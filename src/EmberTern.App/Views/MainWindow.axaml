@@ -1,0 +1,659 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:app="using:EmberTern.App"
+        xmlns:views="using:EmberTern.App.Views"
+        xmlns:ae="using:AvaloniaEdit"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        x:Class="EmberTern.App.Views.MainWindow"
+        x:Name="RootWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="EmberTern"
+        Width="1280" Height="800"
+        MinWidth="900" MinHeight="600"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        WindowDecorations="BorderOnly"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <Design.DataContext>
+    <vm:MainWindowViewModel />
+  </Design.DataContext>
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="F5" Command="{Binding ExecuteQueryCommand}" />
+    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding ExecuteQueryCommand}" />
+    <KeyBinding Gesture="Alt+F" Command="{Binding FormatSqlCommand}" />
+  </Window.KeyBindings>
+
+  <Grid RowDefinitions="36,*,28">
+
+    <!-- Custom titlebar: brand + active connection + connection toolbar + theme + window controls -->
+    <Border Grid.Row="0"
+            x:Name="Titlebar"
+            Background="{DynamicResource ElevatedPanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            PointerPressed="OnTitleBarPointerPressed"
+            DoubleTapped="OnTitleBarDoubleTapped">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+
+        <!-- Brand + active connection name -->
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
+                    VerticalAlignment="Center" Margin="10,0,4,0">
+          <Image Source="avares://EmberTern/Assets/Branding/EmberTern_logo.png"
+                 Width="28" Height="28"
+                 RenderOptions.BitmapInterpolationMode="HighQuality"
+                 VerticalAlignment="Center" />
+          <TextBlock Text="{Binding AppTitle}"
+                     FontWeight="SemiBold" FontSize="13"
+                     VerticalAlignment="Center" />
+          <Border Width="1" Height="14"
+                  Background="{DynamicResource BorderBrush}"
+                  Margin="4,0"
+                  IsVisible="{Binding HasActiveConnection}" />
+          <TextBlock Text="{Binding ActiveConnectionName}"
+                     Classes="subtle"
+                     FontSize="12"
+                     VerticalAlignment="Center"
+                     IsVisible="{Binding HasActiveConnection}" />
+        </StackPanel>
+
+        <!-- Connection toolbar (moved from sidebar) -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2"
+                    VerticalAlignment="Center" Margin="14,0,0,0">
+          <Button Classes="icon" Content="+"
+                  ToolTip.Tip="New Connection"
+                  Click="OnNewConnectionClick" />
+          <Button Classes="icon" Content="✎"
+                  ToolTip.Tip="Edit Connection"
+                  Command="{Binding Metadata.EditSelectedCommand}" />
+          <Button Classes="icon" Content="⧉"
+                  ToolTip.Tip="Copy Connection"
+                  Command="{Binding Metadata.CopySelectedCommand}" />
+          <Button Classes="icon" Content="✕"
+                  ToolTip.Tip="Delete Connection"
+                  Command="{Binding Metadata.DeleteSelectedCommand}" />
+          <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
+          <Button Classes="icon" Content="▶"
+                  ToolTip.Tip="Connect"
+                  Command="{Binding Metadata.ConnectSelectedCommand}" />
+          <Button Classes="icon" Content="⏹"
+                  ToolTip.Tip="Disconnect"
+                  Command="{Binding Metadata.DisconnectSelectedCommand}" />
+          <Button Classes="icon" Content="↺"
+                  ToolTip.Tip="Reconnect"
+                  Command="{Binding Metadata.ReconnectSelectedCommand}" />
+          <Button Classes="icon" Content="↻"
+                  ToolTip.Tip="{Binding Metadata.RefreshTooltip}"
+                  Command="{Binding Metadata.RefreshCommand}" />
+        </StackPanel>
+
+        <!-- Drag spacer (column 2 = *) -->
+
+        <!-- Theme toggle -->
+        <Button Grid.Column="3" Classes="icon"
+                ToolTip.Tip="{Binding ThemeToggleTooltip}"
+                Click="OnThemeToggleClick"
+                Content="◐"
+                VerticalAlignment="Center"
+                Margin="0,0,6,0" />
+
+        <!-- Window controls -->
+        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Stretch">
+          <Button Classes="caption" Click="OnMinimizeClick" ToolTip.Tip="Minimize">
+            <TextBlock Text="—" FontSize="12" />
+          </Button>
+          <Button Classes="caption" Click="OnMaxRestoreClick" ToolTip.Tip="Maximize / Restore"
+                  x:Name="MaxRestoreButton">
+            <TextBlock x:Name="MaxRestoreGlyph" Text="◻" FontSize="11" />
+          </Button>
+          <Button Classes="caption close" Click="OnCloseClick" ToolTip.Tip="Close">
+            <TextBlock Text="✕" FontSize="11" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Main 3-zone body: sidebar | workspace+bottom -->
+    <Grid Grid.Row="1" ColumnDefinitions="280,1,*">
+
+      <!-- Sidebar — IBExpert-style connection tree -->
+      <Border Grid.Column="0" Background="{DynamicResource PanelBrush}">
+        <DockPanel LastChildFill="True" DataContext="{Binding Metadata}">
+
+          <!-- Filter -->
+          <Border DockPanel.Dock="Top" Margin="8,6,8,4">
+            <TextBox Text="{Binding FilterText, Mode=TwoWay}"
+                     PlaceholderText="{Binding FilterPlaceholder}"
+                     FontSize="12"
+                     Padding="6,4" />
+          </Border>
+
+          <!-- Tree -->
+          <TreeView ItemsSource="{Binding Connections}"
+                    x:Name="SidebarTree"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    SelectionChanged="OnSidebarTreeSelectionChanged">
+            <!-- Virtualization at the nested level: a category can hold 2000+ leaves.
+                 Without VSP, expanding Tables realizes ~2k TreeViewItems at once and the
+                 UI freezes for ~1s. With VSP, only visible rows materialize. -->
+            <TreeView.ItemsPanel>
+              <ItemsPanelTemplate>
+                <VirtualizingStackPanel />
+              </ItemsPanelTemplate>
+            </TreeView.ItemsPanel>
+            <TreeView.Styles>
+              <Style Selector="TreeViewItem">
+                <Setter Property="ItemsPanel">
+                  <ItemsPanelTemplate>
+                    <VirtualizingStackPanel />
+                  </ItemsPanelTemplate>
+                </Setter>
+              </Style>
+              <!-- Two concrete-type Styles instead of an interface-typed one. Avalonia 12
+                   compiled bindings on an interface (IExpandableNode) didn't reliably push
+                   TVI.IsExpanded back to the VM through Style.Setter — categories silently
+                   refused to expand. Each Style here targets one concrete VM type so the
+                   binding source cast matches at runtime. -->
+              <Style Selector="TreeViewItem" x:DataType="vm:ConnectionNodeViewModel">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+              </Style>
+              <Style Selector="TreeViewItem" x:DataType="vm:MetadataNodeViewModel">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                <Setter Property="IsVisible" Value="{Binding IsVisible}" />
+              </Style>
+            </TreeView.Styles>
+
+            <!-- BOTH templates live in DataTemplates so TreeView resolves per-type at
+                 every nesting level. Setting TreeView.ItemTemplate to the ConnectionNode
+                 template (even with DataType match) makes Avalonia 12 skip child template
+                 lookup for nested MetadataNode items — categories rendered fine but their
+                 own ItemsSource={Binding Children} didn't kick in, so chevrons never showed. -->
+            <TreeView.DataTemplates>
+              <TreeDataTemplate DataType="vm:ConnectionNodeViewModel"
+                                ItemsSource="{Binding Children}">
+                <Border HorizontalAlignment="Stretch"
+                        Background="Transparent"
+                        DoubleTapped="OnConnectionNodeDoubleTapped">
+                  <Border.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="Connect"
+                                Command="{Binding ConnectCommand}"
+                                IsVisible="{Binding !IsConnected}" />
+                      <MenuItem Header="Disconnect"
+                                Command="{Binding DisconnectCommand}"
+                                IsVisible="{Binding IsConnected}" />
+                      <Separator />
+                      <MenuItem Header="Edit" Command="{Binding EditCommand}" />
+                      <MenuItem Header="Copy" Command="{Binding CopyCommand}" />
+                      <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
+                    </ContextMenu>
+                  </Border.ContextMenu>
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <TextBlock Text="{Binding StatusIndicator}"
+                               Foreground="{DynamicResource ConnectedBrush}"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding DisplayName}"
+                               FontWeight="SemiBold"
+                               FontSize="11"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                </Border>
+              </TreeDataTemplate>
+
+              <TreeDataTemplate DataType="vm:MetadataNodeViewModel"
+                                ItemsSource="{Binding Children}">
+                <!-- Full-row hit target: Border with Stretch + transparent background. -->
+                <Border HorizontalAlignment="Stretch"
+                        Background="Transparent"
+                        DoubleTapped="OnMetadataNodeDoubleTapped">
+                  <Border.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="{Binding ContextOpenDdlLabel}"
+                                Command="{Binding OpenDdlCommand}"
+                                IsVisible="{Binding IsActionable}" />
+                      <MenuItem Header="{Binding ContextCopyNameLabel}"
+                                Command="{Binding CopyNameCommand}"
+                                IsVisible="{Binding IsActionable}" />
+                    </ContextMenu>
+                  </Border.ContextMenu>
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <!-- Bare colored unicode glyph (DataGrip / IBExpert style) — no chip box.
+                         Width pinned so leaves align vertically regardless of glyph metrics.
+                         Foreground resolves the per-kind resource key against the *current*
+                         theme dictionary via IconBrushConverter; the second binding to the
+                         window's ActualThemeVariant forces re-evaluation on theme toggle. -->
+                    <TextBlock Text="{Binding Icon}"
+                               FontSize="12"
+                               Width="14"
+                               TextAlignment="Center"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding !IsPlaceholder}">
+                      <TextBlock.Foreground>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="IconResourceKey" />
+                          <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </TextBlock.Foreground>
+                    </TextBlock>
+                    <TextBlock Text="{Binding DisplayLabel}"
+                               VerticalAlignment="Center"
+                               Classes.subtle="{Binding IsPlaceholder}"
+                               FontSize="11" />
+                    <TextBlock Text="…"
+                               Classes="subtle"
+                               FontSize="10"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding IsLoading}" />
+                  </StackPanel>
+                </Border>
+              </TreeDataTemplate>
+            </TreeView.DataTemplates>
+          </TreeView>
+        </DockPanel>
+      </Border>
+
+      <Border Grid.Column="1" Background="{DynamicResource BorderBrush}" />
+
+      <!-- Workspace + bottom panel. Bottom rows live in an inner Grid so they
+           can be hidden as a unit on DDL / TableDetail tabs (Results/Messages
+           only make sense for SQL execution). Auto row collapses to 0 when
+           the inner Grid is hidden; the editor area expands to fill. -->
+      <Grid Grid.Column="2" RowDefinitions="*,Auto">
+
+        <Grid Grid.Row="0" RowDefinitions="Auto,Auto,*,Auto">
+
+          <!-- Tab strip — WrapPanel so overflow flows to a second row (IBExpert style)
+               instead of horizontal scrolling. Auto-height (Grid row was 36; we replaced
+               it with Auto on the parent below). -->
+          <Border Grid.Row="0"
+                  Background="{DynamicResource PanelBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}"
+                  BorderThickness="0,0,0,1">
+            <ItemsControl ItemsSource="{Binding WorkspaceTabs}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:WorkspaceTabViewModel">
+                  <Border BorderBrush="{DynamicResource BorderBrush}"
+                          BorderThickness="0,0,1,0"
+                          Background="{DynamicResource PanelBrush}"
+                          Classes.active-tab="{Binding IsSelected}">
+                    <Border.Styles>
+                      <Style Selector="Border.active-tab">
+                        <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+                      </Style>
+                    </Border.Styles>
+                    <StackPanel Orientation="Horizontal" Spacing="0">
+                      <Button Classes="flat"
+                              Padding="8,4"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              Command="{Binding ActivateCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Icon}"
+                                     FontSize="11"
+                                     Width="12"
+                                     TextAlignment="Center"
+                                     VerticalAlignment="Center">
+                            <TextBlock.Foreground>
+                              <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                                <Binding Path="IconResourceKey" />
+                                <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+                              </MultiBinding>
+                            </TextBlock.Foreground>
+                          </TextBlock>
+                          <TextBlock Text="{Binding DisplayTitle}"
+                                     FontSize="11"
+                                     VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                      <Button Classes="icon"
+                              Padding="4,2"
+                              Margin="0,0,3,0"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              ToolTip.Tip="Close tab"
+                              Content="×"
+                              FontSize="12"
+                              IsVisible="{Binding IsClosable}"
+                              Command="{Binding CloseCommand}" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Border>
+
+          <!-- Editor toolbar. Final order (per V1.1 spec):
+                 ▶ Execute | ⏹ Cancel | ✓ Commit | ✕ Rollback | sep |
+                 + New query | ▤ Toggle panel | 🗑 Clear editor | ⎄ Format SQL | ✕ Close tab
+               Commit/Rollback moved here from the transaction bar — that strip is
+               status-only now (dot + text), no duplicate buttons. -->
+          <Border Grid.Row="1"
+                  Background="{DynamicResource PanelBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}"
+                  BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="6" Margin="10,4" VerticalAlignment="Center">
+              <Button Classes="primary"
+                      Padding="10,4"
+                      Command="{Binding ExecuteQueryCommand}"
+                      IsVisible="{Binding ShowExecuteButton}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="▶" FontSize="11" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding ExecuteLabel}" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding ExecuteHint}"
+                             FontSize="10"
+                             Foreground="#80FFFFFF"
+                             VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="flat"
+                      Padding="10,4"
+                      Command="{Binding CancelQueryCommand}"
+                      IsVisible="{Binding ShowCancelButton}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="⏹" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource ErrorBrush}" />
+                  <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="icon"
+                      Content="✓"
+                      FontSize="14"
+                      Foreground="{DynamicResource CommitButtonBrush}"
+                      ToolTip.Tip="{Binding CommitLabel}"
+                      Command="{Binding CommitCommand}"
+                      IsEnabled="{Binding IsTransactionActive}"
+                      IsVisible="{Binding IsQueryTabActive}" />
+              <Button Classes="icon"
+                      Content="✕"
+                      FontSize="14"
+                      Foreground="{DynamicResource RollbackButtonBrush}"
+                      ToolTip.Tip="{Binding RollbackLabel}"
+                      Command="{Binding RollbackCommand}"
+                      IsEnabled="{Binding !IsTransactionIdle}"
+                      IsVisible="{Binding IsQueryTabActive}" />
+              <Border Width="1" Margin="4,4"
+                      Background="{DynamicResource BorderBrush}"
+                      IsVisible="{Binding IsQueryTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.ToolbarNewQueryIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewQueryTooltip}"
+                      Command="{Binding NewQueryCommand}"
+                      IsVisible="{Binding IsQueryTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.ToolbarToggleQueryPanelIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleQueryPanelTooltip}"
+                      Command="{Binding ToggleQueryPanelCommand}"
+                      IsVisible="{Binding IsQueryTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.ToolbarClearEditorIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarClearEditorTooltip}"
+                      Command="{Binding ClearActiveEditorCommand}"
+                      IsVisible="{Binding IsQueryTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.ToolbarFormatSqlIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+                      Command="{Binding FormatSqlCommand}"
+                      IsVisible="{Binding IsQueryTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.ToolbarCloseTabIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarCloseTabTooltip}"
+                      Command="{Binding CloseActiveTabCommand}"
+                      IsVisible="{Binding IsClosableTabActive}" />
+            </StackPanel>
+          </Border>
+
+          <!-- Editor area: SQL editor for Query tabs, DDL editor for DDL tabs.
+               Right-side saved-queries panel collapses to zero width when toggled off. -->
+          <Grid Grid.Row="2" Background="{DynamicResource BackgroundBrush}"
+                ColumnDefinitions="*,Auto">
+            <Grid Grid.Column="0">
+              <ae:TextEditor x:Name="SqlEditor"
+                             ShowLineNumbers="True"
+                             FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                             FontSize="13"
+                             HorizontalScrollBarVisibility="Auto"
+                             VerticalScrollBarVisibility="Auto"
+                             Background="{DynamicResource BackgroundBrush}"
+                             Foreground="{DynamicResource ForegroundBrush}"
+                             IsVisible="{Binding IsQueryTabActive}" />
+              <ae:TextEditor x:Name="DdlEditor"
+                             ShowLineNumbers="True"
+                             IsReadOnly="True"
+                             FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                             FontSize="13"
+                             HorizontalScrollBarVisibility="Auto"
+                             VerticalScrollBarVisibility="Auto"
+                             Background="{DynamicResource BackgroundBrush}"
+                             Foreground="{DynamicResource ForegroundBrush}"
+                             IsVisible="{Binding IsDdlTabActive}" />
+              <views:TableDetailTabView x:Name="TableDetailView"
+                                        DataContext="{Binding ActiveTableDetail}"
+                                        IsVisible="{Binding DataContext.IsTableDetailTabActive, ElementName=RootWindow}" />
+            </Grid>
+
+            <!-- Saved queries panel (IBExpert-style) — visible only when the Query
+                 tab is active AND the user hasn't toggled it off. ShowQueryPanel
+                 combines both gates so DDL / TableDetail tabs hide the panel. -->
+            <Border Grid.Column="1"
+                    Width="200"
+                    Background="{DynamicResource PanelBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1,0,0,0"
+                    IsVisible="{Binding ShowQueryPanel}">
+              <Grid RowDefinitions="Auto,Auto,*">
+                <Border Grid.Row="0"
+                        Padding="8,6"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="0,0,0,1">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{x:Static app:UiStrings.QueryPanelHeader}"
+                               FontWeight="SemiBold"
+                               FontSize="11"
+                               VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+                      <Button Classes="icon"
+                              Content="{x:Static app:UiStrings.ToolbarNewQueryIcon}"
+                              ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewQueryTooltip}"
+                              Command="{Binding NewQueryCommand}" />
+                      <Button Classes="icon"
+                              Content="🗑"
+                              ToolTip.Tip="{x:Static app:UiStrings.QueryDeleteTooltip}"
+                              Command="{Binding DeleteSelectedQueryCommand}" />
+                      <Button Classes="icon"
+                              Content="⌦"
+                              ToolTip.Tip="{x:Static app:UiStrings.QueryClearAllTooltip}"
+                              Command="{Binding ClearAllQueriesCommand}" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+
+                <TextBlock Grid.Row="1"
+                           Text="{x:Static app:UiStrings.QueryPanelEmptyHint}"
+                           Classes="subtle"
+                           FontSize="11"
+                           Margin="10,8"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding ShowQueryPanelEmptyHint}" />
+
+                <ListBox Grid.Row="2"
+                         ItemsSource="{Binding SavedQueries}"
+                         SelectedItem="{Binding SelectedSavedQuery, Mode=TwoWay}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         IsVisible="{Binding HasSavedQueries}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate DataType="vm:SavedQueryViewModel">
+                      <TextBlock Text="{Binding Name}"
+                                 FontSize="11"
+                                 Padding="2,1" />
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </Grid>
+            </Border>
+          </Grid>
+
+          <!-- Transaction bar — status only. Commit/Rollback live on the editor toolbar. -->
+          <Border Grid.Row="3"
+                  Background="{DynamicResource PanelBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}"
+                  BorderThickness="0,1,0,0"
+                  IsVisible="{Binding IsQueryTabActive}">
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="14,0" VerticalAlignment="Center">
+              <Ellipse Width="8" Height="8"
+                       Fill="{DynamicResource SubtleForegroundBrush}"
+                       IsVisible="{Binding IsTransactionIdle}" />
+              <Ellipse Width="8" Height="8"
+                       Fill="{DynamicResource TransactionActiveBrush}"
+                       IsVisible="{Binding IsTransactionActive}" />
+              <Ellipse Width="8" Height="8"
+                       Fill="{DynamicResource ErrorBrush}"
+                       IsVisible="{Binding IsTransactionError}" />
+              <TextBlock Text="{Binding TransactionBarText}"
+                         Classes="subtle"
+                         Classes.error="{Binding IsTransactionError}"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <!-- Bottom-area wrapper: separator + Results/Messages panel together.
+             Both collapse on DDL / TableDetail tabs via the IsVisible binding. -->
+        <Grid Grid.Row="1" RowDefinitions="1,280"
+              IsVisible="{Binding IsQueryTabActive}">
+
+          <Border Grid.Row="0" Background="{DynamicResource BorderBrush}" />
+
+          <!-- Bottom panel: Results / Messages tabs -->
+          <Border Grid.Row="1" Background="{DynamicResource PanelBrush}">
+          <TabControl SelectedIndex="{Binding SelectedBottomTabIndex, Mode=TwoWay}"
+                      Padding="0">
+            <TabItem Classes="bottom-tab" Header="{Binding ResultsLabel}">
+              <Grid Background="{DynamicResource BackgroundBrush}" RowDefinitions="Auto,*">
+                <Border Grid.Row="0"
+                        Background="{DynamicResource ElevatedPanelBrush}"
+                        Padding="12,6"
+                        IsVisible="{Binding ShowTruncatedBanner}">
+                  <TextBlock Text="{Binding TruncatedBannerText}"
+                             Classes="subtle"
+                             FontSize="11" />
+                </Border>
+                <TextBlock Grid.Row="1"
+                           Text="{Binding ResultsEmptyHint}"
+                           Classes="subtle"
+                           Margin="14,14,0,0"
+                           IsVisible="{Binding ShowResultsEmptyHint}" />
+                <DataGrid x:Name="ResultGrid"
+                          Grid.Row="1"
+                          IsReadOnly="True"
+                          GridLinesVisibility="Horizontal"
+                          HeadersVisibility="Column"
+                          CanUserSortColumns="False"
+                          CanUserResizeColumns="True"
+                          CanUserReorderColumns="False"
+                          ColumnWidth="Auto"
+                          RowBackground="Transparent"
+                          HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                          VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                          IsVisible="{Binding HasCurrentResult}">
+                  <DataGrid.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}"
+                                Click="OnCopyCellClick" />
+                      <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}"
+                                Click="OnCopyRowClick" />
+                      <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}"
+                                Click="OnCopyRowWithHeadersClick" />
+                      <Separator />
+                      <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}"
+                                Click="OnCopyAllWithHeadersClick" />
+                    </ContextMenu>
+                  </DataGrid.ContextMenu>
+                </DataGrid>
+              </Grid>
+            </TabItem>
+            <TabItem Classes="bottom-tab" Header="{Binding MessagesLabel}">
+              <Grid Background="{DynamicResource BackgroundBrush}">
+                <TextBlock Text="{Binding MessagesEmptyHint}"
+                           Classes="subtle"
+                           Margin="14,14,0,0"
+                           IsVisible="{Binding ShowMessagesEmptyHint}" />
+                <ScrollViewer IsVisible="{Binding HasMessages}">
+                  <ItemsControl ItemsSource="{Binding Messages}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="vm:QueryMessageViewModel">
+                        <Border Padding="14,6"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="0,0,0,1">
+                          <Grid ColumnDefinitions="80,*">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding TimestampLabel}"
+                                       Classes="subtle"
+                                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                                       FontSize="11"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Text}"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Classes.error="{Binding IsError}" />
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </Grid>
+            </TabItem>
+            <TabItem Classes="bottom-tab" Header="{Binding OutputLabel}">
+              <Grid Background="{DynamicResource BackgroundBrush}" />
+            </TabItem>
+          </TabControl>
+          </Border>
+        </Grid>
+      </Grid>
+    </Grid>
+
+    <!-- Status bar -->
+    <Border Grid.Row="2"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="14,0">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Ellipse Width="7" Height="7" Fill="{DynamicResource ConnectedBrush}" IsVisible="{Binding IsConnected}" />
+          <Ellipse Width="7" Height="7" Fill="{DynamicResource SubtleForegroundBrush}" IsVisible="{Binding !IsConnected}" />
+          <TextBlock Text="{Binding StatusText}"
+                     Classes="subtle"
+                     Classes.error="{Binding IsStatusError}"
+                     FontSize="11"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBlock Grid.Column="1"
+                   Text="{Binding QueryStatsText}"
+                   Classes="subtle"
+                   FontSize="11"
+                   Margin="20,0,0,0"
+                   VerticalAlignment="Center" />
+        <TextBlock Grid.Column="3"
+                   Text="EmberTern 0.1.0"
+                   Classes="subtle"
+                   FontSize="11"
+                   VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+
+  </Grid>
+</Window>

@@ -1,0 +1,213 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:app="using:EmberTern.App"
+             xmlns:conv="using:EmberTern.App.Converters"
+             xmlns:ae="using:AvaloniaEdit"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="EmberTern.App.Views.TableDetailTabView"
+             x:DataType="vm:TableDetailTabViewModel"
+             Background="{DynamicResource BackgroundBrush}">
+
+  <!-- Tighter row pitch than the results grid. Scoped to descendants of this
+       UserControl so it doesn't bleed into the SQL Editor result grid. -->
+  <UserControl.Styles>
+    <Style Selector="DataGridRow">
+      <Setter Property="Height" Value="22" />
+    </Style>
+    <Style Selector="DataGridCell">
+      <Setter Property="Padding" Value="6 2" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="*,Auto">
+
+    <TabControl Grid.Row="0"
+                SelectedIndex="{Binding ActiveSubTabIndex, Mode=TwoWay}"
+                Padding="0">
+
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabFields}">
+        <DataGrid x:Name="FieldsGrid"
+                  ItemsSource="{Binding Fields}"
+                  IsReadOnly="True"
+                  FontSize="11"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  CanUserSortColumns="False"
+                  CanUserResizeColumns="True"
+                  CanUserReorderColumns="False"
+                  ColumnWidth="Auto"
+                  RowBackground="Transparent"
+                  HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                  VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                  Background="{DynamicResource BackgroundBrush}">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnPosition}"
+                                Binding="{Binding DisplayPosition}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
+                                Binding="{Binding Name}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnType}"
+                                Binding="{Binding Type}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnSize}"
+                                Binding="{Binding Size}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnScale}"
+                                Binding="{Binding Scale, Converter={x:Static conv:ZeroToEmptyConverter.Instance}}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnNotNull}"
+                                Binding="{Binding NotNull, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDefault}"
+                                Binding="{Binding DefaultValue}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDescription}"
+                                Binding="{Binding Description}" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </TabItem>
+
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabConstraints}">
+        <DataGrid x:Name="ConstraintsGrid"
+                  ItemsSource="{Binding Constraints}"
+                  IsReadOnly="True"
+                  FontSize="11"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  CanUserSortColumns="False"
+                  CanUserResizeColumns="True"
+                  CanUserReorderColumns="False"
+                  ColumnWidth="Auto"
+                  RowBackground="Transparent"
+                  HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                  VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                  Background="{DynamicResource BackgroundBrush}">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
+                                Binding="{Binding Name}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintKind}"
+                                Binding="{Binding Kind}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintFields}"
+                                Binding="{Binding Fields}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintRefTable}"
+                                Binding="{Binding RefTable}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintRefFields}"
+                                Binding="{Binding RefFields}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintCheck}"
+                                Binding="{Binding CheckSource}" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </TabItem>
+
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabIndexes}">
+        <DataGrid x:Name="IndexesGrid"
+                  ItemsSource="{Binding Indexes}"
+                  IsReadOnly="True"
+                  FontSize="11"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  CanUserSortColumns="False"
+                  CanUserResizeColumns="True"
+                  CanUserReorderColumns="False"
+                  ColumnWidth="Auto"
+                  RowBackground="Transparent"
+                  HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                  VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                  Background="{DynamicResource BackgroundBrush}">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
+                                Binding="{Binding Name}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexFields}"
+                                Binding="{Binding Fields}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexUnique}"
+                                Binding="{Binding IsUnique, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexDescending}"
+                                Binding="{Binding IsDescending, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexPrimary}"
+                                Binding="{Binding IsPrimary, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </TabItem>
+
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabData}">
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Grid.Row="0"
+                     Text="{Binding DataPreviewHint}"
+                     Classes="subtle"
+                     FontSize="11"
+                     Margin="8,4" />
+          <TextBlock Grid.Row="1"
+                     Text="{Binding DataError}"
+                     Classes="subtle error"
+                     FontSize="11"
+                     Margin="8,4"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding ShowDataError}" />
+          <DataGrid Grid.Row="1"
+                    x:Name="DataPreviewGrid"
+                    IsReadOnly="True"
+                    FontSize="11"
+                    GridLinesVisibility="Horizontal"
+                    HeadersVisibility="Column"
+                    CanUserSortColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserReorderColumns="False"
+                    ColumnWidth="Auto"
+                    RowBackground="Transparent"
+                    HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                    VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                    Background="{DynamicResource BackgroundBrush}"
+                    IsVisible="{Binding HasDataResult}" />
+        </Grid>
+      </TabItem>
+
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabDescription}">
+        <Grid Background="{DynamicResource BackgroundBrush}">
+          <TextBlock Text="{x:Static app:UiStrings.TableDetailDescriptionEmpty}"
+                     Classes="subtle"
+                     FontSize="11"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center"
+                     IsVisible="{Binding ShowDescriptionEmpty}" />
+          <TextBox Text="{Binding Description, Mode=OneWay}"
+                   IsReadOnly="True"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   FontSize="11"
+                   Margin="8"
+                   BorderThickness="0"
+                   Background="{DynamicResource BackgroundBrush}"
+                   IsVisible="{Binding HasDescription}" />
+        </Grid>
+      </TabItem>
+
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabDdl}">
+        <ae:TextEditor x:Name="TableDetailDdlEditor"
+                       ShowLineNumbers="True"
+                       IsReadOnly="True"
+                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       FontSize="13"
+                       HorizontalScrollBarVisibility="Auto"
+                       VerticalScrollBarVisibility="Auto"
+                       Background="{DynamicResource BackgroundBrush}"
+                       Foreground="{DynamicResource ForegroundBrush}" />
+      </TabItem>
+
+    </TabControl>
+
+    <StackPanel Grid.Row="1" Orientation="Vertical">
+      <TextBlock Text="{x:Static app:UiStrings.TableDetailLoadingHint}"
+                 Classes="subtle"
+                 Margin="10,4"
+                 FontSize="11"
+                 IsVisible="{Binding IsLoading}" />
+      <!-- Surface load errors in the view directly — the Messages tab is
+           hidden on TableDetail tabs (per the SQL-Editor-only bottom panel),
+           so without this the user would see no feedback at all. -->
+      <TextBlock Text="{Binding ErrorMessage}"
+                 Classes="subtle error"
+                 Margin="10,4"
+                 FontSize="11"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </StackPanel>
+  </Grid>
+
+</UserControl>

@@ -1,0 +1,160 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+
+    <ResourceDictionary x:Key="Dark">
+      <Color x:Key="BackgroundColor">#1E1E1E</Color>
+      <Color x:Key="PanelColor">#252526</Color>
+      <Color x:Key="ElevatedPanelColor">#2D2D2D</Color>
+      <Color x:Key="BorderColor">#3F3F46</Color>
+      <Color x:Key="ForegroundColor">#D4D4D4</Color>
+      <Color x:Key="SubtleForegroundColor">#858585</Color>
+      <Color x:Key="AccentColor">#2D6BBF</Color>
+      <Color x:Key="AccentMutedColor">#1A4F8F</Color>
+      <Color x:Key="TransactionActiveColor">#F0A458</Color>
+      <Color x:Key="ConnectedColor">#4EC994</Color>
+      <!-- Avalonia color hex is ARGB (alpha-first). #FFFFFF12 = opaque yellow-white;
+           #12FFFFFF = 7% white overlay. We meant the latter. -->
+      <Color x:Key="HoverOverlayColor">#12FFFFFF</Color>
+      <Color x:Key="ErrorColor">#F44747</Color>
+      <Color x:Key="SelectionColor">#094771</Color>
+      <Color x:Key="FocusBorderColor">#007FD4</Color>
+      <!-- Zebra-stripe tint for DataGrid alternating rows. ARGB: ~5% white on dark. -->
+      <Color x:Key="RowAlternateColor">#0DFFFFFF</Color>
+      <Color x:Key="CommitButtonForeground">#4CAF50</Color>
+      <Color x:Key="RollbackButtonForeground">#F44336</Color>
+
+      <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ElevatedPanelBrush" Color="{StaticResource ElevatedPanelColor}" />
+      <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ForegroundBrush" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="SubtleForegroundBrush" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+      <SolidColorBrush x:Key="AccentMutedBrush" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="TransactionActiveBrush" Color="{StaticResource TransactionActiveColor}" />
+      <SolidColorBrush x:Key="ConnectedBrush" Color="{StaticResource ConnectedColor}" />
+      <SolidColorBrush x:Key="HoverOverlayBrush" Color="{StaticResource HoverOverlayColor}" />
+      <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
+      <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
+      <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
+      <SolidColorBrush x:Key="CommitButtonBrush" Color="{StaticResource CommitButtonForeground}" />
+      <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />
+
+      <!-- Override FluentTheme's TreeViewItem state brushes. Without these the dark
+           theme inherits SystemAccentColor-derived backgrounds (yellow/beige on a
+           default Win11 install). Borders forced transparent to avoid the colored
+           ring around selected items. -->
+      <SolidColorBrush x:Key="TreeViewItemBackground" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundPointerOver" Color="{StaticResource HoverOverlayColor}" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundPressed" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrush" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrushPointerOver" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrushPressed" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrushSelected" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrushSelectedPointerOver" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrushSelectedPressed" Color="Transparent" />
+
+      <!-- Per-kind metadata icon brushes (dark theme: Material 300/200 — bright on dark).
+           Resolved at render time via DynamicResource through IconBrushConverter so theme
+           toggle re-evaluates without rebuilding the tree. -->
+      <SolidColorBrush x:Key="IconColor_Table"       Color="#4FC3F7" />
+      <SolidColorBrush x:Key="IconColor_View"        Color="#81C784" />
+      <SolidColorBrush x:Key="IconColor_Procedure"   Color="#FFB74D" />
+      <SolidColorBrush x:Key="IconColor_Trigger"     Color="#E57373" />
+      <SolidColorBrush x:Key="IconColor_Function"    Color="#FFF176" />
+      <SolidColorBrush x:Key="IconColor_Generator"   Color="#4DD0E1" />
+      <SolidColorBrush x:Key="IconColor_Domain"      Color="#CE93D8" />
+      <SolidColorBrush x:Key="IconColor_Package"     Color="#7986CB" />
+      <SolidColorBrush x:Key="IconColor_Exception"   Color="#EF9A9A" />
+      <SolidColorBrush x:Key="IconColor_Role"        Color="#90A4AE" />
+      <SolidColorBrush x:Key="IconColor_User"        Color="#90A4AE" />
+      <SolidColorBrush x:Key="IconColor_Index"       Color="#AED581" />
+      <SolidColorBrush x:Key="IconColor_SystemTable" Color="#757575" />
+      <!-- Query (SQL Editor) tab icon — neutral on dark, distinct from blue Table. -->
+      <SolidColorBrush x:Key="IconColor_Query"       Color="#B0BEC5" />
+    </ResourceDictionary>
+
+    <ResourceDictionary x:Key="Light">
+      <Color x:Key="BackgroundColor">#F3F3F3</Color>
+      <!-- Light theme panel hierarchy: editor/results stay near-white (BackgroundColor),
+           sidebar is a step darker (PanelColor), titlebar is darker still
+           (ElevatedPanelColor). Borders sit between PanelColor and ElevatedPanelColor
+           so panel edges read clearly without a sharp line. -->
+      <Color x:Key="PanelColor">#E0E0E0</Color>
+      <Color x:Key="ElevatedPanelColor">#D6D6D6</Color>
+      <Color x:Key="BorderColor">#BDBDBD</Color>
+      <Color x:Key="ForegroundColor">#1F1F1F</Color>
+      <Color x:Key="SubtleForegroundColor">#6E6E6E</Color>
+      <!-- Light accent shares the dark blue palette so the Execute button + focus
+           ring + transaction marker stay consistent across themes. Earlier
+           purple values clashed against the rest of the chrome on light. -->
+      <Color x:Key="AccentColor">#2D6BBF</Color>
+      <Color x:Key="AccentMutedColor">#1A4F8F</Color>
+      <Color x:Key="TransactionActiveColor">#B85C00</Color>
+      <Color x:Key="ConnectedColor">#1A7F4B</Color>
+      <Color x:Key="HoverOverlayColor">#10000000</Color>
+      <Color x:Key="ErrorColor">#CC2929</Color>
+      <Color x:Key="SelectionColor">#CCE4F7</Color>
+      <Color x:Key="FocusBorderColor">#0078D4</Color>
+      <!-- Zebra-stripe tint for DataGrid alternating rows. ARGB: ~5% black on light. -->
+      <Color x:Key="RowAlternateColor">#0D000000</Color>
+      <Color x:Key="CommitButtonForeground">#4CAF50</Color>
+      <Color x:Key="RollbackButtonForeground">#F44336</Color>
+
+      <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ElevatedPanelBrush" Color="{StaticResource ElevatedPanelColor}" />
+      <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ForegroundBrush" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="SubtleForegroundBrush" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+      <SolidColorBrush x:Key="AccentMutedBrush" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="TransactionActiveBrush" Color="{StaticResource TransactionActiveColor}" />
+      <SolidColorBrush x:Key="ConnectedBrush" Color="{StaticResource ConnectedColor}" />
+      <SolidColorBrush x:Key="HoverOverlayBrush" Color="{StaticResource HoverOverlayColor}" />
+      <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
+      <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
+      <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
+      <SolidColorBrush x:Key="CommitButtonBrush" Color="{StaticResource CommitButtonForeground}" />
+      <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />
+
+      <!-- Same TreeViewItem state-brush overrides for Light. See Dark dictionary above. -->
+      <SolidColorBrush x:Key="TreeViewItemBackground" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundPointerOver" Color="{StaticResource HoverOverlayColor}" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundPressed" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrush" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrushPointerOver" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrushPressed" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrushSelected" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrushSelectedPointerOver" Color="Transparent" />
+      <SolidColorBrush x:Key="TreeViewItemBorderBrushSelectedPressed" Color="Transparent" />
+
+      <!-- Per-kind metadata icon brushes (light theme: Material 700/800 — darker and
+           more saturated so glyphs stay legible against the near-white editor background). -->
+      <SolidColorBrush x:Key="IconColor_Table"       Color="#0277BD" />
+      <SolidColorBrush x:Key="IconColor_View"        Color="#2E7D32" />
+      <SolidColorBrush x:Key="IconColor_Procedure"   Color="#E65100" />
+      <SolidColorBrush x:Key="IconColor_Trigger"     Color="#C62828" />
+      <SolidColorBrush x:Key="IconColor_Function"    Color="#F9A825" />
+      <SolidColorBrush x:Key="IconColor_Generator"   Color="#00838F" />
+      <SolidColorBrush x:Key="IconColor_Domain"      Color="#6A1B9A" />
+      <SolidColorBrush x:Key="IconColor_Package"     Color="#283593" />
+      <SolidColorBrush x:Key="IconColor_Exception"   Color="#B71C1C" />
+      <SolidColorBrush x:Key="IconColor_Role"        Color="#37474F" />
+      <SolidColorBrush x:Key="IconColor_User"        Color="#37474F" />
+      <SolidColorBrush x:Key="IconColor_Index"       Color="#558B2F" />
+      <SolidColorBrush x:Key="IconColor_SystemTable" Color="#424242" />
+      <SolidColorBrush x:Key="IconColor_Query"       Color="#455A64" />
+    </ResourceDictionary>
+
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

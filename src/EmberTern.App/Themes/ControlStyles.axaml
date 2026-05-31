@@ -1,0 +1,269 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.subtle">
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="14" />
+  </Style>
+
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="16" />
+  </Style>
+
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="Button.icon">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.icon:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <Style Selector="Button.icon:focus /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
+  <Style Selector="Button.flat">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.flat:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <Style Selector="Button.flat:focus /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="Padding" Value="12,4" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentMutedBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
+    <Setter Property="Opacity" Value="0.85" />
+  </Style>
+
+  <Style Selector="Button.caption">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="Width" Value="46" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.caption:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <Style Selector="Button.caption.close:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#E81123" />
+    <Setter Property="TextElement.Foreground" Value="White" />
+  </Style>
+
+  <Style Selector="TabControl">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="TabItem">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Padding" Value="14,8" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+
+  <!-- Bottom-panel tabs (Results / Messages / Output) — denser than the default
+       TabItem and using a filled active background instead of FluentTheme's
+       blue underline so they read as panel tabs, not navigation tabs. -->
+  <Style Selector="TabItem.bottom-tab">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TabItem.bottom-tab:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <Style Selector="TabItem.bottom-tab:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+  </Style>
+
+  <Style Selector="TabItem.bottom-tab:selected">
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <!-- Hide FluentTheme's selected-indicator pipe for bottom tabs. -->
+  <Style Selector="TabItem.bottom-tab /template/ Border#PART_SelectedPipe">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+
+  <!-- DataGrid: selection / hover wired through SelectionBrush + HoverOverlayBrush
+       so colors match the TreeView. FluentTheme's DataGridRow template names the
+       background as Rectangle#BackgroundRectangle. -->
+  <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <Style Selector="DataGridRow:selected:pointerover /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <Style Selector="DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <!-- Compact rows: smaller font, tighter cell padding for dense result sets. -->
+  <Style Selector="DataGridCell">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+
+  <Style Selector="DataGridRow">
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+
+  <!-- Zebra stripes: tint every other row. Avalonia 12's DataGrid doesn't expose
+       AlternatingRowBackground as an attached/regular property in the version we
+       pull, so we drive it via :nth-child on the row's BackgroundRectangle part. -->
+  <Style Selector="DataGridRow:nth-child(2n) /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource RowAlternateBrush}" />
+  </Style>
+
+  <!-- Selection must win over zebra stripe regardless of row parity. Without these,
+       the :nth-child(2n) rule above re-fills the BackgroundRectangle of every even
+       selected row with RowAlternateBrush — and selection silently disappears on
+       half the rows. Higher specificity (extra :selected token) wins the cascade. -->
+  <Style Selector="DataGridRow:nth-child(2n):selected /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <Style Selector="DataGridRow:nth-child(2n):selected:pointerover /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <!-- Column headers consistent with the rest of the UI: elevated panel background,
+       subtle border, themed foreground. Default FluentTheme picks SystemAccent for
+       hover/press which clashes with the dark blue accent. -->
+  <Style Selector="DataGridColumnHeader">
+    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="SeparatorBrush" Value="{DynamicResource BorderBrush}" />
+  </Style>
+
+  <Style Selector="DataGridColumnHeader:pointerover /template/ Grid#PART_ColumnHeaderRoot">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <Style Selector="DataGridColumnHeader:pressed /template/ Grid#PART_ColumnHeaderRoot">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <!-- ListBoxItem selection / hover — same overrides we did for DataGridRow and
+       TreeViewItem so Saved Queries (and any other ListBox) inherits the unified
+       SelectionBrush instead of FluentTheme's SystemAccent yellow. -->
+  <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:selected:focus /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.error">
+    <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.success">
+    <Setter Property="Foreground" Value="{DynamicResource ConnectedBrush}" />
+  </Style>
+
+  <Style Selector="Border.list-item">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="2,0,0,0" />
+    <Setter Property="Padding" Value="12,8" />
+  </Style>
+
+  <Style Selector="Border.list-item:pointerover">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <Style Selector="Border.list-item.active">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <Style Selector="TreeViewItem">
+    <!-- Tight rows à la IBExpert / DataGrip: minimal vertical padding so the
+         metadata tree stays scannable when it grows to thousands of leaves. -->
+    <Setter Property="Padding" Value="2,0" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+
+  <!-- Hover/selection colors come from the TreeViewItemBackground* resource keys
+       defined in Themes/Colors.axaml. Avalonia 12 FluentTheme's TreeViewItem template
+       already routes :pointerover / :selected / etc. through those DynamicResource
+       lookups — defining the keys in our theme dictionary wins over FluentTheme's
+       defaults (which pull from SystemAccentColor and render as bright yellow on
+       this user's Windows). See https://github.com/AvaloniaUI/Avalonia/blob/release/12.0.3/src/Avalonia.Themes.Fluent/Controls/TreeViewItem.xaml -->
+
+
+</Styles>
