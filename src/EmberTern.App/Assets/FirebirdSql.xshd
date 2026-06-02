@@ -1,14 +1,25 @@
 <?xml version="1.0"?>
+<!--
+  Dark-theme Firebird SQL highlighter. Palette inspired by VS Code "Dark+":
+  DML keywords blue, DML-action + DDL keywords purple, data types teal,
+  built-in functions yellow.
+
+  The Functions Keywords block is declared BEFORE the DDL/DML blocks so
+  CASE/WHEN/THEN/ELSE/END win as functions (they're also valid PSQL
+  control-flow tokens but reading them as expression keywords is more useful
+  for typical query work).
+-->
 <SyntaxDefinition name="Firebird SQL" extensions=".sql"
                   xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
 
-  <Color name="Comment"   foreground="#6A9955" />
-  <Color name="String"    foreground="#CE9178" />
-  <Color name="Number"    foreground="#B5CEA8" />
-  <Color name="Keyword"   foreground="#569CD6" fontWeight="bold" />
-  <Color name="DataType"  foreground="#4EC9B0" />
-  <Color name="Function"  foreground="#DCDCAA" />
-  <Color name="Operator"  foreground="#D4D4D4" />
+  <Color name="Comment"          foreground="#6A9955" />
+  <Color name="String"           foreground="#CE9178" />
+  <Color name="Number"           foreground="#B5CEA8" />
+  <Color name="DmlKeyword"       foreground="#569CD6" fontWeight="bold" />
+  <Color name="StatementKeyword" foreground="#C586C0" fontWeight="bold" />
+  <Color name="DataType"         foreground="#4EC9B0" />
+  <Color name="Function"         foreground="#DCDCAA" />
+  <Color name="Operator"         foreground="#D4D4D4" />
 
   <RuleSet ignoreCase="true">
 
@@ -23,47 +34,87 @@
       </RuleSet>
     </Span>
 
-    <Keywords color="Keyword">
-      <Word>SELECT</Word><Word>FROM</Word><Word>WHERE</Word><Word>GROUP</Word><Word>BY</Word>
-      <Word>HAVING</Word><Word>ORDER</Word><Word>ASC</Word><Word>DESC</Word>
-      <Word>INSERT</Word><Word>INTO</Word><Word>VALUES</Word><Word>RETURNING</Word>
-      <Word>UPDATE</Word><Word>SET</Word><Word>DELETE</Word><Word>MERGE</Word><Word>USING</Word><Word>MATCHED</Word>
-      <Word>JOIN</Word><Word>INNER</Word><Word>LEFT</Word><Word>RIGHT</Word><Word>FULL</Word><Word>OUTER</Word><Word>CROSS</Word><Word>ON</Word>
-      <Word>UNION</Word><Word>ALL</Word><Word>DISTINCT</Word><Word>WITH</Word><Word>RECURSIVE</Word>
+    <!-- Functions must precede general keywords so CASE/WHEN/THEN/ELSE/END
+         resolve to the function color. -->
+    <Keywords color="Function">
       <Word>CASE</Word><Word>WHEN</Word><Word>THEN</Word><Word>ELSE</Word><Word>END</Word>
-      <Word>AND</Word><Word>OR</Word><Word>NOT</Word><Word>IN</Word><Word>EXISTS</Word><Word>BETWEEN</Word><Word>LIKE</Word><Word>STARTING</Word><Word>CONTAINING</Word><Word>SIMILAR</Word><Word>TO</Word><Word>IS</Word><Word>NULL</Word>
-      <Word>TRUE</Word><Word>FALSE</Word><Word>UNKNOWN</Word>
-      <Word>CREATE</Word><Word>RECREATE</Word><Word>ALTER</Word><Word>DROP</Word><Word>TABLE</Word><Word>VIEW</Word><Word>INDEX</Word><Word>SEQUENCE</Word><Word>GENERATOR</Word>
-      <Word>PROCEDURE</Word><Word>FUNCTION</Word><Word>TRIGGER</Word><Word>DOMAIN</Word><Word>EXCEPTION</Word><Word>ROLE</Word>
-      <Word>RETURNS</Word><Word>RETURN</Word><Word>SUSPEND</Word><Word>EXIT</Word><Word>LEAVE</Word>
-      <Word>DECLARE</Word><Word>VARIABLE</Word><Word>BEGIN</Word><Word>AS</Word>
-      <Word>IF</Word><Word>WHILE</Word><Word>DO</Word><Word>FOR</Word><Word>EXECUTE</Word><Word>STATEMENT</Word><Word>BLOCK</Word>
-      <Word>COMMIT</Word><Word>ROLLBACK</Word><Word>SAVEPOINT</Word><Word>TRANSACTION</Word>
-      <Word>GRANT</Word><Word>REVOKE</Word><Word>TO</Word>
-      <Word>PRIMARY</Word><Word>FOREIGN</Word><Word>KEY</Word><Word>REFERENCES</Word><Word>CONSTRAINT</Word><Word>UNIQUE</Word><Word>CHECK</Word><Word>DEFAULT</Word><Word>NOT</Word>
-      <Word>FIRST</Word><Word>SKIP</Word><Word>ROWS</Word><Word>OFFSET</Word><Word>FETCH</Word>
-      <Word>PLAN</Word><Word>NATURAL</Word>
+      <Word>CAST</Word><Word>COALESCE</Word><Word>NULLIF</Word><Word>IIF</Word><Word>DECODE</Word>
+      <Word>CONVERT</Word><Word>EXTRACT</Word><Word>OVERLAY</Word>
+      <Word>COUNT</Word><Word>SUM</Word><Word>AVG</Word><Word>MIN</Word><Word>MAX</Word><Word>LIST</Word>
+      <Word>UPPER</Word><Word>LOWER</Word><Word>TRIM</Word><Word>SUBSTRING</Word><Word>POSITION</Word>
+      <Word>CHAR_LENGTH</Word><Word>CHARACTER_LENGTH</Word><Word>OCTET_LENGTH</Word>
+      <Word>LPAD</Word><Word>RPAD</Word><Word>REPLACE</Word><Word>REVERSE</Word>
+      <Word>LEADING</Word><Word>TRAILING</Word><Word>BOTH</Word>
+      <Word>ABS</Word><Word>SIGN</Word><Word>MOD</Word><Word>POWER</Word><Word>SQRT</Word>
+      <Word>EXP</Word><Word>LN</Word><Word>LOG</Word><Word>LOG10</Word>
+      <Word>FLOOR</Word><Word>CEIL</Word><Word>CEILING</Word><Word>ROUND</Word>
+      <Word>PI</Word><Word>RAND</Word>
+      <Word>ASIN</Word><Word>ACOS</Word><Word>ATAN</Word><Word>ATAN2</Word>
+      <Word>SIN</Word><Word>COS</Word><Word>TAN</Word>
+      <Word>DATEADD</Word><Word>DATEDIFF</Word>
+      <Word>CURRENT_DATE</Word><Word>CURRENT_TIME</Word><Word>CURRENT_TIMESTAMP</Word>
+      <Word>CURRENT_USER</Word><Word>CURRENT_ROLE</Word>
+      <Word>CURRENT_CONNECTION</Word><Word>CURRENT_TRANSACTION</Word>
+      <Word>GEN_ID</Word>
+      <Word>ROW_NUMBER</Word><Word>RANK</Word><Word>DENSE_RANK</Word>
+      <Word>FIRST_VALUE</Word><Word>LAST_VALUE</Word>
+      <Word>LAG</Word><Word>LEAD</Word>
+      <Word>OVER</Word><Word>PARTITION</Word>
     </Keywords>
 
     <Keywords color="DataType">
       <Word>SMALLINT</Word><Word>INTEGER</Word><Word>INT</Word><Word>BIGINT</Word>
       <Word>FLOAT</Word><Word>DOUBLE</Word><Word>PRECISION</Word><Word>NUMERIC</Word><Word>DECIMAL</Word>
-      <Word>CHAR</Word><Word>VARCHAR</Word><Word>NCHAR</Word><Word>BLOB</Word><Word>TEXT</Word><Word>BINARY</Word>
+      <Word>CHAR</Word><Word>VARCHAR</Word><Word>NCHAR</Word><Word>CSTRING</Word>
+      <Word>BLOB</Word><Word>TEXT</Word><Word>BINARY</Word>
       <Word>DATE</Word><Word>TIME</Word><Word>TIMESTAMP</Word><Word>BOOLEAN</Word>
-      <Word>CHARACTER</Word><Word>SET</Word><Word>COLLATE</Word>
+      <Word>CHARACTER</Word><Word>COLLATE</Word>
       <Word>SUB_TYPE</Word><Word>SEGMENT</Word><Word>SIZE</Word>
     </Keywords>
 
-    <Keywords color="Function">
-      <Word>COUNT</Word><Word>SUM</Word><Word>AVG</Word><Word>MIN</Word><Word>MAX</Word><Word>LIST</Word>
-      <Word>COALESCE</Word><Word>NULLIF</Word><Word>IIF</Word><Word>DECODE</Word>
-      <Word>CAST</Word><Word>CONVERT</Word><Word>EXTRACT</Word>
-      <Word>UPPER</Word><Word>LOWER</Word><Word>TRIM</Word><Word>SUBSTRING</Word><Word>POSITION</Word><Word>CHAR_LENGTH</Word><Word>CHARACTER_LENGTH</Word><Word>OCTET_LENGTH</Word><Word>LPAD</Word><Word>RPAD</Word><Word>REPLACE</Word><Word>OVERLAY</Word>
-      <Word>ABS</Word><Word>CEILING</Word><Word>FLOOR</Word><Word>ROUND</Word><Word>MOD</Word><Word>POWER</Word><Word>SQRT</Word><Word>LN</Word><Word>LOG</Word><Word>EXP</Word>
-      <Word>CURRENT_DATE</Word><Word>CURRENT_TIME</Word><Word>CURRENT_TIMESTAMP</Word><Word>CURRENT_USER</Word><Word>CURRENT_ROLE</Word><Word>CURRENT_CONNECTION</Word><Word>CURRENT_TRANSACTION</Word>
-      <Word>DATEADD</Word><Word>DATEDIFF</Word>
-      <Word>GEN_ID</Word><Word>NEXT</Word><Word>VALUE</Word><Word>FOR</Word>
-      <Word>ROW_NUMBER</Word><Word>RANK</Word><Word>DENSE_RANK</Word><Word>LAG</Word><Word>LEAD</Word><Word>OVER</Word><Word>PARTITION</Word>
+    <!-- DML-action + DDL share the same purple. -->
+    <Keywords color="StatementKeyword">
+      <!-- DML action -->
+      <Word>INSERT</Word><Word>UPDATE</Word><Word>DELETE</Word><Word>MERGE</Word>
+      <Word>INTO</Word><Word>VALUES</Word><Word>SET</Word>
+      <Word>USING</Word><Word>MATCHED</Word><Word>RETURNING</Word>
+      <!-- DDL -->
+      <Word>CREATE</Word><Word>RECREATE</Word><Word>ALTER</Word><Word>DROP</Word>
+      <Word>TABLE</Word><Word>VIEW</Word><Word>INDEX</Word><Word>SEQUENCE</Word><Word>GENERATOR</Word>
+      <Word>PROCEDURE</Word><Word>FUNCTION</Word><Word>TRIGGER</Word>
+      <Word>DOMAIN</Word><Word>EXCEPTION</Word><Word>ROLE</Word>
+      <Word>GRANT</Word><Word>REVOKE</Word><Word>EXECUTE</Word>
+      <Word>RETURNS</Word><Word>RETURN</Word>
+      <Word>BEGIN</Word>
+      <Word>FOR</Word><Word>WHILE</Word><Word>DO</Word>
+      <Word>IF</Word>
+      <Word>EXIT</Word><Word>SUSPEND</Word><Word>LEAVE</Word>
+      <Word>DECLARE</Word><Word>VARIABLE</Word><Word>CURSOR</Word><Word>BLOCK</Word>
+      <Word>STATEMENT</Word>
+      <Word>COMMIT</Word><Word>ROLLBACK</Word><Word>SAVEPOINT</Word><Word>TRANSACTION</Word>
+      <Word>PRIMARY</Word><Word>FOREIGN</Word><Word>KEY</Word><Word>REFERENCES</Word>
+      <Word>CONSTRAINT</Word><Word>UNIQUE</Word><Word>CHECK</Word><Word>DEFAULT</Word>
+      <Word>NEXT</Word><Word>VALUE</Word>
+    </Keywords>
+
+    <Keywords color="DmlKeyword">
+      <Word>SELECT</Word><Word>FROM</Word><Word>WHERE</Word>
+      <Word>GROUP</Word><Word>BY</Word><Word>HAVING</Word>
+      <Word>ORDER</Word><Word>ASC</Word><Word>DESC</Word>
+      <Word>JOIN</Word><Word>INNER</Word><Word>LEFT</Word><Word>RIGHT</Word>
+      <Word>FULL</Word><Word>OUTER</Word><Word>CROSS</Word><Word>ON</Word>
+      <Word>AND</Word><Word>OR</Word><Word>NOT</Word>
+      <Word>IN</Word><Word>EXISTS</Word><Word>BETWEEN</Word>
+      <Word>LIKE</Word><Word>STARTING</Word><Word>CONTAINING</Word>
+      <Word>SIMILAR</Word><Word>TO</Word>
+      <Word>IS</Word><Word>NULL</Word>
+      <Word>AS</Word><Word>DISTINCT</Word><Word>ALL</Word>
+      <Word>UNION</Word><Word>EXCEPT</Word><Word>INTERSECT</Word>
+      <Word>WITH</Word><Word>RECURSIVE</Word>
+      <Word>FIRST</Word><Word>SKIP</Word><Word>ROWS</Word>
+      <Word>OFFSET</Word><Word>FETCH</Word><Word>LIMIT</Word>
+      <Word>TRUE</Word><Word>FALSE</Word><Word>UNKNOWN</Word>
+      <Word>PLAN</Word><Word>NATURAL</Word>
     </Keywords>
 
     <Rule color="Number">\b0[xX][0-9a-fA-F]+|(\b\d+(\.[0-9]+)?|\.[0-9]+)([eE][+-]?[0-9]+)?\b</Rule>

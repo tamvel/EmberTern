@@ -43,6 +43,11 @@ public sealed class TransactionService : IDisposable
         }
 
         var connection = _connectionService.RequireOpenConnection();
+        // Wait behind any in-flight reader-owned tx. Once we begin our own,
+        // future readers will see ActiveTransaction != null and Borrow instead
+        // of Begin, so we release the gate immediately — borrowers don't
+        // need it.
+        await _connectionService.TransactionGate.WaitAsync().ConfigureAwait(false);
         try
         {
             _activeTransaction = (FbTransaction)await connection
@@ -55,6 +60,10 @@ public sealed class TransactionService : IDisposable
         {
             SetState(TransactionState.Error);
             throw new TransactionFailedException($"Could not start transaction: {ex.Message}", ex);
+        }
+        finally
+        {
+            _connectionService.TransactionGate.Release();
         }
     }
 

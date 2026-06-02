@@ -18,6 +18,13 @@ public partial class TableDetailTabViewModel : ViewModelBase
     private readonly FirebirdTableDetailReader? _reader;
     private readonly FirebirdDdlReader? _ddlReader;
 
+    // Tracks the in-flight (or completed) load. EnsureLoadedAsync returns this
+    // task — second-and-subsequent callers get the same Task back and join the
+    // already-running load instead of kicking off a duplicate, which would
+    // collide on the single-statement FbConnection. Reset implicitly on
+    // disconnect/reconnect because LoadWorkspaceFor builds a fresh VM instance.
+    private Task? _loadTask;
+
     public TableDetailTabViewModel(string tableName)
         : this(tableName, null, null)
     {
@@ -85,6 +92,15 @@ public partial class TableDetailTabViewModel : ViewModelBase
 
     [ObservableProperty]
     private string? _errorMessage;
+
+    // Lazy-load entry point. First caller starts the load; subsequent callers
+    // (e.g. SelectTab kicking off fire-and-forget AND OnOpenDdlRequested
+    // awaiting the result) get back the SAME task and join the running load.
+    // This prevents "Connection in use" races when several restored TableDetail
+    // tabs would otherwise all kick off LoadAsync concurrently against the
+    // single FbConnection.
+    public Task EnsureLoadedAsync(CancellationToken cancellationToken = default)
+        => _loadTask ??= LoadAsync(cancellationToken);
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {

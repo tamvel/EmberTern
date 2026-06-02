@@ -1,8 +1,12 @@
 using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
 using Avalonia.Media;
 using AvaloniaEdit.CodeCompletion;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Editing;
+using EmberTern.Core.Sql;
 
 namespace EmberTern.App.Completion;
 
@@ -29,16 +33,18 @@ public enum SqlCompletionKind
 internal sealed class SqlCompletionData : ICompletionData
 {
     private readonly string _description;
+    private readonly string? _columnType;
 
-    public SqlCompletionData(string text, SqlCompletionKind kind, string? description = null)
+    public SqlCompletionData(string text, SqlCompletionKind kind, string? description = null, string? columnType = null)
     {
         Text = text;
         Kind = kind;
-        // Sub-content stack would let us render a glyph + label; for now keep the
-        // label plain. CompletionList honours Content; Description shows in the
-        // tooltip pane next to the list.
-        Content = text;
+        _columnType = columnType;
         _description = description ?? DescribeKind(kind);
+        // Two-column IBExpert-style display: kind label on the left, name (+ optional
+        // ": TYPE" suffix for columns) on the right. Column widths must match across
+        // all entries so they line up — fixed-width 90 for the kind column.
+        Content = BuildContent(text, kind, columnType);
     }
 
     public IImage? Image => null;
@@ -70,12 +76,46 @@ internal sealed class SqlCompletionData : ICompletionData
 
     public void Complete(TextArea textArea, ISegment completionSegment, EventArgs insertionRequestEventArgs)
     {
-        textArea.Document.Replace(completionSegment, Text);
+        // Case-preserving insert: read what the user already typed in the
+        // completionSegment and shape the inserted text to match (all-lower /
+        // all-upper / verbatim). The catalog stores Firebird names uppercase,
+        // but lowercase-everywhere is the IBExpert default the user works in.
+        var typedPrefix = textArea.Document.GetText(completionSegment);
+        var insert = CaseMatcher.Match(typedPrefix, Text);
+        textArea.Document.Replace(completionSegment, insert);
+    }
+
+    private static Control BuildContent(string text, SqlCompletionKind kind, string? columnType)
+    {
+        var rightText = kind == SqlCompletionKind.Column && !string.IsNullOrEmpty(columnType)
+            ? text + " : " + columnType
+            : text;
+
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("90,*"),
+        };
+        var kindLabel = new TextBlock
+        {
+            Text = DescribeKind(kind),
+            VerticalAlignment = VerticalAlignment.Center,
+            Opacity = 0.6,
+        };
+        var nameLabel = new TextBlock
+        {
+            Text = rightText,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(kindLabel, 0);
+        Grid.SetColumn(nameLabel, 1);
+        grid.Children.Add(kindLabel);
+        grid.Children.Add(nameLabel);
+        return grid;
     }
 
     private static string DescribeKind(SqlCompletionKind kind) => kind switch
     {
-        SqlCompletionKind.Keyword => "SQL keyword",
+        SqlCompletionKind.Keyword => "Keyword",
         SqlCompletionKind.Table => "Table",
         SqlCompletionKind.View => "View",
         SqlCompletionKind.Procedure => "Procedure",
@@ -87,7 +127,7 @@ internal sealed class SqlCompletionData : ICompletionData
         SqlCompletionKind.Package => "Package",
         SqlCompletionKind.Role => "Role",
         SqlCompletionKind.Index => "Index",
-        SqlCompletionKind.Column => "Column",
+        SqlCompletionKind.Column => "Field",
         _ => string.Empty,
     };
 }

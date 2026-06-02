@@ -23,11 +23,25 @@ public sealed class FirebirdConnectionService : IDisposable
     private FbConnection? _activeConnection;
     private ConnectionProfile? _activeProfile;
 
+    // Serializes all "owned" BeginTransactionAsync calls on _activeConnection.
+    // Firebird/managed driver rejects a second concurrent tx on the same
+    // connection with "Parallel transactions are not supported". The borrow-
+    // or-begin pattern handles the user-tx-vs-reader-tx case, but reader-vs-
+    // reader (e.g. lazy-loading two TableDetail tabs after reconnect) and
+    // reader-vs-executor (F5 mid-load) still need a real lock.
+    //
+    // Held only while a Begin is in flight AND while an owned tx remains
+    // active. Borrowed txs don't touch this gate — multiple borrowers can
+    // share the user's tx freely.
+    private readonly SemaphoreSlim _transactionGate = new(1, 1);
+
     public bool IsConnected => _activeConnection is { State: System.Data.ConnectionState.Open };
 
     public ConnectionProfile? ActiveProfile => _activeProfile;
 
     public event EventHandler? ActiveConnectionChanged;
+
+    internal SemaphoreSlim TransactionGate => _transactionGate;
 
     public async Task ConnectAsync(ConnectionProfile profile, CancellationToken cancellationToken = default)
     {

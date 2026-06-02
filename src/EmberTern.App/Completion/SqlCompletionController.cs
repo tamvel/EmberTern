@@ -21,16 +21,16 @@ internal sealed class SqlCompletionController
     // Step-2 callbacks. Both nullable — when null, dot completion silently
     // degrades to plain word completion.
     private readonly Func<string, int, string?>? _dotTableResolver;
-    private readonly Func<string, IReadOnlyList<string>?>? _cachedColumnsProvider;
-    private readonly Func<string, Task<IReadOnlyList<string>>>? _ensureColumnsAsync;
+    private readonly Func<string, IReadOnlyList<ColumnSpec>?>? _cachedColumnsProvider;
+    private readonly Func<string, Task<IReadOnlyList<ColumnSpec>>>? _ensureColumnsAsync;
     private CompletionWindow? _window;
 
     public SqlCompletionController(
         TextEditor editor,
         Func<IReadOnlyList<MetadataObject>> objectsProvider,
         Func<string, int, string?>? dotTableResolver = null,
-        Func<string, IReadOnlyList<string>?>? cachedColumnsProvider = null,
-        Func<string, Task<IReadOnlyList<string>>>? ensureColumnsAsync = null)
+        Func<string, IReadOnlyList<ColumnSpec>?>? cachedColumnsProvider = null,
+        Func<string, Task<IReadOnlyList<ColumnSpec>>>? ensureColumnsAsync = null)
     {
         _editor = editor;
         _objectsProvider = objectsProvider;
@@ -128,7 +128,7 @@ internal sealed class SqlCompletionController
             // Unknown qualifier — silently bail. Falling back to plain word
             // completion here would be confusing (user typed "X." expecting
             // X's columns, doesn't want SQL keywords instead).
-            return force ? ShowWindowWithColumns(dot.Value, Array.Empty<string>(), force) : false;
+            return force ? ShowWindowWithColumns(dot.Value, Array.Empty<ColumnSpec>(), force) : false;
         }
 
         // Cache hit → render immediately.
@@ -174,7 +174,7 @@ internal sealed class SqlCompletionController
         }
     }
 
-    private bool ShowWindowWithColumns(DotContext dot, IReadOnlyList<string> columns, bool force)
+    private bool ShowWindowWithColumns(DotContext dot, IReadOnlyList<ColumnSpec> columns, bool force)
     {
         if (_window is not null)
         {
@@ -194,7 +194,7 @@ internal sealed class SqlCompletionController
         var data = window.CompletionList.CompletionData;
         foreach (var col in columns)
         {
-            data.Add(new SqlCompletionData(col, SqlCompletionKind.Column));
+            data.Add(new SqlCompletionData(col.Name, SqlCompletionKind.Column, columnType: col.Type));
         }
 
         if (data.Count == 0) return false;

@@ -79,15 +79,16 @@ public sealed class FirebirdMetadataReader
         => kind == MetadataObjectKind.SystemTable;
 
     /// <summary>
-    /// Returns the column names of a table or view (ordered by RDB$FIELD_POSITION),
-    /// for SQL editor autocomplete after <c>ALIAS.</c>. Short-lived ReadCommitted
-    /// transaction — independent from the user's working tx.
+    /// Returns the columns of a table or view (ordered by RDB$FIELD_POSITION),
+    /// each with name + formatted SQL type, for SQL editor autocomplete after
+    /// <c>ALIAS.</c>. Short-lived ReadCommitted transaction — independent from
+    /// the user's working tx.
     /// </summary>
-    public async Task<IReadOnlyList<string>> ListColumnsAsync(
+    public async Task<IReadOnlyList<ColumnSpec>> ListColumnsAsync(
         string tableName,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrEmpty(tableName)) return Array.Empty<string>();
+        if (string.IsNullOrEmpty(tableName)) return Array.Empty<ColumnSpec>();
 
         var connection = _connectionService.RequireOpenConnection();
         var tx = (FbTransaction)await connection
@@ -96,24 +97,25 @@ public sealed class FirebirdMetadataReader
         try
         {
             await using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "SELECT TRIM(RDB$FIELD_NAME) FROM RDB$RELATION_FIELDS " +
-                "WHERE RDB$RELATION_NAME = @name " +
-                "ORDER BY RDB$FIELD_POSITION";
+            cmd.CommandText = ColumnsSql;
             cmd.CommandTimeout = 0;
             cmd.Transaction = tx;
             cmd.Parameters.AddWithValue("@name", tableName);
 
-            var columns = new List<string>();
+            var columns = new List<ColumnSpec>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 if (reader.IsDBNull(0)) continue;
                 var name = reader.GetString(0).Trim();
-                if (name.Length > 0)
-                {
-                    columns.Add(name);
-                }
+                if (name.Length == 0) continue;
+                var fieldType = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+                var fieldLength = reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2);
+                var fieldScale = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3);
+                var fieldPrecision = reader.IsDBNull(4) ? (int?)null : reader.GetInt32(4);
+                var subType = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
+                var type = FirebirdTableDetailReader.FormatFieldType(fieldType, fieldLength, fieldScale, fieldPrecision, subType);
+                columns.Add(new ColumnSpec(name, type));
             }
 
             await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -129,6 +131,18 @@ public sealed class FirebirdMetadataReader
             await tx.DisposeAsync().ConfigureAwait(false);
         }
     }
+
+    // Joins RDB$RELATION_FIELDS to RDB$FIELDS so the autocomplete dropdown can
+    // render "COLUMN : TYPE". Same mapping logic as the TableDetail Fields tab.
+    internal const string ColumnsSql =
+        "SELECT TRIM(rf.RDB$FIELD_NAME), " +
+        "       ft.RDB$FIELD_TYPE, ft.RDB$FIELD_LENGTH, " +
+        "       ft.RDB$FIELD_SCALE, ft.RDB$FIELD_PRECISION, " +
+        "       ft.RDB$FIELD_SUB_TYPE " +
+        "FROM RDB$RELATION_FIELDS rf " +
+        "JOIN RDB$FIELDS ft ON ft.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE " +
+        "WHERE rf.RDB$RELATION_NAME = @name " +
+        "ORDER BY rf.RDB$FIELD_POSITION";
 
     // Internal so tests can verify system-name filtering without a live connection.
     internal static bool IsSystemName(string name)

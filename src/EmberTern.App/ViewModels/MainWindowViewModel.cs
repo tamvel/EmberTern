@@ -60,7 +60,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _executor = new FirebirdQueryExecutor(_service, _transactionService);
         _metadataReader = new FirebirdMetadataReader(_service);
         _ddlReader = new FirebirdDdlReader(_service, _transactionService);
-        _tableDetailReader = new FirebirdTableDetailReader(_service);
+        _tableDetailReader = new FirebirdTableDetailReader(_service, _transactionService);
         Metadata = new MetadataExplorerViewModel(_service, _metadataReader);
         Metadata.OpenDdlRequested += OnOpenDdlRequested;
         Metadata.CopyNameRequested += OnCopyNameRequested;
@@ -386,15 +386,17 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 // Rebuild the detail VM with the live readers. Seed DdlText from the
                 // cached value so the DDL sub-tab is non-empty before fetch returns.
-                // Fields/Indexes come from a background LoadAsync — fire and forget;
-                // it posts results back on the UI thread.
+                // NO eager LoadAsync here — multiple TableDetail tabs would race
+                // against the single FbConnection and silently fail. Instead,
+                // SelectTab triggers EnsureLoadedAsync on first activation, so the
+                // restored-active tab loads automatically and inactive tabs load
+                // lazily when the user clicks them.
                 var obj = new MetadataObject(tab.ObjectName, detailKind);
                 var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader)
                 {
                     DdlText = tab.DdlText ?? string.Empty,
                 };
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateTableDetail(this, obj, detail, tab.ConnectionProfileId));
-                _ = detail.LoadAsync();
             }
         }
 
@@ -591,7 +593,7 @@ public partial class MainWindowViewModel : ViewModelBase
     // ApplyActiveConnectionChange). A separate "table doesn't exist or has no
     // columns" sentinel is unnecessary — the empty list is the right answer in
     // both cases, and a re-request only costs one tiny round-trip.
-    private readonly Dictionary<string, IReadOnlyList<string>> _columnCache =
+    private readonly Dictionary<string, IReadOnlyList<ColumnSpec>> _columnCache =
         new(StringComparer.OrdinalIgnoreCase);
     // Names of tables/views that the metadata categories have surfaced, so the
     // dot autocomplete knows which qualifier looks up real columns vs. is just
@@ -628,7 +630,7 @@ public partial class MainWindowViewModel : ViewModelBase
         return SqlAliasResolver.ResolveTableForQualifier(text, dot.Value.Qualifier, tables);
     }
 
-    internal IReadOnlyList<string>? TryGetCachedColumns(string tableName)
+    internal IReadOnlyList<ColumnSpec>? TryGetCachedColumns(string tableName)
         => _columnCache.TryGetValue(tableName, out var cols) ? cols : null;
 
     /// <summary>
@@ -636,11 +638,11 @@ public partial class MainWindowViewModel : ViewModelBase
     /// to call repeatedly — subsequent calls return the cached list. Returns
     /// an empty list when no connection is active or the table doesn't exist.
     /// </summary>
-    internal async Task<IReadOnlyList<string>> EnsureColumnsAsync(string tableName, CancellationToken ct = default)
+    internal async Task<IReadOnlyList<ColumnSpec>> EnsureColumnsAsync(string tableName, CancellationToken ct = default)
     {
-        if (string.IsNullOrEmpty(tableName)) return Array.Empty<string>();
+        if (string.IsNullOrEmpty(tableName)) return Array.Empty<ColumnSpec>();
         if (_columnCache.TryGetValue(tableName, out var cached)) return cached;
-        if (!_service.IsConnected) return Array.Empty<string>();
+        if (!_service.IsConnected) return Array.Empty<ColumnSpec>();
 
         try
         {
@@ -651,7 +653,7 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (MetadataReadException)
         {
             // Don't poison the cache on transient errors — let the next attempt retry.
-            return Array.Empty<string>();
+            return Array.Empty<ColumnSpec>();
         }
     }
 
@@ -754,8 +756,10 @@ public partial class MainWindowViewModel : ViewModelBase
                 var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader);
                 var newTab = WorkspaceTabViewModel.CreateTableDetail(this, obj, detail, _service.ActiveProfile?.Id);
                 WorkspaceTabs.Add(newTab);
+                // SelectTab kicks off EnsureLoadedAsync as a side-effect; we await
+                // the same task here so we can surface any post-load error.
                 SelectTab(newTab);
-                await detail.LoadAsync().ConfigureAwait(true);
+                await detail.EnsureLoadedAsync().ConfigureAwait(true);
                 if (!string.IsNullOrEmpty(detail.ErrorMessage))
                 {
                     AddMessage(MessageSeverity.Error, detail.ErrorMessage);
@@ -787,6 +791,18 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var t in WorkspaceTabs) t.IsSelected = false;
         tab.IsSelected = true;
         SelectedWorkspaceTab = tab;
+
+        // Lazy-load TableDetail content on first activation. Restored tabs and
+        // background tabs stay empty until the user clicks them — eager loading
+        // every restored TableDetail tab races against the single-statement
+        // FbConnection and only the first wins. EnsureLoadedAsync is idempotent
+        // and returns the running task, so this fire-and-forget can be awaited
+        // by other code paths (e.g. OnOpenDdlRequested) for completion.
+        if (tab is { Kind: WorkspaceTabKind.TableDetail, TableDetail: { } detail }
+            && _service.IsConnected)
+        {
+            _ = detail.EnsureLoadedAsync();
+        }
     }
 
     internal void CloseTab(WorkspaceTabViewModel tab)

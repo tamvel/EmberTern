@@ -1,6 +1,6 @@
 # EmberTern — Claude Code Context
 
-A modern desktop developer workbench for Firebird database developers, built with **.NET 10 + Avalonia 12**. Target users: ERP and backend devs who work daily with SQL, procedures, triggers, metadata, and transactions. Design philosophy: **less features, better experience; workflow quality over feature count; transaction-aware by default**.
+A modern desktop developer workbench for Firebird database developers, built with **.NET 9 + Avalonia 12**. Target users: ERP and backend devs who work daily with SQL, procedures, triggers, metadata, and transactions. Design philosophy: **less features, better experience; workflow quality over feature count; transaction-aware by default**.
 
 Master prompt / V1 blueprint: `C:\Users\grzegorz.gronski\Desktop\embertern-claude-code-prompt.md`
 Target UI mockup: `C:\Users\grzegorz.gronski\Desktop\UI koncepcja.png`
@@ -12,7 +12,7 @@ Target UI mockup: `C:\Users\grzegorz.gronski\Desktop\UI koncepcja.png`
 dotnet build EmberTern.slnx
 dotnet test  EmberTern.slnx
 # run the app
-src\EmberTern.App\bin\Debug\net10.0\EmberTern.exe
+src\EmberTern.App\bin\Debug\net9.0\EmberTern.exe
 ```
 
 Solution file is `.slnx` (not `.sln`) — .NET 10 default. App AssemblyName is `EmberTern`, so avares URIs use `avares://EmberTern/...`. `Directory.Build.props` sets `net10.0`, `Nullable=enable`, `TreatWarningsAsErrors=true` for every project.
@@ -740,12 +740,135 @@ Mapping helpers `BuildConstraintInfo` / `NormalizeDescription` / `NormalizeCheck
 
 **319 / 319 green** (309 → 319, +10 new). Build clean (zero warnings, TWAE on). Smoke-verified: app launches, runs 5 seconds without crashing.
 
+### TableDetail late-session fixes (shipped)
+
+After the 6-sub-tabs landed, four real-world bugs surfaced (and were fixed) while smoke-testing against the user's FB 5 schema. Test count stayed at 319 throughout — all fixes were code/architecture changes, no new behavior to pin.
+
+**1. CheckBox columns rendered as orange/tan rectangles at 22 px row pitch.** FluentTheme's `CheckBox` template has a `~20 px` inner Border element that doesn't scale cleanly to 14×14 — squeezing it via style setters produced a malformed rounded rectangle, no glyph. Replaced the three `DataGridCheckBoxColumn`s (Not Null, Unique, Descending, PK) with `DataGridTextColumn` + a new [BoolToCheckmarkConverter](src/EmberTern.App/Converters/BoolToCheckmarkConverter.cs) returning `✓` for true and `""` for false. Cleaner read for read-only display, inherits row selection/hover colors naturally, matches IBExpert/DataGrip convention. The `DataGridCell CheckBox` style block in `UserControl.Styles` was removed (no longer needed).
+
+**2. Bottom panel (Results/Messages/Output) visible on non-SQL tabs.** Results and Messages only make sense for SQL execution; on a DDL or TableDetail tab they're noise. The workspace grid row defs flipped from `"*,1,280"` to `"*,Auto"`, with the 1px separator + 280px panel wrapped in an inner `Grid RowDefinitions="1,280" IsVisible="{Binding IsQueryTabActive}"`. When the inner Grid hides, the outer Auto row collapses to 0 and the editor area (`*`) expands to fill the full height. Same `IsQueryTabActive` property as the toolbar/Saved-Queries gates.
+
+**3. LoadAsync was monolithic — one failing query wiped the rest.** The original `LoadAsync` had a single outer `try/catch` wrapping the five sequential reads (fields/constraints/indexes/DDL/description). A failure in step 2 (e.g. a Constraints SQL error on a particular FB version) skipped every later step too. And the error message was reported to Messages — which is now hidden on TableDetail tabs (see fix #2). User saw "empty data" with no feedback. Refactored: each step runs through a `SafeLoadAsync` helper that traps `MetadataReadException` independently. First error wins for the tab-level `ErrorMessage`; subsequent steps run regardless. Added an `ErrorMessage` TextBlock inside the TableDetail view (next to the loading hint) so errors are visible even with Messages hidden.
+
+**4. Multiple restored TableDetail tabs raced against the single FbConnection — only the first loaded.** `LoadWorkspaceFor` was fire-and-forgetting `_ = detail.LoadAsync()` for every restored TableDetail tab. With N tabs sharing one connection, the first tab's `BeginTransactionAsync` held it; subsequent tabs threw "Parallel transactions" and the catch swallowed them. Fix: **lazy-load on first activation**. New `EnsureLoadedAsync` entry point on `TableDetailTabViewModel`:
+
+```csharp
+private Task? _loadTask;
+public Task EnsureLoadedAsync(CancellationToken ct = default)
+    => _loadTask ??= LoadAsync(ct);
+```
+
+Idempotent — first caller starts the load and stashes the task; subsequent callers join the *same* task. `SelectTab` kicks off `EnsureLoadedAsync` when the newly-activated tab is a TableDetail. The restored-active tab loads automatically (via `SelectTab(WorkspaceTabs[activeIndex])` at the end of `LoadWorkspaceFor`); non-active tabs load when the user clicks them. `OnOpenDdlRequested` (new-tab path) awaits the same task so its post-load `ErrorMessage` check still works. Reset semantics are free: on disconnect/reconnect, `LoadWorkspaceFor` builds *new* VM instances with `_loadTask = null`, so the next activation loads fresh against the new connection.
+
+**5. Opening a TableDetail tab during an active user transaction flooded Messages with "Parallel transactions are not supported".** `FirebirdTableDetailReader` opened its own `ReadCommittedTransactionAsync` for every query. When the user already had a working tx active, this raised on every call. Adopted the **borrow-or-begin** pattern already proven in `FirebirdDdlReader`: new constructor accepts an optional `TransactionService`; new private helper:
+
+```csharp
+private async Task<(FbTransaction tx, bool ownsTx)> BorrowOrBeginAsync(FbConnection conn, CancellationToken ct)
+{
+    var borrowed = _transactionService?.ActiveTransaction;
+    if (borrowed is not null) return (borrowed, false);
+    return ((FbTransaction)await conn.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct).ConfigureAwait(false), true);
+}
+```
+
+All five methods (Fields/Indexes/Constraints/Description/DataPreview) use the helper and gate `CommitAsync` / `RollbackAsync` / `DisposeAsync` on `ownsTx`. When the user has a working tx, reads piggyback on it; when there's none, the reader owns and tears down its own short-lived tx as before. `MainWindowViewModel` passes `_transactionService` when constructing the reader.
+
+The spec for fix #5 actually said "remove `BeginTransactionAsync` entirely" and "SELECT works without an explicit tx". Pushed back on that — the managed driver rejects commands without an attached transaction on a connection that needs one, and the borrow-or-begin pattern is already standardized in `FirebirdDdlReader`. Consistency over the suggested shortcut.
+
+**Gotchas promoted to architecture lore.**
+
+22. **Borrow-or-begin transaction pattern for any reader on a shared `FbConnection`.** Firebird/managed driver disallows parallel transactions on one connection. Any reader that opens its own `BeginTransactionAsync` will throw on every call once a user transaction goes active. The fix is to optionally accept a `TransactionService`, check `ActiveTransaction`, and reuse it when present — only start your own when there's no active user tx, and only commit/dispose what you own. `FirebirdDdlReader` and now `FirebirdTableDetailReader` both follow this; `FirebirdMetadataReader.ListAsync` / `ListColumnsAsync` still don't — they're called only during sidebar load (no user-tx pressure today), but should adopt the same pattern if that changes.
+
+23. **`EnsureLoadedAsync` + `_loadTask` for idempotent lazy load.** When a VM may have its `LoadAsync` triggered by multiple call sites (e.g. tab activation fire-and-forget + an `OnOpenDdlRequested` that awaits the result), they MUST join the same task. The two-line idiom: `private Task? _loadTask; public Task EnsureLoadedAsync(CancellationToken ct = default) => _loadTask ??= LoadAsync(ct);`. First caller starts the load and assigns; later callers get the running/completed task back. Single-thread UI context means no race on `??=` assignment. Reset is free: throw away the VM instance (e.g. on reconnect) and the new one starts fresh.
+
+24. **Per-step error isolation in any multi-step `LoadAsync`.** When `LoadAsync` runs N sequential queries against the same connection, a single outer `try/catch` is wrong: a failure in step 2 silently kills steps 3-N too. Wrap each step in its own try/catch (`SafeLoadAsync` helper in `TableDetailTabViewModel`) that traps the expected exception type, accumulates the first error into a tab-level `ErrorMessage`, and lets the rest proceed. Compound with **surface errors in the view itself** when an out-of-band error channel (e.g. the Messages tab) might be hidden on the current tab kind — otherwise the user sees blank data with no explanation.
+
+25. **Toolbar + bottom panel + Saved Queries panel visibility ALL gate on a small set of computed VM properties.** `IsQueryTabActive` (true when `SelectedWorkspaceTab.Kind == Query`) is the master switch for SQL-execution chrome — Execute / Cancel / Commit / Rollback / Format / New / Toggle panel / Clear, plus the transaction bar, the Saved Queries panel (combined as `ShowQueryPanel = IsQueryPanelVisible && IsQueryTabActive`), and the bottom Results/Messages/Output panel (via the inner-wrapper `IsVisible`). `IsClosableTabActive` (DDL or TableDetail) gates the Close-tab button. All of these notify off `_selectedWorkspaceTab`'s `NotifyPropertyChangedFor` chain — adding a new tab-kind-aware control means adding the property to that chain, not a new event or subscription.
+
+### Connection-wide TransactionGate (shipped)
+
+Bug surfaced after disconnect → reconnect: opening a TableDetail tab while another was loading (or pressing F5 in the SQL Editor mid-load) flooded Messages with "A transaction is currently active. Parallel transactions are not supported." even though the status bar showed Idle.
+
+**Root cause.** The borrow-or-begin pattern (gotcha #22) only checks `_transactionService?.ActiveTransaction` — but a *reader-owned* tx is invisible to `TransactionService`. So:
+
+- TableDetail load owns its own tx (TransactionService Idle, status bar shows "No transaction").
+- User clicks another restored TableDetail tab → its `SelectTab` fires `EnsureLoadedAsync` fire-and-forget → its `BorrowOrBeginAsync` sees TransactionService Idle → calls `connection.BeginTransactionAsync(...)` → **second concurrent tx on the same `FbConnection`** → `FbException` "Parallel transactions are not supported" on every subsequent reader call until the first load finishes.
+- Same race against the F5 executor path (`TransactionService.BeginTransactionAsync` calls `connection.BeginTransactionAsync` without checking for in-flight reader-owned txs).
+
+Pre-reconnect this was rare because `OnOpenDdlRequested` `await`s the load before yielding control. Post-reconnect, `LoadWorkspaceFor` kicks off the active tab's load fire-and-forget at `SelectTab(WorkspaceTabs[activeIndex])`, leaving the user free to click around while the background tx is alive.
+
+**Fix.** A connection-wide `SemaphoreSlim TransactionGate` in [FirebirdConnectionService.cs](src/EmberTern.Firebird/FirebirdConnectionService.cs). Guards every `Begin` against concurrent `Begin`s — borrow path is unchanged (no gate needed, multiple borrowers freely share the user's tx).
+
+- **Owned reader tx** ([FirebirdTableDetailReader.cs](src/EmberTern.Firebird/FirebirdTableDetailReader.cs) + [FirebirdDdlReader.cs](src/EmberTern.Firebird/FirebirdDdlReader.cs)): `BorrowOrBeginAsync` acquires the gate before `Begin`, releases on the owned-tx commit/dispose path (in each method's `finally`). Borrowed path: no gate.
+- **User tx** (`TransactionService.BeginTransactionAsync`): acquires the gate around the `Begin`, releases immediately after (no need to hold for the user-tx duration — subsequent readers will see `ActiveTransaction != null` and Borrow instead of Begin).
+
+**Re-check on acquire**: after `WaitAsync`, re-read `_transactionService?.ActiveTransaction` — between queuing and acquiring, the user may have begun a tx via F5. If so, release the gate and borrow.
+
+**Why not just keep the borrow-or-begin pattern unchanged?** Per the bug owner's explicit ask. The gate composes with the pattern — it doesn't replace it. Without the gate, borrow-or-begin only handles user-vs-reader races; with the gate, reader-vs-reader and reader-vs-executor races close too.
+
+**Gotchas — promote to architecture lore.**
+
+26. **Borrow-or-begin alone is not enough — concurrent owned-tx Begins still collide.** The original gotcha #22 covers user-tx-vs-reader-tx, but two readers racing each other (or a reader racing the F5 executor) still hit "Parallel transactions are not supported" because neither one knows the other has an owned tx in flight (`TransactionService.ActiveTransaction` stays null for reader-owned txs by design — we don't want metadata browsing to bump the user's working-tx state). The fix is a `SemaphoreSlim` on `FirebirdConnectionService` that gates every `BeginTransactionAsync` (whether owned by a reader or by `TransactionService`). Held by the owner across the tx's lifetime; borrowers don't acquire it. **Rule**: any future `BeginTransactionAsync` caller on the shared `FbConnection` MUST go through `_connectionService.TransactionGate` — borrow-or-begin without the gate is a latent race.
+
+27. **Fire-and-forget background work from `SelectTab` is a liability after reconnect.** `LoadWorkspaceFor` kicks off `EnsureLoadedAsync` on the active TableDetail tab via `_ = detail.EnsureLoadedAsync()`. The user sees the tab is selected, doesn't realize a load is running in the background, and clicks something else. Anything that needs the connection (another TableDetail, F5, even a DDL view) hits the race. The TransactionGate (gotcha #26) is the *correct* fix for this — fire-and-forget itself is fine as a UX pattern, but the underlying resource access must be serialization-safe. Don't reach for "await before yielding to UI" — UI thread can't await without freezing. Lock the resource, not the call site.
+
+### SQL autocomplete polish — case-preserving + rich display (shipped)
+
+Two follow-ups on the autocomplete experience.
+
+**1. Case-preserving completion** ([CaseMatcher.cs](src/EmberTern.Core/Sql/CaseMatcher.cs)). New pure helper in `EmberTern.Core.Sql`: `CaseMatcher.Match(typedPrefix, candidate)` — all-lowercase prefix → lowercase candidate, all-uppercase → uppercase, mixed/empty/digits-or-underscores-only → catalog form verbatim. Applied in `SqlCompletionData.Complete`: read the typed text via `textArea.Document.GetText(completionSegment)` and feed it through `CaseMatcher.Match(typed, Text)` before `Document.Replace`. The completion list still stores names in the original RDB$ casing — transformation happens only at insertion time, so the CompletionList's prefix filter doesn't get confused. Picking `NAGL_TABLE_NAME` after typing "nagl" now inserts `nagl_table_name` (matches IBExpert / DataGrip with the lowercase-everywhere preset).
+
+**2. Richer two-column display** ([SqlCompletionData.cs](src/EmberTern.App/Completion/SqlCompletionData.cs)). `Content` is now a 2-column `Grid` (`90,*`) instead of a bare string:
+- **Columns**: left column `"Field"` (Opacity 0.6), right column `"NAME : TYPE"` (e.g. `ID_NAGL : INTEGER`, `NAZWA : VARCHAR(50)`).
+- **Schema objects / keywords**: left column the kind label (`Table`, `View`, `Procedure`, `Trigger`, `Function`, …, `Keyword`), right column the name verbatim.
+
+Layout matches the IBExpert dropdown in the user's reference screenshots. The 90px fixed-width left column means all entries align cleanly. Opacity instead of a themed brush keeps both light + dark legible without extra resource keys; entry text color flows through FluentTheme's `CompletionList` default (no hardcoded colors).
+
+**Column type pipeline.** Required getting the formatted SQL type ("INTEGER", "VARCHAR(50)", "NUMERIC(15,2)") down to the completion data:
+
+- New `ColumnSpec(string Name, string Type)` record in [Core/Metadata/ColumnSpec.cs](src/EmberTern.Core/Metadata/ColumnSpec.cs).
+- `FirebirdMetadataReader.ListColumnsAsync` returns `IReadOnlyList<ColumnSpec>` (was `IReadOnlyList<string>`). New `ColumnsSql` constant joins `RDB$RELATION_FIELDS` ↔ `RDB$FIELDS` (same shape as TableDetail) and reuses `FirebirdTableDetailReader.FormatFieldType` (internal access within the `EmberTern.Firebird` assembly — no public-surface change needed). Same short-lived ReadCommitted tx pattern as before.
+- `MainWindowViewModel._columnCache` retyped to `Dictionary<string, IReadOnlyList<ColumnSpec>>`; `TryGetCachedColumns` / `EnsureColumnsAsync` signatures follow.
+- `SqlCompletionController._cachedColumnsProvider` / `_ensureColumnsAsync` callbacks retyped accordingly; `ShowWindowWithColumns` passes `col.Name` + `col.Type` into the new `SqlCompletionData` ctor param `columnType`.
+- `MainWindow.axaml.cs` callback bodies updated; the rest of the wiring is unchanged.
+
+The inserted `Text` is still just the name — the rich Content is display-only.
+
+**Tests** — 11 new in [CaseMatcherTests.cs](tests/EmberTern.Tests/CaseMatcherTests.cs) covering lower / upper / mixed / empty / null prefixes, digits+underscores only (no signal → verbatim), single-letter prefix, empty candidate. **330 / 330 green** (319 → 330, +11 new). Build clean (zero warnings, TWAE on). Smoke-verified: app launches and runs 8 seconds without crashing.
+
+**Gotchas — promote to architecture lore.**
+
+28. **AvaloniaEdit `ICompletionData.Content` accepts any `Control`, not just strings.** The API name suggests Content should be text. It's actually placed inside a `ContentPresenter`, so a full `Grid` (or any other Avalonia control) renders fine. This is the cleanest path to multi-column IBExpert-style completion entries — no custom template, no custom item container, no per-language theming. **Rule**: when an Avalonia (or AvaloniaEdit) API takes `object Content`, look at the host control — if it ends up in a `ContentPresenter`, you can pass a built-up control tree directly.
+
+29. **Case-matching at insertion time, not at display/sort time.** Tempting to lowercase the entire completion list on display when the user's prefix is lowercase. Don't — the prefix can change between keystrokes, and CompletionList's prefix-filter would re-run incorrectly if `Content`/display text and `Text` (insertion) drift apart. Keep names in catalog form for both the dropdown and filtering; transform only the inserted text in `ICompletionData.Complete`, reading the typed prefix via `textArea.Document.GetText(completionSegment)` (the segment passed in matches `StartOffset..EndOffset` the controller set on the `CompletionWindow`). The pure transformation lives in `EmberTern.Core.Sql.CaseMatcher` so it's unit-testable without AvaloniaEdit.
+
+### SQL highlighter — richer per-category palette (shipped)
+
+Split the single bold "Keyword" color into separate categories matching VS Code Dark+/Light+:
+
+- **DML keywords** (SELECT/FROM/WHERE/JOIN/AND/OR/NULL/AS/UNION/...) — blue (dark `#569CD6`, light `#0000FF`), bold.
+- **DML-action + DDL keywords** (INSERT/UPDATE/DELETE/MERGE/INTO/VALUES/SET/CREATE/ALTER/DROP/TABLE/VIEW/PROCEDURE/BEGIN/IF/DO/FOR/EXIT/SUSPEND/...) — purple (dark `#C586C0`, light `#AF00DB`), bold.
+- **Data types** — teal (`#4EC9B0` / `#267F99`).
+- **Built-in functions** (CAST/COALESCE/IIF/CASE/WHEN/THEN/ELSE/END/COUNT/SUM/MIN/MAX/EXTRACT/ROUND/UPPER/LOWER/TRIM/CURRENT_*/OVER/PARTITION/ROW_NUMBER/...) — yellow/gold (`#DCDCAA` / `#795E26`).
+
+Numbers, strings, comments unchanged. Operators dropped to subtle grey (`#D4D4D4` / `#666666`).
+
+Both [FirebirdSql.xshd](src/EmberTern.App/Assets/FirebirdSql.xshd) and [FirebirdSql.Light.xshd](src/EmberTern.App/Assets/FirebirdSql.Light.xshd) updated 1:1 — same Keywords blocks, same ordering, only colors differ. Theme-switch path (`ApplyEditorThemeColors` in `MainWindow.axaml.cs`) unchanged. No C# logic touched.
+
+**Ordering decision.** Functions block declared FIRST so CASE/WHEN/THEN/ELSE/END resolve as functions (also valid PSQL control-flow tokens, but reading them as expression keywords matches IBExpert/DataGrip and is more useful for daily query work). LEFT/RIGHT stay in DML keywords (blue) since `LEFT JOIN` is far more common than the `LEFT(str, n)` function in this codebase's daily use.
+
+**Tests**: 330 / 330 still green (visual only — no test changes). Build clean (zero warnings, TWAE on).
+
+**Gotcha promoted to architecture lore.**
+
+30. **XSHD `<Keywords>` blocks are precedence-ordered — first declared wins.** When the same word appears in multiple Keywords blocks (e.g. CASE in both Function and DDL lists), the *first* block to match wins. AvaloniaEdit doesn't merge; it short-circuits on first hit. **Rule**: when splitting a single "Keyword" category into per-color categories (DML/DDL/Function/...), put the higher-priority category first in the XSHD file. Tidiest to keep each word in exactly one block, but later-block duplicates simply don't fire — no error.
+
 ## Current state
 
 - **Build**: clean (zero warnings, `TreatWarningsAsErrors=true` enforced).
-- **Tests**: 319 / 319 passing.
-- **App**: builds, launches, exits cleanly. SQL editor: autocomplete (Ctrl+Space, 3+ char auto-trigger, `ALIAS./TABLE.` column completion), formatter lowercases keywords + identifiers, syntax highlighting swaps on theme toggle, selection brush matches the rest of the app, light-theme accent blue, double-click on a loaded metadata object name opens its DDL tab. **Tables open as a 6-sub-tab TableDetailTab (Pola / Ograniczenia / Indeksy / Dane / Opis / DDL)** — 1-based field position, zero scale blanked, font 11, tight 22 px row pitch, Dane shows first 200 rows in a dynamic grid, Opis surfaces the table's RDB$DESCRIPTION. TableDetail tabs survive restart; toolbar buttons + Saved Queries panel hide on non-Query tabs.
-- **Branch state**: working on master. **V1 + Explorer Redesign + Metadata-categories-expansion + V1.1 Workspace Persistence + Per-Connection Workspace + SQL Editor UX + SQL Queries Panel + Visual polish + SQL Editor execute-selected + autoformat + SQL Autocomplete + formatter-lowercase-all + light-theme highlighting + light-color-polish + double-click-open-DDL + Table Detail tab + Table Detail polish + per-tab toolbar + TableDetail persistence + 6 sub-tabs shipped.** Next V1.1 candidate from the list below.
+- **Tests**: 330 / 330 passing.
+- **App**: builds, launches, exits cleanly. SQL editor: autocomplete (Ctrl+Space, 3+ char auto-trigger, `ALIAS./TABLE.` column completion) — **case-preserving on insert (nagl→nagl_table; NAGL→NAGL_TABLE; mixed→catalog form) and IBExpert-style 2-column display (kind label + "NAME : TYPE" for columns / name for objects)**, formatter lowercases keywords + identifiers, syntax highlighting swaps on theme toggle, selection brush matches the rest of the app, light-theme accent blue, double-click on a loaded metadata object name opens its DDL tab. **Tables open as a 6-sub-tab TableDetailTab (Pola / Ograniczenia / Indeksy / Dane / Opis / DDL)** — 1-based field position, zero scale blanked, font 11, tight 22 px row pitch, text-checkmark booleans (✓/empty), Dane shows first 200 rows in a dynamic grid, Opis surfaces the table's RDB$DESCRIPTION. TableDetail tabs survive restart and lazy-load on first activation. TableDetail readers borrow the user's working tx when active (no "Parallel transactions" floods on open-during-tx). **Connection-wide `TransactionGate` semaphore serializes owned-tx Begins across both readers AND `TransactionService` — disconnect/reconnect + lazy-load races + F5-mid-load no longer hit "Parallel transactions are not supported".** Errors in any single sub-step surface in the view itself (Messages panel is hidden on non-Query tabs). Toolbar buttons + Saved Queries panel + bottom Results/Messages panel all hide on non-Query tabs.
+- **Branch state**: working on master. **V1 + Explorer Redesign + Metadata-categories-expansion + V1.1 Workspace Persistence + Per-Connection Workspace + SQL Editor UX + SQL Queries Panel + Visual polish + SQL Editor execute-selected + autoformat + SQL Autocomplete + formatter-lowercase-all + light-theme highlighting + light-color-polish + double-click-open-DDL + Table Detail tab + Table Detail polish + per-tab toolbar + TableDetail persistence + 6 sub-tabs + late-session fixes (checkmark, bottom-panel hide, per-step errors, lazy-load, borrow-or-begin tx) + TransactionGate (closes reader-vs-reader and reader-vs-executor parallel-tx race) + autocomplete-polish (case-preserving + rich display) shipped.** Next V1.1 candidate from the list below.
 
 ## V1 — definition of done (all met)
 
@@ -761,15 +884,18 @@ Mapping helpers `BuildConstraintInfo` / `NormalizeDescription` / `NormalizeCheck
 ## V1.1 candidates (post-V1 polish, not committed)
 
 Surfaced by what was actually built; ordered roughly by user-visible value:
-1. **Refresh DDL button** on DDL tabs — DDL is fetched once at open; the user has no way to re-fetch after they edit the object elsewhere (e.g. in another tool).
-2. **Procedure / function param signature in tab header** — currently `Procedure: SP_BALANCE` is just the name. IBExpert shows `(IN, OUT)` shape; would help disambiguate overloads.
-3. **DDL for FB 2.5 functions** — currently we just emit a one-line comment. Reconstructing the `DECLARE EXTERNAL FUNCTION` from `RDB$FUNCTION_ARGUMENTS` is mechanical and would close that gap.
-4. **DDL syntax: domains, character sets, COMPUTED BY columns** — table reconstruction handles `COMPUTED BY` and references domains, but doesn't emit `CREATE DOMAIN` for the user-defined ones a table depends on. A "show dependencies" toggle would be a natural extension.
-5. **Tab right-click menu** — Close, Close Others, Copy DDL to Clipboard.
-6. **M7 hardening** — test against FB 2.5 / 3.0 / 4.0 (only FB5 has been used so far). Verify WIN1250 round-trip in DDL text. Verify large tables (50+ columns) render correctly in the column loop.
-7. **Trigger types 8192+** — DB-level / DDL triggers currently render as `/* trigger type 8192 */`. Decoding is non-trivial but feasible.
-8. **Smart tab limit** — no cap on open DDL tabs right now; ten+ tabs and the strip overflows into a horizontal scrollbar. UX-wise a most-recently-used eviction policy at ~10 tabs would be cleaner.
-9. **Editor: keyboard close (Ctrl+W)** — DDL tabs only close via the × button.
+1. **Refresh button on TableDetail / DDL tabs** — content is fetched once at open (lazy-loaded the first time the tab activates). After an external schema change there's no way to re-fetch without closing and reopening. Resetting `_loadTask = null` and re-firing `EnsureLoadedAsync` is mechanically straightforward.
+2. **TableDetail persistence schema upgrade** — TableDetail tabs serialize as `CoreTabKind.Ddl` today (Fields/Indexes/Constraints discarded; only `DdlText` survives). A native `TableDetail` kind in the persistence DTO would keep the per-tab cache hot across restarts, at the cost of versioning the schema.
+3. **Borrow-or-begin pattern in `FirebirdMetadataReader`** — `ListAsync` / `ListColumnsAsync` still call `BeginTransactionAsync` unconditionally. Today they're only called during sidebar load (no concurrent user tx), but adopting the same `BorrowOrBeginAsync` helper as `FirebirdDdlReader` / `FirebirdTableDetailReader` would future-proof against the next workflow that triggers them mid-transaction.
+4. **Procedure / function param signature in tab header** — currently `Procedure: SP_BALANCE` is just the name. IBExpert shows `(IN, OUT)` shape; would help disambiguate overloads.
+5. **DDL for FB 2.5 functions** — currently we just emit a one-line comment. Reconstructing the `DECLARE EXTERNAL FUNCTION` from `RDB$FUNCTION_ARGUMENTS` is mechanical and would close that gap.
+6. **DDL syntax: domains, character sets, COMPUTED BY columns** — table reconstruction handles `COMPUTED BY` and references domains, but doesn't emit `CREATE DOMAIN` for the user-defined ones a table depends on. A "show dependencies" toggle would be a natural extension.
+7. **Tab right-click menu** — Close, Close Others, Copy DDL to Clipboard.
+8. **M7 hardening** — test against FB 2.5 / 3.0 / 4.0 (only FB5 has been used so far). Verify WIN1250 round-trip in DDL text. Verify large tables (50+ columns) render correctly in the column loop. Verify the new constraints query (with the `RDB$TRIGGERS chk_src` join) against FB 2.5 — should work but unverified.
+9. **Trigger types 8192+** — DB-level / DDL triggers currently render as `/* trigger type 8192 */`. Decoding is non-trivial but feasible.
+10. **Smart tab limit** — no cap on open DDL/TableDetail tabs right now; ten+ tabs and the strip wraps. A most-recently-used eviction policy at ~10 tabs would be cleaner.
+11. **Editor: keyboard close (Ctrl+W)** — DDL/TableDetail tabs only close via the × button.
+12. **Constraints/Indexes sub-tabs counts in the tab strip** — Pola shows N fields immediately but Ograniczenia/Indeksy/Dane need a click to learn their size. A `(N)` badge per sub-tab header would surface that.
 
 ## Architecture rules — enforce against drift
 

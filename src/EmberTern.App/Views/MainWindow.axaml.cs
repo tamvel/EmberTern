@@ -413,12 +413,12 @@ public partial class MainWindow : Window
     private string? ResolveDotTable(string text, int caret)
         => _currentVm?.ResolveDotTable(text, caret);
 
-    private System.Collections.Generic.IReadOnlyList<string>? GetCachedColumns(string tableName)
+    private System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>? GetCachedColumns(string tableName)
         => _currentVm?.TryGetCachedColumns(tableName);
 
-    private Task<System.Collections.Generic.IReadOnlyList<string>> EnsureColumnsAsync(string tableName)
+    private Task<System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>> EnsureColumnsAsync(string tableName)
         => _currentVm?.EnsureColumnsAsync(tableName)
-           ?? Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(System.Array.Empty<string>());
+           ?? Task.FromResult<System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>>(System.Array.Empty<EmberTern.Core.Metadata.ColumnSpec>());
 
     // Returns the currently-selected text in the SQL editor, or null when nothing
     // is selected. Used by the VM to scope Execute / Format SQL to the selection.

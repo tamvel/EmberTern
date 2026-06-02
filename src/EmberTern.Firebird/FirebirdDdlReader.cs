@@ -43,11 +43,45 @@ public sealed class FirebirdDdlReader
         // double-clicked an object after running a query. When we borrow the user's tx we
         // must NOT commit/rollback/dispose it; ownsTransaction tracks that. With no active
         // user tx we behave as before: short-lived ReadCommitted, owned by us.
+        //
+        // When we own the tx, hold the connection's TransactionGate for its lifetime so
+        // a concurrent reader (or the F5 executor) can't fire Begin against the same
+        // connection mid-flight. Borrowers don't need the gate.
         var borrowed = _transactionService?.ActiveTransaction;
-        var ownsTransaction = borrowed is null;
-        var tx = borrowed ?? (FbTransaction)await connection
-            .BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken)
-            .ConfigureAwait(false);
+        FbTransaction tx;
+        bool ownsTransaction;
+        if (borrowed is not null)
+        {
+            tx = borrowed;
+            ownsTransaction = false;
+        }
+        else
+        {
+            await _connectionService.TransactionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                // Re-check after acquiring — user may have begun a tx while we queued.
+                borrowed = _transactionService?.ActiveTransaction;
+                if (borrowed is not null)
+                {
+                    _connectionService.TransactionGate.Release();
+                    tx = borrowed;
+                    ownsTransaction = false;
+                }
+                else
+                {
+                    tx = (FbTransaction)await connection
+                        .BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken)
+                        .ConfigureAwait(false);
+                    ownsTransaction = true;
+                }
+            }
+            catch
+            {
+                _connectionService.TransactionGate.Release();
+                throw;
+            }
+        }
         try
         {
             string ddl = obj.Kind switch
@@ -90,6 +124,7 @@ public sealed class FirebirdDdlReader
             if (ownsTransaction)
             {
                 await tx.DisposeAsync().ConfigureAwait(false);
+                _connectionService.TransactionGate.Release();
             }
         }
     }

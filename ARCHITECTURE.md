@@ -8,7 +8,7 @@ EmberTern to nowoczesny desktopowy workbench dla deweloperów pracujących z baz
 
 | Warstwa | Technologia | Uzasadnienie |
 |---|---|---|
-| Runtime | **.NET 10** | Najnowszy LTS-track, natywne wsparcie dla `CodePagesEncodingProvider` (krytyczne dla WIN1250/1252 — typowe charsety polskich ERP-ów) bez dodatkowych NuGetów. |
+| Runtime | **.NET 9** | Najnowszy LTS-track, natywne wsparcie dla `CodePagesEncodingProvider` (krytyczne dla WIN1250/1252 — typowe charsety polskich ERP-ów) bez dodatkowych NuGetów. |
 | UI | **Avalonia 12.0.3** | Cross-platform XAML, dojrzały FluentTheme, działa identycznie pod Windows/Linux/macOS. WPF byłby tylko-Windows; MAUI zbyt zorientowany na mobile. |
 | Wzorzec UI | **CommunityToolkit.Mvvm 8.4.2** | `[ObservableProperty]` + `[RelayCommand]` redukuje boilerplate MVVM o ~70% w stosunku do ręcznych implementacji `INotifyPropertyChanged`. |
 | Edytor SQL | **AvaloniaEdit 12.0.0** | Numerowanie linii, podświetlanie składni (XSHD), wirtualizacja długich dokumentów, gotowy `CompletionWindow` dla autocomplete. |
