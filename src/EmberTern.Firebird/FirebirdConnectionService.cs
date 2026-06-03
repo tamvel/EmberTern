@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -192,130 +191,13 @@ public sealed class FirebirdConnectionService : IDisposable
         }
     }
 
-    private static string MapErrorMessage(Exception ex, ConnectionProfile profile)
+    internal static string MapErrorMessage(Exception ex, ConnectionProfile profile)
     {
+        // Always surface the server's own message verbatim. We deliberately do not
+        // interpret or categorize error causes (wrong password, missing user, plugin
+        // mismatch, host down, …) — the raw server text is authoritative and the user
+        // or admin can read it directly. No hints, no special cases, no chain scanning.
         var endpoint = $"{profile.Host}:{profile.Port}";
-
-        if (ex is FbException fb)
-        {
-            return MapFbException(fb, profile, endpoint);
-        }
-
-        if (FindInner<SocketException>(ex) is { } socket)
-        {
-            return MapSocketError(socket, endpoint);
-        }
-
-        if (FindInner<System.IO.IOException>(ex) is { } io)
-        {
-            return $"Network error while connecting to {endpoint}: {io.Message}";
-        }
-
-        if (FindInner<TimeoutException>(ex) is not null)
-        {
-            return $"Connection to {endpoint} timed out.";
-        }
-
         return $"Could not connect to {endpoint}: {ex.Message}";
-    }
-
-    private static string MapFbException(FbException fb, ConnectionProfile profile, string endpoint)
-    {
-        var msg = fb.Message ?? string.Empty;
-        var mapped = MapFbErrorText(msg, profile, fb.ErrorCode);
-
-        // If we couldn't map to a specific category, check for a SocketException
-        // wrapped inside the FbException — that points at host/port problems and
-        // should win over the raw text.
-        if (mapped.StartsWith(FirebirdErrorPrefix, StringComparison.Ordinal)
-            && FindInner<SocketException>(fb) is { } socket)
-        {
-            return MapSocketError(socket, endpoint);
-        }
-
-        return mapped;
-    }
-
-    internal const string FirebirdErrorPrefix = "Firebird error: ";
-
-    /// <summary>
-    /// Maps a Firebird error message + error code to a user-facing string.
-    /// Pure on its inputs (no FbException needed) so the mapping is unit-testable
-    /// without a live database. Order of checks matters — the Legacy_Auth/plugin
-    /// gate intentionally runs FIRST so the actionable hint isn't hidden behind
-    /// the generic "Invalid username or password" branch when the driver echoes
-    /// both "password" and "Legacy_Auth" in the same message.
-    /// </summary>
-    internal static string MapFbErrorText(string rawMessage, ConnectionProfile profile, int errorCode)
-    {
-        var msg = rawMessage ?? string.Empty;
-        var lower = msg.ToLowerInvariant();
-
-        // The managed FirebirdClient driver speaks Srp / Srp256 only — it cannot
-        // authenticate against accounts that exist solely under Legacy_Auth (a
-        // common FB3 upgrade state). Surface the actionable server-side fix
-        // rather than the raw "Not supported plugin 'Legacy_Auth' from server"
-        // text the driver passes through.
-        if (lower.Contains("legacy_auth") || lower.Contains("plugin"))
-        {
-            return BuildLegacyAuthHint(profile);
-        }
-
-        if (lower.Contains("login") || lower.Contains("password") || errorCode == 335544472)
-        {
-            return $"Invalid username or password for '{profile.Username}'.";
-        }
-
-        if (lower.Contains("file") && (lower.Contains("not found") || lower.Contains("no such")))
-        {
-            return $"Database file not found: {profile.DatabasePath}";
-        }
-
-        if (lower.Contains("unavailable database")
-            || (lower.Contains("i/o error") && lower.Contains("open")))
-        {
-            return $"Database is unavailable: {profile.DatabasePath}";
-        }
-
-        if (lower.Contains("character set") || lower.Contains("charset"))
-        {
-            return $"Unsupported character set: {profile.Charset}";
-        }
-
-        return FirebirdErrorPrefix + Sanitize(msg);
-    }
-
-    private static string BuildLegacyAuthHint(ConnectionProfile profile)
-        => $"Firebird auth plugin mismatch: server requires Legacy_Auth, but the .NET driver speaks Srp/Srp256 only. "
-         + $"Fix server-side: CREATE USER {profile.Username} PASSWORD '<password>' USING PLUGIN Srp;";
-
-    private static string MapSocketError(SocketException ex, string endpoint)
-    {
-        return ex.SocketErrorCode switch
-        {
-            SocketError.ConnectionRefused => $"Could not reach host {endpoint}: connection refused (is Firebird running?).",
-            SocketError.HostNotFound or SocketError.HostUnreachable => $"Host not found: {endpoint}.",
-            SocketError.TimedOut => $"Connection to {endpoint} timed out.",
-            SocketError.NetworkUnreachable => $"Network unreachable: {endpoint}.",
-            _ => $"Could not reach host {endpoint} ({ex.SocketErrorCode}).",
-        };
-    }
-
-    private static T? FindInner<T>(Exception ex) where T : Exception
-    {
-        for (Exception? cur = ex; cur is not null; cur = cur.InnerException)
-        {
-            if (cur is T match)
-            {
-                return match;
-            }
-        }
-        return null;
-    }
-
-    private static string Sanitize(string msg)
-    {
-        var trimmed = msg.Trim();
-        return trimmed.Length > 240 ? trimmed[..240] + "…" : trimmed;
     }
 }

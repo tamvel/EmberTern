@@ -24,9 +24,8 @@ public class FirebirdConnectionServiceTests
         var ex = await Assert.ThrowsAsync<ConnectionFailedException>(
             () => service.TestConnectionAsync(profile));
 
-        Assert.DoesNotContain("SocketException", ex.Message);
-        Assert.DoesNotContain("FbException", ex.Message);
-        Assert.Contains("127.0.0.1:1", ex.Message);
+        // Generic path: endpoint prefix + the server's own message verbatim.
+        Assert.StartsWith("Could not connect to 127.0.0.1:1:", ex.Message);
     }
 
     [Fact]
@@ -46,82 +45,34 @@ public class FirebirdConnectionServiceTests
         var ex = await Assert.ThrowsAsync<ConnectionFailedException>(
             () => service.TestConnectionAsync(profile));
 
-        Assert.DoesNotContain("Exception", ex.Message);
+        Assert.StartsWith("Could not connect to this-host-does-not-exist-embertern.invalid:3050:", ex.Message);
     }
 
+    // No special-casing: a Legacy_Auth message now returns the raw server message
+    // like everything else — no hint, no interpretation.
     [Fact]
-    public void MapFbErrorText_LegacyAuthInMessage_ReturnsActionableHint()
+    public void MapErrorMessage_LegacyAuthInMessage_ReturnsRawServerMessage()
     {
-        var profile = new ConnectionProfile { Username = "SYSDBA" };
+        var profile = new ConnectionProfile { Username = "SYSDBA", Host = "localhost", Port = 3050 };
+        var ex = new System.Exception("Not supported plugin 'Legacy_Auth' from server");
 
-        var result = FirebirdConnectionService.MapFbErrorText(
-            "Not supported plugin 'Legacy_Auth' from server", profile, errorCode: 0);
+        var result = FirebirdConnectionService.MapErrorMessage(ex, profile);
 
-        Assert.Contains("Legacy_Auth", result);
-        Assert.Contains("CREATE USER SYSDBA", result);
-        Assert.Contains("USING PLUGIN Srp", result);
-    }
-
-    [Fact]
-    public void MapFbErrorText_PluginKeyword_ReturnsActionableHint()
-    {
-        var profile = new ConnectionProfile { Username = "ADMIN" };
-
-        var result = FirebirdConnectionService.MapFbErrorText(
-            "Auth plugin not supported", profile, errorCode: 0);
-
-        Assert.Contains("plugin mismatch", result);
-        Assert.Contains("CREATE USER ADMIN", result);
-    }
-
-    [Fact]
-    public void MapFbErrorText_WrongPassword_NoLegacyAuthHint()
-    {
-        var profile = new ConnectionProfile { Username = "SYSDBA" };
-
-        var result = FirebirdConnectionService.MapFbErrorText(
-            "Your user name and password are not defined", profile, errorCode: 335544472);
-
-        Assert.Equal("Invalid username or password for 'SYSDBA'.", result);
-        Assert.DoesNotContain("Legacy_Auth", result);
-        Assert.DoesNotContain("plugin", result);
+        Assert.Equal("Could not connect to localhost:3050: Not supported plugin 'Legacy_Auth' from server", result);
         Assert.DoesNotContain("CREATE USER", result);
+        Assert.DoesNotContain("USING PLUGIN", result);
     }
 
+    // Wrong password / missing user / anything else: raw server message, no hint.
     [Fact]
-    public void MapFbErrorText_FileNotFound_NoLegacyAuthHint()
+    public void MapErrorMessage_OtherError_ReturnsRawServerMessage()
     {
-        var profile = new ConnectionProfile { DatabasePath = @"C:\nope.fdb" };
+        var profile = new ConnectionProfile { Username = "SYSDBA", Host = "db1", Port = 3055 };
+        var ex = new System.Exception("Your user name and password are not defined.");
 
-        var result = FirebirdConnectionService.MapFbErrorText(
-            "I/O error: file not found", profile, errorCode: 0);
+        var result = FirebirdConnectionService.MapErrorMessage(ex, profile);
 
-        Assert.Equal(@"Database file not found: C:\nope.fdb", result);
-        Assert.DoesNotContain("Legacy_Auth", result);
-        Assert.DoesNotContain("plugin", result);
-    }
-
-    [Fact]
-    public void MapFbErrorText_UnknownError_FallsThroughToRawMessage_NoLegacyAuthHint()
-    {
-        var profile = new ConnectionProfile { Username = "SYSDBA" };
-
-        var result = FirebirdConnectionService.MapFbErrorText(
-            "Some other Firebird-specific error condition", profile, errorCode: 0);
-
-        Assert.StartsWith("Firebird error: ", result);
-        Assert.DoesNotContain("Legacy_Auth", result);
+        Assert.Equal("Could not connect to db1:3055: Your user name and password are not defined.", result);
         Assert.DoesNotContain("CREATE USER", result);
-    }
-
-    [Fact]
-    public void MapFbErrorText_EmptyMessage_DoesNotTriggerHint()
-    {
-        var profile = new ConnectionProfile { Username = "SYSDBA" };
-
-        var result = FirebirdConnectionService.MapFbErrorText(string.Empty, profile, errorCode: 0);
-
-        Assert.DoesNotContain("Legacy_Auth", result);
-        Assert.DoesNotContain("plugin", result);
     }
 }
