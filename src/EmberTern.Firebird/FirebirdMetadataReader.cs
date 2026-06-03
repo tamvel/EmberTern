@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using EmberTern.Core.Metadata;
@@ -11,10 +10,17 @@ namespace EmberTern.Firebird;
 public sealed class FirebirdMetadataReader
 {
     private readonly FirebirdConnectionService _connectionService;
+    private readonly TransactionService? _transactionService;
 
     public FirebirdMetadataReader(FirebirdConnectionService connectionService)
+        : this(connectionService, null)
+    {
+    }
+
+    public FirebirdMetadataReader(FirebirdConnectionService connectionService, TransactionService? transactionService)
     {
         _connectionService = connectionService;
+        _transactionService = transactionService;
     }
 
     public async Task<IReadOnlyList<MetadataObject>> ListAsync(
@@ -24,17 +30,18 @@ public sealed class FirebirdMetadataReader
         var sql = SqlFor(kind);
         var connection = _connectionService.RequireOpenConnection();
 
-        // A short-lived, read-only tx so we never interfere with the user's
-        // working transaction (different statement counter, different lifetime).
-        var tx = (FbTransaction)await connection
-            .BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken)
-            .ConfigureAwait(false);
+        // Readers never open their own transaction. When the user has a working tx
+        // active we attach to it; otherwise the managed driver runs the SELECT in
+        // an implicit read tx (auto-committed per command). The connection's
+        // CommandLock serializes us against every other reader / executor — FbConnection
+        // is single-threaded and concurrent commands hang or throw.
+        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = sql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = tx;
+            cmd.Transaction = _transactionService?.ActiveTransaction;
 
             var results = new List<MetadataObject>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -58,18 +65,15 @@ public sealed class FirebirdMetadataReader
                 }
                 results.Add(new MetadataObject(name, kind));
             }
-
-            await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
             return results;
         }
         catch (FbException ex)
         {
-            try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { }
             throw new MetadataReadException($"Could not read {kind.ToString().ToLowerInvariant()}s: {ex.Message}", ex);
         }
         finally
         {
-            await tx.DisposeAsync().ConfigureAwait(false);
+            _connectionService.CommandLock.Release();
         }
     }
 
@@ -91,15 +95,13 @@ public sealed class FirebirdMetadataReader
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<ColumnSpec>();
 
         var connection = _connectionService.RequireOpenConnection();
-        var tx = (FbTransaction)await connection
-            .BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken)
-            .ConfigureAwait(false);
+        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = ColumnsSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = tx;
+            cmd.Transaction = _transactionService?.ActiveTransaction;
             cmd.Parameters.AddWithValue("@name", tableName);
 
             var columns = new List<ColumnSpec>();
@@ -117,18 +119,15 @@ public sealed class FirebirdMetadataReader
                 var type = FirebirdTableDetailReader.FormatFieldType(fieldType, fieldLength, fieldScale, fieldPrecision, subType);
                 columns.Add(new ColumnSpec(name, type));
             }
-
-            await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
             return columns;
         }
         catch (FbException ex)
         {
-            try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { }
             throw new MetadataReadException($"Could not read columns for {tableName}: {ex.Message}", ex);
         }
         finally
         {
-            await tx.DisposeAsync().ConfigureAwait(false);
+            _connectionService.CommandLock.Release();
         }
     }
 

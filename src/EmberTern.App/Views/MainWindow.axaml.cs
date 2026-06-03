@@ -238,6 +238,7 @@ public partial class MainWindow : Window
             _currentVm.EditRequested -= OnEditConnectionRequested;
             _currentVm.ConfirmationRequested -= OnConfirmationRequested;
             _currentVm.ClipboardWriteRequested -= OnClipboardWriteRequested;
+            _currentVm.AddConnectionRequested -= OnAddConnectionRequested;
             _currentVm.SelectedQueryTextProvider = null;
             _currentVm.ReplaceSelectedOrAllText = null;
         }
@@ -250,6 +251,7 @@ public partial class MainWindow : Window
             _currentVm.EditRequested += OnEditConnectionRequested;
             _currentVm.ConfirmationRequested += OnConfirmationRequested;
             _currentVm.ClipboardWriteRequested += OnClipboardWriteRequested;
+            _currentVm.AddConnectionRequested += OnAddConnectionRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
 
@@ -567,20 +569,123 @@ public partial class MainWindow : Window
         await _currentVm.CopyGridAsync(mode, rowIndex, colIndex);
     }
 
+    private void OnSavedQueryNameDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control c && c.DataContext is SavedQueryViewModel sq)
+        {
+            sq.BeginRenameCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    private void OnRenameTextBoxLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox tb && tb.DataContext is SavedQueryViewModel sq && sq.IsRenaming)
+        {
+            sq.CommitRenameCommand.Execute(null);
+        }
+    }
+
+    private void OnRenameTextBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox tb || tb.DataContext is not SavedQueryViewModel sq) return;
+        if (e.Key == Key.Enter)
+        {
+            sq.CommitRenameCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            sq.CancelRenameCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
     private async void OnNewConnectionClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm)
+        if (DataContext is not MainWindowViewModel vm) return;
+        // Detect folder context from the sidebar selection — a selected folder
+        // (or a selected connection inside a folder) targets that folder; anything
+        // else lands the new connection at the root (legacy behaviour).
+        var folderId = DetectFolderContext(vm);
+        await OnAddConnectionRequested(folderId);
+    }
+
+    private string? DetectFolderContext(MainWindowViewModel vm)
+    {
+        var tree = this.FindControl<TreeView>("SidebarTree");
+        if (tree?.SelectedItem is FolderNodeViewModel f) return f.Id;
+        if (tree?.SelectedItem is ConnectionNodeViewModel c
+            && vm.FolderState.ConnectionFolderMap.TryGetValue(c.Profile.Id, out var fid)
+            && !string.IsNullOrEmpty(fid))
         {
-            return;
+            return fid;
         }
+        return null;
+    }
+
+    private async Task OnAddConnectionRequested(string? folderId)
+    {
+        if (DataContext is not MainWindowViewModel vm) return;
 
         var dialogVm = new NewConnectionDialogViewModel(vm.Service);
         var dialog = new NewConnectionDialog { DataContext = dialogVm };
         var profile = await dialog.ShowDialog<EmberTern.Core.Connections.ConnectionProfile?>(this);
-        if (profile is not null)
+        if (profile is null) return;
+
+        vm.Store.Upsert(profile);
+        // PlaceConnectionInFolder calls PersistFolderState + ReloadConnections itself,
+        // so the second branch's bare Reload is the only path that needs the call.
+        if (folderId is not null)
         {
-            vm.Store.Upsert(profile);
+            vm.PlaceConnectionInFolder(profile.Id, folderId);
+        }
+        else
+        {
             vm.ReloadConnections();
+        }
+    }
+
+    private async void OnNewFolderClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm) return;
+        var dialog = new NewFolderDialog();
+        var name = await dialog.ShowDialog<string?>(this);
+        if (!string.IsNullOrEmpty(name))
+        {
+            vm.CreateFolder(name);
+        }
+    }
+
+    private void OnFolderNameDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control c && c.DataContext is FolderNodeViewModel f)
+        {
+            f.BeginRenameCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    private void OnFolderRenameLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox tb && tb.DataContext is FolderNodeViewModel f && f.IsRenaming)
+        {
+            f.CommitRenameCommand.Execute(null);
+        }
+    }
+
+    private void OnFolderRenameKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox tb || tb.DataContext is not FolderNodeViewModel f) return;
+        if (e.Key == Key.Enter)
+        {
+            f.CommitRenameCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            f.CancelRenameCommand.Execute(null);
+            e.Handled = true;
         }
     }
 }

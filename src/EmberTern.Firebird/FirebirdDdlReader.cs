@@ -1,5 +1,4 @@
 using System;
-using System.Data;
 using System.Globalization;
 using System.Text;
 using System.Threading;
@@ -37,54 +36,18 @@ public sealed class FirebirdDdlReader
         // back to this encoding when the bytes aren't valid UTF-8.
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
 
-        // Reuse the user's working transaction if it's already active — Firebird (or the
-        // managed driver) rejects a second concurrent tx on the same connection with
-        // "Parallel transactions are not supported", which was happening when the user
-        // double-clicked an object after running a query. When we borrow the user's tx we
-        // must NOT commit/rollback/dispose it; ownsTransaction tracks that. With no active
-        // user tx we behave as before: short-lived ReadCommitted, owned by us.
-        //
-        // When we own the tx, hold the connection's TransactionGate for its lifetime so
-        // a concurrent reader (or the F5 executor) can't fire Begin against the same
-        // connection mid-flight. Borrowers don't need the gate.
-        var borrowed = _transactionService?.ActiveTransaction;
-        FbTransaction tx;
-        bool ownsTransaction;
-        if (borrowed is not null)
-        {
-            tx = borrowed;
-            ownsTransaction = false;
-        }
-        else
-        {
-            await _connectionService.TransactionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                // Re-check after acquiring — user may have begun a tx while we queued.
-                borrowed = _transactionService?.ActiveTransaction;
-                if (borrowed is not null)
-                {
-                    _connectionService.TransactionGate.Release();
-                    tx = borrowed;
-                    ownsTransaction = false;
-                }
-                else
-                {
-                    tx = (FbTransaction)await connection
-                        .BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken)
-                        .ConfigureAwait(false);
-                    ownsTransaction = true;
-                }
-            }
-            catch
-            {
-                _connectionService.TransactionGate.Release();
-                throw;
-            }
-        }
+        // Readers never open their own transaction. Attach to the user's working
+        // tx when one is active; otherwise the managed driver runs each command
+        // in an implicit read tx, auto-committed per statement. The connection's
+        // CommandLock is held across the entire DDL build — many of these kinds
+        // issue multiple commands (table builder reads RDB$RELATION_FIELDS,
+        // RDB$RELATION_CONSTRAINTS, RDB$INDICES separately), and FbConnection
+        // is single-threaded.
+        var tx = _transactionService?.ActiveTransaction;
+        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            string ddl = obj.Kind switch
+            return obj.Kind switch
             {
                 MetadataObjectKind.Table => await BuildTableDdlAsync(connection, tx, obj.Name, cancellationToken).ConfigureAwait(false),
                 MetadataObjectKind.View => await BuildViewDdlAsync(connection, tx, obj.Name, fallback, cancellationToken).ConfigureAwait(false),
@@ -104,34 +67,20 @@ public sealed class FirebirdDdlReader
                 MetadataObjectKind.Index => BuildPlaceholderDdl("INDEX", obj.Name),
                 _ => throw new ArgumentOutOfRangeException(nameof(obj), obj.Kind, null),
             };
-
-            if (ownsTransaction)
-            {
-                await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
-            }
-            return ddl;
         }
         catch (FbException ex)
         {
-            if (ownsTransaction)
-            {
-                try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { }
-            }
             throw new MetadataReadException($"Could not read DDL for {obj.Kind} {obj.Name}: {ex.Message}", ex);
         }
         finally
         {
-            if (ownsTransaction)
-            {
-                await tx.DisposeAsync().ConfigureAwait(false);
-                _connectionService.TransactionGate.Release();
-            }
+            _connectionService.CommandLock.Release();
         }
     }
 
     // -- Tables ---------------------------------------------------------------
 
-    private static async Task<string> BuildTableDdlAsync(FbConnection connection, FbTransaction tx, string name, CancellationToken ct)
+    private static async Task<string> BuildTableDdlAsync(FbConnection connection, FbTransaction? tx, string name, CancellationToken ct)
     {
         var sb = new StringBuilder();
         sb.Append("CREATE TABLE ").Append(Quote(name)).AppendLine(" (");
@@ -264,7 +213,7 @@ public sealed class FirebirdDdlReader
 
     // -- Views ----------------------------------------------------------------
 
-    private static async Task<string> BuildViewDdlAsync(FbConnection connection, FbTransaction tx, string name, Encoding fallback, CancellationToken ct)
+    private static async Task<string> BuildViewDdlAsync(FbConnection connection, FbTransaction? tx, string name, Encoding fallback, CancellationToken ct)
     {
         var source = await ReadBlobAsync(connection, tx,
             "SELECT RDB$VIEW_SOURCE FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = @name",
@@ -303,7 +252,7 @@ public sealed class FirebirdDdlReader
 
     // -- Procedures -----------------------------------------------------------
 
-    private static async Task<string> BuildProcedureDdlAsync(FbConnection connection, FbTransaction tx, string name, int serverMajor, Encoding fallback, CancellationToken ct)
+    private static async Task<string> BuildProcedureDdlAsync(FbConnection connection, FbTransaction? tx, string name, int serverMajor, Encoding fallback, CancellationToken ct)
     {
         var sb = new StringBuilder();
         sb.Append("CREATE OR ALTER PROCEDURE ").Append(Quote(name));
@@ -354,7 +303,7 @@ public sealed class FirebirdDdlReader
 
     // -- Triggers -------------------------------------------------------------
 
-    private static async Task<string> BuildTriggerDdlAsync(FbConnection connection, FbTransaction tx, string name, Encoding fallback, CancellationToken ct)
+    private static async Task<string> BuildTriggerDdlAsync(FbConnection connection, FbTransaction? tx, string name, Encoding fallback, CancellationToken ct)
     {
         string? relation = null;
         short? triggerType = null;
@@ -416,7 +365,7 @@ public sealed class FirebirdDdlReader
 
     // -- Functions ------------------------------------------------------------
 
-    private static async Task<string> BuildFunctionDdlAsync(FbConnection connection, FbTransaction tx, string name, int serverMajor, Encoding fallback, CancellationToken ct)
+    private static async Task<string> BuildFunctionDdlAsync(FbConnection connection, FbTransaction? tx, string name, int serverMajor, Encoding fallback, CancellationToken ct)
     {
         if (serverMajor <= 2)
         {
@@ -437,7 +386,7 @@ public sealed class FirebirdDdlReader
 
     // -- Generators / Sequences ----------------------------------------------
 
-    private static async Task<string> BuildGeneratorDdlAsync(FbConnection connection, FbTransaction tx, string name, CancellationToken ct)
+    private static async Task<string> BuildGeneratorDdlAsync(FbConnection connection, FbTransaction? tx, string name, CancellationToken ct)
     {
         long? currentValue = null;
 
@@ -472,7 +421,7 @@ public sealed class FirebirdDdlReader
 
     // -- Exceptions ----------------------------------------------------------
 
-    private static async Task<string> BuildExceptionDdlAsync(FbConnection connection, FbTransaction tx, string name, Encoding fallback, CancellationToken ct)
+    private static async Task<string> BuildExceptionDdlAsync(FbConnection connection, FbTransaction? tx, string name, Encoding fallback, CancellationToken ct)
     {
         string? message = null;
         await using (var cmd = connection.CreateCommand())
@@ -617,7 +566,7 @@ public sealed class FirebirdDdlReader
         };
     }
 
-    private static async Task<string?> ReadBlobAsync(FbConnection connection, FbTransaction tx, string sql, string nameParam, Encoding fallback, CancellationToken ct)
+    private static async Task<string?> ReadBlobAsync(FbConnection connection, FbTransaction? tx, string sql, string nameParam, Encoding fallback, CancellationToken ct)
     {
         await using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
@@ -696,7 +645,7 @@ public sealed class FirebirdDdlReader
     private sealed record ForeignKeyInfo(string ConstraintName, string[] Columns, string ReferencedTable, string[] ReferencedColumns, string UpdateRule, string DeleteRule);
     private sealed record IndexInfo(string IndexName, string[] Columns, bool IsUnique, bool IsDescending);
 
-    private static async Task<ConstraintInfo?> ReadConstraintAsync(FbConnection connection, FbTransaction tx, string relation, string type, CancellationToken ct)
+    private static async Task<ConstraintInfo?> ReadConstraintAsync(FbConnection connection, FbTransaction? tx, string relation, string type, CancellationToken ct)
     {
         await foreach (var c in ReadConstraintsAsync(connection, tx, relation, type, ct).ConfigureAwait(false))
         {
@@ -706,7 +655,7 @@ public sealed class FirebirdDdlReader
     }
 
     private static async System.Collections.Generic.IAsyncEnumerable<ConstraintInfo> ReadConstraintsAsync(
-        FbConnection connection, FbTransaction tx, string relation, string type,
+        FbConnection connection, FbTransaction? tx, string relation, string type,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
         var pairs = new System.Collections.Generic.List<(string Name, string Col, short Pos)>();
@@ -737,7 +686,7 @@ public sealed class FirebirdDdlReader
     }
 
     private static async System.Collections.Generic.IAsyncEnumerable<ForeignKeyInfo> ReadForeignKeysAsync(
-        FbConnection connection, FbTransaction tx, string relation,
+        FbConnection connection, FbTransaction? tx, string relation,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
         // FK metadata is spread across three system tables: RDB$RELATION_CONSTRAINTS (FK side),
@@ -791,7 +740,7 @@ public sealed class FirebirdDdlReader
     }
 
     private static async System.Collections.Generic.IAsyncEnumerable<IndexInfo> ReadIndexesAsync(
-        FbConnection connection, FbTransaction tx, string relation,
+        FbConnection connection, FbTransaction? tx, string relation,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
         var pairs = new System.Collections.Generic.List<(string Name, string Col, short Pos, bool Unique, bool Desc)>();
@@ -838,7 +787,7 @@ public sealed class FirebirdDdlReader
     }
 
     private static async Task<System.Collections.Generic.List<string>> ReadProcedureParamsAsync(
-        FbConnection connection, FbTransaction tx, string procName, short paramType, CancellationToken ct)
+        FbConnection connection, FbTransaction? tx, string procName, short paramType, CancellationToken ct)
     {
         var rows = new System.Collections.Generic.List<string>();
         await using var cmd = connection.CreateCommand();

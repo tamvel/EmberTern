@@ -43,11 +43,8 @@ public sealed class TransactionService : IDisposable
         }
 
         var connection = _connectionService.RequireOpenConnection();
-        // Wait behind any in-flight reader-owned tx. Once we begin our own,
-        // future readers will see ActiveTransaction != null and Borrow instead
-        // of Begin, so we release the gate immediately — borrowers don't
-        // need it.
-        await _connectionService.TransactionGate.WaitAsync().ConfigureAwait(false);
+        // Serialize against in-flight reader commands — FbConnection is single-threaded.
+        await _connectionService.CommandLock.WaitAsync().ConfigureAwait(false);
         try
         {
             _activeTransaction = (FbTransaction)await connection
@@ -63,7 +60,7 @@ public sealed class TransactionService : IDisposable
         }
         finally
         {
-            _connectionService.TransactionGate.Release();
+            _connectionService.CommandLock.Release();
         }
     }
 
@@ -75,6 +72,7 @@ public sealed class TransactionService : IDisposable
         }
 
         var tx = _activeTransaction;
+        await _connectionService.CommandLock.WaitAsync().ConfigureAwait(false);
         try
         {
             await tx.CommitAsync().ConfigureAwait(false);
@@ -93,6 +91,7 @@ public sealed class TransactionService : IDisposable
             {
                 await tx.DisposeAsync().ConfigureAwait(false);
             }
+            _connectionService.CommandLock.Release();
         }
     }
 
@@ -107,6 +106,7 @@ public sealed class TransactionService : IDisposable
         var tx = _activeTransaction;
         _activeTransaction = null;
         _statementCount = 0;
+        await _connectionService.CommandLock.WaitAsync().ConfigureAwait(false);
         try
         {
             await tx.RollbackAsync().ConfigureAwait(false);
@@ -118,6 +118,7 @@ public sealed class TransactionService : IDisposable
         finally
         {
             await tx.DisposeAsync().ConfigureAwait(false);
+            _connectionService.CommandLock.Release();
             SetState(TransactionState.Idle);
         }
     }

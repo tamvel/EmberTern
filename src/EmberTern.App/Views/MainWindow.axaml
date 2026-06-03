@@ -3,6 +3,7 @@
         xmlns:vm="using:EmberTern.App.ViewModels"
         xmlns:app="using:EmberTern.App"
         xmlns:views="using:EmberTern.App.Views"
+        xmlns:behaviors="using:EmberTern.App.Behaviors"
         xmlns:ae="using:AvaloniaEdit"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -68,6 +69,10 @@
           <Button Classes="icon" Content="+"
                   ToolTip.Tip="New Connection"
                   Click="OnNewConnectionClick" />
+          <Button Classes="icon"
+                  Content="{x:Static app:UiStrings.FolderNewIcon}"
+                  ToolTip.Tip="{x:Static app:UiStrings.FolderNewTooltip}"
+                  Click="OnNewFolderClick" />
           <Button Classes="icon" Content="✎"
                   ToolTip.Tip="Edit Connection"
                   Command="{Binding Metadata.EditSelectedCommand}" />
@@ -134,7 +139,7 @@
           </Border>
 
           <!-- Tree -->
-          <TreeView ItemsSource="{Binding Connections}"
+          <TreeView ItemsSource="{Binding RootNodes}"
                     x:Name="SidebarTree"
                     Background="Transparent"
                     BorderThickness="0"
@@ -163,6 +168,9 @@
               <Style Selector="TreeViewItem" x:DataType="vm:ConnectionNodeViewModel">
                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
               </Style>
+              <Style Selector="TreeViewItem" x:DataType="vm:FolderNodeViewModel">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+              </Style>
               <Style Selector="TreeViewItem" x:DataType="vm:MetadataNodeViewModel">
                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                 <Setter Property="IsVisible" Value="{Binding IsVisible}" />
@@ -175,6 +183,46 @@
                  lookup for nested MetadataNode items — categories rendered fine but their
                  own ItemsSource={Binding Children} didn't kick in, so chevrons never showed. -->
             <TreeView.DataTemplates>
+              <TreeDataTemplate DataType="vm:FolderNodeViewModel"
+                                ItemsSource="{Binding Connections}">
+                <Border HorizontalAlignment="Stretch"
+                        Background="Transparent">
+                  <Border.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="{x:Static app:UiStrings.FolderContextAddConnection}"
+                                Command="{Binding AddConnectionCommand}" />
+                      <Separator />
+                      <MenuItem Header="{x:Static app:UiStrings.FolderContextRename}"
+                                Command="{Binding BeginRenameCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.FolderContextDelete}"
+                                Command="{Binding DeleteCommand}" />
+                    </ContextMenu>
+                  </Border.ContextMenu>
+                  <Panel>
+                    <StackPanel Orientation="Horizontal" Spacing="5"
+                                IsVisible="{Binding IsNotRenaming}">
+                      <TextBlock Text="{x:Static app:UiStrings.FolderNodeIcon}"
+                                 FontSize="11"
+                                 Width="14"
+                                 TextAlignment="Center"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Name}"
+                                 FontWeight="SemiBold"
+                                 FontSize="11"
+                                 VerticalAlignment="Center"
+                                 DoubleTapped="OnFolderNameDoubleTapped" />
+                    </StackPanel>
+                    <TextBox Text="{Binding EditingName, Mode=TwoWay}"
+                             FontSize="11"
+                             Padding="2,1"
+                             IsVisible="{Binding IsRenaming}"
+                             behaviors:FocusBehavior.FocusOnVisible="True"
+                             LostFocus="OnFolderRenameLostFocus"
+                             KeyDown="OnFolderRenameKeyDown" />
+                  </Panel>
+                </Border>
+              </TreeDataTemplate>
+
               <TreeDataTemplate DataType="vm:ConnectionNodeViewModel"
                                 ItemsSource="{Binding Children}">
                 <Border HorizontalAlignment="Stretch"
@@ -192,6 +240,13 @@
                       <MenuItem Header="Edit" Command="{Binding EditCommand}" />
                       <MenuItem Header="Copy" Command="{Binding CopyCommand}" />
                       <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
+                      <Separator />
+                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSort}">
+                        <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortAscending}"
+                                  Command="{Binding SortAscendingCommand}" />
+                        <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortDescending}"
+                                  Command="{Binding SortDescendingCommand}" />
+                      </MenuItem>
                     </ContextMenu>
                   </Border.ContextMenu>
                   <StackPanel Orientation="Horizontal" Spacing="5">
@@ -493,11 +548,58 @@
                          Background="Transparent"
                          BorderThickness="0"
                          IsVisible="{Binding HasSavedQueries}">
+                  <ListBox.Styles>
+                    <!-- Hover-visible rename icon: hidden by default, fades in when
+                         the ListBoxItem under the cursor is hovered. Same convention
+                         as IBExpert / DataGrip row-action affordances. -->
+                    <Style Selector="Button.row-hover-icon">
+                      <Setter Property="Opacity" Value="0" />
+                    </Style>
+                    <Style Selector="ListBoxItem:pointerover Button.row-hover-icon">
+                      <Setter Property="Opacity" Value="1" />
+                    </Style>
+                  </ListBox.Styles>
                   <ListBox.ItemTemplate>
                     <DataTemplate DataType="vm:SavedQueryViewModel">
-                      <TextBlock Text="{Binding Name}"
-                                 FontSize="11"
-                                 Padding="2,1" />
+                      <!-- Full-row hit target: Border with Stretch + transparent
+                           background captures DoubleTapped + right-click ContextMenu
+                           anywhere on the row, not just on the text glyphs. -->
+                      <Border HorizontalAlignment="Stretch"
+                              Background="Transparent"
+                              DoubleTapped="OnSavedQueryNameDoubleTapped">
+                        <Border.ContextMenu>
+                          <ContextMenu>
+                            <MenuItem Header="{x:Static app:UiStrings.QueryContextRename}"
+                                      Command="{Binding BeginRenameCommand}" />
+                            <MenuItem Header="{x:Static app:UiStrings.QueryContextDelete}"
+                                      Command="{Binding DeleteCommand}" />
+                          </ContextMenu>
+                        </Border.ContextMenu>
+                        <Panel>
+                          <Grid ColumnDefinitions="*,Auto"
+                                IsVisible="{Binding IsNotRenaming}">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Name}"
+                                       FontSize="11"
+                                       Padding="2,1"
+                                       VerticalAlignment="Center" />
+                            <Button Grid.Column="1"
+                                    Classes="icon row-hover-icon"
+                                    Content="{x:Static app:UiStrings.QueryRenameIcon}"
+                                    ToolTip.Tip="{x:Static app:UiStrings.QueryRenameTooltip}"
+                                    Padding="3,1"
+                                    FontSize="10"
+                                    Command="{Binding BeginRenameCommand}" />
+                          </Grid>
+                          <TextBox Text="{Binding EditingName, Mode=TwoWay}"
+                                   FontSize="11"
+                                   Padding="2,1"
+                                   IsVisible="{Binding IsRenaming}"
+                                   behaviors:FocusBehavior.FocusOnVisible="True"
+                                   LostFocus="OnRenameTextBoxLostFocus"
+                                   KeyDown="OnRenameTextBoxKeyDown" />
+                        </Panel>
+                      </Border>
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>

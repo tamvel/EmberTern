@@ -863,12 +863,157 @@ Both [FirebirdSql.xshd](src/EmberTern.App/Assets/FirebirdSql.xshd) and [Firebird
 
 30. **XSHD `<Keywords>` blocks are precedence-ordered — first declared wins.** When the same word appears in multiple Keywords blocks (e.g. CASE in both Function and DDL lists), the *first* block to match wins. AvaloniaEdit doesn't merge; it short-circuits on first hit. **Rule**: when splitting a single "Keyword" category into per-color categories (DML/DDL/Function/...), put the higher-priority category first in the XSHD file. Tidiest to keep each word in exactly one block, but later-block duplicates simply don't fire — no error.
 
+### Architecture correction — readers never open their own transaction (shipped)
+
+Significant architecture correction over the prior three milestones (borrow-or-begin in [#22](), TransactionGate in [#26](), fire-and-forget-needs-gate in [#27]()). The whole borrow-or-begin pattern + connection-wide semaphore was overengineered around a flawed premise — that every command needs an explicit transaction. The Firebird managed driver (`FirebirdSql.Data.FirebirdClient` 10.3.4) creates an **implicit, auto-committed read transaction per command** when `FbCommand.Transaction == null` and the connection has no user-level pending tx. That's exactly the right semantics for read-only metadata browsing.
+
+**The new rule.** Readers (`FirebirdMetadataReader`, `FirebirdDdlReader`, `FirebirdTableDetailReader`) set:
+
+```csharp
+cmd.Transaction = _transactionService?.ActiveTransaction;
+```
+
+— and nothing else. No `BeginTransactionAsync`, no `CommitAsync`, no `RollbackAsync`, no `DisposeAsync`, no gate. When the user has a working tx active, `cmd.Transaction` is non-null and we attach. When they don't, it's null and the driver runs the SELECT in an implicit per-command tx.
+
+**What got deleted.**
+- [FirebirdTableDetailReader.cs](src/EmberTern.Firebird/FirebirdTableDetailReader.cs) — `BorrowOrBeginAsync` + `ReleaseOwnedGate` helpers and the matching `try/commit/finally/Dispose+Release` shell from all five methods (Fields/Indexes/Constraints/Description/DataPreview).
+- [FirebirdDdlReader.cs](src/EmberTern.Firebird/FirebirdDdlReader.cs) — the 30-line `borrowed/ownsTransaction/gate.Wait/re-check/Begin/Release` block at the top of `FetchDdlAsync`. Inner method signatures changed from `FbTransaction tx` → `FbTransaction? tx` so they accept a null tx and forward it to `cmd.Transaction`.
+- [FirebirdMetadataReader.cs](src/EmberTern.Firebird/FirebirdMetadataReader.cs) — was the worst case: it opened its own tx unconditionally, never even reaching for borrow. Now takes an optional `TransactionService` ctor param (matching the other readers) and uses the same attach-or-null pattern in `ListAsync` + `ListColumnsAsync`. Construction site in [MainWindowViewModel.cs:61](src/EmberTern.App/ViewModels/MainWindowViewModel.cs) updated to pass `_transactionService`.
+- [FirebirdConnectionService.cs](src/EmberTern.Firebird/FirebirdConnectionService.cs) — `_transactionGate` field + `TransactionGate` property gone.
+- [TransactionService.cs](src/EmberTern.Firebird/TransactionService.cs) — `TransactionGate.WaitAsync/Release` removed from `BeginTransactionAsync`. User transactions are inherently sequential (the user clicks Begin manually) and there is now no other Begin caller competing on the connection.
+
+**The only legitimate Begin callers on the shared `FbConnection` now are**:
+1. `TransactionService.BeginTransactionAsync` — user-initiated working tx.
+2. `FirebirdQueryExecutor.ExecuteAsync` — but only by way of `TransactionService.BeginTransactionAsync` (the auto-begin path); it doesn't call `connection.BeginTransactionAsync` directly.
+
+**Eliminates the entire class of "Parallel transactions are not supported" errors** that motivated the prior three milestones — readers no longer compete for transaction slots because they don't ask for one. Two TableDetail tabs lazy-loading after reconnect is fine. F5 mid-load is fine. The user pressing Begin Transaction while a DDL view is fetching is fine.
+
+**Tests** — 330 / 330 still green. The test suite has no live-FB readers and the readers still throw `MetadataReadException` on `FbException`, so xUnit assertions on shape and helpers all pass unchanged. The shape change (no own tx) is verifiable only at runtime against a real Firebird; smoke against the user's FB 5 schema should now show: open TableDetail during active tx → no flood; reconnect + lazy-load multiple tabs → no race; F5 mid-load → no parallel-tx error.
+
+**Gotchas promoted to architecture lore.** These supersede the now-wrong #22, #26, #27.
+
+22 (revised). **Readers must never open their own transaction on the shared `FbConnection`.** Set `cmd.Transaction = _transactionService?.ActiveTransaction` and nothing else. When the user has a working tx, we attach to it. When they don't, the managed driver runs the SELECT in an implicit auto-committed read tx per command. The "Parallel transactions are not supported" error happens specifically when one Begin is in flight while a second Begin starts on the same connection — eliminate the second Begin and the error class disappears.
+
+26 (revised). **`SemaphoreSlim`/gate on `FbConnection` is a code smell.** If you're reaching for a connection-wide lock around `BeginTransactionAsync` to suppress "Parallel transactions are not supported", you're working around an upstream design issue — almost certainly a path that's opening a tx it shouldn't. Look for the unnecessary Begin first. The driver's command-level serialization plus implicit per-command txs handles read-only access without any explicit synchronization.
+
+27 (revised). **Fire-and-forget background work from `SelectTab` is fine** *as long as command execution is serialized at the connection level* — see gotcha #31. Without reader-owned transactions, the only shared resource is the `FbConnection` itself, which the managed driver does not protect against concurrent commands. Serialize commands explicitly (we use `FirebirdConnectionService.CommandLock`) and lazy-load / fire-and-forget paths are safe.
+
+### CommandLock — serialize all FbConnection commands (shipped)
+
+Follow-up to the "readers never open their own transaction" milestone. After that shipped, smoke against the user's FB 5 schema exposed a hang: metadata tree's eager-load completes Tables (showing count 2356) and then `Views.ListAsync` hangs at "Loading…" indefinitely, with subsequent categories never starting.
+
+**Diagnosis.** The hang isn't from `Task.WhenAll` (eager-load is sequential via `foreach await` in `ConnectionNodeViewModel.LoadCategoriesAsync`). It's from independent fire-and-forget paths that all hit the same `FbConnection`:
+
+- `MetadataNodeViewModel.OnIsExpandedChanged` user-click → `_ = _owner.LoadGroupAsync(this)`
+- SQL editor autocomplete `.` keystroke → `_ = EnsureColumnsAsync(tableName)`
+- DDL fetch on double-click → `OnOpenDdlRequested` → `await _ddlReader.FetchDdlAsync(obj)`
+- TableDetail `EnsureLoadedAsync` lazy-load on tab activate, also fire-and-forget from `LoadWorkspaceFor`
+- `FirebirdQueryExecutor.ExecuteAsync` on F5
+
+Any two of these running concurrently against the single `FbConnection` either throws ("There is already an open DataReader") or hangs (driver waiting for the previous command's reader/implicit-tx to release the connection). The managed `FirebirdSql.Data.FirebirdClient` driver does NOT internally serialize concurrent commands — that's the application's job.
+
+**Fix.** A connection-wide `SemaphoreSlim CommandLock` on [FirebirdConnectionService.cs](src/EmberTern.Firebird/FirebirdConnectionService.cs). Every reader / executor / `TransactionService` lifecycle operation wraps its command body in:
+
+```csharp
+await _connectionService.CommandLock.WaitAsync(ct).ConfigureAwait(false);
+try { /* cmd.ExecuteReaderAsync, read rows, etc. */ }
+finally { _connectionService.CommandLock.Release(); }
+```
+
+**Naming choice — `CommandLock`, not `TransactionGate`.** Different semantics, different scope. The removed `TransactionGate` (gotcha #26) gated only `BeginTransactionAsync` calls; the new `CommandLock` gates **command execution end-to-end**. The TransactionGate would not have prevented the hang (the readers no longer call `BeginTransactionAsync` after the prior milestone; the hang is purely from concurrent `cmd.ExecuteReaderAsync` calls).
+
+**Where it's held**:
+- `FirebirdMetadataReader.ListAsync` + `ListColumnsAsync` — around the whole command body.
+- `FirebirdDdlReader.FetchDdlAsync` — across the entire DDL build (some kinds issue 3+ commands serially — table builder reads RDB$RELATION_FIELDS, then constraints, then indexes — all must hold the lock).
+- `FirebirdTableDetailReader.GetFieldsAsync` / `GetIndexesAsync` / `GetConstraintsAsync` / `GetDescriptionAsync` / `GetDataPreviewAsync` — per-method.
+- `FirebirdQueryExecutor.ExecuteAsync` — around the command body. The auto-begin path (when no user tx is active) calls `_transactionService.BeginTransactionAsync()` BEFORE acquiring the executor's own lock — that Begin acquires/releases the lock itself, no deadlock.
+- `TransactionService.BeginTransactionAsync` + `CommitAsync` + `RollbackAsync` — all three send wire messages to the server.
+
+**Lock-not-held detail** for `FirebirdQueryExecutor.ExecuteAsync` + `TransactionService.BeginTransactionAsync` — `RequireOpenConnection()` throws `InvalidOperationException` BEFORE the WaitAsync (test pins this). In the executor that exception must be caught and rewrapped as `QueryExecutionException`, so the try/finally is structured with a `bool lockHeld` flag to avoid releasing a never-acquired lock in the finally. In the TransactionService that exception is the test contract (test expects raw `InvalidOperationException`), so RequireOpenConnection sits outside the try — no flag needed.
+
+**Tests**: 330 / 330 still green. The lock is a no-op on a single-threaded test (xUnit always takes it first try). Build clean.
+
+**Gotcha promoted to architecture lore.**
+
+31. **`FbConnection` is single-threaded — application MUST serialize commands.** The managed `FirebirdSql.Data.FirebirdClient` driver does NOT internally serialize concurrent `ExecuteReaderAsync` calls on the same connection. Two fire-and-forget paths firing simultaneously will either throw "There is already an open DataReader associated with this Connection which must be closed first" or hang waiting on the previous command's implicit-tx commit. The fix is a connection-wide `SemaphoreSlim` (we expose `FirebirdConnectionService.CommandLock`) acquired around every command body. Every reader, the query executor, and `TransactionService.BeginTransactionAsync/CommitAsync/RollbackAsync` must hold it for their whole wire-touching operation. **This is independent of transactions** — even with the "readers attach to user tx or run with implicit per-command tx" pattern from the prior milestone, you still need the lock because the driver doesn't queue concurrent commands. **Rule**: any new code that does `await cmd.ExecuteReaderAsync` / `ExecuteScalarAsync` / `ExecuteNonQueryAsync` / `connection.BeginTransactionAsync` / `tx.CommitAsync` / `tx.RollbackAsync` on the shared connection MUST acquire `_connectionService.CommandLock` first.
+
+### Saved-query rename + Connection folders (shipped)
+
+Two UX features that ship together. **Tests: 351 / 351 green** (330 → 351, +21).
+
+**1. Inline rename for saved queries.** Double-click the name in the right-side Saved Queries panel → it swaps for a focused, all-selected TextBox. Enter / LostFocus commits, Escape cancels. Blank input is rejected (keeps old name). Trim is applied.
+
+- [SavedQueryViewModel.cs](src/EmberTern.App/ViewModels/SavedQueryViewModel.cs) gained `IsRenaming` + `IsNotRenaming` (computed) + `EditingName`, and `BeginRename` / `CommitRename` / `CancelRename` commands. Commit writes `EditingName.Trim()` back into `Name`; persistence is automatic via the existing close-time `CaptureWorkspace` path — no live save, same mechanism as SqlText edits.
+- ListBox item template now wraps a TextBlock + TextBox in a `Panel`; visibility flips off `IsRenaming` / `IsNotRenaming`. TextBox carries `behaviors:FocusBehavior.FocusOnVisible="True"` for auto-focus.
+- Code-behind: `OnSavedQueryNameDoubleTapped` → BeginRename; `OnRenameTextBoxLostFocus` → CommitRename (guarded by `sq.IsRenaming` so double-fire from Enter+focus-shift is a no-op); `OnRenameTextBoxKeyDown` → Enter commits, Escape cancels.
+
+**2. Connection folders in the sidebar.** Each saved profile can live in a named folder (depth 1 — folders don't nest). Folder button (`📁`) in the titlebar toolbar opens a small NewFolderDialog. Right-click on a folder gives Zmień nazwę / Usuń katalog. Right-click on a connection gains a Sortuj węzły → Rosnąco (A→Z) / Malejąco (Z→A) submenu. Sort affects siblings — folder members or root-level mixed (folders + connections together).
+
+**Core layer** (zero Avalonia deps):
+- [FolderEntry.cs](src/EmberTern.Core/Connections/FolderEntry.cs) — `Id` (GUID), `Name`, `SortOrder`.
+- [FolderStore.cs](src/EmberTern.Core/Connections/FolderStore.cs) — JSON store at `%AppData%\EmberTern\folders.json`. Mirror of `ConnectionProfileStore` / `WorkspaceStore`: graceful Load returns empty state on missing / corrupt / unreadable file. `FolderState` carries `List<FolderEntry> Folders`, `Dictionary<string,string> ConnectionFolderMap` (connectionId → folderId; absent = root), and `Dictionary<string,int> ConnectionSortOrders` (per-connection sort key).
+
+**Why a separate file and not extending `connections.json`?** Keeping `connections.json` as `List<ConnectionProfile>` preserves forward compat with older builds and avoids a JSON schema migration. Folder layout is metadata *about* connections, not part of the connection itself.
+
+**App layer**:
+- [FolderNodeViewModel.cs](src/EmberTern.App/ViewModels/FolderNodeViewModel.cs) — same inline-rename surface as `SavedQueryViewModel` (`IsRenaming` / `EditingName` / Begin/Commit/Cancel). Holds `ObservableCollection<ConnectionNodeViewModel> Connections`. Commit calls `_owner.PersistFolderState()` directly (no debounce, no batching — folder edits are rare).
+- [ConnectionNodeViewModel.cs](src/EmberTern.App/ViewModels/ConnectionNodeViewModel.cs) gained `SortAscendingCommand` / `SortDescendingCommand` that delegate to `_owner.SortSiblingsOf(this, ascending)`.
+- [MetadataExplorerViewModel.cs](src/EmberTern.App/ViewModels/MetadataExplorerViewModel.cs) — kept `Connections` (flat list of all `ConnectionNodeViewModel` instances; iterated by `ApplyFilter` / `RefreshAsync` / `EnumerateLoadedObjects`) and added a parallel `RootNodes : ObservableCollection<object>` for the tree's `ItemsSource`. Mixed types (folder VMs + root-level connection VMs) handled by `TreeView.DataTemplates` keyed on `DataType`.
+- [MainWindowViewModel.cs](src/EmberTern.App/ViewModels/MainWindowViewModel.cs) — added `FolderStore` + `FolderState` fields. Rewrote `ReloadConnections()` to (a) detach old nodes, (b) drop stale folder-map / sort entries for deleted profiles, (c) build folder VMs in `SortOrder` order, (d) slot each connection into its folder or the root list, (e) within each folder sort by SortOrder then Name, (f) at the root sort folders + root connections together by SortOrder then Name. New public methods: `CreateFolder(name)`, `DeleteFolderAsync(FolderNodeViewModel)` (confirm via existing `ConfirmDialog`), `PersistFolderState()`, `SortSiblingsOf(node, ascending)`.
+
+**Sort algorithm.** When the pivot is a folder member → sort only that folder's connections by Name (case-insensitive, current culture), write back the index into `ConnectionSortOrders`. When the pivot is a root connection → sort `Folders + root connections` together by Name, write back into `FolderEntry.SortOrder` (for folders) or `ConnectionSortOrders` (for connections). Descending = reverse after sort. Always followed by `PersistFolderState()` + `ReloadConnections()` (the second rebuilds the tree in the new order).
+
+**XAML wiring**:
+- New `xmlns:behaviors="using:EmberTern.App.Behaviors"`.
+- TreeView's `ItemsSource` flipped from `Connections` → `RootNodes`.
+- New `TreeDataTemplate DataType="vm:FolderNodeViewModel"` with `ItemsSource="{Binding Connections}"`. Folder name is a TextBlock when `IsNotRenaming`, a TextBox when `IsRenaming` — same Panel-overlay trick as Saved Queries. Context menu: Zmień nazwę / Usuń katalog.
+- Connection template gained a Separator + `Sortuj węzły` submenu with two children bound to `SortAscendingCommand` / `SortDescendingCommand`.
+- New `Style Selector="TreeViewItem" x:DataType="vm:FolderNodeViewModel"` for TwoWay `IsExpanded` (folders default to expanded; user can collapse).
+- Titlebar toolbar gained a folder button (`📁`) right after the existing `+` connection button, calling `OnNewFolderClick`.
+
+**Dialog**: [NewFolderDialog](src/EmberTern.App/Views/NewFolderDialog.axaml) is a tiny window — TextBox + OK + Cancel. `ShowDialog<string?>` returns the trimmed name or null. Auto-focus + select-all on Opened so the user just types.
+
+**Behaviors**: new [FocusBehavior.cs](src/EmberTern.App/Behaviors/FocusBehavior.cs) attached property `FocusOnVisible`. When the property is true on a Control, subscribes to `Visual.IsVisibleProperty` changes; when it flips to visible, dispatches Focus + (for TextBox) SelectAll at Background priority so layout settles first. Used by both Feature 1 (saved-query rename) and Feature 2 (folder rename) — the rename TextBox is always in the visual tree and only `IsVisible`-toggled by the binding, so a one-shot Loaded / AttachedToVisualTree event won't fire on each rename.
+
+**Tests** ([FolderStoreTests.cs](tests/EmberTern.Tests/FolderStoreTests.cs) +5, [FolderVmTests.cs](tests/EmberTern.Tests/FolderVmTests.cs) +11, [SavedQueryVmTests.cs](tests/EmberTern.Tests/SavedQueryVmTests.cs) +5): FolderStore Load on missing / empty / corrupt → empty state; round-trip preserves folders + connection map + sort orders; FolderEntry default Id is unique. VM tests: CreateFolder persists + appears in RootNodes; blank name → default; reload places mapped connections into folders + others at root; DeleteFolder moves children back to root; rename persists; blank rename keeps name; sort asc / desc at root mixes folders + connections by name; sort inside folder only affects that folder; sort persists across fresh VM instance; deleting a connection drops its stale folder mapping. SavedQuery rename: Begin seeds EditingName + flips flag; Commit applies trimmed name; blank input keeps original; Cancel reverts without mutating; renamed name survives CaptureWorkspace.
+
+**Auto-confirm pattern in tests.** `_main.ConfirmationRequested += _ => Task.FromResult(true);` short-circuits the modal dialog so `DeleteFolderAsync` can be tested without UI. Same shape as the existing delete-saved-query path.
+
+**Gotchas — promote to architecture lore.**
+
+32. **Avalonia 12 `IsVisible`-toggled controls don't get a fresh `AttachedToVisualTree` event each time.** When a TextBox lives in a Panel and visibility flips via `IsVisible="{Binding IsRenaming}"`, the control stays in the visual tree the whole time. `Loaded` / `AttachedToVisualTree` fire only once. To focus on every show, you need to subscribe to `Visual.IsVisibleProperty` changes — what `Behaviors/FocusBehavior.cs` does. **Rule**: for any "focus when this becomes visible" pattern, prefer the attached behavior (`FocusBehavior.FocusOnVisible`) over wiring `Loaded` events — `Loaded` fires once per control lifetime, not once per show.
+
+33. **Mixed-type TreeView (folders + connections at the same level) requires `TreeView.DataTemplates`, not `TreeView.ItemTemplate`.** Same gotcha as Explorer Redesign gotcha #4 — setting `ItemTemplate` to one of the two templates breaks template lookup for the other type at every nesting level. Both templates go in `DataTemplates`, keyed on `DataType`. The root-level `ObservableCollection<object>` happily holds either type; the tree picks the right template per item.
+
+34. **`ObservableCollection<object>` for mixed-type tree roots is the cleanest Avalonia idiom.** Tried briefly with a common interface (same approach that bit gotcha #3 for `TreeViewItem.IsExpanded` setters), but compiled bindings on the parent collection don't need to know the item type — Avalonia resolves templates by DataType at runtime. `object` keeps the collection type-agnostic; concrete `x:DataType` on each TreeDataTemplate handles the per-item compile-time binding contract.
+
+### Folders + saved queries follow-up fixes (shipped)
+
+Three follow-ups on the prior milestone. **Tests: 357 / 357 green** (+6).
+
+**1. Saved-query rename — full-row hit area + right-click + hover affordance.** The double-click handler moved from the bare `TextBlock` to a wrapper `Border HorizontalAlignment="Stretch" Background="Transparent"` so the whole row receives the gesture. Right-click anywhere on the row now opens a `ContextMenu` with "Zmień nazwę" / "Usuń". A hover-visible `✎` icon button sits in the right column of a `Grid ColumnDefinitions="*,Auto"`; styled via `Button.row-hover-icon { Opacity 0 }` + `ListBoxItem:pointerover Button.row-hover-icon { Opacity 1 }` (scoped under `ListBox.Styles`). Both context menu items and the hover button delegate to commands on `SavedQueryViewModel`.
+
+[SavedQueryViewModel.cs](src/EmberTern.App/ViewModels/SavedQueryViewModel.cs) gained an optional `MainWindowViewModel? _owner` ctor parameter and a new `Delete` `[RelayCommand]` that calls `_owner?.DeleteSavedQueryAsync(this) ?? Task.CompletedTask` — same shape as `ConnectionNodeViewModel.Delete`. `DeleteSavedQueryAsync(sq)` is the public entry on the main VM; `DeleteSelectedQueryAsync` now just thin-wraps it.
+
+**2. Add connection to folder.**
+- Folder right-click gained "Dodaj połączenie" at the top of the menu. Bound to `FolderNodeViewModel.AddConnectionCommand` which calls `_owner.RequestAddConnectionAsync(Id)`. MainWindowViewModel exposes `event Func<string?, Task>? AddConnectionRequested` + `RequestAddConnectionAsync(folderId)`; the view subscribes in `OnDataContextChanged`, opens `NewConnectionDialog`, and on confirm calls `PlaceConnectionInFolder(profile.Id, folderId)`.
+- Titlebar `+` button now detects folder context from the tree: if `SidebarTree.SelectedItem` is a `FolderNodeViewModel` → that folder; if it's a `ConnectionNodeViewModel` whose id is in `ConnectionFolderMap` → the parent folder; otherwise root (legacy behaviour). `DetectFolderContext(vm)` lives in the code-behind.
+- New helper `MainWindowViewModel.PlaceConnectionInFolder(profileId, folderId)` mutates `ConnectionFolderMap` (or removes the entry when `folderId is null`), persists, and reloads. Isolated for testability — doesn't require the dialog.
+
+**3. Sort scope (no fix needed — already correct).** The prior milestone's `SortSiblingsOf` already scopes correctly: folder member pivot → only that folder's `ConnectionSortOrders` are updated; root pivot → only `Folders.SortOrder` + root connections' `ConnectionSortOrders`. Added two regression tests pinning this: `SortInsideFolder_LeavesRootOrderUntouched` (root order + root sort-orders + folder.SortOrder all unchanged after a folder sort) and `SortAtRoot_LeavesFolderMembersUntouched` (folder members get no `ConnectionSortOrders` entry from a root sort).
+
+**Tests added (+6).** 2 in [SavedQueryVmTests.cs](tests/EmberTern.Tests/SavedQueryVmTests.cs) — DeleteCommand on a VM with owner routes through `DeleteSavedQueryAsync` and removes; DeleteCommand on a bare VM (owner null) is a no-op (Task.CompletedTask). 4 in [FolderVmTests.cs](tests/EmberTern.Tests/FolderVmTests.cs) — `PlaceConnectionInFolder` maps + persists + reloads tree; `PlaceConnectionInFolder(null)` moves back to root; plus the two sort-scope regression tests above.
+
+**Gotchas — promote to architecture lore.**
+
+35. **Avalonia ListBox hover-visible row actions: `Button.cls { Opacity 0 }` + `ListBoxItem:pointerover Button.cls { Opacity 1 }`.** The hover state cascades from `ListBoxItem` down to descendants, so a Style scoped under `ListBox.Styles` with the two-selector pair makes any tagged button fade in only on the hovered row. No code-behind required, no per-item PointerEntered subscriptions. **Rule**: when adding a row-scoped affordance to an Avalonia ListBox/TreeView, prefer this pattern over `PointerEntered/PointerExited` handlers.
+
 ## Current state
 
 - **Build**: clean (zero warnings, `TreatWarningsAsErrors=true` enforced).
-- **Tests**: 330 / 330 passing.
-- **App**: builds, launches, exits cleanly. SQL editor: autocomplete (Ctrl+Space, 3+ char auto-trigger, `ALIAS./TABLE.` column completion) — **case-preserving on insert (nagl→nagl_table; NAGL→NAGL_TABLE; mixed→catalog form) and IBExpert-style 2-column display (kind label + "NAME : TYPE" for columns / name for objects)**, formatter lowercases keywords + identifiers, syntax highlighting swaps on theme toggle, selection brush matches the rest of the app, light-theme accent blue, double-click on a loaded metadata object name opens its DDL tab. **Tables open as a 6-sub-tab TableDetailTab (Pola / Ograniczenia / Indeksy / Dane / Opis / DDL)** — 1-based field position, zero scale blanked, font 11, tight 22 px row pitch, text-checkmark booleans (✓/empty), Dane shows first 200 rows in a dynamic grid, Opis surfaces the table's RDB$DESCRIPTION. TableDetail tabs survive restart and lazy-load on first activation. TableDetail readers borrow the user's working tx when active (no "Parallel transactions" floods on open-during-tx). **Connection-wide `TransactionGate` semaphore serializes owned-tx Begins across both readers AND `TransactionService` — disconnect/reconnect + lazy-load races + F5-mid-load no longer hit "Parallel transactions are not supported".** Errors in any single sub-step surface in the view itself (Messages panel is hidden on non-Query tabs). Toolbar buttons + Saved Queries panel + bottom Results/Messages panel all hide on non-Query tabs.
-- **Branch state**: working on master. **V1 + Explorer Redesign + Metadata-categories-expansion + V1.1 Workspace Persistence + Per-Connection Workspace + SQL Editor UX + SQL Queries Panel + Visual polish + SQL Editor execute-selected + autoformat + SQL Autocomplete + formatter-lowercase-all + light-theme highlighting + light-color-polish + double-click-open-DDL + Table Detail tab + Table Detail polish + per-tab toolbar + TableDetail persistence + 6 sub-tabs + late-session fixes (checkmark, bottom-panel hide, per-step errors, lazy-load, borrow-or-begin tx) + TransactionGate (closes reader-vs-reader and reader-vs-executor parallel-tx race) + autocomplete-polish (case-preserving + rich display) shipped.** Next V1.1 candidate from the list below.
+- **Tests**: 357 / 357 passing.
+- **App**: builds, launches, exits cleanly. SQL editor: autocomplete (Ctrl+Space, 3+ char auto-trigger, `ALIAS./TABLE.` column completion) — **case-preserving on insert (nagl→nagl_table; NAGL→NAGL_TABLE; mixed→catalog form) and IBExpert-style 2-column display (kind label + "NAME : TYPE" for columns / name for objects)**, formatter lowercases keywords + identifiers, syntax highlighting swaps on theme toggle, selection brush matches the rest of the app, light-theme accent blue, double-click on a loaded metadata object name opens its DDL tab. **Saved queries can be renamed in place** — full-row double-click, right-click → Zmień nazwę / Usuń, or hover-visible `✎` icon button — and are persisted via the existing close-time CaptureWorkspace path. **Connections can be organized in folders** via a 📁 button in the titlebar; right-click a folder for Dodaj połączenie / Zmień nazwę / Usuń katalog (delete moves children back to root); right-click any connection for Sortuj węzły → Rosnąco/Malejąco (siblings sorted by Name; persisted in folders.json). The titlebar `+` add-connection button also auto-scopes to the folder context when a folder (or a folder-member connection) is selected in the tree. **Tables open as a 6-sub-tab TableDetailTab (Pola / Ograniczenia / Indeksy / Dane / Opis / DDL)** — 1-based field position, zero scale blanked, font 11, tight 22 px row pitch, text-checkmark booleans (✓/empty), Dane shows first 200 rows in a dynamic grid, Opis surfaces the table's RDB$DESCRIPTION. TableDetail tabs survive restart and lazy-load on first activation. **Readers never open their own transaction** — they attach to the user's working tx when active, otherwise the managed driver runs each SELECT in an implicit auto-committed read tx. FbConnection is single-threaded — command execution is serialized application-wide via `FirebirdConnectionService.CommandLock` across readers, executor, and TransactionService. Errors in any single sub-step surface in the view itself (Messages panel is hidden on non-Query tabs). Toolbar buttons + Saved Queries panel + bottom Results/Messages panel all hide on non-Query tabs.
+- **Branch state**: working on master. All prior milestones plus **Folders + saved queries follow-up fixes shipped** (saved-query rename full-row hit area + right-click + hover ✎; "Dodaj połączenie" on folder right-click + titlebar `+` auto-detects folder context; sort scope verified — folder sort doesn't touch root and vice versa, with regression tests pinning).
 
 ## V1 — definition of done (all met)
 
@@ -886,16 +1031,15 @@ Both [FirebirdSql.xshd](src/EmberTern.App/Assets/FirebirdSql.xshd) and [Firebird
 Surfaced by what was actually built; ordered roughly by user-visible value:
 1. **Refresh button on TableDetail / DDL tabs** — content is fetched once at open (lazy-loaded the first time the tab activates). After an external schema change there's no way to re-fetch without closing and reopening. Resetting `_loadTask = null` and re-firing `EnsureLoadedAsync` is mechanically straightforward.
 2. **TableDetail persistence schema upgrade** — TableDetail tabs serialize as `CoreTabKind.Ddl` today (Fields/Indexes/Constraints discarded; only `DdlText` survives). A native `TableDetail` kind in the persistence DTO would keep the per-tab cache hot across restarts, at the cost of versioning the schema.
-3. **Borrow-or-begin pattern in `FirebirdMetadataReader`** — `ListAsync` / `ListColumnsAsync` still call `BeginTransactionAsync` unconditionally. Today they're only called during sidebar load (no concurrent user tx), but adopting the same `BorrowOrBeginAsync` helper as `FirebirdDdlReader` / `FirebirdTableDetailReader` would future-proof against the next workflow that triggers them mid-transaction.
-4. **Procedure / function param signature in tab header** — currently `Procedure: SP_BALANCE` is just the name. IBExpert shows `(IN, OUT)` shape; would help disambiguate overloads.
-5. **DDL for FB 2.5 functions** — currently we just emit a one-line comment. Reconstructing the `DECLARE EXTERNAL FUNCTION` from `RDB$FUNCTION_ARGUMENTS` is mechanical and would close that gap.
-6. **DDL syntax: domains, character sets, COMPUTED BY columns** — table reconstruction handles `COMPUTED BY` and references domains, but doesn't emit `CREATE DOMAIN` for the user-defined ones a table depends on. A "show dependencies" toggle would be a natural extension.
-7. **Tab right-click menu** — Close, Close Others, Copy DDL to Clipboard.
-8. **M7 hardening** — test against FB 2.5 / 3.0 / 4.0 (only FB5 has been used so far). Verify WIN1250 round-trip in DDL text. Verify large tables (50+ columns) render correctly in the column loop. Verify the new constraints query (with the `RDB$TRIGGERS chk_src` join) against FB 2.5 — should work but unverified.
-9. **Trigger types 8192+** — DB-level / DDL triggers currently render as `/* trigger type 8192 */`. Decoding is non-trivial but feasible.
-10. **Smart tab limit** — no cap on open DDL/TableDetail tabs right now; ten+ tabs and the strip wraps. A most-recently-used eviction policy at ~10 tabs would be cleaner.
-11. **Editor: keyboard close (Ctrl+W)** — DDL/TableDetail tabs only close via the × button.
-12. **Constraints/Indexes sub-tabs counts in the tab strip** — Pola shows N fields immediately but Ograniczenia/Indeksy/Dane need a click to learn their size. A `(N)` badge per sub-tab header would surface that.
+3. **Procedure / function param signature in tab header** — currently `Procedure: SP_BALANCE` is just the name. IBExpert shows `(IN, OUT)` shape; would help disambiguate overloads.
+4. **DDL for FB 2.5 functions** — currently we just emit a one-line comment. Reconstructing the `DECLARE EXTERNAL FUNCTION` from `RDB$FUNCTION_ARGUMENTS` is mechanical and would close that gap.
+5. **DDL syntax: domains, character sets, COMPUTED BY columns** — table reconstruction handles `COMPUTED BY` and references domains, but doesn't emit `CREATE DOMAIN` for the user-defined ones a table depends on. A "show dependencies" toggle would be a natural extension.
+6. **Tab right-click menu** — Close, Close Others, Copy DDL to Clipboard.
+7. **M7 hardening** — test against FB 2.5 / 3.0 / 4.0 (only FB5 has been used so far). Verify WIN1250 round-trip in DDL text. Verify large tables (50+ columns) render correctly in the column loop. Verify the new constraints query (with the `RDB$TRIGGERS chk_src` join) against FB 2.5 — should work but unverified.
+8. **Trigger types 8192+** — DB-level / DDL triggers currently render as `/* trigger type 8192 */`. Decoding is non-trivial but feasible.
+9. **Smart tab limit** — no cap on open DDL/TableDetail tabs right now; ten+ tabs and the strip wraps. A most-recently-used eviction policy at ~10 tabs would be cleaner.
+10. **Editor: keyboard close (Ctrl+W)** — DDL/TableDetail tabs only close via the × button.
+11. **Constraints/Indexes sub-tabs counts in the tab strip** — Pola shows N fields immediately but Ograniczenia/Indeksy/Dane need a click to learn their size. A `(N)` badge per sub-tab header would surface that.
 
 ## Architecture rules — enforce against drift
 

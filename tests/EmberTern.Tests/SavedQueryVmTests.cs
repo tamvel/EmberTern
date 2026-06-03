@@ -285,6 +285,99 @@ public class SavedQueryVmTests
         Assert.Equal("from B", h.Main.WorkspacesByConnection["B"].SavedQueries[0].SqlText);
     }
 
+    [Fact]
+    public void BeginRename_SeedsEditingNameAndFlipsFlag()
+    {
+        var sq = new SavedQueryViewModel("id1", "Customers", "select 1;");
+
+        sq.BeginRenameCommand.Execute(null);
+
+        Assert.True(sq.IsRenaming);
+        Assert.False(sq.IsNotRenaming);
+        Assert.Equal("Customers", sq.EditingName);
+        Assert.Equal("Customers", sq.Name);
+    }
+
+    [Fact]
+    public void CommitRename_AppliesEditingNameAndExitsRenameMode()
+    {
+        var sq = new SavedQueryViewModel("id1", "Customers", "select 1;");
+        sq.BeginRenameCommand.Execute(null);
+        sq.EditingName = "  Customer report  ";
+
+        sq.CommitRenameCommand.Execute(null);
+
+        Assert.False(sq.IsRenaming);
+        Assert.Equal("Customer report", sq.Name);
+    }
+
+    [Fact]
+    public void CommitRename_BlankInput_KeepsOriginalName()
+    {
+        var sq = new SavedQueryViewModel("id1", "Customers", "select 1;");
+        sq.BeginRenameCommand.Execute(null);
+        sq.EditingName = "   ";
+
+        sq.CommitRenameCommand.Execute(null);
+
+        Assert.False(sq.IsRenaming);
+        Assert.Equal("Customers", sq.Name);
+    }
+
+    [Fact]
+    public void CancelRename_RevertsWithoutMutatingName()
+    {
+        var sq = new SavedQueryViewModel("id1", "Customers", "select 1;");
+        sq.BeginRenameCommand.Execute(null);
+        sq.EditingName = "Different";
+
+        sq.CancelRenameCommand.Execute(null);
+
+        Assert.False(sq.IsRenaming);
+        Assert.Equal("Customers", sq.Name);
+    }
+
+    [Fact]
+    public async Task DeleteCommandOnVm_RoutesThroughOwnerAndRemoves()
+    {
+        using var h = new Harness();
+        h.Main.ApplyActiveConnectionChange("A");
+        // Auto-confirm — match the existing DeleteSelectedQuery test pattern.
+        h.Main.ConfirmationRequested += _ => Task.FromResult(true);
+        h.Main.NewQueryCommand.Execute(null);
+        var target = h.Main.SavedQueries[1];
+
+        await ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand)target.DeleteCommand).ExecuteAsync(null);
+
+        Assert.DoesNotContain(target, h.Main.SavedQueries);
+    }
+
+    [Fact]
+    public void DeleteCommandOnBareVm_IsNoOpWithoutOwner()
+    {
+        // SavedQueryViewModel constructed without an owner (tests, design-time) must
+        // not crash when DeleteCommand fires — DeleteSavedQueryAsync requires the owner.
+        var sq = new SavedQueryViewModel("id1", "Name", "select 1;");
+        // Should complete without throwing.
+        var task = ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand)sq.DeleteCommand).ExecuteAsync(null);
+        Assert.True(task.IsCompleted);
+    }
+
+    [Fact]
+    public void RenamedSavedQuery_PersistsThroughCaptureWorkspace()
+    {
+        using var h = new Harness();
+        h.Main.ApplyActiveConnectionChange("A");
+        var sq = h.Main.SavedQueries[0];
+        sq.BeginRenameCommand.Execute(null);
+        sq.EditingName = "Customer report";
+        sq.CommitRenameCommand.Execute(null);
+
+        var state = h.Main.CaptureWorkspace();
+
+        Assert.Equal("Customer report", state.Workspaces["A"].SavedQueries[0].Name);
+    }
+
     private sealed class Harness : IDisposable
     {
         public Harness()

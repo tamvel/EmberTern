@@ -22,6 +22,8 @@ namespace EmberTern.App.ViewModels;
 public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly ConnectionProfileStore _store;
+    private readonly FolderStore _folderStore;
+    private FolderState _folderState = new();
     private readonly FirebirdConnectionService _service;
     private readonly TransactionService _transactionService;
     private readonly FirebirdQueryExecutor _executor;
@@ -53,12 +55,19 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public MainWindowViewModel(ConnectionProfileStore store, FirebirdConnectionService service, TransactionService transactionService)
+        : this(store, service, transactionService, new FolderStore(System.IO.Path.GetDirectoryName(store.FilePath)!))
+    {
+    }
+
+    public MainWindowViewModel(ConnectionProfileStore store, FirebirdConnectionService service, TransactionService transactionService, FolderStore folderStore)
     {
         _store = store;
+        _folderStore = folderStore;
+        _folderState = _folderStore.Load();
         _service = service;
         _transactionService = transactionService;
         _executor = new FirebirdQueryExecutor(_service, _transactionService);
-        _metadataReader = new FirebirdMetadataReader(_service);
+        _metadataReader = new FirebirdMetadataReader(_service, _transactionService);
         _ddlReader = new FirebirdDdlReader(_service, _transactionService);
         _tableDetailReader = new FirebirdTableDetailReader(_service, _transactionService);
         Metadata = new MetadataExplorerViewModel(_service, _metadataReader);
@@ -236,10 +245,220 @@ public partial class MainWindowViewModel : ViewModelBase
             stale.Detach();
         }
         Metadata.Connections.Clear();
-        foreach (var profile in _store.LoadAll())
+        Metadata.RootNodes.Clear();
+
+        var profiles = _store.LoadAll();
+        var nodesById = new Dictionary<string, ConnectionNodeViewModel>(StringComparer.Ordinal);
+        foreach (var profile in profiles)
         {
-            Metadata.Connections.Add(new ConnectionNodeViewModel(profile, this));
+            var node = new ConnectionNodeViewModel(profile, this);
+            Metadata.Connections.Add(node);
+            nodesById[profile.Id] = node;
         }
+
+        // Drop folder-map entries whose connection profiles no longer exist —
+        // keeps folders.json from growing forever after profile deletions.
+        var staleMappings = new List<string>();
+        foreach (var kvp in _folderState.ConnectionFolderMap)
+        {
+            if (!nodesById.ContainsKey(kvp.Key)) staleMappings.Add(kvp.Key);
+        }
+        foreach (var id in staleMappings) _folderState.ConnectionFolderMap.Remove(id);
+
+        // Drop stale per-connection sort orders too, same rationale.
+        var staleSorts = new List<string>();
+        foreach (var kvp in _folderState.ConnectionSortOrders)
+        {
+            if (!nodesById.ContainsKey(kvp.Key)) staleSorts.Add(kvp.Key);
+        }
+        foreach (var id in staleSorts) _folderState.ConnectionSortOrders.Remove(id);
+
+        // Build folder VMs keyed by id, in their persisted sort order.
+        var foldersById = new Dictionary<string, FolderNodeViewModel>(StringComparer.Ordinal);
+        var folderVms = new List<FolderNodeViewModel>();
+        foreach (var entry in _folderState.Folders)
+        {
+            var f = new FolderNodeViewModel(entry, this);
+            foldersById[entry.Id] = f;
+            folderVms.Add(f);
+        }
+
+        // Place each connection into its folder (when mapped + folder exists), otherwise root.
+        var rootConnections = new List<ConnectionNodeViewModel>();
+        foreach (var node in Metadata.Connections)
+        {
+            if (_folderState.ConnectionFolderMap.TryGetValue(node.Profile.Id, out var folderId)
+                && !string.IsNullOrEmpty(folderId)
+                && foldersById.TryGetValue(folderId, out var folder))
+            {
+                folder.Connections.Add(node);
+            }
+            else
+            {
+                rootConnections.Add(node);
+            }
+        }
+
+        // Within each folder, sort children by persisted SortOrder then Name.
+        foreach (var f in folderVms)
+        {
+            var sorted = f.Connections
+                .OrderBy(c => GetConnectionSortOrder(c.Profile.Id))
+                .ThenBy(c => c.Profile.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+            f.Connections.Clear();
+            foreach (var c in sorted) f.Connections.Add(c);
+        }
+
+        // RootNodes: folders + root connections mixed, sorted by SortOrder, then Name.
+        // Folders use FolderEntry.SortOrder; root connections use ConnectionSortOrders.
+        var rootEntries = new List<(int sort, string name, object node)>();
+        foreach (var f in folderVms)
+        {
+            rootEntries.Add((f.Entry.SortOrder, f.Name, f));
+        }
+        foreach (var c in rootConnections)
+        {
+            rootEntries.Add((GetConnectionSortOrder(c.Profile.Id), c.Profile.Name, c));
+        }
+        rootEntries.Sort((a, b) =>
+        {
+            var bySort = a.sort.CompareTo(b.sort);
+            return bySort != 0 ? bySort : string.Compare(a.name, b.name, System.StringComparison.CurrentCultureIgnoreCase);
+        });
+
+        foreach (var entry in rootEntries)
+        {
+            Metadata.RootNodes.Add(entry.node);
+        }
+    }
+
+    private int GetConnectionSortOrder(string profileId)
+        => _folderState.ConnectionSortOrders.TryGetValue(profileId, out var v) ? v : 0;
+
+    internal FolderState FolderState => _folderState;
+    internal FolderStore FolderStore => _folderStore;
+
+    public void PersistFolderState()
+    {
+        try
+        {
+            _folderStore.Save(_folderState);
+        }
+        catch (System.IO.IOException) { /* best effort */ }
+        catch (System.UnauthorizedAccessException) { /* best effort */ }
+    }
+
+    public FolderEntry CreateFolder(string name)
+    {
+        var trimmed = (name ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(trimmed)) trimmed = "New folder";
+
+        var nextSort = 0;
+        foreach (var f in _folderState.Folders)
+        {
+            if (f.SortOrder >= nextSort) nextSort = f.SortOrder + 1;
+        }
+        foreach (var kvp in _folderState.ConnectionSortOrders)
+        {
+            // Only consider root-level connections for the nextSort horizon — folder
+            // members don't compete with root-level entries.
+            if (!_folderState.ConnectionFolderMap.ContainsKey(kvp.Key)
+                && kvp.Value >= nextSort) nextSort = kvp.Value + 1;
+        }
+
+        var entry = new FolderEntry { Name = trimmed, SortOrder = nextSort };
+        _folderState.Folders.Add(entry);
+        PersistFolderState();
+        ReloadConnections();
+        return entry;
+    }
+
+    public async Task DeleteFolderAsync(FolderNodeViewModel folder)
+    {
+        var confirmed = await RequestConfirmAsync(new ConfirmRequest
+        {
+            Title = UiStrings.FolderDeleteConfirmTitle,
+            Message = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FolderDeleteConfirmFormat, folder.Name),
+            ConfirmLabel = UiStrings.FolderDeleteConfirmYes,
+            CancelLabel = UiStrings.DialogCancel,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
+        if (!confirmed) return;
+
+        // Move children back to root before removing the folder entry.
+        var toUnmap = new List<string>();
+        foreach (var kvp in _folderState.ConnectionFolderMap)
+        {
+            if (kvp.Value == folder.Id) toUnmap.Add(kvp.Key);
+        }
+        foreach (var id in toUnmap) _folderState.ConnectionFolderMap.Remove(id);
+
+        _folderState.Folders.RemoveAll(f => f.Id == folder.Id);
+        PersistFolderState();
+        ReloadConnections();
+    }
+
+    // Sort the siblings of the given connection node. Connection inside a folder
+    // → sort that folder's connections; connection at root → sort the mixed
+    // folders + root connections together by Name. Updates persisted sort orders
+    // and reloads the tree.
+    public void SortSiblingsOf(ConnectionNodeViewModel node, bool ascending)
+    {
+        if (_folderState.ConnectionFolderMap.TryGetValue(node.Profile.Id, out var folderId)
+            && !string.IsNullOrEmpty(folderId))
+        {
+            // Folder member — sort the connections that share this folder.
+            var members = new List<ConnectionNodeViewModel>();
+            foreach (var c in Metadata.Connections)
+            {
+                if (_folderState.ConnectionFolderMap.TryGetValue(c.Profile.Id, out var fid)
+                    && fid == folderId)
+                {
+                    members.Add(c);
+                }
+            }
+            members.Sort((a, b) => string.Compare(a.Profile.Name, b.Profile.Name, System.StringComparison.CurrentCultureIgnoreCase));
+            if (!ascending) members.Reverse();
+            for (int i = 0; i < members.Count; i++)
+            {
+                _folderState.ConnectionSortOrders[members[i].Profile.Id] = i;
+            }
+        }
+        else
+        {
+            // Root sibling — sort folders + root connections together.
+            var rootEntries = new List<(string name, bool isFolder, string id)>();
+            foreach (var f in _folderState.Folders)
+            {
+                rootEntries.Add((f.Name, true, f.Id));
+            }
+            foreach (var c in Metadata.Connections)
+            {
+                if (!_folderState.ConnectionFolderMap.TryGetValue(c.Profile.Id, out var fid)
+                    || string.IsNullOrEmpty(fid))
+                {
+                    rootEntries.Add((c.Profile.Name, false, c.Profile.Id));
+                }
+            }
+            rootEntries.Sort((a, b) => string.Compare(a.name, b.name, System.StringComparison.CurrentCultureIgnoreCase));
+            if (!ascending) rootEntries.Reverse();
+            for (int i = 0; i < rootEntries.Count; i++)
+            {
+                if (rootEntries[i].isFolder)
+                {
+                    var entry = _folderState.Folders.Find(f => f.Id == rootEntries[i].id);
+                    if (entry is not null) entry.SortOrder = i;
+                }
+                else
+                {
+                    _folderState.ConnectionSortOrders[rootEntries[i].id] = i;
+                }
+            }
+        }
+
+        PersistFolderState();
+        ReloadConnections();
     }
 
     public WorkspaceState CaptureWorkspace()
@@ -429,7 +648,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 SavedQueries.Add(new SavedQueryViewModel(
                     string.IsNullOrEmpty(sq.Id) ? Guid.NewGuid().ToString("N") : sq.Id,
                     string.IsNullOrEmpty(sq.Name) ? string.Format(CultureInfo.InvariantCulture, UiStrings.QueryDefaultNameFormat, SavedQueries.Count + 1) : sq.Name,
-                    sq.SqlText ?? string.Empty));
+                    sq.SqlText ?? string.Empty,
+                    this));
             }
 
             // Bootstrap a "Query 1" on first Connect after this milestone (or for any
@@ -441,7 +661,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 SavedQueries.Add(new SavedQueryViewModel(
                     Guid.NewGuid().ToString("N"),
                     string.Format(CultureInfo.InvariantCulture, UiStrings.QueryDefaultNameFormat, 1),
-                    QueryText));
+                    QueryText,
+                    this));
             }
 
             SavedQueryViewModel? active = null;
@@ -568,6 +789,33 @@ public partial class MainWindowViewModel : ViewModelBase
         => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
 
     public event Func<string, Task>? ClipboardWriteRequested;
+
+    // Asks the view to open the New Connection dialog. When folderId is non-null,
+    // the resulting connection is slotted into that folder; otherwise it lands at
+    // the root. Fired from FolderNodeViewModel.AddConnectionCommand for the folder
+    // right-click "Dodaj połączenie" entry and from MainWindow.OnNewConnectionClick
+    // (which resolves the folder context from the tree selection).
+    public event Func<string?, Task>? AddConnectionRequested;
+    public Task RequestAddConnectionAsync(string? folderId)
+        => AddConnectionRequested?.Invoke(folderId) ?? Task.CompletedTask;
+
+    // Persist a freshly-added connection into a folder. Called by the view after
+    // the dialog returns with a profile; isolated here so tests can drive the
+    // folder-placement logic without standing up the dialog.
+    public void PlaceConnectionInFolder(string profileId, string? folderId)
+    {
+        if (string.IsNullOrEmpty(profileId)) return;
+        if (string.IsNullOrEmpty(folderId))
+        {
+            _folderState.ConnectionFolderMap.Remove(profileId);
+        }
+        else
+        {
+            _folderState.ConnectionFolderMap[profileId] = folderId;
+        }
+        PersistFolderState();
+        ReloadConnections();
+    }
 
     // Set by the view to read the SQL editor's current selection. Returns null or empty
     // when there is no selection. Used to scope Execute and Format SQL to the selected
@@ -1065,7 +1313,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private void NewQuery()
     {
         var name = string.Format(CultureInfo.InvariantCulture, UiStrings.QueryDefaultNameFormat, NextQueryNumber());
-        var sq = new SavedQueryViewModel(Guid.NewGuid().ToString("N"), name, string.Empty);
+        var sq = new SavedQueryViewModel(Guid.NewGuid().ToString("N"), name, string.Empty, this);
         SavedQueries.Add(sq);
         SelectedSavedQuery = sq;
     }
@@ -1073,9 +1321,16 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool CanCreateSavedQuery => HasActiveWorkspace;
 
     [RelayCommand(CanExecute = nameof(CanDeleteSelectedQuery))]
-    private async Task DeleteSelectedQueryAsync()
+    private Task DeleteSelectedQueryAsync()
+        => SelectedSavedQuery is { } sq ? DeleteSavedQueryAsync(sq) : Task.CompletedTask;
+
+    public bool CanDeleteSelectedQuery => SelectedSavedQuery is not null;
+
+    // Confirm + delete a specific saved query. Invoked by both the toolbar
+    // "trash" button (via DeleteSelectedQueryAsync) and the per-row context
+    // menu / hover button (via SavedQueryViewModel.DeleteCommand).
+    public async Task DeleteSavedQueryAsync(SavedQueryViewModel sq)
     {
-        if (SelectedSavedQuery is not { } sq) return;
         var confirmed = await RequestConfirmAsync(new ConfirmRequest
         {
             Title = UiStrings.QueryDeleteConfirmTitle,
@@ -1087,8 +1342,6 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!confirmed) return;
         RemoveSavedQuery(sq);
     }
-
-    public bool CanDeleteSelectedQuery => SelectedSavedQuery is not null;
 
     [RelayCommand(CanExecute = nameof(CanClearAllQueries))]
     private async Task ClearAllQueriesAsync()
@@ -1120,7 +1373,8 @@ public partial class MainWindowViewModel : ViewModelBase
         var bootstrap = new SavedQueryViewModel(
             Guid.NewGuid().ToString("N"),
             string.Format(CultureInfo.InvariantCulture, UiStrings.QueryDefaultNameFormat, 1),
-            string.Empty);
+            string.Empty,
+            this);
         SavedQueries.Add(bootstrap);
         SelectedSavedQuery = bootstrap;
     }
@@ -1145,7 +1399,8 @@ public partial class MainWindowViewModel : ViewModelBase
             var bootstrap = new SavedQueryViewModel(
                 Guid.NewGuid().ToString("N"),
                 string.Format(CultureInfo.InvariantCulture, UiStrings.QueryDefaultNameFormat, 1),
-                string.Empty);
+                string.Empty,
+                this);
             SavedQueries.Add(bootstrap);
             SelectedSavedQuery = bootstrap;
         }

@@ -1,0 +1,54 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EmberTern.App"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.NewFolderDialog"
+        Title="{x:Static app:UiStrings.FolderDialogTitle}"
+        Width="400"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <Grid RowDefinitions="Auto,Auto,Auto">
+
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="20,16">
+      <TextBlock Text="{x:Static app:UiStrings.FolderDialogTitle}" Classes="h1" />
+    </Border>
+
+    <StackPanel Grid.Row="1" Margin="20,18,20,18" Spacing="6">
+      <TextBlock Text="{x:Static app:UiStrings.FolderDialogNameLabel}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                 FontSize="12" />
+      <TextBox x:Name="NameBox"
+               Text=""
+               KeyDown="OnNameBoxKeyDown" />
+    </StackPanel>
+
+    <Border Grid.Row="2"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="20,12">
+      <StackPanel Orientation="Horizontal"
+                  HorizontalAlignment="Right"
+                  Spacing="8">
+        <Button Classes="flat"
+                Content="{x:Static app:UiStrings.DialogCancel}"
+                Click="OnCancelClick" />
+        <Button Classes="primary"
+                Content="{x:Static app:UiStrings.FolderDialogCreate}"
+                Click="OnCreateClick"
+                IsDefault="True" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>

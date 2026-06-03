@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
@@ -27,54 +26,10 @@ public sealed class FirebirdTableDetailReader
         _transactionService = transactionService;
     }
 
-    // Borrow the user's active working transaction when one exists, otherwise
-    // start our own short-lived ReadCommitted tx. Firebird requires a tx for
-    // every command, and the managed driver rejects a second concurrent tx on
-    // the same connection ("Parallel transactions are not supported"), so we
-    // MUST share whatever the user already has. Returned bool indicates
-    // ownership — when true the caller commits/disposes AND releases the
-    // TransactionGate; when false the tx belongs to the user and we must
-    // not touch its lifecycle (and didn't acquire the gate).
-    //
-    // The gate guards against concurrent owned-tx Begins on the same
-    // connection — race scenarios: two TableDetail tabs lazy-loading in
-    // parallel after reconnect, or a TableDetail load racing with the user
-    // pressing F5 in the SQL Editor. Without it the second Begin throws
-    // "Parallel transactions are not supported" even though the status bar
-    // shows Idle (the reader-owned tx is invisible to TransactionService).
-    private async Task<(FbTransaction tx, bool owns)> BorrowOrBeginAsync(FbConnection connection, CancellationToken ct)
-    {
-        var borrowed = _transactionService?.ActiveTransaction;
-        if (borrowed is not null) return (borrowed, false);
-
-        await _connectionService.TransactionGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            // Re-check after acquiring — the user (or another reader) may have
-            // begun a tx while we were queued. If so, borrow and release the
-            // gate immediately.
-            borrowed = _transactionService?.ActiveTransaction;
-            if (borrowed is not null)
-            {
-                _connectionService.TransactionGate.Release();
-                return (borrowed, false);
-            }
-            var tx = (FbTransaction)await connection
-                .BeginTransactionAsync(IsolationLevel.ReadCommitted, ct)
-                .ConfigureAwait(false);
-            return (tx, true);
-        }
-        catch
-        {
-            _connectionService.TransactionGate.Release();
-            throw;
-        }
-    }
-
-    // Caller invokes this in its finally block when ownsTx == true, AFTER
-    // disposing the FbTransaction. Releasing the gate is what lets the next
-    // queued Begin proceed.
-    private void ReleaseOwnedGate() => _connectionService.TransactionGate.Release();
+    // Readers never open their own transaction. When the user has a working tx
+    // active we attach to it; otherwise the managed driver runs the SELECT in
+    // an implicit read tx (auto-committed per command). Either way we don't
+    // touch the user's tx state and we can't race against other readers.
 
     public async Task<IReadOnlyList<FieldInfo>> GetFieldsAsync(
         string tableName,
@@ -83,13 +38,13 @@ public sealed class FirebirdTableDetailReader
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<FieldInfo>();
 
         var connection = _connectionService.RequireOpenConnection();
-        var (tx, ownsTx) = await BorrowOrBeginAsync(connection, cancellationToken).ConfigureAwait(false);
+        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = FieldsSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = tx;
+            cmd.Transaction = _transactionService?.ActiveTransaction;
             cmd.Parameters.AddWithValue("@tableName", tableName);
 
             var results = new List<FieldInfo>();
@@ -121,22 +76,15 @@ public sealed class FirebirdTableDetailReader
                     Description = string.IsNullOrEmpty(description) ? null : description,
                 });
             }
-
-            if (ownsTx) await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
             return results;
         }
         catch (FbException ex)
         {
-            if (ownsTx) { try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { } }
             throw new MetadataReadException($"Could not read columns for {tableName}: {ex.Message}", ex);
         }
         finally
         {
-            if (ownsTx)
-            {
-                await tx.DisposeAsync().ConfigureAwait(false);
-                ReleaseOwnedGate();
-            }
+            _connectionService.CommandLock.Release();
         }
     }
 
@@ -147,13 +95,13 @@ public sealed class FirebirdTableDetailReader
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<IndexInfo>();
 
         var connection = _connectionService.RequireOpenConnection();
-        var (tx, ownsTx) = await BorrowOrBeginAsync(connection, cancellationToken).ConfigureAwait(false);
+        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = IndexesSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = tx;
+            cmd.Transaction = _transactionService?.ActiveTransaction;
             cmd.Parameters.AddWithValue("@tableName", tableName);
 
             var results = new List<IndexInfo>();
@@ -175,22 +123,15 @@ public sealed class FirebirdTableDetailReader
                     IsPrimary = IsPrimaryConstraint(constraintType),
                 });
             }
-
-            if (ownsTx) await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
             return results;
         }
         catch (FbException ex)
         {
-            if (ownsTx) { try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { } }
             throw new MetadataReadException($"Could not read indexes for {tableName}: {ex.Message}", ex);
         }
         finally
         {
-            if (ownsTx)
-            {
-                await tx.DisposeAsync().ConfigureAwait(false);
-                ReleaseOwnedGate();
-            }
+            _connectionService.CommandLock.Release();
         }
     }
 
@@ -201,13 +142,13 @@ public sealed class FirebirdTableDetailReader
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<ConstraintInfo>();
 
         var connection = _connectionService.RequireOpenConnection();
-        var (tx, ownsTx) = await BorrowOrBeginAsync(connection, cancellationToken).ConfigureAwait(false);
+        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = ConstraintsSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = tx;
+            cmd.Transaction = _transactionService?.ActiveTransaction;
             cmd.Parameters.AddWithValue("@tableName", tableName);
 
             var results = new List<ConstraintInfo>();
@@ -222,22 +163,15 @@ public sealed class FirebirdTableDetailReader
                     refFields: reader.IsDBNull(5) ? null : reader.GetString(5),
                     checkSource: reader.IsDBNull(6) ? null : reader.GetString(6)));
             }
-
-            if (ownsTx) await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
             return results;
         }
         catch (FbException ex)
         {
-            if (ownsTx) { try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { } }
             throw new MetadataReadException($"Could not read constraints for {tableName}: {ex.Message}", ex);
         }
         finally
         {
-            if (ownsTx)
-            {
-                await tx.DisposeAsync().ConfigureAwait(false);
-                ReleaseOwnedGate();
-            }
+            _connectionService.CommandLock.Release();
         }
     }
 
@@ -248,14 +182,14 @@ public sealed class FirebirdTableDetailReader
         if (string.IsNullOrEmpty(tableName)) return string.Empty;
 
         var connection = _connectionService.RequireOpenConnection();
-        var (tx, ownsTx) = await BorrowOrBeginAsync(connection, cancellationToken).ConfigureAwait(false);
+        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText =
                 "SELECT RDB$DESCRIPTION FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = @tableName";
             cmd.CommandTimeout = 0;
-            cmd.Transaction = tx;
+            cmd.Transaction = _transactionService?.ActiveTransaction;
             cmd.Parameters.AddWithValue("@tableName", tableName);
 
             string? description = null;
@@ -267,30 +201,22 @@ public sealed class FirebirdTableDetailReader
                     description = reader.GetString(0);
                 }
             }
-
-            if (ownsTx) await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
             return NormalizeDescription(description);
         }
         catch (FbException ex)
         {
-            if (ownsTx) { try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { } }
             throw new MetadataReadException($"Could not read description for {tableName}: {ex.Message}", ex);
         }
         finally
         {
-            if (ownsTx)
-            {
-                await tx.DisposeAsync().ConfigureAwait(false);
-                ReleaseOwnedGate();
-            }
+            _connectionService.CommandLock.Release();
         }
     }
 
     /// <summary>
     /// Returns up to <paramref name="limit"/> rows from the table — preview only,
-    /// not the user's "Execute query" path. Runs in its own short-lived
-    /// ReadCommitted transaction so the user's working tx counter isn't touched
-    /// (matching the Fields/Indexes/Constraints pattern).
+    /// not the user's "Execute query" path. Attaches to the user's working tx
+    /// when active; otherwise the driver runs the SELECT in an implicit read tx.
     /// </summary>
     public async Task<QueryResult> GetDataPreviewAsync(
         string tableName,
@@ -304,7 +230,7 @@ public sealed class FirebirdTableDetailReader
 
         var connection = _connectionService.RequireOpenConnection();
         var sw = Stopwatch.StartNew();
-        var (tx, ownsTx) = await BorrowOrBeginAsync(connection, cancellationToken).ConfigureAwait(false);
+        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -312,7 +238,7 @@ public sealed class FirebirdTableDetailReader
             // still work. Internal quotes get doubled per SQL convention.
             cmd.CommandText = $"SELECT FIRST {limit} * FROM \"{tableName.Replace("\"", "\"\"")}\"";
             cmd.CommandTimeout = 0;
-            cmd.Transaction = tx;
+            cmd.Transaction = _transactionService?.ActiveTransaction;
 
             var columns = new List<QueryColumn>();
             var rows = new List<object?[]>();
@@ -333,8 +259,6 @@ public sealed class FirebirdTableDetailReader
                     rows.Add(row);
                 }
             }
-
-            if (ownsTx) await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
             sw.Stop();
             return new QueryResult
             {
@@ -346,16 +270,11 @@ public sealed class FirebirdTableDetailReader
         }
         catch (FbException ex)
         {
-            if (ownsTx) { try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { } }
             throw new MetadataReadException($"Could not preview data for {tableName}: {ex.Message}", ex);
         }
         finally
         {
-            if (ownsTx)
-            {
-                await tx.DisposeAsync().ConfigureAwait(false);
-                ReleaseOwnedGate();
-            }
+            _connectionService.CommandLock.Release();
         }
     }
 

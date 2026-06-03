@@ -164,4 +164,28 @@ internal static class UiStrings
     public const string TableDetailDataPreviewHintFormat = "Pokazuję pierwsze {0} wierszy";
     public const string TableDetailDataLoadingHint = "Ładowanie danych…";
     public const string TableDetailDescriptionEmpty = "Brak opisu.";
+
+    public const string FolderNewTooltip = "Nowy katalog";
+    public const string FolderNewIcon = "📁";
+    public const string FolderNodeIcon = "📁";
+    public const string FolderDialogTitle = "Nowy katalog";
+    public const string FolderDialogNameLabel = "Nazwa katalogu";
+    public const string FolderDialogCreate = "Utwórz";
+    public const string FolderContextRename = "Zmień nazwę";
+    public const string FolderContextDelete = "Usuń katalog";
+    public const string FolderDeleteConfirmTitle = "Usuń katalog";
+    public const string FolderDeleteConfirmFormat = "Usunąć katalog „{0}”? Połączenia z tego katalogu wrócą do korzenia drzewa.";
+    public const string FolderDeleteConfirmYes = "Usuń";
+    public const string FolderDefaultName = "Nowy katalog";
+
+    public const string ConnectionContextSort = "Sortuj węzły";
+    public const string ConnectionContextSortAscending = "Rosnąco (A→Z)";
+    public const string ConnectionContextSortDescending = "Malejąco (Z→A)";
+
+    public const string FolderContextAddConnection = "Dodaj połączenie";
+
+    public const string QueryContextRename = "Zmień nazwę";
+    public const string QueryContextDelete = "Usuń";
+    public const string QueryRenameIcon = "✎";
+    public const string QueryRenameTooltip = "Zmień nazwę zapytania";
 }

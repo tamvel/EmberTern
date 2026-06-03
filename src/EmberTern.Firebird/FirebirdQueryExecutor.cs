@@ -44,9 +44,14 @@ public sealed class FirebirdQueryExecutor
 
         var sw = Stopwatch.StartNew();
 
+        bool lockHeld = false;
         try
         {
             var connection = _connectionService.RequireOpenConnection();
+            // Serialize against in-flight reader commands (metadata eager-load, DDL fetch,
+            // autocomplete column fetch, TableDetail load). FbConnection is single-threaded.
+            await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            lockHeld = true;
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = sql;
             cmd.CommandTimeout = 0;
@@ -115,6 +120,13 @@ public sealed class FirebirdQueryExecutor
         catch (InvalidOperationException ex)
         {
             throw new QueryExecutionException(ex.Message, ex);
+        }
+        finally
+        {
+            if (lockHeld)
+            {
+                _connectionService.CommandLock.Release();
+            }
         }
     }
 

@@ -19,10 +19,17 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         _connectionService = connectionService;
         _reader = reader;
         Connections = new ObservableCollection<ConnectionNodeViewModel>();
+        RootNodes = new ObservableCollection<object>();
     }
 
-    // Top-level tree: one node per saved profile, populated by MainWindowViewModel.ReloadConnections.
+    // Flat list of every loaded ConnectionNodeViewModel, regardless of whether
+    // the node currently sits inside a folder or at the root. Populated by
+    // MainWindowViewModel.ReloadConnections alongside RootNodes.
     public ObservableCollection<ConnectionNodeViewModel> Connections { get; }
+
+    // The tree's actual ItemsSource — a mix of FolderNodeViewModel and
+    // root-level ConnectionNodeViewModel instances, ordered by SortOrder.
+    public ObservableCollection<object> RootNodes { get; }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(EditSelectedCommand))]

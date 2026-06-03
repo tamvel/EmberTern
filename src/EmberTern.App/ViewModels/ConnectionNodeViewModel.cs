@@ -170,6 +170,15 @@ public partial class ConnectionNodeViewModel : ViewModelBase
     [RelayCommand]
     private void Delete() => _owner?.Delete(Profile);
 
+    // Sort the siblings around this node. If this node is inside a folder, sorts
+    // that folder's connections; if at root, sorts root-level connections and
+    // folders together. Owner persists the new SortOrder values.
+    [RelayCommand]
+    private void SortAscending() => _owner?.SortSiblingsOf(this, ascending: true);
+
+    [RelayCommand]
+    private void SortDescending() => _owner?.SortSiblingsOf(this, ascending: false);
+
     private bool CanConnect() => !IsConnected;
     private bool CanDisconnect() => IsConnected;
 

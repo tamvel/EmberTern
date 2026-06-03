@@ -23,17 +23,14 @@ public sealed class FirebirdConnectionService : IDisposable
     private FbConnection? _activeConnection;
     private ConnectionProfile? _activeProfile;
 
-    // Serializes all "owned" BeginTransactionAsync calls on _activeConnection.
-    // Firebird/managed driver rejects a second concurrent tx on the same
-    // connection with "Parallel transactions are not supported". The borrow-
-    // or-begin pattern handles the user-tx-vs-reader-tx case, but reader-vs-
-    // reader (e.g. lazy-loading two TableDetail tabs after reconnect) and
-    // reader-vs-executor (F5 mid-load) still need a real lock.
-    //
-    // Held only while a Begin is in flight AND while an owned tx remains
-    // active. Borrowed txs don't touch this gate — multiple borrowers can
-    // share the user's tx freely.
-    private readonly SemaphoreSlim _transactionGate = new(1, 1);
+    // FbConnection is single-threaded — concurrent commands on the same connection
+    // hang or throw. The application has multiple fire-and-forget code paths that
+    // can hit this connection in parallel: metadata eager-load, user-click expand,
+    // SQL editor autocomplete column fetch, DDL fetch, TableDetail load, F5 execute.
+    // This lock serializes them all. Different from a transaction gate — it gates
+    // COMMAND EXECUTION, not transaction begins. Readers attach to the user's
+    // working tx (or a per-command implicit tx) regardless.
+    private readonly SemaphoreSlim _commandLock = new(1, 1);
 
     public bool IsConnected => _activeConnection is { State: System.Data.ConnectionState.Open };
 
@@ -41,7 +38,7 @@ public sealed class FirebirdConnectionService : IDisposable
 
     public event EventHandler? ActiveConnectionChanged;
 
-    internal SemaphoreSlim TransactionGate => _transactionGate;
+    internal SemaphoreSlim CommandLock => _commandLock;
 
     public async Task ConnectAsync(ConnectionProfile profile, CancellationToken cancellationToken = default)
     {
@@ -225,9 +222,46 @@ public sealed class FirebirdConnectionService : IDisposable
     private static string MapFbException(FbException fb, ConnectionProfile profile, string endpoint)
     {
         var msg = fb.Message ?? string.Empty;
+        var mapped = MapFbErrorText(msg, profile, fb.ErrorCode);
+
+        // If we couldn't map to a specific category, check for a SocketException
+        // wrapped inside the FbException — that points at host/port problems and
+        // should win over the raw text.
+        if (mapped.StartsWith(FirebirdErrorPrefix, StringComparison.Ordinal)
+            && FindInner<SocketException>(fb) is { } socket)
+        {
+            return MapSocketError(socket, endpoint);
+        }
+
+        return mapped;
+    }
+
+    internal const string FirebirdErrorPrefix = "Firebird error: ";
+
+    /// <summary>
+    /// Maps a Firebird error message + error code to a user-facing string.
+    /// Pure on its inputs (no FbException needed) so the mapping is unit-testable
+    /// without a live database. Order of checks matters — the Legacy_Auth/plugin
+    /// gate intentionally runs FIRST so the actionable hint isn't hidden behind
+    /// the generic "Invalid username or password" branch when the driver echoes
+    /// both "password" and "Legacy_Auth" in the same message.
+    /// </summary>
+    internal static string MapFbErrorText(string rawMessage, ConnectionProfile profile, int errorCode)
+    {
+        var msg = rawMessage ?? string.Empty;
         var lower = msg.ToLowerInvariant();
 
-        if (lower.Contains("login") || lower.Contains("password") || fb.ErrorCode == 335544472)
+        // The managed FirebirdClient driver speaks Srp / Srp256 only — it cannot
+        // authenticate against accounts that exist solely under Legacy_Auth (a
+        // common FB3 upgrade state). Surface the actionable server-side fix
+        // rather than the raw "Not supported plugin 'Legacy_Auth' from server"
+        // text the driver passes through.
+        if (lower.Contains("legacy_auth") || lower.Contains("plugin"))
+        {
+            return BuildLegacyAuthHint(profile);
+        }
+
+        if (lower.Contains("login") || lower.Contains("password") || errorCode == 335544472)
         {
             return $"Invalid username or password for '{profile.Username}'.";
         }
@@ -237,7 +271,8 @@ public sealed class FirebirdConnectionService : IDisposable
             return $"Database file not found: {profile.DatabasePath}";
         }
 
-        if (lower.Contains("unavailable database") || lower.Contains("i/o error") && lower.Contains("open"))
+        if (lower.Contains("unavailable database")
+            || (lower.Contains("i/o error") && lower.Contains("open")))
         {
             return $"Database is unavailable: {profile.DatabasePath}";
         }
@@ -247,13 +282,12 @@ public sealed class FirebirdConnectionService : IDisposable
             return $"Unsupported character set: {profile.Charset}";
         }
 
-        if (FindInner<SocketException>(fb) is { } socket)
-        {
-            return MapSocketError(socket, endpoint);
-        }
-
-        return $"Firebird error: {Sanitize(msg)}";
+        return FirebirdErrorPrefix + Sanitize(msg);
     }
+
+    private static string BuildLegacyAuthHint(ConnectionProfile profile)
+        => $"Firebird auth plugin mismatch: server requires Legacy_Auth, but the .NET driver speaks Srp/Srp256 only. "
+         + $"Fix server-side: CREATE USER {profile.Username} PASSWORD '<password>' USING PLUGIN Srp;";
 
     private static string MapSocketError(SocketException ex, string endpoint)
     {
