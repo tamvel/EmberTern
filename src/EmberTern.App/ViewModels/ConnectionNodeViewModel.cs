@@ -61,6 +61,16 @@ public partial class ConnectionNodeViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isExpanded;
 
+    // Drag/drop visual + state markers. IsDragging follows the row that the user
+    // grabbed (cursor + suppression); IsDropTarget highlights the row under the
+    // pointer with the AccentMutedBrush overlay. Both are driven by code-behind
+    // pointer handlers — no DragDrop API (unreliable for TreeView in Avalonia 12).
+    [ObservableProperty]
+    private bool _isDragging;
+
+    [ObservableProperty]
+    private bool _isDropTarget;
+
     public string DisplayName => $"{Profile.Name} ({Profile.Host}:{Profile.Port})";
 
     public string StatusIndicator => IsConnected ? "●" : "○";
@@ -101,16 +111,6 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         }
         _categoriesBuilt = true;
 
-        // Auto-expand the root connection node. The straight assignment-then-await pattern
-        // didn't take on first connect (works on subsequent reconnects, suggesting a
-        // TreeViewItem-container-not-yet-realized race the first time around). Belt-and-
-        // braces: set synchronously here so the TwoWay binding sees the change while the
-        // VM tree is still on the UI thread untouched-by-await, and also re-post at
-        // Background priority after eager-load — Background is lower than Loaded, so it
-        // runs after every layout/render/loaded round triggered by the children mutations.
-        // If the synchronous set lands, the post is a no-op (same-value short-circuit).
-        IsExpanded = true;
-
         // Eager-load each category sequentially so counts (Tables (2158), ...) show
         // right after connect — matches IBExpert UX. Cannot Task.WhenAll because the
         // FirebirdClient FbConnection only services one command at a time; concurrent
@@ -122,19 +122,13 @@ public partial class ConnectionNodeViewModel : ViewModelBase
             await metadata.LoadGroupAsync(cat).ConfigureAwait(true);
         }
 
-        // Backup post: if the synchronous set above missed (container not yet realized,
-        // binding not yet subscribed to VM.PropertyChanged), force a change notification
-        // by toggling false→true via two dispatcher rounds. Toggling, not just re-setting,
-        // because CommunityToolkit's [ObservableProperty] short-circuits same-value sets —
-        // a bare second IsExpanded=true would not fire PropertyChanged.
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (IsExpanded)
-            {
-                IsExpanded = false;
-            }
-            Dispatcher.UIThread.Post(() => IsExpanded = true, DispatcherPriority.Background);
-        }, DispatcherPriority.Background);
+        // Re-assert expanded after the categories exist. OnIsConnectedChanged already
+        // set IsExpanded=true synchronously; this is a plain idempotent confirmation
+        // now that the TreeViewItem→VM binding is sound (see the MainWindow.axaml
+        // container-style fix + gotcha #38). No Dispatcher posts, no false→true toggle:
+        // those were compensating for a broken binding that could never propagate, not
+        // a real realization race — proven by ConnectionExpandBindingProbe.
+        IsExpanded = true;
     }
 
     [RelayCommand(CanExecute = nameof(CanConnect))]
@@ -188,6 +182,10 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         {
             _ = LoadCategoriesAsync();
         }
+        // Persist user-initiated expand/collapse. Owner gates on its own suppression
+        // flag during ReloadConnections so this doesn't fire a save for every node
+        // we touch while restoring state.
+        _owner?.OnNodeExpansionChanged(Profile.Id, value);
     }
 
     partial void OnIsConnectedChanged(bool value)
@@ -195,9 +193,9 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         // "Rozwinięte = połączone" — auto-expand on successful connect so the user sees
         // their categories without an extra click. Disconnect path handles collapse in
         // UpdateConnectedState before we get here (IsExpanded is already false by then).
-        // Set IsExpanded synchronously here: LoadCategoriesAsync also sets it but bails
-        // early when owner/metadata is null (unit-test scenarios), so the sync set is
-        // the single source of truth for the connected→expanded invariant.
+        // A plain synchronous set is enough now that the TreeViewItem→VM IsExpanded
+        // binding is sound (MainWindow.axaml single-container-style fix, gotcha #38);
+        // LoadCategoriesAsync re-asserts it once the categories exist.
         if (value)
         {
             IsExpanded = true;

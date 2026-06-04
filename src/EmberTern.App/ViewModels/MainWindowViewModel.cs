@@ -44,6 +44,12 @@ public partial class MainWindowViewModel : ViewModelBase
     // way out.
     private bool _suppressSavedQuerySync;
 
+    // Set during ReloadConnections while we apply saved expand state to freshly
+    // built nodes. Without this, each IsExpanded write would echo through
+    // OnNodeExpansionChanged → PersistFolderState — N saves per reload, all
+    // redundant with the value we just read out of the set.
+    private bool _suppressExpandSave;
+
     public MainWindowViewModel()
         : this(new ConnectionProfileStore(), new FirebirdConnectionService())
     {
@@ -331,6 +337,11 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             Metadata.RootNodes.Add(entry.node);
         }
+
+        // Restore user-chosen expand state to the freshly rebuilt nodes. Runs after
+        // RootNodes is fully populated (so all VM instances exist) and under the
+        // suppress flag (so each IsExpanded write doesn't echo back as a save).
+        RestoreExpandState();
     }
 
     private int GetConnectionSortOrder(string profileId)
@@ -347,6 +358,125 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (System.IO.IOException) { /* best effort */ }
         catch (System.UnauthorizedAccessException) { /* best effort */ }
+    }
+
+    // Called by Folder/Connection node VMs when their IsExpanded flips. Mirrors the
+    // change into _folderState.ExpandedNodeIds and saves. The suppress flag is set
+    // by ReloadConnections while it pushes the persisted state into the new node
+    // instances — that path mutates IsExpanded but is not a user action, so the
+    // save must not fire (the on-disk set is already authoritative).
+    public void OnNodeExpansionChanged(string nodeId, bool expanded)
+    {
+        if (_suppressExpandSave) return;
+        if (string.IsNullOrEmpty(nodeId)) return;
+        var changed = expanded
+            ? _folderState.ExpandedNodeIds.Add(nodeId)
+            : _folderState.ExpandedNodeIds.Remove(nodeId);
+        if (changed) PersistFolderState();
+    }
+
+    // Sync the persisted set with the live tree. Exposed for tests; the on-change
+    // hook keeps the two in sync during normal use, but this is handy for forcing
+    // a refresh before ReloadConnections rebuilds the VMs.
+    public void CaptureExpandState()
+    {
+        foreach (var node in Metadata.RootNodes)
+        {
+            switch (node)
+            {
+                case FolderNodeViewModel f:
+                    Apply(f.Id, f.IsExpanded);
+                    foreach (var c in f.Connections) Apply(c.Profile.Id, c.IsExpanded);
+                    break;
+                case ConnectionNodeViewModel c:
+                    Apply(c.Profile.Id, c.IsExpanded);
+                    break;
+            }
+        }
+
+        void Apply(string id, bool expanded)
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            if (expanded) _folderState.ExpandedNodeIds.Add(id);
+            else _folderState.ExpandedNodeIds.Remove(id);
+        }
+    }
+
+    // Push the persisted expand set onto the freshly rebuilt RootNodes —
+    // verbatim: presence in set => IsExpanded=true; absence => false. This
+    // assumes the set has been "initialized" (every node the user wants
+    // expanded is explicitly present); MaybeMigrateExpandState handles the
+    // one-time seeding of legacy data so folders don't all collapse on
+    // first launch after the feature ships. Wrapped in _suppressExpandSave
+    // so the IsExpanded writes don't echo back as re-saves.
+    public void RestoreExpandState()
+    {
+        MaybeMigrateExpandState();
+
+        _suppressExpandSave = true;
+        try
+        {
+            foreach (var node in Metadata.RootNodes)
+            {
+                switch (node)
+                {
+                    case FolderNodeViewModel f:
+                        ApplyFolder(f);
+                        foreach (var c in f.Connections) ApplyConnection(c);
+                        break;
+                    case ConnectionNodeViewModel c:
+                        ApplyConnection(c);
+                        break;
+                }
+            }
+        }
+        finally
+        {
+            _suppressExpandSave = false;
+        }
+
+        // Folders default to IsExpanded=true, so the only way to persist a *collapse*
+        // is to force false when the id is absent — hence verbatim (presence => true,
+        // absence => false).
+        void ApplyFolder(FolderNodeViewModel f)
+        {
+            var wanted = _folderState.ExpandedNodeIds.Contains(f.Id);
+            if (f.IsExpanded != wanted) f.IsExpanded = wanted;
+        }
+
+        // Connections default to IsExpanded=false, so absence already means collapsed —
+        // we only ever need to force *true*, never false. Critically, NOT forcing false
+        // means a freshly-connected node (which auto-expands on connect and may not yet
+        // be in the set when a concurrent ReloadConnections runs) never gets clobbered
+        // back to collapsed by a restore pass.
+        void ApplyConnection(ConnectionNodeViewModel c)
+        {
+            if (_folderState.ExpandedNodeIds.Contains(c.Profile.Id) && !c.IsExpanded)
+            {
+                c.IsExpanded = true;
+            }
+        }
+    }
+
+    // One-time migration when loading a pre-feature folders.json: folders were
+    // default-expanded with no persistence, so we seed the set with every folder
+    // id we know about. After this runs, the set is fully authoritative —
+    // subsequent runs honor explicit user collapses (which remove from the set).
+    private void MaybeMigrateExpandState()
+    {
+        if (_folderState.ExpandStateInitialized) return;
+        var added = false;
+        foreach (var f in _folderState.Folders)
+        {
+            if (_folderState.ExpandedNodeIds.Add(f.Id)) added = true;
+        }
+        _folderState.ExpandStateInitialized = true;
+        if (added || _folderState.Folders.Count == 0)
+        {
+            // Always persist the flag flip even for the no-folders case so the
+            // migration doesn't re-run on every launch (cheap I/O, but principled).
+            PersistFolderState();
+        }
     }
 
     public FolderEntry CreateFolder(string name)
@@ -369,6 +499,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var entry = new FolderEntry { Name = trimmed, SortOrder = nextSort };
         _folderState.Folders.Add(entry);
+        // New folders default to expanded (FolderNodeViewModel._isExpanded = true).
+        // Seed the set so that default survives across restarts — without this,
+        // RestoreExpandState would treat the absence as "collapsed" and the user's
+        // freshly-created folder would slam shut on the next ReloadConnections.
+        _folderState.ExpandedNodeIds.Add(entry.Id);
         PersistFolderState();
         ReloadConnections();
         return entry;
@@ -454,6 +589,170 @@ public partial class MainWindowViewModel : ViewModelBase
                 {
                     _folderState.ConnectionSortOrders[rootEntries[i].id] = i;
                 }
+            }
+        }
+
+        PersistFolderState();
+        ReloadConnections();
+    }
+
+    // Drag-and-drop drop handler. Source and target are sidebar VMs
+    // (ConnectionNodeViewModel or FolderNodeViewModel). Same persistence path
+    // as SortSiblingsOf — mutates _folderState, calls PersistFolderState +
+    // ReloadConnections.
+    //
+    // Valid combinations:
+    //   Connection → Folder, Into            : move connection into folder (membership change).
+    //   Connection → Connection, Before/After: reorder within target's container (may also change folder).
+    //   Folder     → Folder, Before/After    : reorder folders at root.
+    //   Folder     → Connection, Before/After: only when target is a root connection; folder goes to root.
+    //
+    // Anything else (e.g., dropping a folder Into a connection, source == target,
+    // dropping a connection into the folder it's already in) is a no-op.
+    public void ExecuteDrop(object dragSource, object dropTarget, DropPosition position)
+    {
+        if (ReferenceEquals(dragSource, dropTarget)) return;
+
+        // Drop a connection INTO a folder: membership change + place at end of folder.
+        if (dragSource is ConnectionNodeViewModel sIntoConn
+            && dropTarget is FolderNodeViewModel folderInto
+            && position == DropPosition.Into)
+        {
+            if (_folderState.ConnectionFolderMap.TryGetValue(sIntoConn.Profile.Id, out var curFolderId)
+                && curFolderId == folderInto.Id)
+            {
+                // Already in this folder — no-op.
+                return;
+            }
+
+            _folderState.ConnectionFolderMap[sIntoConn.Profile.Id] = folderInto.Id;
+            // Place at the end of the folder's current members.
+            var maxOrder = -1;
+            foreach (var c in Metadata.Connections)
+            {
+                if (c.Profile.Id == sIntoConn.Profile.Id) continue;
+                if (_folderState.ConnectionFolderMap.TryGetValue(c.Profile.Id, out var fid)
+                    && fid == folderInto.Id)
+                {
+                    var order = GetConnectionSortOrder(c.Profile.Id);
+                    if (order > maxOrder) maxOrder = order;
+                }
+            }
+            _folderState.ConnectionSortOrders[sIntoConn.Profile.Id] = maxOrder + 1;
+            PersistFolderState();
+            ReloadConnections();
+            return;
+        }
+
+        // Before/After reorder paths.
+        if (position is DropPosition.Before or DropPosition.After)
+        {
+            // The target's container determines where the source lands:
+            //   target = folder            → root (folders only live at root)
+            //   target = connection        → that connection's folder (or root if unmapped)
+            string? targetContainer = null;
+            if (dropTarget is ConnectionNodeViewModel tConn
+                && _folderState.ConnectionFolderMap.TryGetValue(tConn.Profile.Id, out var tFid)
+                && !string.IsNullOrEmpty(tFid))
+            {
+                targetContainer = tFid;
+            }
+
+            // Folders can only live at root — refuse to drop a folder into a folder-member context.
+            if (dragSource is FolderNodeViewModel && targetContainer is not null) return;
+
+            ReorderForDrop(dragSource, dropTarget, position, targetContainer);
+        }
+    }
+
+    private void ReorderForDrop(object dragSource, object dropTarget, DropPosition position, string? containerFolderId)
+    {
+        var sourceIsFolder = dragSource is FolderNodeViewModel;
+        var targetIsFolder = dropTarget is FolderNodeViewModel;
+        var sourceId = dragSource switch
+        {
+            ConnectionNodeViewModel c => c.Profile.Id,
+            FolderNodeViewModel f => f.Entry.Id,
+            _ => string.Empty,
+        };
+        var targetId = dropTarget switch
+        {
+            ConnectionNodeViewModel c => c.Profile.Id,
+            FolderNodeViewModel f => f.Entry.Id,
+            _ => string.Empty,
+        };
+        if (sourceId.Length == 0 || targetId.Length == 0) return;
+
+        // Connection moving between containers: update its folder map first so the
+        // sibling list we build below reflects the post-move state.
+        if (!sourceIsFolder)
+        {
+            if (containerFolderId is null) _folderState.ConnectionFolderMap.Remove(sourceId);
+            else _folderState.ConnectionFolderMap[sourceId] = containerFolderId;
+        }
+
+        // Build the ordered sibling list for the target's container, EXCLUDING source.
+        var siblings = new List<(string id, bool isFolder, int sort, string name)>();
+        if (containerFolderId is null)
+        {
+            // Root: folders + root-level connections, sorted by SortOrder/Name.
+            foreach (var f in _folderState.Folders)
+            {
+                if (sourceIsFolder && f.Id == sourceId) continue;
+                siblings.Add((f.Id, true, f.SortOrder, f.Name));
+            }
+            foreach (var c in Metadata.Connections)
+            {
+                if (!sourceIsFolder && c.Profile.Id == sourceId) continue;
+                if (_folderState.ConnectionFolderMap.TryGetValue(c.Profile.Id, out var fid)
+                    && !string.IsNullOrEmpty(fid)) continue;
+                siblings.Add((c.Profile.Id, false, GetConnectionSortOrder(c.Profile.Id), c.Profile.Name));
+            }
+        }
+        else
+        {
+            // Folder members.
+            foreach (var c in Metadata.Connections)
+            {
+                if (!sourceIsFolder && c.Profile.Id == sourceId) continue;
+                if (!_folderState.ConnectionFolderMap.TryGetValue(c.Profile.Id, out var fid)
+                    || fid != containerFolderId) continue;
+                siblings.Add((c.Profile.Id, false, GetConnectionSortOrder(c.Profile.Id), c.Profile.Name));
+            }
+        }
+
+        siblings.Sort((a, b) =>
+        {
+            var s = a.sort.CompareTo(b.sort);
+            return s != 0 ? s : string.Compare(a.name, b.name, StringComparison.CurrentCultureIgnoreCase);
+        });
+
+        var targetIndex = siblings.FindIndex(s => s.id == targetId && s.isFolder == targetIsFolder);
+        if (targetIndex < 0) return;
+
+        var insertIndex = position == DropPosition.After ? targetIndex + 1 : targetIndex;
+
+        // Look up source name for stability in case of future tiebreaks (sort field becomes a contiguous index here).
+        var sourceName = dragSource switch
+        {
+            ConnectionNodeViewModel c => c.Profile.Name,
+            FolderNodeViewModel f => f.Name,
+            _ => string.Empty,
+        };
+        siblings.Insert(insertIndex, (sourceId, sourceIsFolder, 0, sourceName));
+
+        // Renumber 0..N — this is what the next ReloadConnections will read back.
+        for (var i = 0; i < siblings.Count; i++)
+        {
+            var s = siblings[i];
+            if (s.isFolder)
+            {
+                var entry = _folderState.Folders.Find(f => f.Id == s.id);
+                if (entry is not null) entry.SortOrder = i;
+            }
+            else
+            {
+                _folderState.ConnectionSortOrders[s.id] = i;
             }
         }
 

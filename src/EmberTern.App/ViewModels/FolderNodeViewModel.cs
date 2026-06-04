@@ -33,6 +33,19 @@ public partial class FolderNodeViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isExpanded = true;
 
+    partial void OnIsExpandedChanged(bool value)
+        // Persist user collapse/expand. Owner's suppression flag keeps this quiet
+        // while ReloadConnections is restoring saved state.
+        => _owner?.OnNodeExpansionChanged(Id, value);
+
+    // Drag/drop visual markers — same shape as ConnectionNodeViewModel; the
+    // sidebar's pointer handlers drive them.
+    [ObservableProperty]
+    private bool _isDragging;
+
+    [ObservableProperty]
+    private bool _isDropTarget;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotRenaming))]
     private bool _isRenaming;

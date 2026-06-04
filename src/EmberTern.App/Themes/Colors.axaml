@@ -21,6 +21,8 @@
       <Color x:Key="FocusBorderColor">#007FD4</Color>
       <!-- Zebra-stripe tint for DataGrid alternating rows. ARGB: ~5% white on dark. -->
       <Color x:Key="RowAlternateColor">#0DFFFFFF</Color>
+      <!-- Drag-and-drop drop-target overlay: ~33% of the dark accent blue. ARGB hex. -->
+      <Color x:Key="DropTargetColor">#552D6BBF</Color>
       <Color x:Key="CommitButtonForeground">#4CAF50</Color>
       <Color x:Key="RollbackButtonForeground">#F44336</Color>
 
@@ -39,6 +41,7 @@
       <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}" />
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
+      <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
       <SolidColorBrush x:Key="CommitButtonBrush" Color="{StaticResource CommitButtonForeground}" />
       <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />
 
@@ -103,6 +106,8 @@
       <Color x:Key="FocusBorderColor">#0078D4</Color>
       <!-- Zebra-stripe tint for DataGrid alternating rows. ARGB: ~5% black on light. -->
       <Color x:Key="RowAlternateColor">#0D000000</Color>
+      <!-- Drag-and-drop drop-target overlay: ~33% of the light accent blue. ARGB hex. -->
+      <Color x:Key="DropTargetColor">#552D6BBF</Color>
       <Color x:Key="CommitButtonForeground">#4CAF50</Color>
       <Color x:Key="RollbackButtonForeground">#F44336</Color>
 
@@ -121,6 +126,7 @@
       <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}" />
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
+      <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
       <SolidColorBrush x:Key="CommitButtonBrush" Color="{StaticResource CommitButtonForeground}" />
       <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />
 

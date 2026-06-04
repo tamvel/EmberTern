@@ -160,20 +160,34 @@
                   </ItemsPanelTemplate>
                 </Setter>
               </Style>
-              <!-- Two concrete-type Styles instead of an interface-typed one. Avalonia 12
-                   compiled bindings on an interface (IExpandableNode) didn't reliably push
-                   TVI.IsExpanded back to the VM through Style.Setter — categories silently
-                   refused to expand. Each Style here targets one concrete VM type so the
-                   binding source cast matches at runtime. -->
-              <Style Selector="TreeViewItem" x:DataType="vm:ConnectionNodeViewModel">
-                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+              <!-- Drag-and-drop drop-target overlay. Templates use Classes="row-target"
+                   as the base + Classes.drop-target="{Binding IsDropTarget}" toggle.
+                   Background is driven by Style.Setter so the Boolean class can flip
+                   between Transparent and the DropTarget overlay without each row
+                   needing a LocalValue Background (LocalValue would beat Style). -->
+              <Style Selector="Border.row-target">
+                <Setter Property="Background" Value="Transparent" />
               </Style>
-              <Style Selector="TreeViewItem" x:DataType="vm:FolderNodeViewModel">
-                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+              <Style Selector="Border.row-target.drop-target">
+                <Setter Property="Background" Value="{DynamicResource DropTargetBrush}" />
               </Style>
-              <Style Selector="TreeViewItem" x:DataType="vm:MetadataNodeViewModel">
-                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                <Setter Property="IsVisible" Value="{Binding IsVisible}" />
+              <!-- ONE TreeViewItem container style. The `TreeViewItem` selector matches
+                   EVERY item regardless of node type — x:DataType does NOT filter the
+                   selector at runtime, it's only a compile-time hint for the binding.
+                   The previous three concrete-typed styles therefore ALL applied to every
+                   container, and the last one (MetadataNodeViewModel) won: for a connection
+                   or folder node its compiled binding failed to cast the DataContext, the
+                   IsExpanded setter resolved to UnsetValue, and it clobbered the correct
+                   setter — so connection nodes never expanded (proven by the headless
+                   ConnectionExpandBindingProbe: VM IsExpanded=true, container exists, but
+                   container.IsExpanded stayed false). Fix: a single setter whose
+                   ReflectionBinding resolves IsExpanded by name at runtime against whatever
+                   VM is the DataContext — all three node types expose IsExpanded. IsVisible
+                   exists only on MetadataNodeViewModel; FallbackValue keeps the other two
+                   (which have no such property) visible. See gotcha #38. -->
+              <Style Selector="TreeViewItem">
+                <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded, Mode=TwoWay}" />
+                <Setter Property="IsVisible" Value="{ReflectionBinding IsVisible, FallbackValue=True}" />
               </Style>
             </TreeView.Styles>
 
@@ -186,7 +200,8 @@
               <TreeDataTemplate DataType="vm:FolderNodeViewModel"
                                 ItemsSource="{Binding Connections}">
                 <Border HorizontalAlignment="Stretch"
-                        Background="Transparent">
+                        Classes="row-target"
+                        Classes.drop-target="{Binding IsDropTarget}">
                   <Border.ContextMenu>
                     <ContextMenu>
                       <MenuItem Header="{x:Static app:UiStrings.FolderContextAddConnection}"
@@ -226,7 +241,8 @@
               <TreeDataTemplate DataType="vm:ConnectionNodeViewModel"
                                 ItemsSource="{Binding Children}">
                 <Border HorizontalAlignment="Stretch"
-                        Background="Transparent"
+                        Classes="row-target"
+                        Classes.drop-target="{Binding IsDropTarget}"
                         DoubleTapped="OnConnectionNodeDoubleTapped">
                   <Border.ContextMenu>
                     <ContextMenu>

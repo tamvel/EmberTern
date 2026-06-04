@@ -345,4 +345,421 @@ public class FolderVmTests : IDisposable
         ConnectionNodeViewModel c => c.Profile.Name,
         _ => string.Empty,
     };
+
+    // ---- ExecuteDrop (drag & drop) -----------------------------------------
+
+    [Fact]
+    public void ExecuteDrop_ConnectionIntoFolder_MapsAndPersists()
+    {
+        var p = MakeProfile("Alpha");
+        var folder = _main.CreateFolder("Production");
+        _main.ReloadConnections();
+
+        var connVm = _main.Metadata.Connections.Single(c => c.Profile.Id == p.Id);
+        var folderVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+
+        _main.ExecuteDrop(connVm, folderVm, DropPosition.Into);
+
+        Assert.Equal(folder.Id, _main.FolderState.ConnectionFolderMap[p.Id]);
+        var refreshedFolder = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+        Assert.Contains(refreshedFolder.Connections, c => c.Profile.Id == p.Id);
+        // Persisted to disk.
+        Assert.Equal(folder.Id, new FolderStore(_tempDir).Load().ConnectionFolderMap[p.Id]);
+    }
+
+    [Fact]
+    public void ExecuteDrop_ConnectionIntoSameFolder_IsNoOp()
+    {
+        var p = MakeProfile("Alpha");
+        var folder = _main.CreateFolder("Production");
+        _main.FolderState.ConnectionFolderMap[p.Id] = folder.Id;
+        _main.ReloadConnections();
+
+        var connVm = _main.Metadata.Connections.Single(c => c.Profile.Id == p.Id);
+        var folderVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+
+        // Same folder — no sort order should be written.
+        _main.ExecuteDrop(connVm, folderVm, DropPosition.Into);
+
+        Assert.Equal(folder.Id, _main.FolderState.ConnectionFolderMap[p.Id]);
+        Assert.False(_main.FolderState.ConnectionSortOrders.ContainsKey(p.Id));
+    }
+
+    [Fact]
+    public void ExecuteDrop_ConnectionReorder_Before_AtRoot()
+    {
+        // Build a known root order: Alpha, Bravo, Charlie.
+        MakeProfile("Alpha");
+        MakeProfile("Bravo");
+        MakeProfile("Charlie");
+        _main.ReloadConnections();
+
+        var alpha = _main.Metadata.Connections.Single(c => c.Profile.Name == "Alpha");
+        var charlie = _main.Metadata.Connections.Single(c => c.Profile.Name == "Charlie");
+
+        // Drop Charlie BEFORE Alpha → order: Charlie, Alpha, Bravo.
+        _main.ExecuteDrop(charlie, alpha, DropPosition.Before);
+
+        var rootNames = _main.Metadata.RootNodes.OfType<ConnectionNodeViewModel>()
+            .Select(c => c.Profile.Name).ToList();
+        Assert.Equal(new[] { "Charlie", "Alpha", "Bravo" }, rootNames);
+    }
+
+    [Fact]
+    public void ExecuteDrop_ConnectionReorder_After_AtRoot()
+    {
+        MakeProfile("Alpha");
+        MakeProfile("Bravo");
+        MakeProfile("Charlie");
+        _main.ReloadConnections();
+
+        var alpha = _main.Metadata.Connections.Single(c => c.Profile.Name == "Alpha");
+        var charlie = _main.Metadata.Connections.Single(c => c.Profile.Name == "Charlie");
+
+        // Drop Alpha AFTER Charlie → order: Bravo, Charlie, Alpha.
+        _main.ExecuteDrop(alpha, charlie, DropPosition.After);
+
+        var rootNames = _main.Metadata.RootNodes.OfType<ConnectionNodeViewModel>()
+            .Select(c => c.Profile.Name).ToList();
+        Assert.Equal(new[] { "Bravo", "Charlie", "Alpha" }, rootNames);
+    }
+
+    [Fact]
+    public void ExecuteDrop_ConnectionFromRoot_OntoConnectionInFolder_MovesIntoFolder()
+    {
+        var loose = MakeProfile("Alpha");
+        var member = MakeProfile("Bravo");
+        var folder = _main.CreateFolder("Production");
+        _main.FolderState.ConnectionFolderMap[member.Id] = folder.Id;
+        _main.ReloadConnections();
+
+        var alphaVm = _main.Metadata.Connections.Single(c => c.Profile.Id == loose.Id);
+        var bravoVm = _main.Metadata.Connections.Single(c => c.Profile.Id == member.Id);
+
+        // Dropping Alpha before Bravo (which lives in folder) moves Alpha into that folder.
+        _main.ExecuteDrop(alphaVm, bravoVm, DropPosition.Before);
+
+        Assert.Equal(folder.Id, _main.FolderState.ConnectionFolderMap[loose.Id]);
+        var folderVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+        Assert.Equal(new[] { "Alpha", "Bravo" },
+            folderVm.Connections.Select(c => c.Profile.Name).ToArray());
+    }
+
+    [Fact]
+    public void ExecuteDrop_ConnectionFromFolder_OntoRootConnection_MovesToRoot()
+    {
+        var rootP = MakeProfile("Alpha");
+        var memberP = MakeProfile("Bravo");
+        var folder = _main.CreateFolder("Production");
+        _main.FolderState.ConnectionFolderMap[memberP.Id] = folder.Id;
+        _main.ReloadConnections();
+
+        var alphaVm = _main.Metadata.Connections.Single(c => c.Profile.Id == rootP.Id);
+        var bravoVm = _main.Metadata.Connections.Single(c => c.Profile.Id == memberP.Id);
+
+        // Dropping Bravo AFTER Alpha at root pulls Bravo out of the folder.
+        _main.ExecuteDrop(bravoVm, alphaVm, DropPosition.After);
+
+        Assert.False(_main.FolderState.ConnectionFolderMap.ContainsKey(memberP.Id));
+        var folderVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+        Assert.Empty(folderVm.Connections);
+        // Both at root, Bravo after Alpha.
+        var rootNames = _main.Metadata.RootNodes.OfType<ConnectionNodeViewModel>()
+            .Select(c => c.Profile.Name).ToList();
+        Assert.Equal(new[] { "Alpha", "Bravo" }, rootNames);
+    }
+
+    [Fact]
+    public void ExecuteDrop_FolderReorder_Before()
+    {
+        _main.CreateFolder("Banana");
+        _main.CreateFolder("Apple");
+        _main.CreateFolder("Cherry");
+        _main.ReloadConnections();
+
+        var apple = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single(f => f.Name == "Apple");
+        var cherry = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single(f => f.Name == "Cherry");
+
+        // Initial order (creation order, since CreateFolder bumps SortOrder per call):
+        // Banana(0), Apple(1), Cherry(2). Drop Cherry BEFORE Apple → Banana, Cherry, Apple.
+        _main.ExecuteDrop(cherry, apple, DropPosition.Before);
+
+        var rootNames = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>()
+            .Select(f => f.Name).ToList();
+        Assert.Equal(new[] { "Banana", "Cherry", "Apple" }, rootNames);
+    }
+
+    [Fact]
+    public void ExecuteDrop_FolderOntoFolderMemberConnection_IsNoOp()
+    {
+        var memberP = MakeProfile("Alpha");
+        var folder = _main.CreateFolder("Production");
+        var other = _main.CreateFolder("Other");
+        _main.FolderState.ConnectionFolderMap[memberP.Id] = folder.Id;
+        _main.ReloadConnections();
+
+        var otherVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single(f => f.Name == "Other");
+        var memberVm = _main.Metadata.Connections.Single(c => c.Profile.Id == memberP.Id);
+
+        var beforeMap = new System.Collections.Generic.Dictionary<string, string>(_main.FolderState.ConnectionFolderMap);
+
+        // Folders can only live at root — dropping a folder onto a folder-member
+        // connection (whose container is a folder) should be rejected.
+        _main.ExecuteDrop(otherVm, memberVm, DropPosition.Before);
+
+        Assert.Equal(beforeMap, _main.FolderState.ConnectionFolderMap);
+    }
+
+    [Fact]
+    public void ExecuteDrop_SourceEqualsTarget_IsNoOp()
+    {
+        var p = MakeProfile("Alpha");
+        _main.ReloadConnections();
+        var vm = _main.Metadata.Connections.Single();
+
+        _main.ExecuteDrop(vm, vm, DropPosition.Before);
+
+        Assert.False(_main.FolderState.ConnectionSortOrders.ContainsKey(p.Id));
+    }
+
+    // ---- Expand state persistence -----------------------------------------
+
+    [Fact]
+    public void NewFolder_DefaultsToExpanded_AndIsInExpandedSet()
+    {
+        var folder = _main.CreateFolder("Production");
+
+        var folderVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+        Assert.True(folderVm.IsExpanded);
+        Assert.Contains(folder.Id, _main.FolderState.ExpandedNodeIds);
+        // Persisted to disk.
+        Assert.Contains(folder.Id, new FolderStore(_tempDir).Load().ExpandedNodeIds);
+    }
+
+    [Fact]
+    public void FolderCollapse_RemovesIdFromSet_AndPersists()
+    {
+        var folder = _main.CreateFolder("Production");
+        var folderVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+
+        folderVm.IsExpanded = false;
+
+        Assert.DoesNotContain(folder.Id, _main.FolderState.ExpandedNodeIds);
+        Assert.DoesNotContain(folder.Id, new FolderStore(_tempDir).Load().ExpandedNodeIds);
+    }
+
+    [Fact]
+    public void ConnectionExpand_AddsToSet_AndPersists()
+    {
+        var p = MakeProfile("Alpha");
+        _main.ReloadConnections();
+        var vm = _main.Metadata.Connections.Single();
+        Assert.False(vm.IsExpanded);
+        Assert.DoesNotContain(p.Id, _main.FolderState.ExpandedNodeIds);
+
+        vm.IsExpanded = true;
+
+        Assert.Contains(p.Id, _main.FolderState.ExpandedNodeIds);
+        Assert.Contains(p.Id, new FolderStore(_tempDir).Load().ExpandedNodeIds);
+    }
+
+    [Fact]
+    public void ReloadConnections_RestoresFolderCollapseState()
+    {
+        var folder = _main.CreateFolder("Production");
+        var folderVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+        folderVm.IsExpanded = false;
+        Assert.False(folderVm.IsExpanded);
+
+        // Reload (simulates what drag/drop does) — new VM instance, default would
+        // be _isExpanded=true. Restore must pull it back to false.
+        _main.ReloadConnections();
+        var newVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single(f => f.Id == folder.Id);
+        Assert.False(newVm.IsExpanded);
+    }
+
+    [Fact]
+    public void ReloadConnections_RestoresConnectionExpandState_InsideFolder()
+    {
+        var p = MakeProfile("Alpha");
+        var folder = _main.CreateFolder("Production");
+        _main.FolderState.ConnectionFolderMap[p.Id] = folder.Id;
+        _main.FolderState.ExpandedNodeIds.Add(p.Id);
+        _main.ReloadConnections();
+
+        var folderVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+        var connVm = folderVm.Connections.Single();
+        Assert.True(connVm.IsExpanded);
+    }
+
+    [Fact]
+    public void DragReload_PreservesExpandState()
+    {
+        // Set up two folders, expand state recorded explicitly: A expanded, B collapsed.
+        var fA = _main.CreateFolder("Alpha");
+        var fB = _main.CreateFolder("Beta");
+        var bVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single(f => f.Id == fB.Id);
+        bVm.IsExpanded = false;
+
+        // Trigger a drag-style reload by reordering the two folders.
+        var aVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single(f => f.Id == fA.Id);
+        _main.ExecuteDrop(bVm, aVm, DropPosition.Before);
+
+        // After reload: A still expanded, B still collapsed.
+        var aAfter = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single(f => f.Id == fA.Id);
+        var bAfter = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single(f => f.Id == fB.Id);
+        Assert.True(aAfter.IsExpanded);
+        Assert.False(bAfter.IsExpanded);
+    }
+
+    [Fact]
+    public void CaptureExpandState_MirrorsVmStateIntoSet()
+    {
+        var fA = _main.CreateFolder("Alpha");
+        var fB = _main.CreateFolder("Beta");
+        // Manually muck with state without going through setter so we can verify capture syncs it.
+        _main.FolderState.ExpandedNodeIds.Clear();
+        _main.FolderState.ExpandedNodeIds.Add(fA.Id);
+        _main.FolderState.ExpandedNodeIds.Add(fB.Id);
+
+        _main.CaptureExpandState();
+
+        // VM defaults to expanded → set should contain both ids.
+        Assert.Contains(fA.Id, _main.FolderState.ExpandedNodeIds);
+        Assert.Contains(fB.Id, _main.FolderState.ExpandedNodeIds);
+    }
+
+    [Fact]
+    public void RestoreExpandState_AppliesSetVerbatim()
+    {
+        var fA = _main.CreateFolder("Alpha");
+        var fB = _main.CreateFolder("Beta");
+        // Force B out of the set so restore should collapse it.
+        _main.FolderState.ExpandedNodeIds.Remove(fB.Id);
+
+        _main.RestoreExpandState();
+
+        var aVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single(f => f.Id == fA.Id);
+        var bVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single(f => f.Id == fB.Id);
+        Assert.True(aVm.IsExpanded);
+        Assert.False(bVm.IsExpanded);
+    }
+
+    [Fact]
+    public void RestoreExpandState_DoesNotCollapseExpandedConnectionMissingFromSet()
+    {
+        // Simulates a freshly-connected node: expanded in the VM but (for the sake of
+        // the test) absent from ExpandedNodeIds at the moment a restore pass runs.
+        // RestoreExpandState must leave it expanded — connections are only ever
+        // force-true, never force-false.
+        var p = MakeProfile("Alpha");
+        _main.ReloadConnections();
+        var vm = _main.Metadata.Connections.Single();
+        vm.IsExpanded = true;                              // adds p.Id to the set...
+        _main.FolderState.ExpandedNodeIds.Remove(p.Id);    // ...remove it to set up the scenario.
+
+        _main.RestoreExpandState();
+
+        Assert.True(vm.IsExpanded);
+    }
+
+    [Fact]
+    public void RestoreExpandState_CollapsesFolderMissingFromSet()
+    {
+        // Counterpart to the connection case: folders DO get force-collapsed when
+        // absent (their default is expanded, so absence must mean collapsed).
+        var folder = _main.CreateFolder("Production");
+        var vm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+        Assert.True(vm.IsExpanded);
+        _main.FolderState.ExpandedNodeIds.Remove(folder.Id);
+
+        _main.RestoreExpandState();
+
+        Assert.False(vm.IsExpanded);
+    }
+
+    [Fact]
+    public void RestoreExpandState_SuppressesSaves()
+    {
+        // Build a state where reload would flip multiple nodes; verify the on-disk
+        // set matches what we set up — no spurious "current vm value" overwrites.
+        MakeProfile("Alpha");
+        _main.CreateFolder("Production");
+        // Manually engineer set so legacy migration is already done.
+        _main.FolderState.ExpandStateInitialized = true;
+        // Hand-craft: folder collapsed, connection expanded.
+        _main.FolderState.ExpandedNodeIds.Clear();
+        _main.FolderState.ExpandedNodeIds.Add(_main.Metadata.Connections.Single().Profile.Id);
+        _folderStore.Save(_main.FolderState);
+
+        _main.ReloadConnections();
+
+        // After restore: folder should be collapsed (absent), connection expanded (present).
+        var folderVm = _main.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+        var connVm = _main.Metadata.Connections.Single();
+        Assert.False(folderVm.IsExpanded);
+        Assert.True(connVm.IsExpanded);
+
+        // The on-disk set should still contain only the connection id (no auto-add of folder).
+        var ondisk = new FolderStore(_tempDir).Load();
+        Assert.DoesNotContain(folderVm.Id, ondisk.ExpandedNodeIds);
+        Assert.Contains(connVm.Profile.Id, ondisk.ExpandedNodeIds);
+    }
+
+    [Fact]
+    public void LegacyMigration_SeedsExistingFoldersIntoSet()
+    {
+        // Hand-write a legacy folders.json (no ExpandStateInitialized, no ExpandedNodeIds).
+        var legacyFolder = new FolderEntry { Name = "Legacy", SortOrder = 0 };
+        _folderStore.Save(new FolderState
+        {
+            Folders = { legacyFolder },
+            ExpandStateInitialized = false,
+        });
+
+        // Fresh VM loads from disk.
+        var freshService = new FirebirdConnectionService();
+        try
+        {
+            var fresh = new MainWindowViewModel(_store, freshService, new TransactionService(freshService), new FolderStore(_tempDir));
+            fresh.ConfirmationRequested += _ => Task.FromResult(true);
+
+            Assert.True(fresh.FolderState.ExpandStateInitialized);
+            Assert.Contains(legacyFolder.Id, fresh.FolderState.ExpandedNodeIds);
+            var folderVm = fresh.Metadata.RootNodes.OfType<FolderNodeViewModel>().Single();
+            Assert.True(folderVm.IsExpanded);
+        }
+        finally
+        {
+            freshService.Dispose();
+        }
+    }
+
+    [Fact]
+    public void ExecuteDrop_OrderPersistsAcrossReload()
+    {
+        MakeProfile("Alpha");
+        MakeProfile("Bravo");
+        MakeProfile("Charlie");
+        _main.ReloadConnections();
+        var alpha = _main.Metadata.Connections.Single(c => c.Profile.Name == "Alpha");
+        var charlie = _main.Metadata.Connections.Single(c => c.Profile.Name == "Charlie");
+
+        _main.ExecuteDrop(charlie, alpha, DropPosition.Before);
+
+        // Fresh VM observes the same root order.
+        var freshFolderStore = new FolderStore(_tempDir);
+        var freshService = new FirebirdConnectionService();
+        try
+        {
+            var fresh = new MainWindowViewModel(_store, freshService, new TransactionService(freshService), freshFolderStore);
+            var rootNames = fresh.Metadata.RootNodes.OfType<ConnectionNodeViewModel>()
+                .Select(c => c.Profile.Name).ToList();
+            Assert.Equal(new[] { "Charlie", "Alpha", "Bravo" }, rootNames);
+        }
+        finally
+        {
+            freshService.Dispose();
+        }
+    }
 }

@@ -16,6 +16,19 @@ public sealed class FolderState
     public List<FolderEntry> Folders { get; set; } = new();
     public Dictionary<string, string> ConnectionFolderMap { get; set; } = new();
     public Dictionary<string, int> ConnectionSortOrders { get; set; } = new();
+    // Ids of tree nodes (FolderEntry.Id or ConnectionProfile.Id) that should
+    // currently render expanded. Presence == expanded, absence == collapsed.
+    // The asymmetric defaults between folders (default expanded) and connections
+    // (default collapsed) are reconciled by seeding the set with new folder ids
+    // on creation and by the one-time legacy migration gated on
+    // <see cref="ExpandStateInitialized"/>.
+    public HashSet<string> ExpandedNodeIds { get; set; } = new();
+    // False on first load after this feature shipped (the field is absent from
+    // legacy folders.json so the deserializer leaves it at the default false).
+    // The next ReloadConnections seeds ExpandedNodeIds with all known folder ids
+    // (since folders were default-expanded pre-feature) and flips this to true so
+    // subsequent runs treat the set as fully authoritative.
+    public bool ExpandStateInitialized { get; set; }
 }
 
 public sealed class FolderStore

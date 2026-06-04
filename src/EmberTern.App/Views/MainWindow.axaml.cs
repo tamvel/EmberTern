@@ -32,6 +32,16 @@ public partial class MainWindow : Window
 
     private TextBlock? _maxRestoreGlyph;
 
+    // Drag-and-drop state. The DragDrop API on TreeView in Avalonia 12 is unreliable
+    // (item containers are virtualized, drop events drop while the cursor is over
+    // children, etc.), so we drive everything from pointer events on the TreeView.
+    private object? _dragSource;          // ConnectionNodeViewModel or FolderNodeViewModel candidate
+    private Point _dragStart;             // pointer position at PointerPressed, in tree coords
+    private bool _isDragging;             // crossed the 8px threshold
+    private object? _currentDropTarget;   // VM whose IsDropTarget is currently set
+    private DropPosition _currentDropPosition;
+    private const double DragThreshold = 8.0;
+
     private readonly WorkspaceStore _workspaceStore = new();
     private WorkspaceState? _pendingRestore;
     // Tracks the bounds last seen while WindowState was Normal so a closing-while-maximized
@@ -73,6 +83,18 @@ public partial class MainWindow : Window
             // would then act on the previously-selected row (or nothing). Select the
             // row under the cursor first; leave Handled=false so ContextMenu still opens.
             _resultGrid.PointerPressed += OnResultGridPointerPressed;
+        }
+
+        var sidebar = this.FindControl<TreeView>("SidebarTree");
+        if (sidebar is not null)
+        {
+            // Tunnel PointerPressed so we see it before TreeView's own selection handling
+            // (otherwise selection moves before we record the drag candidate). Moved/Released
+            // bubble up — defaults are fine for those.
+            sidebar.AddHandler(PointerPressedEvent, OnSidebarPointerPressed, RoutingStrategies.Tunnel);
+            sidebar.PointerMoved += OnSidebarPointerMoved;
+            sidebar.PointerReleased += OnSidebarPointerReleased;
+            sidebar.PointerCaptureLost += OnSidebarPointerCaptureLost;
         }
 
         _pendingRestore = _workspaceStore.Load();
@@ -295,6 +317,207 @@ public partial class MainWindow : Window
         {
             _currentVm.Metadata.SelectedConnection = cn;
         }
+    }
+
+    // ---- Sidebar drag & drop --------------------------------------------------
+
+    private void OnSidebarPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not TreeView tree) return;
+        var point = e.GetCurrentPoint(tree);
+        if (!point.Properties.IsLeftButtonPressed) return;
+
+        // Find the closest row VM under the pointer. We only initiate drags for
+        // Folder / Connection rows — clicking a category or a metadata leaf does
+        // not start a drag.
+        var vm = FindRowVmAtPointer(tree, point.Position);
+        if (vm is not (ConnectionNodeViewModel or FolderNodeViewModel)) return;
+
+        // Don't grab connections that are mid-connect/disconnect — moving them
+        // would race with the event firing on the async-continuation thread.
+        if (vm is ConnectionNodeViewModel cn && IsBusyConnection(cn)) return;
+
+        _dragSource = vm;
+        _dragStart = point.Position;
+        _isDragging = false;
+        // Leave PointerPressed routing un-handled so the TreeView's own selection
+        // handling still runs (clicking a connection still selects it normally if
+        // the user doesn't actually drag).
+    }
+
+    private void OnSidebarPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_dragSource is null) return;
+        if (sender is not TreeView tree) return;
+        var point = e.GetCurrentPoint(tree);
+        if (!point.Properties.IsLeftButtonPressed)
+        {
+            ClearDragState();
+            return;
+        }
+
+        var pos = point.Position;
+        if (!_isDragging)
+        {
+            var dx = pos.X - _dragStart.X;
+            var dy = pos.Y - _dragStart.Y;
+            if (dx * dx + dy * dy < DragThreshold * DragThreshold) return;
+            _isDragging = true;
+            MarkSourceDragging(true);
+            e.Pointer.Capture(tree);
+            tree.Cursor = new Avalonia.Input.Cursor(StandardCursorType.DragMove);
+        }
+
+        UpdateDropTarget(tree, pos);
+    }
+
+    private void OnSidebarPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (sender is not TreeView tree) return;
+        try
+        {
+            if (!_isDragging || _dragSource is null) return;
+            var source = _dragSource;
+            var target = _currentDropTarget;
+            var position = _currentDropPosition;
+            if (target is null || ReferenceEquals(source, target)) return;
+            if (_currentVm is null) return;
+
+            _currentVm.ExecuteDrop(source, target, position);
+        }
+        finally
+        {
+            tree.Cursor = Avalonia.Input.Cursor.Default;
+            e.Pointer.Capture(null);
+            ClearDragState();
+        }
+    }
+
+    private void OnSidebarPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (sender is TreeView tree) tree.Cursor = Avalonia.Input.Cursor.Default;
+        ClearDragState();
+    }
+
+    private void UpdateDropTarget(TreeView tree, Point pos)
+    {
+        var hover = FindRowVmAtPointer(tree, pos);
+        var (target, position) = ResolveDropTarget(_dragSource!, hover, tree, pos);
+
+        if (!ReferenceEquals(target, _currentDropTarget))
+        {
+            SetIsDropTarget(_currentDropTarget, false);
+            SetIsDropTarget(target, true);
+            _currentDropTarget = target;
+        }
+        _currentDropPosition = position;
+    }
+
+    private static (object? target, DropPosition position) ResolveDropTarget(
+        object source, object? hover, TreeView tree, Point pos)
+    {
+        // Dropped onto empty area or outside any row: if source is a connection in
+        // a folder, treat as "move to root" by targeting a root sibling or — if no
+        // siblings exist — surface a null target and let release no-op. Spec says
+        // "drop outside any valid target → cancel" so we keep it simple: no target.
+        if (hover is null) return (null, DropPosition.After);
+
+        if (ReferenceEquals(source, hover)) return (null, DropPosition.After);
+
+        if (source is ConnectionNodeViewModel)
+        {
+            if (hover is FolderNodeViewModel) return (hover, DropPosition.Into);
+            if (hover is ConnectionNodeViewModel)
+            {
+                // Top half = Before, bottom half = After (relative to the row container).
+                var pos2 = PositionFromVerticalSplit(tree, hover, pos);
+                return (hover, pos2);
+            }
+            return (null, DropPosition.After);
+        }
+
+        if (source is FolderNodeViewModel)
+        {
+            // Folders only live at root. Reorder relative to another folder or a
+            // root-level connection. (ExecuteDrop rejects folder-into-folder-member
+            // contexts itself, so we don't have to filter here.)
+            if (hover is FolderNodeViewModel or ConnectionNodeViewModel)
+            {
+                var pos2 = PositionFromVerticalSplit(tree, hover, pos);
+                return (hover, pos2);
+            }
+            return (null, DropPosition.After);
+        }
+
+        return (null, DropPosition.After);
+    }
+
+    private static DropPosition PositionFromVerticalSplit(TreeView tree, object hoverVm, Point pointerPos)
+    {
+        // Walk the tree's visual tree for the TreeViewItem whose DataContext == hoverVm.
+        // Use its bounds (translated to tree coords) to decide top vs bottom half.
+        var item = FindTreeViewItemFor(tree, hoverVm);
+        if (item is null) return DropPosition.After;
+        var topLeft = item.TranslatePoint(new Point(0, 0), tree);
+        if (topLeft is null) return DropPosition.After;
+        var midY = topLeft.Value.Y + item.Bounds.Height / 2.0;
+        return pointerPos.Y < midY ? DropPosition.Before : DropPosition.After;
+    }
+
+    private static TreeViewItem? FindTreeViewItemFor(Visual root, object dataContext)
+    {
+        foreach (var d in root.GetVisualDescendants())
+        {
+            if (d is TreeViewItem tvi && ReferenceEquals(tvi.DataContext, dataContext))
+            {
+                return tvi;
+            }
+        }
+        return null;
+    }
+
+    private static object? FindRowVmAtPointer(TreeView tree, Point pos)
+    {
+        var hit = tree.InputHitTest(pos);
+        if (hit is not Visual v) return null;
+        // Walk up until we find a TreeViewItem; its DataContext is the row VM.
+        var item = v.FindAncestorOfType<TreeViewItem>(includeSelf: true);
+        return item?.DataContext;
+    }
+
+    private static bool IsBusyConnection(ConnectionNodeViewModel cn)
+        // CanConnect() / CanDisconnect() are private. The CommandManager-managed
+        // CanExecute on the relay commands is the next-best signal — but it's
+        // equivalent to !IsConnected/IsConnected. There's no exposed "connecting"
+        // flag today, so the simplest correct check is: never grab nodes that
+        // can neither connect nor disconnect (would mean a connection mid-flight).
+        => !cn.ConnectCommand.CanExecute(null) && !cn.DisconnectCommand.CanExecute(null);
+
+    private void MarkSourceDragging(bool dragging)
+    {
+        switch (_dragSource)
+        {
+            case ConnectionNodeViewModel cn: cn.IsDragging = dragging; break;
+            case FolderNodeViewModel fn: fn.IsDragging = dragging; break;
+        }
+    }
+
+    private static void SetIsDropTarget(object? vm, bool value)
+    {
+        switch (vm)
+        {
+            case ConnectionNodeViewModel cn: cn.IsDropTarget = value; break;
+            case FolderNodeViewModel fn: fn.IsDropTarget = value; break;
+        }
+    }
+
+    private void ClearDragState()
+    {
+        MarkSourceDragging(false);
+        SetIsDropTarget(_currentDropTarget, false);
+        _dragSource = null;
+        _currentDropTarget = null;
+        _isDragging = false;
     }
 
     private void OnConnectionNodeDoubleTapped(object? sender, TappedEventArgs e)
