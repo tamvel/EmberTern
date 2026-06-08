@@ -152,6 +152,13 @@ internal static class UiStrings
     public const string TableDetailColumnNotNull = "Not Null";
     public const string TableDetailColumnDefault = "Default";
     public const string TableDetailColumnDescription = "Opis";
+    public const string TableDetailColumnPrimaryKey = "Primary key";
+    public const string TableDetailColumnForeignKey = "Foreign key";
+    public const string TableDetailColumnUnique = "Unique";
+    public const string TableDetailColumnDomain = "Domena";
+    public const string TableDetailColumnForeignKeyTable = "FK Tabela";
+    public const string TableDetailColumnComputed = "Computed";
+    public const string TableDetailColumnCharset = "Charset";
     public const string TableDetailIndexFields = "Pola";
     public const string TableDetailIndexUnique = "Unikalny";
     public const string TableDetailIndexDescending = "Malejący";

@@ -3,6 +3,7 @@
              xmlns:vm="using:EmberTern.App.ViewModels"
              xmlns:app="using:EmberTern.App"
              xmlns:conv="using:EmberTern.App.Converters"
+             xmlns:metadata="using:EmberTern.Core.Metadata"
              xmlns:ae="using:AvaloniaEdit"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -13,6 +14,15 @@
 
   <!-- Tighter row pitch than the results grid. Scoped to descendants of this
        UserControl so it doesn't bleed into the SQL Editor result grid. -->
+  <UserControl.Resources>
+    <!-- Inline icon geometries for the Pola grid PK / FK / UNQ columns.
+         Each glyph is sized to roughly fit a 14×14 viewport; Path.Stretch=Uniform
+         scales to whatever cell size the column uses. -->
+    <StreamGeometry x:Key="PkIconGeometry">M 8,0 C 5,0 3,2 3,4 C 3,6 4,7 5,8 L 1,12 L 0,14 L 2,14 L 2,12 L 4,12 L 4,10 L 6,10 L 6,8 C 7,8.5 8,9 9,9 C 11,9 13,7 13,4 C 13,2 11,0 8,0 Z M 9,2 C 10,2 11,3 11,4 C 11,5 10,6 9,6 C 8,6 7,5 7,4 C 7,3 8,2 9,2 Z</StreamGeometry>
+    <StreamGeometry x:Key="FkIconGeometry">M 0,4 L 4,4 L 4,2 L 8,5 L 4,8 L 4,6 L 0,6 Z M 10,1 L 10,9 C 12,9 14,7 14,5 C 14,3 12,1 10,1 Z</StreamGeometry>
+    <StreamGeometry x:Key="UnqIconGeometry">M 7,0 L 14,5 L 7,10 L 0,5 Z</StreamGeometry>
+  </UserControl.Resources>
+
   <UserControl.Styles>
     <Style Selector="DataGridRow">
       <Setter Property="Height" Value="22" />
@@ -35,9 +45,9 @@
                   FontSize="11"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
-                  CanUserSortColumns="False"
+                  CanUserSortColumns="True"
                   CanUserResizeColumns="True"
-                  CanUserReorderColumns="False"
+                  CanUserReorderColumns="True"
                   ColumnWidth="Auto"
                   RowBackground="Transparent"
                   HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
@@ -45,21 +55,102 @@
                   Background="{DynamicResource BackgroundBrush}">
           <DataGrid.Columns>
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnPosition}"
-                                Binding="{Binding DisplayPosition}" />
+                                Binding="{Binding DisplayPosition}"
+                                SortMemberPath="DisplayPosition" />
+
+            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnPrimaryKey}"
+                                    Width="Auto"
+                                    MinWidth="60"
+                                    SortMemberPath="IsPrimaryKey">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate x:DataType="metadata:FieldInfo">
+                  <Path Data="{StaticResource PkIconGeometry}"
+                        Fill="{DynamicResource AccentBrush}"
+                        Width="14" Height="14"
+                        Stretch="Uniform"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding IsPrimaryKey}" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+
+            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnForeignKey}"
+                                    Width="Auto"
+                                    MinWidth="60"
+                                    SortMemberPath="IsForeignKey">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate x:DataType="metadata:FieldInfo">
+                  <Path Data="{StaticResource FkIconGeometry}"
+                        Fill="{DynamicResource WarningBrush}"
+                        Width="14" Height="14"
+                        Stretch="Uniform"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding IsForeignKey}" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+
+            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnUnique}"
+                                    Width="Auto"
+                                    MinWidth="60"
+                                    SortMemberPath="IsUnique">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate x:DataType="metadata:FieldInfo">
+                  <Path Data="{StaticResource UnqIconGeometry}"
+                        Fill="{DynamicResource SubtleForegroundBrush}"
+                        Width="14" Height="14"
+                        Stretch="Uniform"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding IsUnique}" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
-                                Binding="{Binding Name}" />
+                                Binding="{Binding Name}"
+                                SortMemberPath="Name" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnType}"
-                                Binding="{Binding Type}" />
+                                Binding="{Binding BaseTypeName}"
+                                SortMemberPath="BaseTypeName" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnSize}"
-                                Binding="{Binding Size}" />
+                                Binding="{Binding Size}"
+                                SortMemberPath="Size" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnScale}"
-                                Binding="{Binding Scale, Converter={x:Static conv:ZeroToEmptyConverter.Instance}}" />
+                                Binding="{Binding Scale, Converter={x:Static conv:ZeroToEmptyConverter.Instance}}"
+                                SortMemberPath="Scale" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnNotNull}"
-                                Binding="{Binding NotNull, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}" />
+                                Binding="{Binding NotNull, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
+                                SortMemberPath="NotNull" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDefault}"
-                                Binding="{Binding DefaultValue}" />
+                                Binding="{Binding DefaultValue}"
+                                SortMemberPath="DefaultValue" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDescription}"
-                                Binding="{Binding Description}" />
+                                Binding="{Binding Description}"
+                                SortMemberPath="Description" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDomain}"
+                                Binding="{Binding Domain}"
+                                SortMemberPath="Domain" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnForeignKeyTable}"
+                                Binding="{Binding ForeignKeyTable}"
+                                SortMemberPath="ForeignKeyTable" />
+            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnComputed}"
+                                    SortMemberPath="ComputedSource">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate x:DataType="metadata:FieldInfo">
+                  <TextBlock Text="{Binding ComputedSource}"
+                             FontStyle="Italic"
+                             Foreground="{DynamicResource SubtleForegroundBrush}"
+                             Margin="6,0"
+                             VerticalAlignment="Center" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnCharset}"
+                                Binding="{Binding Charset}"
+                                SortMemberPath="Charset" />
           </DataGrid.Columns>
         </DataGrid>
       </TabItem>
@@ -71,9 +162,9 @@
                   FontSize="11"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
-                  CanUserSortColumns="False"
+                  CanUserSortColumns="True"
                   CanUserResizeColumns="True"
-                  CanUserReorderColumns="False"
+                  CanUserReorderColumns="True"
                   ColumnWidth="Auto"
                   RowBackground="Transparent"
                   HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
@@ -81,17 +172,23 @@
                   Background="{DynamicResource BackgroundBrush}">
           <DataGrid.Columns>
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
-                                Binding="{Binding Name}" />
+                                Binding="{Binding Name}"
+                                SortMemberPath="Name" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintKind}"
-                                Binding="{Binding Kind}" />
+                                Binding="{Binding Kind}"
+                                SortMemberPath="Kind" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintFields}"
-                                Binding="{Binding Fields}" />
+                                Binding="{Binding Fields}"
+                                SortMemberPath="Fields" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintRefTable}"
-                                Binding="{Binding RefTable}" />
+                                Binding="{Binding RefTable}"
+                                SortMemberPath="RefTable" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintRefFields}"
-                                Binding="{Binding RefFields}" />
+                                Binding="{Binding RefFields}"
+                                SortMemberPath="RefFields" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintCheck}"
-                                Binding="{Binding CheckSource}" />
+                                Binding="{Binding CheckSource}"
+                                SortMemberPath="CheckSource" />
           </DataGrid.Columns>
         </DataGrid>
       </TabItem>
@@ -103,9 +200,9 @@
                   FontSize="11"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
-                  CanUserSortColumns="False"
+                  CanUserSortColumns="True"
                   CanUserResizeColumns="True"
-                  CanUserReorderColumns="False"
+                  CanUserReorderColumns="True"
                   ColumnWidth="Auto"
                   RowBackground="Transparent"
                   HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
@@ -113,15 +210,20 @@
                   Background="{DynamicResource BackgroundBrush}">
           <DataGrid.Columns>
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
-                                Binding="{Binding Name}" />
+                                Binding="{Binding Name}"
+                                SortMemberPath="Name" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexFields}"
-                                Binding="{Binding Fields}" />
+                                Binding="{Binding Fields}"
+                                SortMemberPath="Fields" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexUnique}"
-                                Binding="{Binding IsUnique, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}" />
+                                Binding="{Binding IsUnique, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
+                                SortMemberPath="IsUnique" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexDescending}"
-                                Binding="{Binding IsDescending, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}" />
+                                Binding="{Binding IsDescending, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
+                                SortMemberPath="IsDescending" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexPrimary}"
-                                Binding="{Binding IsPrimary, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}" />
+                                Binding="{Binding IsPrimary, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
+                                SortMemberPath="IsPrimary" />
           </DataGrid.Columns>
         </DataGrid>
       </TabItem>

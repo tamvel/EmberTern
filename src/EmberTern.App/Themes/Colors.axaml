@@ -17,6 +17,7 @@
            #12FFFFFF = 7% white overlay. We meant the latter. -->
       <Color x:Key="HoverOverlayColor">#12FFFFFF</Color>
       <Color x:Key="ErrorColor">#F44747</Color>
+      <Color x:Key="WarningColor">#E8A020</Color>
       <Color x:Key="SelectionColor">#094771</Color>
       <Color x:Key="FocusBorderColor">#007FD4</Color>
       <!-- Zebra-stripe tint for DataGrid alternating rows. ARGB: ~5% white on dark. -->
@@ -38,6 +39,7 @@
       <SolidColorBrush x:Key="ConnectedBrush" Color="{StaticResource ConnectedColor}" />
       <SolidColorBrush x:Key="HoverOverlayBrush" Color="{StaticResource HoverOverlayColor}" />
       <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
+      <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
       <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}" />
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
@@ -102,6 +104,7 @@
       <Color x:Key="ConnectedColor">#1A7F4B</Color>
       <Color x:Key="HoverOverlayColor">#10000000</Color>
       <Color x:Key="ErrorColor">#CC2929</Color>
+      <Color x:Key="WarningColor">#C77800</Color>
       <Color x:Key="SelectionColor">#CCE4F7</Color>
       <Color x:Key="FocusBorderColor">#0078D4</Color>
       <!-- Zebra-stripe tint for DataGrid alternating rows. ARGB: ~5% black on light. -->
@@ -123,6 +126,7 @@
       <SolidColorBrush x:Key="ConnectedBrush" Color="{StaticResource ConnectedColor}" />
       <SolidColorBrush x:Key="HoverOverlayBrush" Color="{StaticResource HoverOverlayColor}" />
       <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
+      <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
       <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}" />
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />

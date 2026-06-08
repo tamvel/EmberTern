@@ -1,3 +1,4 @@
+using EmberTern.Core.Metadata;
 using EmberTern.Firebird;
 using Xunit;
 
@@ -200,5 +201,104 @@ public class FirebirdTableDetailReaderTests
     public void NormalizeDescription_TrimsAndDefaultsToEmpty(string? input, string expected)
     {
         Assert.Equal(expected, FirebirdTableDetailReader.NormalizeDescription(input));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("RDB$12", null)]
+    [InlineData("RDB$1234567", null)]
+    [InlineData("MY_DOMAIN", "MY_DOMAIN")]
+    [InlineData("  USER_NAME_T  ", "USER_NAME_T")]
+    public void NormalizeDomain_FiltersAnonymousBackingDomains(string? input, string? expected)
+    {
+        Assert.Equal(expected, FirebirdTableDetailReader.NormalizeDomain(input));
+    }
+
+    [Fact]
+    public void FieldsSql_PullsPkFkDomainAndCharsetColumns()
+    {
+        var sql = FirebirdTableDetailReader.FieldsSql;
+        Assert.Contains("PK_FLAG", sql);
+        Assert.Contains("FK_FLAG", sql);
+        Assert.Contains("'PRIMARY KEY'", sql);
+        Assert.Contains("'FOREIGN KEY'", sql);
+        Assert.Contains("rf.RDB$FIELD_SOURCE", sql);
+        Assert.Contains("RDB$CHARACTER_SETS", sql);
+    }
+
+    [Fact]
+    public void FieldInfo_InitializesNewProperties()
+    {
+        var f = new FieldInfo
+        {
+            Position = 0,
+            Name = "ID",
+            Type = "INTEGER",
+            IsPrimaryKey = true,
+            IsForeignKey = false,
+            Domain = "MY_DOMAIN",
+            ComputedSource = "(A + B)",
+            Charset = "WIN1250",
+        };
+        Assert.True(f.IsPrimaryKey);
+        Assert.False(f.IsForeignKey);
+        Assert.Equal("MY_DOMAIN", f.Domain);
+        Assert.Equal("(A + B)", f.ComputedSource);
+        Assert.Equal("WIN1250", f.Charset);
+    }
+
+    [Fact]
+    public void FieldInfo_NewPropertiesDefaultToFalseOrNull()
+    {
+        var f = new FieldInfo { Name = "X", Type = "INTEGER" };
+        Assert.False(f.IsPrimaryKey);
+        Assert.False(f.IsForeignKey);
+        Assert.Null(f.Domain);
+        Assert.Null(f.Charset);
+        Assert.Null(f.ComputedSource);
+    }
+
+    [Theory]
+    [InlineData("VARCHAR(255)", "VARCHAR")]
+    [InlineData("NUMERIC(15,2)", "NUMERIC")]
+    [InlineData("DECIMAL(18,4)", "DECIMAL")]
+    [InlineData("CHAR(10)", "CHAR")]
+    [InlineData("CSTRING(64)", "CSTRING")]
+    [InlineData("INTEGER", "INTEGER")]
+    [InlineData("SMALLINT", "SMALLINT")]
+    [InlineData("BIGINT", "BIGINT")]
+    [InlineData("DOUBLE PRECISION", "DOUBLE PRECISION")]
+    [InlineData("TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH TIME ZONE")]
+    [InlineData("", "")]
+    public void BaseTypeName_StripsSizeSuffix(string input, string expected)
+    {
+        var f = new FieldInfo { Type = input };
+        Assert.Equal(expected, f.BaseTypeName);
+    }
+
+    [Fact]
+    public void IsUnique_DefaultsFalse()
+    {
+        var f = new FieldInfo { Name = "X", Type = "INTEGER" };
+        Assert.False(f.IsUnique);
+    }
+
+    [Fact]
+    public void ForeignKeyTable_DefaultsNull()
+    {
+        var f = new FieldInfo { Name = "X", Type = "INTEGER" };
+        Assert.Null(f.ForeignKeyTable);
+    }
+
+    [Fact]
+    public void FieldsSql_PullsUniqueAndForeignKeyTable()
+    {
+        var sql = FirebirdTableDetailReader.FieldsSql;
+        Assert.Contains("UNQ_FLAG", sql);
+        Assert.Contains("'UNIQUE'", sql);
+        Assert.Contains("FK_TABLE", sql);
+        Assert.Contains("RDB$REF_CONSTRAINTS", sql);
     }
 }

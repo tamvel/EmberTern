@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using Avalonia.Data;
 using Avalonia.Data.Converters;
 
 namespace EmberTern.App.Converters;
@@ -25,6 +26,9 @@ public sealed class ZeroToEmptyConverter : IValueConverter
         };
     }
 
+    // One-way only — see BoolToCheckmarkConverter for the rationale (Avalonia 12
+    // DataGridTextColumn wires TwoWay even with IsReadOnly=True; DoNothing keeps
+    // the binding silent and stops VS from breaking on a user-unhandled throw).
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => throw new NotSupportedException();
+        => BindingOperations.DoNothing;
 }

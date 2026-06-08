@@ -62,6 +62,12 @@ public sealed class FirebirdTableDetailReader
                 var computedSource = reader.IsDBNull(8) ? null : reader.GetString(8).Trim();
                 var description = reader.IsDBNull(9) ? null : reader.GetString(9).Trim();
                 var subType = reader.IsDBNull(10) ? (int?)null : reader.GetInt32(10);
+                var pkCount = reader.IsDBNull(11) ? 0 : reader.GetInt32(11);
+                var fkCount = reader.IsDBNull(12) ? 0 : reader.GetInt32(12);
+                var fieldSource = reader.IsDBNull(13) ? null : reader.GetString(13).Trim();
+                var charsetName = reader.IsDBNull(14) ? null : reader.GetString(14).Trim();
+                var unqCount = reader.IsDBNull(15) ? 0 : reader.GetInt32(15);
+                var fkTable = reader.IsDBNull(16) ? null : reader.GetString(16).Trim();
 
                 results.Add(new FieldInfo
                 {
@@ -72,8 +78,14 @@ public sealed class FirebirdTableDetailReader
                     Scale = fieldScale is null ? null : Math.Abs(fieldScale.Value),
                     NotNull = nullFlag == 1,
                     DefaultValue = StripDefaultPrefix(defaultSource),
-                    ComputedSource = computedSource,
+                    ComputedSource = string.IsNullOrEmpty(computedSource) ? null : computedSource,
                     Description = string.IsNullOrEmpty(description) ? null : description,
+                    IsPrimaryKey = pkCount > 0,
+                    IsForeignKey = fkCount > 0,
+                    IsUnique = unqCount > 0,
+                    Domain = NormalizeDomain(fieldSource),
+                    Charset = string.IsNullOrEmpty(charsetName) ? null : charsetName,
+                    ForeignKeyTable = string.IsNullOrEmpty(fkTable) ? null : fkTable,
                 });
             }
             return results;
@@ -305,6 +317,19 @@ public sealed class FirebirdTableDetailReader
     internal static string NormalizeDescription(string? raw)
         => string.IsNullOrEmpty(raw) ? string.Empty : raw.Trim();
 
+    // RDB$FIELD_SOURCE is the domain name. Anonymous backing domains created by
+    // Firebird for inline column definitions (CHAR(10), INTEGER, COMPUTED BY, …)
+    // are named "RDB$<n>" — those aren't real user domains and shouldn't show
+    // up in the Domena column. Trim + filter; everything else passes through.
+    internal static string? NormalizeDomain(string? rawFieldSource)
+    {
+        if (string.IsNullOrEmpty(rawFieldSource)) return null;
+        var trimmed = rawFieldSource.Trim();
+        if (trimmed.Length == 0) return null;
+        if (trimmed.StartsWith("RDB$", StringComparison.Ordinal)) return null;
+        return trimmed;
+    }
+
     internal const string ConstraintsSql =
         "SELECT rc.RDB$CONSTRAINT_NAME, rc.RDB$CONSTRAINT_TYPE, " +
         "       (SELECT LIST(TRIM(s.RDB$FIELD_NAME), ', ') " +
@@ -333,9 +358,36 @@ public sealed class FirebirdTableDetailReader
         "       ft.RDB$FIELD_SCALE, ft.RDB$FIELD_PRECISION, " +
         "       rf.RDB$NULL_FLAG, rf.RDB$DEFAULT_SOURCE, " +
         "       ft.RDB$COMPUTED_SOURCE, rf.RDB$DESCRIPTION, " +
-        "       ft.RDB$FIELD_SUB_TYPE " +
+        "       ft.RDB$FIELD_SUB_TYPE, " +
+        "       (SELECT COUNT(*) FROM RDB$INDEX_SEGMENTS s " +
+        "          JOIN RDB$RELATION_CONSTRAINTS rc ON rc.RDB$INDEX_NAME = s.RDB$INDEX_NAME " +
+        "          WHERE rc.RDB$RELATION_NAME = rf.RDB$RELATION_NAME " +
+        "            AND rc.RDB$CONSTRAINT_TYPE = 'PRIMARY KEY' " +
+        "            AND s.RDB$FIELD_NAME = rf.RDB$FIELD_NAME) AS PK_FLAG, " +
+        "       (SELECT COUNT(*) FROM RDB$INDEX_SEGMENTS s " +
+        "          JOIN RDB$RELATION_CONSTRAINTS rc ON rc.RDB$INDEX_NAME = s.RDB$INDEX_NAME " +
+        "          WHERE rc.RDB$RELATION_NAME = rf.RDB$RELATION_NAME " +
+        "            AND rc.RDB$CONSTRAINT_TYPE = 'FOREIGN KEY' " +
+        "            AND s.RDB$FIELD_NAME = rf.RDB$FIELD_NAME) AS FK_FLAG, " +
+        "       rf.RDB$FIELD_SOURCE, " +
+        "       cs.RDB$CHARACTER_SET_NAME, " +
+        "       (SELECT COUNT(*) FROM RDB$INDEX_SEGMENTS s " +
+        "          JOIN RDB$RELATION_CONSTRAINTS rc ON rc.RDB$INDEX_NAME = s.RDB$INDEX_NAME " +
+        "          WHERE rc.RDB$RELATION_NAME = rf.RDB$RELATION_NAME " +
+        "            AND rc.RDB$CONSTRAINT_TYPE = 'UNIQUE' " +
+        "            AND s.RDB$FIELD_NAME = rf.RDB$FIELD_NAME) AS UNQ_FLAG, " +
+        "       (SELECT TRIM(rc_uq.RDB$RELATION_NAME) " +
+        "          FROM RDB$RELATION_CONSTRAINTS rc_fk " +
+        "          JOIN RDB$REF_CONSTRAINTS ref ON ref.RDB$CONSTRAINT_NAME = rc_fk.RDB$CONSTRAINT_NAME " +
+        "          JOIN RDB$RELATION_CONSTRAINTS rc_uq ON rc_uq.RDB$CONSTRAINT_NAME = ref.RDB$CONST_NAME_UQ " +
+        "          JOIN RDB$INDEX_SEGMENTS s ON s.RDB$INDEX_NAME = rc_fk.RDB$INDEX_NAME " +
+        "          WHERE rc_fk.RDB$RELATION_NAME = rf.RDB$RELATION_NAME " +
+        "            AND rc_fk.RDB$CONSTRAINT_TYPE = 'FOREIGN KEY' " +
+        "            AND s.RDB$FIELD_NAME = rf.RDB$FIELD_NAME " +
+        "          ROWS 1) AS FK_TABLE " +
         "FROM RDB$RELATION_FIELDS rf " +
         "JOIN RDB$FIELDS ft ON ft.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE " +
+        "LEFT JOIN RDB$CHARACTER_SETS cs ON cs.RDB$CHARACTER_SET_ID = ft.RDB$CHARACTER_SET_ID " +
         "WHERE rf.RDB$RELATION_NAME = @tableName " +
         "ORDER BY rf.RDB$FIELD_POSITION";
 
