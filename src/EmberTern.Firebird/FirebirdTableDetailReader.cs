@@ -122,17 +122,23 @@ public sealed class FirebirdTableDetailReader
             {
                 var name = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim();
                 var uniqueFlag = reader.IsDBNull(1) ? (int?)null : reader.GetInt32(1);
-                var indexType = reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2);
+                var indexDirection = reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2);
                 var fields = reader.IsDBNull(3) ? string.Empty : reader.GetString(3).Trim();
                 var constraintType = reader.IsDBNull(4) ? null : reader.GetString(4).Trim();
+                var inactiveFlag = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
+                var statistics = reader.IsDBNull(6) ? (double?)null : reader.GetDouble(6);
+                var expression = reader.IsDBNull(7) ? null : reader.GetString(7).Trim();
 
                 results.Add(new IndexInfo
                 {
                     Name = name,
                     Fields = fields,
                     IsUnique = uniqueFlag == 1,
-                    IsDescending = indexType == 1,
-                    IsPrimary = IsPrimaryConstraint(constraintType),
+                    IsDescending = indexDirection == 1,
+                    IsActive = inactiveFlag != 1,
+                    Statistics = statistics,
+                    Expression = string.IsNullOrEmpty(expression) ? null : expression,
+                    IndexType = NormalizeIndexType(constraintType),
                 });
             }
             return results;
@@ -173,7 +179,11 @@ public sealed class FirebirdTableDetailReader
                     fields: reader.IsDBNull(2) ? null : reader.GetString(2),
                     refTable: reader.IsDBNull(4) ? null : reader.GetString(4),
                     refFields: reader.IsDBNull(5) ? null : reader.GetString(5),
-                    checkSource: reader.IsDBNull(6) ? null : reader.GetString(6)));
+                    checkSource: reader.IsDBNull(6) ? null : reader.GetString(6),
+                    indexName: reader.IsDBNull(7) ? null : reader.GetString(7),
+                    updateRule: reader.IsDBNull(8) ? null : reader.GetString(8),
+                    deleteRule: reader.IsDBNull(9) ? null : reader.GetString(9),
+                    indexDirection: reader.IsDBNull(10) ? (int?)null : reader.GetInt32(10)));
             }
             return results;
         }
@@ -297,15 +307,23 @@ public sealed class FirebirdTableDetailReader
         string? fields,
         string? refTable,
         string? refFields,
-        string? checkSource)
+        string? checkSource,
+        string? indexName = null,
+        string? updateRule = null,
+        string? deleteRule = null,
+        int? indexDirection = null)
         => new()
         {
             Name = name?.Trim() ?? string.Empty,
-            Kind = rawKind?.Trim() ?? string.Empty,
+            ConstraintType = rawKind?.Trim() ?? string.Empty,
             Fields = fields?.Trim() ?? string.Empty,
             RefTable = refTable?.Trim() ?? string.Empty,
             RefFields = refFields?.Trim() ?? string.Empty,
-            CheckSource = NormalizeCheckSource(checkSource),
+            CheckClause = NormalizeCheckSource(checkSource),
+            IndexName = indexName?.Trim() ?? string.Empty,
+            UpdateRule = updateRule?.Trim() ?? string.Empty,
+            DeleteRule = deleteRule?.Trim() ?? string.Empty,
+            IsDescending = indexDirection == 1,
         };
 
     // RDB$TRIGGER_SOURCE (check-constraint body) is wrapped as "CHECK (...)" in the
@@ -343,12 +361,17 @@ public sealed class FirebirdTableDetailReader
         "        FROM RDB$INDEX_SEGMENTS s2 " +
         "        JOIN RDB$RELATION_CONSTRAINTS rc3 ON rc3.RDB$INDEX_NAME = s2.RDB$INDEX_NAME " +
         "        WHERE rc3.RDB$CONSTRAINT_NAME = fk.RDB$CONST_NAME_UQ) AS REF_FIELDS, " +
-        "       chk_src.RDB$TRIGGER_SOURCE " +
+        "       chk_src.RDB$TRIGGER_SOURCE, " +
+        "       rc.RDB$INDEX_NAME, " +
+        "       fk.RDB$UPDATE_RULE, " +
+        "       fk.RDB$DELETE_RULE, " +
+        "       idx.RDB$INDEX_TYPE " +
         "FROM RDB$RELATION_CONSTRAINTS rc " +
         "LEFT JOIN RDB$REF_CONSTRAINTS fk ON fk.RDB$CONSTRAINT_NAME = rc.RDB$CONSTRAINT_NAME " +
         "LEFT JOIN RDB$CHECK_CONSTRAINTS chk ON chk.RDB$CONSTRAINT_NAME = rc.RDB$CONSTRAINT_NAME " +
         "LEFT JOIN RDB$TRIGGERS chk_src ON chk_src.RDB$TRIGGER_NAME = chk.RDB$TRIGGER_NAME " +
         "                              AND chk_src.RDB$TRIGGER_TYPE = 1 " +
+        "LEFT JOIN RDB$INDICES idx ON idx.RDB$INDEX_NAME = rc.RDB$INDEX_NAME " +
         "WHERE rc.RDB$RELATION_NAME = @tableName " +
         "ORDER BY rc.RDB$CONSTRAINT_TYPE, rc.RDB$CONSTRAINT_NAME";
 
@@ -399,10 +422,26 @@ public sealed class FirebirdTableDetailReader
         "       (SELECT rc.RDB$CONSTRAINT_TYPE " +
         "        FROM RDB$RELATION_CONSTRAINTS rc " +
         "        WHERE rc.RDB$INDEX_NAME = i.RDB$INDEX_NAME " +
-        "        ROWS 1) AS CONSTRAINT_TYPE " +
+        "          AND rc.RDB$CONSTRAINT_TYPE IN ('PRIMARY KEY', 'FOREIGN KEY') " +
+        "        ROWS 1) AS CONSTRAINT_TYPE, " +
+        "       i.RDB$INDEX_INACTIVE, " +
+        "       i.RDB$STATISTICS, " +
+        "       i.RDB$EXPRESSION_SOURCE " +
         "FROM RDB$INDICES i " +
         "WHERE i.RDB$RELATION_NAME = @tableName " +
         "ORDER BY i.RDB$INDEX_NAME";
+
+    // Constraint subquery is narrowed to PRIMARY KEY / FOREIGN KEY (UNIQUE
+    // constraint backing indexes are surfaced through IsUnique). Anything
+    // outside that set comes back null → empty IndexType.
+    internal static string NormalizeIndexType(string? constraintType)
+    {
+        if (string.IsNullOrWhiteSpace(constraintType)) return string.Empty;
+        var trimmed = constraintType.Trim();
+        if (string.Equals(trimmed, "PRIMARY KEY", StringComparison.OrdinalIgnoreCase)) return "PRIMARY KEY";
+        if (string.Equals(trimmed, "FOREIGN KEY", StringComparison.OrdinalIgnoreCase)) return "FOREIGN KEY";
+        return string.Empty;
+    }
 
     // Internal so tests can verify the integer → string mapping without a live DB.
     internal static string FormatFieldType(int fieldType, int? length, int? scale, int? precision, int? subType)

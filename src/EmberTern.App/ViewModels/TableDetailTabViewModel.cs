@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -38,6 +41,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
         Fields = new ObservableCollection<FieldInfo>();
         Indexes = new ObservableCollection<IndexInfo>();
         Constraints = new ObservableCollection<ConstraintInfo>();
+        Constraints.CollectionChanged += OnConstraintsCollectionChanged;
     }
 
     public string TableName { get; }
@@ -45,6 +49,64 @@ public partial class TableDetailTabViewModel : ViewModelBase
     public ObservableCollection<FieldInfo> Fields { get; }
     public ObservableCollection<IndexInfo> Indexes { get; }
     public ObservableCollection<ConstraintInfo> Constraints { get; }
+
+    // Filtered views over Constraints, one per constraint kind. Plain get-only
+    // properties (not [ObservableProperty]) per spec; refresh is driven by
+    // OnConstraintsCollectionChanged raising PropertyChanged on each filter +
+    // its count + its HasX flag whenever the underlying collection mutates.
+    public IReadOnlyList<ConstraintInfo> PrimaryKeyConstraints
+        => Filter("PRIMARY KEY");
+
+    public IReadOnlyList<ConstraintInfo> ForeignKeyConstraints
+        => Filter("FOREIGN KEY");
+
+    public IReadOnlyList<ConstraintInfo> CheckConstraints
+        => Filter("CHECK");
+
+    public IReadOnlyList<ConstraintInfo> UniqueConstraints
+        => Filter("UNIQUE");
+
+    public int PrimaryKeyConstraintCount => PrimaryKeyConstraints.Count;
+    public int ForeignKeyConstraintCount => ForeignKeyConstraints.Count;
+    public int CheckConstraintCount => CheckConstraints.Count;
+    public int UniqueConstraintCount => UniqueConstraints.Count;
+
+    public bool HasPrimaryKeyConstraints => PrimaryKeyConstraintCount > 0;
+    public bool HasForeignKeyConstraints => ForeignKeyConstraintCount > 0;
+    public bool HasCheckConstraints => CheckConstraintCount > 0;
+    public bool HasUniqueConstraints => UniqueConstraintCount > 0;
+
+    public string PrimaryKeyTabHeader => FormatHeader(UiStrings.TableDetailConstraintSubTabPrimaryKey, PrimaryKeyConstraintCount);
+    public string ForeignKeyTabHeader => FormatHeader(UiStrings.TableDetailConstraintSubTabForeignKey, ForeignKeyConstraintCount);
+    public string CheckTabHeader => FormatHeader(UiStrings.TableDetailConstraintSubTabCheck, CheckConstraintCount);
+    public string UniqueTabHeader => FormatHeader(UiStrings.TableDetailConstraintSubTabUnique, UniqueConstraintCount);
+
+    private static string FormatHeader(string label, int count) => $"{label} ({count})";
+
+    private IReadOnlyList<ConstraintInfo> Filter(string constraintType)
+        => Constraints
+            .Where(c => string.Equals(c.ConstraintType, constraintType, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private void OnConstraintsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(PrimaryKeyConstraints));
+        OnPropertyChanged(nameof(ForeignKeyConstraints));
+        OnPropertyChanged(nameof(CheckConstraints));
+        OnPropertyChanged(nameof(UniqueConstraints));
+        OnPropertyChanged(nameof(PrimaryKeyConstraintCount));
+        OnPropertyChanged(nameof(ForeignKeyConstraintCount));
+        OnPropertyChanged(nameof(CheckConstraintCount));
+        OnPropertyChanged(nameof(UniqueConstraintCount));
+        OnPropertyChanged(nameof(HasPrimaryKeyConstraints));
+        OnPropertyChanged(nameof(HasForeignKeyConstraints));
+        OnPropertyChanged(nameof(HasCheckConstraints));
+        OnPropertyChanged(nameof(HasUniqueConstraints));
+        OnPropertyChanged(nameof(PrimaryKeyTabHeader));
+        OnPropertyChanged(nameof(ForeignKeyTabHeader));
+        OnPropertyChanged(nameof(CheckTabHeader));
+        OnPropertyChanged(nameof(UniqueTabHeader));
+    }
 
     [ObservableProperty]
     private int _activeSubTabIndex;

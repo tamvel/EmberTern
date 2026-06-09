@@ -120,13 +120,52 @@ public class FirebirdTableDetailReaderTests
             fields: "ID",
             refTable: null,
             refFields: null,
-            checkSource: null);
+            checkSource: null,
+            indexName: "PK_USERS_IDX");
         Assert.Equal("PK_USERS", c.Name);
-        Assert.Equal("PRIMARY KEY", c.Kind);
+        Assert.Equal("PRIMARY KEY", c.ConstraintType);
         Assert.Equal("ID", c.Fields);
         Assert.Equal(string.Empty, c.RefTable);
         Assert.Equal(string.Empty, c.RefFields);
-        Assert.Equal(string.Empty, c.CheckSource);
+        Assert.Equal(string.Empty, c.CheckClause);
+        Assert.Equal("PK_USERS_IDX", c.IndexName);
+        Assert.False(c.IsDescending);
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    public void BuildConstraintInfo_MapsIndexDirectionToIsDescending(int? indexDirection, bool expected)
+    {
+        var c = FirebirdTableDetailReader.BuildConstraintInfo(
+            name: "PK", rawKind: "PRIMARY KEY", fields: "ID",
+            refTable: null, refFields: null, checkSource: null,
+            indexName: "PK_IDX", indexDirection: indexDirection);
+        Assert.Equal(expected, c.IsDescending);
+    }
+
+    [Fact]
+    public void BuildConstraintInfo_ForeignKey_FillsRulesAndDirection()
+    {
+        var c = FirebirdTableDetailReader.BuildConstraintInfo(
+            name: "FK", rawKind: "FOREIGN KEY", fields: "X",
+            refTable: "T", refFields: "ID", checkSource: null,
+            indexName: "FK_IDX",
+            updateRule: "CASCADE", deleteRule: "SET NULL",
+            indexDirection: 1);
+        Assert.Equal("CASCADE", c.UpdateRule);
+        Assert.Equal("SET NULL", c.DeleteRule);
+        Assert.True(c.IsDescending);
+    }
+
+    [Fact]
+    public void ConstraintsSql_JoinsRdbIndicesForIndexType()
+    {
+        var sql = FirebirdTableDetailReader.ConstraintsSql;
+        Assert.Contains("RDB$INDICES", sql);
+        Assert.Contains("idx.RDB$INDEX_TYPE", sql);
+        Assert.Contains("idx.RDB$INDEX_NAME = rc.RDB$INDEX_NAME", sql);
     }
 
     [Fact]
@@ -138,11 +177,17 @@ public class FirebirdTableDetailReaderTests
             fields: "CUSTOMER_ID",
             refTable: "CUSTOMERS",
             refFields: "ID",
-            checkSource: null);
-        Assert.Equal("FOREIGN KEY", c.Kind);
+            checkSource: null,
+            indexName: "FK_ORDERS_CUSTOMER_IDX",
+            updateRule: "CASCADE",
+            deleteRule: "SET NULL");
+        Assert.Equal("FOREIGN KEY", c.ConstraintType);
         Assert.Equal("CUSTOMERS", c.RefTable);
         Assert.Equal("ID", c.RefFields);
-        Assert.Equal(string.Empty, c.CheckSource);
+        Assert.Equal(string.Empty, c.CheckClause);
+        Assert.Equal("CASCADE", c.UpdateRule);
+        Assert.Equal("SET NULL", c.DeleteRule);
+        Assert.Equal("ON UPDATE CASCADE, ON DELETE SET NULL", c.ForeignKeyRule);
     }
 
     [Fact]
@@ -155,8 +200,8 @@ public class FirebirdTableDetailReaderTests
             refTable: null,
             refFields: null,
             checkSource: "CHECK (AGE >= 0)");
-        Assert.Equal("CHECK", c.Kind);
-        Assert.Equal("CHECK (AGE >= 0)", c.CheckSource);
+        Assert.Equal("CHECK", c.ConstraintType);
+        Assert.Equal("CHECK (AGE >= 0)", c.CheckClause);
         Assert.Equal(string.Empty, c.Fields);
     }
 
@@ -169,10 +214,12 @@ public class FirebirdTableDetailReaderTests
             fields: "EMAIL",
             refTable: null,
             refFields: null,
-            checkSource: null);
-        Assert.Equal("UNIQUE", c.Kind);
+            checkSource: null,
+            indexName: "UQ_USERS_EMAIL_IDX");
+        Assert.Equal("UNIQUE", c.ConstraintType);
         Assert.Equal("EMAIL", c.Fields);
         Assert.Equal(string.Empty, c.RefTable);
+        Assert.Equal("UQ_USERS_EMAIL_IDX", c.IndexName);
     }
 
     [Fact]
@@ -186,11 +233,131 @@ public class FirebirdTableDetailReaderTests
             refFields: null,
             checkSource: null);
         Assert.Equal(string.Empty, c.Name);
-        Assert.Equal(string.Empty, c.Kind);
+        Assert.Equal(string.Empty, c.ConstraintType);
         Assert.Equal(string.Empty, c.Fields);
         Assert.Equal(string.Empty, c.RefTable);
         Assert.Equal(string.Empty, c.RefFields);
-        Assert.Equal(string.Empty, c.CheckSource);
+        Assert.Equal(string.Empty, c.CheckClause);
+        Assert.Equal(string.Empty, c.IndexName);
+        Assert.Equal(string.Empty, c.UpdateRule);
+        Assert.Equal(string.Empty, c.DeleteRule);
+        Assert.Equal(string.Empty, c.ForeignKeyRule);
+        Assert.False(c.IsDescending);
+    }
+
+    [Fact]
+    public void ForeignKeyRule_SuppressesDefaultRestrict()
+    {
+        var c = FirebirdTableDetailReader.BuildConstraintInfo(
+            name: "FK", rawKind: "FOREIGN KEY", fields: "X",
+            refTable: "T", refFields: "ID", checkSource: null,
+            updateRule: "RESTRICT", deleteRule: "CASCADE");
+        Assert.Equal("ON DELETE CASCADE", c.ForeignKeyRule);
+    }
+
+    [Fact]
+    public void ForeignKeyRule_BothRestrictRendersEmpty()
+    {
+        var c = FirebirdTableDetailReader.BuildConstraintInfo(
+            name: "FK", rawKind: "FOREIGN KEY", fields: "X",
+            refTable: "T", refFields: "ID", checkSource: null,
+            updateRule: "RESTRICT", deleteRule: "RESTRICT");
+        Assert.Equal(string.Empty, c.ForeignKeyRule);
+    }
+
+    [Fact]
+    public void IndexesSql_IncludesNewColumns()
+    {
+        var sql = FirebirdTableDetailReader.IndexesSql;
+        Assert.Contains("RDB$INDEX_INACTIVE", sql);
+        Assert.Contains("RDB$STATISTICS", sql);
+        Assert.Contains("RDB$EXPRESSION_SOURCE", sql);
+        Assert.Contains("'PRIMARY KEY'", sql);
+        Assert.Contains("'FOREIGN KEY'", sql);
+    }
+
+    [Theory]
+    [InlineData(null, "")]
+    [InlineData("", "")]
+    [InlineData("UNIQUE", "")]
+    [InlineData("CHECK", "")]
+    [InlineData("PRIMARY KEY", "PRIMARY KEY")]
+    [InlineData("primary key", "PRIMARY KEY")]
+    [InlineData("FOREIGN KEY", "FOREIGN KEY")]
+    [InlineData("foreign key", "FOREIGN KEY")]
+    [InlineData("  PRIMARY KEY  ", "PRIMARY KEY")]
+    public void NormalizeIndexType_MapsConstraintType(string? constraintType, string expected)
+    {
+        Assert.Equal(expected, FirebirdTableDetailReader.NormalizeIndexType(constraintType));
+    }
+
+    [Fact]
+    public void IndexInfo_NewPropertiesDefaultsAreSensible()
+    {
+        var idx = new IndexInfo();
+        Assert.Equal(string.Empty, idx.Name);
+        Assert.Equal(string.Empty, idx.Fields);
+        Assert.False(idx.IsUnique);
+        Assert.False(idx.IsDescending);
+        Assert.True(idx.IsActive);
+        Assert.Null(idx.Statistics);
+        Assert.Null(idx.Expression);
+        Assert.Equal(string.Empty, idx.IndexType);
+        Assert.False(idx.IsPrimary);
+        Assert.False(idx.IsForeignKeyIndex);
+    }
+
+    [Fact]
+    public void IndexInfo_IsPrimary_DerivesFromIndexType()
+    {
+        var pk = new IndexInfo { IndexType = "PRIMARY KEY" };
+        Assert.True(pk.IsPrimary);
+        Assert.False(pk.IsForeignKeyIndex);
+
+        var fk = new IndexInfo { IndexType = "FOREIGN KEY" };
+        Assert.False(fk.IsPrimary);
+        Assert.True(fk.IsForeignKeyIndex);
+
+        var plain = new IndexInfo { IndexType = string.Empty };
+        Assert.False(plain.IsPrimary);
+        Assert.False(plain.IsForeignKeyIndex);
+    }
+
+    [Fact]
+    public void IndexInfo_IsPrimary_IsCaseInsensitive()
+    {
+        var idx = new IndexInfo { IndexType = "primary key" };
+        Assert.True(idx.IsPrimary);
+    }
+
+    [Fact]
+    public void IndexInfo_NewPropertiesRoundtripInit()
+    {
+        var idx = new IndexInfo
+        {
+            Name = "IDX_USER_EMAIL",
+            Fields = "EMAIL",
+            IsUnique = true,
+            IsDescending = false,
+            IsActive = false,
+            Statistics = 0.123456,
+            Expression = "UPPER(EMAIL)",
+            IndexType = "FOREIGN KEY",
+        };
+        Assert.Equal("IDX_USER_EMAIL", idx.Name);
+        Assert.False(idx.IsActive);
+        Assert.Equal(0.123456, idx.Statistics);
+        Assert.Equal("UPPER(EMAIL)", idx.Expression);
+        Assert.True(idx.IsForeignKeyIndex);
+    }
+
+    [Fact]
+    public void ConstraintsSql_IncludesIndexNameAndFkRules()
+    {
+        var sql = FirebirdTableDetailReader.ConstraintsSql;
+        Assert.Contains("rc.RDB$INDEX_NAME", sql);
+        Assert.Contains("fk.RDB$UPDATE_RULE", sql);
+        Assert.Contains("fk.RDB$DELETE_RULE", sql);
     }
 
     [Theory]

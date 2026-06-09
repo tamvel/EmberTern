@@ -137,40 +137,58 @@ internal static class UiStrings
     public const string ResultsTruncatedFormat = "Results limited to {0} rows.";
     public const string RowsFetchedFormat = "{0} rows in {1} ms";
 
+    // Main tab names stay Polish — pre-existing intentional choice.
     public const string TableDetailTabFields = "Pola";
     public const string TableDetailTabConstraints = "Ograniczenia";
     public const string TableDetailTabIndexes = "Indeksy";
     public const string TableDetailTabData = "Dane";
     public const string TableDetailTabDescription = "Opis";
     public const string TableDetailTabDdl = "DDL";
-    public const string TableDetailLoadingHint = "Ładowanie szczegółów tabeli…";
+    public const string TableDetailConstraintSubTabPrimaryKey = "Primary Key";
+    public const string TableDetailConstraintSubTabForeignKey = "Foreign Keys";
+    public const string TableDetailConstraintSubTabCheck = "Check";
+    public const string TableDetailConstraintSubTabUnique = "Unique";
+
+    public const string TableDetailLoadingHint = "Loading table details…";
     public const string TableDetailColumnPosition = "#";
-    public const string TableDetailColumnName = "Nazwa";
-    public const string TableDetailColumnType = "Typ";
-    public const string TableDetailColumnSize = "Rozmiar";
-    public const string TableDetailColumnScale = "Skala";
+    public const string TableDetailColumnName = "Name";
+    public const string TableDetailColumnType = "Type";
+    public const string TableDetailColumnSize = "Size";
+    public const string TableDetailColumnScale = "Scale";
     public const string TableDetailColumnNotNull = "Not Null";
     public const string TableDetailColumnDefault = "Default";
-    public const string TableDetailColumnDescription = "Opis";
+    public const string TableDetailColumnDescription = "Description";
     public const string TableDetailColumnPrimaryKey = "Primary key";
     public const string TableDetailColumnForeignKey = "Foreign key";
     public const string TableDetailColumnUnique = "Unique";
-    public const string TableDetailColumnDomain = "Domena";
-    public const string TableDetailColumnForeignKeyTable = "FK Tabela";
+    public const string TableDetailColumnDomain = "Domain";
+    public const string TableDetailColumnForeignKeyTable = "FK Table";
     public const string TableDetailColumnComputed = "Computed";
     public const string TableDetailColumnCharset = "Charset";
-    public const string TableDetailIndexFields = "Pola";
-    public const string TableDetailIndexUnique = "Unikalny";
-    public const string TableDetailIndexDescending = "Malejący";
+
+    public const string TableDetailIndexType = "Type";
+    public const string TableDetailIndexFields = "Fields";
+    public const string TableDetailIndexExpression = "Expression";
+    public const string TableDetailIndexUnique = "Unique";
+    public const string TableDetailIndexDescending = "Descending";
     public const string TableDetailIndexPrimary = "PK";
-    public const string TableDetailConstraintKind = "Typ";
-    public const string TableDetailConstraintFields = "Pola";
-    public const string TableDetailConstraintRefTable = "Tabela ref.";
-    public const string TableDetailConstraintRefFields = "Pola ref.";
-    public const string TableDetailConstraintCheck = "Warunek";
-    public const string TableDetailDataPreviewHintFormat = "Pokazuję pierwsze {0} wierszy";
-    public const string TableDetailDataLoadingHint = "Ładowanie danych…";
-    public const string TableDetailDescriptionEmpty = "Brak opisu.";
+    public const string TableDetailIndexActive = "Active";
+    public const string TableDetailIndexStatistics = "Statistics";
+
+    public const string TableDetailConstraintFields = "Fields";
+    public const string TableDetailConstraintRefTable = "Ref. table";
+    public const string TableDetailConstraintRefFields = "Ref. fields";
+    public const string TableDetailConstraintUpdateRule = "Update rule";
+    public const string TableDetailConstraintDeleteRule = "Delete rule";
+    public const string TableDetailConstraintSource = "Source";
+    public const string TableDetailConstraintIndexName = "Index name";
+    public const string TableDetailConstraintSort = "Sort";
+    public const string TableDetailConstraintSortAscending = "Ascending";
+    public const string TableDetailConstraintSortDescending = "Descending";
+
+    public const string TableDetailDataPreviewHintFormat = "Showing first {0} rows";
+    public const string TableDetailDataLoadingHint = "Loading data…";
+    public const string TableDetailDescriptionEmpty = "No description.";
 
     public const string FolderNewTooltip = "Nowy katalog";
     public const string FolderNewIcon = "📁";

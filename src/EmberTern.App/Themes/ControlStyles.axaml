@@ -143,6 +143,33 @@
     <Setter Property="IsVisible" Value="False" />
   </Style>
 
+  <!-- Sub-tabs (smaller, tighter than bottom-tab). Used for nested TabControls
+       inside a TableDetail sub-tab (e.g. Ograniczenia → Klucz główny / Klucze
+       zewnętrzne / Check / Unique). Empty class greys the header label out
+       when the underlying collection has no rows. -->
+  <Style Selector="TabItem.sub-tab">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="Padding" Value="6,3" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TabItem.sub-tab.empty">
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TabItem.sub-tab:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <Style Selector="TabItem.sub-tab:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+  </Style>
+
+  <Style Selector="TabItem.sub-tab /template/ Border#PART_SelectedPipe">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+
   <!-- DataGrid: selection / hover wired through SelectionBrush + HoverOverlayBrush
        so colors match the TreeView. FluentTheme's DataGridRow template names the
        background as Rectangle#BackgroundRectangle. -->
