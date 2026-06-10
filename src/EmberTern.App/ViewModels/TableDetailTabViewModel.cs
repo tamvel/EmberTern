@@ -41,6 +41,10 @@ public partial class TableDetailTabViewModel : ViewModelBase
         Fields = new ObservableCollection<FieldInfo>();
         Indexes = new ObservableCollection<IndexInfo>();
         Constraints = new ObservableCollection<ConstraintInfo>();
+        DependsOn = new ObservableCollection<DependencyInfo>();
+        DependedOnBy = new ObservableCollection<DependencyInfo>();
+        DependsOnTree = new ObservableCollection<DependencyGroupNode>();
+        DependedOnByTree = new ObservableCollection<DependencyGroupNode>();
         Constraints.CollectionChanged += OnConstraintsCollectionChanged;
     }
 
@@ -49,6 +53,122 @@ public partial class TableDetailTabViewModel : ViewModelBase
     public ObservableCollection<FieldInfo> Fields { get; }
     public ObservableCollection<IndexInfo> Indexes { get; }
     public ObservableCollection<ConstraintInfo> Constraints { get; }
+    public ObservableCollection<DependencyInfo> DependsOn { get; }
+    public ObservableCollection<DependencyInfo> DependedOnBy { get; }
+    public ObservableCollection<DependencyGroupNode> DependsOnTree { get; }
+    public ObservableCollection<DependencyGroupNode> DependedOnByTree { get; }
+
+    /// <summary>
+    /// Fired when the user double-clicks a dependency leaf in the tree. The
+    /// owner (MainWindowViewModel) reuses its existing OnOpenDdlRequested path
+    /// to open a TableDetail tab (for tables) or a DDL tab (other kinds).
+    /// </summary>
+    public event Action<MetadataObject>? OpenObjectRequested;
+
+    /// <summary>
+    /// Resolves the dependency leaf to a (Name, Kind) MetadataObject and raises
+    /// <see cref="OpenObjectRequested"/>. Silently no-ops for kinds that aren't
+    /// independently openable (e.g. Field, "Object (N)" fallbacks).
+    /// </summary>
+    public void RequestOpen(DependencyInfo dependency)
+    {
+        if (dependency is null || string.IsNullOrEmpty(dependency.ObjectName)) return;
+        var kind = MapObjectTypeToKind(dependency.ObjectType);
+        if (kind is null) return;
+        OpenObjectRequested?.Invoke(new MetadataObject(dependency.ObjectName, kind.Value));
+    }
+
+    public void RequestOpen(DependencyLeafNode leaf)
+    {
+        if (leaf is null) return;
+        RequestOpen(leaf.Dependency);
+    }
+
+    // Inverse of FirebirdTableDetailReader.MapObjectType. Kinds without an
+    // independent open-tab affordance (Field, unknown "Object (N)") return null;
+    // RequestOpen treats null as a silent no-op.
+    internal static MetadataObjectKind? MapObjectTypeToKind(string? objectType) => objectType switch
+    {
+        "Table" => MetadataObjectKind.Table,
+        "View" => MetadataObjectKind.View,
+        "Trigger" => MetadataObjectKind.Trigger,
+        "Procedure" => MetadataObjectKind.Procedure,
+        "Exception" => MetadataObjectKind.Exception,
+        "Generator" => MetadataObjectKind.Generator,
+        "Function" => MetadataObjectKind.Function,
+        "Package" => MetadataObjectKind.Package,
+        "Index" => MetadataObjectKind.Index,
+        "User" => MetadataObjectKind.User,
+        "Domain" => MetadataObjectKind.Domain,
+        _ => null,
+    };
+
+    // IBExpert-style fixed category order for the dependency tree. Every entry
+    // appears as a root node even when empty. ObjectTypeKey matches the singular
+    // value MapObjectType returns; DisplayLabel is the plural shown in headers.
+    // "UDF" has no matching dependency type code today — it stays as a fixed
+    // empty placeholder so the category list mirrors IBExpert exactly.
+    internal static readonly IReadOnlyList<DependencyCategory> CategoryOrder = new[]
+    {
+        new DependencyCategory("Domain",    MetadataObjectKind.Domain,    UiStrings.MetadataGroupDomains),
+        new DependencyCategory("Table",     MetadataObjectKind.Table,     UiStrings.MetadataGroupTables),
+        new DependencyCategory("View",      MetadataObjectKind.View,      UiStrings.MetadataGroupViews),
+        new DependencyCategory("Procedure", MetadataObjectKind.Procedure, UiStrings.MetadataGroupProcedures),
+        new DependencyCategory("Function",  MetadataObjectKind.Function,  UiStrings.MetadataGroupFunctions),
+        new DependencyCategory("Package",   MetadataObjectKind.Package,   UiStrings.MetadataGroupPackages),
+        new DependencyCategory("Trigger",   MetadataObjectKind.Trigger,   UiStrings.MetadataGroupTriggers),
+        new DependencyCategory("Exception", MetadataObjectKind.Exception, UiStrings.MetadataGroupExceptions),
+        new DependencyCategory("UDF",       null,                         UiStrings.DependencyCategoryUdfs),
+        new DependencyCategory("Generator", MetadataObjectKind.Generator, UiStrings.MetadataGroupGenerators),
+        new DependencyCategory("Index",     MetadataObjectKind.Index,     UiStrings.MetadataGroupIndexes),
+    };
+
+    internal sealed record DependencyCategory(string ObjectTypeKey, MetadataObjectKind? Kind, string DisplayLabel);
+
+    internal static IReadOnlyList<DependencyGroupNode> BuildDependencyTree(IEnumerable<DependencyInfo> dependencies)
+    {
+        // Dedup by ObjectName within each category — the same object can show up
+        // multiple times when several fields reference it (e.g. one trigger that
+        // touches three columns); the tree should surface it as one leaf.
+        var byType = dependencies
+            .GroupBy(d => d.ObjectType, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<DependencyInfo>)g
+                    .DistinctBy(d => d.ObjectName, StringComparer.Ordinal)
+                    .OrderBy(d => d.ObjectName, StringComparer.Ordinal)
+                    .ToList(),
+                StringComparer.Ordinal);
+
+        var groups = new List<DependencyGroupNode>(CategoryOrder.Count);
+        foreach (var category in CategoryOrder)
+        {
+            var icon = category.Kind is { } k ? MetadataNodeViewModel.IconFor(k) : string.Empty;
+            var iconKey = category.Kind is { } k2 ? MetadataNodeViewModel.ResourceKeyFor(k2) : string.Empty;
+
+            IReadOnlyList<DependencyLeafNode> leaves = Array.Empty<DependencyLeafNode>();
+            if (byType.TryGetValue(category.ObjectTypeKey, out var matched))
+            {
+                leaves = matched
+                    .Select(d => new DependencyLeafNode
+                    {
+                        Dependency = d,
+                        Icon = icon,
+                        IconResourceKey = iconKey,
+                    })
+                    .ToList();
+            }
+
+            groups.Add(new DependencyGroupNode
+            {
+                ObjectType = category.DisplayLabel,
+                Children = leaves,
+                Icon = icon,
+                IconResourceKey = iconKey,
+            });
+        }
+        return groups;
+    }
 
     // Filtered views over Constraints, one per constraint kind. Plain get-only
     // properties (not [ObservableProperty]) per spec; refresh is driven by
@@ -206,6 +326,21 @@ public partial class TableDetailTabViewModel : ViewModelBase
                     var indexes = await _reader.GetIndexesAsync(TableName, cancellationToken).ConfigureAwait(true);
                     Indexes.Clear();
                     foreach (var i in indexes) Indexes.Add(i);
+                });
+
+            await SafeLoadAsync(
+                async () =>
+                {
+                    var (dependsOn, dependedOnBy) = await _reader.GetDependenciesAsync(TableName, cancellationToken).ConfigureAwait(true);
+                    DependsOn.Clear();
+                    foreach (var d in dependsOn) DependsOn.Add(d);
+                    DependedOnBy.Clear();
+                    foreach (var d in dependedOnBy) DependedOnBy.Add(d);
+
+                    DependsOnTree.Clear();
+                    foreach (var g in BuildDependencyTree(dependsOn)) DependsOnTree.Add(g);
+                    DependedOnByTree.Clear();
+                    foreach (var g in BuildDependencyTree(dependedOnBy)) DependedOnByTree.Add(g);
                 });
 
             await SafeLoadAsync(

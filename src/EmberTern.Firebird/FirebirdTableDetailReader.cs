@@ -235,6 +235,83 @@ public sealed class FirebirdTableDetailReader
         }
     }
 
+    public async Task<(IReadOnlyList<DependencyInfo> DependsOn, IReadOnlyList<DependencyInfo> DependedOnBy)> GetDependenciesAsync(
+        string tableName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(tableName))
+        {
+            return (Array.Empty<DependencyInfo>(), Array.Empty<DependencyInfo>());
+        }
+
+        var connection = _connectionService.RequireOpenConnection();
+        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var dependsOn = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = DependsOnSql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = _transactionService?.ActiveTransaction;
+                // Bind each distinct parameter name — see DependsOnSql comment
+                // for why we don't reuse @tableName across branches.
+                cmd.Parameters.AddWithValue("@tableName", tableName);
+                cmd.Parameters.AddWithValue("@t2", tableName);
+                cmd.Parameters.AddWithValue("@t3", tableName);
+                cmd.Parameters.AddWithValue("@t4", tableName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    // Column order: (OBJ_NAME, FIELD_NAME, OBJ_TYPE).
+                    dependsOn.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        FieldName = reader.IsDBNull(1) ? null : reader.GetString(1).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2)),
+                    });
+                }
+            }
+
+            var dependedOnBy = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = DependedOnBySql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = _transactionService?.ActiveTransaction;
+                cmd.Parameters.AddWithValue("@tableName", tableName);
+                cmd.Parameters.AddWithValue("@t2", tableName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    // Column order: (DEPENDENT_NAME, FIELD_NAME, DEPENDENT_TYPE).
+                    dependedOnBy.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        FieldName = reader.IsDBNull(1) ? null : reader.GetString(1).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2)),
+                    });
+                }
+            }
+
+            // Related Tables — sourced ONLY from FK constraints. Each row from
+            // these queries is appended as a Table-typed dependency so the VM's
+            // categoriser puts it in the Tables group like any other entry.
+            await AppendFkResultsAsync(connection, FkOutgoingSql, tableName, dependsOn, cancellationToken).ConfigureAwait(false);
+            await AppendFkResultsAsync(connection, FkIncomingSql, tableName, dependedOnBy, cancellationToken).ConfigureAwait(false);
+
+            return (dependsOn, dependedOnBy);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read dependencies for {tableName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            _connectionService.CommandLock.Release();
+        }
+    }
+
     /// <summary>
     /// Returns up to <paramref name="limit"/> rows from the table — preview only,
     /// not the user's "Execute query" path. Attaches to the user's working tx
@@ -300,6 +377,33 @@ public sealed class FirebirdTableDetailReader
         }
     }
 
+    private async Task AppendFkResultsAsync(
+        FbConnection connection,
+        string sql,
+        string tableName,
+        List<DependencyInfo> target,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.CommandTimeout = 0;
+        cmd.Transaction = _transactionService?.ActiveTransaction;
+        cmd.Parameters.AddWithValue("@tableName", tableName);
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (reader.IsDBNull(0)) continue;
+            var name = reader.GetString(0).Trim();
+            if (name.Length == 0) continue;
+            target.Add(new DependencyInfo
+            {
+                ObjectName = name,
+                FieldName = null,
+                ObjectType = "Table",
+            });
+        }
+    }
+
     // Internal so tests can verify mapping from raw catalog strings without a live FB.
     internal static ConstraintInfo BuildConstraintInfo(
         string? name,
@@ -347,6 +451,158 @@ public sealed class FirebirdTableDetailReader
         if (trimmed.StartsWith("RDB$", StringComparison.Ordinal)) return null;
         return trimmed;
     }
+
+    // DependsOn — what this table uses. Reproduces IBExpert's coverage as four
+    // UNION ALL branches, but skips IBExpert's broken self-join on RDB$RELATIONS
+    // (which causes 365k natural-scan reads). Column projection is identical
+    // across branches: (name, field_name, type) so the reader keeps one shape.
+    //   1) User-defined domains the table references via RDB$RELATION_FIELDS.
+    //      RDB$<n> anonymous backing domains for inline types are excluded.
+    //      Type is hardcoded to 9 ("Domain").
+    //   2) Direct RDB$DEPENDENCIES rows where this table is the dependent
+    //      (computed cols, defaults, check expressions referencing other
+    //      objects). Filtered to dependent-type 0 (relation) not inside a
+    //      package. The depended-on side's real type rides along.
+    //   3) Same as (2) but for rows inside a package — surfaced as type 18
+    //      ("Package") so they land in the Packages category.
+    //   4) Indirect via domain: when a domain (DEPENDENT_TYPE = 3) depends on
+    //      something, every relation whose field uses that domain inherits the
+    //      dependency. Inner-join RDB$RELATION_FIELDS to find this table's
+    //      domain-mediated upstream targets.
+    // Each branch uses a distinct parameter name (@tableName / @t2 / @t3 / @t4)
+    // so the FB driver doesn't have to do multi-reference name resolution —
+    // empirically that path drops bindings on branches past the first INNER
+    // JOIN, leaving indirect-via-domain rows behind.
+    //
+    // Every branch carries `RDB$DEPENDED_ON_TYPE <> 0` so Relation-typed rows
+    // (Tables AND Views) NEVER come from this catalog. Tables are sourced
+    // exclusively from the FK queries (see FkOutgoingSql / FkIncomingSql);
+    // Views still flow through RDB$DEPENDENCIES, but only via the dedicated
+    // VIEW_BLR-gated branch in DependedOnBySql.
+    internal const string DependsOnSql =
+        "SELECT DISTINCT " +
+        "    CAST(TRIM(rf.RDB$FIELD_SOURCE) AS VARCHAR(64)) AS OBJ_NAME, " +
+        "    CAST(NULL AS VARCHAR(64)) AS FIELD_NAME, " +
+        "    CAST(9 AS INTEGER) AS OBJ_TYPE " +
+        "FROM RDB$RELATION_FIELDS rf " +
+        "WHERE TRIM(rf.RDB$RELATION_NAME) = @tableName " +
+        "  AND rf.RDB$FIELD_SOURCE NOT STARTING WITH 'RDB$' " +
+        "UNION ALL " +
+        "SELECT DISTINCT " +
+        "    CAST(TRIM(d.RDB$DEPENDED_ON_NAME) AS VARCHAR(64)), " +
+        "    CAST(TRIM(d.RDB$FIELD_NAME) AS VARCHAR(64)), " +
+        "    CAST(d.RDB$DEPENDED_ON_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDENT_NAME) = @t2 " +
+        "  AND d.RDB$DEPENDENT_TYPE = 0 " +
+        "  AND d.RDB$PACKAGE_NAME IS NULL " +
+        "  AND d.RDB$DEPENDED_ON_TYPE <> 0 " +
+        "UNION ALL " +
+        "SELECT DISTINCT " +
+        "    CAST(TRIM(d.RDB$PACKAGE_NAME) AS VARCHAR(64)), " +
+        "    CAST(TRIM(d.RDB$FIELD_NAME) AS VARCHAR(64)), " +
+        "    CAST(18 AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDENT_NAME) = @t3 " +
+        "  AND d.RDB$DEPENDENT_TYPE = 0 " +
+        "  AND d.RDB$PACKAGE_NAME IS NOT NULL " +
+        "UNION ALL " +
+        "SELECT DISTINCT " +
+        "    CAST(TRIM(d.RDB$DEPENDED_ON_NAME) AS VARCHAR(64)), " +
+        "    CAST(TRIM(d.RDB$FIELD_NAME) AS VARCHAR(64)), " +
+        "    CAST(d.RDB$DEPENDED_ON_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "INNER JOIN RDB$RELATION_FIELDS f ON f.RDB$FIELD_SOURCE = d.RDB$DEPENDENT_NAME " +
+        "WHERE d.RDB$DEPENDENT_TYPE = 3 " +
+        "  AND TRIM(f.RDB$RELATION_NAME) = @t4 " +
+        "  AND d.RDB$DEPENDED_ON_TYPE <> 0 " +
+        "ORDER BY 1, 2";
+
+    // DependedOnBy — objects that depend on this table. Two branches:
+    //   1) Direct dependents via RDB$DEPENDENCIES. CHECK_<n> / RDB$<n>
+    //      system-named triggers and DEPENDENT_TYPE=3 anonymous-field rows
+    //      are excluded.
+    //   2) Indirect via domain: relations whose fields use a domain that
+    //      depends on this table — those relations transitively use it too.
+    //      Inner-join RDB$RELATION_FIELDS to find the using relation; left-join
+    //      RDB$RELATIONS to read RDB$VIEW_BLR so we can distinguish Tables
+    //      (type 0) from Views (type 1) without falling back to "Object (3)".
+    //      IBExpert ships a broken cross-join here that scans RDB$RELATIONS
+    //      365k times for a table like NAGL; this version stays on the index.
+    // Branch 1: direct dependents (Procedures / Triggers / Views / etc.).
+    // Branch 2: indirect-via-domain, VIEWS ONLY.
+    // Both branches exclude RDB$DEPENDENT_TYPE = 0 (Relation) — Tables come
+    // exclusively from FkIncomingSql. The CHECK_ / RDB$ exclusion stays scoped
+    // to RDB$DEPENDENT_TYPE = 2 (Trigger) so user procedures / views named
+    // CHECK_<something> (e.g. CHECK_ZAKSIEGWREJVAT) pass through.
+    internal const string DependedOnBySql =
+        "SELECT DISTINCT " +
+        "    CAST(TRIM(d.RDB$DEPENDENT_NAME) AS VARCHAR(64)), " +
+        "    CAST(TRIM(d.RDB$FIELD_NAME) AS VARCHAR(64)), " +
+        "    CAST(d.RDB$DEPENDENT_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE d.RDB$DEPENDED_ON_TYPE = 0 " +
+        "  AND TRIM(d.RDB$DEPENDED_ON_NAME) = @tableName " +
+        "  AND d.RDB$DEPENDENT_TYPE <> 3 " +
+        "  AND d.RDB$DEPENDENT_TYPE <> 0 " +
+        "  AND NOT (d.RDB$DEPENDENT_TYPE = 2 AND TRIM(d.RDB$DEPENDENT_NAME) STARTING WITH 'CHECK_') " +
+        "  AND NOT (d.RDB$DEPENDENT_TYPE = 2 AND TRIM(d.RDB$DEPENDENT_NAME) STARTING WITH 'RDB$') " +
+        "UNION ALL " +
+        "SELECT DISTINCT " +
+        "    CAST(TRIM(f.RDB$RELATION_NAME) AS VARCHAR(64)), " +
+        "    CAST(TRIM(d.RDB$FIELD_NAME) AS VARCHAR(64)), " +
+        "    CAST(1 AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "INNER JOIN RDB$RELATION_FIELDS f ON f.RDB$FIELD_SOURCE = d.RDB$DEPENDENT_NAME " +
+        "INNER JOIN RDB$RELATIONS r ON r.RDB$RELATION_NAME = f.RDB$RELATION_NAME " +
+        "WHERE d.RDB$DEPENDENT_TYPE = 3 " +
+        "  AND TRIM(d.RDB$DEPENDED_ON_NAME) = @t2 " +
+        "  AND r.RDB$VIEW_BLR IS NOT NULL " +
+        "ORDER BY 1, 2";
+
+    // FK queries — the SOLE source of Related Tables, per spec. No indirect
+    // chains, no recursive walks, no trigger / procedure / view / domain /
+    // computed-column derivations. Just plain FOREIGN KEY constraints joined
+    // through RDB$REF_CONSTRAINTS ↔ RDB$RELATION_CONSTRAINTS.
+    internal const string FkOutgoingSql =
+        "SELECT DISTINCT " +
+        "    CAST(TRIM(pk.RDB$RELATION_NAME) AS VARCHAR(64)) AS TARGET_TABLE " +
+        "FROM RDB$REF_CONSTRAINTS rc " +
+        "JOIN RDB$RELATION_CONSTRAINTS fk ON fk.RDB$CONSTRAINT_NAME = rc.RDB$CONSTRAINT_NAME " +
+        "JOIN RDB$RELATION_CONSTRAINTS pk ON pk.RDB$CONSTRAINT_NAME = rc.RDB$CONST_NAME_UQ " +
+        "WHERE TRIM(fk.RDB$RELATION_NAME) = @tableName " +
+        "ORDER BY pk.RDB$RELATION_NAME";
+
+    internal const string FkIncomingSql =
+        "SELECT DISTINCT " +
+        "    CAST(TRIM(fk.RDB$RELATION_NAME) AS VARCHAR(64)) AS REFERENCING_TABLE " +
+        "FROM RDB$REF_CONSTRAINTS rc " +
+        "JOIN RDB$RELATION_CONSTRAINTS fk ON fk.RDB$CONSTRAINT_NAME = rc.RDB$CONSTRAINT_NAME " +
+        "JOIN RDB$RELATION_CONSTRAINTS pk ON pk.RDB$CONSTRAINT_NAME = rc.RDB$CONST_NAME_UQ " +
+        "WHERE TRIM(pk.RDB$RELATION_NAME) = @tableName " +
+        "ORDER BY fk.RDB$RELATION_NAME";
+
+    // RDB$OBJECT_TYPE codes (RDB$DEPENDED_ON_TYPE / RDB$DEPENDENT_TYPE share the
+    // same enum). Unknown codes fall back to "Object (N)".
+    internal static string MapObjectType(int? objectType) => objectType switch
+    {
+        0 => "Table",
+        1 => "View",
+        2 => "Trigger",
+        5 => "Procedure",
+        7 => "Exception",
+        8 => "User",
+        // 9 = RDB$OBJECT_TYPE "Field" in catalog literature, but in our dependency
+        // tree it always represents a domain reference (the DependsOn query
+        // hardcodes 9 for RDB$FIELD_SOURCE rows). Surface it as "Domain".
+        9 => "Domain",
+        10 => "Index",
+        14 => "Generator",
+        15 => "Function",
+        18 => "Package",
+        null => string.Empty,
+        _ => string.Format(CultureInfo.InvariantCulture, "Object ({0})", objectType.Value),
+    };
 
     internal const string ConstraintsSql =
         "SELECT rc.RDB$CONSTRAINT_NAME, rc.RDB$CONSTRAINT_TYPE, " +

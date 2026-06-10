@@ -6,6 +6,7 @@ using Avalonia.Data;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Interactivity;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.ViewModels;
@@ -95,6 +96,15 @@ public partial class TableDetailTabView : UserControl
         if (_ddlEditor.Text != text)
         {
             _ddlEditor.Text = text;
+        }
+    }
+
+    private void OnDependencyNodeDoubleTapped(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: DependencyLeafNode leaf } && _currentVm is not null)
+        {
+            _currentVm.RequestOpen(leaf);
+            e.Handled = true;
         }
     }
 

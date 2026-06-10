@@ -468,4 +468,151 @@ public class FirebirdTableDetailReaderTests
         Assert.Contains("FK_TABLE", sql);
         Assert.Contains("RDB$REF_CONSTRAINTS", sql);
     }
+
+    [Fact]
+    public void DependencyInfo_DefaultsAreSensible()
+    {
+        var d = new DependencyInfo();
+        Assert.Equal(string.Empty, d.ObjectName);
+        Assert.Equal(string.Empty, d.ObjectType);
+        Assert.Null(d.FieldName);
+    }
+
+    [Fact]
+    public void DependencyInfo_InitRoundtripsValues()
+    {
+        var d = new DependencyInfo
+        {
+            ObjectName = "V_USERS",
+            ObjectType = "View",
+            FieldName = "ID",
+        };
+        Assert.Equal("V_USERS", d.ObjectName);
+        Assert.Equal("View", d.ObjectType);
+        Assert.Equal("ID", d.FieldName);
+    }
+
+    [Theory]
+    [InlineData(0, "Table")]
+    [InlineData(1, "View")]
+    [InlineData(2, "Trigger")]
+    [InlineData(5, "Procedure")]
+    [InlineData(7, "Exception")]
+    [InlineData(8, "User")]
+    [InlineData(9, "Domain")]
+    [InlineData(10, "Index")]
+    [InlineData(14, "Generator")]
+    [InlineData(15, "Function")]
+    [InlineData(18, "Package")]
+    public void MapObjectType_KnownCodes(int code, string expected)
+    {
+        Assert.Equal(expected, FirebirdTableDetailReader.MapObjectType(code));
+    }
+
+    [Theory]
+    [InlineData(3, "Object (3)")]
+    [InlineData(99, "Object (99)")]
+    [InlineData(-1, "Object (-1)")]
+    public void MapObjectType_UnknownCodesFallBack(int code, string expected)
+    {
+        Assert.Equal(expected, FirebirdTableDetailReader.MapObjectType(code));
+    }
+
+    [Fact]
+    public void MapObjectType_NullReturnsEmpty()
+    {
+        Assert.Equal(string.Empty, FirebirdTableDetailReader.MapObjectType(null));
+    }
+
+    [Fact]
+    public void DependsOnSql_UnionsRelationFieldsAndDependencies()
+    {
+        // DependsOn = (a) user-defined domains the table references via
+        // RDB$RELATION_FIELDS.RDB$FIELD_SOURCE (type hardcoded to 9 = "Domain"),
+        // UNION ALL with (b) RDB$DEPENDENCIES rows where the table is the
+        // dependent (computed cols, defaults, etc.).
+        var sql = FirebirdTableDetailReader.DependsOnSql;
+        Assert.Contains("RDB$RELATION_FIELDS", sql);
+        Assert.Contains("rf.RDB$FIELD_SOURCE", sql);
+        Assert.Contains("RDB$RELATION_NAME", sql);
+        Assert.Contains("CAST(9 AS INTEGER)", sql);
+        Assert.Contains("UNION ALL", sql);
+        Assert.Contains("RDB$DEPENDENCIES", sql);
+        Assert.Contains("TRIM(d.RDB$DEPENDENT_NAME) = @t2", sql);
+        Assert.Contains("d.RDB$DEPENDED_ON_NAME", sql);
+        Assert.Contains("d.RDB$DEPENDED_ON_TYPE", sql);
+        Assert.Contains("d.RDB$PACKAGE_NAME IS NULL", sql);
+        Assert.Contains("DISTINCT", sql);
+    }
+
+    [Fact]
+    public void DependsOnSql_ExcludesAnonymousBackingDomains()
+    {
+        // The RDB$FIELD_SOURCE branch must filter the RDB$<n> anonymous backing
+        // domains FB synthesizes for inline column types — only user domains
+        // should appear in the "Domains" category.
+        var sql = FirebirdTableDetailReader.DependsOnSql;
+        Assert.Contains("rf.RDB$FIELD_SOURCE NOT STARTING WITH 'RDB$'", sql);
+    }
+
+    [Fact]
+    public void DependsOnSql_ExcludesRelationTypeRows()
+    {
+        // Related Tables come exclusively from FK queries — RDB$DEPENDENCIES
+        // branches must not return type-0 (Relation) rows.
+        var sql = FirebirdTableDetailReader.DependsOnSql;
+        Assert.Contains("d.RDB$DEPENDED_ON_TYPE <> 0", sql);
+    }
+
+    [Fact]
+    public void DependedOnBySql_ExcludesRelationTypeRows()
+    {
+        var sql = FirebirdTableDetailReader.DependedOnBySql;
+        Assert.Contains("d.RDB$DEPENDENT_TYPE <> 0", sql);
+        // Indirect branch keeps Views only via the VIEW_BLR gate.
+        Assert.Contains("r.RDB$VIEW_BLR IS NOT NULL", sql);
+    }
+
+    [Fact]
+    public void FkOutgoingSql_QueriesRefConstraintsOnly()
+    {
+        var sql = FirebirdTableDetailReader.FkOutgoingSql;
+        Assert.Contains("RDB$REF_CONSTRAINTS", sql);
+        Assert.Contains("RDB$RELATION_CONSTRAINTS", sql);
+        Assert.Contains("rc.RDB$CONST_NAME_UQ", sql);
+        Assert.Contains("rc.RDB$CONSTRAINT_NAME", sql);
+        Assert.Contains("TRIM(fk.RDB$RELATION_NAME) = @tableName", sql);
+        Assert.Contains("pk.RDB$RELATION_NAME", sql);
+        Assert.DoesNotContain("RDB$DEPENDENCIES", sql);
+    }
+
+    [Fact]
+    public void FkIncomingSql_QueriesRefConstraintsOnly()
+    {
+        var sql = FirebirdTableDetailReader.FkIncomingSql;
+        Assert.Contains("RDB$REF_CONSTRAINTS", sql);
+        Assert.Contains("RDB$RELATION_CONSTRAINTS", sql);
+        Assert.Contains("rc.RDB$CONST_NAME_UQ", sql);
+        Assert.Contains("rc.RDB$CONSTRAINT_NAME", sql);
+        Assert.Contains("TRIM(pk.RDB$RELATION_NAME) = @tableName", sql);
+        Assert.Contains("fk.RDB$RELATION_NAME", sql);
+        Assert.DoesNotContain("RDB$DEPENDENCIES", sql);
+    }
+
+    [Fact]
+    public void DependedOnBySql_FiltersByDependedOnAndSelectsDependent()
+    {
+        // "Used by" — restricted to dependencies where the depended-on side is
+        // a relation (RDB$DEPENDED_ON_TYPE = 0) named @tableName.
+        // RDB$DEPENDENT_TYPE = 3 (computed field) is excluded as anonymous noise.
+        var sql = FirebirdTableDetailReader.DependedOnBySql;
+        Assert.Contains("RDB$DEPENDENCIES", sql);
+        Assert.Contains("d.RDB$DEPENDED_ON_TYPE = 0", sql);
+        Assert.Contains("TRIM(d.RDB$DEPENDED_ON_NAME) = @tableName", sql);
+        Assert.Contains("d.RDB$DEPENDENT_TYPE <> 3", sql);
+        Assert.Contains("d.RDB$DEPENDENT_NAME", sql);
+        Assert.Contains("d.RDB$DEPENDENT_TYPE", sql);
+        Assert.Contains("d.RDB$FIELD_NAME", sql);
+        Assert.Contains("DISTINCT", sql);
+    }
 }

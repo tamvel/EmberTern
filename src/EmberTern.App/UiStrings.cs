@@ -141,6 +141,13 @@ internal static class UiStrings
     public const string TableDetailTabFields = "Pola";
     public const string TableDetailTabConstraints = "Ograniczenia";
     public const string TableDetailTabIndexes = "Indeksy";
+    public const string TableDetailTabDependencies = "Zależności";
+    public const string TableDetailDependsOnHeader = "Depends on";
+    public const string TableDetailDependedOnByHeader = "Used by";
+    public const string DependencyCategoryUdfs = "UDFs";
+    public const string TableDetailDependencyType = "Type";
+    public const string TableDetailDependencyName = "Name";
+    public const string TableDetailDependencyField = "Field";
     public const string TableDetailTabData = "Dane";
     public const string TableDetailTabDescription = "Opis";
     public const string TableDetailTabDdl = "DDL";

@@ -61,6 +61,13 @@ public sealed class IndexInfo
         => string.Equals(IndexType, "FOREIGN KEY", StringComparison.OrdinalIgnoreCase);
 }
 
+public sealed record DependencyInfo
+{
+    public string ObjectName { get; init; } = string.Empty;
+    public string ObjectType { get; init; } = string.Empty;
+    public string? FieldName { get; init; }
+}
+
 public sealed class ConstraintInfo
 {
     public string Name { get; init; } = string.Empty;

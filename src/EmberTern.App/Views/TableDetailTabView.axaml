@@ -9,6 +9,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="EmberTern.App.Views.TableDetailTabView"
+             x:Name="RootControl"
              x:DataType="vm:TableDetailTabViewModel"
              Background="{DynamicResource BackgroundBrush}">
 
@@ -379,6 +380,145 @@
             </DataGridTemplateColumn>
           </DataGrid.Columns>
         </DataGrid>
+      </TabItem>
+
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabDependencies}">
+        <Grid ColumnDefinitions="*,4,*">
+          <Grid Grid.Column="0" RowDefinitions="Auto,*">
+            <TextBlock Grid.Row="0"
+                       Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
+                       FontSize="11"
+                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                       Margin="0,4,0,4" />
+            <!-- "Used by" (left) — objects that depend on this table
+                 (views, triggers, procedures, functions, etc.). IBExpert layout. -->
+            <TreeView Grid.Row="1"
+                      ItemsSource="{Binding DependedOnByTree}"
+                      Background="{DynamicResource BackgroundBrush}">
+              <TreeView.DataTemplates>
+                <TreeDataTemplate DataType="vm:DependencyGroupNode"
+                                  ItemsSource="{Binding Children}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <TextBlock Text="{Binding Icon}"
+                               FontSize="12"
+                               Width="14"
+                               TextAlignment="Center"
+                               VerticalAlignment="Center">
+                      <TextBlock.Foreground>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="IconResourceKey" />
+                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </TextBlock.Foreground>
+                    </TextBlock>
+                    <TextBlock Text="{Binding Header}"
+                               FontSize="11"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                </TreeDataTemplate>
+                <DataTemplate DataType="vm:DependencyLeafNode">
+                  <Border HorizontalAlignment="Stretch"
+                          Background="Transparent"
+                          DoubleTapped="OnDependencyNodeDoubleTapped">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <TextBlock Text="{Binding Icon}"
+                                 FontSize="12"
+                                 Width="14"
+                                 TextAlignment="Center"
+                                 VerticalAlignment="Center">
+                        <TextBlock.Foreground>
+                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                            <Binding Path="IconResourceKey" />
+                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                          </MultiBinding>
+                        </TextBlock.Foreground>
+                      </TextBlock>
+                      <TextBlock Text="{Binding ObjectName}"
+                                 FontSize="11"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding FieldName}"
+                                 FontSize="10"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </TreeView.DataTemplates>
+            </TreeView>
+          </Grid>
+
+          <GridSplitter Grid.Column="1"
+                        Width="4"
+                        Background="{DynamicResource BorderBrush}"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch" />
+
+          <Grid Grid.Column="2" RowDefinitions="Auto,*">
+            <TextBlock Grid.Row="0"
+                       Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
+                       FontSize="11"
+                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                       Margin="0,4,0,4" />
+            <!-- "Depends on" (right) — what this table uses. Domains via field
+                 types, plus RDB$DEPENDENCIES rows where the table is the
+                 dependent (computed cols, defaults, check expressions). -->
+            <TreeView Grid.Row="1"
+                      ItemsSource="{Binding DependsOnTree}"
+                      Background="{DynamicResource BackgroundBrush}">
+              <TreeView.DataTemplates>
+                <TreeDataTemplate DataType="vm:DependencyGroupNode"
+                                  ItemsSource="{Binding Children}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <TextBlock Text="{Binding Icon}"
+                               FontSize="12"
+                               Width="14"
+                               TextAlignment="Center"
+                               VerticalAlignment="Center">
+                      <TextBlock.Foreground>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="IconResourceKey" />
+                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </TextBlock.Foreground>
+                    </TextBlock>
+                    <TextBlock Text="{Binding Header}"
+                               FontSize="11"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                </TreeDataTemplate>
+                <DataTemplate DataType="vm:DependencyLeafNode">
+                  <Border HorizontalAlignment="Stretch"
+                          Background="Transparent"
+                          DoubleTapped="OnDependencyNodeDoubleTapped">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <TextBlock Text="{Binding Icon}"
+                                 FontSize="12"
+                                 Width="14"
+                                 TextAlignment="Center"
+                                 VerticalAlignment="Center">
+                        <TextBlock.Foreground>
+                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                            <Binding Path="IconResourceKey" />
+                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                          </MultiBinding>
+                        </TextBlock.Foreground>
+                      </TextBlock>
+                      <TextBlock Text="{Binding ObjectName}"
+                                 FontSize="11"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding FieldName}"
+                                 FontSize="10"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </TreeView.DataTemplates>
+            </TreeView>
+          </Grid>
+        </Grid>
       </TabItem>
 
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabData}">

@@ -914,6 +914,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 {
                     DdlText = tab.DdlText ?? string.Empty,
                 };
+                detail.OpenObjectRequested += OnOpenDdlRequested;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateTableDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
@@ -1301,6 +1302,7 @@ public partial class MainWindowViewModel : ViewModelBase
             if (obj.Kind == MetadataObjectKind.Table)
             {
                 var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader);
+                detail.OpenObjectRequested += OnOpenDdlRequested;
                 var newTab = WorkspaceTabViewModel.CreateTableDetail(this, obj, detail, _service.ActiveProfile?.Id);
                 WorkspaceTabs.Add(newTab);
                 // SelectTab kicks off EnsureLoadedAsync as a side-effect; we await
