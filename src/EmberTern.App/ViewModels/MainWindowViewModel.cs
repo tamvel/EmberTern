@@ -30,6 +30,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdMetadataReader _metadataReader;
     private readonly FirebirdDdlReader _ddlReader;
     private readonly FirebirdTableDetailReader _tableDetailReader;
+    private readonly FirebirdDataEditor _dataEditor;
     private CancellationTokenSource? _executionCts;
     private TransactionState _previousTransactionState = TransactionState.Idle;
     // Per-connection tabs. Key = ConnectionProfile.Id. Populated on disconnect/switch
@@ -76,6 +77,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _metadataReader = new FirebirdMetadataReader(_service, _transactionService);
         _ddlReader = new FirebirdDdlReader(_service, _transactionService);
         _tableDetailReader = new FirebirdTableDetailReader(_service, _transactionService);
+        _dataEditor = new FirebirdDataEditor(_service, _transactionService);
         Metadata = new MetadataExplorerViewModel(_service, _metadataReader);
         Metadata.OpenDdlRequested += OnOpenDdlRequested;
         Metadata.CopyNameRequested += OnCopyNameRequested;
@@ -130,7 +132,9 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsQueryTabActive))]
     [NotifyPropertyChangedFor(nameof(IsDdlTabActive))]
     [NotifyPropertyChangedFor(nameof(IsTableDetailTabActive))]
+    [NotifyPropertyChangedFor(nameof(IsDataTabActive))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
+    [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowQueryPanel))]
     [NotifyPropertyChangedFor(nameof(ActiveDdlText))]
     [NotifyPropertyChangedFor(nameof(ActiveTableDetail))]
@@ -142,11 +146,21 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ClearActiveEditorCommand))]
     [NotifyCanExecuteChangedFor(nameof(CloseActiveTabCommand))]
     [NotifyCanExecuteChangedFor(nameof(FormatSqlCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshDataPreviewCommand))]
     private WorkspaceTabViewModel? _selectedWorkspaceTab;
 
     public bool IsQueryTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Query };
     public bool IsDdlTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl };
     public bool IsTableDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TableDetail };
+    // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
+    // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
+    // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
+    // — see HookTableDetailEvents.
+    public bool IsDataTabActive
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TableDetail, TableDetail: { IsDataSubTabActive: true } };
+    // The Dane sub-tab reuses Commit / Rollback exactly like the Query tab —
+    // both share the user's working transaction, so the same buttons make sense.
+    public bool ShowTransactionButtons => IsQueryTabActive || IsDataTabActive;
     // Close-tab toolbar button targets *other* tabs (DDL or TableDetail); the
     // anchored Query tab is never closable so the button hides when it's active.
     public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail };
@@ -910,11 +924,12 @@ public partial class MainWindowViewModel : ViewModelBase
                 // restored-active tab loads automatically and inactive tabs load
                 // lazily when the user clicks them.
                 var obj = new MetadataObject(tab.ObjectName, detailKind);
-                var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader)
+                var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader, _dataEditor)
                 {
                     DdlText = tab.DdlText ?? string.Empty,
                 };
                 detail.OpenObjectRequested += OnOpenDdlRequested;
+                detail.ConfirmationRequested += RequestConfirmAsync;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateTableDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
@@ -1301,8 +1316,9 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             if (obj.Kind == MetadataObjectKind.Table)
             {
-                var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader);
+                var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader, _dataEditor);
                 detail.OpenObjectRequested += OnOpenDdlRequested;
+                detail.ConfirmationRequested += RequestConfirmAsync;
                 var newTab = WorkspaceTabViewModel.CreateTableDetail(this, obj, detail, _service.ActiveProfile?.Id);
                 WorkspaceTabs.Add(newTab);
                 // SelectTab kicks off EnsureLoadedAsync as a side-effect; we await
@@ -1592,6 +1608,47 @@ public partial class MainWindowViewModel : ViewModelBase
         if (SelectedSavedQuery is { } sq && !ReferenceEquals(sq.SqlText, value))
         {
             sq.SqlText = value;
+        }
+    }
+
+    // Bridge: TableDetailTabViewModel.IsDataSubTabActive → MainWindowViewModel.IsDataTabActive.
+    // We subscribe to PropertyChanged on the inner VM so changing sub-tabs
+    // inside a TableDetail tab flips the toolbar without the user having to
+    // switch outer tabs first.
+    private TableDetailTabViewModel? _trackedTableDetail;
+
+    partial void OnSelectedWorkspaceTabChanged(WorkspaceTabViewModel? oldValue, WorkspaceTabViewModel? newValue)
+    {
+        if (_trackedTableDetail is not null)
+        {
+            _trackedTableDetail.PropertyChanged -= OnTableDetailPropertyChanged;
+            _trackedTableDetail = null;
+        }
+        if (newValue is { Kind: WorkspaceTabKind.TableDetail, TableDetail: { } td })
+        {
+            _trackedTableDetail = td;
+            _trackedTableDetail.PropertyChanged += OnTableDetailPropertyChanged;
+        }
+    }
+
+    private void OnTableDetailPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TableDetailTabViewModel.IsDataSubTabActive))
+        {
+            OnPropertyChanged(nameof(IsDataTabActive));
+            OnPropertyChanged(nameof(ShowTransactionButtons));
+            RefreshDataPreviewCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public bool CanRefreshDataPreview => IsDataTabActive;
+
+    [RelayCommand(CanExecute = nameof(CanRefreshDataPreview))]
+    private async Task RefreshDataPreviewAsync()
+    {
+        if (SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TableDetail, TableDetail: { } td })
+        {
+            await td.ReloadDataPreviewAsync().ConfigureAwait(true);
         }
     }
 

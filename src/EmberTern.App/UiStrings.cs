@@ -107,6 +107,8 @@ internal static class UiStrings
     public const string ToolbarToggleQueryPanelTooltip = "Show / hide saved queries panel";
     public const string ToolbarFormatSqlIcon = "⎄";
     public const string ToolbarFormatSqlTooltip = "Format SQL (Alt+F)";
+    public const string ToolbarRefreshDataIcon = "↺";
+    public const string ToolbarRefreshDataTooltip = "Refresh data preview";
 
     public const string QueryPanelHeader = "Saved Queries";
     public const string QueryPanelEmptyHint = "No saved queries yet.";
@@ -193,9 +195,36 @@ internal static class UiStrings
     public const string TableDetailConstraintSortAscending = "Ascending";
     public const string TableDetailConstraintSortDescending = "Descending";
 
-    public const string TableDetailDataPreviewHintFormat = "Showing first {0} rows";
+    public const string TableDetailDataPagedHintFormat = "Page {0} · Showing {1} rows";
+    public const string TableDetailDataPreviewSortedByFormat = " · sorted by {0} {1}";
+
+    public const string TableDetailPaginationFirstIcon = "⏮";
+    public const string TableDetailPaginationPreviousIcon = "◀";
+    public const string TableDetailPaginationNextIcon = "▶";
+    public const string TableDetailPaginationLastIcon = "⏭";
+    public const string TableDetailPaginationFirstTooltip = "First page";
+    public const string TableDetailPaginationPreviousTooltip = "Previous page";
+    public const string TableDetailPaginationNextTooltip = "Next page";
+    public const string TableDetailPaginationLastTooltip = "Last page";
+    public const string TableDetailDataPreviewNullPlaceholder = "<null>";
     public const string TableDetailDataLoadingHint = "Loading data…";
     public const string TableDetailDescriptionEmpty = "No description.";
+
+    public const string DataEditAddRowIcon = "+";
+    public const string DataEditAddRowTooltip = "Add new row";
+    public const string DataEditDeleteRowIcon = "−";
+    public const string DataEditDeleteRowTooltip = "Delete selected row";
+    public const string DataEditDeleteConfirmTitle = "Delete row";
+    public const string DataEditDeleteConfirmMessage = "Delete the selected row? This becomes part of the current transaction — use Rollback to revert.";
+    public const string DataEditDeleteConfirmYes = "Delete";
+    public const string DataEditNoPrimaryKeyHint = "Table has no primary key — only INSERT is available.";
+    public const string DataEditNotConnectedHint = "Connect to a database to edit data.";
+
+    public const string BlobEditorTitle = "Edit BLOB";
+    public const string BlobEditorBinaryPlaceholder = "Binary BLOB ({0} bytes) — cannot be edited as text.";
+    public const string BlobEditorButtonIcon = "…";
+    public const string BlobEditorButtonTooltip = "Edit BLOB content";
+    public const string BlobEditorOk = "OK";
 
     public const string FolderNewTooltip = "Nowy katalog";
     public const string FolderNewIcon = "📁";

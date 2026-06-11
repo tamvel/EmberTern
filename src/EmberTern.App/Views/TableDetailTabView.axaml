@@ -28,8 +28,21 @@
     <Style Selector="DataGridRow">
       <Setter Property="Height" Value="22" />
     </Style>
+    <!-- Dane grid lives in always-editable mode; the in-cell TextBox needs more
+         vertical space than the read-only Pola / Indeksy / Ograniczenia grids.
+         Style ordering: this declaration follows the global DataGridRow rule,
+         so for descendants of a DataGrid with class "data-edit" it wins. -->
+    <Style Selector="DataGrid.data-edit DataGridRow">
+      <Setter Property="Height" Value="32" />
+    </Style>
     <Style Selector="DataGridCell">
       <Setter Property="Padding" Value="6 2" />
+    </Style>
+    <!-- Applied per-cell by PopulateDataGrid when the underlying value is null.
+         DynamicResource handles theme switching automatically. -->
+    <Style Selector="TextBlock.null-cell">
+      <Setter Property="FontStyle" Value="Italic" />
+      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
     </Style>
   </UserControl.Styles>
 
@@ -522,26 +535,50 @@
       </TabItem>
 
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabData}">
-        <Grid RowDefinitions="Auto,*">
-          <TextBlock Grid.Row="0"
+        <Grid RowDefinitions="Auto,Auto,Auto,*">
+          <!-- Inline edit hint row. Add/Delete buttons + pagination controls
+               live in the main app toolbar (MainWindow.axaml), gated on
+               IsDataTabActive — keeping them in a single chrome row matches
+               the existing Execute/Commit/Refresh affordances. -->
+          <StackPanel Grid.Row="0"
+                      Orientation="Horizontal"
+                      Spacing="4"
+                      Margin="8,4">
+            <TextBlock Text="{Binding EditModeHint}"
+                       Classes="subtle"
+                       FontSize="11"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding EditModeHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </StackPanel>
+          <TextBlock Grid.Row="1"
+                     Text="{Binding EditStatusMessage}"
+                     Classes="subtle error"
+                     FontSize="11"
+                     Margin="8,0,8,4"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding HasEditStatusMessage}" />
+          <TextBlock Grid.Row="2"
                      Text="{Binding DataPreviewHint}"
                      Classes="subtle"
                      FontSize="11"
                      Margin="8,4" />
-          <TextBlock Grid.Row="1"
+          <TextBlock Grid.Row="3"
                      Text="{Binding DataError}"
                      Classes="subtle error"
                      FontSize="11"
                      Margin="8,4"
                      TextWrapping="Wrap"
                      IsVisible="{Binding ShowDataError}" />
-          <DataGrid Grid.Row="1"
+          <DataGrid Grid.Row="3"
                     x:Name="DataPreviewGrid"
-                    IsReadOnly="True"
+                    Classes="data-edit"
+                    ItemsSource="{Binding EditableRows}"
+                    SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                    IsReadOnly="{Binding IsDataReadOnly}"
                     FontSize="11"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
-                    CanUserSortColumns="False"
+                    CanUserSortColumns="True"
                     CanUserResizeColumns="True"
                     CanUserReorderColumns="False"
                     ColumnWidth="Auto"

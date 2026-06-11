@@ -615,4 +615,72 @@ public class FirebirdTableDetailReaderTests
         Assert.Contains("d.RDB$FIELD_NAME", sql);
         Assert.Contains("DISTINCT", sql);
     }
+
+    [Fact]
+    public void BuildDataPreviewSql_FirstPage_EmitsRowsOneToPageSize()
+    {
+        var sql = FirebirdTableDetailReader.BuildDataPreviewSql("NAGL", 1, 200, null);
+        Assert.Equal("SELECT * FROM \"NAGL\" ROWS 1 TO 200", sql);
+    }
+
+    [Fact]
+    public void BuildDataPreviewSql_OrderBy_AppendsBeforeRows()
+    {
+        // ORDER BY must precede ROWS in Firebird SQL grammar.
+        var sql = FirebirdTableDetailReader.BuildDataPreviewSql("NAGL", 1, 200, "\"ID\" ASC");
+        Assert.Equal("SELECT * FROM \"NAGL\" ORDER BY \"ID\" ASC ROWS 1 TO 200", sql);
+    }
+
+    [Fact]
+    public void BuildDataPreviewSql_WhitespaceOrderBy_DoesNotAppend()
+    {
+        var sql = FirebirdTableDetailReader.BuildDataPreviewSql("T", 1, 10, "   ");
+        Assert.Equal("SELECT * FROM \"T\" ROWS 1 TO 10", sql);
+    }
+
+    [Fact]
+    public void BuildDataPreviewSql_QuotedTableName_DoublesInternalQuotes()
+    {
+        // Defence against pathological table names with embedded quotes —
+        // matches the existing identifier-quoting convention used elsewhere
+        // (e.g. FirebirdDdlReader.Quote).
+        var sql = FirebirdTableDetailReader.BuildDataPreviewSql("A\"B", 1, 5, null);
+        Assert.Equal("SELECT * FROM \"A\"\"B\" ROWS 1 TO 5", sql);
+    }
+
+    [Fact]
+    public void BuildDataPreviewSql_TrimsOrderBy()
+    {
+        // Caller may pass slightly padded ORDER BY clauses; we don't want a
+        // double space in the emitted SQL.
+        var sql = FirebirdTableDetailReader.BuildDataPreviewSql("T", 1, 5, "  \"ID\" DESC  ");
+        Assert.Equal("SELECT * FROM \"T\" ORDER BY \"ID\" DESC ROWS 1 TO 5", sql);
+    }
+
+    [Theory]
+    [InlineData(1, 200, 1, 200)]
+    [InlineData(2, 200, 201, 400)]
+    [InlineData(3, 50, 101, 150)]
+    [InlineData(0, 100, 1, 100)]      // page < 1 clamps to 1
+    [InlineData(-5, 100, 1, 100)]     // negative also clamps to 1
+    public void ComputeRowRange_ReturnsOneBasedInclusive(int page, int pageSize, int expectedStart, int expectedEnd)
+    {
+        var (start, end) = FirebirdTableDetailReader.ComputeRowRange(page, pageSize);
+        Assert.Equal(expectedStart, start);
+        Assert.Equal(expectedEnd, end);
+    }
+
+    [Fact]
+    public void BuildRowCountSql_WrapsTableInFirstCappedDerivedTable()
+    {
+        var sql = FirebirdTableDetailReader.BuildRowCountSql("NAGL", 50000);
+        Assert.Equal("SELECT COUNT(*) FROM (SELECT FIRST 50000 1 AS X FROM \"NAGL\") sub", sql);
+    }
+
+    [Fact]
+    public void BuildRowCountSql_QuotedTableName_DoublesInternalQuotes()
+    {
+        var sql = FirebirdTableDetailReader.BuildRowCountSql("A\"B", 50000);
+        Assert.Equal("SELECT COUNT(*) FROM (SELECT FIRST 50000 1 AS X FROM \"A\"\"B\") sub", sql);
+    }
 }

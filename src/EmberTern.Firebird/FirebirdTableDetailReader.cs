@@ -313,13 +313,31 @@ public sealed class FirebirdTableDetailReader
     }
 
     /// <summary>
-    /// Returns up to <paramref name="limit"/> rows from the table — preview only,
-    /// not the user's "Execute query" path. Attaches to the user's working tx
-    /// when active; otherwise the driver runs the SELECT in an implicit read tx.
+    /// Returns one page worth of rows from the table — preview only, not the
+    /// user's "Execute query" path. Attaches to the user's working tx when
+    /// active; otherwise the driver runs the SELECT in an implicit read tx.
+    ///
+    /// <paramref name="page"/> is 1-based; <paramref name="pageSize"/> is the
+    /// row cap. The query uses Firebird's <c>ROWS m TO n</c> syntax (2.5+).
+    /// </summary>
+    public Task<QueryResult> GetDataPreviewAsync(
+        string tableName,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+        => GetDataPreviewAsync(tableName, page, pageSize, null, cancellationToken);
+
+    /// <summary>
+    /// Variant that appends an <c>ORDER BY</c> clause. The <paramref name="orderBy"/>
+    /// string is inserted verbatim after the FROM — caller is responsible for
+    /// quoting identifiers (the VM wraps column names in <c>"..."</c> per Firebird
+    /// convention to handle reserved words).
     /// </summary>
     public async Task<QueryResult> GetDataPreviewAsync(
         string tableName,
-        int limit,
+        int page,
+        int pageSize,
+        string? orderBy,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(tableName))
@@ -327,15 +345,15 @@ public sealed class FirebirdTableDetailReader
             return new QueryResult();
         }
 
+        var (startRow, endRow) = ComputeRowRange(page, pageSize);
+
         var connection = _connectionService.RequireOpenConnection();
         var sw = Stopwatch.StartNew();
         await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
-            // Quote the identifier so case-sensitive / reserved-word table names
-            // still work. Internal quotes get doubled per SQL convention.
-            cmd.CommandText = $"SELECT FIRST {limit} * FROM \"{tableName.Replace("\"", "\"\"")}\"";
+            cmd.CommandText = BuildDataPreviewSql(tableName, startRow, endRow, orderBy);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _transactionService?.ActiveTransaction;
 
@@ -364,7 +382,7 @@ public sealed class FirebirdTableDetailReader
                 Columns = columns,
                 Rows = rows,
                 Elapsed = sw.Elapsed,
-                Truncated = rows.Count >= limit,
+                Truncated = rows.Count >= pageSize,
             };
         }
         catch (FbException ex)
@@ -375,6 +393,59 @@ public sealed class FirebirdTableDetailReader
         {
             _connectionService.CommandLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Returns the row count of the table capped at <paramref name="cap"/>.
+    /// Implemented as <c>SELECT COUNT(*) FROM (SELECT FIRST cap 1 AS X ...)</c>
+    /// so the engine doesn't scan the whole table on big tables — once it has
+    /// counted <paramref name="cap"/> rows it stops. A return value equal to
+    /// <paramref name="cap"/> means "≥ cap rows"; less means exact count.
+    /// </summary>
+    public async Task<int> GetRowCountAsync(
+        string tableName,
+        int cap,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(tableName)) return 0;
+        if (cap <= 0) return 0;
+
+        var connection = _connectionService.RequireOpenConnection();
+        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = BuildRowCountSql(tableName, cap);
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = _transactionService?.ActiveTransaction;
+            var raw = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            return raw switch
+            {
+                null => 0,
+                int i => i,
+                long l => (int)Math.Min(l, int.MaxValue),
+                _ => Convert.ToInt32(raw, CultureInfo.InvariantCulture),
+            };
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not count rows for {tableName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            _connectionService.CommandLock.Release();
+        }
+    }
+
+    // Page math kept internal + static so tests pin the boundary behavior.
+    // page is 1-based; pageSize > 0. Clamps below 1 to (1, pageSize).
+    internal static (int StartRow, int EndRow) ComputeRowRange(int page, int pageSize)
+    {
+        if (pageSize <= 0) pageSize = 1;
+        if (page < 1) page = 1;
+        var start = (page - 1) * pageSize + 1;
+        var end = page * pageSize;
+        return (start, end);
     }
 
     private async Task AppendFkResultsAsync(
@@ -402,6 +473,36 @@ public sealed class FirebirdTableDetailReader
                 ObjectType = "Table",
             });
         }
+    }
+
+    // Internal so tests can pin the SQL shape — quoted identifier, optional
+    // ORDER BY between FROM and ROWS, and the 1-based inclusive ROWS m TO n
+    // window. Embedded as literals (not parameters) because FB 2.5 doesn't
+    // bind parameters in ROWS clauses; safe with integers.
+    internal static string BuildDataPreviewSql(string tableName, int startRow, int endRow, string? orderBy)
+    {
+        var quoted = tableName.Replace("\"", "\"\"");
+        var sb = new System.Text.StringBuilder();
+        sb.AppendFormat(CultureInfo.InvariantCulture, "SELECT * FROM \"{0}\"", quoted);
+        if (!string.IsNullOrWhiteSpace(orderBy))
+        {
+            sb.Append(" ORDER BY ").Append(orderBy.Trim());
+        }
+        sb.AppendFormat(CultureInfo.InvariantCulture, " ROWS {0} TO {1}", startRow, endRow);
+        return sb.ToString();
+    }
+
+    // SELECT COUNT(*) FROM (SELECT FIRST {cap} 1 AS X FROM "T") — bounded
+    // row counter. Without the inner FIRST {cap}, COUNT(*) on a 50M-row
+    // table is a sequential scan; with it, the engine stops after cap rows.
+    internal static string BuildRowCountSql(string tableName, int cap)
+    {
+        var quoted = tableName.Replace("\"", "\"\"");
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "SELECT COUNT(*) FROM (SELECT FIRST {0} 1 AS X FROM \"{1}\") sub",
+            cap,
+            quoted);
     }
 
     // Internal so tests can verify mapping from raw catalog strings without a live FB.

@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EmberTern.App"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="400"
+        x:Class="EmberTern.App.Views.BlobEditorWindow"
+        Title="{x:Static app:UiStrings.BlobEditorTitle}"
+        Width="600" Height="400"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <Grid RowDefinitions="*,Auto" Margin="8">
+    <TextBox Grid.Row="0"
+             x:Name="BlobText"
+             AcceptsReturn="True"
+             AcceptsTab="True"
+             TextWrapping="NoWrap"
+             FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+             FontSize="12"
+             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+             ScrollViewer.VerticalScrollBarVisibility="Auto"
+             Background="{DynamicResource PanelBrush}"
+             Foreground="{DynamicResource ForegroundBrush}" />
+    <StackPanel Grid.Row="1"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,8,0,0">
+      <Button Content="{x:Static app:UiStrings.BlobEditorOk}"
+              Classes="primary"
+              Padding="16,4"
+              Click="OnOkClick" />
+      <Button Content="{x:Static app:UiStrings.DialogCancel}"
+              Classes="flat"
+              Padding="16,4"
+              Click="OnCancelClick" />
+    </StackPanel>
+  </Grid>
+</Window>

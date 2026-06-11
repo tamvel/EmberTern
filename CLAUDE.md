@@ -1213,12 +1213,104 @@ The final SQL surface ([FirebirdTableDetailReader.cs](src/EmberTern.Firebird/Fir
 
 48. **`CHECK_<n>` and `RDB$<n>` system-name filters must be scoped by type.** Firebird's system-generated CHECK-constraint triggers are named `CHECK_<n>` and have `RDB$DEPENDENT_TYPE = 2` (Trigger). A blanket `TRIM(name) NOT STARTING WITH 'CHECK_'` filter also excludes user procedures / views / tables whose name happens to start with `CHECK_` (the user's `CHECK_ZAKSIEGWREJVAT` procedure was a real case). Scope the prefix exclusion to triggers only: `NOT (RDB$DEPENDENT_TYPE = 2 AND TRIM(name) STARTING WITH 'CHECK_')`. Same for `RDB$<n>` system triggers — scope to type 2, leave non-trigger objects starting with `RDB$` unmolested.
 
+### TableDetail Dane — inline data editing (shipped)
+
+Inline edit on the Dane sub-tab. Auto-begin via the existing `TransactionService` on the first mutation; user controls Commit / Rollback through the same toolbar buttons the Query tab uses. No autocommit, no new transaction flow.
+
+**Editor** ([FirebirdDataEditor.cs](src/EmberTern.Firebird/FirebirdDataEditor.cs)) — direct class, no interface. Takes `FirebirdConnectionService` + `TransactionService`. Three async methods: `UpdateCellAsync` / `InsertRowAsync` / `DeleteRowAsync`. Each one:
+- Calls `EnsureTransactionAsync` — if `_transactionService.IsActive` is false, awaits `BeginTransactionAsync()` (mirrors the F5 executor's auto-begin path). Never opens a raw `connection.BeginTransactionAsync` of its own.
+- Acquires `_connectionService.CommandLock` around the command body (per gotcha #31).
+- Sets `cmd.Transaction = _transactionService.ActiveTransaction`.
+- Wraps `FbException` as `DataEditException` with the server's raw message.
+- Calls `_transactionService.NotifyStatementExecuted()` after release so the transaction-bar counter ticks.
+
+Internal static SQL builders (`BuildUpdateSql` / `BuildInsertSql` / `BuildDeleteSql`) emit `"NAME"`-quoted identifiers with doubled internal quotes; parameter names are positional (`@newValue`, `@pk0..N`, `@v0..N`) so the driver never has to dedupe multi-references (per gotcha #47).
+
+**VM** ([TableDetailTabViewModel.cs](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs)) — new ctor accepts `FirebirdDataEditor?`. Backward-compat ctors still work (existing tests / construction sites with `null` editor get a read-only data tab). New surface:
+- `EditableRows: ObservableCollection<object?[]>` — writable mirror of `DataResult.Rows`. Re-populated by `partial void OnDataResultChanged` after each preview fetch. DataGrid binds to this so Add/Delete mutate the visible row list without re-allocating a QueryResult.
+- `IsEditingData`, `SelectedRow`, `EditStatusMessage`, `HasPrimaryKey`, `PrimaryKeyColumns`, `ColumnIndex`, `CanEnterEditMode`, `EditModeHint`.
+- Commands: `ToggleEditModeCommand` (gated on `CanEnterEditMode` = editor present), `AddRowCommand` (gated on `IsEditingData && editor`), `DeleteRowCommand` (gated on `IsEditingData && editor && SelectedRow && HasPrimaryKey && _pkSnapshots.ContainsKey(SelectedRow)`).
+- `RefreshPrimaryKeyColumns()` rebuilds `PrimaryKeyColumns` from `Fields.Where(f => f.IsPrimaryKey)`. Called at the end of the Fields load step in `LoadAsync`.
+- `_pkSnapshots: Dictionary<object?[], object?[]>` (keyed by row reference via `ReferenceEqualityComparer.Instance`) holds the original PK values per loaded row so UPDATE/DELETE can identify the row even after the user edits a PK cell. Captured during `RebuildEditableRows`.
+- `_newRows: HashSet<object?[]>` tracks rows added in-grid via `AddRowCommand` that haven't been INSERTed yet.
+- `UpdateCellAsync(row, columnIndex, newValue)` — view's per-cell commit entry point. For an existing row: looks up PK snapshot, calls `_dataEditor.UpdateCellAsync`, on success updates the cell + refreshes the snapshot if the PK column itself was edited. For a new row (in `_newRows`): just stores the cell in memory — INSERT is deferred to `CommitNewRowAsync`.
+- `CommitNewRowAsync(row)` — view's row-commit entry point. Builds a `(column, value)` list omitting nulls (NULL columns aren't sent in INSERT — Firebird uses column defaults), calls `_dataEditor.InsertRowAsync`, on success removes from `_newRows` and captures a PK snapshot so subsequent cell edits flip to UPDATE. Empty rows (all nulls) are silently dropped from the grid.
+- `IsNewRow(row)` — view-facing predicate.
+- `ConfirmationRequested: Func<ConfirmRequest, Task<bool>>?` event for the delete confirmation; `MainWindowViewModel` wires its own `RequestConfirmAsync` into it so the existing `ConfirmDialog` modal handles both DDL-load failures and row-delete confirmations.
+
+**View** ([TableDetailTabView.axaml](src/EmberTern.App/Views/TableDetailTabView.axaml) + .axaml.cs):
+- Dane sub-tab grid now has 4 rows: edit toolbar / status / hint / grid (was 2).
+- Toolbar: ✎ Toggle (always visible inside the Dane sub-tab), `+` New row + `−` Delete (visible only when `IsEditingData`), `EditModeHint` text (shown when no PK — "Table has no primary key — only INSERT is available.").
+- Status row: `EditStatusMessage` in error styling, surfaces UPDATE/INSERT/DELETE failures (Messages tab is hidden on TableDetail tabs).
+- DataGrid: `ItemsSource="{Binding EditableRows}"`, `SelectedItem="{Binding SelectedRow, Mode=TwoWay}"`, `IsReadOnly="{Binding !IsEditingData}"`.
+- Code-behind: each column built imperatively now also carries a `CellEditingTemplate` (TextBox over the cell value). `CellEditEnding` + `RowEditEnding` events wired in the ctor. CellEditEnding reads the TextBox text, empty → NULL, calls `vm.UpdateCellAsync`. RowEditEnding checks `vm.IsNewRow(row)` and only fires `vm.CommitNewRowAsync` for not-yet-INSERTed rows. Flipping `IsEditingData` triggers a full column rebuild (forces `_dataPreviewColumnNames.Clear()` so `PopulateDataGrid` regenerates with the editing templates active).
+
+**MainWindowViewModel wiring**: new field `_dataEditor = new FirebirdDataEditor(_service, _transactionService)`. Both TableDetail construction sites (`OnOpenDdlRequested` for new tabs, `LoadWorkspaceFor` for restored tabs) pass `_dataEditor` to the VM and `+= RequestConfirmAsync` to the new `ConfirmationRequested` event.
+
+**Strings** ([UiStrings.cs](src/EmberTern.App/UiStrings.cs)) — `DataEditToggleIcon/Tooltip`, `DataEditAddRowIcon/Tooltip`, `DataEditDeleteRowIcon/Tooltip`, `DataEditDeleteConfirm{Title,Message,Yes}`, `DataEditNoPrimaryKeyHint`, `DataEditNotConnectedHint`. Zero inline strings in XAML.
+
+**Tests** ([FirebirdDataEditorTests.cs](tests/EmberTern.Tests/FirebirdDataEditorTests.cs) +7, [TableDetailDataEditTests.cs](tests/EmberTern.Tests/TableDetailDataEditTests.cs) +12): SQL builder shape (single PK / composite PK / internal-quote escaping); VM defaults (no editor → can't enter edit mode); `RefreshPrimaryKeyColumns` derives from Fields; no-PK hint shown; `DataResult` assignment populates `EditableRows` + `ColumnIndex` + clears them on reassignment / null; `CanAddRow` gates correctly; `UpdateCellAsync` no-ops when editor null; `BuildKeyValuePairs` pairs by index; `IsNewRow` false for existing rows. **536 / 536 green** (517 → 536, +19). Build clean (zero warnings, TWAE on). App launches and exits cleanly via the 8-second-uptime smoke.
+
+**Gotchas — promote to architecture lore.**
+
+49. **`ReferenceEqualityComparer.Instance` for `Dictionary<object?[], ...>` keyed by row identity.** Default `EqualityComparer<object?[]>` falls back to `ReferenceEquals` anyway for arrays without a custom equality, but `ReferenceEqualityComparer.Instance` makes the intent explicit and is mandatory for `HashSet<object?[]>` where the default would block on null elements during hash. Use this whenever a tracking collection needs to identify rows by reference (row mutations don't invalidate the key).
+
+50. **DataGrid `CellEditEnding` + `RowEditEnding` are the two-stage commit gates.** CellEditEnding fires per-cell (Tab/Enter out of the TextBox); RowEditEnding fires when the row "confirms" (Enter on the row, or focus moves to a different row). For Avalonia 12.0.3 DataGrid editing of `object?[]` rows: rely on `CellEditEnding`'s `EditingElement` (the `TextBox` from the `CellEditingTemplate`) to read the new text, then map column → index via `_dataPreviewGrid.Columns.IndexOf(e.Column)`. For row-level commit (INSERT path on a freshly added row), use `RowEditEnding` and check a VM-side `IsNewRow` predicate so existing rows (already UPDATEd cell-by-cell) don't fire a duplicate operation.
+
+### TableDetail Dane — UX polish: always-editable, optimistic writes, PK refresh sync (shipped)
+
+Post-ship feedback round on the initial Dane inline-edit. Five fixes; whole edit-mode-toggle layer was removed.
+
+**1. No more ✎ toggle — DataGrid is always editable when an editor is wired.** `IsEditingData`, `ToggleEditModeCommand`, `CanEnterEditMode` deleted. The new surface: `CanEditData` (`_dataEditor is not null`) + `IsDataReadOnly` (inverse, bound to `DataGrid.IsReadOnly`). Edit starts on F2 / Enter / second-click natively. `+ −` buttons unconditionally visible inside the Dane sub-tab. Dropped now-unused `DataEditToggleIcon` / `DataEditToggleTooltip` strings.
+
+**2. Optimistic local cell write — the cell paints the new value immediately.** Avalonia's DataGrid rebuilds `CellTemplate` synchronously after `CellEditEnding` returns. Our `FuncDataTemplate<object?[]>` lambda reads `row[columnIndex]` during the rebuild — so the new value must already be in place when the rebuild fires (i.e. before the `await` in `UpdateCellAsync`). [`TableDetailTabViewModel.UpdateCellAsync`](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs) now: (1) captures `oldValue`; (2) writes `row[columnIndex] = newValue` synchronously; (3) `await`s the DB UPDATE; (4) on failure, reverts via `ReplaceRowInGrid(row)` which clones the array, migrates `_pkSnapshots` / `_newRows` / `SelectedRow` to the clone, and re-inserts into `EditableRows` so the DataGrid recycles the row container and re-renders.
+
+**3. AddRow auto-begins the working transaction.** `AddRowCommand` is `async` and `await`s a new public `FirebirdDataEditor.EnsureTransactionAsync` (calls `TransactionService.BeginTransactionAsync` only when no tx is active). The existing `TransactionStateChanged` → `MainWindowViewModel.OnTransactionStateChanged` flow propagates `IsTransactionActive` / `HasExecutedInTransaction` / `TransactionBarText` notifications — toolbar Commit/Rollback enable correctly on first row add.
+
+**4. False "no primary key" after refresh — two-part fix.** `RebuildEditableRows` defensively calls `RefreshPrimaryKeyColumns()` when `Fields.Count > 0` so PK is always derived from the current Fields snapshot. `ReloadDataPreviewAsync` (used by both Refresh and ApplyColumnSort paths) now awaits `EnsureLoadedAsync` at its start — idempotent (cached task) when LoadAsync already finished, but covers the race where Refresh is clicked before the initial lazy load completes.
+
+**5. View XAML adjustments.** Removed `IsEditingData` / `ToggleEditModeCommand` plumbing. `IsReadOnly="{Binding IsDataReadOnly}"`. The toolbar row inside `TableDetailTabView` keeps only the edit-hint text — `+ −` move to the main toolbar in the next polish round.
+
+**Tests**: 536 → 538 (+2 — `RebuildEditableRows_RefreshesPrimaryKeyFromFields`, `IsDataReadOnly_NoEditor_IsTrue`). Build clean, zero warnings.
+
+### TableDetail Dane — pagination, toolbar move, smart cell editors (shipped)
+
+Big polish round: row height bumped, +/- relocated to the main toolbar with pagination next to them, and per-column-type editors for DATE/TIMESTAMP/BOOLEAN/BLOB.
+
+**1. Row height 32 px.** Style selector `<Style Selector="DataGrid.data-edit DataGridRow"><Setter Property="Height" Value="32"/></Style>` declared after the global `DataGridRow Height=22`. The Dane DataGrid carries `Classes="data-edit"`; Pola/Indeksy/Ograniczenia stay at 22.
+
+**2. Pagination — VM + reader + paged SQL.**
+
+- [`FirebirdTableDetailReader.cs`](src/EmberTern.Firebird/FirebirdTableDetailReader.cs): `GetDataPreviewAsync` signature is now `(tableName, page, pageSize, [orderBy], ct)`. SQL switched from `SELECT FIRST {limit} *` to `SELECT * FROM "T" [ORDER BY ...] ROWS m TO n` (FB 2.5+ syntax; embedded literals so FB 2.5 parameter-binding quirks don't bite). New `GetRowCountAsync(tableName, cap, ct)` runs `SELECT COUNT(*) FROM (SELECT FIRST {cap} 1 AS X FROM "T") sub` — the inner FIRST cap keeps the engine from sequential-scanning a 50M-row table. New internal helpers `ComputeRowRange` + `BuildRowCountSql` + `BuildDataPreviewSql(tableName, startRow, endRow, orderBy)` pinned by tests.
+- [`TableDetailTabViewModel.cs`](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs): new state `CurrentPage` (1-based), `PageSize` (default 200, clamped 1..1000), `LastKnownRowCount` (set after `GoToLastPageAsync`), `HasPreviousPage`, `HasNextPage`, and 4 commands `GoToFirstPageCommand` / `GoToPreviousPageCommand` / `GoToNextPageCommand` / `GoToLastPageCommand`. `HasNextPage` uses authoritative COUNT-probe (`LastKnownRowCount`) when set; otherwise falls back to "current page is full" heuristic. Sort changes reset `LastKnownRowCount = null` and `CurrentPage = 1`. `DataPreviewHint` reformatted to `"Page {0} · Showing {1} rows"` (plus existing sort suffix).
+- New constants: `MaxPageSize = 1000`, `RowCountCap = 50000`.
+
+**3. `+ −` and pagination buttons in the main toolbar.** Removed from [`TableDetailTabView.axaml`](src/EmberTern.App/Views/TableDetailTabView.axaml) (only the edit-hint text remains in that row). Added in [`MainWindow.axaml`](src/EmberTern.App/Views/MainWindow.axaml) after the Refresh button, all gated on `IsDataTabActive`: separator → `+ −` (bound through `ActiveTableDetail.AddRowCommand` / `DeleteRowCommand`) → separator → `⏮ ◀ ▶ ⏭` pagination (bound through `ActiveTableDetail.GoTo*PageCommand`).
+
+**4. Smart cell editors.**
+
+- New [`Converters/DateTimeToDateTimeOffsetConverter.cs`](src/EmberTern.App/Converters/DateTimeToDateTimeOffsetConverter.cs) — singleton `IValueConverter` going `DateTime` ↔ `DateTimeOffset?`. Unspecified-kind DateTimes surface as Local (Firebird's managed driver returns Unspecified; treating as UTC shifts the displayed wall-clock).
+- New [`Views/BlobEditorWindow.axaml(.cs)`](src/EmberTern.App/Views/BlobEditorWindow.axaml) — modal 600×400 Window with monospace multiline TextBox + OK/Cancel. Static `ShowAsync(owner, currentValue, readOnly)` returns `string?` (null on Cancel). For SUB_TYPE 1 text BLOBs the dialog is editable; for binary BLOBs the caller passes a `"Binary BLOB (N bytes)"` placeholder + `readOnly=true`.
+- [`TableDetailTabView.axaml.cs`](src/EmberTern.App/Views/TableDetailTabView.axaml.cs): new `CellEditorKind` enum (Text / Date / Boolean / Blob). `DetermineEditorKind` resolves from the matching `FieldInfo`: `BaseTypeName` starts with `DATE` or `TIMESTAMP` → Date; `BaseTypeName == "BOOLEAN"` → Boolean; `BaseTypeName == "SMALLINT" && Domain == "T_BOOLEANN"` → Boolean (legacy ERP convention); `BaseTypeName == "BLOB"` → Blob; else Text. Per-kind template builders: `BuildTextCellTemplate` / `BuildTextEditingTemplate` (existing TextBox flow), `BuildDateEditingTemplate` (CalendarDatePicker, `MinWidth = 120` after UX feedback iteration 160→120), `BuildBooleanCellTemplate` (CheckBox in CellTemplate; Click handler fires `UpdateCellAsync` directly with `bool` or `short 0/1` depending on underlying type), `BuildBlobCellTemplate` (`…` Button opens BlobEditorWindow). Boolean and BLOB columns are `IsReadOnly = true` so the standard cell-edit flow stays out of their way; their CellTemplate handles the commit. `OnCellEditEnding` dispatches on the resolved kind via the parallel `_dataPreviewEditorKinds` list.
+
+**Tests** (538 → 557, +19): pagination cycle, SQL/RowCount shape (`ComputeRowRange` Theory, `BuildDataPreviewSql_*` updated to ROWS form, `BuildRowCountSql_*`), `DateTimeToDateTimeOffsetConverterTests` (6 tests covering Convert / ConvertBack / Unspecified-as-Local / DoNothing fallback). Build clean (zero warnings, `TreatWarningsAsErrors=true`). App smoke-launched and exits cleanly.
+
+**Gotchas — promote to architecture lore.**
+
+51. **`Avalonia 12.0.3 CalendarDatePicker.SelectedDate` is `DateTime?`, NOT `DateTimeOffset?`.** Specs / older Avalonia samples assume `DateTimeOffset?`. In 12.0.3 the property is `DateTime?`; assigning a `DateTimeOffset?` is a `CS0029` compile error. The `DateTimeToDateTimeOffsetConverter` we ship is forward-compat for newer Avalonia versions or third-party pickers that do use `DateTimeOffset`; the view code path assigns `DateTime?` directly. **Rule**: check the API surface against the running Avalonia version before threading a converter for type bridging — the type may already match.
+
+52. **`TextBox` scroll-bar visibility goes through attached `ScrollViewer.*` properties, not direct ones.** `<TextBox HorizontalScrollBarVisibility="Auto" .../>` fails with `AVLN2000` in 12.0.3 — the property doesn't exist on TextBox itself. Correct: `<TextBox ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" .../>` — these are the standard Avalonia ScrollViewer attached properties. **Rule**: when a scroll affordance is needed on a TextBox, reach for the attached `ScrollViewer.*` setters; don't expect them as direct properties.
+
+53. **Avalonia DataGrid CellTemplate rebuild on `CellEditEnding` lets us paint optimistic local writes without `INotifyPropertyChanged` wrapping the row.** The DataGrid tears down the editing element and re-applies `CellTemplate` synchronously after `CellEditEnding` returns. With a `FuncDataTemplate<object?[]>` reading `row[columnIndex]`, mutating that cell *before the first await* in the async commit handler means the post-edit rebuild paints the new value immediately. For failure rollback (the new value didn't survive the DB UPDATE), revert + force a row swap via `EditableRows[idx] = cloneOfRow` to trigger an ItemsControl replace, then migrate any per-row tracking dictionaries (`_pkSnapshots`, `_newRows`) to the clone. **Rule**: prefer optimistic local mutation + swap-on-failure over wrapping `object?[]` rows in an observable shape — works with the existing data model and keeps the DataGrid path identical to the read-only case.
+
+54. **Firebird `ROWS m TO n` pagination uses literal integers, not parameters, on FB 2.5.** Newer FB versions accept `ROWS @offset TO @end` parameter binding; FB 2.5 does not. `BuildDataPreviewSql` embeds the page bounds as literals via `StringBuilder.AppendFormat(InvariantCulture, ...)` — safe with integers, and avoids the brittle cross-version parameter-binding behavior of the `ROWS` clause. **Rule**: for pagination SQL targeting "anything from FB 2.5 onward", embed the row range as literals.
+
 ## Current state
 
 - **Build**: clean (zero warnings, `TreatWarningsAsErrors=true` enforced).
-- **Tests**: 492 / 492 passing (includes 2 headless Avalonia binding probes; test project references `Avalonia.Headless` 12.0.3).
-- **App**: builds, launches, exits cleanly. TableDetail tab now opens as a 7-sub-tab view (Pola / Ograniczenia / Indeksy / **Zależności** / Dane / Opis / DDL). **Zależności** shows two `TreeView`s side-by-side (Used by | Depends on) with 11 IBExpert-order categories that are always visible — categories with zero matches render as `"X (0)"` and aren't expandable. Tables come exclusively from `RDB$REF_CONSTRAINTS` FK joins; all other categories flow through `RDB$DEPENDENCIES` with system-trigger noise filtered. Double-clicking a leaf opens the corresponding TableDetail (for tables) or DDL (everything else) tab via the existing metadata-tree open path. Icons and per-kind colors match the sidebar metadata tree 1:1 (live re-evaluation on theme toggle via the `IconBrushConverter` MultiBinding pipeline).
-- **Branch state**: working on master. All prior milestones plus **TableDetail Zależności (FK-sourced Related Tables, IBExpert-style category tree)**.
+- **Tests**: 557 / 557 passing (includes 2 headless Avalonia binding probes; test project references `Avalonia.Headless` 12.0.3).
+- **App**: builds, launches, exits cleanly. TableDetail Dane sub-tab supports always-editable inline UPDATE with optimistic local cell writes, INSERT on row commit, DELETE with confirmation (all on the user's working transaction, auto-begun via `TransactionService.BeginTransactionAsync`). `+ −` and pagination `⏮ ◀ ▶ ⏭` live in the main toolbar (gated on `IsDataTabActive`); the Dane sub-tab's own toolbar holds only the edit-hint text. DATE/TIMESTAMP columns edit via CalendarDatePicker (MinWidth 120), BOOLEAN / SMALLINT-with-T_BOOLEANN columns toggle via CheckBox in the CellTemplate, BLOB columns open a modal text editor. Pagination uses `ROWS m TO n` (FB 2.5+) with a 50000-row COUNT cap for `GoToLastPage`.
+- **Branch state**: working on master. All prior milestones plus **TableDetail Dane UX polish (always-editable, optimistic writes, PK refresh sync)** and **TableDetail Dane pagination + toolbar move + smart cell editors**.
 
 ## V1 — definition of done (all met)
 

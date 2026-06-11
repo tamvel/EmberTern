@@ -444,7 +444,7 @@
                       ToolTip.Tip="{Binding CommitLabel}"
                       Command="{Binding CommitCommand}"
                       IsEnabled="{Binding IsTransactionActive}"
-                      IsVisible="{Binding IsQueryTabActive}" />
+                      IsVisible="{Binding ShowTransactionButtons}" />
               <Button Classes="icon"
                       Content="✕"
                       FontSize="14"
@@ -452,7 +452,57 @@
                       ToolTip.Tip="{Binding RollbackLabel}"
                       Command="{Binding RollbackCommand}"
                       IsEnabled="{Binding !IsTransactionIdle}"
-                      IsVisible="{Binding IsQueryTabActive}" />
+                      IsVisible="{Binding ShowTransactionButtons}" />
+              <!-- Refresh reuses the Dane sub-tab's existing reload path (with current
+                   sort params). Visible only when the Dane sub-tab is active inside a
+                   TableDetail tab. -->
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.ToolbarRefreshDataIcon}"
+                      FontSize="14"
+                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarRefreshDataTooltip}"
+                      Command="{Binding RefreshDataPreviewCommand}"
+                      IsVisible="{Binding IsDataTabActive}" />
+              <!-- Data-edit add/delete row buttons. Bound through ActiveTableDetail
+                   because the commands live on TableDetailTabViewModel. Visible only
+                   on the Dane sub-tab; the leading separator collapses to zero width
+                   when not visible thanks to IsVisible on the Border. -->
+              <Border Width="1" Margin="4,4"
+                      Background="{DynamicResource BorderBrush}"
+                      IsVisible="{Binding IsDataTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.DataEditAddRowIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.DataEditAddRowTooltip}"
+                      Command="{Binding ActiveTableDetail.AddRowCommand}"
+                      IsVisible="{Binding IsDataTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.DataEditDeleteRowIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.DataEditDeleteRowTooltip}"
+                      Command="{Binding ActiveTableDetail.DeleteRowCommand}"
+                      IsVisible="{Binding IsDataTabActive}" />
+              <!-- Pagination section. Same ActiveTableDetail binding pattern. -->
+              <Border Width="1" Margin="4,4"
+                      Background="{DynamicResource BorderBrush}"
+                      IsVisible="{Binding IsDataTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.TableDetailPaginationFirstIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
+                      Command="{Binding ActiveTableDetail.GoToFirstPageCommand}"
+                      IsVisible="{Binding IsDataTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.TableDetailPaginationPreviousIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
+                      Command="{Binding ActiveTableDetail.GoToPreviousPageCommand}"
+                      IsVisible="{Binding IsDataTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.TableDetailPaginationNextIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
+                      Command="{Binding ActiveTableDetail.GoToNextPageCommand}"
+                      IsVisible="{Binding IsDataTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.TableDetailPaginationLastIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
+                      Command="{Binding ActiveTableDetail.GoToLastPageCommand}"
+                      IsVisible="{Binding IsDataTabActive}" />
               <Border Width="1" Margin="4,4"
                       Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding IsQueryTabActive}" />
