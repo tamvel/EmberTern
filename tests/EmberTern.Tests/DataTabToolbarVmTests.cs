@@ -54,7 +54,7 @@ public class DataTabToolbarVmTests
     }
 
     [Fact]
-    public void MainVm_TableDetailTabActive_OnNonDataSubTab_IsDataTabActiveFalse_ShowTransactionButtonsFalse()
+    public void MainVm_TableDetailTabActive_OnPolaSubTab_TransactionButtonsVisible_DataButtonsNot()
     {
         using var harness = new Harness();
         harness.Main.ApplyActiveConnectionChange("A");
@@ -67,8 +67,33 @@ public class DataTabToolbarVmTests
         harness.Main.WorkspaceTabs.Add(tab);
         harness.Main.SelectTab(tab);
 
-        // Default sub-tab is Pola (index 0).
+        // Default sub-tab is Pola (index 0). The Pola sub-tab also shows
+        // Commit/Rollback so the user can roll back / commit immediate Add /
+        // Drop Field changes from the same toolbar — only the data-edit
+        // buttons (add row, refresh, pagination) stay hidden.
         Assert.True(harness.Main.IsTableDetailTabActive);
+        Assert.True(harness.Main.IsFieldsTabActive);
+        Assert.False(harness.Main.IsDataTabActive);
+        Assert.True(harness.Main.ShowTransactionButtons);
+    }
+
+    [Fact]
+    public void MainVm_TableDetailTab_NonFieldsNonDataSubTab_NoTransactionButtons()
+    {
+        using var harness = new Harness();
+        harness.Main.ApplyActiveConnectionChange("A");
+        var td = new TableDetailTabViewModel("T");
+        var tab = WorkspaceTabViewModel.CreateTableDetail(
+            harness.Main,
+            new MetadataObject("T", MetadataObjectKind.Table),
+            td,
+            "A");
+        harness.Main.WorkspaceTabs.Add(tab);
+        harness.Main.SelectTab(tab);
+
+        // Switch to a sub-tab that is neither Pola nor Dane (e.g. Ograniczenia = 1).
+        td.ActiveSubTabIndex = 1;
+        Assert.False(harness.Main.IsFieldsTabActive);
         Assert.False(harness.Main.IsDataTabActive);
         Assert.False(harness.Main.ShowTransactionButtons);
     }

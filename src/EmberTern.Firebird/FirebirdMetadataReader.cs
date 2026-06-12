@@ -131,6 +131,61 @@ public sealed class FirebirdMetadataReader
         }
     }
 
+    /// <summary>
+    /// User-defined domains plus their formatted SQL type. Used by the
+    /// AddFieldDialog's Domain ComboBox so the user can see what they're
+    /// picking without cross-referencing the catalog. Filters out anonymous
+    /// RDB$ backing-domains client-side (matches the <see cref="ListAsync"/>
+    /// behaviour for <see cref="MetadataObjectKind.Domain"/>).
+    /// </summary>
+    public async Task<IReadOnlyList<DomainSpec>> ListDomainsAsync(CancellationToken cancellationToken = default)
+    {
+        var connection = _connectionService.RequireOpenConnection();
+        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = DomainsSql;
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = _transactionService?.ActiveTransaction;
+
+            var domains = new List<DomainSpec>();
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (reader.IsDBNull(0)) continue;
+                var name = reader.GetString(0).Trim();
+                if (name.Length == 0) continue;
+                if (IsSystemName(name)) continue;
+                var fieldType = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+                var fieldLength = reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2);
+                var fieldScale = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3);
+                var fieldPrecision = reader.IsDBNull(4) ? (int?)null : reader.GetInt32(4);
+                var subType = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
+                var type = FirebirdTableDetailReader.FormatFieldType(fieldType, fieldLength, fieldScale, fieldPrecision, subType);
+                domains.Add(new DomainSpec(name, type));
+            }
+            return domains;
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read domains: {ex.Message}", ex);
+        }
+        finally
+        {
+            _connectionService.CommandLock.Release();
+        }
+    }
+
+    internal const string DomainsSql =
+        "SELECT TRIM(RDB$FIELD_NAME), " +
+        "       RDB$FIELD_TYPE, RDB$FIELD_LENGTH, " +
+        "       RDB$FIELD_SCALE, RDB$FIELD_PRECISION, " +
+        "       RDB$FIELD_SUB_TYPE " +
+        "FROM RDB$FIELDS " +
+        "WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 " +
+        "ORDER BY RDB$FIELD_NAME";
+
     // Joins RDB$RELATION_FIELDS to RDB$FIELDS so the autocomplete dropdown can
     // render "COLUMN : TYPE". Same mapping logic as the TableDetail Fields tab.
     internal const string ColumnsSql =

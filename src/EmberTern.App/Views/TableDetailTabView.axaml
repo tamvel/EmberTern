@@ -28,6 +28,14 @@
     <Style Selector="DataGridRow">
       <Setter Property="Height" Value="22" />
     </Style>
+    <!-- Pola grid: in-row CheckBox (NotNull) needs more vertical room than 22 —
+         the default-size CheckBox visual gets clipped otherwise. FluentTheme
+         CheckBox is ~22 px tall with built-in padding, so 34 leaves clean
+         breathing space on top and bottom. Selector targets the named grid
+         only so the Indeksy / Ograniczenia grids stay tight. -->
+    <Style Selector="DataGrid#FieldsGrid DataGridRow">
+      <Setter Property="Height" Value="34" />
+    </Style>
     <!-- Dane grid lives in always-editable mode; the in-cell TextBox needs more
          vertical space than the read-only Pola / Indeksy / Ograniczenia grids.
          Style ordering: this declaration follows the global DataGridRow rule,
@@ -54,8 +62,9 @@
 
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabFields}">
         <DataGrid x:Name="FieldsGrid"
-                  ItemsSource="{Binding Fields}"
-                  IsReadOnly="True"
+                  ItemsSource="{Binding EditableFields}"
+                  SelectedItem="{Binding SelectedFieldRow, Mode=TwoWay}"
+                  IsReadOnly="{Binding IsFieldsReadOnly}"
                   FontSize="11"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
@@ -67,17 +76,29 @@
                   HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                   VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                   Background="{DynamicResource BackgroundBrush}">
+          <DataGrid.Styles>
+            <!-- Subtle background tint on rows with pending edits. Row-level Classes
+                 can't bind to per-item state from XAML in Avalonia 12 — apply via the
+                 cell rectangle template part triggered by the row VM's IsModified
+                 flag using the DataTrigger pattern. -->
+            <Style Selector="DataGridRow.pending /template/ Rectangle#BackgroundRectangle">
+              <Setter Property="Fill" Value="{DynamicResource WarningBrush}" />
+              <Setter Property="Opacity" Value="0.12" />
+            </Style>
+          </DataGrid.Styles>
           <DataGrid.Columns>
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnPosition}"
                                 Binding="{Binding DisplayPosition}"
-                                SortMemberPath="DisplayPosition" />
+                                SortMemberPath="DisplayPosition"
+                                IsReadOnly="True" />
 
             <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnPrimaryKey}"
                                     Width="Auto"
                                     MinWidth="60"
-                                    SortMemberPath="IsPrimaryKey">
+                                    SortMemberPath="IsPrimaryKey"
+                                    IsReadOnly="True">
               <DataGridTemplateColumn.CellTemplate>
-                <DataTemplate x:DataType="metadata:FieldInfo">
+                <DataTemplate x:DataType="vm:FieldRowViewModel">
                   <Path Data="{StaticResource PkIconGeometry}"
                         Fill="{DynamicResource AccentBrush}"
                         Width="14" Height="14"
@@ -92,9 +113,10 @@
             <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnForeignKey}"
                                     Width="Auto"
                                     MinWidth="60"
-                                    SortMemberPath="IsForeignKey">
+                                    SortMemberPath="IsForeignKey"
+                                    IsReadOnly="True">
               <DataGridTemplateColumn.CellTemplate>
-                <DataTemplate x:DataType="metadata:FieldInfo">
+                <DataTemplate x:DataType="vm:FieldRowViewModel">
                   <Path Data="{StaticResource FkIconGeometry}"
                         Fill="{DynamicResource WarningBrush}"
                         Width="14" Height="14"
@@ -109,9 +131,10 @@
             <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnUnique}"
                                     Width="Auto"
                                     MinWidth="60"
-                                    SortMemberPath="IsUnique">
+                                    SortMemberPath="IsUnique"
+                                    IsReadOnly="True">
               <DataGridTemplateColumn.CellTemplate>
-                <DataTemplate x:DataType="metadata:FieldInfo">
+                <DataTemplate x:DataType="vm:FieldRowViewModel">
                   <Path Data="{StaticResource UnqIconGeometry}"
                         Fill="{DynamicResource SubtleForegroundBrush}"
                         Width="14" Height="14"
@@ -123,37 +146,84 @@
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
 
+            <!-- Editable: Name (rename, gated by deps in EnqueueRowEdits). -->
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
-                                Binding="{Binding Name}"
+                                Binding="{Binding Name, Mode=TwoWay}"
                                 SortMemberPath="Name" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnType}"
-                                Binding="{Binding BaseTypeName}"
-                                SortMemberPath="BaseTypeName" />
+            <!-- Editable: full Type string. Always-visible ComboBox in CellTemplate
+                 (no separate CellEditingTemplate) — Avalonia 12's CellEditingTemplate
+                 path causes a focus race where the dropdown opens then immediately
+                 closes, and the cell-edit cycle can hang on rapid clicks. The
+                 IsEnabled binding gates interaction by the owner's edit-mode toggle. -->
+            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnType}"
+                                    SortMemberPath="TypeText"
+                                    IsReadOnly="True">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate x:DataType="vm:FieldRowViewModel">
+                  <ComboBox ItemsSource="{Binding BasicTypes}"
+                            SelectedItem="{Binding TypeText, Mode=TwoWay}"
+                            IsEnabled="{Binding IsCellEditable}"
+                            BorderThickness="0"
+                            Background="Transparent"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Center" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnSize}"
                                 Binding="{Binding Size}"
-                                SortMemberPath="Size" />
+                                SortMemberPath="Size"
+                                IsReadOnly="True" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnScale}"
                                 Binding="{Binding Scale, Converter={x:Static conv:ZeroToEmptyConverter.Instance}}"
-                                SortMemberPath="Scale" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnNotNull}"
-                                Binding="{Binding NotNull, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
-                                SortMemberPath="NotNull" />
+                                SortMemberPath="Scale"
+                                IsReadOnly="True" />
+            <!-- Editable: NotNull (CheckBox). -->
+            <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.TableDetailColumnNotNull}"
+                                    Binding="{Binding NotNull, Mode=TwoWay}"
+                                    SortMemberPath="NotNull" />
+            <!-- Editable: Default. -->
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDefault}"
-                                Binding="{Binding DefaultValue}"
+                                Binding="{Binding DefaultValue, Mode=TwoWay}"
                                 SortMemberPath="DefaultValue" />
+            <!-- Editable: Description (COMMENT ON COLUMN). -->
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDescription}"
-                                Binding="{Binding Description}"
+                                Binding="{Binding Description, Mode=TwoWay}"
                                 SortMemberPath="Description" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDomain}"
-                                Binding="{Binding Domain}"
-                                SortMemberPath="Domain" />
+            <!-- Editable: Domain. Always-visible ComboBox in CellTemplate (same
+                 reasoning as the Type column — avoids the Avalonia 12 CellEditingTemplate
+                 focus race). User picks a domain → ALTER COLUMN TYPE <DOMAIN_NAME>
+                 queued (same dep gate as plain type). -->
+            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnDomain}"
+                                    SortMemberPath="DomainName"
+                                    IsReadOnly="True">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate x:DataType="vm:FieldRowViewModel">
+                  <ComboBox ItemsSource="{Binding AvailableDomains}"
+                            SelectedItem="{Binding SelectedDomainSpec, Mode=TwoWay}"
+                            IsEnabled="{Binding IsCellEditable}"
+                            BorderThickness="0"
+                            Background="Transparent"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Name}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnForeignKeyTable}"
                                 Binding="{Binding ForeignKeyTable}"
-                                SortMemberPath="ForeignKeyTable" />
+                                SortMemberPath="ForeignKeyTable"
+                                IsReadOnly="True" />
             <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnComputed}"
-                                    SortMemberPath="ComputedSource">
+                                    SortMemberPath="ComputedSource"
+                                    IsReadOnly="True">
               <DataGridTemplateColumn.CellTemplate>
-                <DataTemplate x:DataType="metadata:FieldInfo">
+                <DataTemplate x:DataType="vm:FieldRowViewModel">
                   <TextBlock Text="{Binding ComputedSource}"
                              FontStyle="Italic"
                              Foreground="{DynamicResource SubtleForegroundBrush}"
@@ -164,7 +234,13 @@
             </DataGridTemplateColumn>
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnCharset}"
                                 Binding="{Binding Charset}"
-                                SortMemberPath="Charset" />
+                                SortMemberPath="Charset"
+                                IsReadOnly="True" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnAutoIncrement}"
+                                Binding="{Binding IsAutoIncrement, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
+                                SortMemberPath="IsAutoIncrement"
+                                MinWidth="40"
+                                IsReadOnly="True" />
           </DataGrid.Columns>
         </DataGrid>
       </TabItem>

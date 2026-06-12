@@ -1,0 +1,251 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EmberTern.App"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:m="using:EmberTern.Core.Metadata"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.AddFieldDialog"
+        x:DataType="vm:AddFieldDialogViewModel"
+        Title="{x:Static app:UiStrings.AddFieldDialogTitle}"
+        Width="820"
+        Height="560"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+
+    <!-- Header -->
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="20,16">
+      <TextBlock Text="{x:Static app:UiStrings.AddFieldDialogTitle}" Classes="h1" />
+    </Border>
+
+    <!-- Always-visible: name + Not Null + Primary Key -->
+    <Border Grid.Row="1" Padding="20,14,20,10">
+      <StackPanel Spacing="10">
+        <StackPanel Spacing="4">
+          <TextBlock Text="{x:Static app:UiStrings.AddFieldFieldName}" Classes="field-label" />
+          <TextBox Text="{Binding FieldName, Mode=TwoWay}" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="20">
+          <CheckBox Content="{x:Static app:UiStrings.AddFieldNotNull}"
+                    IsChecked="{Binding NotNull, Mode=TwoWay}" />
+          <CheckBox Content="{x:Static app:UiStrings.AddFieldPrimaryKey}"
+                    IsChecked="{Binding PrimaryKey, Mode=TwoWay}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- Tabs -->
+    <TabControl Grid.Row="2" Padding="0" Margin="14,4,14,0">
+
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabDomain}">
+        <StackPanel Margin="8" Spacing="6">
+          <TextBlock Text="{x:Static app:UiStrings.AddFieldDomainLabel}" Classes="field-label" />
+          <ComboBox ItemsSource="{Binding Domains}"
+                    SelectedItem="{Binding SelectedDomain, Mode=TwoWay}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="m:DomainSpec">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Grid.Column="0"
+                             Text="{Binding Name}"
+                             FontSize="12"
+                             VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1"
+                             Text="{Binding Type}"
+                             FontSize="11"
+                             Foreground="{DynamicResource SubtleForegroundBrush}"
+                             VerticalAlignment="Center"
+                             Margin="12,0,0,0" />
+                </Grid>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Text="{x:Static app:UiStrings.AddFieldDomainHint}"
+                     Classes="subtle"
+                     FontSize="11"
+                     TextWrapping="Wrap"
+                     Margin="0,4,0,0" />
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabBasicType}">
+        <StackPanel Margin="8" Spacing="6">
+          <TextBlock Text="{x:Static app:UiStrings.AddFieldBasicTypeLabel}" Classes="field-label" />
+          <ComboBox ItemsSource="{x:Static vm:AddFieldDialogViewModel.BasicTypes}"
+                    SelectedItem="{Binding SelectedBasicType, Mode=TwoWay}"
+                    HorizontalAlignment="Stretch" />
+          <StackPanel Orientation="Horizontal" Spacing="14" Margin="0,8,0,0"
+                      IsVisible="{Binding ShowSize}">
+            <StackPanel Spacing="4">
+              <TextBlock Text="{x:Static app:UiStrings.AddFieldSizeLabel}" Classes="field-label" />
+              <NumericUpDown Value="{Binding Size, Mode=TwoWay}"
+                             Minimum="1" Maximum="32767"
+                             Width="120"
+                             FormatString="0" />
+            </StackPanel>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="14" Margin="0,8,0,0"
+                      IsVisible="{Binding ShowPrecisionScale}">
+            <StackPanel Spacing="4">
+              <TextBlock Text="{x:Static app:UiStrings.AddFieldPrecisionLabel}" Classes="field-label" />
+              <NumericUpDown Value="{Binding Precision, Mode=TwoWay}"
+                             Minimum="1" Maximum="38"
+                             Width="120"
+                             FormatString="0" />
+            </StackPanel>
+            <StackPanel Spacing="4">
+              <TextBlock Text="{x:Static app:UiStrings.AddFieldScaleLabel}" Classes="field-label" />
+              <NumericUpDown Value="{Binding Scale, Mode=TwoWay}"
+                             Minimum="0" Maximum="38"
+                             Width="120"
+                             FormatString="0" />
+            </StackPanel>
+          </StackPanel>
+          <StackPanel Spacing="4" Margin="0,8,0,0"
+                      IsVisible="{Binding ShowBlobSubType}">
+            <TextBlock Text="{x:Static app:UiStrings.AddFieldBlobSubTypeLabel}" Classes="field-label" />
+            <ComboBox ItemsSource="{x:Static vm:AddFieldDialogViewModel.BlobSubTypes}"
+                      SelectedItem="{Binding SelectedBlobSubType, Mode=TwoWay}"
+                      Width="200" />
+          </StackPanel>
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabDefault}">
+        <StackPanel Margin="8" Spacing="6">
+          <TextBlock Text="{x:Static app:UiStrings.AddFieldDefaultLabel}" Classes="field-label" />
+          <TextBox Text="{Binding DefaultValue, Mode=TwoWay}"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   MinHeight="120"
+                   FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                   FontSize="12" />
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabCheck}">
+        <StackPanel Margin="8" Spacing="6">
+          <TextBlock Text="{x:Static app:UiStrings.AddFieldCheckLabel}" Classes="field-label" />
+          <TextBox Text="{Binding CheckExpression, Mode=TwoWay}"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   MinHeight="120"
+                   FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                   FontSize="12" />
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabComputed}">
+        <StackPanel Margin="8" Spacing="6">
+          <TextBlock Text="{x:Static app:UiStrings.AddFieldComputedLabel}" Classes="field-label" />
+          <TextBox Text="{Binding ComputedExpression, Mode=TwoWay}"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   MinHeight="120"
+                   FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                   FontSize="12" />
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabAutoinc}">
+        <StackPanel Margin="8" Spacing="6">
+          <RadioButton GroupName="Autoinc"
+                       Content="{x:Static app:UiStrings.AddFieldAutoincNone}"
+                       IsChecked="{Binding IsAutoincNone, Mode=TwoWay}" />
+          <RadioButton GroupName="Autoinc"
+                       Content="{x:Static app:UiStrings.AddFieldAutoincIdentity}"
+                       IsChecked="{Binding IsAutoincIdentity, Mode=TwoWay}" />
+          <RadioButton GroupName="Autoinc"
+                       Content="{x:Static app:UiStrings.AddFieldAutoincExisting}"
+                       IsChecked="{Binding IsAutoincExisting, Mode=TwoWay}" />
+          <ComboBox ItemsSource="{Binding Generators}"
+                    SelectedItem="{Binding SelectedGenerator, Mode=TwoWay}"
+                    HorizontalAlignment="Stretch"
+                    Margin="22,2,0,2"
+                    IsVisible="{Binding ShowExistingGeneratorPicker}" />
+          <RadioButton GroupName="Autoinc"
+                       Content="{x:Static app:UiStrings.AddFieldAutoincNew}"
+                       IsChecked="{Binding IsAutoincNew, Mode=TwoWay}" />
+          <StackPanel Margin="22,2,0,0" Spacing="6"
+                      IsVisible="{Binding ShowNewGeneratorFields}">
+            <TextBlock Text="{x:Static app:UiStrings.AddFieldGeneratorNameLabel}" Classes="field-label" />
+            <TextBox Text="{Binding NewGeneratorName, Mode=TwoWay}" />
+            <TextBlock Text="{x:Static app:UiStrings.AddFieldTriggerNameLabel}" Classes="field-label" />
+            <TextBox Text="{Binding TriggerName, Mode=TwoWay}" />
+          </StackPanel>
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabDescription}">
+        <StackPanel Margin="8" Spacing="6">
+          <TextBlock Text="{x:Static app:UiStrings.AddFieldDescriptionLabel}" Classes="field-label" />
+          <TextBox Text="{Binding Description, Mode=TwoWay}"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   MinHeight="160" />
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabDdl}">
+        <TextBox Text="{Binding DdlPreview, Mode=OneWay}"
+                 IsReadOnly="True"
+                 AcceptsReturn="True"
+                 TextWrapping="NoWrap"
+                 FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                 FontSize="12"
+                 Margin="8"
+                 MinHeight="180"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+      </TabItem>
+
+    </TabControl>
+
+    <!-- Validation row -->
+    <Border Grid.Row="3"
+            Padding="20,4,20,4"
+            IsVisible="{Binding HasValidationMessage}">
+      <TextBlock Text="{Binding ValidationMessage}"
+                 Classes="error"
+                 FontSize="12"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <!-- Footer -->
+    <Border Grid.Row="4"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="20,12">
+      <StackPanel Orientation="Horizontal"
+                  HorizontalAlignment="Right"
+                  Spacing="8">
+        <Button Classes="flat"
+                Content="{x:Static app:UiStrings.DialogCancel}"
+                Command="{Binding CancelCommand}" />
+        <Button Classes="primary"
+                Content="{x:Static app:UiStrings.AddFieldDialogOk}"
+                Command="{Binding AcceptCommand}"
+                IsDefault="True" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>

@@ -68,6 +68,7 @@ public sealed class FirebirdTableDetailReader
                 var charsetName = reader.IsDBNull(14) ? null : reader.GetString(14).Trim();
                 var unqCount = reader.IsDBNull(15) ? 0 : reader.GetInt32(15);
                 var fkTable = reader.IsDBNull(16) ? null : reader.GetString(16).Trim();
+                var aiFlag = reader.IsDBNull(17) ? 0 : reader.GetInt32(17);
 
                 results.Add(new FieldInfo
                 {
@@ -86,6 +87,7 @@ public sealed class FirebirdTableDetailReader
                     Domain = NormalizeDomain(fieldSource),
                     Charset = string.IsNullOrEmpty(charsetName) ? null : charsetName,
                     ForeignKeyTable = string.IsNullOrEmpty(fkTable) ? null : fkTable,
+                    IsAutoIncrement = aiFlag > 0,
                 });
             }
             return results;
@@ -764,7 +766,24 @@ public sealed class FirebirdTableDetailReader
         "          WHERE rc_fk.RDB$RELATION_NAME = rf.RDB$RELATION_NAME " +
         "            AND rc_fk.RDB$CONSTRAINT_TYPE = 'FOREIGN KEY' " +
         "            AND s.RDB$FIELD_NAME = rf.RDB$FIELD_NAME " +
-        "          ROWS 1) AS FK_TABLE " +
+        "          ROWS 1) AS FK_TABLE, " +
+        // AI = 1 when this column is auto-incremented. Detected via two paths:
+        //   (a) FB3+ identity: RDB$RELATION_FIELDS.RDB$IDENTITY_TYPE IS NOT NULL.
+        //   (b) Legacy trigger pattern: a BEFORE INSERT user-trigger on this table
+        //       whose source mentions GEN_ID( and NEW.<field name>. BLOB SUB_TYPE
+        //       TEXT supports CONTAINING since FB 2.5.
+        // NOTE: RDB$IDENTITY_TYPE exists from FB3. On FB2.5 the column is missing
+        // and this query throws an FbException — the Pola load step catches it
+        // via SafeLoadAsync and only the Fields tab shows an error; other tabs
+        // continue to render. Pragmatic trade-off given the FB5-primary user base.
+        "       CASE WHEN (rf.RDB$IDENTITY_TYPE IS NOT NULL " +
+        "                 OR EXISTS(SELECT 1 FROM RDB$TRIGGERS t " +
+        "                             WHERE t.RDB$RELATION_NAME = rf.RDB$RELATION_NAME " +
+        "                               AND t.RDB$TRIGGER_TYPE = 1 " +
+        "                               AND COALESCE(t.RDB$SYSTEM_FLAG, 0) = 0 " +
+        "                               AND t.RDB$TRIGGER_SOURCE CONTAINING 'GEN_ID(' " +
+        "                               AND t.RDB$TRIGGER_SOURCE CONTAINING 'NEW.' || TRIM(rf.RDB$FIELD_NAME))) " +
+        "            THEN 1 ELSE 0 END AS IS_AI " +
         "FROM RDB$RELATION_FIELDS rf " +
         "JOIN RDB$FIELDS ft ON ft.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE " +
         "LEFT JOIN RDB$CHARACTER_SETS cs ON cs.RDB$CHARACTER_SET_ID = ft.RDB$CHARACTER_SET_ID " +

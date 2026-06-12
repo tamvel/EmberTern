@@ -28,6 +28,18 @@ public class MetadataReaderTests
     }
 
     [Fact]
+    public void DomainsSql_SelectsTypeColumns()
+    {
+        var sql = FirebirdMetadataReader.DomainsSql;
+        Assert.Contains("RDB$FIELDS", sql);
+        Assert.Contains("RDB$FIELD_TYPE", sql);
+        Assert.Contains("RDB$FIELD_LENGTH", sql);
+        Assert.Contains("RDB$FIELD_SCALE", sql);
+        Assert.Contains("RDB$FIELD_PRECISION", sql);
+        Assert.Contains("RDB$FIELD_SUB_TYPE", sql);
+    }
+
+    [Fact]
     public void IsSystemName_ReturnsTrueForEmpty()
     {
         Assert.True(FirebirdMetadataReader.IsSystemName(""));

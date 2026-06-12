@@ -46,7 +46,7 @@
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
                     VerticalAlignment="Center" Margin="10,0,4,0">
           <Image Source="avares://EmberTern/Assets/Branding/EmberTern_logo.png"
-                 Width="28" Height="28"
+                 Width="43" Height="28"
                  RenderOptions.BitmapInterpolationMode="HighQuality"
                  VerticalAlignment="Center" />
           <TextBlock Text="{Binding AppTitle}"
@@ -95,6 +95,15 @@
           <Button Classes="icon" Content="↻"
                   ToolTip.Tip="{Binding Metadata.RefreshTooltip}"
                   Command="{Binding Metadata.RefreshCommand}" />
+          <!-- Table-creation section sits AFTER all connection-related buttons.
+               Icon ▦＋ mirrors the metadata tree's Table glyph with a plus —
+               visually rhymes with the sidebar where new tables will appear. -->
+          <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
+          <Button Classes="icon"
+                  Content="{x:Static app:UiStrings.ToolbarNewTableIcon}"
+                  Foreground="{DynamicResource IconColor_Table}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewTableTooltip}"
+                  Command="{Binding NewTableCommand}" />
         </StackPanel>
 
         <!-- Drag spacer (column 2 = *) -->
@@ -462,6 +471,75 @@
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarRefreshDataTooltip}"
                       Command="{Binding RefreshDataPreviewCommand}"
                       IsVisible="{Binding IsDataTabActive}" />
+              <!-- Structural edit (Pola sub-tab): Compile + Add + Drop + Move Up / Down.
+                   Add / Drop run immediately in the active tx; Move queues a pending
+                   change drained by ⚡ Compile. All five share IsVisible on the Pola
+                   sub-tab; commands route through ActiveTableDetail. -->
+              <Border Width="1" Margin="4,4"
+                      Background="{DynamicResource BorderBrush}"
+                      IsVisible="{Binding IsFieldsTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.FieldEditCompileIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
+                      Command="{Binding ActiveTableDetail.CompileCommand}"
+                      IsVisible="{Binding IsFieldsTabActive}" />
+              <!-- Inline-edit toggle. Off by default on existing tables — explicit
+                   opt-in stops accidental schema edits from a misclick. Highlights
+                   when active via Classes="active-toggle" toggled below. -->
+              <ToggleButton Classes="icon"
+                            Content="{x:Static app:UiStrings.ToolbarToggleFieldEditIcon}"
+                            Foreground="{DynamicResource IconColor_Table}"
+                            ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleFieldEditTooltip}"
+                            IsChecked="{Binding ActiveTableDetail.IsFieldEditMode, Mode=TwoWay}"
+                            IsVisible="{Binding IsFieldsTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.FieldEditAddIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditAddTooltip}"
+                      Command="{Binding ActiveTableDetail.AddFieldCommand}"
+                      IsVisible="{Binding IsFieldsTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.FieldEditDropIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditDropTooltip}"
+                      Command="{Binding ActiveTableDetail.DropFieldCommand}"
+                      IsVisible="{Binding IsFieldsTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.FieldEditMoveUpIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditMoveUpTooltip}"
+                      Command="{Binding ActiveTableDetail.MoveFieldUpCommand}"
+                      IsVisible="{Binding IsFieldsTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.FieldEditMoveDownIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditMoveDownTooltip}"
+                      Command="{Binding ActiveTableDetail.MoveFieldDownCommand}"
+                      IsVisible="{Binding IsFieldsTabActive}" />
+              <!-- ⚡ Compile + grid row commands for the New Table tab. All five
+                   visible only when the New Table tab is active. The grid itself
+                   carries no inline toolbar — these are the only entry points. -->
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.FieldEditCompileIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.NewTableDialogCompile}"
+                      Command="{Binding ActiveNewTable.CompileCommand}"
+                      IsVisible="{Binding IsNewTableTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.FieldEditAddIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.NewTableAddRowTooltip}"
+                      Command="{Binding ActiveNewTable.AddFieldCommand}"
+                      IsVisible="{Binding IsNewTableTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.FieldEditDropIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.NewTableDeleteRowTooltip}"
+                      Command="{Binding ActiveNewTable.DeleteFieldCommand}"
+                      IsVisible="{Binding IsNewTableTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.FieldEditMoveUpIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.NewTableMoveUpTooltip}"
+                      Command="{Binding ActiveNewTable.MoveFieldUpCommand}"
+                      IsVisible="{Binding IsNewTableTabActive}" />
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.FieldEditMoveDownIcon}"
+                      ToolTip.Tip="{x:Static app:UiStrings.NewTableMoveDownTooltip}"
+                      Command="{Binding ActiveNewTable.MoveFieldDownCommand}"
+                      IsVisible="{Binding IsNewTableTabActive}" />
               <!-- Data-edit add/delete row buttons. Bound through ActiveTableDetail
                    because the commands live on TableDetailTabViewModel. Visible only
                    on the Dane sub-tab; the leading separator collapses to zero width
@@ -561,6 +639,9 @@
               <views:TableDetailTabView x:Name="TableDetailView"
                                         DataContext="{Binding ActiveTableDetail}"
                                         IsVisible="{Binding DataContext.IsTableDetailTabActive, ElementName=RootWindow}" />
+              <views:NewTableTabView x:Name="NewTableView"
+                                     DataContext="{Binding ActiveNewTable}"
+                                     IsVisible="{Binding DataContext.IsNewTableTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query

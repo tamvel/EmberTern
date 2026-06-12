@@ -1,0 +1,190 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:EmberTern.App"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:m="using:EmberTern.Core.Metadata"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             x:Class="EmberTern.App.Views.NewTableTabView"
+             x:DataType="vm:NewTableTabViewModel"
+             Background="{DynamicResource BackgroundBrush}">
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    <Style Selector="DataGridRow">
+      <Setter Property="Height" Value="34" />
+    </Style>
+    <Style Selector="DataGridCell">
+      <Setter Property="Padding" Value="6 2" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto,Auto">
+
+    <!-- Top: name + kind -->
+    <Border Grid.Row="0" Padding="14,10">
+      <Grid ColumnDefinitions="*,12,260" RowDefinitions="Auto,Auto">
+        <TextBlock Grid.Row="0" Grid.Column="0"
+                   Text="{x:Static app:UiStrings.NewTableDialogTableNameLabel}"
+                   Classes="field-label" />
+        <TextBlock Grid.Row="0" Grid.Column="2"
+                   Text="{x:Static app:UiStrings.NewTableDialogTableKindLabel}"
+                   Classes="field-label" />
+        <TextBox Grid.Row="1" Grid.Column="0"
+                 Text="{Binding TableName, Mode=TwoWay}"
+                 PlaceholderText="{x:Static app:UiStrings.NewTableNamePlaceholder}" />
+        <ComboBox Grid.Row="1" Grid.Column="2"
+                  ItemsSource="{Binding TableKinds}"
+                  SelectedItem="{Binding SelectedKind, Mode=TwoWay}"
+                  HorizontalAlignment="Stretch">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:NewTableTabViewModel+NamedTableKind">
+              <TextBlock Text="{Binding Label}" FontSize="12" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+    </Border>
+
+    <!-- Fields grid + Description tabs -->
+    <TabControl Grid.Row="1" Padding="0" Margin="10,0">
+      <TabItem Header="{x:Static app:UiStrings.NewTableTabFields}">
+        <!-- Add / Drop / Move buttons live in the main toolbar — see MainWindow.axaml,
+             gated on IsNewTableTabActive — so this tab carries just the grid. -->
+          <DataGrid x:Name="NewTableFieldsGrid"
+                    ItemsSource="{Binding Fields}"
+                    SelectedItem="{Binding SelectedField, Mode=TwoWay}"
+                    FontSize="11"
+                    GridLinesVisibility="Horizontal"
+                    HeadersVisibility="Column"
+                    CanUserSortColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserReorderColumns="False"
+                    RowBackground="Transparent"
+                    HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                    VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                    Background="{DynamicResource BackgroundBrush}">
+            <DataGrid.Columns>
+              <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.NewTableFieldPk}"
+                                      Binding="{Binding PrimaryKey, Mode=TwoWay}"
+                                      Width="40" />
+              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldName}"
+                                  Binding="{Binding Name, Mode=TwoWay}"
+                                  Width="160" />
+              <!-- Type — always-visible ComboBox in CellTemplate (no separate
+                   CellEditingTemplate). Avalonia 12 DataGrid's edit-mode swap
+                   from TextBlock to ComboBox loses focus on the popup open
+                   pass, which both closes the dropdown immediately and (under
+                   repeated clicks) hangs the cell-edit cycle. Always-visible
+                   means the user clicks once and the dropdown opens natively. -->
+              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldType}"
+                                      Width="140"
+                                      IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
+                    <ComboBox ItemsSource="{Binding BasicTypes}"
+                              SelectedItem="{Binding Type, Mode=TwoWay}"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <!-- Domain — same always-visible CellTemplate ComboBox pattern as Type. -->
+              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldDomain}"
+                                      Width="140"
+                                      IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
+                    <ComboBox ItemsSource="{Binding AvailableDomains}"
+                              SelectedItem="{Binding SelectedDomainSpec, Mode=TwoWay}"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Center">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Name}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldSize}"
+                                  Binding="{Binding Size, Mode=TwoWay}"
+                                  Width="60" />
+              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldScale}"
+                                  Binding="{Binding Scale, Mode=TwoWay}"
+                                  Width="60" />
+              <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.NewTableFieldNotNull}"
+                                      Binding="{Binding NotNull, Mode=TwoWay}"
+                                      Width="60" />
+              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldDefault}"
+                                  Binding="{Binding DefaultValue, Mode=TwoWay}"
+                                  Width="110" />
+              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldComputed}"
+                                  Binding="{Binding ComputedExpression, Mode=TwoWay}"
+                                  Width="120" />
+              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldCheck}"
+                                  Binding="{Binding CheckExpression, Mode=TwoWay}"
+                                  Width="120" />
+              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldCharset}"
+                                  Binding="{Binding Charset, Mode=TwoWay}"
+                                  Width="80" />
+              <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.NewTableFieldAi}"
+                                      Binding="{Binding AutoIncrement, Mode=TwoWay}"
+                                      Width="40" />
+              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldDescription}"
+                                  Binding="{Binding Description, Mode=TwoWay}"
+                                  Width="*" />
+            </DataGrid.Columns>
+          </DataGrid>
+      </TabItem>
+
+      <TabItem Header="{x:Static app:UiStrings.NewTableTabDescription}">
+        <StackPanel Margin="8" Spacing="6">
+          <TextBlock Text="{x:Static app:UiStrings.NewTableDescriptionLabel}" Classes="field-label" />
+          <TextBox Text="{Binding Description, Mode=TwoWay}"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   MinHeight="180" />
+        </StackPanel>
+      </TabItem>
+    </TabControl>
+
+    <!-- Live DDL preview -->
+    <Border Grid.Row="2" Padding="14,4">
+      <StackPanel Spacing="4">
+        <TextBlock Text="{x:Static app:UiStrings.NewTableDdlLabel}" Classes="field-label" />
+        <TextBox Text="{Binding DdlPreview, Mode=OneWay}"
+                 IsReadOnly="True"
+                 AcceptsReturn="True"
+                 TextWrapping="NoWrap"
+                 FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                 FontSize="12"
+                 MinHeight="100"
+                 MaxHeight="180"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+      </StackPanel>
+    </Border>
+
+    <!-- Validation -->
+    <Border Grid.Row="3"
+            Padding="14,4"
+            IsVisible="{Binding HasValidationMessage}">
+      <TextBlock Text="{Binding ValidationMessage}"
+                 Classes="error"
+                 FontSize="12"
+                 TextWrapping="Wrap" />
+    </Border>
+
+  </Grid>
+</UserControl>

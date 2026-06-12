@@ -9,6 +9,7 @@ public enum WorkspaceTabKind
     Query,
     Ddl,
     TableDetail,
+    NewTable,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -44,6 +45,18 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
         };
 
+    public static WorkspaceTabViewModel CreateNewTable(MainWindowViewModel owner, NewTableTabViewModel newTable, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.NewTable,
+            BaseTitle = newTable.DisplayTitle,
+            IsClosable = true,
+            ConnectionProfileId = connectionProfileId,
+            Icon = MetadataNodeViewModel.IconFor(MetadataObjectKind.Table),
+            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(MetadataObjectKind.Table),
+            NewTable = newTable,
+        };
+
     public static WorkspaceTabViewModel CreateTableDetail(MainWindowViewModel owner, MetadataObject obj, TableDetailTabViewModel detail, string? connectionProfileId)
         => new(owner)
         {
@@ -68,6 +81,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public string Icon { get; private init; } = string.Empty;
     public string IconResourceKey { get; private init; } = string.Empty;
     public TableDetailTabViewModel? TableDetail { get; private init; }
+    public NewTableTabViewModel? NewTable { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]

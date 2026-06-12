@@ -19,6 +19,11 @@ public sealed class FieldInfo
     public string? Domain { get; init; }
     public string? Charset { get; init; }
     public string? ForeignKeyTable { get; init; }
+    /// <summary>True when this column is auto-incremented — either a native
+    /// FB3+ identity column (<c>RDB$IDENTITY_TYPE IS NOT NULL</c>) or backed
+    /// by a legacy BEFORE INSERT trigger that calls <c>GEN_ID</c> with this
+    /// field as target.</summary>
+    public bool IsAutoIncrement { get; init; }
 
     // Firebird stores RDB$FIELD_POSITION as 0-based; the grid shows 1-based.
     public int DisplayPosition => Position + 1;

@@ -31,6 +31,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdDdlReader _ddlReader;
     private readonly FirebirdTableDetailReader _tableDetailReader;
     private readonly FirebirdDataEditor _dataEditor;
+    private readonly FirebirdDdlExecutor _ddlExecutor;
     private CancellationTokenSource? _executionCts;
     private TransactionState _previousTransactionState = TransactionState.Idle;
     // Per-connection tabs. Key = ConnectionProfile.Id. Populated on disconnect/switch
@@ -78,6 +79,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _ddlReader = new FirebirdDdlReader(_service, _transactionService);
         _tableDetailReader = new FirebirdTableDetailReader(_service, _transactionService);
         _dataEditor = new FirebirdDataEditor(_service, _transactionService);
+        _ddlExecutor = new FirebirdDdlExecutor(_service, _transactionService);
         Metadata = new MetadataExplorerViewModel(_service, _metadataReader);
         Metadata.OpenDdlRequested += OnOpenDdlRequested;
         Metadata.CopyNameRequested += OnCopyNameRequested;
@@ -133,6 +135,9 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsDdlTabActive))]
     [NotifyPropertyChangedFor(nameof(IsTableDetailTabActive))]
     [NotifyPropertyChangedFor(nameof(IsDataTabActive))]
+    [NotifyPropertyChangedFor(nameof(IsFieldsTabActive))]
+    [NotifyPropertyChangedFor(nameof(IsNewTableTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveNewTable))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowQueryPanel))]
@@ -152,18 +157,29 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsQueryTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Query };
     public bool IsDdlTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl };
     public bool IsTableDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TableDetail };
+    /// <summary>True when the active workspace tab is a New Table tab.</summary>
+    public bool IsNewTableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.NewTable };
+    public NewTableTabViewModel? ActiveNewTable
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.NewTable } t ? t.NewTable : null;
     // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
     // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
     // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
     // — see HookTableDetailEvents.
     public bool IsDataTabActive
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TableDetail, TableDetail: { IsDataSubTabActive: true } };
-    // The Dane sub-tab reuses Commit / Rollback exactly like the Query tab —
-    // both share the user's working transaction, so the same buttons make sense.
-    public bool ShowTransactionButtons => IsQueryTabActive || IsDataTabActive;
-    // Close-tab toolbar button targets *other* tabs (DDL or TableDetail); the
-    // anchored Query tab is never closable so the button hides when it's active.
-    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail };
+    // True when the Pola sub-tab is active inside a TableDetail tab. Drives the
+    // main toolbar's ⚡ ＋ − ↑ ↓ structural-edit buttons.
+    public bool IsFieldsTabActive
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TableDetail, TableDetail: { IsFieldsSubTabActive: true } };
+    // Commit / Rollback are shown on any sub-tab where structural or data changes
+    // can be committed: the Query tab (F5 statements), the Dane sub-tab (inline
+    // INSERT/UPDATE/DELETE), and the Pola sub-tab (Add Field / Drop Field run
+    // immediately in the user's working tx — the user needs the same Commit /
+    // Rollback escape hatch).
+    public bool ShowTransactionButtons => IsQueryTabActive || IsDataTabActive || IsFieldsTabActive;
+    // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable);
+    // the anchored Query tab is never closable so the button hides when it's active.
+    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable };
     // Saved Queries panel is only meaningful while the Query tab is active.
     // When a DDL or TableDetail tab is active the panel collapses regardless of
     // the user's IsQueryPanelVisible toggle preference (the preference itself
@@ -924,7 +940,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 // restored-active tab loads automatically and inactive tabs load
                 // lazily when the user clicks them.
                 var obj = new MetadataObject(tab.ObjectName, detailKind);
-                var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader, _dataEditor)
+                var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader, _dataEditor, _ddlExecutor, _metadataReader)
                 {
                     DdlText = tab.DdlText ?? string.Empty,
                 };
@@ -1113,6 +1129,69 @@ public partial class MainWindowViewModel : ViewModelBase
     public event Func<string?, Task>? AddConnectionRequested;
     public Task RequestAddConnectionAsync(string? folderId)
         => AddConnectionRequested?.Invoke(folderId) ?? Task.CompletedTask;
+
+    // ─── New Table workspace tab + executor exposure ──────────────────────
+    //
+    // New Table button creates a workspace tab (WorkspaceTabKind.NewTable)
+    // hosting NewTableTabViewModel. The user fills in the form progressively;
+    // ⚡ Compile from the main toolbar fires the DDL via FirebirdDdlExecutor
+    // (in the user's working tx), refreshes the tree, then closes the tab.
+    // Multiple New Table tabs can coexist.
+
+    internal FirebirdDdlExecutor DdlExecutor => _ddlExecutor;
+    internal FirebirdMetadataReader MetadataReader => _metadataReader;
+
+    public bool CanCreateTable => _service.IsConnected;
+
+    [RelayCommand(CanExecute = nameof(CanCreateTable))]
+    private async Task NewTableAsync()
+    {
+        var newTableVm = new NewTableTabViewModel(this);
+        newTableVm.CompileRequested += OnNewTableCompileRequested;
+
+        // Best-effort fetch of available domains so the in-cell Domain combo has
+        // something to offer. Failure surfaces as an empty list — non-fatal.
+        try
+        {
+            var domains = await _metadataReader.ListDomainsAsync().ConfigureAwait(true);
+            newTableVm.SetAvailableDomains(domains);
+        }
+        catch (MetadataReadException) { /* best effort */ }
+
+        var tab = WorkspaceTabViewModel.CreateNewTable(this, newTableVm, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+    }
+
+    private async Task OnNewTableCompileRequested(NewTableTabViewModel newTable)
+    {
+        var trimmed = newTable.TableName.Trim();
+        try
+        {
+            var sql = DdlGenerator.BuildCreateTable(trimmed, newTable.BuildSpec());
+            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+            AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewTableExecutedFormat, trimmed));
+            await Metadata.RefreshAsync().ConfigureAwait(true);
+
+            // Close the tab carrying this NewTableTabViewModel.
+            foreach (var t in WorkspaceTabs)
+            {
+                if (t.Kind == WorkspaceTabKind.NewTable && ReferenceEquals(t.NewTable, newTable))
+                {
+                    CloseTab(t);
+                    break;
+                }
+            }
+        }
+        catch (DdlExecutionException ex)
+        {
+            newTable.ValidationMessage = ex.Message;
+        }
+        catch (InvalidOperationException ex)
+        {
+            newTable.ValidationMessage = ex.Message;
+        }
+    }
 
     // Persist a freshly-added connection into a folder. Called by the view after
     // the dialog returns with a profile; isolated here so tests can drive the
@@ -1316,7 +1395,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             if (obj.Kind == MetadataObjectKind.Table)
             {
-                var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader, _dataEditor);
+                var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader, _dataEditor, _ddlExecutor, _metadataReader);
                 detail.OpenObjectRequested += OnOpenDdlRequested;
                 detail.ConfirmationRequested += RequestConfirmAsync;
                 var newTab = WorkspaceTabViewModel.CreateTableDetail(this, obj, detail, _service.ActiveProfile?.Id);
@@ -1639,6 +1718,11 @@ public partial class MainWindowViewModel : ViewModelBase
             OnPropertyChanged(nameof(ShowTransactionButtons));
             RefreshDataPreviewCommand.NotifyCanExecuteChanged();
         }
+        else if (e.PropertyName == nameof(TableDetailTabViewModel.IsFieldsSubTabActive))
+        {
+            OnPropertyChanged(nameof(IsFieldsTabActive));
+            OnPropertyChanged(nameof(ShowTransactionButtons));
+        }
     }
 
     public bool CanRefreshDataPreview => IsDataTabActive;
@@ -1860,6 +1944,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsConnected));
         OnPropertyChanged(nameof(ActiveConnectionName));
         OnPropertyChanged(nameof(HasActiveConnection));
+        OnPropertyChanged(nameof(CanCreateTable));
+        NewTableCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

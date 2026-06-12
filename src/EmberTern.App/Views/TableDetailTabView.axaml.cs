@@ -27,6 +27,7 @@ public partial class TableDetailTabView : UserControl
 {
     private TextEditor? _ddlEditor;
     private DataGrid? _dataPreviewGrid;
+    private DataGrid? _fieldsGrid;
     private TableDetailTabViewModel? _currentVm;
     private readonly List<string> _dataPreviewColumnNames = new();
     // Resolved once per column rebuild — used by CellEditEnding to extract the
@@ -49,6 +50,17 @@ public partial class TableDetailTabView : UserControl
         InitializeComponent();
         _ddlEditor = this.FindControl<TextEditor>("TableDetailDdlEditor");
         _dataPreviewGrid = this.FindControl<DataGrid>("DataPreviewGrid");
+        _fieldsGrid = this.FindControl<DataGrid>("FieldsGrid");
+        if (_fieldsGrid is not null)
+        {
+            // Inline structure-edit on the Pola grid: every row-commit (Tab/Enter
+            // out of the editing element, or focus moves off the row) inspects
+            // edited values vs. original and queues ALTER statements via the VM.
+            _fieldsGrid.RowEditEnding += OnFieldsRowEditEnding;
+            // Toggle the "pending" row class when IsModified changes so the row
+            // gets a subtle background tint until Compile drains the queue.
+            _fieldsGrid.LoadingRow += OnFieldsLoadingRow;
+        }
         if (_dataPreviewGrid is not null)
         {
             // Avalonia paints the column-header arrow itself when (a) the
@@ -75,19 +87,56 @@ public partial class TableDetailTabView : UserControl
         if (_currentVm is not null)
         {
             _currentVm.PropertyChanged -= OnVmPropertyChanged;
+            _currentVm.AddFieldRequested -= OnAddFieldRequested;
         }
         _currentVm = DataContext as TableDetailTabViewModel;
         if (_currentVm is not null)
         {
             _currentVm.PropertyChanged += OnVmPropertyChanged;
+            _currentVm.AddFieldRequested += OnAddFieldRequested;
             PushDdl();
             PopulateDataGrid(_currentVm.DataResult);
         }
     }
 
+    private async System.Threading.Tasks.Task<FieldDefinition?> OnAddFieldRequested()
+    {
+        if (_currentVm is null) return null;
+        // Walk up to the host Window so we can resolve the MainWindowViewModel
+        // (carrier of MetadataReader). Also serves as the dialog's owner.
+        var window = this.FindAncestorOfType<Window>();
+        if (window is null) return null;
+        var mainVm = window.DataContext as MainWindowViewModel;
+        if (mainVm is null) return null;
+
+        // Fetch domains + generators from the live metadata reader. Failures fall
+        // through to empty lists — the dialog still works against the basic-type
+        // tab and a manually-entered generator name. Domains carry their SQL type
+        // (e.g. T_ID — INTEGER) so the ComboBox shows it inline.
+        IReadOnlyList<DomainSpec> domains = System.Array.Empty<DomainSpec>();
+        var generators = new List<string>();
+        try
+        {
+            domains = await mainVm.MetadataReader.ListDomainsAsync().ConfigureAwait(true);
+        }
+        catch { /* best effort — empty list lets the dialog still open */ }
+        try
+        {
+            var generatorObjs = await mainVm.MetadataReader.ListAsync(MetadataObjectKind.Generator).ConfigureAwait(true);
+            foreach (var g in generatorObjs) generators.Add(g.Name);
+        }
+        catch { /* best effort */ }
+
+        var dialogVm = new AddFieldDialogViewModel(_currentVm.TableName, domains, generators);
+        var dialog = new AddFieldDialog { DataContext = dialogVm };
+        var result = await dialog.ShowDialog<FieldDefinition?>(window);
+        return result;
+    }
+
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(TableDetailTabViewModel.DdlText))
+        if (e.PropertyName == nameof(TableDetailTabViewModel.DdlText)
+            || e.PropertyName == nameof(TableDetailTabViewModel.DdlWithPendingPreview))
         {
             PushDdl();
         }
@@ -441,10 +490,68 @@ public partial class TableDetailTabView : UserControl
     private void PushDdl()
     {
         if (_ddlEditor is null || _currentVm is null) return;
-        var text = _currentVm.DdlText ?? string.Empty;
+        // DdlWithPendingPreview prepends the live DDL with a "-- Pending changes:"
+        // block whenever the user has queued add/drop/move actions, so the DDL
+        // sub-tab reflects what Compile would send to the server.
+        var text = _currentVm.DdlWithPendingPreview ?? string.Empty;
         if (_ddlEditor.Text != text)
         {
             _ddlEditor.Text = text;
+        }
+    }
+
+    // RowEditEnding fires when the user commits the row (Tab/Enter out of the
+    // last editing element, or focus moves to a different row). All edited cells
+    // are already written through to the bound FieldRowViewModel by that point;
+    // we ask the VM to inspect-and-queue.
+    private void OnFieldsRowEditEnding(object? sender, DataGridRowEditEndingEventArgs e)
+    {
+        if (e.EditAction != DataGridEditAction.Commit) return;
+        if (e.Row.DataContext is not FieldRowViewModel row) return;
+        if (_currentVm is null) return;
+        _currentVm.EnqueueRowEdits(row);
+        // Refresh the row class so the tint reflects the new IsModified state.
+        UpdatePendingClass(e.Row, row);
+    }
+
+    private void OnFieldsLoadingRow(object? sender, DataGridRowEventArgs e)
+    {
+        if (e.Row.DataContext is FieldRowViewModel row)
+        {
+            UpdatePendingClass(e.Row, row);
+            row.PropertyChanged -= OnFieldRowPropertyChanged;
+            row.PropertyChanged += OnFieldRowPropertyChanged;
+        }
+    }
+
+    private void OnFieldRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(FieldRowViewModel.IsModified)) return;
+        if (_fieldsGrid is null) return;
+        // Walk visible rows to find the one matching the VM and re-apply class.
+        // We don't track containers explicitly; LoadingRow re-fires on virtualization
+        // recycle, so this path only matters for currently realized rows.
+        if (sender is not FieldRowViewModel row) return;
+        foreach (var item in _fieldsGrid.ItemsSource!)
+        {
+            if (!ReferenceEquals(item, row)) continue;
+            // No public API for "get container for item"; LoadingRow has done the
+            // initial pass. Class changes via .Classes[] would require the row;
+            // skipping mid-edit toggle is acceptable — RowEditEnding's
+            // UpdatePendingClass covers the post-commit redraw.
+            break;
+        }
+    }
+
+    private static void UpdatePendingClass(DataGridRow row, FieldRowViewModel vm)
+    {
+        if (vm.IsModified)
+        {
+            if (!row.Classes.Contains("pending")) row.Classes.Add("pending");
+        }
+        else
+        {
+            row.Classes.Remove("pending");
         }
     }
 

@@ -34,9 +34,16 @@ public partial class TableDetailTabViewModel : ViewModelBase
     // Zależności, Dane, Opis, DDL).
     public const int DataSubTabIndex = 4;
 
+    // Index of the "Pola" sub-tab — leftmost, default-selected. The main
+    // toolbar binds ⚡ ＋ − ↑ ↓ visibility to this so structural-edit affordances
+    // live in a single chrome row alongside Execute/Commit/Pagination.
+    public const int FieldsSubTabIndex = 0;
+
     private readonly FirebirdTableDetailReader? _reader;
     private readonly FirebirdDdlReader? _ddlReader;
     private readonly FirebirdDataEditor? _dataEditor;
+    private readonly FirebirdDdlExecutor? _ddlExecutor;
+    private readonly FirebirdMetadataReader? _metadataReader;
 
     // Original PK snapshots per row reference. We capture them on row load (when
     // we know the PK columns) so UPDATE/DELETE can identify the row even after
@@ -57,22 +64,42 @@ public partial class TableDetailTabViewModel : ViewModelBase
     private Task? _loadTask;
 
     public TableDetailTabViewModel(string tableName)
-        : this(tableName, null, null, null)
+        : this(tableName, null, null, null, null, null)
     {
     }
 
     public TableDetailTabViewModel(string tableName, FirebirdTableDetailReader? reader, FirebirdDdlReader? ddlReader)
-        : this(tableName, reader, ddlReader, null)
+        : this(tableName, reader, ddlReader, null, null, null)
     {
     }
 
     public TableDetailTabViewModel(string tableName, FirebirdTableDetailReader? reader, FirebirdDdlReader? ddlReader, FirebirdDataEditor? dataEditor)
+        : this(tableName, reader, ddlReader, dataEditor, null, null)
+    {
+    }
+
+    public TableDetailTabViewModel(string tableName, FirebirdTableDetailReader? reader, FirebirdDdlReader? ddlReader, FirebirdDataEditor? dataEditor, FirebirdDdlExecutor? ddlExecutor)
+        : this(tableName, reader, ddlReader, dataEditor, ddlExecutor, null)
+    {
+    }
+
+    public TableDetailTabViewModel(string tableName, FirebirdTableDetailReader? reader, FirebirdDdlReader? ddlReader, FirebirdDataEditor? dataEditor, FirebirdDdlExecutor? ddlExecutor, FirebirdMetadataReader? metadataReader)
     {
         TableName = tableName;
         _reader = reader;
         _ddlReader = ddlReader;
         _dataEditor = dataEditor;
+        _ddlExecutor = ddlExecutor;
+        _metadataReader = metadataReader;
         Fields = new ObservableCollection<FieldInfo>();
+        EditableFields = new ObservableCollection<FieldRowViewModel>();
+        AvailableDomains = new ObservableCollection<DomainSpec>();
+        BasicTypes = new[]
+        {
+            "SMALLINT", "INTEGER", "BIGINT", "FLOAT", "DOUBLE PRECISION",
+            "NUMERIC", "DECIMAL", "CHAR", "VARCHAR",
+            "DATE", "TIME", "TIMESTAMP", "BLOB",
+        };
         Indexes = new ObservableCollection<IndexInfo>();
         Constraints = new ObservableCollection<ConstraintInfo>();
         DependsOn = new ObservableCollection<DependencyInfo>();
@@ -80,7 +107,20 @@ public partial class TableDetailTabViewModel : ViewModelBase
         DependsOnTree = new ObservableCollection<DependencyGroupNode>();
         DependedOnByTree = new ObservableCollection<DependencyGroupNode>();
         EditableRows = new ObservableCollection<object?[]>();
+        PendingChanges = new ObservableCollection<PendingDdlChange>();
         Constraints.CollectionChanged += OnConstraintsCollectionChanged;
+        PendingChanges.CollectionChanged += OnPendingChangesCollectionChanged;
+        Fields.CollectionChanged += OnFieldsCollectionChanged;
+    }
+
+    // Mirror Fields → EditableFields whenever Fields changes (load + post-Compile
+    // re-load both clear-and-rebuild Fields). EditableFields is what the Pola
+    // grid binds to; FieldRowViewModel forwards read-only props and surfaces
+    // owner-side AvailableDomains / BasicTypes / CanEditStructure for the in-cell editors.
+    private void OnFieldsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        EditableFields.Clear();
+        foreach (var f in Fields) EditableFields.Add(new FieldRowViewModel(f, this));
     }
 
     /// <summary>
@@ -96,6 +136,154 @@ public partial class TableDetailTabViewModel : ViewModelBase
     public string TableName { get; }
 
     public ObservableCollection<FieldInfo> Fields { get; }
+    /// <summary>
+    /// Editable wrappers around <see cref="Fields"/>, one per row. Rebuilt
+    /// every time Fields changes. Bound to the Pola DataGrid for inline editing.
+    /// </summary>
+    public ObservableCollection<FieldRowViewModel> EditableFields { get; }
+
+    /// <summary>
+    /// Domain list for the inline Domain ComboBox. Populated by the load chain;
+    /// the FieldRowViewModel surfaces a reference to this via its owner so the
+    /// DataGrid's CellEditingTemplate can bind directly.
+    /// </summary>
+    public ObservableCollection<DomainSpec> AvailableDomains { get; }
+
+    /// <summary>Basic SQL types — used by the Type ComboBox in inline edit.</summary>
+    public IReadOnlyList<string> BasicTypes { get; }
+
+    /// <summary>
+    /// True when the named field has no incoming dependencies — i.e. nothing
+    /// in <see cref="DependedOnBy"/> references it. Rename is only safe in
+    /// that case (Firebird rejects ALTER COLUMN TO when triggers / views / etc.
+    /// still reference the old name).
+    /// </summary>
+    public bool CanRenameField(string fieldName)
+    {
+        if (string.IsNullOrEmpty(fieldName)) return false;
+        foreach (var dep in DependedOnBy)
+        {
+            if (string.Equals(dep.FieldName, fieldName, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Inspects the edited row vs. its original and queues one
+    /// <see cref="PendingDdlChange"/> per changed property. Called by the
+    /// view's CellEditEnding handler. Idempotent re-application is fine —
+    /// "edit, revert, edit again" simply queues another statement.
+    /// </summary>
+    public void EnqueueRowEdits(FieldRowViewModel row)
+    {
+        if (row is null) return;
+        var original = row.Original;
+        var originalName = original.Name;
+
+        if (!string.Equals(row.Name, originalName, System.StringComparison.Ordinal))
+        {
+            // Rename: gate on no incoming deps. If blocked, revert the edit and
+            // surface a hint — the user shouldn't be able to commit a broken rename.
+            if (CanRenameField(originalName) && !string.IsNullOrWhiteSpace(row.Name))
+            {
+                PendingChanges.Add(new PendingDdlChange
+                {
+                    Kind = PendingDdlChangeKind.Other,
+                    Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionRenameFormat, originalName, row.Name),
+                    Sql = DdlGenerator.BuildRenameField(TableName, originalName, row.Name),
+                });
+            }
+            else
+            {
+                row.Name = originalName;
+                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditRenameBlockedFormat, originalName);
+            }
+        }
+
+        if (row.NotNull != original.NotNull)
+        {
+            PendingChanges.Add(new PendingDdlChange
+            {
+                Kind = PendingDdlChangeKind.Other,
+                Description = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                    row.NotNull ? UiStrings.FieldEditDescriptionSetNotNullFormat : UiStrings.FieldEditDescriptionDropNotNullFormat,
+                    originalName),
+                Sql = DdlGenerator.BuildSetNotNull(TableName, originalName, row.NotNull),
+            });
+        }
+
+        var origDefault = original.DefaultValue ?? string.Empty;
+        var newDefault = row.DefaultValue ?? string.Empty;
+        if (!string.Equals(origDefault, newDefault, System.StringComparison.Ordinal))
+        {
+            PendingChanges.Add(new PendingDdlChange
+            {
+                Kind = PendingDdlChangeKind.Other,
+                Description = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                    string.IsNullOrWhiteSpace(newDefault) ? UiStrings.FieldEditDescriptionDropDefaultFormat : UiStrings.FieldEditDescriptionSetDefaultFormat,
+                    originalName),
+                Sql = DdlGenerator.BuildSetDefault(TableName, originalName, newDefault),
+            });
+        }
+
+        if (!string.Equals(row.TypeText, original.Type, System.StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(row.TypeText))
+        {
+            // Type changes share the same dependency gate as rename — FB rejects
+            // ALTER COLUMN TYPE while triggers / views still reference the column.
+            if (CanRenameField(originalName))
+            {
+                PendingChanges.Add(new PendingDdlChange
+                {
+                    Kind = PendingDdlChangeKind.Other,
+                    Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionAlterTypeFormat, originalName, row.TypeText),
+                    Sql = DdlGenerator.BuildAlterType(TableName, originalName, row.TypeText),
+                });
+            }
+            else
+            {
+                row.TypeText = original.Type;
+                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditRenameBlockedFormat, originalName);
+            }
+        }
+
+        // Domain change → ALTER COLUMN TYPE <DOMAIN>. Same dep gate as plain type.
+        var origDomain = original.Domain ?? string.Empty;
+        var newDomain = row.DomainName ?? string.Empty;
+        if (!string.Equals(origDomain, newDomain, System.StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(newDomain))
+        {
+            if (CanRenameField(originalName))
+            {
+                PendingChanges.Add(new PendingDdlChange
+                {
+                    Kind = PendingDdlChangeKind.Other,
+                    Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionAlterTypeFormat, originalName, newDomain),
+                    Sql = DdlGenerator.BuildAlterType(TableName, originalName, newDomain),
+                });
+            }
+            else
+            {
+                row.DomainName = original.Domain;
+                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditRenameBlockedFormat, originalName);
+            }
+        }
+
+        var origDesc = original.Description ?? string.Empty;
+        var newDesc = row.Description ?? string.Empty;
+        if (!string.Equals(origDesc, newDesc, System.StringComparison.Ordinal))
+        {
+            PendingChanges.Add(new PendingDdlChange
+            {
+                Kind = PendingDdlChangeKind.Other,
+                Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionCommentFormat, originalName),
+                Sql = DdlGenerator.BuildCommentColumn(TableName, originalName, newDesc),
+            });
+        }
+    }
     public ObservableCollection<IndexInfo> Indexes { get; }
     public ObservableCollection<ConstraintInfo> Constraints { get; }
     public ObservableCollection<DependencyInfo> DependsOn { get; }
@@ -275,9 +463,11 @@ public partial class TableDetailTabViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDataSubTabActive))]
+    [NotifyPropertyChangedFor(nameof(IsFieldsSubTabActive))]
     private int _activeSubTabIndex;
 
     public bool IsDataSubTabActive => ActiveSubTabIndex == DataSubTabIndex;
+    public bool IsFieldsSubTabActive => ActiveSubTabIndex == FieldsSubTabIndex;
 
     [ObservableProperty]
     private string _ddlText = string.Empty;
@@ -918,6 +1108,22 @@ public partial class TableDetailTabViewModel : ViewModelBase
                     DescriptionLoaded = true;
                 });
 
+            // Domain list for the inline Domain ComboBox in the Pola grid. Wraps
+            // a separate reader call — if it throws (FB2.5 etc.) the inline
+            // Domain combo stays empty but the rest of the tab still renders.
+            // Fetched via _metadataReader because that's where ListDomainsAsync
+            // lives; injected from the owner.
+            if (_metadataReader is not null)
+            {
+                await SafeLoadAsync(
+                    async () =>
+                    {
+                        var domains = await _metadataReader.ListDomainsAsync(cancellationToken).ConfigureAwait(true);
+                        AvailableDomains.Clear();
+                        foreach (var d in domains) AvailableDomains.Add(d);
+                    });
+            }
+
             // Data preview gets its own visible error slot (DataError → shown
             // on the Dane tab); other tabs render normally even when this fails
             // (large tables, permission denied, dialect mismatch on quoted IDs).
@@ -1108,5 +1314,299 @@ public partial class TableDetailTabViewModel : ViewModelBase
         Indexes.Clear();
         foreach (var i in indexes) Indexes.Add(i);
         DdlText = ddl;
+    }
+
+    // ─── Structural editing (Add / Drop / Move fields + Compile) ───────────
+    //
+    // PendingChanges is the in-memory queue of DDL statements collected from
+    // the Pola toolbar. Nothing leaves the VM until the user presses ⚡ Compile,
+    // which feeds the statements one-by-one through FirebirdDdlExecutor. On
+    // success the list is cleared and the tab fully refreshed; on failure the
+    // first server error is surfaced as ErrorMessage and the remaining
+    // statements stay queued so the user can fix and retry.
+
+    public ObservableCollection<PendingDdlChange> PendingChanges { get; }
+
+    public bool HasPendingChanges => PendingChanges.Count > 0;
+    public bool CanCompile => _ddlExecutor is not null && HasPendingChanges;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DropFieldCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveFieldUpCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveFieldDownCommand))]
+    private FieldInfo? _selectedField;
+
+    /// <summary>
+    /// Grid-side selection — the wrapper. Drives the same Drop / Move commands
+    /// (those still take a <see cref="FieldInfo"/>) by mirroring into
+    /// <see cref="SelectedField"/> on every change.
+    /// </summary>
+    [ObservableProperty]
+    private FieldRowViewModel? _selectedFieldRow;
+
+    partial void OnSelectedFieldRowChanged(FieldRowViewModel? value)
+    {
+        SelectedField = value?.Original;
+    }
+
+    /// <summary>
+    /// When true the Pola DataGrid accepts inline edits (Name, Type, Domain,
+    /// NotNull, Default, Description); when false the grid is read-only.
+    /// Default off for existing tables — the user explicitly toggles it via
+    /// the main-toolbar grid-pencil button. The CreateTable workspace tab
+    /// runs its own grid always-on (no shared state).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFieldsReadOnly))]
+    private bool _isFieldEditMode;
+
+    public bool IsFieldsReadOnly => !IsFieldEditMode;
+
+    [RelayCommand]
+    private void ToggleFieldEditMode() => IsFieldEditMode = !IsFieldEditMode;
+
+    public bool CanAddField => _ddlExecutor is not null;
+
+    /// <summary>
+    /// View-side handler returns the populated <see cref="FieldDefinition"/> from
+    /// the modal AddFieldDialog, or null on Cancel. Async because the dialog
+    /// fetches the available domains + generators before opening.
+    /// </summary>
+    public event System.Func<Task<FieldDefinition?>>? AddFieldRequested;
+
+    [RelayCommand(CanExecute = nameof(CanAddField))]
+    private async Task AddFieldAsync()
+    {
+        if (AddFieldRequested is null) return;
+        var def = await AddFieldRequested().ConfigureAwait(true);
+        if (def is null) return;
+        await ExecuteAddFieldAsync(def).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Executes the ALTER TABLE … ADD statement immediately (in the user's
+    /// working transaction — DDL Executor auto-begins one if needed) and reloads
+    /// the table detail so the new column appears in the Pola grid. Errors
+    /// surface as <see cref="ErrorMessage"/>; the Commit / Rollback toolbar
+    /// buttons remain the user's escape hatch.
+    /// </summary>
+    public async Task ExecuteAddFieldAsync(FieldDefinition definition)
+    {
+        if (definition is null) return;
+        if (_ddlExecutor is null) return;
+
+        ErrorMessage = null;
+        var sql = DdlGenerator.BuildAddField(TableName, definition);
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+            return;
+        }
+        await ReloadAfterStructuralChangeAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Executes the ALTER TABLE … DROP statement immediately (in tx) and reloads
+    /// the table detail. Symmetric to <see cref="ExecuteAddFieldAsync"/>.
+    /// </summary>
+    public async Task ExecuteDropFieldAsync(string fieldName)
+    {
+        if (string.IsNullOrWhiteSpace(fieldName)) return;
+        if (_ddlExecutor is null) return;
+
+        ErrorMessage = null;
+        var sql = DdlGenerator.BuildDropField(TableName, fieldName);
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+            return;
+        }
+        await ReloadAfterStructuralChangeAsync().ConfigureAwait(true);
+    }
+
+    // Force the next EnsureLoadedAsync to re-fetch fields/constraints/indexes/DDL
+    // from the live catalog. Called after Add / Drop / Compile so the Pola grid
+    // reflects the new structure immediately.
+    private Task ReloadAfterStructuralChangeAsync()
+    {
+        _loadTask = null;
+        return EnsureLoadedAsync();
+    }
+    public bool CanDropField => _ddlExecutor is not null && SelectedField is not null;
+    public bool CanMoveFieldUp => _ddlExecutor is not null && SelectedField is not null && Fields.IndexOf(SelectedField) > 0;
+    public bool CanMoveFieldDown => _ddlExecutor is not null && SelectedField is not null && Fields.IndexOf(SelectedField) >= 0 && Fields.IndexOf(SelectedField) < Fields.Count - 1;
+
+    /// <summary>
+    /// Queues an ADD-FIELD change. Called by the view after the AddFieldDialog
+    /// closes with a valid <see cref="FieldDefinition"/>. Pure VM call — no
+    /// I/O — so unit tests drive it directly.
+    /// </summary>
+    public void AddPendingAddField(FieldDefinition definition)
+    {
+        if (definition is null) return;
+        var sql = DdlGenerator.BuildAddField(TableName, definition);
+        PendingChanges.Add(new PendingDdlChange
+        {
+            Kind = PendingDdlChangeKind.AddField,
+            Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionAddFormat, definition.Name),
+            Sql = sql,
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDropField))]
+    private async Task DropFieldAsync()
+    {
+        if (SelectedField is not { } field) return;
+        var confirmed = await RequestConfirmAsync(new ConfirmRequest
+        {
+            Title = UiStrings.FieldEditDropConfirmTitle,
+            Message = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDropConfirmFormat, field.Name),
+            ConfirmLabel = UiStrings.FieldEditDropConfirmYes,
+            CancelLabel = UiStrings.DialogCancel,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
+        if (!confirmed) return;
+
+        // Immediate execute in the user's working transaction — symmetric to
+        // Add Field. Rollback from the main toolbar undoes the drop.
+        await ExecuteDropFieldAsync(field.Name).ConfigureAwait(true);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanMoveFieldUp))]
+    private void MoveFieldUp()
+    {
+        if (SelectedField is not { } field) return;
+        var index = Fields.IndexOf(field);
+        if (index <= 0) return;
+        // Firebird positions are 1-based — moving up means newPosition = currentIndex
+        // (which equals (index+1) - 1).
+        var newPos = index; // current 1-based pos is index+1; we want index → 1-based pos = index
+        AddMovePending(field.Name, newPos);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanMoveFieldDown))]
+    private void MoveFieldDown()
+    {
+        if (SelectedField is not { } field) return;
+        var index = Fields.IndexOf(field);
+        if (index < 0 || index >= Fields.Count - 1) return;
+        // Index+1 in 0-based → 1-based pos = index+2.
+        var newPos = index + 2;
+        AddMovePending(field.Name, newPos);
+    }
+
+    private void AddMovePending(string fieldName, int oneBasedPosition)
+    {
+        PendingChanges.Add(new PendingDdlChange
+        {
+            Kind = PendingDdlChangeKind.MoveField,
+            Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionMoveFormat, fieldName, oneBasedPosition),
+            Sql = DdlGenerator.BuildMoveField(TableName, fieldName, oneBasedPosition),
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCompile))]
+    private async Task CompileAsync()
+    {
+        if (_ddlExecutor is null) return;
+        if (PendingChanges.Count == 0) return;
+
+        ErrorMessage = null;
+        // Drain the pending list as we go — partial success leaves the still-pending
+        // statements in place so the user can fix and retry. We snapshot the list
+        // first so removing-from-front doesn't shift indices under the loop.
+        var snapshot = PendingChanges.ToList();
+        foreach (var change in snapshot)
+        {
+            try
+            {
+                await _ddlExecutor.ExecuteAsync(change.Sql).ConfigureAwait(true);
+            }
+            catch (DdlExecutionException ex)
+            {
+                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+                return;
+            }
+            catch (InvalidOperationException ex)
+            {
+                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+                return;
+            }
+            PendingChanges.Remove(change);
+        }
+
+        // Full success — force a reload so the Fields / Constraints / Indexes /
+        // DDL all reflect the new structure. Resetting _loadTask makes
+        // EnsureLoadedAsync kick off a fresh LoadAsync (idempotent otherwise).
+        _loadTask = null;
+        await EnsureLoadedAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// True while the user is editing structure (any pending changes queued).
+    /// Drives the DDL sub-tab's "current + pending" rendering.
+    /// </summary>
+    public string DdlWithPendingPreview
+    {
+        get
+        {
+            if (PendingChanges.Count == 0) return DdlText;
+            var sb = new System.Text.StringBuilder();
+            sb.Append(DdlText);
+            if (!DdlText.EndsWith('\n')) sb.Append('\n');
+            sb.Append('\n').Append(UiStrings.FieldEditPendingHeader).Append('\n');
+            foreach (var change in PendingChanges)
+            {
+                sb.Append(change.Sql);
+                if (!change.Sql.EndsWith(';')) sb.Append(';');
+                sb.Append('\n');
+            }
+            return sb.ToString();
+        }
+    }
+
+    private void OnPendingChangesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(HasPendingChanges));
+        OnPropertyChanged(nameof(CanCompile));
+        OnPropertyChanged(nameof(DdlWithPendingPreview));
+        CompileCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnDdlTextChanged(string value)
+    {
+        // Live DDL preview tab reads DdlWithPendingPreview; keep it in sync when
+        // the underlying DDL refreshes.
+        OnPropertyChanged(nameof(DdlWithPendingPreview));
+    }
+
+    partial void OnSelectedFieldChanged(FieldInfo? value)
+    {
+        // Move enablement depends on the selection's *index* — re-evaluate Up / Down
+        // explicitly on each selection change.
+        OnPropertyChanged(nameof(CanMoveFieldUp));
+        OnPropertyChanged(nameof(CanMoveFieldDown));
+        OnPropertyChanged(nameof(CanDropField));
+        MoveFieldUpCommand.NotifyCanExecuteChanged();
+        MoveFieldDownCommand.NotifyCanExecuteChanged();
+        DropFieldCommand.NotifyCanExecuteChanged();
     }
 }
