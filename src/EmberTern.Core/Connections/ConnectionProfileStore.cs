@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace EmberTern.Core.Connections;
 
@@ -11,6 +12,9 @@ public sealed class ConnectionProfileStore
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
+        // TransactionProfile (and any future enum) serialized as its name, not a
+        // magic number — readable in connections.json and stable across reorders.
+        Converters = { new JsonStringEnumConverter() },
     };
 
     private readonly string _filePath;

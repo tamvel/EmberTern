@@ -91,10 +91,24 @@ internal static class UiStrings
     public const string DialogFieldDialect = "Dialect";
     public const string DialogFieldClientLibrary = "Client library (fbclient.dll)";
     public const string DialogFieldClientLibraryHint = "Leave empty to use the default. Set when connecting to a Firebird version different from the default client (e.g. Firebird 3 server while Firebird 5 client is on PATH).";
+    public const string DialogFieldTransactionProfile = "Transaction profile";
     public const string DialogTestConnection = "Test connection";
     public const string DialogSave = "Save";
     public const string DialogCancel = "Cancel";
     public const string DialogBrowse = "Browse…";
+
+    // Transaction profile labels (IBExpert terms — kept in English on purpose).
+    public const string TransactionProfileReadCommitted = "Read Committed";
+    public const string TransactionProfileSnapshot = "Snapshot";
+    public const string TransactionProfileReadOnlyTableStability = "Read Only Table Stability";
+    public const string TransactionProfileReadWriteTableStability = "Read Write Table Stability";
+    // Per-profile one-line descriptions shown under the picker.
+    public const string TransactionProfileReadCommittedDesc = "Sees committed changes from other transactions. Safe default for everyday work.";
+    public const string TransactionProfileSnapshotDesc = "Stable snapshot of the database taken at transaction start. Does not see later commits.";
+    public const string TransactionProfileReadOnlyTableStabilityDesc = "Read-only with table stability (consistency). Warning: locks whole tables and can block other users.";
+    public const string TransactionProfileReadWriteTableStabilityDesc = "Read-write with table stability (consistency). Warning: locks whole tables and can block other users.";
+    // Active profile chip in the title bar, e.g. "TX: Read Committed".
+    public const string TransactionProfileChipFormat = "TX: {0}";
 
     public const string TestInProgress = "Testing connection…";
     public const string TestSuccess = "Connection successful.";

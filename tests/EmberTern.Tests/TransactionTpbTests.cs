@@ -1,56 +1,96 @@
+using EmberTern.Core.Connections;
 using EmberTern.Firebird;
 using FirebirdSql.Data.FirebirdClient;
 using Xunit;
 
 namespace EmberTern.Tests;
 
-// Pins the working-transaction TPB so the IBExpert-matching profile
-// (write + read_committed + rec_version + nowait) can't silently regress back to
-// the driver's IsolationLevel.ReadCommitted mapping (which ends in isc_tpb_WAIT).
+// Pins the per-profile TPB mapping so the IBExpert-matching profiles can't
+// silently regress (e.g. back to the driver's IsolationLevel.ReadCommitted
+// mapping, which ends in isc_tpb_WAIT).
 public class TransactionTpbTests
 {
+    private static FbTransactionBehavior Behavior(TransactionProfile profile)
+        => TransactionService.BuildTransactionOptions(profile).TransactionBehavior;
+
+    // --- Read Committed (default): write + read_committed + rec_version + nowait ---
+
     [Fact]
-    public void WorkingTransaction_IsReadWrite()
+    public void ReadCommitted_IsReadWrite()
+        => Assert.True(Behavior(TransactionProfile.ReadCommitted).HasFlag(FbTransactionBehavior.Write));
+
+    [Fact]
+    public void ReadCommitted_IsReadCommitted()
+        => Assert.True(Behavior(TransactionProfile.ReadCommitted).HasFlag(FbTransactionBehavior.ReadCommitted));
+
+    [Fact]
+    public void ReadCommitted_UsesRecordVersion()
+        => Assert.True(Behavior(TransactionProfile.ReadCommitted).HasFlag(FbTransactionBehavior.RecVersion));
+
+    [Fact]
+    public void ReadCommitted_IsNoWait()
+        => Assert.True(Behavior(TransactionProfile.ReadCommitted).HasFlag(FbTransactionBehavior.NoWait));
+
+    [Fact]
+    public void ReadCommitted_IsNotWaitAndNotConsistency()
     {
-        var options = TransactionService.BuildWorkingTransactionOptions();
-        Assert.True(options.TransactionBehavior.HasFlag(FbTransactionBehavior.Write));
+        var b = Behavior(TransactionProfile.ReadCommitted);
+        Assert.False(b.HasFlag(FbTransactionBehavior.Wait));
+        Assert.False(b.HasFlag(FbTransactionBehavior.Consistency));
+    }
+
+    // --- Snapshot: write + concurrency + nowait ---
+
+    [Fact]
+    public void Snapshot_IsConcurrencyReadWriteNoWait()
+    {
+        var b = Behavior(TransactionProfile.Snapshot);
+        Assert.True(b.HasFlag(FbTransactionBehavior.Concurrency));
+        Assert.True(b.HasFlag(FbTransactionBehavior.Write));
+        Assert.True(b.HasFlag(FbTransactionBehavior.NoWait));
     }
 
     [Fact]
-    public void WorkingTransaction_IsReadCommitted()
+    public void Snapshot_IsNotReadCommittedAndNotConsistency()
     {
-        var options = TransactionService.BuildWorkingTransactionOptions();
-        Assert.True(options.TransactionBehavior.HasFlag(FbTransactionBehavior.ReadCommitted));
+        var b = Behavior(TransactionProfile.Snapshot);
+        Assert.False(b.HasFlag(FbTransactionBehavior.ReadCommitted));
+        Assert.False(b.HasFlag(FbTransactionBehavior.Consistency));
+    }
+
+    // --- Read Only Table Stability: read + consistency (no nowait per spec) ---
+
+    [Fact]
+    public void ReadOnlyTableStability_IsReadConsistency()
+    {
+        var b = Behavior(TransactionProfile.ReadOnlyTableStability);
+        Assert.True(b.HasFlag(FbTransactionBehavior.Read));
+        Assert.True(b.HasFlag(FbTransactionBehavior.Consistency));
     }
 
     [Fact]
-    public void WorkingTransaction_UsesRecordVersion()
+    public void ReadOnlyTableStability_IsNotWriteAndNotNoWait()
     {
-        var options = TransactionService.BuildWorkingTransactionOptions();
-        Assert.True(options.TransactionBehavior.HasFlag(FbTransactionBehavior.RecVersion));
+        var b = Behavior(TransactionProfile.ReadOnlyTableStability);
+        Assert.False(b.HasFlag(FbTransactionBehavior.Write));
+        Assert.False(b.HasFlag(FbTransactionBehavior.NoWait));
+    }
+
+    // --- Read Write Table Stability: write + consistency (no nowait per spec) ---
+
+    [Fact]
+    public void ReadWriteTableStability_IsWriteConsistency()
+    {
+        var b = Behavior(TransactionProfile.ReadWriteTableStability);
+        Assert.True(b.HasFlag(FbTransactionBehavior.Write));
+        Assert.True(b.HasFlag(FbTransactionBehavior.Consistency));
     }
 
     [Fact]
-    public void WorkingTransaction_IsNoWait()
+    public void ReadWriteTableStability_IsNotReadAndNotNoWait()
     {
-        var options = TransactionService.BuildWorkingTransactionOptions();
-        Assert.True(options.TransactionBehavior.HasFlag(FbTransactionBehavior.NoWait));
-    }
-
-    [Fact]
-    public void WorkingTransaction_IsNotWait()
-    {
-        // The whole point of the change: must NOT carry the WAIT flag.
-        var options = TransactionService.BuildWorkingTransactionOptions();
-        Assert.False(options.TransactionBehavior.HasFlag(FbTransactionBehavior.Wait));
-    }
-
-    [Fact]
-    public void WorkingTransaction_IsNotConsistency()
-    {
-        // Consistency (table stability) would be far too aggressive — it locks
-        // whole tables and is exactly what we want to avoid.
-        var options = TransactionService.BuildWorkingTransactionOptions();
-        Assert.False(options.TransactionBehavior.HasFlag(FbTransactionBehavior.Consistency));
+        var b = Behavior(TransactionProfile.ReadWriteTableStability);
+        Assert.False(b.HasFlag(FbTransactionBehavior.Read));
+        Assert.False(b.HasFlag(FbTransactionBehavior.NoWait));
     }
 }

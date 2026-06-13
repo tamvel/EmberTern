@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using EmberTern.Core.Connections;
 using FirebirdSql.Data.FirebirdClient;
 
 namespace EmberTern.Firebird;
@@ -49,11 +50,12 @@ public sealed class TransactionService : IDisposable
             // Explicit TPB instead of IsolationLevel.ReadCommitted. The managed
             // driver maps IsolationLevel.ReadCommitted to a TPB that ends in
             // isc_tpb_WAIT — which makes EmberTern block indefinitely on a lock
-            // conflict. We want isc_tpb_NOWAIT (immediate error), matching
-            // IBExpert's default "Data transaction" profile:
-            //   isc_tpb_write + isc_tpb_read_committed + isc_tpb_rec_version + isc_tpb_nowait
+            // conflict. We build the TPB from the connection's selected profile
+            // (default ReadCommitted = write/read_committed/rec_version/nowait,
+            // matching IBExpert's default "Data transaction"). The profile is read
+            // at begin time, so changing it only affects the NEXT transaction.
             _activeTransaction = (FbTransaction)await connection
-                .BeginTransactionAsync(BuildWorkingTransactionOptions())
+                .BeginTransactionAsync(BuildTransactionOptions(ResolveActiveProfile()))
                 .ConfigureAwait(false);
             _statementCount = 0;
             SetState(TransactionState.Active);
@@ -74,15 +76,46 @@ public sealed class TransactionService : IDisposable
         await LogTransactionParametersIfEnabledAsync().ConfigureAwait(false);
     }
 
-    // Working-transaction TPB. Read-write, read committed, record version, NO WAIT.
-    // Internal so a unit test can pin the flag set without a live Firebird.
-    internal static FbTransactionOptions BuildWorkingTransactionOptions() => new()
+    // The profile to use for the next transaction. Read from the active
+    // connection; falls back to the safe default when nothing is connected.
+    private TransactionProfile ResolveActiveProfile()
+        => _connectionService.ActiveProfile?.TransactionProfile ?? TransactionProfile.ReadCommitted;
+
+    // Maps each IBExpert-style profile to its TPB. Internal + static so a unit
+    // test can pin every mapping without a live Firebird. Access-mode note:
+    // ReadCommitted and Snapshot are read-write data transactions (the spec listed
+    // only their isolation flags); the two Table Stability profiles carry the
+    // explicit read/write the user specified.
+    internal static FbTransactionOptions BuildTransactionOptions(TransactionProfile profile) => new()
     {
-        TransactionBehavior =
-            FbTransactionBehavior.Write
-            | FbTransactionBehavior.ReadCommitted
-            | FbTransactionBehavior.RecVersion
-            | FbTransactionBehavior.NoWait,
+        TransactionBehavior = profile switch
+        {
+            // isc_tpb_write + read_committed + rec_version + nowait — the safe default.
+            TransactionProfile.ReadCommitted =>
+                FbTransactionBehavior.Write
+                | FbTransactionBehavior.ReadCommitted
+                | FbTransactionBehavior.RecVersion
+                | FbTransactionBehavior.NoWait,
+            // isc_tpb_write + concurrency + nowait — stable snapshot, still writable.
+            TransactionProfile.Snapshot =>
+                FbTransactionBehavior.Write
+                | FbTransactionBehavior.Concurrency
+                | FbTransactionBehavior.NoWait,
+            // isc_tpb_read + consistency — read-only table stability. No nowait per
+            // spec; consistency locks whole tables and CAN block other users.
+            TransactionProfile.ReadOnlyTableStability =>
+                FbTransactionBehavior.Read
+                | FbTransactionBehavior.Consistency,
+            // isc_tpb_write + consistency — read-write table stability. CAN block others.
+            TransactionProfile.ReadWriteTableStability =>
+                FbTransactionBehavior.Write
+                | FbTransactionBehavior.Consistency,
+            _ =>
+                FbTransactionBehavior.Write
+                | FbTransactionBehavior.ReadCommitted
+                | FbTransactionBehavior.RecVersion
+                | FbTransactionBehavior.NoWait,
+        },
     };
 
     private async Task LogTransactionParametersIfEnabledAsync()

@@ -61,6 +61,17 @@
                      FontSize="12"
                      VerticalAlignment="Center"
                      IsVisible="{Binding HasActiveConnection}" />
+          <Border Background="{DynamicResource AccentMutedBrush}"
+                  CornerRadius="3"
+                  Padding="6,1"
+                  Margin="2,0,0,0"
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HasActiveConnection}">
+            <TextBlock Text="{Binding ActiveTransactionProfileText}"
+                       FontSize="11"
+                       Foreground="White"
+                       VerticalAlignment="Center" />
+          </Border>
         </StackPanel>
 
         <!-- Connection toolbar (moved from sidebar) -->

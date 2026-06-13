@@ -29,6 +29,7 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
 
     public IReadOnlyList<string> Charsets => CharsetCatalog.Supported;
     public IReadOnlyList<int> Dialects { get; } = new[] { 1, 3 };
+    public IReadOnlyList<TransactionProfileOption> TransactionProfiles => TransactionProfileCatalog.All;
 
     public string DialogTitle => IsEditing
         ? UiStrings.DialogEditConnectionTitle
@@ -42,6 +43,7 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
     public string UsernameLabel => UiStrings.DialogFieldUsername;
     public string PasswordLabel => UiStrings.DialogFieldPassword;
     public string CharsetLabel => UiStrings.DialogFieldCharset;
+    public string TransactionProfileLabel => UiStrings.DialogFieldTransactionProfile;
     public string DialectLabel => UiStrings.DialogFieldDialect;
     public string ClientLibraryLabel => UiStrings.DialogFieldClientLibrary;
     public string ClientLibraryHint => UiStrings.DialogFieldClientLibraryHint;
@@ -76,6 +78,18 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _clientLibraryPath = string.Empty;
+
+    // The picker binds SelectedItem to this wrapper (Avalonia has no
+    // SelectedValueBinding — gotcha #57). The setter mirrors into the enum-typed
+    // TransactionProfile; the description + warning re-evaluate off the option.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TransactionProfileDescription))]
+    [NotifyPropertyChangedFor(nameof(ShowConsistencyWarning))]
+    private TransactionProfileOption _selectedTransactionProfile = TransactionProfileCatalog.All[0];
+
+    public TransactionProfile TransactionProfile => SelectedTransactionProfile.Value;
+    public string TransactionProfileDescription => SelectedTransactionProfile.Description;
+    public bool ShowConsistencyWarning => SelectedTransactionProfile.IsConsistencyWarning;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsTesting))]
@@ -160,6 +174,7 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
         Charset = profile.Charset;
         Dialect = profile.Dialect;
         ClientLibraryPath = profile.ClientLibraryPath;
+        SelectedTransactionProfile = TransactionProfileCatalog.For(profile.TransactionProfile);
         OnPropertyChanged(nameof(IsEditing));
         OnPropertyChanged(nameof(DialogTitle));
     }
@@ -190,6 +205,7 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
             Charset = string.IsNullOrWhiteSpace(Charset) ? CharsetCatalog.Default : Charset,
             Dialect = Dialect == 1 ? 1 : 3,
             ClientLibraryPath = ClientLibraryPath?.Trim() ?? string.Empty,
+            TransactionProfile = TransactionProfile,
         };
 
         if (_editingProfileId is not null)

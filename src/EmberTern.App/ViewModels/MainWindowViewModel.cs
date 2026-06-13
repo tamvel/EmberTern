@@ -256,6 +256,18 @@ public partial class MainWindowViewModel : ViewModelBase
     public string ActiveConnectionName => _service.ActiveProfile?.Name ?? string.Empty;
     public bool HasActiveConnection => _service.ActiveProfile is not null;
 
+    // Title-bar chip: which transaction profile new transactions will use, so the
+    // user always knows what they are working on (e.g. "TX: Read Committed").
+    public string ActiveTransactionProfileText
+    {
+        get
+        {
+            var profile = _service.ActiveProfile?.TransactionProfile
+                ?? Core.Connections.TransactionProfile.ReadCommitted;
+            return string.Format(UiStrings.TransactionProfileChipFormat, TransactionProfileCatalog.LabelFor(profile));
+        }
+    }
+
     public bool HasCurrentResult => CurrentResult is { HasResultSet: true };
     public bool ShowResultsEmptyHint => !HasCurrentResult;
     public bool ShowTruncatedBanner => CurrentResult is { Truncated: true };
@@ -2105,6 +2117,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsConnected));
         OnPropertyChanged(nameof(ActiveConnectionName));
         OnPropertyChanged(nameof(HasActiveConnection));
+        OnPropertyChanged(nameof(ActiveTransactionProfileText));
         OnPropertyChanged(nameof(CanCreateTable));
         NewTableCommand.NotifyCanExecuteChanged();
     }

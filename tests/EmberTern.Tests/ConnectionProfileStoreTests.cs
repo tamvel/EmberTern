@@ -70,6 +70,64 @@ public class ConnectionProfileStoreTests
     }
 
     [Fact]
+    public void NewProfile_DefaultsToReadCommitted()
+    {
+        Assert.Equal(TransactionProfile.ReadCommitted, new ConnectionProfile().TransactionProfile);
+    }
+
+    [Fact]
+    public void RoundtripsTransactionProfile_AsStringName()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new ConnectionProfileStore(dir);
+            var profile = new ConnectionProfile
+            {
+                Name = "Admin",
+                DatabasePath = "/srv/db/test.fdb",
+                TransactionProfile = TransactionProfile.ReadWriteTableStability,
+            };
+            store.Upsert(profile);
+
+            // Persisted as the enum NAME, not a magic number (readable + reorder-safe).
+            var json = File.ReadAllText(store.FilePath);
+            Assert.Contains("ReadWriteTableStability", json);
+
+            var reloaded = store.LoadAll();
+            Assert.Single(reloaded);
+            Assert.Equal(TransactionProfile.ReadWriteTableStability, reloaded[0].TransactionProfile);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LegacyJsonWithoutTransactionProfile_LoadsAsReadCommitted()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(dir);
+            // A connections.json from before the transaction-profile field existed.
+            File.WriteAllText(
+                Path.Combine(dir, "connections.json"),
+                "[{\"Name\":\"Legacy\",\"Host\":\"localhost\",\"Port\":3050,\"DatabasePath\":\"/db/x.fdb\"}]");
+
+            var store = new ConnectionProfileStore(dir);
+            var reloaded = store.LoadAll();
+            Assert.Single(reloaded);
+            Assert.Equal(TransactionProfile.ReadCommitted, reloaded[0].TransactionProfile);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void CharsetCatalogIncludesPolishErpCharsets()
     {
         Assert.Contains("UTF8", CharsetCatalog.Supported);

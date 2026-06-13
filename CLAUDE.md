@@ -1923,13 +1923,35 @@ Impact on `RefreshStructureAsync` + uncommitted visibility: `RefreshStructureAsy
 
 85. **`IsolationLevel.ReadCommitted` on `FirebirdSql.Data.FirebirdClient` maps to a TPB ending in `isc_tpb_WAIT`.** The ADO.NET `IsolationLevel` enum can't express the wait/nowait or rec_version axes, and the driver's default for ReadCommitted is `wait` — so EmberTern blocked indefinitely on lock conflicts. To match IBExpert (and to fail fast), build an explicit `FbTransactionOptions { TransactionBehavior = Write | ReadCommitted | RecVersion | NoWait }` and pass it to `BeginTransactionAsync(options)`. **Rule**: never start a Firebird transaction from a bare `IsolationLevel` — always go through explicit `FbTransactionOptions` so wait/nowait and rec_version are deliberate. The single transaction-creation site is `TransactionService.BeginTransactionAsync`; any new one must do the same. Confirm the live TPB via `MON$TRANSACTIONS.MON$LOCK_TIMEOUT` (0 = nowait) — `EMBERTERN_TX_DIAG=1` logs it on every begin.
 
+### Transaction profiles (IBExpert-style) — shipped 2026-06-13
+
+Extension of C1 (not a return to C2). Per-connection choice of transaction profile, mirroring IBExpert's presets, so Firebird admins can deliberately switch the working transaction's TPB. Default stays the safe `Read Committed`. **No transaction-architecture change** — still one working transaction, still C1's explicit-TPB path; only the flag set is now profile-driven. **892 → 904 tests** (+12).
+
+**Profiles → TPB mapping** ([`TransactionService.BuildTransactionOptions(TransactionProfile)`](src/EmberTern.Firebird/TransactionService.cs) — pure, unit-pinned):
+| Profile | `FbTransactionBehavior` | TPB |
+|---|---|---|
+| **Read Committed** (default) | `Write \| ReadCommitted \| RecVersion \| NoWait` | `isc_tpb_write + read_committed + rec_version + nowait` |
+| **Snapshot** | `Write \| Concurrency \| NoWait` | `isc_tpb_write + concurrency + nowait` |
+| **Read Only Table Stability** | `Read \| Consistency` | `isc_tpb_read + consistency` |
+| **Read Write Table Stability** | `Write \| Consistency` | `isc_tpb_write + consistency` |
+
+Access-mode note: the spec listed only the isolation flags for Read Committed / Snapshot; both are data transactions so they carry explicit `Write` (Read Committed unchanged from C1). The two Table Stability profiles carry the exact `read`/`write` + `consistency` the user specified — deliberately **no nowait** (server-default wait), since they are conscious admin profiles meant to lock.
+
+**Model & persistence.** New [`TransactionProfile`](src/EmberTern.Core/Connections/TransactionProfile.cs) enum in Core (`ReadCommitted = 0` so legacy files default safely). [`ConnectionProfile.TransactionProfile`](src/EmberTern.Core/Connections/ConnectionProfile.cs) (default `ReadCommitted`). [`ConnectionProfileStore`](src/EmberTern.Core/Connections/ConnectionProfileStore.cs) gained a `JsonStringEnumConverter` so it persists as the readable name; old `connections.json` without the field loads as `ReadCommitted`.
+
+**Resolution & lifecycle.** `TransactionService.ResolveActiveProfile()` reads `_connectionService.ActiveProfile?.TransactionProfile` **at begin time**. So changing the profile affects only the NEXT transaction — an active transaction keeps its parameters until Commit/Rollback (the user's rule). No in-flight reparametrization, no autocommit (rule #3 intact).
+
+**UI.** New-connection dialog ([NewConnectionDialog.axaml](src/EmberTern.App/Views/NewConnectionDialog.axaml)) got a "Transaction profile" ComboBox after Charset (`SelectedItem` bound to a `TransactionProfileOption` wrapper — Avalonia has no `SelectedValueBinding`, gotcha #57). Below it: a subtle per-profile description, swapped for a prominent `WarningBrush` SemiBold line for the two Consistency profiles ("locks whole tables and can block other users") — **warns, does not block** (conscious admin feature). Title bar shows an accent chip `TX: <profile>` ([MainWindowViewModel.ActiveTransactionProfileText](src/EmberTern.App/ViewModels/MainWindowViewModel.cs), notified on `ActiveConnectionChanged`) so the active profile is always visible. UI labels/descriptions live in [`TransactionProfileCatalog`](src/EmberTern.App/ViewModels/TransactionProfileCatalog.cs) + `UiStrings` (Core enum stays UI-free).
+
+**Tests.** [TransactionTpbTests](tests/EmberTern.Tests/TransactionTpbTests.cs) rewritten to pin all four mappings (incl. negative assertions — Snapshot is not Consistency, Table Stability is not NoWait). New [TransactionProfileCatalogTests](tests/EmberTern.Tests/TransactionProfileCatalogTests.cs) (order, warning flags, label, fallback). [ConnectionProfileStoreTests](tests/EmberTern.Tests/ConnectionProfileStoreTests.cs): default = ReadCommitted, round-trip persists as string name, legacy JSON without the field loads as ReadCommitted.
+
 ## Current state
 
 - **Build**: clean (zero warnings, `TreatWarningsAsErrors=true` enforced).
-- **Tests**: 892 / 892 passing.
+- **Tests**: 904 / 904 passing.
 - **App**: builds + launches cleanly (8-second-uptime smoke). Table editor: Pola (inline edit + Add/Drop/Move field + Drop FK), Ograniczenia (Add/Drop PK/FK/Check/Unique, PK/Unique with optional USING index config), Indeksy (Add/Drop index + constraint-backed-index guard), Dane (paged inline edit), Opis (editable + Save/Clear), DDL. Computed By has a complete dependency model enforced in the UI (New Table grid cells DISABLE per-row, not just the DDL); domain selection governs/shows the type. Commit/Rollback reachable from every TableDetail sub-tab. New Table grid scrolls horizontally to all columns. Validation/compile messages always surface.
-- **Transactions**: working transaction uses explicit TPB `write + read_committed + rec_version + nowait` (IBExpert-matching). Readers still attach to the working tx when active (Milestone 2 / C2 will move pure-browse reads to a dedicated second connection). `EMBERTERN_TX_DIAG=1` logs real server-side TPB to `%TEMP%\EmberTern-debug.log` on every begin.
-- **Branch state**: working on master. Latest milestone: **Transaction TPB hardening — Milestone 1 (C1 + diagnostics)**. Next: **Milestone 2 / C2** — second read-only connection for metadata browsing (analysis + routing table already in this file).
+- **Transactions**: per-connection **transaction profile** (Read Committed default / Snapshot / Read Only Table Stability / Read Write Table Stability), mapped to explicit TPB; default `write + read_committed + rec_version + nowait` (IBExpert-matching). Profile read at begin time → affects only the next transaction; active tx keeps its params until Commit/Rollback. Active profile shown as a `TX: <profile>` chip in the title bar. Readers still attach to the working tx when active (C2 — second metadata connection — analysed but explicitly deferred, not planned for now). `EMBERTERN_TX_DIAG=1` logs real server-side TPB to `%TEMP%\EmberTern-debug.log` on every begin.
+- **Branch state**: working on master. Latest milestone: **Transaction profiles (IBExpert-style)**. C2 (second read-only metadata connection) is analysed in this file but intentionally NOT being implemented — the blocking problem is considered resolved by C1.
 
 ## V1 — definition of done (all met)
 
