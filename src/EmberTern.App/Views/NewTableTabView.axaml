@@ -70,13 +70,24 @@
                     VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                     Background="{DynamicResource BackgroundBrush}">
             <DataGrid.Columns>
-              <!-- MinWidth replaces fixed Width so DataGridLength.Auto can grow
-                   each column to fit the larger of header/content. The last
-                   column (Description) keeps Width="*" to soak up remaining
-                   space. -->
-              <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.NewTableFieldPk}"
-                                      Binding="{Binding PrimaryKey, Mode=TwoWay}"
-                                      MinWidth="40" />
+              <!-- Every editable cell is a template column whose editor binds
+                   IsEnabled to a per-row gate (Is*Enabled) so the field
+                   dependency model (Computed/Domain/PK/Autoincrement) DISABLES
+                   the cells that don't apply, not just clears them once (#1/#4).
+                   DataGridTextColumn / DataGridCheckBoxColumn can't bind a
+                   per-row IsEnabled, hence the templates. Name + Description are
+                   always editable so they stay plain text columns. -->
+              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldPk}"
+                                      MinWidth="40" IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
+                    <CheckBox IsChecked="{Binding PrimaryKey, Mode=TwoWay}"
+                              IsEnabled="{Binding IsPkEnabled}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
               <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldName}"
                                   Binding="{Binding Name, Mode=TwoWay}"
                                   MinWidth="160" />
@@ -137,30 +148,94 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldSize}"
-                                  Binding="{Binding Size, Mode=TwoWay}"
-                                  MinWidth="60" />
-              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldScale}"
-                                  Binding="{Binding Scale, Mode=TwoWay}"
-                                  MinWidth="60" />
-              <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.NewTableFieldNotNull}"
-                                      Binding="{Binding NotNull, Mode=TwoWay}"
-                                      MinWidth="70" />
-              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldDefault}"
-                                  Binding="{Binding DefaultValue, Mode=TwoWay}"
-                                  MinWidth="100" />
-              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldComputed}"
-                                  Binding="{Binding ComputedExpression, Mode=TwoWay}"
-                                  MinWidth="100" />
-              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldCheck}"
-                                  Binding="{Binding CheckExpression, Mode=TwoWay}"
-                                  MinWidth="100" />
-              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldCharset}"
-                                  Binding="{Binding Charset, Mode=TwoWay}"
-                                  MinWidth="80" />
-              <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.NewTableFieldAi}"
-                                      Binding="{Binding AutoIncrement, Mode=TwoWay}"
-                                      MinWidth="50" />
+              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldSize}"
+                                      MinWidth="60" IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
+                    <TextBox Text="{Binding Size, Mode=TwoWay}"
+                             IsEnabled="{Binding IsSizeEnabled}"
+                             BorderThickness="0" Background="Transparent"
+                             VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldScale}"
+                                      MinWidth="60" IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
+                    <TextBox Text="{Binding Scale, Mode=TwoWay}"
+                             IsEnabled="{Binding IsPrecisionScaleEnabled}"
+                             BorderThickness="0" Background="Transparent"
+                             VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldNotNull}"
+                                      MinWidth="70" IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
+                    <CheckBox IsChecked="{Binding NotNull, Mode=TwoWay}"
+                              IsEnabled="{Binding IsNotNullEnabled}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldDefault}"
+                                      MinWidth="100" IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
+                    <TextBox Text="{Binding DefaultValue, Mode=TwoWay}"
+                             IsEnabled="{Binding IsDefaultEnabled}"
+                             BorderThickness="0" Background="Transparent"
+                             VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldComputed}"
+                                      MinWidth="100" IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
+                    <TextBox Text="{Binding ComputedExpression, Mode=TwoWay}"
+                             IsEnabled="{Binding IsComputedEnabled}"
+                             BorderThickness="0" Background="Transparent"
+                             VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldCheck}"
+                                      MinWidth="100" IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
+                    <TextBox Text="{Binding CheckExpression, Mode=TwoWay}"
+                             IsEnabled="{Binding IsCheckEnabled}"
+                             BorderThickness="0" Background="Transparent"
+                             VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldCharset}"
+                                      MinWidth="80" IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
+                    <TextBox Text="{Binding Charset, Mode=TwoWay}"
+                             IsEnabled="{Binding IsCharsetEnabled}"
+                             BorderThickness="0" Background="Transparent"
+                             VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldAi}"
+                                      MinWidth="50" IsReadOnly="True">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
+                    <CheckBox IsChecked="{Binding AutoIncrement, Mode=TwoWay}"
+                              IsEnabled="{Binding IsAiEnabled}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
               <!-- MinWidth, NOT Width="*". A star-width column makes the DataGrid
                    lay its columns out to fit the viewport (the star absorbs the
                    remaining width), which SUPPRESSES the horizontal scrollbar —

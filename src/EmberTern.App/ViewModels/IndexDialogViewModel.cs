@@ -73,6 +73,7 @@ public partial class IndexDialogViewModel : ViewModelBase
     public bool IsFieldPickerEnabled => !HasComputed;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasValidationMessage))]
     private string _validationMessage = string.Empty;
 
     public bool HasValidationMessage => !string.IsNullOrEmpty(ValidationMessage);

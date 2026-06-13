@@ -86,6 +86,7 @@ public partial class ConstraintFieldDialogViewModel : ViewModelBase
     private bool _descending;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasValidationMessage))]
     private string _validationMessage = string.Empty;
 
     public bool HasValidationMessage => !string.IsNullOrEmpty(ValidationMessage);

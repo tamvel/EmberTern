@@ -65,6 +65,10 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasDomain))]
     [NotifyPropertyChangedFor(nameof(DomainType))]
     [NotifyPropertyChangedFor(nameof(IsTypeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsSizeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsPrecisionScaleEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsCharsetEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsComputedEnabled))]
     [NotifyPropertyChangedFor(nameof(EffectiveTypeDisplay))]
     private string? _domainName;
 
@@ -74,22 +78,31 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasComputed))]
     [NotifyPropertyChangedFor(nameof(IsTypeEnabled))]
     [NotifyPropertyChangedFor(nameof(IsDomainEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsSizeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsPrecisionScaleEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsNotNullEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsDefaultEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsCheckEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsCharsetEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsPkEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsAiEnabled))]
     private string _computedExpression = string.Empty;
 
     partial void OnComputedExpressionChanged(string value)
     {
         // A computed column derives everything from its expression — Firebird
         // rejects Domain / Size / Scale / Default / NOT NULL / CHECK / PK /
-        // Autoincrement on it. The grid's text/checkbox columns can't bind a
-        // per-cell IsEnabled, so we CLEAR the conflicting values when a computed
-        // expression is entered (#2). Re-entrancy is safe — none of these write
-        // back to ComputedExpression.
+        // Autoincrement on it. We BOTH disable those cells (via the Is*Enabled
+        // flags below, bound to per-cell template editors) AND clear any values
+        // already entered, so the row can't carry contradictory state (#1/#4).
+        // Re-entrancy is safe — none of these write back to ComputedExpression.
         if (string.IsNullOrWhiteSpace(value)) return;
         DomainName = null;
         Size = null;
         Scale = null;
         DefaultValue = string.Empty;
         CheckExpression = string.Empty;
+        Charset = null;
         NotNull = false;
         PrimaryKey = false;
         AutoIncrement = false;
@@ -103,6 +116,7 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     [ObservableProperty] private string _description = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDefaultEnabled))]
     private bool _autoIncrement;
 
     partial void OnAutoIncrementChanged(bool value)
@@ -112,8 +126,18 @@ public partial class NewTableFieldRowViewModel : ObservableObject
         if (value) DefaultValue = string.Empty;
     }
 
-    public bool IsSizeEnabled => !HasDomain && Type is "CHAR" or "VARCHAR" or "NUMERIC" or "DECIMAL";
-    public bool IsPrecisionScaleEnabled => !HasDomain && Type is "NUMERIC" or "DECIMAL";
+    // ─── Per-cell enable gates (#1/#4 — full dependency model) ────────────
+    // Every editable New-Table cell is a template column whose editor binds
+    // IsEnabled to one of these. Computed By wins over everything; Domain
+    // governs the type-related cells; PK forces Not Null; Autoincrement owns
+    // the value (no Default).
+    public bool IsSizeEnabled => !HasComputed && !HasDomain && Type is "CHAR" or "VARCHAR" or "NUMERIC" or "DECIMAL";
+    public bool IsPrecisionScaleEnabled => !HasComputed && !HasDomain && Type is "NUMERIC" or "DECIMAL";
+    public bool IsDefaultEnabled => !HasComputed && !AutoIncrement;
+    public bool IsCheckEnabled => !HasComputed;
+    public bool IsCharsetEnabled => !HasComputed && !HasDomain;
+    public bool IsPkEnabled => !HasComputed;
+    public bool IsAiEnabled => !HasComputed;
 
     /// <summary>True when a COMPUTED BY expression is set — the type/domain are
     /// then derived from the expression and ignored by Firebird, so the Type +
@@ -130,8 +154,11 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     /// <summary>Domain combo enabled unless the field is computed (mutually exclusive).</summary>
     public bool IsDomainEnabled => !HasComputed;
 
-    /// <summary>Not Null cell enabled unless PK forces it on.</summary>
-    public bool IsNotNullEnabled => !PrimaryKey;
+    /// <summary>Computed cell enabled unless a domain is selected (mutually exclusive).</summary>
+    public bool IsComputedEnabled => !HasDomain;
+
+    /// <summary>Not Null cell enabled unless computed or PK forces it on.</summary>
+    public bool IsNotNullEnabled => !HasComputed && !PrimaryKey;
 
     /// <summary>The selected domain's resolved SQL type (e.g. VARCHAR(80)), or
     /// empty when no domain is selected.</summary>
@@ -322,7 +349,12 @@ public partial class NewTableTabViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(MoveFieldDownCommand))]
     private NewTableFieldRowViewModel? _selectedField;
 
+    // NotifyPropertyChangedFor(HasValidationMessage) is MANDATORY here: IsValid()
+    // and the compile-error catch set ValidationMessage directly, so without this
+    // the message text changes but HasValidationMessage (→ the row's IsVisible)
+    // never re-evaluates → "click Compile, nothing happens" (#2).
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasValidationMessage))]
     private string _validationMessage = string.Empty;
 
     public bool HasValidationMessage => !string.IsNullOrEmpty(ValidationMessage);

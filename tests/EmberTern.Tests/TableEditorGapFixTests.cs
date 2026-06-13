@@ -185,6 +185,64 @@ public class TableEditorGapFixTests
         Assert.Equal(string.Empty, row.DefaultValue);
     }
 
+    // #1 — Computed By DISABLES every conflicting cell (not just clears once).
+    [Fact]
+    public void NewTableRow_Computed_DisablesAllConflictingCells()
+    {
+        var row = new NewTableFieldRowViewModel { Type = "VARCHAR" };
+        // sanity — before computing, the type-related cells are enabled
+        Assert.True(row.IsSizeEnabled);
+        row.ComputedExpression = "A + B";
+
+        Assert.False(row.IsSizeEnabled);
+        Assert.False(row.IsPrecisionScaleEnabled);
+        Assert.False(row.IsDefaultEnabled);
+        Assert.False(row.IsCheckEnabled);
+        Assert.False(row.IsCharsetEnabled);
+        Assert.False(row.IsPkEnabled);
+        Assert.False(row.IsAiEnabled);
+        Assert.False(row.IsNotNullEnabled);
+        Assert.False(row.IsTypeEnabled);
+        Assert.False(row.IsDomainEnabled);
+    }
+
+    [Fact]
+    public void NewTableRow_Domain_DisablesComputedAndSize()
+    {
+        var owner = new NewTableTabViewModel();
+        owner.SetAvailableDomains(new[] { new DomainSpec("T_KWOTA", "NUMERIC(15,2)") });
+        var row = new NewTableFieldRowViewModel(owner) { Type = "VARCHAR" };
+        Assert.True(row.IsComputedEnabled);
+        row.DomainName = "T_KWOTA";
+        Assert.False(row.IsComputedEnabled);   // domain ↔ computed mutually exclusive
+        Assert.False(row.IsSizeEnabled);        // domain governs the type
+    }
+
+    // #2 — setting ValidationMessage must raise HasValidationMessage so the
+    // validation row's IsVisible updates (otherwise "click Compile, nothing").
+    [Fact]
+    public void NewTable_ValidationMessage_RaisesHasValidationMessage()
+    {
+        var vm = new NewTableTabViewModel();
+        var raised = false;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(NewTableTabViewModel.HasValidationMessage)) raised = true;
+        };
+        vm.ValidationMessage = "boom";
+        Assert.True(raised);
+        Assert.True(vm.HasValidationMessage);
+    }
+
+    [Fact]
+    public void NewTable_CompileWithEmptyName_SurfacesValidationMessage()
+    {
+        var vm = new NewTableTabViewModel { TableName = "" };
+        Assert.False(vm.IsValid());
+        Assert.True(vm.HasValidationMessage);
+        Assert.NotEmpty(vm.ValidationMessage);
+    }
+
     // ─── #3 + #4 : inline Pola row ────────────────────────────────────────
 
     [Fact]

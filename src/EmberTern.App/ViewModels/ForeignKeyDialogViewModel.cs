@@ -119,6 +119,7 @@ public partial class ForeignKeyDialogViewModel : ViewModelBase
     private NamedForeignKeyAction _onDeleteAction;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasValidationMessage))]
     private string _validationMessage = string.Empty;
 
     public bool HasValidationMessage => !string.IsNullOrEmpty(ValidationMessage);
