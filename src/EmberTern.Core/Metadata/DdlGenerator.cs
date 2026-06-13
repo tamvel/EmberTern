@@ -605,6 +605,114 @@ public static class DdlGenerator
         }
     }
 
+    // ─── Constraint generation (Constraint Management Sprint V1) ──────────
+    //
+    // Add + Drop only. Firebird has no in-place ALTER CONSTRAINT, so a future
+    // "edit constraint" is just Drop + Add over these same builders. Every
+    // constraint is added with ALTER TABLE … ADD CONSTRAINT … and dropped with
+    // ALTER TABLE … DROP CONSTRAINT …. Identifiers are quoted (internal quotes
+    // doubled) so reserved-word / lowercase names round-trip. Field lists go
+    // through AppendQuotedList. FK has its own builder (BuildAddForeignKey).
+
+    /// <summary>
+    /// <c>ALTER TABLE "T" ADD CONSTRAINT "PK" PRIMARY KEY ("A", "B")</c>.
+    /// </summary>
+    public static string BuildAddPrimaryKey(string tableName, string constraintName, IReadOnlyList<string> fields)
+    {
+        ValidateConstraintBasics(tableName, constraintName, fields);
+        var sb = new StringBuilder();
+        sb.Append("ALTER TABLE ").Append(Quote(tableName.Trim()))
+          .Append(" ADD CONSTRAINT ").Append(Quote(constraintName.Trim()))
+          .Append(" PRIMARY KEY (");
+        AppendQuotedList(sb, fields);
+        sb.Append(')');
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// <c>ALTER TABLE "T" ADD CONSTRAINT "UQ" UNIQUE ("A", "B")</c>.
+    /// </summary>
+    public static string BuildAddUnique(string tableName, string constraintName, IReadOnlyList<string> fields)
+    {
+        ValidateConstraintBasics(tableName, constraintName, fields);
+        var sb = new StringBuilder();
+        sb.Append("ALTER TABLE ").Append(Quote(tableName.Trim()))
+          .Append(" ADD CONSTRAINT ").Append(Quote(constraintName.Trim()))
+          .Append(" UNIQUE (");
+        AppendQuotedList(sb, fields);
+        sb.Append(')');
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// <c>ALTER TABLE "T" ADD CONSTRAINT "CK" CHECK (expr)</c>. The
+    /// <paramref name="checkExpression"/> may be either a bare condition
+    /// (<c>ID &gt; 0</c>) or a full clause (<c>CHECK (ID &gt; 0)</c>) — both
+    /// produce a valid <c>CHECK (...)</c> clause. Whitespace is trimmed; the
+    /// expression is otherwise embedded verbatim (the user owns its SQL).
+    /// </summary>
+    public static string BuildAddCheck(string tableName, string constraintName, string checkExpression)
+    {
+        if (string.IsNullOrWhiteSpace(tableName))
+            throw new ArgumentException("Table name is required.", nameof(tableName));
+        if (string.IsNullOrWhiteSpace(constraintName))
+            throw new ArgumentException("Constraint name is required.", nameof(constraintName));
+        if (string.IsNullOrWhiteSpace(checkExpression))
+            throw new ArgumentException("Check expression is required.", nameof(checkExpression));
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "ALTER TABLE {0} ADD CONSTRAINT {1} {2}",
+            Quote(tableName.Trim()),
+            Quote(constraintName.Trim()),
+            NormalizeCheckClause(checkExpression));
+    }
+
+    /// <summary>
+    /// <c>ALTER TABLE "T" DROP CONSTRAINT "X"</c>. Works for any constraint
+    /// kind (PK / FK / CHECK / UNIQUE). Caller confirms the destructive intent;
+    /// EmberTern never auto-drops dependents — a Firebird dependency rejection
+    /// surfaces to the user.
+    /// </summary>
+    public static string BuildDropConstraint(string tableName, string constraintName)
+    {
+        if (string.IsNullOrWhiteSpace(tableName))
+            throw new ArgumentException("Table name is required.", nameof(tableName));
+        if (string.IsNullOrWhiteSpace(constraintName))
+            throw new ArgumentException("Constraint name is required.", nameof(constraintName));
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "ALTER TABLE {0} DROP CONSTRAINT {1}",
+            Quote(tableName.Trim()),
+            Quote(constraintName.Trim()));
+    }
+
+    private static void ValidateConstraintBasics(string tableName, string constraintName, IReadOnlyList<string> fields)
+    {
+        if (string.IsNullOrWhiteSpace(tableName))
+            throw new ArgumentException("Table name is required.", nameof(tableName));
+        if (string.IsNullOrWhiteSpace(constraintName))
+            throw new ArgumentException("Constraint name is required.", nameof(constraintName));
+        if (fields is null || fields.Count == 0)
+            throw new ArgumentException("At least one field is required.", nameof(fields));
+    }
+
+    // Accept either a full "CHECK (...)" clause or a bare condition; return a
+    // "CHECK (...)" clause. A leading CHECK keyword (word-boundary, so "CHECKED"
+    // isn't mistaken for it) means the user already wrote the full clause.
+    private static string NormalizeCheckClause(string raw)
+    {
+        var expr = raw.Trim();
+        if (expr.Length > 5
+            && expr.StartsWith("CHECK", StringComparison.OrdinalIgnoreCase)
+            && (char.IsWhiteSpace(expr[5]) || expr[5] == '('))
+        {
+            return expr;
+        }
+        return "CHECK (" + expr + ")";
+    }
+
     // ─── Shared ALTER pipeline (inline edit + dialog edit) ────────────────
     //
     // The inline Pola grid edit (FieldRowViewModel → EnqueueRowEdits) and the

@@ -1,0 +1,104 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EmberTern.App"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.CheckConstraintDialog"
+        x:DataType="vm:CheckConstraintDialogViewModel"
+        Title="{x:Static app:UiStrings.CheckConstraintDialogTitle}"
+        Width="460"
+        SizeToContent="Height"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+
+    <!-- Header -->
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="20,16">
+      <TextBlock Text="{x:Static app:UiStrings.CheckConstraintDialogHeader}" Classes="h1" />
+    </Border>
+
+    <!-- Constraint name -->
+    <StackPanel Grid.Row="1" Margin="20,14,20,8" Spacing="4">
+      <TextBlock Text="{x:Static app:UiStrings.ConstraintNameLabel}" Classes="field-label" />
+      <TextBox Text="{Binding ConstraintName, Mode=TwoWay}" />
+    </StackPanel>
+
+    <!-- Check expression -->
+    <StackPanel Grid.Row="2" Margin="20,4,20,8" Spacing="4">
+      <TextBlock Text="{x:Static app:UiStrings.CheckConstraintExpressionLabel}" Classes="field-label" />
+      <TextBox Text="{Binding CheckExpression, Mode=TwoWay}"
+               AcceptsReturn="True"
+               TextWrapping="Wrap"
+               MinHeight="64"
+               PlaceholderText="{x:Static app:UiStrings.CheckConstraintExpressionWatermark}"
+               FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+               FontSize="12" />
+    </StackPanel>
+
+    <!-- Live DDL preview -->
+    <StackPanel Grid.Row="3" Margin="20,4,20,4" Spacing="4">
+      <TextBlock Text="{x:Static app:UiStrings.ConstraintDdlPreviewLabel}" Classes="field-label" />
+      <Border BorderBrush="{DynamicResource BorderBrush}"
+              BorderThickness="1"
+              CornerRadius="3">
+        <TextBox Text="{Binding DdlPreview, Mode=OneWay}"
+                 IsReadOnly="True"
+                 AcceptsReturn="True"
+                 TextWrapping="NoWrap"
+                 FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                 FontSize="11"
+                 BorderThickness="0"
+                 Padding="8,6"
+                 MinHeight="56"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+      </Border>
+    </StackPanel>
+
+    <!-- Validation row -->
+    <Border Grid.Row="4"
+            Padding="20,4,20,4"
+            IsVisible="{Binding HasValidationMessage}">
+      <TextBlock Text="{Binding ValidationMessage}"
+                 Classes="error"
+                 FontSize="12"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <!-- Footer -->
+    <Border Grid.Row="5"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="20,12">
+      <StackPanel Orientation="Horizontal"
+                  HorizontalAlignment="Right"
+                  Spacing="8">
+        <Button Classes="flat"
+                Content="{x:Static app:UiStrings.DialogCancel}"
+                Command="{Binding CancelCommand}" />
+        <Button Classes="primary"
+                Content="{x:Static app:UiStrings.ConstraintDialogCreate}"
+                Command="{Binding AcceptCommand}"
+                IsDefault="True" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>

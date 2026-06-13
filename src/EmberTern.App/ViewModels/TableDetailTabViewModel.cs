@@ -47,7 +47,10 @@ public partial class TableDetailTabViewModel : ViewModelBase
     // Inner Constraints TabControl tab indices: Primary Key (0) /
     // Foreign Keys (1) / Check (2) / Unique (3). Must match the TabItem
     // order in TableDetailTabView.axaml's nested Constraints TabControl.
+    public const int ConstraintsPrimaryKeyIndex = 0;
     public const int ConstraintsForeignKeysIndex = 1;
+    public const int ConstraintsCheckIndex = 2;
+    public const int ConstraintsUniqueIndex = 3;
 
     private readonly FirebirdTableDetailReader? _reader;
     private readonly FirebirdDdlReader? _ddlReader;
@@ -496,7 +499,40 @@ public partial class TableDetailTabViewModel : ViewModelBase
     /// "Foreign Keys" sub-tab and sees the new constraint in the list.
     /// </summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DropConstraintCommand))]
     private int _constraintsActiveSubTabIndex;
+
+    // One selected-constraint property per sub-grid. A single shared property
+    // bound to all four DataGrids would self-clobber: an item selected in the
+    // PK grid isn't present in the FK grid's ItemsSource, so the FK grid's
+    // TwoWay SelectedItem binding would push null back. Four independent
+    // properties + ActiveConstraint (keyed off the inner sub-tab) sidestep that.
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DropConstraintCommand))]
+    private ConstraintInfo? _selectedPrimaryKey;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DropConstraintCommand))]
+    private ConstraintInfo? _selectedForeignKey;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DropConstraintCommand))]
+    private ConstraintInfo? _selectedCheck;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DropConstraintCommand))]
+    private ConstraintInfo? _selectedUnique;
+
+    /// <summary>The constraint the Drop command acts on — the selection of
+    /// whichever inner sub-tab is currently active.</summary>
+    public ConstraintInfo? ActiveConstraint => ConstraintsActiveSubTabIndex switch
+    {
+        ConstraintsPrimaryKeyIndex => SelectedPrimaryKey,
+        ConstraintsForeignKeysIndex => SelectedForeignKey,
+        ConstraintsCheckIndex => SelectedCheck,
+        ConstraintsUniqueIndex => SelectedUnique,
+        _ => null,
+    };
 
     [ObservableProperty]
     private string _ddlText = string.Empty;
@@ -1570,11 +1606,221 @@ public partial class TableDetailTabViewModel : ViewModelBase
         // mechanism preserves user's selection / sort / page.
         await RefreshStructureAsync().ConfigureAwait(true);
 
-        // Override the snapshot-restored sub-tab — spec says "switch to
-        // Ograniczenia → Foreign Keys after a successful FK". Set both the
-        // outer (Ograniczenia) and inner (FK) indices.
+        // Jump to Ograniczenia → Foreign Keys and select the new constraint.
+        SelectNewConstraint(ConstraintsForeignKeysIndex, ForeignKeyConstraints, spec.ConstraintName);
+    }
+
+    // ─── Constraint management (Constraint Management Sprint V1) ──────────
+    //
+    // Add (PK / Check / Unique — FK reuses the wizard above) + Drop. All Add
+    // dialogs follow the FK pattern: the VM raises a *Requested event, the view
+    // opens the dialog and returns a spec (or null on Cancel). Execution goes
+    // through FirebirdDdlExecutor in the user's working transaction (Rollback
+    // undoes), then RefreshStructureAsync re-reads the catalog and we jump to
+    // the matching inner sub-tab + select the new row. Drop is type-agnostic
+    // (one command for all four sub-tabs) and confirms via ConfirmDialog.
+
+    public bool CanManageConstraints => _ddlExecutor is not null;
+    public bool CanDropConstraint => _ddlExecutor is not null && ActiveConstraint is not null;
+
+    /// <summary>View returns the picked <see cref="ConstraintFieldSpec"/> from
+    /// the field-picker dialog (Primary Key), or null on Cancel.</summary>
+    public event System.Func<Task<ConstraintFieldSpec?>>? AddPrimaryKeyRequested;
+
+    /// <summary>View returns the picked <see cref="ConstraintFieldSpec"/> from
+    /// the field-picker dialog (Unique), or null on Cancel.</summary>
+    public event System.Func<Task<ConstraintFieldSpec?>>? AddUniqueRequested;
+
+    /// <summary>View returns the <see cref="CheckConstraintSpec"/> from the
+    /// check dialog, or null on Cancel.</summary>
+    public event System.Func<Task<CheckConstraintSpec?>>? AddCheckRequested;
+
+    [RelayCommand(CanExecute = nameof(CanManageConstraints))]
+    private async Task AddPrimaryKey()
+    {
+        if (AddPrimaryKeyRequested is null) return;
+        var spec = await AddPrimaryKeyRequested().ConfigureAwait(true);
+        if (spec is null) return;
+        await ExecuteAddPrimaryKeyAsync(spec).ConfigureAwait(true);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageConstraints))]
+    private async Task AddUnique()
+    {
+        if (AddUniqueRequested is null) return;
+        var spec = await AddUniqueRequested().ConfigureAwait(true);
+        if (spec is null) return;
+        await ExecuteAddUniqueAsync(spec).ConfigureAwait(true);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageConstraints))]
+    private async Task AddCheck()
+    {
+        if (AddCheckRequested is null) return;
+        var spec = await AddCheckRequested().ConfigureAwait(true);
+        if (spec is null) return;
+        await ExecuteAddCheckAsync(spec).ConfigureAwait(true);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDropConstraint))]
+    private async Task DropConstraint()
+    {
+        if (ActiveConstraint is not { } constraint) return;
+        if (string.IsNullOrWhiteSpace(constraint.Name)) return;
+        var confirmed = await RequestConfirmAsync(new ConfirmRequest
+        {
+            Title = UiStrings.ConstraintDropConfirmTitle,
+            Message = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ConstraintDropConfirmFormat, constraint.Name),
+            ConfirmLabel = UiStrings.ConstraintDropConfirmYes,
+            CancelLabel = UiStrings.DialogCancel,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
+        if (!confirmed) return;
+        await ExecuteDropConstraintAsync(constraint.Name).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Executes ADD CONSTRAINT … PRIMARY KEY in the user's working transaction,
+    /// then refreshes + jumps to Ograniczenia → Primary Key with the new
+    /// constraint selected. Public for tests (no dialog, no confirm).
+    /// </summary>
+    public Task ExecuteAddPrimaryKeyAsync(ConstraintFieldSpec spec)
+        => ExecuteConstraintAddAsync(
+            spec is null ? null : SafeBuild(() => DdlGenerator.BuildAddPrimaryKey(TableName, spec.Name, spec.Fields)),
+            ConstraintsPrimaryKeyIndex,
+            () => PrimaryKeyConstraints,
+            spec?.Name,
+            r => SelectedPrimaryKey = r);
+
+    /// <summary>
+    /// Executes ADD CONSTRAINT … UNIQUE. Symmetric to
+    /// <see cref="ExecuteAddPrimaryKeyAsync"/>.
+    /// </summary>
+    public Task ExecuteAddUniqueAsync(ConstraintFieldSpec spec)
+        => ExecuteConstraintAddAsync(
+            spec is null ? null : SafeBuild(() => DdlGenerator.BuildAddUnique(TableName, spec.Name, spec.Fields)),
+            ConstraintsUniqueIndex,
+            () => UniqueConstraints,
+            spec?.Name,
+            r => SelectedUnique = r);
+
+    /// <summary>
+    /// Executes ADD CONSTRAINT … CHECK. Symmetric to
+    /// <see cref="ExecuteAddPrimaryKeyAsync"/>.
+    /// </summary>
+    public Task ExecuteAddCheckAsync(CheckConstraintSpec spec)
+        => ExecuteConstraintAddAsync(
+            spec is null ? null : SafeBuild(() => DdlGenerator.BuildAddCheck(TableName, spec.Name, spec.Expression)),
+            ConstraintsCheckIndex,
+            () => CheckConstraints,
+            spec?.Name,
+            r => SelectedCheck = r);
+
+    /// <summary>
+    /// Executes ALTER TABLE … DROP CONSTRAINT in the user's working transaction
+    /// and refreshes. Public for tests (the confirm lives in
+    /// <see cref="DropConstraintCommand"/>). After the drop the user stays on
+    /// the current inner sub-tab; the gone row clears its selection.
+    /// </summary>
+    public async Task ExecuteDropConstraintAsync(string constraintName)
+    {
+        if (string.IsNullOrWhiteSpace(constraintName)) return;
+        if (_ddlExecutor is null) return;
+
+        ErrorMessage = null;
+        string sql;
+        try
+        {
+            sql = DdlGenerator.BuildDropConstraint(TableName, constraintName);
+        }
+        catch (System.ArgumentException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ConstraintExecuteFailedFormat, ex.Message);
+            return;
+        }
+
+        if (!await TryExecuteConstraintSqlAsync(sql).ConfigureAwait(true)) return;
+        await RefreshStructureAsync().ConfigureAwait(true);
+    }
+
+    // Shared ADD path: execute the (already-built) SQL, refresh, then jump to
+    // the matching inner sub-tab and select the new constraint by name. A null
+    // sql means the builder threw on a validation gap (SafeBuild set
+    // ErrorMessage already) → bail.
+    private async Task ExecuteConstraintAddAsync(
+        string? sql,
+        int innerIndex,
+        System.Func<IReadOnlyList<ConstraintInfo>> listSelector,
+        string? newName,
+        System.Action<ConstraintInfo?> assignSelection)
+    {
+        if (_ddlExecutor is null) return;
+        if (sql is null) return; // builder failed validation; ErrorMessage set
+
+        if (!await TryExecuteConstraintSqlAsync(sql).ConfigureAwait(true)) return;
+        await RefreshStructureAsync().ConfigureAwait(true);
+
         ActiveSubTabIndex = ConstraintsSubTabIndex;
-        ConstraintsActiveSubTabIndex = ConstraintsForeignKeysIndex;
+        ConstraintsActiveSubTabIndex = innerIndex;
+        var match = newName is null
+            ? null
+            : listSelector().FirstOrDefault(c => string.Equals(c.Name, newName, StringComparison.OrdinalIgnoreCase));
+        assignSelection(match);
+    }
+
+    // Runs constraint DDL through the executor with the standard error
+    // handling. Returns true on success, false (with ErrorMessage set) on a
+    // DDL / connection failure — caller then skips the refresh.
+    private async Task<bool> TryExecuteConstraintSqlAsync(string sql)
+    {
+        ErrorMessage = null;
+        try
+        {
+            await _ddlExecutor!.ExecuteAsync(sql).ConfigureAwait(true);
+            return true;
+        }
+        catch (DdlExecutionException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ConstraintExecuteFailedFormat, ex.Message);
+            return false;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ConstraintExecuteFailedFormat, ex.Message);
+            return false;
+        }
+    }
+
+    // Build SQL, trapping the builder's validation ArgumentException into
+    // ErrorMessage and returning null so the caller bails before executing.
+    private string? SafeBuild(System.Func<string> build)
+    {
+        try
+        {
+            return build();
+        }
+        catch (System.ArgumentException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ConstraintExecuteFailedFormat, ex.Message);
+            return null;
+        }
+    }
+
+    // Jump to Ograniczenia → <innerIndex> and select the named constraint in
+    // the matching filtered list (reference-equal to the grid's bound list, so
+    // SelectedItem highlights the row).
+    private void SelectNewConstraint(int innerIndex, IReadOnlyList<ConstraintInfo> list, string name)
+    {
+        ActiveSubTabIndex = ConstraintsSubTabIndex;
+        ConstraintsActiveSubTabIndex = innerIndex;
+        var match = list.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+        switch (innerIndex)
+        {
+            case ConstraintsPrimaryKeyIndex: SelectedPrimaryKey = match; break;
+            case ConstraintsForeignKeysIndex: SelectedForeignKey = match; break;
+            case ConstraintsCheckIndex: SelectedCheck = match; break;
+            case ConstraintsUniqueIndex: SelectedUnique = match; break;
+        }
     }
 
     /// <summary>

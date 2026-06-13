@@ -423,7 +423,10 @@
           <TabItem Classes="sub-tab"
                    Classes.empty="{Binding !HasPrimaryKeyConstraints}"
                    Header="{Binding PrimaryKeyTabHeader}">
-            <DataGrid ItemsSource="{Binding PrimaryKeyConstraints}"
+            <DataGrid x:Name="PrimaryKeyGrid"
+                      ItemsSource="{Binding PrimaryKeyConstraints}"
+                      SelectedItem="{Binding SelectedPrimaryKey, Mode=TwoWay}"
+                      PointerPressed="OnConstraintGridPointerPressed"
                       IsReadOnly="True"
                       FontSize="11"
                       GridLinesVisibility="Horizontal"
@@ -436,6 +439,14 @@
                       HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                       VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                       Background="{DynamicResource BackgroundBrush}">
+              <DataGrid.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddPrimaryKey}"
+                            Command="{Binding AddPrimaryKeyCommand}" />
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropPrimaryKey}"
+                            Command="{Binding DropConstraintCommand}" />
+                </ContextMenu>
+              </DataGrid.ContextMenu>
               <DataGrid.Columns>
                 <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
                                     Binding="{Binding Name}"
@@ -456,7 +467,10 @@
           <TabItem Classes="sub-tab"
                    Classes.empty="{Binding !HasForeignKeyConstraints}"
                    Header="{Binding ForeignKeyTabHeader}">
-            <DataGrid ItemsSource="{Binding ForeignKeyConstraints}"
+            <DataGrid x:Name="ForeignKeyGrid"
+                      ItemsSource="{Binding ForeignKeyConstraints}"
+                      SelectedItem="{Binding SelectedForeignKey, Mode=TwoWay}"
+                      PointerPressed="OnConstraintGridPointerPressed"
                       IsReadOnly="True"
                       FontSize="11"
                       GridLinesVisibility="Horizontal"
@@ -469,6 +483,14 @@
                       HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                       VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                       Background="{DynamicResource BackgroundBrush}">
+              <DataGrid.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddForeignKey}"
+                            Command="{Binding CreateForeignKeyCommand}" />
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropForeignKey}"
+                            Command="{Binding DropConstraintCommand}" />
+                </ContextMenu>
+              </DataGrid.ContextMenu>
               <DataGrid.Columns>
                 <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
                                     Binding="{Binding Name}"
@@ -498,7 +520,10 @@
           <TabItem Classes="sub-tab"
                    Classes.empty="{Binding !HasCheckConstraints}"
                    Header="{Binding CheckTabHeader}">
-            <DataGrid ItemsSource="{Binding CheckConstraints}"
+            <DataGrid x:Name="CheckGrid"
+                      ItemsSource="{Binding CheckConstraints}"
+                      SelectedItem="{Binding SelectedCheck, Mode=TwoWay}"
+                      PointerPressed="OnConstraintGridPointerPressed"
                       IsReadOnly="True"
                       FontSize="11"
                       GridLinesVisibility="Horizontal"
@@ -511,6 +536,14 @@
                       HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                       VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                       Background="{DynamicResource BackgroundBrush}">
+              <DataGrid.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddCheck}"
+                            Command="{Binding AddCheckCommand}" />
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropCheck}"
+                            Command="{Binding DropConstraintCommand}" />
+                </ContextMenu>
+              </DataGrid.ContextMenu>
               <DataGrid.Columns>
                 <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
                                     Binding="{Binding Name}"
@@ -526,7 +559,10 @@
           <TabItem Classes="sub-tab"
                    Classes.empty="{Binding !HasUniqueConstraints}"
                    Header="{Binding UniqueTabHeader}">
-            <DataGrid ItemsSource="{Binding UniqueConstraints}"
+            <DataGrid x:Name="UniqueGrid"
+                      ItemsSource="{Binding UniqueConstraints}"
+                      SelectedItem="{Binding SelectedUnique, Mode=TwoWay}"
+                      PointerPressed="OnConstraintGridPointerPressed"
                       IsReadOnly="True"
                       FontSize="11"
                       GridLinesVisibility="Horizontal"
@@ -539,6 +575,14 @@
                       HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                       VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                       Background="{DynamicResource BackgroundBrush}">
+              <DataGrid.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddUnique}"
+                            Command="{Binding AddUniqueCommand}" />
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropUnique}"
+                            Command="{Binding DropConstraintCommand}" />
+                </ContextMenu>
+              </DataGrid.ContextMenu>
               <DataGrid.Columns>
                 <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
                                     Binding="{Binding Name}"

@@ -400,6 +400,42 @@ internal static class UiStrings
     public const string ForeignKeyValidationReferencedFieldsRequired = "Pick at least one referenced field.";
     public const string ForeignKeyValidationFieldCountMismatch = "Source and referenced field counts must match.";
     public const string ForeignKeyExecuteFailedFormat = "Failed to create foreign key: {0}";
+
+    // ─── Constraint management (Constraint Management Sprint V1) ──────────
+    // Shared dialog chrome
+    public const string ConstraintNameLabel = "Constraint name";
+    public const string ConstraintFieldsLabel = "Fields";
+    public const string ConstraintDialogCreate = "Create";
+    public const string ConstraintDdlPreviewLabel = "DDL preview";
+    public const string ConstraintDdlPreviewIncomplete = "-- Fill in the constraint name and select at least one field to preview the DDL.";
+    public const string ConstraintValidationNameRequired = "Constraint name is required.";
+    public const string ConstraintValidationFieldsRequired = "Select at least one field.";
+    public const string ConstraintExecuteFailedFormat = "Failed to apply constraint change: {0}";
+    // Primary Key / Unique field-picker dialog
+    public const string PrimaryKeyDialogTitle = "Add Primary Key";
+    public const string PrimaryKeyDialogHeader = "Add Primary Key";
+    public const string UniqueDialogTitle = "Add Unique Constraint";
+    public const string UniqueDialogHeader = "Add Unique Constraint";
+    // Check dialog
+    public const string CheckConstraintDialogTitle = "Add Check Constraint";
+    public const string CheckConstraintDialogHeader = "Add Check Constraint";
+    public const string CheckConstraintExpressionLabel = "CHECK condition";
+    public const string CheckConstraintExpressionWatermark = "e.g. ID > 0  (or  CHECK (ID > 0))";
+    public const string CheckConstraintValidationExpressionRequired = "Check expression is required.";
+    // Context-menu actions
+    public const string ConstraintMenuAddPrimaryKey = "Add Primary Key";
+    public const string ConstraintMenuDropPrimaryKey = "Drop Primary Key";
+    public const string ConstraintMenuAddForeignKey = "Add Foreign Key";
+    public const string ConstraintMenuDropForeignKey = "Drop Foreign Key";
+    public const string ConstraintMenuAddCheck = "Add Check Constraint";
+    public const string ConstraintMenuDropCheck = "Drop Check Constraint";
+    public const string ConstraintMenuAddUnique = "Add Unique Constraint";
+    public const string ConstraintMenuDropUnique = "Drop Unique Constraint";
+    // Drop confirmation
+    public const string ConstraintDropConfirmTitle = "Drop constraint";
+    public const string ConstraintDropConfirmFormat = "Are you sure you want to drop constraint '{0}'?";
+    public const string ConstraintDropConfirmYes = "Drop";
+
     public const string AddFieldFieldName = "Field name";
     public const string AddFieldNotNull = "Not Null";
     public const string AddFieldPrimaryKey = "Primary Key";

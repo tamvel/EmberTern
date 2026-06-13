@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
@@ -90,6 +91,9 @@ public partial class TableDetailTabView : UserControl
             _currentVm.AddFieldRequested -= OnAddFieldRequested;
             _currentVm.EditFieldRequested -= OnEditFieldRequested;
             _currentVm.CreateForeignKeyRequested -= OnCreateForeignKeyRequested;
+            _currentVm.AddPrimaryKeyRequested -= OnAddPrimaryKeyRequested;
+            _currentVm.AddUniqueRequested -= OnAddUniqueRequested;
+            _currentVm.AddCheckRequested -= OnAddCheckRequested;
         }
         _currentVm = DataContext as TableDetailTabViewModel;
         if (_currentVm is not null)
@@ -98,6 +102,9 @@ public partial class TableDetailTabView : UserControl
             _currentVm.AddFieldRequested += OnAddFieldRequested;
             _currentVm.EditFieldRequested += OnEditFieldRequested;
             _currentVm.CreateForeignKeyRequested += OnCreateForeignKeyRequested;
+            _currentVm.AddPrimaryKeyRequested += OnAddPrimaryKeyRequested;
+            _currentVm.AddUniqueRequested += OnAddUniqueRequested;
+            _currentVm.AddCheckRequested += OnAddCheckRequested;
             PushDdl();
             PopulateDataGrid(_currentVm.DataResult);
         }
@@ -221,6 +228,56 @@ public partial class TableDetailTabView : UserControl
             LoadFields,
             LoadPrimaryKey);
         return await ForeignKeyDialog.ShowAsync(window, dialogVm).ConfigureAwait(true);
+    }
+
+    // ─── Constraint management dialogs (Constraint Management Sprint V1) ──
+
+    private Task<ConstraintFieldSpec?> OnAddPrimaryKeyRequested()
+        => OpenConstraintFieldDialogAsync(ConstraintFieldKind.PrimaryKey);
+
+    private Task<ConstraintFieldSpec?> OnAddUniqueRequested()
+        => OpenConstraintFieldDialogAsync(ConstraintFieldKind.Unique);
+
+    // PK + Unique share the field-picker dialog — only the kind differs.
+    // Field names come from the current table's loaded Fields.
+    private async Task<ConstraintFieldSpec?> OpenConstraintFieldDialogAsync(ConstraintFieldKind kind)
+    {
+        if (_currentVm is null) return null;
+        var window = this.FindAncestorOfType<Window>();
+        if (window is null) return null;
+
+        var fieldNames = new List<string>();
+        foreach (var f in _currentVm.Fields) fieldNames.Add(f.Name);
+
+        var dialogVm = new ConstraintFieldDialogViewModel(kind, _currentVm.TableName, fieldNames);
+        return await ConstraintFieldDialog.ShowAsync(window, dialogVm).ConfigureAwait(true);
+    }
+
+    private async Task<CheckConstraintSpec?> OnAddCheckRequested()
+    {
+        if (_currentVm is null) return null;
+        var window = this.FindAncestorOfType<Window>();
+        if (window is null) return null;
+
+        var dialogVm = new CheckConstraintDialogViewModel(_currentVm.TableName);
+        return await CheckConstraintDialog.ShowAsync(window, dialogVm).ConfigureAwait(true);
+    }
+
+    // Avalonia DataGrid doesn't select the row under a right-click (gotcha #16),
+    // so context-menu Drop would act on a stale selection. Wire right-button
+    // PointerPressed on each constraint sub-grid to select the row first; leave
+    // Handled=false so the ContextMenu still opens. Each grid binds SelectedItem
+    // to its own VM property, so setting grid.SelectedItem propagates.
+    private void OnConstraintGridPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (sender is not DataGrid grid) return;
+        if (!e.GetCurrentPoint(grid).Properties.IsRightButtonPressed) return;
+        if (e.Source is not Avalonia.Visual visual) return;
+        var row = visual.FindAncestorOfType<DataGridRow>(includeSelf: true);
+        if (row?.DataContext is ConstraintInfo constraint)
+        {
+            grid.SelectedItem = constraint;
+        }
     }
 
     // Double-click on a Pola row opens the Edit Field dialog. Filters out

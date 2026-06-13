@@ -759,16 +759,27 @@ public sealed class FirebirdTableDetailReader
         "        FROM RDB$INDEX_SEGMENTS s2 " +
         "        JOIN RDB$RELATION_CONSTRAINTS rc3 ON rc3.RDB$INDEX_NAME = s2.RDB$INDEX_NAME " +
         "        WHERE rc3.RDB$CONSTRAINT_NAME = fk.RDB$CONST_NAME_UQ) AS REF_FIELDS, " +
-        "       chk_src.RDB$TRIGGER_SOURCE, " +
+        // CHECK source via a correlated scalar subquery, NOT a join. A Firebird
+        // CHECK constraint is backed by several triggers (BEFORE INSERT type 1,
+        // BEFORE UPDATE type 3, …) so RDB$CHECK_CONSTRAINTS holds one row per
+        // trigger. Joining it to RDB$RELATION_CONSTRAINTS multiplied each CHECK
+        // into N grid rows (one per backing trigger), all sharing the constraint
+        // name but only the type-1 row carrying the source — the rest came back
+        // with a NULL source. The scalar subquery collapses that to exactly one
+        // row per constraint (ROWS 1 on the type-1 trigger), and yields NULL for
+        // non-CHECK constraints without affecting their row count.
+        "       (SELECT t.RDB$TRIGGER_SOURCE " +
+        "        FROM RDB$CHECK_CONSTRAINTS chk " +
+        "        JOIN RDB$TRIGGERS t ON t.RDB$TRIGGER_NAME = chk.RDB$TRIGGER_NAME " +
+        "        WHERE chk.RDB$CONSTRAINT_NAME = rc.RDB$CONSTRAINT_NAME " +
+        "          AND t.RDB$TRIGGER_TYPE = 1 " +
+        "        ROWS 1) AS CHECK_SOURCE, " +
         "       rc.RDB$INDEX_NAME, " +
         "       fk.RDB$UPDATE_RULE, " +
         "       fk.RDB$DELETE_RULE, " +
         "       idx.RDB$INDEX_TYPE " +
         "FROM RDB$RELATION_CONSTRAINTS rc " +
         "LEFT JOIN RDB$REF_CONSTRAINTS fk ON fk.RDB$CONSTRAINT_NAME = rc.RDB$CONSTRAINT_NAME " +
-        "LEFT JOIN RDB$CHECK_CONSTRAINTS chk ON chk.RDB$CONSTRAINT_NAME = rc.RDB$CONSTRAINT_NAME " +
-        "LEFT JOIN RDB$TRIGGERS chk_src ON chk_src.RDB$TRIGGER_NAME = chk.RDB$TRIGGER_NAME " +
-        "                              AND chk_src.RDB$TRIGGER_TYPE = 1 " +
         "LEFT JOIN RDB$INDICES idx ON idx.RDB$INDEX_NAME = rc.RDB$INDEX_NAME " +
         "WHERE rc.RDB$RELATION_NAME = @tableName " +
         "ORDER BY rc.RDB$CONSTRAINT_TYPE, rc.RDB$CONSTRAINT_NAME";
