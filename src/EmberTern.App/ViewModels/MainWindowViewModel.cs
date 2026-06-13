@@ -178,7 +178,13 @@ public partial class MainWindowViewModel : ViewModelBase
     // INSERT/UPDATE/DELETE), and the Pola sub-tab (Add Field / Drop Field run
     // immediately in the user's working tx — the user needs the same Commit /
     // Rollback escape hatch).
-    public bool ShowTransactionButtons => IsQueryTabActive || IsDataTabActive || IsFieldsTabActive;
+    // Commit / Rollback must be reachable from EVERY TableDetail sub-tab, not
+    // just Pola / Dane: Add/Drop Index (Indeksy), Save/Clear description (Opis)
+    // and Add/Drop constraint (Ograniczenia) all open the working transaction,
+    // so the user needs the Commit/Rollback buttons there to finalize (#3).
+    // IsTableDetailTabActive covers all sub-tabs (it's keyed on the workspace
+    // tab kind, not the inner sub-tab).
+    public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive;
     // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable);
     // the anchored Query tab is never closable so the button hides when it's active.
     public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable };
@@ -1237,6 +1243,13 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             newTable.ValidationMessage = ex.Message;
         }
+        catch (ArgumentException ex)
+        {
+            // BuildCreateTable validation gap (empty name etc.) — IsValid should
+            // catch these first, but surface anything that slips through rather
+            // than letting the async command swallow it silently (#3).
+            newTable.ValidationMessage = ex.Message;
+        }
     }
 
     // Persist a freshly-added connection into a folder. Called by the view after
@@ -2101,48 +2114,63 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void OnTransactionStateChanged(object? sender, EventArgs e)
     {
+        // TransactionStateChanged fires on whichever thread the Begin/Commit/
+        // Rollback async work completed on — NOT the UI thread (gotcha #11).
+        // The transition booleans are computed synchronously here (safe scalar
+        // reads, and correct even if two events coalesce before the dispatcher
+        // drains), then the side-effects — which mutate UI-bound collections
+        // (AddMessage) and kick off RefreshAfterTransactionAsync (clears +
+        // repopulates the TableDetail Fields/EditableFields collections) — are
+        // marshalled onto the UI thread. Running those off-thread is what broke
+        // the DataGrid binding layer and left the grid unresponsive ("UI locked"
+        // after reorder+commit, #6).
         var current = _transactionService.State;
-        if (_previousTransactionState != TransactionState.Active && current == TransactionState.Active)
+        var becameActive = _previousTransactionState != TransactionState.Active && current == TransactionState.Active;
+        // Active → Idle means a Commit or Rollback just completed; the on-screen
+        // TableDetail tabs may be out of sync with the live catalog (rollback
+        // reverts ALTERs fired in the tx; commit confirms them) — refresh each.
+        var committedOrRolledBack = _previousTransactionState == TransactionState.Active && current == TransactionState.Idle;
+        _previousTransactionState = current;
+
+        void Apply()
         {
-            AddMessage(MessageSeverity.Info, UiStrings.TransactionStartedMessage);
-        }
-        // Active → Idle transition means a Commit or Rollback just completed.
-        // Either way, the on-screen TableDetail tabs may now be out of sync
-        // with the live catalog (rollback reverts ALTERs the user fired in
-        // the tx; commit confirms them). Refresh every open TableDetail so
-        // the grid reflects the DB state and any user-pending edits are
-        // dropped — matches the spec "rollback przywraca stan z bazy +
-        // czyści pending changes".
-        if (_previousTransactionState == TransactionState.Active && current == TransactionState.Idle)
-        {
+            if (becameActive)
+            {
+                AddMessage(MessageSeverity.Info, UiStrings.TransactionStartedMessage);
+            }
+            if (committedOrRolledBack)
+            {
+                foreach (var tab in WorkspaceTabs)
+                {
+                    if (tab.Kind == WorkspaceTabKind.TableDetail && tab.TableDetail is { } detail)
+                    {
+                        // Fire-and-forget — errors land in detail.ErrorMessage via
+                        // the standard SafeLoadAsync chain.
+                        _ = detail.RefreshAfterTransactionAsync();
+                    }
+                }
+            }
+
+            OnPropertyChanged(nameof(IsTransactionIdle));
+            OnPropertyChanged(nameof(IsTransactionActive));
+            OnPropertyChanged(nameof(IsTransactionError));
+            OnPropertyChanged(nameof(HasExecutedInTransaction));
+            OnPropertyChanged(nameof(TransactionBarText));
+
+            // The Query tab carries the transaction-active marker. It only exists
+            // while a connection is active; when none is, there's no marker to set.
             foreach (var tab in WorkspaceTabs)
             {
-                if (tab.Kind == WorkspaceTabKind.TableDetail && tab.TableDetail is { } detail)
+                if (tab.Kind == WorkspaceTabKind.Query)
                 {
-                    // Fire-and-forget — errors land in detail.ErrorMessage via
-                    // the standard SafeLoadAsync chain.
-                    _ = detail.RefreshAfterTransactionAsync();
+                    tab.ShowActiveTransactionMarker = HasExecutedInTransaction;
+                    break;
                 }
             }
         }
-        _previousTransactionState = current;
 
-        OnPropertyChanged(nameof(IsTransactionIdle));
-        OnPropertyChanged(nameof(IsTransactionActive));
-        OnPropertyChanged(nameof(IsTransactionError));
-        OnPropertyChanged(nameof(HasExecutedInTransaction));
-        OnPropertyChanged(nameof(TransactionBarText));
-
-        // The Query tab carries the transaction-active marker. It only exists while
-        // a connection is active; when none is, there's no marker to set.
-        foreach (var tab in WorkspaceTabs)
-        {
-            if (tab.Kind == WorkspaceTabKind.Query)
-            {
-                tab.ShowActiveTransactionMarker = HasExecutedInTransaction;
-                break;
-            }
-        }
+        if (Dispatcher.UIThread.CheckAccess()) Apply();
+        else Dispatcher.UIThread.Post(Apply);
     }
 
     private void UpdateStatusFromConnection()

@@ -78,7 +78,7 @@ public class DataTabToolbarVmTests
     }
 
     [Fact]
-    public void MainVm_TableDetailTab_NonFieldsNonDataSubTab_NoTransactionButtons()
+    public void MainVm_TableDetailTab_AllSubTabs_ShowTransactionButtons()
     {
         using var harness = new Harness();
         harness.Main.ApplyActiveConnectionChange("A");
@@ -91,11 +91,16 @@ public class DataTabToolbarVmTests
         harness.Main.WorkspaceTabs.Add(tab);
         harness.Main.SelectTab(tab);
 
-        // Switch to a sub-tab that is neither Pola nor Dane (e.g. Ograniczenia = 1).
-        td.ActiveSubTabIndex = 1;
-        Assert.False(harness.Main.IsFieldsTabActive);
-        Assert.False(harness.Main.IsDataTabActive);
-        Assert.False(harness.Main.ShowTransactionButtons);
+        // Commit/Rollback are now reachable from EVERY TableDetail sub-tab (#3):
+        // Add/Drop Index (Indeksy=2), Save/Clear description (Opis=5) and
+        // Add/Drop constraint (Ograniczenia=1) all open the working transaction,
+        // so the user must be able to finalize it from those sub-tabs too.
+        foreach (var subTab in new[] { 1, 2, 5 })   // Ograniczenia / Indeksy / Opis
+        {
+            td.ActiveSubTabIndex = subTab;
+            Assert.True(harness.Main.IsTableDetailTabActive);
+            Assert.True(harness.Main.ShowTransactionButtons);
+        }
     }
 
     [Fact]

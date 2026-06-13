@@ -24,7 +24,17 @@ public partial class NewTableFieldRowViewModel : ObservableObject
 
     private readonly NewTableTabViewModel? _owner;
 
-    [ObservableProperty] private bool _primaryKey;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotNullEnabled))]
+    private bool _primaryKey;
+
+    partial void OnPrimaryKeyChanged(bool value)
+    {
+        // PK implies NOT NULL (#4) — force it on; IsNotNullEnabled disables the
+        // cell so it can't be toggled back off while PK is set.
+        if (value) NotNull = true;
+    }
+
     [ObservableProperty] private string _name = string.Empty;
 
     // Identifier names live in catalog UPPERCASE. Auto-coerce so the live
@@ -47,24 +57,100 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsSizeEnabled))]
     [NotifyPropertyChangedFor(nameof(IsPrecisionScaleEnabled))]
     [NotifyPropertyChangedFor(nameof(SelectedDomainSpec))]
+    [NotifyPropertyChangedFor(nameof(EffectiveTypeDisplay))]
     private string _type = "INTEGER";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedDomainSpec))]
+    [NotifyPropertyChangedFor(nameof(HasDomain))]
+    [NotifyPropertyChangedFor(nameof(DomainType))]
+    [NotifyPropertyChangedFor(nameof(IsTypeEnabled))]
+    [NotifyPropertyChangedFor(nameof(EffectiveTypeDisplay))]
     private string? _domainName;
 
     [ObservableProperty] private string _defaultValue = string.Empty;
-    [ObservableProperty] private string _computedExpression = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasComputed))]
+    [NotifyPropertyChangedFor(nameof(IsTypeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsDomainEnabled))]
+    private string _computedExpression = string.Empty;
+
+    partial void OnComputedExpressionChanged(string value)
+    {
+        // A computed column derives everything from its expression — Firebird
+        // rejects Domain / Size / Scale / Default / NOT NULL / CHECK / PK /
+        // Autoincrement on it. The grid's text/checkbox columns can't bind a
+        // per-cell IsEnabled, so we CLEAR the conflicting values when a computed
+        // expression is entered (#2). Re-entrancy is safe — none of these write
+        // back to ComputedExpression.
+        if (string.IsNullOrWhiteSpace(value)) return;
+        DomainName = null;
+        Size = null;
+        Scale = null;
+        DefaultValue = string.Empty;
+        CheckExpression = string.Empty;
+        NotNull = false;
+        PrimaryKey = false;
+        AutoIncrement = false;
+    }
+
     [ObservableProperty] private string _checkExpression = string.Empty;
     [ObservableProperty] private int? _size;
     [ObservableProperty] private int? _scale;
     [ObservableProperty] private bool _notNull;
     [ObservableProperty] private string? _charset;
     [ObservableProperty] private string _description = string.Empty;
-    [ObservableProperty] private bool _autoIncrement;
 
-    public bool IsSizeEnabled => Type is "CHAR" or "VARCHAR" or "NUMERIC" or "DECIMAL";
-    public bool IsPrecisionScaleEnabled => Type is "NUMERIC" or "DECIMAL";
+    [ObservableProperty]
+    private bool _autoIncrement;
+
+    partial void OnAutoIncrementChanged(bool value)
+    {
+        // Autoincrement supplies the value — a manual DEFAULT is redundant /
+        // invalid alongside it (#4). Clear it when AI is turned on.
+        if (value) DefaultValue = string.Empty;
+    }
+
+    public bool IsSizeEnabled => !HasDomain && Type is "CHAR" or "VARCHAR" or "NUMERIC" or "DECIMAL";
+    public bool IsPrecisionScaleEnabled => !HasDomain && Type is "NUMERIC" or "DECIMAL";
+
+    /// <summary>True when a COMPUTED BY expression is set — the type/domain are
+    /// then derived from the expression and ignored by Firebird, so the Type +
+    /// Domain cell editors are disabled to avoid a contradictory definition (#4).</summary>
+    public bool HasComputed => !string.IsNullOrWhiteSpace(ComputedExpression);
+
+    /// <summary>True when a domain is selected — the domain governs the type, so
+    /// the Type cell shows the domain's type (read-only) instead of the combo (#3).</summary>
+    public bool HasDomain => !string.IsNullOrEmpty(DomainName);
+
+    /// <summary>Type combo enabled only when neither computed nor domain-governed.</summary>
+    public bool IsTypeEnabled => !HasComputed && !HasDomain;
+
+    /// <summary>Domain combo enabled unless the field is computed (mutually exclusive).</summary>
+    public bool IsDomainEnabled => !HasComputed;
+
+    /// <summary>Not Null cell enabled unless PK forces it on.</summary>
+    public bool IsNotNullEnabled => !PrimaryKey;
+
+    /// <summary>The selected domain's resolved SQL type (e.g. VARCHAR(80)), or
+    /// empty when no domain is selected.</summary>
+    public string? DomainType
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(DomainName)) return null;
+            foreach (var d in AvailableDomains)
+            {
+                if (string.Equals(d.Name, DomainName, StringComparison.Ordinal)) return d.Type;
+            }
+            return null;
+        }
+    }
+
+    /// <summary>What the Type cell shows: the domain's type when a domain is
+    /// picked (#3), otherwise the chosen basic type.</summary>
+    public string EffectiveTypeDisplay => HasDomain ? (DomainType ?? string.Empty) : Type;
 
     public IReadOnlyList<string> BasicTypes => _owner?.BasicTypes ?? FallbackBasicTypes;
     public ObservableCollection<DomainSpec> AvailableDomains
@@ -77,14 +163,35 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     {
         get
         {
-            if (string.IsNullOrEmpty(DomainName)) return null;
+            if (string.IsNullOrEmpty(DomainName))
+            {
+                // Show the "(none)" sentinel as selected when no domain is set.
+                return FindNoneSentinel();
+            }
             foreach (var d in AvailableDomains)
             {
                 if (string.Equals(d.Name, DomainName, StringComparison.Ordinal)) return d;
             }
             return null;
         }
-        set => DomainName = value?.Name;
+        set
+        {
+            // null = load-time clobber (combo can't resolve while the list is
+            // still empty) — ignore it. The "(none)" sentinel = explicit clear.
+            if (value is null) return;
+            DomainName = string.Equals(value.Name, UiStrings.DomainNoneOption, StringComparison.Ordinal)
+                ? null
+                : value.Name;
+        }
+    }
+
+    private DomainSpec? FindNoneSentinel()
+    {
+        foreach (var d in AvailableDomains)
+        {
+            if (string.Equals(d.Name, UiStrings.DomainNoneOption, StringComparison.Ordinal)) return d;
+        }
+        return null;
     }
 
     public FieldDefinition ToFieldDefinition()
@@ -228,6 +335,9 @@ public partial class NewTableTabViewModel : ViewModelBase
     public void SetAvailableDomains(IEnumerable<DomainSpec> domains)
     {
         AvailableDomains.Clear();
+        // Leading "(none)" sentinel so the user can clear a row's domain back to
+        // a basic type (#5). Recognized by name in SelectedDomainSpec.
+        AvailableDomains.Add(new DomainSpec(UiStrings.DomainNoneOption, string.Empty));
         foreach (var d in domains) AvailableDomains.Add(d);
     }
 
@@ -288,7 +398,13 @@ public partial class NewTableTabViewModel : ViewModelBase
         var idx = Fields.IndexOf(row);
         var t = idx + delta;
         if (idx < 0 || t < 0 || t >= Fields.Count) return;
-        Fields.Move(idx, t);
+        // RemoveAt + Insert instead of ObservableCollection.Move: Avalonia's
+        // DataGrid doesn't reliably re-render a NotifyCollectionChangedAction.Move
+        // (the row order in the VM changes but the grid keeps the old visual
+        // order). Remove + Add are handled correctly, so the moved row shows in
+        // its new position immediately.
+        Fields.RemoveAt(idx);
+        Fields.Insert(t, row);
         SelectedField = row;
     }
 

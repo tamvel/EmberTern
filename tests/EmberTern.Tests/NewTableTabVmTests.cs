@@ -1,3 +1,4 @@
+using EmberTern.App;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Metadata;
 using Xunit;
@@ -92,8 +93,83 @@ public class NewTableTabVmTests
             new DomainSpec("T_ID", "INTEGER"),
             new DomainSpec("T_KWOTA", "NUMERIC(15,2)"),
         });
-        Assert.Equal(2, vm.AvailableDomains.Count);
-        Assert.Equal("T_KWOTA", vm.AvailableDomains[1].Name);
+        // A leading "(none)" sentinel is prepended so a row's domain can be
+        // cleared back to a basic type (#5), hence 3 entries for 2 real domains.
+        Assert.Equal(3, vm.AvailableDomains.Count);
+        Assert.Equal(UiStrings.DomainNoneOption, vm.AvailableDomains[0].Name);
+        Assert.Equal("T_ID", vm.AvailableDomains[1].Name);
+        Assert.Equal("T_KWOTA", vm.AvailableDomains[2].Name);
+    }
+
+    // #2 — Move Up / Down actually reorder the Fields collection (regression for
+    // the DataGrid not reflecting ObservableCollection.Move).
+    [Fact]
+    public void MoveFieldDown_ReordersFields()
+    {
+        var vm = new NewTableTabViewModel();        // seeds one "ID" row
+        vm.AddFieldCommand.Execute(null);
+        vm.Fields[1].Name = "SECOND";
+        vm.SelectedField = vm.Fields[0];            // the ID row
+
+        vm.MoveFieldDownCommand.Execute(null);
+
+        Assert.Equal("SECOND", vm.Fields[0].Name);
+        Assert.Equal("ID", vm.Fields[1].Name);
+        Assert.Same(vm.Fields[1], vm.SelectedField); // selection follows the row
+    }
+
+    [Fact]
+    public void MoveFieldUp_ReordersFields()
+    {
+        var vm = new NewTableTabViewModel();
+        vm.AddFieldCommand.Execute(null);
+        vm.Fields[1].Name = "SECOND";
+        vm.SelectedField = vm.Fields[1];
+
+        vm.MoveFieldUpCommand.Execute(null);
+
+        Assert.Equal("SECOND", vm.Fields[0].Name);
+        Assert.Equal("ID", vm.Fields[1].Name);
+    }
+
+    // #4 — a computed expression disables the type/domain editors.
+    [Fact]
+    public void Row_HasComputed_DisablesType()
+    {
+        var row = new NewTableFieldRowViewModel();
+        Assert.True(row.IsTypeEnabled);
+        row.ComputedExpression = "PRICE * QTY";
+        Assert.True(row.HasComputed);
+        Assert.False(row.IsTypeEnabled);
+        row.ComputedExpression = "  ";
+        Assert.True(row.IsTypeEnabled);
+    }
+
+    // #5 — picking the "(none)" sentinel clears the row's domain.
+    [Fact]
+    public void Row_SelectingNoneSentinel_ClearsDomain()
+    {
+        var vm = new NewTableTabViewModel();
+        vm.SetAvailableDomains(new[] { new DomainSpec("T_KWOTA", "NUMERIC(15,2)") });
+        var row = new NewTableFieldRowViewModel(vm) { DomainName = "T_KWOTA" };
+
+        var sentinel = vm.AvailableDomains[0]; // the "(none)" entry
+        row.SelectedDomainSpec = sentinel;
+
+        Assert.Null(row.DomainName);
+    }
+
+    // #5 — a null write (load-time clobber) must NOT clear the domain.
+    [Fact]
+    public void Row_NullDomainWriteback_IsIgnored()
+    {
+        var vm = new NewTableTabViewModel();
+        vm.SetAvailableDomains(new[] { new DomainSpec("T_KWOTA", "NUMERIC(15,2)") });
+        var row = new NewTableFieldRowViewModel(vm) { DomainName = "T_KWOTA" };
+
+        row.SelectedDomainSpec = null;
+
+        Assert.Equal("T_KWOTA", row.DomainName);
     }
 }
 

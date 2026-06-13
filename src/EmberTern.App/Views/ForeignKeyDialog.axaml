@@ -74,9 +74,12 @@
                    BorderThickness="0">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:SelectableFieldViewModel">
-                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                          Content="{Binding Name}"
-                          FontSize="11" />
+                <!-- TextBlock child (not string Content) so the CheckBox's
+                     ContentPresenter doesn't treat "_" in the field name as an
+                     access-key mnemonic (ID_NAGL → IDNAGL). See gotcha #76. -->
+                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}">
+                  <TextBlock Text="{Binding Name}" FontSize="11" />
+                </CheckBox>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
@@ -104,6 +107,7 @@
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedTableLabel}" Classes="field-label" />
             <ComboBox ItemsSource="{Binding AvailableTables}"
                       SelectedItem="{Binding SelectedReferencedTable, Mode=TwoWay}"
+                      IsTextSearchEnabled="True"
                       HorizontalAlignment="Stretch" />
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedFieldsHint}"
                        FontSize="10"
@@ -118,9 +122,9 @@
                    BorderBrush="{DynamicResource BorderBrush}">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:SelectableFieldViewModel">
-                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                          Content="{Binding Name}"
-                          FontSize="11" />
+                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}">
+                  <TextBlock Text="{Binding Name}" FontSize="11" />
+                </CheckBox>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>

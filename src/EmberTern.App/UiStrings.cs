@@ -436,6 +436,45 @@ internal static class UiStrings
     public const string ConstraintDropConfirmFormat = "Are you sure you want to drop constraint '{0}'?";
     public const string ConstraintDropConfirmYes = "Drop";
 
+    // Optional USING [ASC|DESC] INDEX clause for PK / UNIQUE (Constraint config).
+    public const string ConstraintIndexNameLabel = "Index name (optional)";
+    public const string ConstraintDescendingLabel = "Descending index";
+
+    // Pola sub-tab: Drop Foreign Key context-menu entry (routes through the
+    // shared Drop Constraint path; the FK constraint is resolved from the
+    // selected field).
+    public const string FieldsContextMenuDropForeignKey = "Drop Foreign Key";
+
+    // ─── Index Management V1 ──────────────────────────────────────────────
+    public const string IndexDialogTitle = "Add Index";
+    public const string IndexDialogHeader = "Add Index";
+    public const string IndexDialogCreate = "Create";
+    public const string IndexNameLabel = "Index name";
+    public const string IndexFieldsLabel = "Fields";
+    public const string IndexUniqueLabel = "Unique";
+    public const string IndexDescendingLabel = "Descending";
+    public const string IndexComputedLabel = "Computed by (optional — expression index)";
+    public const string IndexDdlPreviewLabel = "DDL preview";
+    public const string IndexDdlPreviewIncomplete = "-- Fill in the index name and select at least one field (or enter a COMPUTED BY expression).";
+    public const string IndexValidationNameRequired = "Index name is required.";
+    public const string IndexValidationFieldsRequired = "Select at least one field, or enter a COMPUTED BY expression.";
+    public const string IndexMenuAdd = "Add Index";
+    public const string IndexMenuDrop = "Drop Index";
+    public const string IndexDropConfirmTitle = "Drop index";
+    public const string IndexDropConfirmFormat = "Are you sure you want to drop index '{0}'?";
+    public const string IndexDropConfirmYes = "Drop";
+    public const string IndexExecuteFailedFormat = "Failed to apply index change: {0}";
+    // Shown when the user tries to drop an index that backs a PK / FK / UNIQUE
+    // constraint — those are managed via the Ograniczenia tab.
+    public const string IndexConstraintBackedFormat = "Index '{0}' backs a constraint — drop the constraint from the Ograniczenia tab instead.";
+
+    // ─── Table description editing (Opis tab) ─────────────────────────────
+    public const string TableDescriptionEditLabel = "Table description";
+    public const string TableDescriptionSaveIcon = "💾";
+    public const string TableDescriptionSave = "Save";
+    public const string TableDescriptionClear = "Clear";
+    public const string TableDescriptionSaveFailedFormat = "Failed to save description: {0}";
+
     public const string AddFieldFieldName = "Field name";
     public const string AddFieldNotNull = "Not Null";
     public const string AddFieldPrimaryKey = "Primary Key";
@@ -449,6 +488,11 @@ internal static class UiStrings
     public const string AddFieldTabDdl = "DDL";
     public const string AddFieldDomainLabel = "Existing domain";
     public const string AddFieldDomainHint = "Leave blank to use a basic type instead.";
+    public const string AddFieldClearDomain = "Clear";
+    // Sentinel label shown at the top of inline Domain combos so the user can
+    // clear a previously-picked domain back to a basic type (#5). Real Firebird
+    // domains can't be named with parentheses, so this never collides.
+    public const string DomainNoneOption = "(none)";
     public const string AddFieldBasicTypeLabel = "SQL type";
     public const string AddFieldSizeLabel = "Size";
     public const string AddFieldPrecisionLabel = "Precision";

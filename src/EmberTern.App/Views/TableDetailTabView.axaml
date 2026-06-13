@@ -70,6 +70,7 @@
                   Grid.Row="0"
                   ItemsSource="{Binding EditableFields}"
                   SelectedItem="{Binding SelectedFieldRow, Mode=TwoWay}"
+                  PointerPressed="OnFieldsGridPointerPressed"
                   IsReadOnly="{Binding IsFieldsReadOnly}"
                   FontSize="11"
                   GridLinesVisibility="Horizontal"
@@ -102,6 +103,8 @@
               <Separator />
               <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuCreateForeignKey}"
                         Command="{Binding CreateForeignKeyCommand}" />
+              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuDropForeignKey}"
+                        Command="{Binding DropFieldForeignKeyCommand}" />
             </ContextMenu>
           </DataGrid.ContextMenu>
           <!-- Keyboard shortcuts scoped to the grid — fire only when the grid
@@ -206,7 +209,8 @@
                 <DataTemplate x:DataType="vm:FieldRowViewModel">
                   <ComboBox ItemsSource="{Binding BasicTypes}"
                             SelectedItem="{Binding SelectedTypeItem, Mode=TwoWay}"
-                            IsEnabled="{Binding IsCellEditable}"
+                            IsEnabled="{Binding IsTypeCellEditable}"
+                            IsTextSearchEnabled="True"
                             BorderThickness="0"
                             Background="Transparent"
                             HorizontalAlignment="Stretch"
@@ -252,6 +256,8 @@
                   <ComboBox ItemsSource="{Binding AvailableDomains}"
                             SelectedItem="{Binding SelectedDomainSpec, Mode=TwoWay}"
                             IsEnabled="{Binding IsCellEditable}"
+                            IsTextSearchEnabled="True"
+                            TextSearch.TextBinding="{ReflectionBinding Name}"
                             BorderThickness="0"
                             Background="Transparent"
                             HorizontalAlignment="Stretch"
@@ -606,6 +612,8 @@
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabIndexes}">
         <DataGrid x:Name="IndexesGrid"
                   ItemsSource="{Binding Indexes}"
+                  SelectedItem="{Binding SelectedIndex, Mode=TwoWay}"
+                  PointerPressed="OnIndexGridPointerPressed"
                   IsReadOnly="True"
                   FontSize="11"
                   GridLinesVisibility="Horizontal"
@@ -618,6 +626,14 @@
                   HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                   VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                   Background="{DynamicResource BackgroundBrush}">
+          <DataGrid.ContextMenu>
+            <ContextMenu>
+              <MenuItem Header="{x:Static app:UiStrings.IndexMenuAdd}"
+                        Command="{Binding AddIndexCommand}" />
+              <MenuItem Header="{x:Static app:UiStrings.IndexMenuDrop}"
+                        Command="{Binding DropIndexCommand}" />
+            </ContextMenu>
+          </DataGrid.ContextMenu>
           <DataGrid.Columns>
             <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailIndexType}"
                                     Width="30"
@@ -886,22 +902,32 @@
       </TabItem>
 
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabDescription}">
-        <Grid Background="{DynamicResource BackgroundBrush}">
-          <TextBlock Text="{x:Static app:UiStrings.TableDetailDescriptionEmpty}"
-                     Classes="subtle"
-                     FontSize="11"
-                     HorizontalAlignment="Center"
-                     VerticalAlignment="Center"
-                     IsVisible="{Binding ShowDescriptionEmpty}" />
-          <TextBox Text="{Binding Description, Mode=OneWay}"
-                   IsReadOnly="True"
+        <!-- Editable table description (COMMENT ON TABLE). Save/Clear run in the
+             working transaction via the same RefreshStructureAsync path as other
+             structural edits. Buttons disabled when no DDL executor is wired. -->
+        <Grid RowDefinitions="Auto,*" Background="{DynamicResource BackgroundBrush}">
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4">
+            <TextBlock Text="{x:Static app:UiStrings.TableDescriptionEditLabel}"
+                       Classes="subtle"
+                       FontSize="11"
+                       VerticalAlignment="Center" />
+            <Button Classes="icon"
+                    Content="{x:Static app:UiStrings.TableDescriptionSaveIcon}"
+                    ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
+                    Command="{Binding SaveDescriptionCommand}" />
+            <Button Classes="flat"
+                    Padding="8,2"
+                    Content="{x:Static app:UiStrings.TableDescriptionClear}"
+                    Command="{Binding ClearDescriptionCommand}" />
+          </StackPanel>
+          <TextBox Grid.Row="1"
+                   Text="{Binding EditableDescription, Mode=TwoWay}"
+                   IsEnabled="{Binding CanEditDescription}"
                    AcceptsReturn="True"
                    TextWrapping="Wrap"
                    FontSize="11"
-                   Margin="8"
-                   BorderThickness="0"
-                   Background="{DynamicResource BackgroundBrush}"
-                   IsVisible="{Binding HasDescription}" />
+                   Margin="8,0,8,8"
+                   Background="{DynamicResource BackgroundBrush}" />
         </Grid>
       </TabItem>
 

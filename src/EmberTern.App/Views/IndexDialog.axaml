@@ -5,11 +5,11 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        x:Class="EmberTern.App.Views.ConstraintFieldDialog"
-        x:DataType="vm:ConstraintFieldDialogViewModel"
-        Title="{Binding DialogTitle}"
+        x:Class="EmberTern.App.Views.IndexDialog"
+        x:DataType="vm:IndexDialogViewModel"
+        Title="{x:Static app:UiStrings.IndexDialogTitle}"
         Width="460"
-        Height="520"
+        Height="580"
         CanResize="True"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BackgroundBrush}"
@@ -23,46 +23,44 @@
     </Style>
   </Window.Styles>
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto">
 
-    <!-- Header -->
     <Border Grid.Row="0"
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="20,16">
-      <TextBlock Text="{Binding Header}" Classes="h1" />
+      <TextBlock Text="{x:Static app:UiStrings.IndexDialogHeader}" Classes="h1" />
     </Border>
 
-    <!-- Constraint name + optional backing-index config (name + sort) -->
-    <StackPanel Grid.Row="1" Margin="20,14,20,8" Spacing="6">
-      <StackPanel Spacing="4">
-        <TextBlock Text="{x:Static app:UiStrings.ConstraintNameLabel}" Classes="field-label" />
-        <TextBox Text="{Binding ConstraintName, Mode=TwoWay}" />
-      </StackPanel>
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-        <StackPanel Grid.Column="0" Spacing="4">
-          <TextBlock Text="{x:Static app:UiStrings.ConstraintIndexNameLabel}" Classes="field-label" />
-          <TextBox Text="{Binding IndexName, Mode=TwoWay}" />
-        </StackPanel>
-        <CheckBox Grid.Column="1" VerticalAlignment="Bottom"
-                  IsChecked="{Binding Descending, Mode=TwoWay}">
-          <TextBlock Text="{x:Static app:UiStrings.ConstraintDescendingLabel}" />
-        </CheckBox>
-      </Grid>
+    <!-- Index name -->
+    <StackPanel Grid.Row="1" Margin="20,14,20,4" Spacing="4">
+      <TextBlock Text="{x:Static app:UiStrings.IndexNameLabel}" Classes="field-label" />
+      <TextBox Text="{Binding ConstraintName, Mode=TwoWay}" />
     </StackPanel>
 
-    <!-- Field multi-select -->
-    <Border Grid.Row="2"
+    <!-- Unique + Descending -->
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="20,4,20,8" Spacing="20">
+      <CheckBox IsChecked="{Binding Unique, Mode=TwoWay}">
+        <TextBlock Text="{x:Static app:UiStrings.IndexUniqueLabel}" />
+      </CheckBox>
+      <CheckBox IsChecked="{Binding Descending, Mode=TwoWay}">
+        <TextBlock Text="{x:Static app:UiStrings.IndexDescendingLabel}" />
+      </CheckBox>
+    </StackPanel>
+
+    <!-- Field multi-select (disabled when a COMPUTED BY expression is set) -->
+    <Border Grid.Row="3"
             Margin="20,4,20,8"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="1"
-            CornerRadius="3">
+            CornerRadius="3"
+            IsEnabled="{Binding IsFieldPickerEnabled}">
       <Grid RowDefinitions="Auto,*">
         <Border Grid.Row="0"
                 Background="{DynamicResource PanelBrush}"
                 Padding="8,4">
-          <TextBlock Text="{x:Static app:UiStrings.ConstraintFieldsLabel}"
+          <TextBlock Text="{x:Static app:UiStrings.IndexFieldsLabel}"
                      FontSize="11"
                      FontWeight="SemiBold" />
         </Border>
@@ -72,8 +70,6 @@
                  BorderThickness="0">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:SelectableFieldViewModel">
-              <!-- TextBlock child (not string Content) so "_" in a field name
-                   isn't consumed as an access-key mnemonic. See gotcha #76. -->
               <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}">
                 <TextBlock Text="{Binding Name}" FontSize="11" />
               </CheckBox>
@@ -83,9 +79,17 @@
       </Grid>
     </Border>
 
+    <!-- Optional COMPUTED BY expression -->
+    <StackPanel Grid.Row="4" Margin="20,0,20,8" Spacing="4">
+      <TextBlock Text="{x:Static app:UiStrings.IndexComputedLabel}" Classes="field-label" />
+      <TextBox Text="{Binding ComputedExpression, Mode=TwoWay}"
+               FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+               FontSize="12" />
+    </StackPanel>
+
     <!-- Live DDL preview -->
-    <StackPanel Grid.Row="3" Margin="20,4,20,4" Spacing="4">
-      <TextBlock Text="{x:Static app:UiStrings.ConstraintDdlPreviewLabel}" Classes="field-label" />
+    <StackPanel Grid.Row="5" Margin="20,4,20,4" Spacing="4">
+      <TextBlock Text="{x:Static app:UiStrings.IndexDdlPreviewLabel}" Classes="field-label" />
       <Border BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
               CornerRadius="3">
@@ -102,8 +106,8 @@
       </Border>
     </StackPanel>
 
-    <!-- Validation row -->
-    <Border Grid.Row="4"
+    <!-- Validation -->
+    <Border Grid.Row="6"
             Padding="20,4,20,4"
             IsVisible="{Binding HasValidationMessage}">
       <TextBlock Text="{Binding ValidationMessage}"
@@ -113,7 +117,7 @@
     </Border>
 
     <!-- Footer -->
-    <Border Grid.Row="5"
+    <Border Grid.Row="7"
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0"
@@ -125,7 +129,7 @@
                 Content="{x:Static app:UiStrings.DialogCancel}"
                 Command="{Binding CancelCommand}" />
         <Button Classes="primary"
-                Content="{x:Static app:UiStrings.ConstraintDialogCreate}"
+                Content="{x:Static app:UiStrings.IndexDialogCreate}"
                 Command="{Binding AcceptCommand}"
                 IsDefault="True" />
       </StackPanel>

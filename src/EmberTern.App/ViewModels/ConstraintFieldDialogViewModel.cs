@@ -23,7 +23,11 @@ public enum ConstraintFieldKind
 /// this to <c>TableDetailTabViewModel.ExecuteAddPrimaryKeyAsync</c> /
 /// <c>ExecuteAddUniqueAsync</c>, which emit DDL via <see cref="DdlGenerator"/>.
 /// </summary>
-public sealed record ConstraintFieldSpec(string Name, IReadOnlyList<string> Fields);
+public sealed record ConstraintFieldSpec(
+    string Name,
+    IReadOnlyList<string> Fields,
+    string? IndexName = null,
+    bool Descending = false);
 
 /// <summary>
 /// Drives the Add-Primary-Key / Add-Unique dialog. One VM for both kinds —
@@ -69,6 +73,18 @@ public partial class ConstraintFieldDialogViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(DdlPreview))]
     private string _constraintName = string.Empty;
 
+    // Optional backing-index configuration (Firebird's USING [ASC|DESC] INDEX
+    // clause on PK / UNIQUE). The Ograniczenia grid already SHOWS index name +
+    // sort, so the dialog lets the user SET them. Empty index name + ascending
+    // → no USING clause (FB default index named after the constraint).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DdlPreview))]
+    private string _indexName = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DdlPreview))]
+    private bool _descending;
+
     [ObservableProperty]
     private string _validationMessage = string.Empty;
 
@@ -85,8 +101,8 @@ public partial class ConstraintFieldDialogViewModel : ViewModelBase
             try
             {
                 return Kind == ConstraintFieldKind.PrimaryKey
-                    ? DdlGenerator.BuildAddPrimaryKey(TableName, spec.Name, spec.Fields)
-                    : DdlGenerator.BuildAddUnique(TableName, spec.Name, spec.Fields);
+                    ? DdlGenerator.BuildAddPrimaryKey(TableName, spec.Name, spec.Fields, spec.IndexName, spec.Descending)
+                    : DdlGenerator.BuildAddUnique(TableName, spec.Name, spec.Fields, spec.IndexName, spec.Descending);
             }
             catch (ArgumentException)
             {
@@ -101,7 +117,9 @@ public partial class ConstraintFieldDialogViewModel : ViewModelBase
         if (selected.Count == 0) return null;
         return new ConstraintFieldSpec(
             string.IsNullOrWhiteSpace(ConstraintName) ? "?" : ConstraintName.Trim(),
-            selected);
+            selected,
+            string.IsNullOrWhiteSpace(IndexName) ? null : IndexName.Trim(),
+            Descending);
     }
 
     /// <summary>True when ready to convert to a spec: name present + at least
@@ -123,7 +141,10 @@ public partial class ConstraintFieldDialogViewModel : ViewModelBase
     }
 
     public ConstraintFieldSpec BuildResult()
-        => new(ConstraintName.Trim(), SelectedFieldNames());
+        => new(ConstraintName.Trim(),
+               SelectedFieldNames(),
+               string.IsNullOrWhiteSpace(IndexName) ? null : IndexName.Trim(),
+               Descending);
 
     private string DefaultName()
     {

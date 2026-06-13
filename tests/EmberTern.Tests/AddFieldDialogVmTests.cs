@@ -19,6 +19,39 @@ public class AddFieldDialogVmTests
         Assert.NotEmpty(vm.ValidationMessage);
     }
 
+    // #4 — a computed expression disables the Domain / Basic-type / Default /
+    // Autoincrement controls (mutually exclusive with COMPUTED BY).
+    [Fact]
+    public void HasComputed_GatesTypeSections()
+    {
+        var vm = Make();
+        Assert.True(vm.IsRegularTypeEnabled);
+        vm.ComputedExpression = "A + B";
+        Assert.True(vm.HasComputed);
+        Assert.False(vm.IsRegularTypeEnabled);
+        Assert.False(vm.IsAutoincTabEnabled);
+        vm.ComputedExpression = "";
+        Assert.True(vm.IsRegularTypeEnabled);
+    }
+
+    // #5 — ClearDomain resets the selected domain; CanExecute tracks selection.
+    [Fact]
+    public void ClearDomain_ResetsSelectedDomain()
+    {
+        var vm = new AddFieldDialogViewModel("T",
+            new[] { new DomainSpec("T_KWOTA", "NUMERIC(15,2)") },
+            Array.Empty<string>());
+        Assert.False(vm.ClearDomainCommand.CanExecute(null));
+        vm.SelectedDomain = vm.Domains[0];
+        Assert.True(vm.ClearDomainCommand.CanExecute(null));
+
+        vm.ClearDomainCommand.Execute(null);
+
+        Assert.Null(vm.SelectedDomain);
+        Assert.True(vm.IsDomainEmpty);
+        Assert.False(vm.ClearDomainCommand.CanExecute(null));
+    }
+
     [Fact]
     public void IsValid_PassesOnNonEmptyName()
     {

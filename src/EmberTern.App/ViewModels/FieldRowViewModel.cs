@@ -57,6 +57,7 @@ public partial class FieldRowViewModel : ObservableObject
         if (e.PropertyName == nameof(TableDetailTabViewModel.IsFieldEditMode))
         {
             OnPropertyChanged(nameof(IsCellEditable));
+            OnPropertyChanged(nameof(IsTypeCellEditable));
         }
     }
 
@@ -160,7 +161,16 @@ public partial class FieldRowViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsModified))]
     [NotifyPropertyChangedFor(nameof(SelectedDomainSpec))]
+    [NotifyPropertyChangedFor(nameof(HasDomain))]
+    [NotifyPropertyChangedFor(nameof(IsTypeCellEditable))]
     private string? _domainName;
+
+    /// <summary>True when this column is domain-governed — the Type combo is then
+    /// disabled (the domain governs the type, #3/#4).</summary>
+    public bool HasDomain => !string.IsNullOrEmpty(DomainName);
+
+    /// <summary>Type combo enabled only in edit mode AND when not domain-governed.</summary>
+    public bool IsTypeCellEditable => IsCellEditable && !HasDomain;
 
     /// <summary>
     /// DomainSpec wrapper for the Domain ComboBox's SelectedItem binding.
@@ -171,7 +181,18 @@ public partial class FieldRowViewModel : ObservableObject
     {
         get
         {
-            if (string.IsNullOrEmpty(DomainName)) return null;
+            if (string.IsNullOrEmpty(DomainName))
+            {
+                // Show the "(none)" sentinel as selected when the column has no
+                // domain, so the combo isn't blank and the user can see/keep the
+                // "no domain" state.
+                foreach (var d in AvailableDomains)
+                {
+                    if (string.Equals(d.Name, UiStrings.DomainNoneOption, System.StringComparison.Ordinal))
+                        return d;
+                }
+                return null;
+            }
             foreach (var d in AvailableDomains)
             {
                 if (string.Equals(d.Name, DomainName, System.StringComparison.Ordinal))
@@ -187,10 +208,13 @@ public partial class FieldRowViewModel : ObservableObject
             // asynchronously after the rows are built) and for anonymous
             // RDB$ backing-domains that never appear in the list. Honoring
             // that null would clear DomainName and falsely mark the row
-            // modified. There is no "clear domain" entry in the list, so the
-            // user never legitimately picks null here.
+            // modified.
             if (value is null) return;
-            DomainName = value.Name;
+            // The "(none)" sentinel is the explicit "clear domain" choice (#5):
+            // map it to a null DomainName so the column falls back to a basic type.
+            DomainName = string.Equals(value.Name, UiStrings.DomainNoneOption, System.StringComparison.Ordinal)
+                ? null
+                : value.Name;
         }
     }
 

@@ -61,6 +61,11 @@ public partial class TableDetailTabView : UserControl
             // Toggle the "pending" row class when IsModified changes so the row
             // gets a subtle background tint until Compile drains the queue.
             _fieldsGrid.LoadingRow += OnFieldsLoadingRow;
+            // Avalonia's DataGrid can come back blank after its TabItem is
+            // detached and reattached (switch away from Pola, then back) — the
+            // row generator doesn't re-run for an unchanged ItemsSource. Nudge
+            // the ItemsSource on re-attach to force row regeneration (#7).
+            _fieldsGrid.AttachedToVisualTree += OnFieldsGridAttached;
         }
         if (_dataPreviewGrid is not null)
         {
@@ -83,6 +88,25 @@ public partial class TableDetailTabView : UserControl
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
+    // Re-assign ItemsSource from the VM after a tab-switch reattach. The XAML
+    // binding already points at the same EditableFields instance, so reassigning
+    // the same reference (after a null) only forces the DataGrid to regenerate
+    // its rows — it doesn't break the live binding (EditableFields is never
+    // swapped, only mutated). Posted to the dispatcher so it runs after the
+    // attach/layout pass completes.
+    private void OnFieldsGridAttached(object? sender, Avalonia.VisualTreeAttachmentEventArgs e)
+    {
+        if (_fieldsGrid is null) return;
+        var vm = _currentVm;
+        if (vm is null) return;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (_fieldsGrid is null) return;
+            _fieldsGrid.ItemsSource = null;
+            _fieldsGrid.ItemsSource = vm.EditableFields;
+        }, Avalonia.Threading.DispatcherPriority.Loaded);
+    }
+
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_currentVm is not null)
@@ -94,6 +118,7 @@ public partial class TableDetailTabView : UserControl
             _currentVm.AddPrimaryKeyRequested -= OnAddPrimaryKeyRequested;
             _currentVm.AddUniqueRequested -= OnAddUniqueRequested;
             _currentVm.AddCheckRequested -= OnAddCheckRequested;
+            _currentVm.AddIndexRequested -= OnAddIndexRequested;
         }
         _currentVm = DataContext as TableDetailTabViewModel;
         if (_currentVm is not null)
@@ -105,6 +130,7 @@ public partial class TableDetailTabView : UserControl
             _currentVm.AddPrimaryKeyRequested += OnAddPrimaryKeyRequested;
             _currentVm.AddUniqueRequested += OnAddUniqueRequested;
             _currentVm.AddCheckRequested += OnAddCheckRequested;
+            _currentVm.AddIndexRequested += OnAddIndexRequested;
             PushDdl();
             PopulateDataGrid(_currentVm.DataResult);
         }
@@ -166,9 +192,9 @@ public partial class TableDetailTabView : UserControl
 
         // Source-side: snapshot the current table's field names. The wizard
         // doesn't hot-reload them — if structure changes mid-edit the user
-        // simply cancels and reopens.
-        var sourceFieldNames = new List<string>();
-        foreach (var f in _currentVm.Fields) sourceFieldNames.Add(f.Name);
+        // simply cancels and reopens. Falls back to a fresh reader fetch when
+        // the VM's Fields collection is empty (#9).
+        var sourceFieldNames = await ResolveFieldNamesAsync(window).ConfigureAwait(true);
 
         // List of available target tables. Best-effort: failures fall through
         // to an empty list (user can't pick a target → validation will block).
@@ -239,18 +265,43 @@ public partial class TableDetailTabView : UserControl
         => OpenConstraintFieldDialogAsync(ConstraintFieldKind.Unique);
 
     // PK + Unique share the field-picker dialog — only the kind differs.
-    // Field names come from the current table's loaded Fields.
+    // Field names come from the current table's loaded Fields. If that
+    // collection is empty (e.g. the user reached this from a sub-tab before the
+    // lazy load populated Fields, or after a refresh emptied it), fall back to a
+    // fresh reader query so the picker is never empty (#9).
     private async Task<ConstraintFieldSpec?> OpenConstraintFieldDialogAsync(ConstraintFieldKind kind)
     {
         if (_currentVm is null) return null;
         var window = this.FindAncestorOfType<Window>();
         if (window is null) return null;
 
-        var fieldNames = new List<string>();
-        foreach (var f in _currentVm.Fields) fieldNames.Add(f.Name);
+        var fieldNames = await ResolveFieldNamesAsync(window).ConfigureAwait(true);
 
         var dialogVm = new ConstraintFieldDialogViewModel(kind, _currentVm.TableName, fieldNames);
         return await ConstraintFieldDialog.ShowAsync(window, dialogVm).ConfigureAwait(true);
+    }
+
+    // Field names for the constraint / FK pickers. Prefers the already-loaded
+    // VM Fields; falls back to a fresh reader fetch when that's empty so a
+    // timing/refresh gap can't leave the picker blank.
+    private async Task<List<string>> ResolveFieldNamesAsync(Window window)
+    {
+        var names = new List<string>();
+        if (_currentVm is not null)
+        {
+            foreach (var f in _currentVm.Fields) names.Add(f.Name);
+        }
+        if (names.Count > 0) return names;
+
+        if (_currentVm is null) return names;
+        if (window.DataContext is not MainWindowViewModel mainVm) return names;
+        try
+        {
+            var fields = await mainVm.TableDetailReader.GetFieldsAsync(_currentVm.TableName).ConfigureAwait(true);
+            foreach (var f in fields) names.Add(f.Name);
+        }
+        catch { /* best effort — empty picker is still better than a crash */ }
+        return names;
     }
 
     private async Task<CheckConstraintSpec?> OnAddCheckRequested()
@@ -261,6 +312,19 @@ public partial class TableDetailTabView : UserControl
 
         var dialogVm = new CheckConstraintDialogViewModel(_currentVm.TableName);
         return await CheckConstraintDialog.ShowAsync(window, dialogVm).ConfigureAwait(true);
+    }
+
+    // Add-Index dialog. Field names come from the current table's loaded Fields,
+    // with the same reader fallback the constraint pickers use.
+    private async Task<IndexSpec?> OnAddIndexRequested()
+    {
+        if (_currentVm is null) return null;
+        var window = this.FindAncestorOfType<Window>();
+        if (window is null) return null;
+
+        var fieldNames = await ResolveFieldNamesAsync(window).ConfigureAwait(true);
+        var dialogVm = new IndexDialogViewModel(_currentVm.TableName, fieldNames);
+        return await IndexDialog.ShowAsync(window, dialogVm).ConfigureAwait(true);
     }
 
     // Avalonia DataGrid doesn't select the row under a right-click (gotcha #16),
@@ -277,6 +341,35 @@ public partial class TableDetailTabView : UserControl
         if (row?.DataContext is ConstraintInfo constraint)
         {
             grid.SelectedItem = constraint;
+        }
+    }
+
+    // Right-click selects the Pola row first so the context menu (Edit / Drop /
+    // Drop Foreign Key) acts on the clicked field, not a stale selection (#16).
+    // The grid's SelectedItem binds to SelectedFieldRow → SelectedField.
+    private void OnFieldsGridPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (sender is not DataGrid grid) return;
+        if (!e.GetCurrentPoint(grid).Properties.IsRightButtonPressed) return;
+        if (e.Source is not Avalonia.Visual visual) return;
+        var row = visual.FindAncestorOfType<DataGridRow>(includeSelf: true);
+        if (row?.DataContext is FieldRowViewModel fieldRow)
+        {
+            grid.SelectedItem = fieldRow;
+        }
+    }
+
+    // Same right-click-selects-row pattern for the Indeksy grid so the context
+    // menu's Drop Index acts on the clicked index, not a stale selection.
+    private void OnIndexGridPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (sender is not DataGrid grid) return;
+        if (!e.GetCurrentPoint(grid).Properties.IsRightButtonPressed) return;
+        if (e.Source is not Avalonia.Visual visual) return;
+        var row = visual.FindAncestorOfType<DataGridRow>(includeSelf: true);
+        if (row?.DataContext is IndexInfo index)
+        {
+            grid.SelectedItem = index;
         }
     }
 

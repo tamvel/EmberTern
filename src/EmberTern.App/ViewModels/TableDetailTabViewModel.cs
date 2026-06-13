@@ -44,6 +44,10 @@ public partial class TableDetailTabViewModel : ViewModelBase
     // after a successful CREATE.
     public const int ConstraintsSubTabIndex = 1;
 
+    // Index of the "Indeksy" sub-tab. Index Management's post-add UX jumps here
+    // and selects the new index.
+    public const int IndexesSubTabIndex = 2;
+
     // Inner Constraints TabControl tab indices: Primary Key (0) /
     // Foreign Keys (1) / Check (2) / Unique (3). Must match the TabItem
     // order in TableDetailTabView.axaml's nested Constraints TabControl.
@@ -1185,6 +1189,9 @@ public partial class TableDetailTabViewModel : ViewModelBase
                     {
                         var domains = await _metadataReader.ListDomainsAsync(cancellationToken).ConfigureAwait(true);
                         AvailableDomains.Clear();
+                        // Leading "(none)" sentinel so the inline Domain combo can
+                        // clear a column back to a basic type (#5).
+                        AvailableDomains.Add(new DomainSpec(UiStrings.DomainNoneOption, string.Empty));
                         foreach (var d in domains) AvailableDomains.Add(d);
                     });
             }
@@ -1400,6 +1407,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(EditFieldCommand))]
     [NotifyCanExecuteChangedFor(nameof(MoveFieldUpCommand))]
     [NotifyCanExecuteChangedFor(nameof(MoveFieldDownCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DropFieldForeignKeyCommand))]
     private FieldInfo? _selectedField;
 
     /// <summary>
@@ -1666,17 +1674,67 @@ public partial class TableDetailTabViewModel : ViewModelBase
     private async Task DropConstraint()
     {
         if (ActiveConstraint is not { } constraint) return;
-        if (string.IsNullOrWhiteSpace(constraint.Name)) return;
+        await ConfirmAndDropConstraintAsync(constraint.Name).ConfigureAwait(true);
+    }
+
+    // Shared confirm-then-drop for any constraint by name. Used by the
+    // Ograniczenia sub-tab Drop command AND the Pola tab's Drop-Foreign-Key
+    // entry (#1) so there's a single Drop Constraint code path.
+    private async Task ConfirmAndDropConstraintAsync(string constraintName)
+    {
+        if (string.IsNullOrWhiteSpace(constraintName)) return;
         var confirmed = await RequestConfirmAsync(new ConfirmRequest
         {
             Title = UiStrings.ConstraintDropConfirmTitle,
-            Message = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ConstraintDropConfirmFormat, constraint.Name),
+            Message = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ConstraintDropConfirmFormat, constraintName),
             ConfirmLabel = UiStrings.ConstraintDropConfirmYes,
             CancelLabel = UiStrings.DialogCancel,
             IsDestructive = true,
         }).ConfigureAwait(true);
         if (!confirmed) return;
-        await ExecuteDropConstraintAsync(constraint.Name).ConfigureAwait(true);
+        await ExecuteDropConstraintAsync(constraintName).ConfigureAwait(true);
+    }
+
+    // ─── Drop Foreign Key from the Pola sub-tab (#1) ──────────────────────
+    //
+    // Reuses the Drop Constraint path above. The FK constraint name is resolved
+    // from the selected field by matching it against the FK constraints' local
+    // field lists. No new FK-drop implementation — just a resolver + the shared
+    // confirm/drop.
+
+    public bool CanDropFieldForeignKey
+        => _ddlExecutor is not null && SelectedField is { IsForeignKey: true };
+
+    [RelayCommand(CanExecute = nameof(CanDropFieldForeignKey))]
+    private async Task DropFieldForeignKey()
+    {
+        var name = ResolveForeignKeyConstraintForField(SelectedField);
+        if (name is null)
+        {
+            // The field is flagged FK but we couldn't match a constraint (e.g.
+            // constraints not loaded). Surface a message rather than silently no-op.
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                UiStrings.ConstraintExecuteFailedFormat, SelectedField?.Name ?? string.Empty);
+            return;
+        }
+        await ConfirmAndDropConstraintAsync(name).ConfigureAwait(true);
+    }
+
+    // Finds the FOREIGN KEY constraint whose local field list contains the given
+    // field. ConstraintInfo.Fields is a comma-separated list of local columns.
+    internal string? ResolveForeignKeyConstraintForField(FieldInfo? field)
+    {
+        if (field is null || string.IsNullOrEmpty(field.Name)) return null;
+        foreach (var c in ForeignKeyConstraints)
+        {
+            if (string.IsNullOrEmpty(c.Fields)) continue;
+            foreach (var part in c.Fields.Split(','))
+            {
+                if (string.Equals(part.Trim(), field.Name, StringComparison.OrdinalIgnoreCase))
+                    return c.Name;
+            }
+        }
+        return null;
     }
 
     /// <summary>
@@ -1686,7 +1744,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
     /// </summary>
     public Task ExecuteAddPrimaryKeyAsync(ConstraintFieldSpec spec)
         => ExecuteConstraintAddAsync(
-            spec is null ? null : SafeBuild(() => DdlGenerator.BuildAddPrimaryKey(TableName, spec.Name, spec.Fields)),
+            spec is null ? null : SafeBuild(() => DdlGenerator.BuildAddPrimaryKey(TableName, spec.Name, spec.Fields, spec.IndexName, spec.Descending)),
             ConstraintsPrimaryKeyIndex,
             () => PrimaryKeyConstraints,
             spec?.Name,
@@ -1698,7 +1756,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
     /// </summary>
     public Task ExecuteAddUniqueAsync(ConstraintFieldSpec spec)
         => ExecuteConstraintAddAsync(
-            spec is null ? null : SafeBuild(() => DdlGenerator.BuildAddUnique(TableName, spec.Name, spec.Fields)),
+            spec is null ? null : SafeBuild(() => DdlGenerator.BuildAddUnique(TableName, spec.Name, spec.Fields, spec.IndexName, spec.Descending)),
             ConstraintsUniqueIndex,
             () => UniqueConstraints,
             spec?.Name,
@@ -1821,6 +1879,203 @@ public partial class TableDetailTabViewModel : ViewModelBase
             case ConstraintsCheckIndex: SelectedCheck = match; break;
             case ConstraintsUniqueIndex: SelectedUnique = match; break;
         }
+    }
+
+    // ─── Index management (Index Management V1) ───────────────────────────
+    //
+    // Add + Drop, modeled on Constraint Management V1. Add runs CREATE INDEX in
+    // the user's working transaction; Drop runs DROP INDEX after a confirm.
+    // Indexes backing a PK / FK / UNIQUE constraint are blocked from dropping
+    // here (managed via the Ograniczenia tab) — a friendly message is surfaced
+    // instead of letting Firebird reject the DROP with a cryptic error.
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DropIndexCommand))]
+    private IndexInfo? _selectedIndex;
+
+    public bool CanManageIndexes => _ddlExecutor is not null;
+    public bool CanDropIndex => _ddlExecutor is not null && SelectedIndex is not null;
+
+    /// <summary>View returns the picked <see cref="IndexSpec"/> from the Add-Index
+    /// dialog, or null on Cancel.</summary>
+    public event System.Func<Task<IndexSpec?>>? AddIndexRequested;
+
+    [RelayCommand(CanExecute = nameof(CanManageIndexes))]
+    private async Task AddIndex()
+    {
+        if (AddIndexRequested is null) return;
+        var spec = await AddIndexRequested().ConfigureAwait(true);
+        if (spec is null) return;
+        await ExecuteAddIndexAsync(spec).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// True when the index backs a PK / FK / UNIQUE constraint. Such indexes
+    /// can't be dropped directly (Firebird rejects it) — they go through the
+    /// constraint. PK/FK are detected via <see cref="IndexInfo.IndexType"/>;
+    /// the unique-constraint backing index is matched against the constraints'
+    /// <see cref="ConstraintInfo.IndexName"/>.
+    /// </summary>
+    internal bool IsConstraintBackedIndex(IndexInfo? index)
+    {
+        if (index is null) return false;
+        if (index.IsPrimary || index.IsForeignKeyIndex) return true;
+        foreach (var c in Constraints)
+        {
+            if (!string.IsNullOrEmpty(c.IndexName)
+                && string.Equals(c.IndexName, index.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDropIndex))]
+    private async Task DropIndex()
+    {
+        if (SelectedIndex is not { } index) return;
+        if (string.IsNullOrWhiteSpace(index.Name)) return;
+        if (IsConstraintBackedIndex(index))
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                UiStrings.IndexConstraintBackedFormat, index.Name);
+            return;
+        }
+        var confirmed = await RequestConfirmAsync(new ConfirmRequest
+        {
+            Title = UiStrings.IndexDropConfirmTitle,
+            Message = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.IndexDropConfirmFormat, index.Name),
+            ConfirmLabel = UiStrings.IndexDropConfirmYes,
+            CancelLabel = UiStrings.DialogCancel,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
+        if (!confirmed) return;
+        await ExecuteDropIndexAsync(index.Name).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Executes CREATE INDEX in the user's working transaction, refreshes, then
+    /// jumps to the Indeksy sub-tab with the new index selected. Public for tests.
+    /// </summary>
+    public async Task ExecuteAddIndexAsync(IndexSpec spec)
+    {
+        if (spec is null) return;
+        if (_ddlExecutor is null) return;
+
+        var sql = SafeBuildIndex(() => DdlGenerator.BuildCreateIndex(
+            TableName, spec.Name, spec.Fields, spec.Unique, spec.Descending, spec.ComputedExpression));
+        if (sql is null) return;
+        if (!await TryExecuteIndexSqlAsync(sql).ConfigureAwait(true)) return;
+
+        await RefreshStructureAsync().ConfigureAwait(true);
+        ActiveSubTabIndex = IndexesSubTabIndex;
+        SelectedIndex = Indexes.FirstOrDefault(i => string.Equals(i.Name, spec.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Executes DROP INDEX in the user's working transaction and refreshes.
+    /// Public for tests (the confirm + constraint-backed guard live in
+    /// <see cref="DropIndexCommand"/>).
+    /// </summary>
+    public async Task ExecuteDropIndexAsync(string indexName)
+    {
+        if (string.IsNullOrWhiteSpace(indexName)) return;
+        if (_ddlExecutor is null) return;
+
+        var sql = SafeBuildIndex(() => DdlGenerator.BuildDropIndex(indexName));
+        if (sql is null) return;
+        if (!await TryExecuteIndexSqlAsync(sql).ConfigureAwait(true)) return;
+        await RefreshStructureAsync().ConfigureAwait(true);
+    }
+
+    private async Task<bool> TryExecuteIndexSqlAsync(string sql)
+    {
+        ErrorMessage = null;
+        try
+        {
+            await _ddlExecutor!.ExecuteAsync(sql).ConfigureAwait(true);
+            return true;
+        }
+        catch (DdlExecutionException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.IndexExecuteFailedFormat, ex.Message);
+            return false;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.IndexExecuteFailedFormat, ex.Message);
+            return false;
+        }
+    }
+
+    private string? SafeBuildIndex(System.Func<string> build)
+    {
+        try
+        {
+            return build();
+        }
+        catch (System.ArgumentException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.IndexExecuteFailedFormat, ex.Message);
+            return null;
+        }
+    }
+
+    // ─── Table description editing (Opis tab) ─────────────────────────────
+    //
+    // COMMENT ON TABLE participates in the working transaction (auto-begin via
+    // DdlExecutor) like every other structural edit. Save persists the current
+    // EditableDescription; Clear empties it and persists IS NULL. Both refresh.
+
+    /// <summary>User-editable copy of the table description. Mirrors
+    /// <see cref="Description"/> on load/refresh (via OnDescriptionChanged) so a
+    /// refresh shows the persisted value; the user edits this independently
+    /// until Save.</summary>
+    [ObservableProperty]
+    private string _editableDescription = string.Empty;
+
+    partial void OnDescriptionChanged(string value)
+    {
+        // Keep the editable copy in sync whenever the persisted description
+        // (re)loads. User edits to EditableDescription don't touch Description,
+        // so there's no loop.
+        EditableDescription = value ?? string.Empty;
+    }
+
+    public bool CanEditDescription => _ddlExecutor is not null;
+
+    [RelayCommand(CanExecute = nameof(CanEditDescription))]
+    private Task SaveDescription() => SaveDescriptionCoreAsync();
+
+    [RelayCommand(CanExecute = nameof(CanEditDescription))]
+    private Task ClearDescription()
+    {
+        EditableDescription = string.Empty;
+        return SaveDescriptionCoreAsync();
+    }
+
+    private async Task SaveDescriptionCoreAsync()
+    {
+        if (_ddlExecutor is null) return;
+        ErrorMessage = null;
+        var comment = string.IsNullOrWhiteSpace(EditableDescription) ? null : EditableDescription;
+        var sql = DdlGenerator.BuildCommentTable(TableName, comment);
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ex.Message);
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ex.Message);
+            return;
+        }
+        await RefreshStructureAsync().ConfigureAwait(true);
     }
 
     /// <summary>

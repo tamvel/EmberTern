@@ -54,10 +54,11 @@
         </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="20">
           <CheckBox Content="{x:Static app:UiStrings.AddFieldNotNull}"
-                    IsChecked="{Binding NotNull, Mode=TwoWay}" />
+                    IsChecked="{Binding NotNull, Mode=TwoWay}"
+                    IsEnabled="{Binding IsNotNullEnabled}" />
           <CheckBox Content="{x:Static app:UiStrings.AddFieldPrimaryKey}"
                     IsChecked="{Binding PrimaryKey, Mode=TwoWay}"
-                    IsEnabled="{Binding IsAddMode}" />
+                    IsEnabled="{Binding IsPrimaryKeyEnabled}" />
         </StackPanel>
       </StackPanel>
     </Border>
@@ -65,11 +66,16 @@
     <!-- Tabs -->
     <TabControl Grid.Row="2" Padding="0" Margin="14,4,14,0">
 
-      <TabItem Header="{x:Static app:UiStrings.AddFieldTabDomain}">
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabDomain}"
+               IsEnabled="{Binding IsDomainTabEnabled}">
         <StackPanel Margin="8" Spacing="6">
           <TextBlock Text="{x:Static app:UiStrings.AddFieldDomainLabel}" Classes="field-label" />
-          <ComboBox ItemsSource="{Binding Domains}"
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+          <ComboBox Grid.Column="0"
+                    ItemsSource="{Binding Domains}"
                     SelectedItem="{Binding SelectedDomain, Mode=TwoWay}"
+                    IsTextSearchEnabled="True"
+                    TextSearch.TextBinding="{ReflectionBinding Name}"
                     HorizontalAlignment="Stretch">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="m:DomainSpec">
@@ -88,19 +94,36 @@
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
+          <Button Grid.Column="1"
+                  Classes="flat"
+                  Content="{x:Static app:UiStrings.AddFieldClearDomain}"
+                  Command="{Binding ClearDomainCommand}"
+                  VerticalAlignment="Stretch" />
+          </Grid>
           <TextBlock Text="{x:Static app:UiStrings.AddFieldDomainHint}"
                      Classes="subtle"
                      FontSize="11"
                      TextWrapping="Wrap"
                      Margin="0,4,0,0" />
+          <!-- #3 — show the domain's underlying type so the user sees what it
+               actually represents. The Basic-type tab is disabled while a domain
+               is selected (the domain governs the type). -->
+          <SelectableTextBlock Text="{Binding SelectedDomainType, StringFormat='→ {0}'}"
+                               FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                               FontSize="12"
+                               Foreground="{DynamicResource AccentBrush}"
+                               Margin="0,4,0,0"
+                               IsVisible="{Binding HasDomainType}" />
         </StackPanel>
       </TabItem>
 
-      <TabItem Header="{x:Static app:UiStrings.AddFieldTabBasicType}">
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabBasicType}"
+               IsEnabled="{Binding IsBasicTypeTabEnabled}">
         <StackPanel Margin="8" Spacing="6">
           <TextBlock Text="{x:Static app:UiStrings.AddFieldBasicTypeLabel}" Classes="field-label" />
           <ComboBox ItemsSource="{x:Static vm:AddFieldDialogViewModel.BasicTypes}"
                     SelectedItem="{Binding SelectedBasicType, Mode=TwoWay}"
+                    IsTextSearchEnabled="True"
                     HorizontalAlignment="Stretch" />
           <StackPanel Orientation="Horizontal" Spacing="14" Margin="0,8,0,0"
                       IsVisible="{Binding ShowSize}">
@@ -139,7 +162,8 @@
         </StackPanel>
       </TabItem>
 
-      <TabItem Header="{x:Static app:UiStrings.AddFieldTabDefault}">
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabDefault}"
+               IsEnabled="{Binding IsDefaultTabEnabled}">
         <StackPanel Margin="8" Spacing="6">
           <TextBlock Text="{x:Static app:UiStrings.AddFieldDefaultLabel}" Classes="field-label" />
           <TextBox Text="{Binding DefaultValue, Mode=TwoWay}"
@@ -152,7 +176,7 @@
       </TabItem>
 
       <TabItem Header="{x:Static app:UiStrings.AddFieldTabCheck}"
-               IsEnabled="{Binding IsAddOnlyTabEnabled}">
+               IsEnabled="{Binding IsCheckTabEnabled}">
         <StackPanel Margin="8" Spacing="6">
           <TextBlock Text="{x:Static app:UiStrings.AddFieldCheckLabel}" Classes="field-label" />
           <TextBox Text="{Binding CheckExpression, Mode=TwoWay}"
@@ -178,7 +202,7 @@
       </TabItem>
 
       <TabItem Header="{x:Static app:UiStrings.AddFieldTabAutoinc}"
-               IsEnabled="{Binding IsAddOnlyTabEnabled}">
+               IsEnabled="{Binding IsAutoincTabEnabled}">
         <StackPanel Margin="8" Spacing="6">
           <RadioButton GroupName="Autoinc"
                        Content="{x:Static app:UiStrings.AddFieldAutoincNone}"
@@ -191,6 +215,7 @@
                        IsChecked="{Binding IsAutoincExisting, Mode=TwoWay}" />
           <ComboBox ItemsSource="{Binding Generators}"
                     SelectedItem="{Binding SelectedGenerator, Mode=TwoWay}"
+                    IsTextSearchEnabled="True"
                     HorizontalAlignment="Stretch"
                     Margin="22,2,0,2"
                     IsVisible="{Binding ShowExistingGeneratorPicker}" />

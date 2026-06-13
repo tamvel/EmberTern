@@ -193,14 +193,46 @@ public partial class AddFieldDialogViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DdlPreview))]
+    [NotifyPropertyChangedFor(nameof(IsNotNullEnabled))]
     private bool _primaryKey;
+
+    partial void OnPrimaryKeyChanged(bool value)
+    {
+        // PK implies NOT NULL — force it on and let IsNotNullEnabled disable the
+        // checkbox so the user can't make a PK column nullable.
+        if (value) NotNull = true;
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DdlPreview))]
     [NotifyPropertyChangedFor(nameof(IsDomainEmpty))]
+    [NotifyPropertyChangedFor(nameof(HasDomain))]
+    [NotifyPropertyChangedFor(nameof(SelectedDomainType))]
+    [NotifyPropertyChangedFor(nameof(HasDomainType))]
+    [NotifyPropertyChangedFor(nameof(IsBasicTypeTabEnabled))]
+    [NotifyCanExecuteChangedFor(nameof(ClearDomainCommand))]
     private DomainSpec? _selectedDomain;
 
     public bool IsDomainEmpty => SelectedDomain is null;
+
+    /// <summary>True when a domain is selected — the column's type is then
+    /// governed by the domain, so the Basic type tab is disabled (#3/#4).</summary>
+    public bool HasDomain => SelectedDomain is not null;
+
+    /// <summary>The resolved SQL type of the selected domain (e.g.
+    /// <c>VARCHAR(80)</c>), surfaced so the user sees what the domain actually
+    /// represents (#3). Empty when no domain is selected.</summary>
+    public string SelectedDomainType => SelectedDomain?.Type ?? string.Empty;
+
+    public bool HasDomainType => !string.IsNullOrEmpty(SelectedDomainType);
+
+    /// <summary>Clears the domain selection so the field falls back to a basic
+    /// type. There is no "(none)" entry in the list, so this is the way back to
+    /// an unset domain (#5).</summary>
+    [RelayCommand(CanExecute = nameof(IsDomainSelected))]
+    private void ClearDomain() => SelectedDomain = null;
+
+    public bool IsDomainSelected => SelectedDomain is not null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DdlPreview))]
@@ -239,10 +271,54 @@ public partial class AddFieldDialogViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DdlPreview))]
+    [NotifyPropertyChangedFor(nameof(HasComputed))]
+    [NotifyPropertyChangedFor(nameof(IsRegularTypeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsDomainTabEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsBasicTypeTabEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsDefaultTabEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsCheckTabEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsAutoincTabEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsPrimaryKeyEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsNotNullEnabled))]
     private string _computedExpression = string.Empty;
+
+    // ─── Field-option dependency model (#4) ──────────────────────────────
+    //
+    // Firebird semantics, encoded as enable/disable gates + value coordination:
+    //   Computed BY  →  mutually exclusive with Type / Domain / Default /
+    //                   Not Null / Autoincrement / Primary Key / Check
+    //                   (type is derived from the expression). Description stays.
+    //   Domain       →  governs the type, so Basic type is disabled while a
+    //                   domain is picked. Default / Not Null / Autoinc still OK.
+    //   Autoincrement→  the generator/identity supplies the value, so Default
+    //                   is disabled (and cleared) while engaged.
+    //   Primary Key  →  implies NOT NULL: NotNull is forced true + disabled.
+
+    /// <summary>True when the user has typed a COMPUTED BY expression.</summary>
+    public bool HasComputed => !string.IsNullOrWhiteSpace(ComputedExpression);
+    public bool HasAutoincrement => AutoIncrementMode != AutoIncrementMode.None;
+
+    /// <summary>Back-compat alias retained for existing tests — equals
+    /// <see cref="IsDomainTabEnabled"/>.</summary>
+    public bool IsRegularTypeEnabled => !HasComputed;
+
+    public bool IsDomainTabEnabled => !HasComputed;
+    public bool IsBasicTypeTabEnabled => !HasComputed && !HasDomain;
+    public bool IsDefaultTabEnabled => !HasComputed && !HasAutoincrement;
+    public bool IsCheckTabEnabled => IsAddMode && !HasComputed;
+    public bool IsAutoincTabEnabled => IsAddMode && !HasComputed;
+
+    /// <summary>Primary Key checkbox: add-mode AND not computed.</summary>
+    public bool IsPrimaryKeyEnabled => IsAddMode && !HasComputed;
+
+    /// <summary>Not Null checkbox: disabled when computed (computed can't be
+    /// NOT NULL in the column def) or when Primary Key forces it true.</summary>
+    public bool IsNotNullEnabled => !HasComputed && !PrimaryKey;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DdlPreview))]
+    [NotifyPropertyChangedFor(nameof(HasAutoincrement))]
+    [NotifyPropertyChangedFor(nameof(IsDefaultTabEnabled))]
     [NotifyPropertyChangedFor(nameof(ShowExistingGeneratorPicker))]
     [NotifyPropertyChangedFor(nameof(ShowNewGeneratorFields))]
     private AutoIncrementMode _autoIncrementMode = AutoIncrementMode.None;
@@ -380,6 +456,11 @@ public partial class AddFieldDialogViewModel : ViewModelBase
 
     partial void OnAutoIncrementModeChanged(AutoIncrementMode value)
     {
+        // An autoincremented column's value comes from the identity/generator —
+        // a manual DEFAULT would be redundant (and invalid alongside IDENTITY).
+        // Clear it when autoinc engages (#4). Empty default is harmless.
+        if (value != AutoIncrementMode.None) DefaultValue = string.Empty;
+
         // Sync sibling radio properties so the dialog's RadioButton group repaints
         // when AutoIncrementMode flips via any of them.
         OnPropertyChanged(nameof(IsAutoincNone));
