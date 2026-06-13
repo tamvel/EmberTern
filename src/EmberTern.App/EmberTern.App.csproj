@@ -24,6 +24,9 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
+    <!-- DPAPI (ProtectedData) for encrypting connection passwords at rest. Not part
+         of the BCL on .NET Core+; this Microsoft-owned package supplies it. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -6,6 +6,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Platform;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
+using EmberTern.App.Security;
 using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
 using EmberTern.Core.Connections;
@@ -35,7 +36,9 @@ public class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var store = new ConnectionProfileStore();
+            // DPAPI-backed protector encrypts connection passwords at rest (and
+            // migrates any legacy plaintext connections.json on first load).
+            var store = new ConnectionProfileStore(DpapiSecretProtector.Create());
             _service = new FirebirdConnectionService();
             _transactionService = new TransactionService(_service);
 

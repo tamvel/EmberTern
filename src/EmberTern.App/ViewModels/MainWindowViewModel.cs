@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Security;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
@@ -53,7 +54,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool _suppressExpandSave;
 
     public MainWindowViewModel()
-        : this(new ConnectionProfileStore(), new FirebirdConnectionService())
+        : this(new ConnectionProfileStore(DpapiSecretProtector.Create()), new FirebirdConnectionService())
     {
     }
 

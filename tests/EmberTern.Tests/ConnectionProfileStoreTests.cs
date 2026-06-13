@@ -1,12 +1,21 @@
+using System;
 using System.IO;
 using System.Linq;
+using EmberTern.App.Security;
 using EmberTern.Core.Connections;
+using EmberTern.Core.Security;
 using Xunit;
 
 namespace EmberTern.Tests;
 
 public class ConnectionProfileStoreTests
 {
+    // Reversible, human-readable stand-in for DPAPI: "secret" -> "ENC:secret".
+    // Lets the at-rest tests assert the password is transformed without depending on
+    // the platform crypto (which is exercised separately by the DPAPI round-trip).
+    private static SecretProtector FakeProtector() =>
+        new(s => "ENC:" + s, s => s.StartsWith("ENC:", StringComparison.Ordinal) ? s.Substring(4) : s);
+
     [Fact]
     public void RoundtripsProfilesThroughJson()
     {
@@ -133,6 +142,129 @@ public class ConnectionProfileStoreTests
         Assert.Contains("UTF8", CharsetCatalog.Supported);
         Assert.Contains("WIN1250", CharsetCatalog.Supported);
         Assert.Contains("ISO8859_1", CharsetCatalog.Supported);
+    }
+
+    [Fact]
+    public void Password_IsEncryptedAtRest_AndDecryptedOnLoad()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new ConnectionProfileStore(dir, FakeProtector());
+            store.Upsert(new ConnectionProfile { Name = "Sec", DatabasePath = "/db/x.fdb", Password = "secret" });
+
+            // On disk: protected form present, plaintext password absent, no legacy field.
+            var json = File.ReadAllText(store.FilePath);
+            Assert.Contains("ProtectedPassword", json);
+            Assert.Contains("ENC:secret", json);
+            Assert.DoesNotContain("\"secret\"", json);
+            Assert.DoesNotContain("\"Password\"", json);
+            Assert.Contains("SchemaVersion", json);
+
+            // In memory: round-trips back to the plaintext.
+            var reloaded = store.LoadAll();
+            Assert.Single(reloaded);
+            Assert.Equal("secret", reloaded[0].Password);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LegacyPlaintextArray_IsMigratedToEncryptedContainer()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(dir);
+            // A pre-encryption connections.json: bare array, plaintext "Password".
+            File.WriteAllText(
+                Path.Combine(dir, "connections.json"),
+                "[{\"Name\":\"Legacy\",\"DatabasePath\":\"/db/x.fdb\",\"Password\":\"plain\"}]");
+
+            var store = new ConnectionProfileStore(dir, FakeProtector());
+
+            // Load decrypts/migrates and returns the plaintext.
+            var reloaded = store.LoadAll();
+            Assert.Single(reloaded);
+            Assert.Equal("plain", reloaded[0].Password);
+
+            // The file was rewritten in place as the encrypted v1 container.
+            var json = File.ReadAllText(store.FilePath);
+            Assert.Contains("SchemaVersion", json);
+            Assert.Contains("ProtectedPassword", json);
+            Assert.Contains("ENC:plain", json);
+            Assert.DoesNotContain("\"plain\"", json);
+            Assert.DoesNotContain("\"Password\"", json);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Unprotect_Failure_DegradesToEmptyPassword()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            // Write an encrypted v1 file with a working protector...
+            new ConnectionProfileStore(dir, FakeProtector())
+                .Upsert(new ConnectionProfile { Name = "Sec", DatabasePath = "/db/x.fdb", Password = "secret" });
+
+            // ...then load it with a protector that can't decrypt (e.g. a DPAPI blob
+            // from another machine/account). The password degrades to empty rather
+            // than crashing the load.
+            var throwing = new SecretProtector(s => s, _ => throw new InvalidOperationException("cannot decrypt"));
+            var reloaded = new ConnectionProfileStore(dir, throwing).LoadAll();
+
+            Assert.Single(reloaded);
+            Assert.Equal(string.Empty, reloaded[0].Password);
+            Assert.Equal("Sec", reloaded[0].Name);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EmptyPassword_RoundTrips_AsEmpty()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new ConnectionProfileStore(dir, FakeProtector());
+            store.Upsert(new ConnectionProfile { Name = "NoPass", DatabasePath = "/db/x.fdb", Password = "" });
+
+            var reloaded = store.LoadAll();
+            Assert.Single(reloaded);
+            Assert.Equal(string.Empty, reloaded[0].Password);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DpapiSecretProtector_RoundTrips()
+    {
+        // DPAPI is Windows-only; skip the round-trip elsewhere.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        Assert.Equal(string.Empty, DpapiSecretProtector.Protect(string.Empty));
+        Assert.Equal(string.Empty, DpapiSecretProtector.Unprotect(string.Empty));
+
+        var encrypted = DpapiSecretProtector.Protect("hunter2");
+        Assert.NotEqual("hunter2", encrypted);
+        Assert.Equal("hunter2", DpapiSecretProtector.Unprotect(encrypted));
     }
 
     [Fact]
