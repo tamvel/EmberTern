@@ -77,6 +77,10 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     public event Action<MetadataObject>? OpenDdlRequested;
     public event Action<string>? CopyNameRequested;
     public event Action<string>? StatusReported;
+    // Table context-menu actions. The owner (MainWindowViewModel) reuses its
+    // existing New Table / Delete flows — these are just the dispatch points.
+    public event Action? NewTableRequested;
+    public event Action<MetadataObject>? DeleteTableRequested;
 
     [RelayCommand]
     public async Task RefreshAsync()
@@ -148,6 +152,8 @@ public partial class MetadataExplorerViewModel : ViewModelBase
 
     internal void RequestOpenDdl(MetadataObject obj) => OpenDdlRequested?.Invoke(obj);
     internal void RequestCopyName(string name) => CopyNameRequested?.Invoke(name);
+    internal void RequestNewTable() => NewTableRequested?.Invoke();
+    internal void RequestDeleteTable(MetadataObject obj) => DeleteTableRequested?.Invoke(obj);
 
     [RelayCommand(CanExecute = nameof(HasSelectedConnection))]
     private void EditSelected() => SelectedConnection?.EditCommand.Execute(null);

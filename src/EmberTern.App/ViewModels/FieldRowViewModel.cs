@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EmberTern.Core.Metadata;
 
@@ -42,6 +44,11 @@ public partial class FieldRowViewModel : ObservableObject
         if (_owner is not null)
         {
             _owner.PropertyChanged += OnOwnerPropertyChanged;
+            // Domains load asynchronously AFTER the field rows are built, so the
+            // Domain ComboBox's SelectedItem can't resolve at construction time.
+            // Re-raise SelectedDomainSpec when the list arrives so the combo
+            // visually selects the right domain once it's available.
+            _owner.AvailableDomains.CollectionChanged += OnAvailableDomainsChanged;
         }
     }
 
@@ -51,6 +58,18 @@ public partial class FieldRowViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(IsCellEditable));
         }
+    }
+
+    private void OnAvailableDomainsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => OnPropertyChanged(nameof(SelectedDomainSpec));
+
+    // Strips the size/precision suffix from a type string: "VARCHAR(50)" →
+    // "VARCHAR", "NUMERIC(15,2)" → "NUMERIC", "DOUBLE PRECISION" → unchanged.
+    private static string StripSize(string? type)
+    {
+        if (string.IsNullOrEmpty(type)) return string.Empty;
+        var paren = type.IndexOf('(');
+        return paren < 0 ? type : type.Substring(0, paren).TrimEnd();
     }
 
     /// <summary>
@@ -69,6 +88,22 @@ public partial class FieldRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsModified))]
     private string _name;
 
+    // Field identifier always UPPERCASE — Firebird stores all unquoted identifiers
+    // in upper case, and the rest of the workbench (autocomplete, DDL) assumes
+    // that form. Coerce in the setter so the live grid display reflects what
+    // the eventual ALTER COLUMN TO will emit.
+    private bool _settingNameUpper;
+    partial void OnNameChanged(string value)
+    {
+        if (_settingNameUpper) return;
+        var upper = value?.ToUpperInvariant() ?? string.Empty;
+        if (!string.Equals(value, upper, System.StringComparison.Ordinal))
+        {
+            _settingNameUpper = true;
+            try { Name = upper; } finally { _settingNameUpper = false; }
+        }
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsModified))]
     private bool _notNull;
@@ -84,7 +119,42 @@ public partial class FieldRowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsModified))]
+    [NotifyPropertyChangedFor(nameof(SelectedTypeItem))]
     private string _typeText;
+
+    /// <summary>
+    /// Base-type wrapper for the Type ComboBox's SelectedItem binding. The
+    /// ComboBox's ItemsSource (<see cref="BasicTypes"/>) only carries base
+    /// type names, but <see cref="TypeText"/> holds the FULL type
+    /// (<c>VARCHAR(50)</c>). Without this wrapper the ComboBox can't match the
+    /// full string in its items, resets SelectedItem to null, and the TwoWay
+    /// binding writes that null straight back into TypeText — which then reads
+    /// as a change vs. the original and falsely tints the row modified.
+    ///
+    /// Getter: returns the base type ONLY when it's a known basic type;
+    /// otherwise null (combo shows blank, TypeText preserved).
+    /// Setter: ignores null/empty (the load-time and not-found writeback) and
+    /// no-ops when the base type is unchanged, so TypeText keeps its full
+    /// form unless the user genuinely picks a different base type.
+    /// </summary>
+    public string? SelectedTypeItem
+    {
+        get
+        {
+            var baseType = StripSize(TypeText);
+            foreach (var t in BasicTypes)
+            {
+                if (string.Equals(t, baseType, StringComparison.OrdinalIgnoreCase)) return t;
+            }
+            return null;
+        }
+        set
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            if (string.Equals(value, StripSize(TypeText), StringComparison.OrdinalIgnoreCase)) return;
+            TypeText = value;
+        }
+    }
 
     /// <summary>Domain name or null. Editable via Domain ComboBox.</summary>
     [ObservableProperty]
@@ -111,7 +181,16 @@ public partial class FieldRowViewModel : ObservableObject
         }
         set
         {
-            DomainName = value?.Name;
+            // Ignore null writeback. The ComboBox sets SelectedItem to null
+            // whenever the getter can't resolve DomainName against
+            // AvailableDomains — which happens on load (domains arrive
+            // asynchronously after the rows are built) and for anonymous
+            // RDB$ backing-domains that never appear in the list. Honoring
+            // that null would clear DomainName and falsely mark the row
+            // modified. There is no "clear domain" entry in the list, so the
+            // user never legitimately picks null here.
+            if (value is null) return;
+            DomainName = value.Name;
         }
     }
 

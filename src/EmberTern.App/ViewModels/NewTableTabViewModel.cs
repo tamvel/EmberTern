@@ -27,6 +27,22 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     [ObservableProperty] private bool _primaryKey;
     [ObservableProperty] private string _name = string.Empty;
 
+    // Identifier names live in catalog UPPERCASE. Auto-coerce so the live
+    // DDL preview and the eventual CREATE TABLE statement both pick up the
+    // user's intent regardless of how they typed it. Re-entrancy guard avoids
+    // an OnNameChanged → Name = upper → OnNameChanged loop.
+    private bool _settingNameUpper;
+    partial void OnNameChanged(string value)
+    {
+        if (_settingNameUpper) return;
+        var upper = value?.ToUpperInvariant() ?? string.Empty;
+        if (!string.Equals(value, upper, StringComparison.Ordinal))
+        {
+            _settingNameUpper = true;
+            try { Name = upper; } finally { _settingNameUpper = false; }
+        }
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSizeEnabled))]
     [NotifyPropertyChangedFor(nameof(IsPrecisionScaleEnabled))]
@@ -155,12 +171,35 @@ public partial class NewTableTabViewModel : ViewModelBase
         ? UiStrings.NewTableTabDefaultTitle
         : TableName.Trim();
 
+    /// <summary>
+    /// True when the user has done meaningful work on the form — used to gate
+    /// the close-confirmation. A freshly-opened tab has an empty name and the
+    /// single seeded ID field; anything beyond that counts as content worth
+    /// confirming before discard.
+    /// </summary>
+    public bool HasContent
+        => !string.IsNullOrWhiteSpace(TableName) || Fields.Count != 1;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DdlPreview))]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]
     [NotifyPropertyChangedFor(nameof(HasValidationMessage))]
     [NotifyPropertyChangedFor(nameof(ValidationMessage))]
     private string _tableName = string.Empty;
+
+    // Table identifier always UPPERCASE — see NewTableFieldRowViewModel.OnNameChanged
+    // for the same coercion shape on field names.
+    private bool _settingTableNameUpper;
+    partial void OnTableNameChanged(string value)
+    {
+        if (_settingTableNameUpper) return;
+        var upper = value?.ToUpperInvariant() ?? string.Empty;
+        if (!string.Equals(value, upper, StringComparison.Ordinal))
+        {
+            _settingTableNameUpper = true;
+            try { TableName = upper; } finally { _settingTableNameUpper = false; }
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DdlPreview))]

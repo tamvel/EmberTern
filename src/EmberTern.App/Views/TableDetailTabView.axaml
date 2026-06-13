@@ -61,7 +61,13 @@
                 Padding="0">
 
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabFields}">
+        <!-- Pola sub-tab: FieldsGrid up top, GridSplitter, then the
+             field-dependencies panel. Default panel height is 180 px;
+             GridSplitter lets the user resize. The panel binds to
+             SelectedField on the VM — pick a row to see its deps. -->
+        <Grid RowDefinitions="*,4,180">
         <DataGrid x:Name="FieldsGrid"
+                  Grid.Row="0"
                   ItemsSource="{Binding EditableFields}"
                   SelectedItem="{Binding SelectedFieldRow, Mode=TwoWay}"
                   IsReadOnly="{Binding IsFieldsReadOnly}"
@@ -75,7 +81,38 @@
                   RowBackground="Transparent"
                   HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                   VerticalGridLinesBrush="{DynamicResource BorderBrush}"
-                  Background="{DynamicResource BackgroundBrush}">
+                  Background="{DynamicResource BackgroundBrush}"
+                  DoubleTapped="OnFieldsGridDoubleTapped">
+          <!-- Context menu — right-click on a row or in the empty grid area
+               opens a 4-item menu mirroring the spec. Bound to the host VM
+               via the grid's DataContext (TableDetailTabViewModel). The Edit
+               + Drop + FK items rely on SelectedField; the New item works
+               with or without a selection. -->
+          <DataGrid.ContextMenu>
+            <ContextMenu>
+              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuAdd}"
+                        Command="{Binding AddFieldCommand}"
+                        InputGesture="Insert" />
+              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuEdit}"
+                        Command="{Binding EditFieldCommand}"
+                        InputGesture="F2" />
+              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuDrop}"
+                        Command="{Binding DropFieldCommand}"
+                        InputGesture="Delete" />
+              <Separator />
+              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuCreateForeignKey}"
+                        Command="{Binding CreateForeignKeyCommand}" />
+            </ContextMenu>
+          </DataGrid.ContextMenu>
+          <!-- Keyboard shortcuts scoped to the grid — fire only when the grid
+               (or one of its rows) has focus. Insert / F2 / Delete map to the
+               same commands as the context menu so behavior stays consistent
+               across input modes. -->
+          <DataGrid.KeyBindings>
+            <KeyBinding Gesture="Insert" Command="{Binding AddFieldCommand}" />
+            <KeyBinding Gesture="F2" Command="{Binding EditFieldCommand}" />
+            <KeyBinding Gesture="Delete" Command="{Binding DropFieldCommand}" />
+          </DataGrid.KeyBindings>
           <DataGrid.Styles>
             <!-- Subtle background tint on rows with pending edits. Row-level Classes
                  can't bind to per-item state from XAML in Avalonia 12 — apply via the
@@ -87,9 +124,14 @@
             </Style>
           </DataGrid.Styles>
           <DataGrid.Columns>
+            <!-- MinWidth ≈ header text × 7 px + padding so the header is never
+                 truncated even when the column's content is empty (which would
+                 otherwise let DataGridLength.Auto collapse the column to a
+                 narrow content-only width on the first measure pass). -->
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnPosition}"
                                 Binding="{Binding DisplayPosition}"
                                 SortMemberPath="DisplayPosition"
+                                MinWidth="32"
                                 IsReadOnly="True" />
 
             <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnPrimaryKey}"
@@ -149,7 +191,8 @@
             <!-- Editable: Name (rename, gated by deps in EnqueueRowEdits). -->
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
                                 Binding="{Binding Name, Mode=TwoWay}"
-                                SortMemberPath="Name" />
+                                SortMemberPath="Name"
+                                MinWidth="100" />
             <!-- Editable: full Type string. Always-visible ComboBox in CellTemplate
                  (no separate CellEditingTemplate) — Avalonia 12's CellEditingTemplate
                  path causes a focus race where the dropdown opens then immediately
@@ -157,11 +200,12 @@
                  IsEnabled binding gates interaction by the owner's edit-mode toggle. -->
             <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnType}"
                                     SortMemberPath="TypeText"
+                                    MinWidth="100"
                                     IsReadOnly="True">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate x:DataType="vm:FieldRowViewModel">
                   <ComboBox ItemsSource="{Binding BasicTypes}"
-                            SelectedItem="{Binding TypeText, Mode=TwoWay}"
+                            SelectedItem="{Binding SelectedTypeItem, Mode=TwoWay}"
                             IsEnabled="{Binding IsCellEditable}"
                             BorderThickness="0"
                             Background="Transparent"
@@ -173,29 +217,35 @@
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnSize}"
                                 Binding="{Binding Size}"
                                 SortMemberPath="Size"
+                                MinWidth="50"
                                 IsReadOnly="True" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnScale}"
                                 Binding="{Binding Scale, Converter={x:Static conv:ZeroToEmptyConverter.Instance}}"
                                 SortMemberPath="Scale"
+                                MinWidth="50"
                                 IsReadOnly="True" />
             <!-- Editable: NotNull (CheckBox). -->
             <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.TableDetailColumnNotNull}"
                                     Binding="{Binding NotNull, Mode=TwoWay}"
-                                    SortMemberPath="NotNull" />
+                                    SortMemberPath="NotNull"
+                                    MinWidth="70" />
             <!-- Editable: Default. -->
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDefault}"
                                 Binding="{Binding DefaultValue, Mode=TwoWay}"
-                                SortMemberPath="DefaultValue" />
+                                SortMemberPath="DefaultValue"
+                                MinWidth="80" />
             <!-- Editable: Description (COMMENT ON COLUMN). -->
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDescription}"
                                 Binding="{Binding Description, Mode=TwoWay}"
-                                SortMemberPath="Description" />
+                                SortMemberPath="Description"
+                                MinWidth="100" />
             <!-- Editable: Domain. Always-visible ComboBox in CellTemplate (same
                  reasoning as the Type column — avoids the Avalonia 12 CellEditingTemplate
                  focus race). User picks a domain → ALTER COLUMN TYPE <DOMAIN_NAME>
                  queued (same dep gate as plain type). -->
             <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnDomain}"
                                     SortMemberPath="DomainName"
+                                    MinWidth="100"
                                     IsReadOnly="True">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate x:DataType="vm:FieldRowViewModel">
@@ -218,9 +268,11 @@
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnForeignKeyTable}"
                                 Binding="{Binding ForeignKeyTable}"
                                 SortMemberPath="ForeignKeyTable"
+                                MinWidth="100"
                                 IsReadOnly="True" />
             <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnComputed}"
                                     SortMemberPath="ComputedSource"
+                                    MinWidth="90"
                                     IsReadOnly="True">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate x:DataType="vm:FieldRowViewModel">
@@ -235,6 +287,7 @@
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnCharset}"
                                 Binding="{Binding Charset}"
                                 SortMemberPath="Charset"
+                                MinWidth="70"
                                 IsReadOnly="True" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnAutoIncrement}"
                                 Binding="{Binding IsAutoIncrement, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
@@ -243,10 +296,129 @@
                                 IsReadOnly="True" />
           </DataGrid.Columns>
         </DataGrid>
+
+        <!-- Vertical splitter — user drags to grow/shrink the dependencies
+             panel. ResizeDirection=Rows because the parent Grid is
+             row-oriented. -->
+        <GridSplitter Grid.Row="1"
+                      Height="4"
+                      ResizeDirection="Rows"
+                      Background="{DynamicResource BorderBrush}"
+                      HorizontalAlignment="Stretch" />
+
+        <!-- Bottom: per-field dependencies. Three mutually-exclusive
+             children (DataGrid + two TextBlock hints) — the VM's flags
+             toggle exactly one visible at a time. -->
+        <Border Grid.Row="2"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Background="{DynamicResource PanelBrush}">
+          <Grid RowDefinitions="Auto,*">
+            <Border Grid.Row="0"
+                    Padding="8,4"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1">
+              <TextBlock Text="{x:Static app:UiStrings.FieldDependenciesHeader}"
+                         FontSize="11"
+                         FontWeight="SemiBold" />
+            </Border>
+
+            <!-- No-selection state. -->
+            <TextBlock Grid.Row="1"
+                       Text="{x:Static app:UiStrings.FieldDependenciesNoSelection}"
+                       Classes="subtle"
+                       FontSize="11"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding ShowFieldDependenciesNoSelection}" />
+
+            <!-- Field selected, no dependencies. -->
+            <TextBlock Grid.Row="1"
+                       Text="{x:Static app:UiStrings.FieldDependenciesEmpty}"
+                       Classes="subtle"
+                       FontSize="11"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding ShowFieldDependenciesEmpty}" />
+
+            <!-- Field selected with dependencies. Same compact styling as the
+                 other TableDetail grids (Pola / Indeksy / Ograniczenia). Read-only.
+                 DoubleTapped + Enter route through FieldDependencyItem.NavigateCommand
+                 (existing RequestOpen path — same as the Zależności tree). -->
+            <DataGrid Grid.Row="1"
+                      x:Name="FieldDependenciesGrid"
+                      ItemsSource="{Binding FieldDependencies}"
+                      SelectedItem="{Binding SelectedFieldDependency, Mode=TwoWay}"
+                      IsReadOnly="True"
+                      FontSize="11"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      CanUserSortColumns="True"
+                      CanUserResizeColumns="True"
+                      CanUserReorderColumns="True"
+                      ColumnWidth="Auto"
+                      RowBackground="Transparent"
+                      HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                      VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                      Background="{DynamicResource BackgroundBrush}"
+                      IsVisible="{Binding HasFieldDependencies}"
+                      DoubleTapped="OnFieldDependencyDoubleTapped">
+              <DataGrid.KeyBindings>
+                <KeyBinding Gesture="Enter" Command="{Binding NavigateSelectedDependencyCommand}" />
+              </DataGrid.KeyBindings>
+              <DataGrid.Columns>
+                <!-- Type column carries the same unicode glyph + per-kind
+                     color as the metadata tree (via IconBrushConverter +
+                     ActualThemeVariant). Glyph empty for non-openable kinds. -->
+                <DataGridTemplateColumn Header="{x:Static app:UiStrings.FieldDependenciesColumnType}"
+                                        SortMemberPath="ObjectType"
+                                        MinWidth="110">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate x:DataType="vm:FieldDependencyItem">
+                      <StackPanel Orientation="Horizontal" Spacing="6" Margin="6,0">
+                        <TextBlock Text="{Binding Icon}"
+                                   FontSize="12"
+                                   Width="14"
+                                   TextAlignment="Center"
+                                   VerticalAlignment="Center">
+                          <TextBlock.Foreground>
+                            <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                              <Binding Path="IconResourceKey" />
+                              <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                            </MultiBinding>
+                          </TextBlock.Foreground>
+                        </TextBlock>
+                        <TextBlock Text="{Binding ObjectType}"
+                                   VerticalAlignment="Center" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="{x:Static app:UiStrings.FieldDependenciesColumnName}"
+                                    Binding="{Binding ObjectName}"
+                                    SortMemberPath="ObjectName"
+                                    MinWidth="160" />
+                <!-- Insert / Update — ✓ for triggers that fire on that DML op,
+                     blank for procedures / views / etc. (no per-field op
+                     semantics in the catalog). -->
+                <DataGridTextColumn Header="{x:Static app:UiStrings.FieldDependenciesColumnInsert}"
+                                    Binding="{Binding InsertMark}"
+                                    SortMemberPath="InsertMark"
+                                    MinWidth="60" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.FieldDependenciesColumnUpdate}"
+                                    Binding="{Binding UpdateMark}"
+                                    SortMemberPath="UpdateMark"
+                                    MinWidth="60" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+        </Border>
+        </Grid>
       </TabItem>
 
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabConstraints}">
-        <TabControl Padding="0">
+        <TabControl Padding="0"
+                    SelectedIndex="{Binding ConstraintsActiveSubTabIndex, Mode=TwoWay}">
 
           <TabItem Classes="sub-tab"
                    Classes.empty="{Binding !HasPrimaryKeyConstraints}"
@@ -427,36 +599,39 @@
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
+            <!-- Replaced fixed Width with MinWidth so the grid-level
+                 ColumnWidth="Auto" can grow each column to fit the larger of
+                 header / content text without truncating either. -->
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
                                 Binding="{Binding Name}"
                                 SortMemberPath="Name"
-                                Width="200" />
+                                MinWidth="160" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexFields}"
                                 Binding="{Binding Fields}"
                                 SortMemberPath="Fields"
-                                Width="150" />
+                                MinWidth="120" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexExpression}"
                                 Binding="{Binding Expression}"
                                 SortMemberPath="Expression"
-                                Width="120" />
+                                MinWidth="100" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexUnique}"
                                 Binding="{Binding IsUnique, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
                                 SortMemberPath="IsUnique"
-                                Width="60" />
+                                MinWidth="70" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexDescending}"
                                 Binding="{Binding IsDescending, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
                                 SortMemberPath="IsDescending"
-                                Width="70" />
+                                MinWidth="90" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexPrimary}"
                                 Binding="{Binding IsPrimary, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
                                 SortMemberPath="IsPrimary"
-                                Width="40" />
+                                MinWidth="60" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexActive}"
                                 Binding="{Binding IsActive, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
                                 SortMemberPath="IsActive"
-                                Width="60" />
+                                MinWidth="60" />
             <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailIndexStatistics}"
-                                    Width="80"
+                                    MinWidth="90"
                                     SortMemberPath="Statistics">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate x:DataType="metadata:IndexInfo">

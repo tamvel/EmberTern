@@ -295,6 +295,24 @@
                         DoubleTapped="OnMetadataNodeDoubleTapped">
                   <Border.ContextMenu>
                     <ContextMenu>
+                      <!-- Tables category → New Table. -->
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextNewTable}"
+                                Command="{Binding NewTableCommand}"
+                                IsVisible="{Binding IsTableGroup}" />
+                      <!-- Table leaf → Open / Design / Delete. Open + Design
+                           both route through OpenDdl (TableDetail tab). -->
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextOpenTable}"
+                                Command="{Binding OpenDdlCommand}"
+                                IsVisible="{Binding IsTableLeaf}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDesignTable}"
+                                Command="{Binding OpenDdlCommand}"
+                                IsVisible="{Binding IsTableLeaf}" />
+                      <Separator IsVisible="{Binding IsTableLeaf}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeleteTable}"
+                                Command="{Binding DeleteTableCommand}"
+                                IsVisible="{Binding IsTableLeaf}" />
+                      <Separator IsVisible="{Binding IsTableLeaf}" />
+                      <!-- Generic actions for every actionable leaf (incl. tables). -->
                       <MenuItem Header="{Binding ContextOpenDdlLabel}"
                                 Command="{Binding OpenDdlCommand}"
                                 IsVisible="{Binding IsActionable}" />

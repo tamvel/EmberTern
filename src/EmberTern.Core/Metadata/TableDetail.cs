@@ -71,6 +71,14 @@ public sealed record DependencyInfo
     public string ObjectName { get; init; } = string.Empty;
     public string ObjectType { get; init; } = string.Empty;
     public string? FieldName { get; init; }
+
+    // Trigger operation flags — populated ONLY for trigger dependencies, by
+    // decoding RDB$TRIGGERS.RDB$TRIGGER_TYPE. Null for every other object kind
+    // (procedures / views / etc. carry no per-field operation semantics in the
+    // Firebird catalog). The field-dependencies panel renders a ✓ when true,
+    // blank when false or null.
+    public bool? FiresOnInsert { get; init; }
+    public bool? FiresOnUpdate { get; init; }
 }
 
 public sealed class ConstraintInfo

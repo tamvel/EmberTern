@@ -286,12 +286,21 @@ public sealed class FirebirdTableDetailReader
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    // Column order: (DEPENDENT_NAME, FIELD_NAME, DEPENDENT_TYPE).
+                    // Column order: (DEPENDENT_NAME, FIELD_NAME, DEPENDENT_TYPE, TRIGGER_TYPE).
+                    bool? firesInsert = null, firesUpdate = null;
+                    if (!reader.IsDBNull(3))
+                    {
+                        var (ins, upd, _) = DecodeTriggerOps(reader.GetInt32(3));
+                        firesInsert = ins;
+                        firesUpdate = upd;
+                    }
                     dependedOnBy.Add(new DependencyInfo
                     {
                         ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
                         FieldName = reader.IsDBNull(1) ? null : reader.GetString(1).Trim(),
                         ObjectType = MapObjectType(reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2)),
+                        FiresOnInsert = firesInsert,
+                        FiresOnUpdate = firesUpdate,
                     });
                 }
             }
@@ -638,12 +647,18 @@ public sealed class FirebirdTableDetailReader
     // exclusively from FkIncomingSql. The CHECK_ / RDB$ exclusion stays scoped
     // to RDB$DEPENDENT_TYPE = 2 (Trigger) so user procedures / views named
     // CHECK_<something> (e.g. CHECK_ZAKSIEGWREJVAT) pass through.
+    // 4th column = RDB$TRIGGER_TYPE for trigger dependents (LEFT JOIN, so it's
+    // NULL for non-triggers), used to decode INSERT/UPDATE operation flags in
+    // the field-dependencies panel. The table-level Zależności tree reads only
+    // columns 0-2 and ignores column 3, so the extra column is harmless there.
     internal const string DependedOnBySql =
         "SELECT DISTINCT " +
         "    CAST(TRIM(d.RDB$DEPENDENT_NAME) AS VARCHAR(64)), " +
         "    CAST(TRIM(d.RDB$FIELD_NAME) AS VARCHAR(64)), " +
-        "    CAST(d.RDB$DEPENDENT_TYPE AS INTEGER) " +
+        "    CAST(d.RDB$DEPENDENT_TYPE AS INTEGER), " +
+        "    CAST(tr.RDB$TRIGGER_TYPE AS INTEGER) " +
         "FROM RDB$DEPENDENCIES d " +
+        "LEFT JOIN RDB$TRIGGERS tr ON tr.RDB$TRIGGER_NAME = d.RDB$DEPENDENT_NAME AND d.RDB$DEPENDENT_TYPE = 2 " +
         "WHERE d.RDB$DEPENDED_ON_TYPE = 0 " +
         "  AND TRIM(d.RDB$DEPENDED_ON_NAME) = @tableName " +
         "  AND d.RDB$DEPENDENT_TYPE <> 3 " +
@@ -654,7 +669,8 @@ public sealed class FirebirdTableDetailReader
         "SELECT DISTINCT " +
         "    CAST(TRIM(f.RDB$RELATION_NAME) AS VARCHAR(64)), " +
         "    CAST(TRIM(d.RDB$FIELD_NAME) AS VARCHAR(64)), " +
-        "    CAST(1 AS INTEGER) " +
+        "    CAST(1 AS INTEGER), " +
+        "    CAST(NULL AS INTEGER) " +
         "FROM RDB$DEPENDENCIES d " +
         "INNER JOIN RDB$RELATION_FIELDS f ON f.RDB$FIELD_SOURCE = d.RDB$DEPENDENT_NAME " +
         "INNER JOIN RDB$RELATIONS r ON r.RDB$RELATION_NAME = f.RDB$RELATION_NAME " +
@@ -662,6 +678,29 @@ public sealed class FirebirdTableDetailReader
         "  AND TRIM(d.RDB$DEPENDED_ON_NAME) = @t2 " +
         "  AND r.RDB$VIEW_BLR IS NOT NULL " +
         "ORDER BY 1, 2";
+
+    /// <summary>
+    /// Decodes a Firebird <c>RDB$TRIGGER_TYPE</c> into (firesOnInsert,
+    /// firesOnUpdate, firesOnDelete). Firebird packs up to three DML "slots"
+    /// into the type: <c>((type + 1) >> (2*slot + 1)) &amp; 3</c> yields
+    /// 1=INSERT / 2=UPDATE / 3=DELETE / 0=none for slot 0,1,2. DB-level / DDL
+    /// triggers (type ≥ 8192) carry no DML semantics → all false. Internal for
+    /// unit testing without a live FB.
+    /// </summary>
+    internal static (bool insert, bool update, bool delete) DecodeTriggerOps(int triggerType)
+    {
+        if (triggerType >= 8192 || triggerType <= 0) return (false, false, false);
+        bool ins = false, upd = false, del = false;
+        long n = triggerType + 1;
+        for (int slot = 0; slot < 3; slot++)
+        {
+            var v = (n >> (2 * slot + 1)) & 3;
+            if (v == 1) ins = true;
+            else if (v == 2) upd = true;
+            else if (v == 3) del = true;
+        }
+        return (ins, upd, del);
+    }
 
     // FK queries — the SOLE source of Related Tables, per spec. No indirect
     // chains, no recursive walks, no trigger / procedure / view / domain /

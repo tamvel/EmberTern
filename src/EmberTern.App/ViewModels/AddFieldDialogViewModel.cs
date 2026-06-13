@@ -18,15 +18,117 @@ public partial class AddFieldDialogViewModel : ViewModelBase
     public AddFieldDialogViewModel(string tableName,
                                    IReadOnlyList<DomainSpec> domains,
                                    IReadOnlyList<string> generators)
+        : this(tableName, domains, generators, originalField: null, canRename: true)
+    {
+    }
+
+    /// <summary>
+    /// Edit-mode ctor — seeds the form from <paramref name="originalField"/>'s
+    /// current state, sets <see cref="IsEditMode"/>, swaps the dialog title,
+    /// and gates the FieldName input on <paramref name="canRename"/> (false
+    /// when the field has incoming dependencies — Firebird rejects ALTER … TO
+    /// in that case). Tabs that emit DDL outside the safe ALTER set (Check,
+    /// Computed, Autoincrement) are disabled in edit mode to keep this dialog
+    /// reusable for both Add and Edit; non-ALTERable changes simply produce no
+    /// statements in <see cref="DdlGenerator.BuildAlterStatements"/>.
+    /// </summary>
+    public AddFieldDialogViewModel(string tableName,
+                                   IReadOnlyList<DomainSpec> domains,
+                                   IReadOnlyList<string> generators,
+                                   FieldInfo? originalField,
+                                   bool canRename)
     {
         TableName = tableName;
         Domains = new ObservableCollection<DomainSpec>(domains);
         Generators = new ObservableCollection<string>(generators);
+        OriginalField = originalField;
+        IsEditMode = originalField is not null;
+        CanRename = !IsEditMode || canRename;
+        if (originalField is not null) SeedFromField(originalField);
     }
 
     public string TableName { get; }
     public ObservableCollection<DomainSpec> Domains { get; }
     public ObservableCollection<string> Generators { get; }
+
+    /// <summary>Existing field when this dialog opens in edit mode; null
+    /// otherwise. The caller passes this through to
+    /// <see cref="TableDetailTabViewModel.ExecuteEditFieldAsync"/> alongside
+    /// the dialog's <see cref="BuildDefinition"/> result so the diff has
+    /// both sides.</summary>
+    public FieldInfo? OriginalField { get; }
+    public bool IsEditMode { get; }
+    public bool IsAddMode => !IsEditMode;
+
+    /// <summary>True when the FieldName TextBox is editable. False in edit
+    /// mode when the original field has incoming dependencies (rename would
+    /// be rejected by Firebird). Bound to <c>IsEnabled</c> on the input.</summary>
+    public bool CanRename { get; }
+
+    /// <summary>Inverse of <see cref="CanRename"/> in edit mode — drives the
+    /// "Cannot rename — field has dependencies" hint visibility.</summary>
+    public bool ShowRenameBlockedHint => IsEditMode && !CanRename;
+
+    /// <summary>True for tabs that emit non-ALTERable DDL (Check, Computed,
+    /// Autoincrement). Bound to TabItem.IsEnabled in XAML so the user can
+    /// still see them but not touch them in edit mode.</summary>
+    public bool IsAddOnlyTabEnabled => IsAddMode;
+
+    /// <summary>Dialog title — "Add field" or "Edit field <name>".</summary>
+    public string DialogTitle => IsEditMode
+        ? string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                        UiStrings.AddFieldDialogEditTitleFormat,
+                        OriginalField?.Name ?? string.Empty)
+        : UiStrings.AddFieldDialogTitle;
+
+    private void SeedFromField(FieldInfo f)
+    {
+        // Use the generated public setters (not the backing fields) — the
+        // CommunityToolkit analyzer (MVVMTK0034) requires it. PropertyChanged
+        // fires for each, but that's fine: DdlPreview re-evaluates to reflect
+        // the seeded state, which is exactly what we want for the live preview.
+        FieldName = f.Name;
+        NotNull = f.NotNull;
+        PrimaryKey = f.IsPrimaryKey;
+        DefaultValue = f.DefaultValue ?? string.Empty;
+        Description = f.Description ?? string.Empty;
+        ComputedExpression = f.ComputedSource ?? string.Empty;
+
+        // Domain match — straight name lookup against the loaded Domains list.
+        // When the field carries no Domain or the name doesn't resolve, we leave
+        // SelectedDomain null and the dialog falls through to BasicType.
+        if (!string.IsNullOrEmpty(f.Domain))
+        {
+            foreach (var d in Domains)
+            {
+                if (string.Equals(d.Name, f.Domain, System.StringComparison.Ordinal))
+                {
+                    SelectedDomain = d;
+                    break;
+                }
+            }
+        }
+
+        // BasicType: prefer FieldInfo's parsed BaseTypeName (already stripped
+        // of parens). Falls back to INTEGER for safety.
+        var baseType = f.BaseTypeName?.ToUpperInvariant();
+        if (string.IsNullOrEmpty(baseType)) baseType = "INTEGER";
+        SelectedBasicType = baseType;
+
+        // Size/Precision/Scale: FieldInfo.Size carries the parens value (length
+        // for CHAR/VARCHAR, precision for NUMERIC/DECIMAL). Scale is separate.
+        if (baseType is "CHAR" or "VARCHAR" or "CSTRING")
+        {
+            Size = f.Size;
+        }
+        else if (baseType is "NUMERIC" or "DECIMAL")
+        {
+            Precision = f.Size;
+            Scale = f.Scale;
+        }
+        // BLOB sub-type isn't carried on FieldInfo today — leave the default
+        // (TEXT). Editing the sub-type via ALTER is unsupported anyway.
+    }
 
     public static IReadOnlyList<string> BasicTypes { get; } = new[]
     {
@@ -48,6 +150,42 @@ public partial class AddFieldDialogViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(HasValidationMessage))]
     [NotifyPropertyChangedFor(nameof(ValidationMessage))]
     private string _fieldName = string.Empty;
+
+    // Identifiers (field, generator, trigger) always UPPERCASE — same coercion
+    // pattern as NewTableTabViewModel + FieldRowViewModel.
+    private bool _coercingFieldName;
+    private bool _coercingNewGeneratorName;
+    private bool _coercingTriggerName;
+    partial void OnFieldNameChanged(string value)
+    {
+        if (_coercingFieldName) return;
+        var upper = value?.ToUpperInvariant() ?? string.Empty;
+        if (!string.Equals(value, upper, System.StringComparison.Ordinal))
+        {
+            _coercingFieldName = true;
+            try { FieldName = upper; } finally { _coercingFieldName = false; }
+        }
+    }
+    partial void OnNewGeneratorNameChanged(string value)
+    {
+        if (_coercingNewGeneratorName) return;
+        var upper = value?.ToUpperInvariant() ?? string.Empty;
+        if (!string.Equals(value, upper, System.StringComparison.Ordinal))
+        {
+            _coercingNewGeneratorName = true;
+            try { NewGeneratorName = upper; } finally { _coercingNewGeneratorName = false; }
+        }
+    }
+    partial void OnTriggerNameChanged(string value)
+    {
+        if (_coercingTriggerName) return;
+        var upper = value?.ToUpperInvariant() ?? string.Empty;
+        if (!string.Equals(value, upper, System.StringComparison.Ordinal))
+        {
+            _coercingTriggerName = true;
+            try { TriggerName = upper; } finally { _coercingTriggerName = false; }
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DdlPreview))]

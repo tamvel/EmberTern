@@ -8,7 +8,7 @@
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.AddFieldDialog"
         x:DataType="vm:AddFieldDialogViewModel"
-        Title="{x:Static app:UiStrings.AddFieldDialogTitle}"
+        Title="{Binding DialogTitle}"
         Width="820"
         Height="560"
         CanResize="True"
@@ -32,21 +32,32 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="20,16">
-      <TextBlock Text="{x:Static app:UiStrings.AddFieldDialogTitle}" Classes="h1" />
+      <TextBlock Text="{Binding DialogTitle}" Classes="h1" />
     </Border>
 
-    <!-- Always-visible: name + Not Null + Primary Key -->
+    <!-- Always-visible: name + Not Null + Primary Key. In edit mode the
+         PrimaryKey checkbox is disabled (changing PK constraint requires
+         drop+recreate which isn't in this dialog's scope); the FieldName
+         box is disabled when the field has incoming dependencies — the
+         hint below explains why. -->
     <Border Grid.Row="1" Padding="20,14,20,10">
       <StackPanel Spacing="10">
         <StackPanel Spacing="4">
           <TextBlock Text="{x:Static app:UiStrings.AddFieldFieldName}" Classes="field-label" />
-          <TextBox Text="{Binding FieldName, Mode=TwoWay}" />
+          <TextBox Text="{Binding FieldName, Mode=TwoWay}"
+                   IsEnabled="{Binding CanRename}" />
+          <TextBlock Text="{x:Static app:UiStrings.AddFieldRenameBlockedHint}"
+                     Classes="subtle error"
+                     FontSize="11"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding ShowRenameBlockedHint}" />
         </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="20">
           <CheckBox Content="{x:Static app:UiStrings.AddFieldNotNull}"
                     IsChecked="{Binding NotNull, Mode=TwoWay}" />
           <CheckBox Content="{x:Static app:UiStrings.AddFieldPrimaryKey}"
-                    IsChecked="{Binding PrimaryKey, Mode=TwoWay}" />
+                    IsChecked="{Binding PrimaryKey, Mode=TwoWay}"
+                    IsEnabled="{Binding IsAddMode}" />
         </StackPanel>
       </StackPanel>
     </Border>
@@ -140,7 +151,8 @@
         </StackPanel>
       </TabItem>
 
-      <TabItem Header="{x:Static app:UiStrings.AddFieldTabCheck}">
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabCheck}"
+               IsEnabled="{Binding IsAddOnlyTabEnabled}">
         <StackPanel Margin="8" Spacing="6">
           <TextBlock Text="{x:Static app:UiStrings.AddFieldCheckLabel}" Classes="field-label" />
           <TextBox Text="{Binding CheckExpression, Mode=TwoWay}"
@@ -152,7 +164,8 @@
         </StackPanel>
       </TabItem>
 
-      <TabItem Header="{x:Static app:UiStrings.AddFieldTabComputed}">
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabComputed}"
+               IsEnabled="{Binding IsAddOnlyTabEnabled}">
         <StackPanel Margin="8" Spacing="6">
           <TextBlock Text="{x:Static app:UiStrings.AddFieldComputedLabel}" Classes="field-label" />
           <TextBox Text="{Binding ComputedExpression, Mode=TwoWay}"
@@ -164,7 +177,8 @@
         </StackPanel>
       </TabItem>
 
-      <TabItem Header="{x:Static app:UiStrings.AddFieldTabAutoinc}">
+      <TabItem Header="{x:Static app:UiStrings.AddFieldTabAutoinc}"
+               IsEnabled="{Binding IsAddOnlyTabEnabled}">
         <StackPanel Margin="8" Spacing="6">
           <RadioButton GroupName="Autoinc"
                        Content="{x:Static app:UiStrings.AddFieldAutoincNone}"

@@ -1378,12 +1378,416 @@ The big follow-up. Lands in several iterations within one session.
 
 57. **`SelectedValueBinding` is WPF-only.** Avalonia 12 `ComboBox` has `SelectedValue` but no `SelectedValueBinding` property; setting it in XAML is a compile error. For a `ComboBox` whose source list is objects (e.g. `DomainSpec`) and whose bound model property is a string (e.g. `DomainName`), the cleanest pattern is a wrapper property on the row VM — `SelectedDomainSpec` getter looks up the matching item in `AvailableDomains` by name; setter writes `value?.Name` back into `DomainName`. The ComboBox binds `SelectedItem` to the wrapper. Notify the wrapper from the `OnDomainNameChanged` partial so external writes round-trip through the UI.
 
+### Table editor — bugfix + UX polish session (shipped 2026-06-12)
+
+Sesja #1 z planu czteroetapowego (sesje #2-4: menu kontekstowe Pola, kreator Foreign Key, panel zależności pola). Wszystkie zmiany ograniczone do istniejącej powierzchni edytora tabel — brak nowych okien dialogowych ani nowych warstw zapytań.
+
+**1. Scentralizowany refresh po zmianach struktury** ([TableDetailTabViewModel.cs](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs)). Wprowadzono publiczne `RefreshStructureAsync(CancellationToken)` które wykonuje:
+- Snapshot przed reload: `ActiveSubTabIndex`, `SelectedField?.Name`, `SortColumn`/`SortDescending`, `CurrentPage`/`PageSize`, PK aktualnie zaznaczonego wiersza w Dane.
+- `_loadTask = null; await EnsureLoadedAsync()` — pełen re-fetch fields/constraints/indexes/DDL/description/data preview.
+- `PendingChanges.Clear()` — wszelkie pending DDL stają się nieaktualne wobec świeżej struktury.
+- Restore po reload: po nazwie pola znajduje nowo zbudowane `FieldInfo` i ustawia `SelectedField` + lustrzane `SelectedFieldRow` (grid bindowany do `EditableFields`).
+- Emituje `StructureRefreshed` event — hook dla widoku gdyby trzeba było odtworzyć stan UI-side.
+
+Wszystkie operacje strukturalne — `ExecuteAddFieldAsync`, `ExecuteDropFieldAsync`, `ExecuteMoveAsync`, `CompileAsync` — przepuszczone przez tę jedną metodę. Wcześniej każda miała własne `_loadTask = null + await EnsureLoadedAsync()`; teraz to jedna ścieżka i jeden punkt dodawania future snapshot pól.
+
+Szerokości kolumn zachowane "za darmo" bo gridy Pola/Constraints/Indexes deklarują kolumny statycznie w XAML (nigdy nie są niszczone), a `PopulateDataGrid` (Dane) ma `sameStructure` check pomijający `Columns.Clear()` gdy nazwy są niezmienne.
+
+**2. Move Up/Down wykonywane od razu** (Fix #4). Wcześniej `MoveFieldUpCommand`/`MoveFieldDownCommand` dodawały tylko `PendingDdlChange` — user widział "compile-needed" stan bez wizualnego efektu. Teraz nowe `ExecuteMoveAsync(name, oneBasedPosition)` (publiczne) odpala `ALTER TABLE … POSITION` natychmiastowo w transakcji użytkownika (auto-begin via DdlExecutor) i wywołuje `RefreshStructureAsync` — symetrycznie do Add/Drop. Pole pozostaje zaznaczone (po nazwie). `AddMovePending` zostawione publicznie jako pure-API do testów + ewentualnego batch-move; testy `PendingDdlVmTests` (2 sztuki) przepisane na ten endpoint.
+
+**3. Rollback wycofuje pending i refreshuje** (Fix #3). [MainWindowViewModel.cs](src/EmberTern.App/ViewModels/MainWindowViewModel.cs) `OnTransactionStateChanged` wykrywa przejście `Active → Idle` (commit lub rollback) i dla każdego otwartego TableDetail tab wywołuje fire-and-forget `RefreshAfterTransactionAsync` (alias na `RefreshStructureAsync` dla jasności call-site'u). Rzuca `PendingChanges.Clear()` + pełny re-fetch z bazy. Po rollback grid pokazuje stan rzeczywisty w DB; po commit działa idempotentnie.
+
+**4. Tab po Create Table zostaje + przełącza na nową tabelę** (Fix #7). [MainWindowViewModel.cs](src/EmberTern.App/ViewModels/MainWindowViewModel.cs) `OnNewTableCompileRequested` po udanym CREATE TABLE + `Metadata.RefreshAsync()` zamyka tab NewTable i wywołuje `OnOpenDdlRequested(new MetadataObject(name, Table))`. Idzie przez tę samą ścieżkę co dwuklik na drzewie metadanych — auto-dedup + tworzenie TableDetail tab + EnsureLoadedAsync. User zostaje w kontekście tabeli którą właśnie zbudował.
+
+**5. UPPERCASE dla identyfikatorów** (Fix #6). VM-side coercja przez `partial void OnXxxChanged` + flagę re-entrancy. Pokrycie:
+- `NewTableTabViewModel.TableName` + `NewTableFieldRowViewModel.Name`
+- `FieldRowViewModel.Name` (inline-edit Pola grid)
+- `AddFieldDialogViewModel.FieldName`, `NewGeneratorName`, `TriggerName`
+
+Setter sprawdza czy wartość jest już UPPERCASE; jeśli nie — re-assignuje uppercased pod flagą zapobiegającą rekurencji. Caret w TextBoxie po przejściu na UPPERCASE skacze na koniec stringu (znana cecha PropertyChanged → re-render) — UX akceptowalny. `OnNewTableCompileRequested` dodatkowo robi `trimmed.ToUpperInvariant()` jako belt-and-braces.
+
+**6. Auto-szerokości kolumn** (Fix #5). Wszystkie kolumny w gridach edytora dostały `MinWidth="N"` z N ≈ 7px × długość nagłówka + padding. Wcześniej `DataGridLength.Auto` na grid-level miało pokrywać "max(header, content)", ale w Avalonia 12.0.3 podczas pierwszego measure-pass'u kolumna z pustą zawartością zwija się do minimum bez uwzględnienia szerokości tekstu nagłówka. `MinWidth` gwarantuje że nagłówek nie zostanie obcięty nawet przy pustej kolumnie. Pola/Indeksy grid: wszystkie kolumny dostały MinWidth. NewTableFieldsGrid: zamieniono fixed `Width="N"` na `MinWidth="N"`; Description ostatnia zachowała `Width="*"`.
+
+**7. Cell focus rectangle nie obcinany + niebieski (nie pomarańczowy)** (Fix #1+#2). Dwa źródła problemu:
+- FluentTheme paint'uje `DataGridCellFocusVisualPrimaryBrush`/`Secondary` przez SystemAccentColor (orange-brown na typowym Win11). Override w [Colors.axaml](src/EmberTern.App/Themes/Colors.axaml) — oba klucze ustawione na `FocusBorderBrush`. Plus `DataGridCellBackgroundBrushFocused/Selected/SelectedFocused/SelectedUnfocused` ustawione na `SelectionBrush` bo cell-level brush rysuje się NAD row-level `Rectangle#BackgroundRectangle` i pokazywał brąz pomimo overrideu row-level.
+- Focus rectangle obcinany — FluentTheme template wkłada `Rectangle x:Name="FocusVisual"` z `Margin=0` co gubiło dolną krawędź. Nowy `Style Selector="DataGridCell /template/ Rectangle#FocusVisual"` w [ControlStyles.axaml](src/EmberTern.App/Themes/ControlStyles.axaml) ustawia `Margin="1"` + `StrokeThickness="1"` + `Stroke="{DynamicResource FocusBorderBrush}"`.
+
+**Zmienione pliki** (10):
+- [src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs)
+- [src/EmberTern.App/ViewModels/MainWindowViewModel.cs](src/EmberTern.App/ViewModels/MainWindowViewModel.cs)
+- [src/EmberTern.App/ViewModels/NewTableTabViewModel.cs](src/EmberTern.App/ViewModels/NewTableTabViewModel.cs)
+- [src/EmberTern.App/ViewModels/FieldRowViewModel.cs](src/EmberTern.App/ViewModels/FieldRowViewModel.cs)
+- [src/EmberTern.App/ViewModels/AddFieldDialogViewModel.cs](src/EmberTern.App/ViewModels/AddFieldDialogViewModel.cs)
+- [src/EmberTern.App/Views/TableDetailTabView.axaml](src/EmberTern.App/Views/TableDetailTabView.axaml)
+- [src/EmberTern.App/Views/NewTableTabView.axaml](src/EmberTern.App/Views/NewTableTabView.axaml)
+- [src/EmberTern.App/Themes/Colors.axaml](src/EmberTern.App/Themes/Colors.axaml)
+- [src/EmberTern.App/Themes/ControlStyles.axaml](src/EmberTern.App/Themes/ControlStyles.axaml)
+- [tests/EmberTern.Tests/PendingDdlVmTests.cs](tests/EmberTern.Tests/PendingDdlVmTests.cs) (2 testy Move przepisane)
+
+**Tests**: 658 / 658 zielone (bez zmiany liczby — 2 testy zmienione, 0 nowych). Build clean. Smoke launch: app startuje + zamyka się czysto.
+
+**Gotchas — promote to architecture lore.**
+
+58. **`DataGridLength.Auto` w Avalonia 12.0.3 nie zawsze respektuje header text width.** Dokumentacja mówi "max(SizeToCells, SizeToHeader)", ale dla kolumn z pustą lub krótką zawartością pierwszy measure-pass zwija column do minimum header'a — bez uwzględnienia jego pełnej szerokości tekstowej. Workaround: ustawić `MinWidth` per-kolumna obliczone jako ~7px × długość header'a + padding. **Reguła w projekcie**: każda kolumna DataGridowa otrzymuje explicit `MinWidth` chroniący header.
+
+59. **FluentTheme DataGridCell ma DWIE warstwy podświetlenia, obie domyślnie biorą SystemAccent.** Pierwsza — focus rectangle (`Rectangle x:Name="FocusVisual"` w template, koloruje się przez `DataGridCellFocusVisualPrimaryBrush`/`Secondary`). Druga — cell-level background fill (`DataGridCellBackgroundBrushSelected/Focused/SelectedFocused/SelectedUnfocused`). Override tylko jednej zostawia brąz na drugiej. Spójny niebieski focus state wymaga override'u obu zestawów kluczy w obu theme dictionaries.
+
+60. **Refresh-after-transaction hook na `Active→Idle`** wymaga zachowania `_previousTransactionState`. CommunityToolkit emitter `TransactionStateChanged` nie carry'uje "from/to" w EventArgs (`EventArgs.Empty`). Wzorzec: trzymać `_previousTransactionState` w polu, porównać z `_transactionService.State` na entry handler'a, aktualizować na końcu. Bez tego nie odróżnisz Active→Idle (commit/rollback completed) od Idle→Active (begin) od Active→Active (statement-count tick).
+
+61. **Move Field "queue and compile" vs "execute immediately" — wybór sygnalizuje user'owi czy chodzi o pojedynczą zmianę czy batch.** Wcześniej Add/Drop było immediate ale Move było queue'd — niespójność która powodowała że user widział pole na miejscu, klikał ↑, nic się nie zmieniało wizualnie. Po decyzji "wszystko strukturalne idzie do bazy od razu, Rollback to escape hatch" wszystkie 3 mają identyczną semantykę. Jeśli kiedyś będzie potrzeba batch (drag-and-drop reorder z 5 polami) — `AddMovePending` zostało jako pure-API call, można zbudować nad nim batch-Compile workflow bez zmiany dotychczasowych ścieżek.
+
+### Table editor — context menu + Edit Field dialog + FK stub (Sesja 2, shipped 2026-06-12)
+
+Sesja #2 z planu czteroetapowego. Zakres: menu kontekstowe na Pola grid, edycja pola przez re-use'owany AddFieldDialog w trybie edit, stub kreatora Foreign Key, plus ekstrakcja wspólnej ścieżki DDL dla inline-edit i dialog-edit. Sesja #3 doda właściwy FK Wizard, sesja #4 panel zależności pola.
+
+**1. Wspólna ścieżka generowania ALTER — `DdlGenerator.BuildAlterStatements`** ([DdlGenerator.cs](src/EmberTern.Core/Metadata/DdlGenerator.cs)). Nowy pure-Core helper:
+
+```csharp
+public static IReadOnlyList<PendingDdlChange> BuildAlterStatements(
+    string tableName,
+    FieldInfo original,
+    AlterFieldTarget target,
+    bool canRename)
+```
+
+Diff oryginalnego `FieldInfo` (loaded state) vs `AlterFieldTarget` (desired state) i emisja minimum-set ALTER statements w bezpiecznej kolejności (rename pierwszy, kolejne ALTERy referencują nową nazwę przez `effectiveName`). Pokrycie:
+- Rename — gated by `canRename` (skipped silently gdy `false`; caller surfacuje feedback)
+- Type/Domain — przez `TypeClause` (pre-formatted string przez `FormatTypeOrDomain` dla dialogu, raw user input dla inline); też gated by `canRename` (FB odrzuca ALTER TYPE przy zależnościach)
+- NotNull — set/drop transition
+- Default — set/drop (`null` i `""` traktowane równoważnie — oba oznaczają "no default")
+- Description — `COMMENT ON COLUMN` (też `null`≡`""`)
+
+`AlterFieldTarget` — prosta klasa transport-shape (Name / TypeClause / NotNull / DefaultValue / Description), wystarczająca dla obu ścieżek. Inline edit buduje ją z `FieldRowViewModel`; dialog edit konwertuje przez `DdlGenerator.FormatTypeOrDomain(FieldDefinition)` (już istniał, public static).
+
+**2. Refactor inline `EnqueueRowEdits`** ([TableDetailTabViewModel.cs](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs)). Ze 100+ linii property-by-property diff'u → ~30 linii wrappera nad `BuildAlterStatements`. Inline-specyficzne pozostało: UX wycofujący zmiany w gridzie + komunikat "rename blocked" gdy `canRename=false`. Zero powielania logiki diff między inline i dialog.
+
+**3. EditField + CreateForeignKey commands** ([TableDetailTabViewModel.cs](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs)):
+- `EditFieldCommand` z `CanExecute = CanEditField` (executor wired + SelectedField not null). Wywołuje `EditFieldRequested` event (`Func<FieldInfo, bool, Task<FieldDefinition?>>`), passing `CanRenameField(originalName)` jako gate dla dialog UI.
+- `ExecuteEditFieldAsync(FieldInfo original, FieldDefinition target)` — publiczna, owner-callable. Buduje `AlterFieldTarget` z `target`, woła `BuildAlterStatements`, **empty list → no-op** (per spec — user kliknął OK bez zmian, brak DDL, brak refresh, brak modyfikacji ErrorMessage). Inaczej — sekwencyjny `_ddlExecutor.ExecuteAsync` per statement, errors halt + set ErrorMessage, success → `RefreshStructureAsync`.
+- `CreateForeignKeyCommand` z `CanExecute = CanCreateForeignKey` (executor present). Fire-and-forget `CreateForeignKeyRequested` (`Func<Task>`); owner-side dialog open. **Stub w Sesji 2 — Session 3 podmieni body dialogu, surface się nie zmieni.**
+
+**4. `AddFieldDialogViewModel` edit mode** ([AddFieldDialogViewModel.cs](src/EmberTern.App/ViewModels/AddFieldDialogViewModel.cs)). Drugi konstruktor:
+
+```csharp
+AddFieldDialogViewModel(string tableName, IReadOnlyList<DomainSpec> domains,
+                       IReadOnlyList<string> generators,
+                       FieldInfo? originalField, bool canRename)
+```
+
+Gdy `originalField is not null` — `IsEditMode = true`, `SeedFromField(originalField)` populuje:
+- FieldName / NotNull / PrimaryKey / DefaultValue / Description / ComputedExpression
+- SelectedDomain (match po nazwie w `Domains` collection)
+- SelectedBasicType z `FieldInfo.BaseTypeName` (computed, strips parens)
+- Size dla CHAR/VARCHAR/CSTRING, Precision+Scale dla NUMERIC/DECIMAL
+
+`CanRename` flag → driver dla `ShowRenameBlockedHint` + `IsEnabled` na FieldName TextBox. Dodatkowe gate'y view-side:
+- `IsAddOnlyTabEnabled` (false w edit mode) → disable tabs Check / Computed / Autoinc
+- `IsAddMode` (false w edit mode) → disable PrimaryKey checkbox
+- `DialogTitle` zwraca `"Add Field"` lub `"Edit Field — {name}"` przez x:Static format binding
+
+**Czemu jeden dialog, nie osobny EditFieldDialog?** Spec: "Nie twórz osobnego EditFieldDialog jeśli da się wykorzystać AddFieldDialog w trybie edit". Wystarczyła jedna ctor overload, jedna metoda Seed, kilka boolowych flag widoku. Test count rośnie po liniowo, nie kwadratowo (duplicated codebase).
+
+**5. ForeignKeyDialog placeholder** ([ForeignKeyDialog.axaml](src/EmberTern.App/Views/ForeignKeyDialog.axaml)). Minimalny Window: header + body "Coming in Session 3" + Close. Static `ShowAsync(Window owner, string tableName)` zwraca Task — surface przygotowane pod Session 3 (gdzie zwracać będzie `ForeignKeySpec?`).
+
+**6. FieldsGrid context menu + keybindings + double-click** ([TableDetailTabView.axaml](src/EmberTern.App/Views/TableDetailTabView.axaml) + .cs):
+- `ContextMenu` przez `DataGrid.ContextMenu` z 4 itemami (Nowe pole / Edytuj pole / Usuń pole / sep / Utwórz klucz zewnętrzny). InputGesture na każdym pokazuje skrót.
+- `DataGrid.KeyBindings`: `Insert` → AddField, `F2` → EditField, `Delete` → DropField. Scope grid-only — żeby F2 w SQL editor nie firowała EditField.
+- `DoubleTapped` handler na DataGrid → walk do `DataGridRow`, sprawdź `DataContext is FieldRowViewModel`, fire `EditFieldCommand`. Avalonia DataGrid w edit mode (IsReadOnly=false) intercept'uje double-click pierwsza dla cell-edit, więc dwuklik-edit-pola fires tylko w trybie read-only (przy włączonym IsFieldEditMode trzeba użyć skrótu F2 lub menu).
+
+**Wszystkie 4 wejścia (context menu / keybinding / double-click / toolbar) routują przez te same 4 commandy na VM-ie** — jedyne źródło prawdy dla "co robi New / Edit / Drop / FK".
+
+**Zmienione pliki** (8):
+- [src/EmberTern.Core/Metadata/DdlGenerator.cs](src/EmberTern.Core/Metadata/DdlGenerator.cs) — `AlterFieldTarget` + `BuildAlterStatements`
+- [src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs) — refactor `EnqueueRowEdits`, dodanie `EditFieldCommand`/`ExecuteEditFieldAsync`/`CreateForeignKeyCommand` + events
+- [src/EmberTern.App/ViewModels/AddFieldDialogViewModel.cs](src/EmberTern.App/ViewModels/AddFieldDialogViewModel.cs) — edit-mode ctor + SeedFromField + IsEditMode/CanRename/ShowRenameBlockedHint/IsAddOnlyTabEnabled/DialogTitle
+- [src/EmberTern.App/Views/AddFieldDialog.axaml](src/EmberTern.App/Views/AddFieldDialog.axaml) — Title binding, hint visibility, tab IsEnabled gates, PrimaryKey IsEnabled
+- [src/EmberTern.App/Views/TableDetailTabView.axaml](src/EmberTern.App/Views/TableDetailTabView.axaml) — ContextMenu + KeyBindings + DoubleTapped
+- [src/EmberTern.App/Views/TableDetailTabView.axaml.cs](src/EmberTern.App/Views/TableDetailTabView.axaml.cs) — `OnEditFieldRequested`, `OnCreateForeignKeyRequested`, `OnFieldsGridDoubleTapped`, shared `OpenAddFieldDialogAsync`
+- [src/EmberTern.App/Views/ForeignKeyDialog.axaml(.cs)](src/EmberTern.App/Views/ForeignKeyDialog.axaml) (new) — placeholder
+- [src/EmberTern.App/UiStrings.cs](src/EmberTern.App/UiStrings.cs) — `AddFieldDialogEditTitleFormat`, `AddFieldRenameBlockedHint`, `FieldsContextMenu*`, `ForeignKeyDialog*`
+
+**Testy** (+27, 658 → 685): [BuildAlterStatementsTests.cs](tests/EmberTern.Tests/BuildAlterStatementsTests.cs) (13 — pure DDL diff: empty/rename/blocked/type/notnull/default/description/order-of-statements/null-clause/quoting), [AddFieldDialogEditModeTests.cs](tests/EmberTern.Tests/AddFieldDialogEditModeTests.cs) (9 — IsEditMode/seeding/domain-match/numeric-precision-scale/CanRename gate/DialogTitle/IsAddOnlyTabEnabled/BuildDefinition round-trip), [EditFieldCommandTests.cs](tests/EmberTern.Tests/EditFieldCommandTests.cs) (5 — CanExecute gates + no-op-on-empty-diff + event signature pins).
+
+**Architektura — co świadomie zostało**:
+- `EnqueueRowEdits` zachowane jako publiczne — view-side RowEditEnding nadal je wywołuje. Wewnętrznie thin wrapper nad `BuildAlterStatements`.
+- `AddMovePending` (z sesji 1) zachowane jako pure-API + nadal testowane. Edit dialog **nie** używa pending-queue (executes immediately jak Add/Drop/Move).
+- Dialog Computed/Check/Autoincrement tabs są **disabled**, nie ukryte. User widzi czego nie da się zmodyfikować przez ALTER (DROP+ADD wymagałby utraty danych — out of scope). Gdy ktoś kiedyś chce wspierać DROP+ADD, ścieżka jest dodaniem nowej branchy w `BuildAlterStatements` lub osobnego helpera.
+- FK Wizard surface: command + event + placeholder dialog. Session 3 podmieni body dialogu na właściwe okno + zaimplementuje serializację → DDL. Surface się nie zmieni.
+
+**Znane ograniczenia**:
+1. Edit dialog nie wspiera zmian Computed/Check/Autoincrement/PrimaryKey. Te tabs/kontrolki są disabled. Modyfikacje wymagałyby DROP+ADD (z utratą danych) lub specjalnych ALTER ścieżek FB (FB nie ma `ALTER COLUMN COMPUTED BY`, etc.). Workaround: user może drop'nąć + dodać pole na nowo.
+2. BLOB sub-type nie jest carrowane w `FieldInfo` (loader nie pobiera go z `RDB$FIELDS.RDB$FIELD_SUB_TYPE`). Edit mode dla BLOB pola domyśli się TEXT — zmiana sub-type i tak nie jest wspierana przez ALTER.
+3. Double-click na pole otwiera Edit Field **tylko gdy grid jest read-only** (default). W trybie IsFieldEditMode=true Avalonia DataGrid intercept'uje double-click pierwsza dla cell-edit. Spec mówił "dwuklik na wierszu pola = Edytuj pole" — interpretacja: w trybie default-read-only. Power user może wymusić edit dialogiem przez F2.
+4. Foreign Key command — placeholder dialog returnuje Task bez wartości. Session 3 dodaje ForeignKeySpec.
+
+**Gotchas — promote to architecture lore.**
+
+62. **CommunityToolkit MVVMTK0034 — backing fields are off-limits.** `[ObservableProperty] private string _foo;` generuje public `Foo` property; analyzer wymaga, żeby cały kod (włącznie z ctor'em + helperami w tej samej klasie) referował się przez `Foo`, nie przez `_foo`. Powód: gdyby ktoś write'ował do `_foo` bezpośrednio, PropertyChanged by nie firował i bindowane UI zostawałoby stale. Setup ctor / Seed-from-X / migrations → MUSI używać public property. Wyjątek: w `partial void OnFooChanged(...)` możesz czytać/pisać `Foo` jak normalnie (analyzer rozumie generator-emitted callback). **Rule**: jeśli widzisz `MVVMTK0034`, zamień `_xxx = ...` na `Xxx = ...` w całym setupowym kodzie.
+
+63. **`x:Static` na internal class wymaga InternalsVisibleTo OR public class.** Pierwsze podejście do `AddFieldDialogEditTitleFormat` używało `{Binding DialogTitle}` które wewnętrznie format'owało przez `string.Format(CultureInfo, UiStrings.AddFieldDialogEditTitleFormat, name)` — działa bo VM ma direct access do `UiStrings`. Gdybym próbował `{x:Static app:UiStrings.AddFieldDialogEditTitleFormat}` w XAML — wymagałoby publicznego UiStrings (AXAML loader nie respects InternalsVisibleTo). Format-string trzymany w VM, raw string z dialog'a → bind przez computed property. **Rule**: gdy format-string ma argumenty, formatuj w VM przez computed property — XAML widzi tylko gotowy string przez Binding, nie potrzebuje x:Static do internal class.
+
+64. **DataGrid context menu + keybindings + double-click MUSZĄ wywoływać te same commands.** Inaczej zachowanie się rozjeżdża między input modes. Wzorzec: zdefiniuj N commands na VM, połącz każdą z trzech input ścieżek do tego samego command'a. ContextMenu MenuItem → `Command="{Binding XxxCommand}"`. DataGrid.KeyBindings KeyBinding → `Command="{Binding XxxCommand}"`. DoubleTapped handler w code-behind → `vm.XxxCommand.Execute(null)`. Wszystkie 3 sprawdzają `CanExecute`. Jeśli kiedyś trzeba dodać 4-tą ścieżkę (np. drag-and-drop) — wystarczy podpiąć do command.
+
+65. **Edit dialog "no-op when no change" wymaga diff'u, nie sygnału z dialogu.** Tempting: dodać `IsDirty` flag w dialog VM, gate'ować Accept na tym. Problem: użytkownik może wpisać znak i go zmazać — dialog uznałby się za dirty pomimo identycznego końcowego stanu. **Rule**: no-op semantykę implementuje pipeline DDL (BuildAlterStatements zwraca empty list dla zerowego diff'u), nie dialog. Owner woła `ExecuteEditFieldAsync` zawsze gdy user klika OK — pipeline decyduje czy cokolwiek emitować. Plus: testowalne czysto bez UI.
+
+### Foreign Key Wizard (Sesja 3, shipped 2026-06-12)
+
+Sesja #3 z planu czteroetapowego. Zastąpienie placeholder dialogu z Sesji 2 pełnym kreatorem FK. Architektura siedzi na powierzchniach z Sesji 1–2: `RefreshStructureAsync`, `CreateForeignKeyCommand`/`CreateForeignKeyRequested`, `DdlGenerator.BuildAddForeignKey` (nowy).
+
+**1. Core model — `ForeignKeyAction` + `ForeignKeySpec`** ([ForeignKey.cs](src/EmberTern.Core/Metadata/ForeignKey.cs)). Plain init-only POCO + zamknięty enum.
+- `ForeignKeyAction { NoAction, Cascade, SetNull }` — V1 spec. Komentarz w pliku opisuje miejsca do rozszerzenia (`SetDefault`, `Restrict`).
+- `ForeignKeySpec { ConstraintName, LocalFields, ReferencedTable, ReferencedFields, OnUpdate, OnDelete }` — `IReadOnlyList<string>` dla pól (kolejność istotna: `LocalFields[i]` → `ReferencedFields[i]`).
+
+**2. `DdlGenerator.BuildAddForeignKey(tableName, spec)`** ([DdlGenerator.cs](src/EmberTern.Core/Metadata/DdlGenerator.cs)). Pure-Core emit. Validation throws (5 osobnych `ArgumentException` per warunek). Shape:
+
+```sql
+ALTER TABLE "T" ADD CONSTRAINT "FK_..." FOREIGN KEY ("a", "b") REFERENCES "Y" ("c", "d")
+[ ON UPDATE CASCADE | SET NULL ]
+[ ON DELETE CASCADE | SET NULL ]
+```
+
+`NoAction` omits the clause entirely — matches FB's server-side default i konwencję reader-side `ForeignKeyRule` która suppress'uje RESTRICT przy display. `Cascade` / `SetNull` rendered literally. Order: `ON UPDATE` zawsze przed `ON DELETE`.
+
+**3. `ForeignKeyDialogViewModel`** ([ForeignKeyDialogViewModel.cs](src/EmberTern.App/ViewModels/ForeignKeyDialogViewModel.cs)). Mirror'uje kontrakt `AddFieldDialogViewModel`:
+- `[ObservableProperty]` na każdym polu form-state z `[NotifyPropertyChangedFor(nameof(DdlPreview))]` → live preview reaktywne na każdą zmianę
+- `SourceFields` + `ReferencedFields` to `ObservableCollection<SelectableFieldViewModel>` (po jednym wrapperze per pole z `IsSelected` flag), bound do dwóch ListBox z checkboxami
+- `LoadReferencedFieldsAsync` + `LoadReferencedPrimaryKeyAsync` to dwa callback'i dostarczane przez view — VM nie ma znajomości warstwy bazodanowej (test seam — testy podają synchronous fakes)
+- `AvailableActions` to lista `NamedForeignKeyAction(Action, Label)` recordów — ComboBox renderuje Label, BuildSpec używa Action. Bez konwerterów wartości.
+
+**Auto-mapowanie (3 stage)** w `RunAutoMappingAsync`:
+- **Stage 1 (by name)**: dla każdego zaznaczonego source field, znajdź same-named field w target. Jeśli WSZYSTKIE zmatchują → propose them. Częściowe matchy fall through to Stage 2 (mieszanka name-matched + PK-matched mylniejsza niż brak propozycji).
+- **Stage 2 (by PK)**: gdy Stage 1 fail, fetch PK target table'a. Jeśli PK column count == selected source count → propose PK columns in PK declaration order.
+- **Stage 3 (no-op)**: user picks manually. UI hint w XAML mówi explicit: "Equal-named source fields are pre-selected automatically."
+
+**Auto-derive nazwy constrainta**: `FK_{SOURCE}_{TARGET}` na zmianę `SelectedReferencedTable`. **Tylko gdy ConstraintName jest pusty LUB matches the last auto-derived value** — user override sticks across subsequent table changes (test pin'uje to: `UserOverridesName_SticksAcrossTableChange`).
+
+**4. Replaced placeholder dialog** ([ForeignKeyDialog.axaml](src/EmberTern.App/Views/ForeignKeyDialog.axaml) + .cs). Layout: header / constraint name + source table label / dual ListBox (source + target with table picker) / 2× action ComboBox / DDL preview / validation row / Cancel+Create footer. Replaces stub body 1:1; static `ShowAsync(Window owner, ForeignKeyDialogViewModel viewModel) → Task<ForeignKeySpec?>` (nowa sygnatura — VM-injected, view-driven).
+
+**5. Event signature change**: `CreateForeignKeyRequested` z `Func<Task>` → `Func<Task<ForeignKeySpec?>>`. Symmetria z `AddFieldRequested` (`Task<FieldDefinition?>`) i `EditFieldRequested` (`Task<FieldDefinition?>`). VM otrzymuje spec od view → woła `ExecuteCreateForeignKeyAsync` jeśli nie null.
+
+**6. `ExecuteCreateForeignKeyAsync(spec)`** ([TableDetailTabViewModel.cs](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs)):
+- Buduje DDL przez `BuildAddForeignKey` (catch `ArgumentException` defensive — dialog's `IsValid` powinien już to złapać)
+- `_ddlExecutor.ExecuteAsync(sql)` w transakcji użytkownika (auto-begin)
+- Errors land w `ErrorMessage` z formatu `UiStrings.ForeignKeyExecuteFailedFormat`
+- Success → `RefreshStructureAsync()` (refetch constraints/DDL z bazy + restore snapshot)
+- **Post-create UX**: po refresh override'uje snapshot-restored sub-tab na `ConstraintsSubTabIndex (=1)` + ustawia `ConstraintsActiveSubTabIndex = ConstraintsForeignKeysIndex (=1)`. User ląduje na Ograniczenia → Foreign Keys i widzi nowy constraint w liście.
+
+**7. Inner `ConstraintsActiveSubTabIndex` binding** ([TableDetailTabView.axaml](src/EmberTern.App/Views/TableDetailTabView.axaml)). Wewnętrzny `TabControl` w Ograniczenia teraz ma `SelectedIndex="{Binding ConstraintsActiveSubTabIndex, Mode=TwoWay}"`. Default = 0 (Primary Key). Post-FK flow ustawia na 1 (Foreign Keys). Konstanty: `ConstraintsSubTabIndex` + `ConstraintsForeignKeysIndex` na VM-ie (matching XAML order).
+
+**8. View wiring** ([TableDetailTabView.axaml.cs](src/EmberTern.App/Views/TableDetailTabView.axaml.cs) `OnCreateForeignKeyRequested`):
+- Snapshot source-table field names z `_currentVm.Fields`
+- Best-effort `mainVm.MetadataReader.ListAsync(Table)` dla tablistę (failure → empty list)
+- Dwie callback closure: `LoadFields(tableName)` + `LoadPrimaryKey(tableName)` — obie używają `mainVm.TableDetailReader.GetFieldsAsync(tableName)` (nowo wyeksponowanego). PK callback filtruje `FieldInfo.IsPrimaryKey == true` — jedno-zapytanie pokrywa oba uses. Tańsze niż osobne `GetConstraintsAsync` dla PK.
+- Buduje VM, woła `ForeignKeyDialog.ShowAsync` → zwraca `ForeignKeySpec?` z powrotem do VM.
+
+**`MainWindowViewModel.TableDetailReader`** (nowa internal property) — symmetria z istniejącym `MetadataReader`. Wyeksponowane bo callback'i FK wizarda potrzebują dostępu do `GetFieldsAsync` dla ref-table'a.
+
+**Zmienione pliki** (9):
+- [src/EmberTern.Core/Metadata/ForeignKey.cs](src/EmberTern.Core/Metadata/ForeignKey.cs) (new) — enum + spec
+- [src/EmberTern.Core/Metadata/DdlGenerator.cs](src/EmberTern.Core/Metadata/DdlGenerator.cs) — `BuildAddForeignKey` + helpers
+- [src/EmberTern.App/ViewModels/ForeignKeyDialogViewModel.cs](src/EmberTern.App/ViewModels/ForeignKeyDialogViewModel.cs) (new) — wizard VM + auto-mapping + auto-naming
+- [src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs) — `ConstraintsSubTabIndex`/`ConstraintsForeignKeysIndex`/`ConstraintsActiveSubTabIndex`/`ExecuteCreateForeignKeyAsync`/event signature change
+- [src/EmberTern.App/ViewModels/MainWindowViewModel.cs](src/EmberTern.App/ViewModels/MainWindowViewModel.cs) — `TableDetailReader` exposure
+- [src/EmberTern.App/Views/ForeignKeyDialog.axaml(.cs)](src/EmberTern.App/Views/ForeignKeyDialog.axaml) — placeholder → real wizard
+- [src/EmberTern.App/Views/TableDetailTabView.axaml](src/EmberTern.App/Views/TableDetailTabView.axaml) — Constraints TabControl SelectedIndex binding
+- [src/EmberTern.App/Views/TableDetailTabView.axaml.cs](src/EmberTern.App/Views/TableDetailTabView.axaml.cs) — `OnCreateForeignKeyRequested` rewrite
+- [src/EmberTern.App/UiStrings.cs](src/EmberTern.App/UiStrings.cs) — FK wizard strings + action labels
+
+**Testy** (+29, 685 → 714): [BuildAddForeignKeyTests.cs](tests/EmberTern.Tests/BuildAddForeignKeyTests.cs) (14 — single/multi-field, action variants, NoAction omits clause, identifier quoting, full validation coverage), [ForeignKeyDialogVmTests.cs](tests/EmberTern.Tests/ForeignKeyDialogVmTests.cs) (15 — default name derivation, user override sticks, 3-stage auto-mapping, multi-field PK auto-map preserves order, validation cases, DDL preview reactivity, full round-trip BuildSpec → BuildAddForeignKey, Accept/Cancel commands). Plus 1 updated test w `EditFieldCommandTests` (event signature change from Sesji 2).
+
+**Architektura — co świadomie zostało**:
+- Edit dialog (Session 2) i FK dialog (Session 3) używają **różnych dialog VMs** — różne form-shapes (FieldDefinition vs ForeignKeySpec). Wspólne: oba zwracają wynik przez `Result` property + fire `RequestClose` event. Brak unifikującej "DialogViewModelBase" — niepotrzebna abstrakcja na zapas.
+- Auto-mapowanie wyłącznie *sugeruje* — nie blokuje. User zawsze może rozregulować propozycję ręcznie. Test `AutoMap_Stage3_NoOp` pin'uje że nie ma wymuszania ani na pustej, ani na partial-matched scenarii.
+- Dialog **nie** loaduje ref-table fields ahead-of-time — tylko on-pick. Otwarcie wizarda nie blokuje UI na DB roundtrip listujący każdą tabelę. Tradeoff: pierwszy klik na tabelę docelową = jeden roundtrip (akceptowalne, 50ms typical).
+- Nazwa constrainta auto-derive używa flagi `_lastAutoDerivedName` zamiast osobnej `IsCustom` bool. Niespodziewanie ekonomiczne — bo `OnConstraintNameChanged` rozpoznaje user override po fakcie (`value != _lastAutoDerivedName` po `_coercingName=false` cycle).
+
+**Znane ograniczenia**:
+1. **Brak highlight'u nowo utworzonego FK na liście.** DataGrid w FK sub-tabie nie ma `SelectedItem` binding'u. Dodanie selekcji wymagałoby (a) `SelectedForeignKey` na VM, (b) binding'u, (c) `OnPropertyChanged` po Refresh — niemała przebudowa. Spec dał discretion: "Jeżeli zaznaczenie wymagałoby dużej przebudowy — opisz ograniczenie". Pominięto. User widzi nowy FK w liście (sortowanie domyślne przez Firebird zazwyczaj alfabetyczne lub po dacie utworzenia).
+2. **Brak inline drag-reorder pól.** Jeśli user wybierze [A, B, C] w source i auto-mapping da [X, Y, Z] w target, mapping = A→X, B→Y, C→Z (by ordered selection-position). Composite FK z innym mapping'iem wymaga ręcznej zmiany kolejności w XAML — nie jest wspierane. V1 spec tego nie wymagał.
+3. **Brak walidacji compatibility typów.** Dialog nie sprawdza czy A:VARCHAR mapuje na X:INTEGER. FB sam odrzuci execution przy create — błąd wyląduje w `ErrorMessage`. Server-side validation tańsza i autorytatywna.
+4. **`SetDefault` + `Restrict` nie wspierane** (spec V1). `ForeignKeyAction` enum + `RenderAction` + dialog's `AvailableActions` to 3 miejsca do dodania linii każdej, jeśli kiedyś trzeba.
+5. **Cyclic FK (table referencing itself) jest legalny** — bieżąca tabela pokaże się w `AvailableTables` (lista wszystkich tabel w DB). User może wybrać self-ref. Test'em nie pinowane, ale powierzchnia działa.
+6. **Brak loading indicatora** podczas fetch'a ref-fields. Async + szybkie zwykle — ale na powolnej sieci user może zauważyć ~100-500ms freeze przed pojawieniem się listy. V2 candidate: subtle `IsLoading` flag + spinner.
+
+**Gotchas — promote to architecture lore.**
+
+66. **Auto-derive form values musi mieć "user override sticks" semantykę przez `_lastAutoDerivedValue` tracking.** Pattern: VM auto-derive'uje wartość X (np. constraint name `FK_SRC_TGT`) na zmianę source-Y. Gdy user edytuje X ręcznie, kolejne zmiany Y NIE MOGĄ override'ować jego edycji. Implementacja:
+    - `_lastAutoDerivedValue` field trackuje "what we last wrote automatically"
+    - `_coercingX` re-entrancy flag chroni przed cyklem na auto-write
+    - `OnXChanged(value)`: gdy `_coercingX==false`, user write → zresetuj `_lastAutoDerivedValue = ""` (signal "user pinned this")
+    - Auto-derive logic: replace ONLY when `X` jest empty OR `X == _lastAutoDerivedValue`. To pierwsze pokrywa initial state, drugie subsequent auto-overrides.
+
+    Ten wzorzec jest test'owalny: `UserOverridesName_SticksAcrossTableChange` pin'uje semantykę bez touch'owania UI.
+
+67. **xUnit2031 — `Assert.Single` z lambdą zamiast `Where().Single()`.** Analyzer xUnit'a flag'uje `Assert.Single(coll.Where(p))` i wymaga `Assert.Single(coll, p)` (predicate overload). Działa identycznie ale generuje lepszy error message przy fail'u (mówi ile elementów spełniało predykat, nie tylko "expected 1 got N"). Razem z `xUnit2029` (`Assert.Empty(coll.Where(p))` → `Assert.DoesNotContain(coll, p)`) trzymaj w pamięci przy pisaniu testów na collection-predicate assertions — IDE pokaże errory ale to brak zwykłych warning'ów.
+
+68. **Dialog VM-driven over dialog-loaded.** Wcześniejsze podejście (Session 2 AddFieldDialog): view-side `OpenAddFieldDialogAsync` fetch'ował domains+generators **przed** stworzeniem VM-a. Session 3 zmienia paradygmat: VM dostaje **callbacks** (Func<T1, Task<T2>>) i loaduje on-demand sam (gdy user picks target table). Plusy: (a) test'owalne synchronicznymi fake'ami, (b) tańsze open (nie blokuje na fetch'u tablistę całego DB), (c) re-fetch on user action darmowy (e.g. user changes target → fresh fields). **Rule**: dla future wizard'ów (Session 4 panel zależności, wszelkie kolejne) wybieraj callback'i over ahead-of-time fetch — szczególnie gdy dane są user-driven (target selection trigger'uje fetch).
+
+### Field Dependencies Panel (Sesja 4, shipped 2026-06-12)
+
+Sesja #4 — finalna z planu czteroetapowego. Dolny panel na Pola sub-tab pokazujący zależności wybranego pola. Bez nowych I/O — wykorzystuje już-załadowane `DependedOnBy` z `RefreshStructureAsync`.
+
+**1. `FieldDependencyItem` wrapper VM** ([FieldDependencyItem.cs](src/EmberTern.App/ViewModels/FieldDependencyItem.cs)). Cienki view-side wrapper nad `DependencyInfo`:
+- `ObjectName` / `ObjectType` — przekazywane verbatim
+- `CanNavigate` — computed przez existing `TableDetailTabViewModel.MapObjectTypeToKind` (same mapping co tree-side Zależności). True dla Table/View/Trigger/Procedure/Function/Generator/Exception/Package/Index/User/Domain. False dla "Field" i fallback "Object (N)".
+- `NavigateCommand` — `[RelayCommand(CanExecute = nameof(CanNavigate))]`. Wired do existing `_owner.RequestOpen(Info)` chain (which fires `OpenObjectRequested` → `MainWindowViewModel.OnOpenDdlRequested`). **View nie binduje command'u do żadnego gestu w Sesji 4** — wsparcie API jest, Session 5 (poza planem 4 sesji) wire'uje DoubleTapped na DataGrid.
+
+**Dlaczego wrapper, nie rozszerzenie `DependencyInfo`?** `DependencyInfo` to Core POCO z `init`-only properties. Dodawanie commandów / wireup'u do `MainWindowViewModel` w Core warstwie złamałoby regułę "zero Avalonia in Core". Wrapper w App.ViewModels — naturalny rozdział.
+
+**2. `FieldDependencies` collection na `TableDetailTabViewModel`**:
+- `ObservableCollection<FieldDependencyItem> FieldDependencies` (publiczna)
+- Computed flags: `HasFieldDependencies`, `HasFieldSelectionForDependencies`, `ShowFieldDependenciesEmpty`, `ShowFieldDependenciesNoSelection` — driving UI state (Empty vs NoSelection vs DataGrid).
+- `RebuildFieldDependencies()` — filtruje `DependedOnBy` gdzie `FieldName == SelectedField.Name` (case-insensitive, bo Firebird przechowuje uppercase ale defensive against mixed-case input), dedup po `(ObjectType|ObjectName)`, wraps w `FieldDependencyItem(dep, this)`.
+- **Rebuilds wired do dwóch sygnałów**:
+  - `partial void OnSelectedFieldChanged` — user zmienia selekcję
+  - `DependedOnBy.CollectionChanged` — refresh structure clears+repopulates collection, każdy Add fires rebuild
+
+**Brak `_lastRebuildedField` cache / debounce.** Typowa tabela ma ≤20 deps; podczas `RefreshStructureAsync` collection Clear() + N×Add() daje N+1 rebuilds @ O(n) — total O(n²) ale n małe, koszt znikomy. Optymalizacja niepotrzebna.
+
+**3. Pola sub-tab UI** ([TableDetailTabView.axaml](src/EmberTern.App/Views/TableDetailTabView.axaml)). Pola TabItem wrapnięte w `Grid RowDefinitions="*,4,180"`:
+- Row 0: `FieldsGrid` (istniejący, niezmieniony co do contentu — tylko `Grid.Row="0"` dodane)
+- Row 1: `GridSplitter Height="4" ResizeDirection="Rows"` — user resize'uje pionowo
+- Row 2: `Border` z headerem ("Field dependencies") + `Grid RowDefinitions="Auto,*"`:
+  - Trzy mutually-exclusive children w row 1:
+    - `TextBlock` "Select a field…" (gdy `ShowFieldDependenciesNoSelection`)
+    - `TextBlock` "This field has no dependencies." (gdy `ShowFieldDependenciesEmpty`)
+    - `DataGrid` z kolumnami Type / Name (gdy `HasFieldDependencies`)
+
+Default panel height = 180 px. Identyczna stylistyka grid'u jak Pola/Indeksy/Ograniczenia (compact rows, font 11, MinWidth per kolumna chronący nagłówki). Read-only — żadnych binding'ów edycyjnych.
+
+**4. UiStrings** — 5 nowych const: `FieldDependenciesHeader`, `FieldDependenciesNoSelection`, `FieldDependenciesEmpty`, `FieldDependenciesColumnType`, `FieldDependenciesColumnName`.
+
+**Zmienione pliki** (4):
+- [src/EmberTern.App/ViewModels/FieldDependencyItem.cs](src/EmberTern.App/ViewModels/FieldDependencyItem.cs) (new) — wrapper VM + NavigateCommand
+- [src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs) — FieldDependencies collection + rebuild + hooks
+- [src/EmberTern.App/Views/TableDetailTabView.axaml](src/EmberTern.App/Views/TableDetailTabView.axaml) — Pola sub-tab Grid + Splitter + bottom panel
+- [src/EmberTern.App/UiStrings.cs](src/EmberTern.App/UiStrings.cs) — 5 string'ów
+
+**Testy** ([FieldDependenciesPanelTests.cs](tests/EmberTern.Tests/FieldDependenciesPanelTests.cs), +11, 714 → 725):
+- No-selection state flags
+- Selection-with-no-matches → empty state
+- Filter by field name + case-insensitivity
+- Dedup by (ObjectType, ObjectName) — same trigger across multiple fields → one row
+- Dedup key honors ObjectType (different kinds with same name don't collapse)
+- CanNavigate true/false for known/unknown kinds
+- CanNavigate gates NavigateCommand.CanExecute
+- Selection change rebuilds list
+- DependedOnBy.CollectionChanged triggers rebuild (simulates RefreshStructureAsync flow)
+- FieldDependencyItem exposes ObjectName/ObjectType + holds raw Info reference
+
+**Architektura — co świadomie zostało**:
+- **No new I/O**. Sesja 4 jest czysto-VM + UI. `GetDependenciesAsync` istniejący Sesji wcześniej już populuje `DependedOnBy` — filter+dedup to czysta operacja w pamięci.
+- **NavigateCommand wired ale nie bound** w XAML. API surface ready dla Session 5; UI gesture (DoubleTapped) doda się trywialnie. Pełne wzorce z `OnDependencyNodeDoubleTapped` na drzewie Zależności są do reuse.
+- **Brak Insert/Update/Delete kolumn dla trigger'ów**. Spec gave discretion ("jeżeli relatywnie małym kosztem — dodaj"). Dodanie wymagałoby:
+  - Rozszerzenia `DependencyInfo` o opcjonalne `OperationFlags` (bitfield)
+  - Modyfikacji `DependedOnBySql` o LEFT JOIN `RDB$TRIGGERS` na `RDB$DEPENDENT_TYPE=2`, plus dodatkowy SELECT z `RDB$TRIGGER_TYPE`
+  - Decoder bitfield client-side (logika już exists w `FirebirdDdlReader.DescribeTriggerType` — można re-use)
+  - Re-bind paramters w UNION ALL branches (gotcha #47 from sesji wcześniejszych — distinct param names per branch)
+  
+  Estymata: ~50 lines reader + 1 DependencyInfo field + 3 columns w XAML + 5 tests. Możliwe ale `Priorytetem jest działający panel zależności` — zostawiam jako V2 candidate.
+
+**Znane ograniczenia**:
+1. **Brak Insert/Update/Delete dla triggerów** (j.w.). User widzi że trigger "TR_NAGL_AI" zależy od pola, ale nie wie czy odpala się na INSERT, UPDATE czy DELETE. W table-level zakładce Zależności też tego nie ma — wymagałoby spójnej rozbudowy obu miejsc.
+2. **Index dependencies nieobecne**. `DependedOnBy` zbiera tylko `RDB$DEPENDENCIES` rows + indirect-via-domain Views. Indexes (`RDB$INDICES`) są separate source — nie pojawiają się w bieżącym filterze. Spec wymienił "Index" jako przykład — ale spec też mówił "wykorzystaj już załadowane dane". Indexes są w `Indexes` collection osobno; per-field index lookup wymagałby joinu po `RDB$INDEX_SEGMENTS.RDB$FIELD_NAME`. V2.
+3. **Foreign Key dependencies (incoming)** — istnieją w `DependedOnBy` jako rows z `ObjectType = "Foreign Key"`? Sprawdzić: bieżący `MapObjectType` w readerze mapuje `RDB$DEPENDENT_TYPE = 7 (RDB$_CONSTRAINT)` → "Constraint" (nie "Foreign Key"). FK incoming w czystej formie zazwyczaj nie wpada w `RDB$DEPENDENCIES`. Better source: `RDB$REF_CONSTRAINTS` joined z `RDB$RELATION_CONSTRAINTS`. V2 — wymaga osobnego query albo zaszczepienia FK info z istniejącego `Constraints` collection (gdzie FK info już mamy z `GetConstraintsAsync`).
+4. **Brak otwierania obiektów po dwukliku** — explicit spec. NavigateCommand exists, UI gesture w Session 5.
+5. **Brak grupowania kolumn po Type** — flat DataGrid (sort by Type to fallback). IBExpert ma tree-shape po typie; ale w naszych prostych use-case'ach (1-10 wierszy max per field) flat grid + Type-sort jest czytelniejsze.
+
+**Gotchas — promote to architecture lore.**
+
+69. **Filtered-view ObservableCollection — wireup do dwóch źródeł sygnału**. Gdy chcesz pokazać filtered subset jakiejś collection (np. zależności pola = filtered DependedOnBy + selected field), musisz reagować na:
+    - Zmianę kryterium filtra (tu: SelectedField → `partial void OnXxxChanged`)
+    - Zmianę zbioru źródłowego (tu: DependedOnBy → CollectionChanged event)
+    
+    **Pomijanie któregokolwiek = stale data**. CollectionChanged ważniejszy bo Clear+Add sequence z `RefreshStructureAsync` może zostawić zfiltrowany panel z danymi sprzed refresh'u. Subscribe w ctorze, unsubscribe nie jest potrzebny dla tego VM (lifetime tabu).
+
+70. **Wrapper VM dla view-side commands na Core POCO**. `DependencyInfo` (Core, init-only) nie może mieć `[RelayCommand]` — to App-only attribute. Wrapper VM (App.ViewModels) trzyma `DependencyInfo Info { get; }` jako referencję + dodaje view-side state (`CanNavigate`, `NavigateCommand`). Konstruktor bierze opcjonalny `TableDetailTabViewModel? owner` — null OK dla testów (tworzenie itemu w izolacji), production zawsze passes `this`. **Rule**: gdy Core model potrzebuje view-side behavior (command, computed property tied to App services), opakuj — nie rozszerzaj.
+
+### UX Polish Sprint (Sesja 5, shipped 2026-06-13)
+
+Sześć dopracowań po ręcznych testach. Bez nowych dużych funkcji — naprawy + drobne rozszerzenia istniejących mechanizmów.
+
+**1. Fałszywe oznaczanie wierszy jako modified (root cause + fix).** **Przyczyna**: Type ComboBox na Pola grid bindował `SelectedItem="{Binding TypeText}"` gdzie `TypeText = original.Type` = `"VARCHAR(50)"`, ale `ItemsSource = BasicTypes` zawiera tylko bazowe typy (`"VARCHAR"`, `"INTEGER"`…). Avalonia ComboBox nie znajduje `"VARCHAR(50)"` w items → resetuje `SelectedItem` na `null` → TwoWay zapisuje `null` z powrotem do `TypeText` → `IsModified` (porównujące `TypeText` vs `Original.Type`) staje się `true` → brązowy tint mimo braku edycji. Analogicznie Domain ComboBox: `SelectedDomainSpec` getter zwraca `null` gdy `AvailableDomains` jeszcze nie załadowane (ładują się async PO zbudowaniu wierszy) → setter zerował `DomainName`. **Fix** ([FieldRowViewModel.cs](src/EmberTern.App/ViewModels/FieldRowViewModel.cs)):
+- Nowy `SelectedTypeItem` wrapper: getter zwraca bazowy typ (strip parens) gdy jest w `BasicTypes`, inaczej null; setter ignoruje null/empty (load-time writeback) i no-opuje przy tym samym bazowym typie. `TypeText` zachowuje pełną formę → `IsModified` poprawne.
+- Domain `SelectedDomainSpec` setter ignoruje `value is null` (nie ma "clear domain" entry, więc null to zawsze artefakt bindowania).
+- `AvailableDomains.CollectionChanged` → re-raise `SelectedDomainSpec` żeby combo wybrało właściwą domenę gdy lista dojedzie async.
+- `EnqueueRowEdits` ([TableDetailTabViewModel.cs](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs)): typeClause pre-filter — ustawiany TYLKO przy realnej zmianie typu/domeny (porównanie base-to-base + domain-changed), inaczej domain-typed kolumny emitowały spurious ALTER (bo `original.Type` to rozwiązany typ, nie nazwa domeny). Po RefreshStructureAsync nowe `FieldRowViewModel` mają IsModified=false → brak stale brązu.
+
+**2. Dwuklik + Enter w panelu zależności pola.** `FieldDependenciesGrid` (nowy x:Name) ma `DoubleTapped="OnFieldDependencyDoubleTapped"` (walk do `DataGridRow` → `FieldDependencyItem.NavigateCommand` jeśli `CanExecute`) + `KeyBinding Gesture="Enter"` → `NavigateSelectedDependencyCommand`. Nowy `[ObservableProperty] SelectedFieldDependency` + `NavigateSelectedDependencyCommand` na VM. Wszystko routuje przez istniejące `FieldDependencyItem.NavigateCommand` → `owner.RequestOpen(Info)` → `OpenObjectRequested` → `MainWindowViewModel.OnOpenDdlRequested` — ta sama ścieżka co drzewo metadanych i tree Zależności. Zero nowej ścieżki otwierania.
+
+**3. Ikony typów w panelu zależności.** `FieldDependencyItem` dostał `Icon` + `IconResourceKey` przez `MetadataNodeViewModel.IconFor`/`ResourceKeyFor` + `MapObjectTypeToKind` (te same co drzewo). Type kolumna w panelu → `DataGridTemplateColumn` z glyph (przez `IconBrushConverter` + `RootControl.ActualThemeVariant` MultiBinding) + tekst typu. Theme-aware, recoloring live. Zero drugiego zestawu ikon.
+
+**4. Kolumny Insert / Update dla zależności.** `DependedOnBySql` rozszerzony o 4. kolumnę `RDB$TRIGGER_TYPE` (LEFT JOIN `RDB$TRIGGERS` na `RDB$DEPENDENT_TYPE = 2`, NULL dla nie-triggerów). Reader dekoduje przez nowy `FirebirdTableDetailReader.DecodeTriggerOps(type)` → `(insert, update, delete)` używając FB packed-slot formula `((type+1) >> (2*slot+1)) & 3`. `DependencyInfo` dostał `bool? FiresOnInsert` / `FiresOnUpdate` (null dla nie-triggerów). `FieldDependencyItem.InsertMark`/`UpdateMark` → `"✓"` lub pusto. Dwie kolumny w panelu. **Delete pominięty** (spec: priorytet Insert/Update). **Procedury**: Firebird nie trzyma per-field operation semantyki dla procedur, więc tam Insert/Update zawsze puste — tylko triggery mają sensowną informację (zakodowaną w trigger type).
+
+**5. Menu kontekstowe tabel w drzewie metadanych.** `MetadataNodeViewModel` dostał `IsTableGroup` (kategoria Tables) + `IsTableLeaf` (liść Table) flagi + komendy `NewTable` / `DeleteTable`. Menu w [MainWindow.axaml](src/EmberTern.App/Views/MainWindow.axaml): kategoria Tables → "New Table" (reuse `NewTableCommand`); liść tabeli → "Open" / "Design Table" (oba przez `OpenDdlCommand` → TableDetail tab, bez duplikacji logiki) / "Delete Table". Eventy `NewTableRequested` / `DeleteTableRequested` na `MetadataExplorerViewModel` → owner.
+
+**6. Delete Table.** `OnDeleteTableRequested` w MainWindowViewModel: confirm dialog ("Are you sure you want to delete table X?") → `DdlGenerator.BuildDropTable(name)` (nowy, `DROP TABLE "X"`) → `_ddlExecutor.ExecuteAsync` → `CloseTabsForObject(kind, name)` (zamyka otwarte Ddl/TableDetail taby tej tabeli) → `Metadata.RefreshAsync()`. Błąd FB (w tym dependency error) surfacowany w Messages bez prób auto-usuwania zależności.
+
+**Zmienione pliki** (9): [FieldRowViewModel.cs](src/EmberTern.App/ViewModels/FieldRowViewModel.cs), [TableDetailTabViewModel.cs](src/EmberTern.App/ViewModels/TableDetailTabViewModel.cs), [FieldDependencyItem.cs](src/EmberTern.App/ViewModels/FieldDependencyItem.cs), [MetadataNodeViewModel.cs](src/EmberTern.App/ViewModels/MetadataNodeViewModel.cs), [MetadataExplorerViewModel.cs](src/EmberTern.App/ViewModels/MetadataExplorerViewModel.cs), [MainWindowViewModel.cs](src/EmberTern.App/ViewModels/MainWindowViewModel.cs), [TableDetail.cs](src/EmberTern.Core/Metadata/TableDetail.cs) (DependencyInfo flags), [DdlGenerator.cs](src/EmberTern.Core/Metadata/DdlGenerator.cs) (BuildDropTable), [FirebirdTableDetailReader.cs](src/EmberTern.Firebird/FirebirdTableDetailReader.cs) (DependedOnBySql + DecodeTriggerOps), [TableDetailTabView.axaml](src/EmberTern.App/Views/TableDetailTabView.axaml), [MainWindow.axaml](src/EmberTern.App/Views/MainWindow.axaml), [TableDetailTabView.axaml.cs](src/EmberTern.App/Views/TableDetailTabView.axaml.cs), [UiStrings.cs](src/EmberTern.App/UiStrings.cs).
+
+**Testy** ([UxPolishSprintTests.cs](tests/EmberTern.Tests/UxPolishSprintTests.cs), +29, 725 → 754): modified-row detection (fresh-from-catalog / SelectedTypeItem display / null-writeback ignored / same-base no-op / real change / domain null-guard), DecodeTriggerOps (10 Theory rows + DB-level all-false), DependedOnBySql column pin, trigger marks, dependency navigation (NavigateCommand + NavigateSelected), BuildDropTable + empty-throws, table context-menu flags (group/leaf/view-leaf), New/Delete command dispatch.
+
+**Ograniczenia**:
+1. **Delete dla zależności pominięty** — tylko Insert/Update (spec). Trigger type dekoduje też delete (`DecodeTriggerOps` zwraca 3-krotkę), ale UI nie pokazuje. Dodanie kolumny Delete to ~1 linia VM + 1 kolumna XAML.
+2. **Insert/Update tylko dla triggerów** — procedury/widoki/inne nie mają per-field operation semantyki w katalogu FB. Pokazują puste.
+3. **Index dependencies wciąż nieobecne w panelu** (z Sesji 4) — `RDB$INDICES` to osobne źródło, nie wpada w `RDB$DEPENDENCIES`. V2.
+4. **Open vs Design Table identyczne** — oba otwierają TableDetail (spec dopuścił). Gdy powstaną osobne detail-views dla różnych trybów, rozdzielą się.
+5. **Delete Table nie kaskaduje** — czysty `DROP TABLE`. FK/zależności → błąd FB pokazany userowi (spec: nie auto-usuwać).
+
+**Gotchas — promote to architecture lore.**
+
+71. **Avalonia ComboBox z `SelectedItem` TwoWay + `ItemsSource` którego bound-value NIE zawiera = cicha korupcja bound property.** Gdy `SelectedItem="{Binding X}"` a `X` nie jest w `ItemsSource`, ComboBox resetuje SelectedItem na null i TwoWay zapisuje null z powrotem do X. Dla pól pochodnych (np. `IsModified` porównujące X vs original) to fałszywe "zmienione". Dwa scenariusze: (a) bound value w innej reprezentacji niż items (pełny typ "VARCHAR(50)" vs bazowe items), (b) ItemsSource ładowane async PO bindowaniu (puste w momencie ataczowania → każdy lookup zwraca null). **Fix**: wrapper property z getterem zwracającym null-bezpiecznie + setterem ignorującym null/empty writeback (`if (value is null) return;`). Trzymaj prawdziwą wartość w osobnym property, nie pozwól ComboBoxowi jej nadpisać.
+
+72. **`MetadataObject` to klasa (reference type), nie struct/record-struct** — `MetadataObject? x` to nullable reference, NIE `Nullable<T>`. Brak `.Value`; dostęp przez `x!.Name`. Łatwa pomyłka w testach gdy piszesz `x.Value.Kind` z nawyku od struct-recordów.
+
+73. **Rozszerzanie współdzielonego SQL o kolumnę jest bezpieczne gdy readery czytają po indeksie i nowa kolumna jest ostatnia.** `DependedOnBySql` używane przez table-level tree ORAZ field-panel. Dodanie 4. kolumny (`RDB$TRIGGER_TYPE`) nie zepsuło drzewa (czyta tylko 0-2, ignoruje 3). UNION ALL wymaga tej samej liczby kolumn w obu branchach → drugi branch dostał `CAST(NULL AS INTEGER)`. **Rule**: dokładając kolumnę do współdzielonego query trzymaj ją na końcu SELECT-listy i upewnij się że wszystkie branche UNION ją mają.
+
+### Destructive-operation confirmation audit (shipped 2026-06-13)
+
+Po zgłoszeniu, że usunięcie połączenia nie pytało o potwierdzenie (utrata configu + saved queries + workspace), pełny audyt operacji destrukcyjnych. Wszystkie używają jednego `ConfirmDialog` przez `RequestConfirmAsync` / `ConfirmRequest`.
+
+**Pełna lista operacji + stan PRZED audytem:**
+
+| # | Operacja | Lokalizacja | Confirm przed? | Ryzyko |
+|---|---|---|---|---|
+| 1 | **Delete connection** | `MainWindowViewModel.Delete` ← node Delete + toolbar DeleteSelected | ❌ **BRAK** | **HIGH** |
+| 2 | Delete folder | `DeleteFolderAsync` | ✓ | Medium |
+| 3 | Delete Table (DROP TABLE) | `OnDeleteTableRequested` | ✓ | HIGH |
+| 4 | Drop Field (ALTER … DROP) | `DropFieldAsync` | ✓ | HIGH |
+| 5 | Delete row (Dane) | `DeleteRowAsync` | ✓ | HIGH |
+| 6 | Delete saved query | `DeleteSavedQueryAsync` | ✓ | Medium |
+| 7 | Clear all queries | `ClearAllQueriesAsync` | ✓ | Medium |
+| 8 | **Clear editor** | `ClearActiveEditor` | ❌ **BRAK** | Low/Medium |
+| 9 | **Close New Table tab** | `CloseTab` (przez × / CloseActiveTab) | ❌ **BRAK** | Medium (niezapisany formularz) |
+| — | Close DDL/TableDetail tab | `CloseTab` | ❌ (celowo) | None (reopenable z drzewa) |
+| — | Disconnect z aktywną tx | `DisconnectAsync` | ✓ (istniejący rollback-confirm) | — |
+
+**Poprawione (3):**
+- **#1 Connection delete** ([MainWindowViewModel.cs](src/EmberTern.App/ViewModels/MainWindowViewModel.cs)): nowy `DeleteWithConfirmationAsync(profile)` z bogatym ostrzeżeniem ("Are you sure… '{0}'?" + bullet list: settings lost / linked saved queries removed / cannot be undone, `IsDestructive=true`). Raw `Delete(profile)` zachowany jako post-confirm executor + dla testów. `ConnectionNodeViewModel.Delete` command → async przez wrapper; `MetadataExplorerViewModel.DeleteSelected` routuje przez ten sam command. **To była zgłoszona regresja.**
+- **#8 Clear editor**: `ClearActiveEditorAsync` pyta gdy `QueryText` niepusty (pusty → cicho, brak pointless prompt). `IsDestructive=true`.
+- **#9 Close New Table tab**: nowy `RequestCloseTabAsync(tab)` — pyta TYLKO dla NewTable z `HasContent` (nazwa tabeli LUB ≠1 pole; świeży tab = pusta nazwa + seeded ID → bez promptu). User paths (`WorkspaceTabViewModel.Close` command + `CloseActiveTab`) idą przez wrapper; **programmatic `CloseTab`** (post-compile, delete-table cleanup) zostaje bez promptu. DDL/TableDetail zamykają się cicho (reopenable).
+
+**Zweryfikowane (już miały spójny confirm)**: Delete folder, Delete Table, Drop Field, Delete row, Delete saved query, Clear all queries — wszystkie English, `IsDestructive=true`, nazwa obiektu w komunikacie, wzmianka o cofnięciu/rollbacku gdzie stosowne.
+
+**Celowo bez potwierdzenia:**
+- **Close DDL/TableDetail tab** — zero utraty danych, w pełni odtwarzalne z drzewa metadanych podwójnym klikiem.
+- **Raw `Delete(profile)`** — to executor PO potwierdzeniu (wrapper już zapytał) + szew testowy.
+- **`ConnectionListItemViewModel`** — martwy kod od Explorer Redesign, niepodłączony do UI; pominięty (nie ma żywej ścieżki).
+
+**Zmienione pliki** (5): [MainWindowViewModel.cs](src/EmberTern.App/ViewModels/MainWindowViewModel.cs) (DeleteWithConfirmationAsync + ClearActiveEditorAsync + RequestCloseTabAsync + CloseActiveTabAsync), [ConnectionNodeViewModel.cs](src/EmberTern.App/ViewModels/ConnectionNodeViewModel.cs) (Delete → async wrapper), [WorkspaceTabViewModel.cs](src/EmberTern.App/ViewModels/WorkspaceTabViewModel.cs) (Close → RequestCloseTabAsync), [NewTableTabViewModel.cs](src/EmberTern.App/ViewModels/NewTableTabViewModel.cs) (`HasContent`), [UiStrings.cs](src/EmberTern.App/UiStrings.cs) (3 nowe zestawy confirm-stringów).
+
+**Testy** ([DeleteConfirmationAuditTests.cs](tests/EmberTern.Tests/DeleteConfirmationAuditTests.cs), +8, 754 → 762): connection delete cancel-keeps / confirm-removes / message-is-destructive-and-named / raw-delete-unconfirmed; NewTable close with-content cancel-keeps / confirm-closes / untouched-no-prompt; HasContent tracking.
+
+**Gotcha — promote to architecture lore.**
+
+74. **Confirm-then-execute wrapper pattern dla destrukcyjnych komend.** Gdy operacja jest wywoływana zarówno z UI (musi pytać) jak i z testów / ścieżek programmatic (nie może pytać), rozdziel na dwie metody: publiczny `XxxWithConfirmationAsync` (RequestConfirmAsync → jeśli ok → wywołaj raw) i raw `Xxx` (bez promptu). UI commands routują przez wrapper; testy i programmatic cleanup wołają raw. `ConfirmationRequested` to **event** — testy podpinają `+=` (nie `=`), a domyślny brak handlera w `RequestConfirmAsync` zwraca `Task.FromResult(true)` (auto-proceed) żeby istniejące testy nie-confirm-aware nie blokowały się. **Rule**: nigdy nie wkładaj `RequestConfirmAsync` do raw-executora współdzielonego z programmatic cleanup — inaczej post-confirm/cleanup zapyta drugi raz albo zawiesi się czekając na nieistniejący dialog.
+
 ## Current state
 
 - **Build**: clean (zero warnings, `TreatWarningsAsErrors=true` enforced).
-- **Tests**: 658 / 658 passing.
-- **App**: builds, launches, exits cleanly (smoke-launched for 5 seconds without errors). Toolbar order is `+ folder ✎ ⧉ ✕ │ ▶ ⏹ ↺ ↻ │ ▦＋ New Table` (table button matches the sidebar's blue Table glyph). New Table opens as a workspace tab (`WorkspaceTabKind.NewTable`) — not a modal — so the user can switch to other tabs while filling it in; ⚡ Compile in the main toolbar executes the DDL and closes the tab on success. The tab's grid columns are PK / Name / Type / Domain / Size / Scale / Not Null / Default / Computed / Check / Charset / AI / Description, with Type and Domain as always-visible CellTemplate ComboBoxes (no `CellEditingTemplate` — see gotcha #56). The TableDetail Pola sub-tab supports inline editing (Name / Not Null / Default / Type / Domain / Description) gated by the ▦✎ edit-mode toggle (default off); rename + type/domain changes are blocked when the field has incoming dependencies. ＋ Add Field and − Drop Field still execute immediately in the user's tx (Rollback undoes); ↑ ↓ Move Field queues `PendingDdlChange` entries that ⚡ Compile drains. Commit / Rollback (✓ ✕) show on the Pola sub-tab too. AddFieldDialog is 820 px wide with all 8 tabs in one row; the Domain ComboBox shows each domain's SQL type alongside the name.
-- **Branch state**: working on master. Latest milestones: **Table structure editing II (inline editing, ALTER methods, CreateTable workspace tab, AI column, edit-mode toggle, ComboBox crash fix)**.
+- **Tests**: 762 / 762 passing.
+- **App**: builds cleanly. Smoke launch deferred to user's manual verification (per session brief). Wszystkie operacje destrukcyjne (delete connection / folder / table / field / row / saved query, clear all queries, clear editor, close New Table z treścią) wymagają potwierdzenia przez wspólny `ConfirmDialog`. Connection delete pokazuje bogate ostrzeżenie (settings + saved queries + nieodwracalność). Close DDL/TableDetail tab celowo bez promptu (reopenable).
+- **Branch state**: working on master. Latest milestones: **Destructive-operation confirmation audit**.
 
 ## V1 — definition of done (all met)
 

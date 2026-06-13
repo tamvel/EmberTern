@@ -29,6 +29,16 @@ internal static class UiStrings
     public const string MetadataRefreshTooltip = "Refresh metadata";
     public const string MetadataContextOpenDdl = "View DDL";
     public const string MetadataContextCopyName = "Copy Name";
+    // Table context menu (metadata tree, Session 5 UX sprint)
+    public const string MetadataContextNewTable = "New Table";
+    public const string MetadataContextOpenTable = "Open";
+    public const string MetadataContextDesignTable = "Design Table";
+    public const string MetadataContextDeleteTable = "Delete Table";
+    public const string MetadataDeleteTableConfirmTitle = "Delete table";
+    public const string MetadataDeleteTableConfirmFormat = "Are you sure you want to delete table {0}?";
+    public const string MetadataDeleteTableConfirmYes = "Delete";
+    public const string MetadataDeleteTableExecutedFormat = "Table {0} deleted.";
+    public const string MetadataDeleteTableFailedFormat = "Could not delete table {0}: {1}";
     public const string MetadataNameCopiedFormat = "Copied “{0}” to clipboard.";
     public const string MetadataLoadingPlaceholder = "Loading…";
     public const string TabCloseTooltip = "Close tab";
@@ -241,6 +251,29 @@ internal static class UiStrings
     public const string FolderDeleteConfirmYes = "Usuń";
     public const string FolderDefaultName = "Nowy katalog";
 
+    // Connection deletion — HIGH risk (config + per-connection saved queries +
+    // workspace state all gone, irreversible). Message phrased per the user's
+    // spec; matches the English of the table-delete + saved-query confirms.
+    public const string ConnectionDeleteConfirmTitle = "Delete connection";
+    public const string ConnectionDeleteConfirmFormat =
+        "Are you sure you want to delete connection '{0}'?\n\n" +
+        "• Saved connection settings will be lost.\n" +
+        "• Saved queries linked to this connection will be removed.\n" +
+        "• This operation cannot be undone.";
+    public const string ConnectionDeleteConfirmYes = "Delete";
+
+    // Clear-editor confirmation (only shown when the editor has text to lose).
+    public const string ClearEditorConfirmTitle = "Clear editor";
+    public const string ClearEditorConfirmMessage =
+        "Clear the SQL editor? The current query text will be lost.";
+    public const string ClearEditorConfirmYes = "Clear";
+
+    // Closing a New Table tab with unsaved form content.
+    public const string NewTableCloseConfirmTitle = "Discard new table";
+    public const string NewTableCloseConfirmFormat =
+        "Discard the unsaved table '{0}'? The form has not been compiled.";
+    public const string NewTableCloseConfirmYes = "Discard";
+
     public const string ConnectionContextSort = "Sortuj węzły";
     public const string ConnectionContextSortAscending = "Rosnąco (A→Z)";
     public const string ConnectionContextSortDescending = "Malejąco (Z→A)";
@@ -321,6 +354,52 @@ internal static class UiStrings
     public const string FieldEditRenameBlockedFormat = "Cannot rename {0} — column is referenced by other database objects.";
 
     public const string AddFieldDialogTitle = "Add Field";
+    public const string AddFieldDialogEditTitleFormat = "Edit Field — {0}";
+    public const string AddFieldRenameBlockedHint = "Renaming is disabled — this field has incoming dependencies (triggers / views / check constraints).";
+
+    // Pola context menu + shortcuts
+    public const string FieldsContextMenuAdd = "New field";
+    public const string FieldsContextMenuEdit = "Edit field";
+    public const string FieldsContextMenuDrop = "Delete field";
+    public const string FieldsContextMenuCreateForeignKey = "Create foreign key…";
+    public const string FieldEditEditIcon = "✎";
+    public const string FieldEditEditTooltip = "Edit selected field (F2)";
+    public const string FieldEditForeignKeyIcon = "⛓";
+    public const string FieldEditForeignKeyTooltip = "Create foreign key…";
+
+    // Field dependencies panel (Pola sub-tab, Session 4)
+    public const string FieldDependenciesHeader = "Field dependencies";
+    public const string FieldDependenciesNoSelection = "Select a field to see its dependencies.";
+    public const string FieldDependenciesEmpty = "This field has no dependencies.";
+    public const string FieldDependenciesColumnType = "Type";
+    public const string FieldDependenciesColumnName = "Name";
+    public const string FieldDependenciesColumnInsert = "Insert";
+    public const string FieldDependenciesColumnUpdate = "Update";
+
+    // Foreign Key wizard (Session 3 full implementation)
+    public const string ForeignKeyDialogTitle = "Create Foreign Key";
+    public const string ForeignKeyDialogHeader = "Create Foreign Key";
+    public const string ForeignKeyDialogClose = "Close";
+    public const string ForeignKeyDialogCreate = "Create";
+    public const string ForeignKeyConstraintNameLabel = "Constraint name";
+    public const string ForeignKeySourceTableLabel = "Source table";
+    public const string ForeignKeySourceFieldsLabel = "Source fields";
+    public const string ForeignKeyReferencedTableLabel = "Referenced table";
+    public const string ForeignKeyReferencedFieldsLabel = "Referenced fields";
+    public const string ForeignKeyReferencedFieldsHint = "Select fields in the same order as the source. Equal-named source fields are pre-selected automatically.";
+    public const string ForeignKeyOnUpdateLabel = "ON UPDATE";
+    public const string ForeignKeyOnDeleteLabel = "ON DELETE";
+    public const string ForeignKeyActionNoAction = "NO ACTION";
+    public const string ForeignKeyActionCascade = "CASCADE";
+    public const string ForeignKeyActionSetNull = "SET NULL";
+    public const string ForeignKeyDdlPreviewLabel = "DDL preview";
+    public const string ForeignKeyDdlPreviewIncomplete = "-- Pick a referenced table and at least one field on each side to preview the DDL.";
+    public const string ForeignKeyValidationConstraintNameRequired = "Constraint name is required.";
+    public const string ForeignKeyValidationReferencedTableRequired = "Pick a referenced table.";
+    public const string ForeignKeyValidationLocalFieldsRequired = "Pick at least one source field.";
+    public const string ForeignKeyValidationReferencedFieldsRequired = "Pick at least one referenced field.";
+    public const string ForeignKeyValidationFieldCountMismatch = "Source and referenced field counts must match.";
+    public const string ForeignKeyExecuteFailedFormat = "Failed to create foreign key: {0}";
     public const string AddFieldFieldName = "Field name";
     public const string AddFieldNotNull = "Not Null";
     public const string AddFieldPrimaryKey = "Primary Key";

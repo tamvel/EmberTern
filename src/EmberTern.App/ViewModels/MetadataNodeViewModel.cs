@@ -95,6 +95,12 @@ public partial class MetadataNodeViewModel : ViewModelBase
     public string ContextOpenDdlLabel => UiStrings.MetadataContextOpenDdl;
     public string ContextCopyNameLabel => UiStrings.MetadataContextCopyName;
 
+    // Table-specific context-menu gates. The Tables CATEGORY node shows
+    // "New Table"; a table LEAF shows Open / Design / Delete. Everything else
+    // keeps the existing View DDL / Copy Name menu.
+    public bool IsTableGroup => IsGroup && Kind == MetadataObjectKind.Table;
+    public bool IsTableLeaf => IsActionable && Kind == MetadataObjectKind.Table;
+
     partial void OnIsExpandedChanged(bool value)
     {
         if (!value || !IsGroup)
@@ -139,6 +145,23 @@ public partial class MetadataNodeViewModel : ViewModelBase
         if (!IsGroup && Object is { } obj)
         {
             _owner.RequestCopyName(obj.Name);
+        }
+    }
+
+    // ─── Table context-menu actions ───────────────────────────────────────
+    // New Table on the category node; Open / Design / Delete on a table leaf.
+    // Open and Design both route through the existing OpenDdl path (which
+    // opens a TableDetail tab for tables) — no duplicate open logic.
+
+    [RelayCommand]
+    private void NewTable() => _owner.RequestNewTable();
+
+    [RelayCommand]
+    private void DeleteTable()
+    {
+        if (!IsGroup && Object is { } obj && Kind == MetadataObjectKind.Table)
+        {
+            _owner.RequestDeleteTable(obj);
         }
     }
 

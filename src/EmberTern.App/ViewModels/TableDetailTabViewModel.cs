@@ -39,6 +39,16 @@ public partial class TableDetailTabViewModel : ViewModelBase
     // live in a single chrome row alongside Execute/Commit/Pagination.
     public const int FieldsSubTabIndex = 0;
 
+    // Index of the "Ograniczenia" sub-tab. Used by the FK wizard's
+    // post-create UX which jumps the user to Constraints → Foreign Keys
+    // after a successful CREATE.
+    public const int ConstraintsSubTabIndex = 1;
+
+    // Inner Constraints TabControl tab indices: Primary Key (0) /
+    // Foreign Keys (1) / Check (2) / Unique (3). Must match the TabItem
+    // order in TableDetailTabView.axaml's nested Constraints TabControl.
+    public const int ConstraintsForeignKeysIndex = 1;
+
     private readonly FirebirdTableDetailReader? _reader;
     private readonly FirebirdDdlReader? _ddlReader;
     private readonly FirebirdDataEditor? _dataEditor;
@@ -94,6 +104,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
         Fields = new ObservableCollection<FieldInfo>();
         EditableFields = new ObservableCollection<FieldRowViewModel>();
         AvailableDomains = new ObservableCollection<DomainSpec>();
+        FieldDependencies = new ObservableCollection<FieldDependencyItem>();
         BasicTypes = new[]
         {
             "SMALLINT", "INTEGER", "BIGINT", "FLOAT", "DOUBLE PRECISION",
@@ -111,6 +122,11 @@ public partial class TableDetailTabViewModel : ViewModelBase
         Constraints.CollectionChanged += OnConstraintsCollectionChanged;
         PendingChanges.CollectionChanged += OnPendingChangesCollectionChanged;
         Fields.CollectionChanged += OnFieldsCollectionChanged;
+        // Field-dependencies panel: rebuild whenever DependedOnBy mutates
+        // (i.e. after every refresh — LoadAsync clears+repopulates the
+        // collection so the panel auto-syncs without an explicit hook in
+        // each callsite).
+        DependedOnBy.CollectionChanged += OnDependedOnByCollectionChanged;
     }
 
     // Mirror Fields → EditableFields whenever Fields changes (load + post-Compile
@@ -132,6 +148,15 @@ public partial class TableDetailTabViewModel : ViewModelBase
 
     private Task<bool> RequestConfirmAsync(ConfirmRequest request)
         => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
+
+    // Strips the size/precision suffix from a type string for base-type
+    // comparison: "VARCHAR(50)" → "VARCHAR", "NUMERIC(15,2)" → "NUMERIC".
+    private static string StripTypeSize(string? type)
+    {
+        if (string.IsNullOrEmpty(type)) return string.Empty;
+        var paren = type.IndexOf('(');
+        return paren < 0 ? type : type.Substring(0, paren).TrimEnd();
+    }
 
     public string TableName { get; }
 
@@ -172,116 +197,78 @@ public partial class TableDetailTabViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Inspects the edited row vs. its original and queues one
-    /// <see cref="PendingDdlChange"/> per changed property. Called by the
-    /// view's CellEditEnding handler. Idempotent re-application is fine —
-    /// "edit, revert, edit again" simply queues another statement.
+    /// Inspects the edited row vs. its original and queues
+    /// <see cref="PendingDdlChange"/> entries via the shared
+    /// <see cref="DdlGenerator.BuildAlterStatements"/>. Called by the
+    /// view's RowEditEnding handler. Idempotent — re-editing a row simply
+    /// queues another batch of ALTERs.
     /// </summary>
     public void EnqueueRowEdits(FieldRowViewModel row)
     {
         if (row is null) return;
         var original = row.Original;
-        var originalName = original.Name;
+        var canRename = CanRenameField(original.Name);
 
-        if (!string.Equals(row.Name, originalName, System.StringComparison.Ordinal))
+        // Type clause — set ONLY when the user genuinely changed the type or
+        // domain. This pre-filter is necessary because the two representations
+        // don't compare cleanly against original.Type:
+        //   - Domain columns: original.Type is the RESOLVED type (e.g.
+        //     "NUMERIC(15,2)") while DomainName is "T_KWOTA". Passing the
+        //     domain name unconditionally would always read as a change.
+        //   - Basic-type columns: the Type ComboBox offers base types, but
+        //     original.Type is the full string. We compare base-to-base.
+        // When nothing changed we pass null so BuildAlterStatements emits no
+        // type ALTER (the spec's "no-op when no change" rule).
+        string? typeClause = null;
+        var domainChanged = !string.Equals(
+            row.DomainName ?? string.Empty, original.Domain ?? string.Empty,
+            System.StringComparison.OrdinalIgnoreCase);
+        var baseTypeChanged = !string.Equals(
+            StripTypeSize(row.TypeText), StripTypeSize(original.Type),
+            System.StringComparison.OrdinalIgnoreCase);
+        if (domainChanged && !string.IsNullOrWhiteSpace(row.DomainName))
         {
-            // Rename: gate on no incoming deps. If blocked, revert the edit and
-            // surface a hint — the user shouldn't be able to commit a broken rename.
-            if (CanRenameField(originalName) && !string.IsNullOrWhiteSpace(row.Name))
-            {
-                PendingChanges.Add(new PendingDdlChange
-                {
-                    Kind = PendingDdlChangeKind.Other,
-                    Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionRenameFormat, originalName, row.Name),
-                    Sql = DdlGenerator.BuildRenameField(TableName, originalName, row.Name),
-                });
-            }
-            else
-            {
-                row.Name = originalName;
-                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditRenameBlockedFormat, originalName);
-            }
+            typeClause = row.DomainName;
+        }
+        else if (baseTypeChanged && !string.IsNullOrWhiteSpace(row.TypeText))
+        {
+            typeClause = row.TypeText;
         }
 
-        if (row.NotNull != original.NotNull)
+        var target = new AlterFieldTarget
         {
-            PendingChanges.Add(new PendingDdlChange
-            {
-                Kind = PendingDdlChangeKind.Other,
-                Description = string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    row.NotNull ? UiStrings.FieldEditDescriptionSetNotNullFormat : UiStrings.FieldEditDescriptionDropNotNullFormat,
-                    originalName),
-                Sql = DdlGenerator.BuildSetNotNull(TableName, originalName, row.NotNull),
-            });
-        }
+            Name = row.Name,
+            TypeClause = typeClause,
+            NotNull = row.NotNull,
+            DefaultValue = row.DefaultValue,
+            Description = row.Description,
+        };
 
-        var origDefault = original.DefaultValue ?? string.Empty;
-        var newDefault = row.DefaultValue ?? string.Empty;
-        if (!string.Equals(origDefault, newDefault, System.StringComparison.Ordinal))
-        {
-            PendingChanges.Add(new PendingDdlChange
-            {
-                Kind = PendingDdlChangeKind.Other,
-                Description = string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    string.IsNullOrWhiteSpace(newDefault) ? UiStrings.FieldEditDescriptionDropDefaultFormat : UiStrings.FieldEditDescriptionSetDefaultFormat,
-                    originalName),
-                Sql = DdlGenerator.BuildSetDefault(TableName, originalName, newDefault),
-            });
-        }
+        var statements = DdlGenerator.BuildAlterStatements(TableName, original, target, canRename);
+        foreach (var s in statements) PendingChanges.Add(s);
 
-        if (!string.Equals(row.TypeText, original.Type, System.StringComparison.Ordinal)
-            && !string.IsNullOrWhiteSpace(row.TypeText))
+        // UX: when the user attempted a rename / type-change but the field has
+        // incoming dependencies, BuildAlterStatements silently skipped them.
+        // Revert the displayed values + surface the standard "rename blocked"
+        // hint so the user knows why their edit didn't take.
+        if (!canRename)
         {
-            // Type changes share the same dependency gate as rename — FB rejects
-            // ALTER COLUMN TYPE while triggers / views still reference the column.
-            if (CanRenameField(originalName))
-            {
-                PendingChanges.Add(new PendingDdlChange
-                {
-                    Kind = PendingDdlChangeKind.Other,
-                    Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionAlterTypeFormat, originalName, row.TypeText),
-                    Sql = DdlGenerator.BuildAlterType(TableName, originalName, row.TypeText),
-                });
-            }
-            else
+            bool attemptedRename = !string.Equals(row.Name, original.Name, System.StringComparison.Ordinal);
+            // typeClause is non-null only on a genuine type/domain change (see
+            // the pre-filter above), so its presence IS the "attempted" signal.
+            bool attemptedTypeChange = typeClause is not null;
+            if (attemptedRename) row.Name = original.Name;
+            if (attemptedTypeChange)
             {
                 row.TypeText = original.Type;
-                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditRenameBlockedFormat, originalName);
-            }
-        }
-
-        // Domain change → ALTER COLUMN TYPE <DOMAIN>. Same dep gate as plain type.
-        var origDomain = original.Domain ?? string.Empty;
-        var newDomain = row.DomainName ?? string.Empty;
-        if (!string.Equals(origDomain, newDomain, System.StringComparison.Ordinal)
-            && !string.IsNullOrWhiteSpace(newDomain))
-        {
-            if (CanRenameField(originalName))
-            {
-                PendingChanges.Add(new PendingDdlChange
-                {
-                    Kind = PendingDdlChangeKind.Other,
-                    Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionAlterTypeFormat, originalName, newDomain),
-                    Sql = DdlGenerator.BuildAlterType(TableName, originalName, newDomain),
-                });
-            }
-            else
-            {
                 row.DomainName = original.Domain;
-                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditRenameBlockedFormat, originalName);
             }
-        }
-
-        var origDesc = original.Description ?? string.Empty;
-        var newDesc = row.Description ?? string.Empty;
-        if (!string.Equals(origDesc, newDesc, System.StringComparison.Ordinal))
-        {
-            PendingChanges.Add(new PendingDdlChange
+            if (attemptedRename || attemptedTypeChange)
             {
-                Kind = PendingDdlChangeKind.Other,
-                Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionCommentFormat, originalName),
-                Sql = DdlGenerator.BuildCommentColumn(TableName, originalName, newDesc),
-            });
+                ErrorMessage = string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    UiStrings.FieldEditRenameBlockedFormat, original.Name);
+            }
         }
     }
     public ObservableCollection<IndexInfo> Indexes { get; }
@@ -290,6 +277,39 @@ public partial class TableDetailTabViewModel : ViewModelBase
     public ObservableCollection<DependencyInfo> DependedOnBy { get; }
     public ObservableCollection<DependencyGroupNode> DependsOnTree { get; }
     public ObservableCollection<DependencyGroupNode> DependedOnByTree { get; }
+
+    /// <summary>
+    /// Per-field dependencies for the Pola sub-tab's bottom panel. Filtered
+    /// view over <see cref="DependedOnBy"/> matching the currently
+    /// <see cref="SelectedField"/>. Rebuilt automatically whenever the
+    /// selection changes or <see cref="DependedOnBy"/> repopulates (e.g.
+    /// after <see cref="RefreshStructureAsync"/> runs).
+    /// </summary>
+    public ObservableCollection<FieldDependencyItem> FieldDependencies { get; }
+
+    /// <summary>Selected row in the dependency panel — bound TwoWay so the
+    /// Enter keybinding can fire the right item's NavigateCommand.</summary>
+    [ObservableProperty]
+    private FieldDependencyItem? _selectedFieldDependency;
+
+    /// <summary>Fires the selected dependency's NavigateCommand. Bound to the
+    /// dependency grid's Enter keybinding; the double-click path goes through
+    /// the row's own item in code-behind. No-op when nothing is selected or
+    /// the selection isn't navigable.</summary>
+    [RelayCommand]
+    private void NavigateSelectedDependency()
+    {
+        if (SelectedFieldDependency is { CanNavigate: true } item)
+        {
+            item.NavigateCommand.Execute(null);
+        }
+    }
+
+    public bool HasFieldDependencies => FieldDependencies.Count > 0;
+    public bool HasFieldSelectionForDependencies => SelectedField is not null;
+    public bool ShowFieldDependenciesEmpty
+        => SelectedField is not null && FieldDependencies.Count == 0;
+    public bool ShowFieldDependenciesNoSelection => SelectedField is null;
 
     /// <summary>
     /// Fired when the user double-clicks a dependency leaf in the tree. The
@@ -468,6 +488,15 @@ public partial class TableDetailTabViewModel : ViewModelBase
 
     public bool IsDataSubTabActive => ActiveSubTabIndex == DataSubTabIndex;
     public bool IsFieldsSubTabActive => ActiveSubTabIndex == FieldsSubTabIndex;
+
+    /// <summary>
+    /// Two-way bound to the nested Constraints TabControl's SelectedIndex.
+    /// The FK wizard's post-create flow sets this to
+    /// <see cref="ConstraintsForeignKeysIndex"/> so the user lands on the
+    /// "Foreign Keys" sub-tab and sees the new constraint in the list.
+    /// </summary>
+    [ObservableProperty]
+    private int _constraintsActiveSubTabIndex;
 
     [ObservableProperty]
     private string _ddlText = string.Empty;
@@ -1332,6 +1361,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DropFieldCommand))]
+    [NotifyCanExecuteChangedFor(nameof(EditFieldCommand))]
     [NotifyCanExecuteChangedFor(nameof(MoveFieldUpCommand))]
     [NotifyCanExecuteChangedFor(nameof(MoveFieldDownCommand))]
     private FieldInfo? _selectedField;
@@ -1366,6 +1396,8 @@ public partial class TableDetailTabViewModel : ViewModelBase
     private void ToggleFieldEditMode() => IsFieldEditMode = !IsFieldEditMode;
 
     public bool CanAddField => _ddlExecutor is not null;
+    public bool CanEditField => _ddlExecutor is not null && SelectedField is not null;
+    public bool CanCreateForeignKey => _ddlExecutor is not null;
 
     /// <summary>
     /// View-side handler returns the populated <see cref="FieldDefinition"/> from
@@ -1374,6 +1406,26 @@ public partial class TableDetailTabViewModel : ViewModelBase
     /// </summary>
     public event System.Func<Task<FieldDefinition?>>? AddFieldRequested;
 
+    /// <summary>
+    /// Edit-mode counterpart of <see cref="AddFieldRequested"/>. View opens
+    /// the same AddFieldDialog seeded from the selected <see cref="FieldInfo"/>
+    /// + canRename flag (so the dialog can disable the name TextBox + show a
+    /// "rename blocked — has dependencies" hint when needed). Returns the
+    /// dialog's target <see cref="FieldDefinition"/> on OK, or null on Cancel
+    /// / no-change.
+    /// </summary>
+    public event System.Func<FieldInfo, bool, Task<FieldDefinition?>>? EditFieldRequested;
+
+    /// <summary>
+    /// Opens the Foreign Key wizard (Session 3). View handler resolves the
+    /// current source-table state (Fields, available tables, on-demand
+    /// referenced-table column lookup, on-demand referenced-table PK lookup)
+    /// and shows the dialog. Returns the populated
+    /// <see cref="ForeignKeySpec"/> on OK, or null on Cancel — symmetric to
+    /// <see cref="AddFieldRequested"/> / <see cref="EditFieldRequested"/>.
+    /// </summary>
+    public event System.Func<Task<ForeignKeySpec?>>? CreateForeignKeyRequested;
+
     [RelayCommand(CanExecute = nameof(CanAddField))]
     private async Task AddFieldAsync()
     {
@@ -1381,6 +1433,148 @@ public partial class TableDetailTabViewModel : ViewModelBase
         var def = await AddFieldRequested().ConfigureAwait(true);
         if (def is null) return;
         await ExecuteAddFieldAsync(def).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Opens the AddFieldDialog in edit mode seeded from the current
+    /// <see cref="SelectedField"/>. On OK, executes the diff via
+    /// <see cref="ExecuteEditFieldAsync"/>. On Cancel / no-change → no-op
+    /// (no DDL emitted, table NOT marked modified — per session spec).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanEditField))]
+    private async Task EditFieldAsync()
+    {
+        if (SelectedField is not { } field) return;
+        if (EditFieldRequested is null) return;
+        var canRename = CanRenameField(field.Name);
+        var target = await EditFieldRequested(field, canRename).ConfigureAwait(true);
+        if (target is null) return;
+        await ExecuteEditFieldAsync(field, target).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Diffs <paramref name="original"/> vs <paramref name="target"/> via
+    /// <see cref="DdlGenerator.BuildAlterStatements"/> and executes the
+    /// resulting ALTERs sequentially in the user's working transaction.
+    /// Empty diff = no-op. First failure halts and leaves
+    /// <see cref="ErrorMessage"/> set; the user can Rollback to undo any
+    /// partially-applied changes. Symmetric to
+    /// <see cref="ExecuteAddFieldAsync"/> / <see cref="ExecuteDropFieldAsync"/>.
+    /// </summary>
+    public async Task ExecuteEditFieldAsync(FieldInfo original, FieldDefinition target)
+    {
+        if (original is null) return;
+        if (target is null) return;
+        if (_ddlExecutor is null) return;
+
+        var canRename = CanRenameField(original.Name);
+        var alterTarget = new AlterFieldTarget
+        {
+            Name = target.Name,
+            // FormatTypeOrDomain handles Domain-vs-BasicType + Size + Precision/Scale
+            // + BlobSubType. Same string the AddField flow would emit for an ADD —
+            // so a Type/Domain ALTER is a one-string substitution.
+            TypeClause = DdlGenerator.FormatTypeOrDomain(target),
+            NotNull = target.NotNull,
+            DefaultValue = target.DefaultValue,
+            Description = target.Description,
+        };
+
+        var statements = DdlGenerator.BuildAlterStatements(TableName, original, alterTarget, canRename);
+        if (statements.Count == 0)
+        {
+            // No-op: user clicked OK without changing anything (or only changed
+            // properties we don't ALTER inline — Computed / Check / AutoIncrement
+            // / PrimaryKey). Don't refresh; don't touch ErrorMessage.
+            return;
+        }
+
+        ErrorMessage = null;
+        foreach (var change in statements)
+        {
+            try
+            {
+                await _ddlExecutor.ExecuteAsync(change.Sql).ConfigureAwait(true);
+            }
+            catch (DdlExecutionException ex)
+            {
+                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+                return;
+            }
+            catch (InvalidOperationException ex)
+            {
+                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+                return;
+            }
+        }
+        await RefreshStructureAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Opens the Foreign Key wizard. On OK, executes the resulting spec via
+    /// <see cref="ExecuteCreateForeignKeyAsync"/>. Cancel = no-op.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanCreateForeignKey))]
+    private async Task CreateForeignKeyAsync()
+    {
+        if (CreateForeignKeyRequested is null) return;
+        var spec = await CreateForeignKeyRequested().ConfigureAwait(true);
+        if (spec is null) return;
+        await ExecuteCreateForeignKeyAsync(spec).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Executes the ADD CONSTRAINT … FOREIGN KEY DDL emitted by
+    /// <see cref="DdlGenerator.BuildAddForeignKey"/>. Runs in the user's
+    /// working transaction (auto-begin via DdlExecutor — Rollback undoes).
+    /// On success: RefreshStructureAsync re-fetches constraints + DDL, then
+    /// jumps the inner UI to Constraints → Foreign Keys so the user sees
+    /// the new entry. Errors land in <see cref="ErrorMessage"/>.
+    /// </summary>
+    public async Task ExecuteCreateForeignKeyAsync(ForeignKeySpec spec)
+    {
+        if (spec is null) return;
+        if (_ddlExecutor is null) return;
+
+        ErrorMessage = null;
+        string sql;
+        try
+        {
+            sql = DdlGenerator.BuildAddForeignKey(TableName, spec);
+        }
+        catch (System.ArgumentException ex)
+        {
+            // Validation gap that survived the dialog (defensive — dialog's
+            // IsValid + BuildAddForeignKey's own throw catch this earlier).
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ForeignKeyExecuteFailedFormat, ex.Message);
+            return;
+        }
+
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ForeignKeyExecuteFailedFormat, ex.Message);
+            return;
+        }
+        catch (System.InvalidOperationException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ForeignKeyExecuteFailedFormat, ex.Message);
+            return;
+        }
+
+        // Refresh: re-fetch fields/constraints/indexes/ddl from the live
+        // catalog. The new FK shows up in Constraints; the snapshot
+        // mechanism preserves user's selection / sort / page.
+        await RefreshStructureAsync().ConfigureAwait(true);
+
+        // Override the snapshot-restored sub-tab — spec says "switch to
+        // Ograniczenia → Foreign Keys after a successful FK". Set both the
+        // outer (Ograniczenia) and inner (FK) indices.
+        ActiveSubTabIndex = ConstraintsSubTabIndex;
+        ConstraintsActiveSubTabIndex = ConstraintsForeignKeysIndex;
     }
 
     /// <summary>
@@ -1411,7 +1605,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
             ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
             return;
         }
-        await ReloadAfterStructuralChangeAsync().ConfigureAwait(true);
+        await RefreshStructureAsync().ConfigureAwait(true);
     }
 
     /// <summary>
@@ -1439,16 +1633,117 @@ public partial class TableDetailTabViewModel : ViewModelBase
             ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
             return;
         }
-        await ReloadAfterStructuralChangeAsync().ConfigureAwait(true);
+        await RefreshStructureAsync().ConfigureAwait(true);
     }
 
     // Force the next EnsureLoadedAsync to re-fetch fields/constraints/indexes/DDL
     // from the live catalog. Called after Add / Drop / Compile so the Pola grid
-    // reflects the new structure immediately.
-    private Task ReloadAfterStructuralChangeAsync()
+    // reflects the new structure immediately. Public surface for the view to
+    // call after an external structural change (rollback, manual refresh).
+    // Snapshots active sub-tab, selected-field name, sort column/direction,
+    // current page, and selected-row PK values before discarding _loadTask;
+    // restores them after the re-fetch completes so the user lands on the
+    // same row they left.
+    public async Task RefreshStructureAsync(System.Threading.CancellationToken ct = default)
     {
+        // Snapshot — capture by VALUE before we drop _loadTask, because the
+        // collections will be cleared during LoadAsync's Fields/Constraints/Indexes
+        // re-population steps.
+        var snap = new StructureSnapshot
+        {
+            ActiveSubTabIndex = ActiveSubTabIndex,
+            SelectedFieldName = SelectedField?.Name,
+            SortColumn = SortColumn,
+            SortDescending = SortDescending,
+            CurrentPage = CurrentPage,
+            PageSize = PageSize,
+            SelectedRowPk = _pkSnapshots.TryGetValue(SelectedRow ?? System.Array.Empty<object?>(), out var pk)
+                ? pk
+                : null,
+        };
+
         _loadTask = null;
-        return EnsureLoadedAsync();
+        await EnsureLoadedAsync(ct).ConfigureAwait(true);
+        // Clear the pending DDL queue — any user-pending edits no longer
+        // describe the current schema (rolled back, compiled, or refreshed
+        // out from under them).
+        PendingChanges.Clear();
+        RestoreStructureSnapshot(snap);
+
+        // Notify the view (column-width preservation lives there).
+        StructureRefreshed?.Invoke(this, System.EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Fired immediately after a structural refresh completes — the view uses
+    /// this hook to restore column widths it snapshotted before the reload.
+    /// </summary>
+    public event System.EventHandler? StructureRefreshed;
+
+    private void RestoreStructureSnapshot(StructureSnapshot snap)
+    {
+        ActiveSubTabIndex = snap.ActiveSubTabIndex;
+
+        if (!string.IsNullOrEmpty(snap.SelectedFieldName))
+        {
+            foreach (var f in Fields)
+            {
+                if (string.Equals(f.Name, snap.SelectedFieldName, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    SelectedField = f;
+                    // Mirror to the row VM as well — the grid's SelectedItem
+                    // binds to SelectedFieldRow, not SelectedField directly.
+                    foreach (var row in EditableFields)
+                    {
+                        if (ReferenceEquals(row.Original, f))
+                        {
+                            SelectedFieldRow = row;
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Page + sort are restored "best effort" — if the data preview
+        // re-fetch is not yet triggered, ReloadDataPreviewAsync sees them
+        // already set and respects them. (LoadAsync's data-preview branch
+        // uses CurrentPage/PageSize as-is.)
+        if (snap.SortColumn is not null) SortColumn = snap.SortColumn;
+        SortDescending = snap.SortDescending;
+        // CurrentPage/PageSize already had the live values; if the user
+        // dropped a column the row count may shrink, but we don't auto-clamp
+        // here — ReloadDataPreviewAsync would land an empty page and the
+        // pagination buttons remain usable.
+    }
+
+    private sealed class StructureSnapshot
+    {
+        public int ActiveSubTabIndex;
+        public string? SelectedFieldName;
+        public string? SortColumn;
+        public bool SortDescending;
+        public int CurrentPage;
+        public int PageSize;
+        public object?[]? SelectedRowPk;
+    }
+
+    /// <summary>
+    /// Called by <see cref="MainWindowViewModel"/> after the user fires
+    /// Rollback (or any other event that may have changed the underlying
+    /// schema without our knowledge — Commit too, for symmetry). Discards
+    /// any pending DDL edits the user had queued and re-fetches the table
+    /// detail from the live catalog. Fire-and-forget — errors surface as
+    /// <see cref="ErrorMessage"/> through the standard LoadAsync path.
+    /// </summary>
+    public Task RefreshAfterTransactionAsync(System.Threading.CancellationToken ct = default)
+    {
+        // Identical mechanics to RefreshStructureAsync — kept separate so the
+        // call site reads clearly at the owner level (search for
+        // RefreshAfterTransactionAsync to find every transaction-driven
+        // refresh).
+        return RefreshStructureAsync(ct);
     }
     public bool CanDropField => _ddlExecutor is not null && SelectedField is not null;
     public bool CanMoveFieldUp => _ddlExecutor is not null && SelectedField is not null && Fields.IndexOf(SelectedField) > 0;
@@ -1491,7 +1786,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
     }
 
     [RelayCommand(CanExecute = nameof(CanMoveFieldUp))]
-    private void MoveFieldUp()
+    private async Task MoveFieldUpAsync()
     {
         if (SelectedField is not { } field) return;
         var index = Fields.IndexOf(field);
@@ -1499,21 +1794,53 @@ public partial class TableDetailTabViewModel : ViewModelBase
         // Firebird positions are 1-based — moving up means newPosition = currentIndex
         // (which equals (index+1) - 1).
         var newPos = index; // current 1-based pos is index+1; we want index → 1-based pos = index
-        AddMovePending(field.Name, newPos);
+        await ExecuteMoveAsync(field.Name, newPos).ConfigureAwait(true);
     }
 
     [RelayCommand(CanExecute = nameof(CanMoveFieldDown))]
-    private void MoveFieldDown()
+    private async Task MoveFieldDownAsync()
     {
         if (SelectedField is not { } field) return;
         var index = Fields.IndexOf(field);
         if (index < 0 || index >= Fields.Count - 1) return;
         // Index+1 in 0-based → 1-based pos = index+2.
         var newPos = index + 2;
-        AddMovePending(field.Name, newPos);
+        await ExecuteMoveAsync(field.Name, newPos).ConfigureAwait(true);
     }
 
-    private void AddMovePending(string fieldName, int oneBasedPosition)
+    /// <summary>
+    /// Executes an ALTER TABLE … POSITION immediately in the user's working
+    /// transaction (auto-begin) and reloads — symmetric to Add/Drop. Selected
+    /// field is preserved by name through <see cref="RefreshStructureAsync"/>.
+    /// </summary>
+    public async Task ExecuteMoveAsync(string fieldName, int oneBasedPosition)
+    {
+        if (string.IsNullOrWhiteSpace(fieldName)) return;
+        if (_ddlExecutor is null) return;
+        ErrorMessage = null;
+        var sql = DdlGenerator.BuildMoveField(TableName, fieldName, oneBasedPosition);
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+            return;
+        }
+        await RefreshStructureAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Test-only helper retained from the previous queue-and-compile model.
+    /// Production code paths use <see cref="ExecuteMoveAsync"/> directly.
+    /// </summary>
+    public void AddMovePending(string fieldName, int oneBasedPosition)
     {
         PendingChanges.Add(new PendingDdlChange
         {
@@ -1553,11 +1880,11 @@ public partial class TableDetailTabViewModel : ViewModelBase
             PendingChanges.Remove(change);
         }
 
-        // Full success — force a reload so the Fields / Constraints / Indexes /
-        // DDL all reflect the new structure. Resetting _loadTask makes
-        // EnsureLoadedAsync kick off a fresh LoadAsync (idempotent otherwise).
-        _loadTask = null;
-        await EnsureLoadedAsync().ConfigureAwait(true);
+        // Full success — refresh the live structure so Fields / Constraints /
+        // Indexes / DDL all reflect the new shape. Goes through the central
+        // RefreshStructureAsync helper so the user's sub-tab, selected field,
+        // sort state, page, and column widths all survive the rebuild.
+        await RefreshStructureAsync().ConfigureAwait(true);
     }
 
     /// <summary>
@@ -1608,5 +1935,46 @@ public partial class TableDetailTabViewModel : ViewModelBase
         MoveFieldUpCommand.NotifyCanExecuteChanged();
         MoveFieldDownCommand.NotifyCanExecuteChanged();
         DropFieldCommand.NotifyCanExecuteChanged();
+        // Per-field dependency panel reacts to selection changes.
+        RebuildFieldDependencies();
+    }
+
+    private void OnDependedOnByCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        // DependedOnBy gets cleared then re-populated during every
+        // LoadAsync / RefreshStructureAsync run — each Add fires once. We
+        // rebuild on every notification; for typical schemas (≤20 deps per
+        // table) this is cheaper than introducing a debounce flag.
+        RebuildFieldDependencies();
+    }
+
+    /// <summary>
+    /// Recomputes the per-field dependencies panel content. Filter:
+    /// <see cref="DependedOnBy"/> rows whose <see cref="DependencyInfo.FieldName"/>
+    /// matches the currently selected field (case-insensitive — Firebird
+    /// stores names uppercase but user input may not be). Dedup by
+    /// (ObjectType, ObjectName) — the same trigger may touch several fields
+    /// and would otherwise show up multiple times for the same selection.
+    /// </summary>
+    private void RebuildFieldDependencies()
+    {
+        FieldDependencies.Clear();
+        var fieldName = SelectedField?.Name;
+        if (!string.IsNullOrEmpty(fieldName))
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var dep in DependedOnBy)
+            {
+                if (!string.Equals(dep.FieldName, fieldName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var key = $"{dep.ObjectType}|{dep.ObjectName}";
+                if (!seen.Add(key)) continue;
+                FieldDependencies.Add(new FieldDependencyItem(dep, this));
+            }
+        }
+        OnPropertyChanged(nameof(HasFieldDependencies));
+        OnPropertyChanged(nameof(HasFieldSelectionForDependencies));
+        OnPropertyChanged(nameof(ShowFieldDependenciesEmpty));
+        OnPropertyChanged(nameof(ShowFieldDependenciesNoSelection));
     }
 }

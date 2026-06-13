@@ -1,8 +1,43 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
 namespace EmberTern.Core.Metadata;
+
+/// <summary>
+/// Target shape for <see cref="DdlGenerator.BuildAlterStatements"/>. The
+/// caller fills this with the *desired* end state of a column; the diff
+/// against the live <see cref="FieldInfo"/> produces the minimum-set of
+/// ALTER statements. Properties unset (<see cref="TypeClause"/> null,
+/// <see cref="Description"/> null, etc.) mean "leave unchanged" — only set
+/// what the user actually edited.
+/// </summary>
+public sealed class AlterFieldTarget
+{
+    /// <summary>New column name. Set even when the user didn't rename — the
+    /// diff compares against the original; identical values produce no rename
+    /// statement.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Pre-formatted type clause ready for <c>ALTER COLUMN TYPE …</c>
+    /// (e.g. <c>"VARCHAR(50)"</c>, <c>"INTEGER"</c>, <c>"DOMAIN_NAME"</c>).
+    /// Null means "no type change". Dialog edit calls
+    /// <see cref="DdlGenerator.FormatTypeOrDomain"/> on a
+    /// <see cref="FieldDefinition"/>; inline edit picks the user-typed
+    /// string OR the selected domain.</summary>
+    public string? TypeClause { get; set; }
+
+    public bool NotNull { get; set; }
+
+    /// <summary>Default expression (empty/whitespace → DROP DEFAULT). Treated
+    /// as null and empty equivalent in the diff.</summary>
+    public string? DefaultValue { get; set; }
+
+    /// <summary>COMMENT ON COLUMN value. Null and empty are equivalent in the
+    /// diff; emit IS NULL when the user cleared a previously-present comment.</summary>
+    public string? Description { get; set; }
+}
 
 /// <summary>
 /// Pure DDL emitter. Every output is a fragment of standard Firebird SQL —
@@ -33,6 +68,18 @@ public static class DdlGenerator
             throw new ArgumentException("Table name is required.", nameof(tableName));
 
         return $"CREATE TABLE {Quote(tableName.Trim())} (\n  ID INTEGER NOT NULL PRIMARY KEY\n)";
+    }
+
+    /// <summary>
+    /// <c>DROP TABLE …</c>. Caller is responsible for confirming the
+    /// destructive intent. EmberTern never auto-drops dependents — if Firebird
+    /// rejects the drop because of a dependency, that error surfaces to the user.
+    /// </summary>
+    public static string BuildDropTable(string tableName)
+    {
+        if (string.IsNullOrWhiteSpace(tableName))
+            throw new ArgumentException("Table name is required.", nameof(tableName));
+        return $"DROP TABLE {Quote(tableName.Trim())}";
     }
 
     /// <summary>
@@ -489,4 +536,192 @@ public static class DdlGenerator
     }
 
     private static string EscapeSqlLiteral(string s) => s.Replace("'", "''");
+
+    // ─── Foreign-key generation ────────────────────────────────────────────
+    //
+    // Emits one ALTER TABLE … ADD CONSTRAINT … FOREIGN KEY … REFERENCES …
+    // statement. NoAction maps to "omit the clause" — Firebird's default is
+    // NO ACTION, and that matches the reader's convention of suppressing
+    // RESTRICT-equivalent rules when displaying FKs. Cascade and SetNull each
+    // get an explicit clause.
+
+    /// <summary>
+    /// Builds the full <c>ALTER TABLE … ADD CONSTRAINT …</c> statement for a
+    /// new foreign key. Throws on any validation gap that would produce
+    /// invalid SQL (missing names, empty field lists, count mismatch).
+    /// </summary>
+    public static string BuildAddForeignKey(string tableName, ForeignKeySpec spec)
+    {
+        if (string.IsNullOrWhiteSpace(tableName))
+            throw new ArgumentException("Table name is required.", nameof(tableName));
+        if (spec is null) throw new ArgumentNullException(nameof(spec));
+        if (string.IsNullOrWhiteSpace(spec.ConstraintName))
+            throw new ArgumentException("Constraint name is required.", nameof(spec));
+        if (spec.LocalFields is null || spec.LocalFields.Count == 0)
+            throw new ArgumentException("At least one local field is required.", nameof(spec));
+        if (string.IsNullOrWhiteSpace(spec.ReferencedTable))
+            throw new ArgumentException("Referenced table is required.", nameof(spec));
+        if (spec.ReferencedFields is null || spec.ReferencedFields.Count == 0)
+            throw new ArgumentException("At least one referenced field is required.", nameof(spec));
+        if (spec.LocalFields.Count != spec.ReferencedFields.Count)
+            throw new ArgumentException("Local and referenced field counts must match.", nameof(spec));
+
+        var sb = new StringBuilder();
+        sb.Append("ALTER TABLE ").Append(Quote(tableName.Trim()))
+          .Append(" ADD CONSTRAINT ").Append(Quote(spec.ConstraintName.Trim()))
+          .Append(" FOREIGN KEY (");
+        AppendQuotedList(sb, spec.LocalFields);
+        sb.Append(") REFERENCES ").Append(Quote(spec.ReferencedTable.Trim()))
+          .Append(" (");
+        AppendQuotedList(sb, spec.ReferencedFields);
+        sb.Append(')');
+
+        // ON UPDATE / ON DELETE clauses — order matches FB syntax. NoAction
+        // means "default" → omit. CASCADE / SET NULL render literally.
+        var onUpdate = RenderAction(spec.OnUpdate);
+        if (onUpdate is not null) sb.Append(" ON UPDATE ").Append(onUpdate);
+        var onDelete = RenderAction(spec.OnDelete);
+        if (onDelete is not null) sb.Append(" ON DELETE ").Append(onDelete);
+
+        return sb.ToString();
+    }
+
+    private static string? RenderAction(ForeignKeyAction action) => action switch
+    {
+        ForeignKeyAction.Cascade => "CASCADE",
+        ForeignKeyAction.SetNull => "SET NULL",
+        // NoAction: omit. Future expansion: SetDefault → "SET DEFAULT",
+        // Restrict → "NO ACTION" (Firebird treats them similarly but the
+        // explicit text helps round-tripping when other engines are involved).
+        _ => null,
+    };
+
+    private static void AppendQuotedList(StringBuilder sb, IReadOnlyList<string> names)
+    {
+        for (int i = 0; i < names.Count; i++)
+        {
+            if (i > 0) sb.Append(", ");
+            sb.Append(Quote(names[i].Trim()));
+        }
+    }
+
+    // ─── Shared ALTER pipeline (inline edit + dialog edit) ────────────────
+    //
+    // The inline Pola grid edit (FieldRowViewModel → EnqueueRowEdits) and the
+    // future "Edit field" dialog both need to compile the same diff: original
+    // FieldInfo vs. user's desired shape. BuildAlterStatements is the single
+    // source of truth for that diff — each property compared once, each ALTER
+    // emitted in the order Firebird tolerates safely (rename first so
+    // subsequent ALTERs reference the new name).
+
+    /// <summary>
+    /// Diffs <paramref name="original"/> against <paramref name="target"/> and
+    /// returns the minimum-set of <see cref="PendingDdlChange"/> entries that
+    /// would morph the column to match. Returns an empty list when no relevant
+    /// property differs ("no-op" semantics per session spec — caller emits no
+    /// DDL when user clicked OK without changing anything).
+    /// </summary>
+    /// <param name="tableName">Owning table — quoted into every generated statement.</param>
+    /// <param name="original">Current state of the column (loaded from <c>RDB$</c>).</param>
+    /// <param name="target">User-desired end state.</param>
+    /// <param name="canRename">When false, rename and type-change are skipped
+    /// (Firebird rejects both when triggers / views / check constraints still
+    /// reference the column). Caller surfaces the "blocked" feedback.</param>
+    public static IReadOnlyList<PendingDdlChange> BuildAlterStatements(
+        string tableName,
+        FieldInfo original,
+        AlterFieldTarget target,
+        bool canRename)
+    {
+        if (string.IsNullOrWhiteSpace(tableName))
+            throw new ArgumentException("Table name is required.", nameof(tableName));
+        if (original is null) throw new ArgumentNullException(nameof(original));
+        if (target is null) throw new ArgumentNullException(nameof(target));
+
+        var changes = new List<PendingDdlChange>();
+
+        // 1. Rename — emit FIRST so subsequent ALTERs in this batch reference
+        //    the new name. Tracked through `effectiveName` for later steps.
+        var effectiveName = original.Name;
+        if (!string.IsNullOrWhiteSpace(target.Name)
+            && !string.Equals(target.Name, original.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            if (canRename)
+            {
+                changes.Add(new PendingDdlChange
+                {
+                    Kind = PendingDdlChangeKind.Other,
+                    Description = string.Format(CultureInfo.CurrentCulture,
+                        "Rename {0} → {1}", original.Name, target.Name),
+                    Sql = BuildRenameField(tableName, original.Name, target.Name),
+                });
+                effectiveName = target.Name;
+            }
+            // canRename=false → caller (inline VM or dialog) handles the
+            // "rename blocked" feedback; we silently skip the rename here.
+        }
+
+        // 2. Type change — gated by canRename for the same dependency reason
+        //    (FB rejects ALTER COLUMN TYPE when objects reference the column).
+        //    Null TypeClause means "leave unchanged".
+        if (target.TypeClause is { Length: > 0 }
+            && !string.Equals(target.TypeClause, original.Type, StringComparison.OrdinalIgnoreCase))
+        {
+            if (canRename)
+            {
+                changes.Add(new PendingDdlChange
+                {
+                    Kind = PendingDdlChangeKind.Other,
+                    Description = string.Format(CultureInfo.CurrentCulture,
+                        "ALTER COLUMN {0} TYPE {1}", effectiveName, target.TypeClause),
+                    Sql = BuildAlterType(tableName, effectiveName, target.TypeClause),
+                });
+            }
+        }
+
+        // 3. NotNull toggle.
+        if (target.NotNull != original.NotNull)
+        {
+            changes.Add(new PendingDdlChange
+            {
+                Kind = PendingDdlChangeKind.Other,
+                Description = string.Format(CultureInfo.CurrentCulture,
+                    target.NotNull ? "Set NOT NULL on {0}" : "Drop NOT NULL on {0}",
+                    effectiveName),
+                Sql = BuildSetNotNull(tableName, effectiveName, target.NotNull),
+            });
+        }
+
+        // 4. Default — null and empty treated equivalently (both mean "no default").
+        var origDefault = original.DefaultValue ?? string.Empty;
+        var newDefault = target.DefaultValue ?? string.Empty;
+        if (!string.Equals(origDefault, newDefault, StringComparison.Ordinal))
+        {
+            changes.Add(new PendingDdlChange
+            {
+                Kind = PendingDdlChangeKind.Other,
+                Description = string.Format(CultureInfo.CurrentCulture,
+                    string.IsNullOrWhiteSpace(newDefault) ? "Drop default on {0}" : "Set default on {0}",
+                    effectiveName),
+                Sql = BuildSetDefault(tableName, effectiveName, newDefault),
+            });
+        }
+
+        // 5. Description (COMMENT ON COLUMN). Null and empty are equivalent —
+        //    BuildCommentColumn emits IS NULL on empty/whitespace.
+        var origDesc = original.Description ?? string.Empty;
+        var newDesc = target.Description ?? string.Empty;
+        if (!string.Equals(origDesc, newDesc, StringComparison.Ordinal))
+        {
+            changes.Add(new PendingDdlChange
+            {
+                Kind = PendingDdlChangeKind.Other,
+                Description = string.Format(CultureInfo.CurrentCulture,
+                    "Comment on {0}", effectiveName),
+                Sql = BuildCommentColumn(tableName, effectiveName, newDesc),
+            });
+        }
+
+        return changes;
+    }
 }

@@ -61,13 +61,18 @@ public class PendingDdlVmTests
         Assert.Contains("ADD \"NEW_COL\"", preview);
     }
 
+    // NOTE: Move Up/Down now execute immediately through FirebirdDdlExecutor
+    // (matching Add Field / Drop Field semantics), not via the pending-DDL
+    // queue. The pure-API queueing helper AddMovePending is retained for
+    // testing and any future "batch move" workflow. These two tests pin the
+    // queue-construction shape via AddMovePending so the SQL-emit format
+    // stays regression-pinned.
     [Fact]
-    public void MoveFieldUp_QueuesAlterStatement()
+    public void AddMovePending_QueuesAlterStatement_UpDirection()
     {
         var vm = BuildVm();
-        // Select OPIS (index 2) — Move Up means new pos 2 (1-based)
-        vm.SelectedField = vm.Fields[2];
-        vm.MoveFieldUpCommand.Execute(null);
+        // OPIS (index 2) → new pos 2 = "Move Up" in 1-based terms.
+        vm.AddMovePending(vm.Fields[2].Name, 2);
 
         Assert.Single(vm.PendingChanges);
         Assert.Equal(PendingDdlChangeKind.MoveField, vm.PendingChanges[0].Kind);
@@ -75,12 +80,11 @@ public class PendingDdlVmTests
     }
 
     [Fact]
-    public void MoveFieldDown_QueuesAlterStatement()
+    public void AddMovePending_QueuesAlterStatement_DownDirection()
     {
         var vm = BuildVm();
-        // Select ID (index 0) — Move Down means new pos 2.
-        vm.SelectedField = vm.Fields[0];
-        vm.MoveFieldDownCommand.Execute(null);
+        // ID (index 0) → new pos 2 = "Move Down".
+        vm.AddMovePending(vm.Fields[0].Name, 2);
 
         Assert.Single(vm.PendingChanges);
         Assert.Contains("ALTER \"ID\" POSITION 2", vm.PendingChanges[0].Sql);

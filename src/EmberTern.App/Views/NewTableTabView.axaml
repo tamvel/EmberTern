@@ -70,12 +70,16 @@
                     VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                     Background="{DynamicResource BackgroundBrush}">
             <DataGrid.Columns>
+              <!-- MinWidth replaces fixed Width so DataGridLength.Auto can grow
+                   each column to fit the larger of header/content. The last
+                   column (Description) keeps Width="*" to soak up remaining
+                   space. -->
               <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.NewTableFieldPk}"
                                       Binding="{Binding PrimaryKey, Mode=TwoWay}"
-                                      Width="40" />
+                                      MinWidth="40" />
               <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldName}"
                                   Binding="{Binding Name, Mode=TwoWay}"
-                                  Width="160" />
+                                  MinWidth="160" />
               <!-- Type — always-visible ComboBox in CellTemplate (no separate
                    CellEditingTemplate). Avalonia 12 DataGrid's edit-mode swap
                    from TextBlock to ComboBox loses focus on the popup open
@@ -83,7 +87,7 @@
                    repeated clicks) hangs the cell-edit cycle. Always-visible
                    means the user clicks once and the dropdown opens natively. -->
               <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldType}"
-                                      Width="140"
+                                      MinWidth="140"
                                       IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
@@ -98,7 +102,7 @@
               </DataGridTemplateColumn>
               <!-- Domain — same always-visible CellTemplate ComboBox pattern as Type. -->
               <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldDomain}"
-                                      Width="140"
+                                      MinWidth="140"
                                       IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
@@ -119,28 +123,28 @@
               </DataGridTemplateColumn>
               <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldSize}"
                                   Binding="{Binding Size, Mode=TwoWay}"
-                                  Width="60" />
+                                  MinWidth="60" />
               <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldScale}"
                                   Binding="{Binding Scale, Mode=TwoWay}"
-                                  Width="60" />
+                                  MinWidth="60" />
               <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.NewTableFieldNotNull}"
                                       Binding="{Binding NotNull, Mode=TwoWay}"
-                                      Width="60" />
+                                      MinWidth="70" />
               <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldDefault}"
                                   Binding="{Binding DefaultValue, Mode=TwoWay}"
-                                  Width="110" />
+                                  MinWidth="100" />
               <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldComputed}"
                                   Binding="{Binding ComputedExpression, Mode=TwoWay}"
-                                  Width="120" />
+                                  MinWidth="100" />
               <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldCheck}"
                                   Binding="{Binding CheckExpression, Mode=TwoWay}"
-                                  Width="120" />
+                                  MinWidth="100" />
               <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldCharset}"
                                   Binding="{Binding Charset, Mode=TwoWay}"
-                                  Width="80" />
+                                  MinWidth="80" />
               <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.NewTableFieldAi}"
                                       Binding="{Binding AutoIncrement, Mode=TwoWay}"
-                                      Width="40" />
+                                      MinWidth="50" />
               <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldDescription}"
                                   Binding="{Binding Description, Mode=TwoWay}"
                                   Width="*" />

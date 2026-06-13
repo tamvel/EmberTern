@@ -64,6 +64,27 @@
       <SolidColorBrush x:Key="TreeViewItemBorderBrushSelectedPointerOver" Color="Transparent" />
       <SolidColorBrush x:Key="TreeViewItemBorderBrushSelectedPressed" Color="Transparent" />
 
+      <!-- FluentTheme's DataGridCell paints its focus rectangle with
+           SystemAccentColor by default (orange-brown on a default Win11 install).
+           Override to the app's blue focus-border so the focused cell matches
+           every other focus visual in the workbench. Both Primary (outer line)
+           and Secondary (inner contrast) need to be set, otherwise the
+           SystemAccent inner edge bleeds through. -->
+      <SolidColorBrush x:Key="DataGridCellFocusVisualPrimaryBrush" Color="{StaticResource FocusBorderColor}" />
+      <SolidColorBrush x:Key="DataGridCellFocusVisualSecondaryBrush" Color="{StaticResource FocusBorderColor}" />
+      <!-- Per-cell background overrides — the FluentTheme template paints
+           DataGridCellBackgroundColorSelected / Focused / etc., which also pick
+           SystemAccent on default themes. Selection background already comes
+           from the row-level Rectangle#BackgroundRectangle override, but cells
+           in :focus / :current state still paint the cell-level brush over
+           the row. Force them through SelectionBrush so the focused cell
+           reads as part of the blue selection. -->
+      <SolidColorBrush x:Key="DataGridCellBackgroundBrushSelected" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="DataGridCellBackgroundBrushFocused" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="DataGridCellBackgroundBrushSelectedFocused" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="DataGridCellBackgroundBrushSelectedUnfocused" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="DataGridCellForegroundBrushFocused" Color="{StaticResource ForegroundColor}" />
+
       <!-- Per-kind metadata icon brushes (dark theme: Material 300/200 — bright on dark).
            Resolved at render time via DynamicResource through IconBrushConverter so theme
            toggle re-evaluates without rebuilding the tree. -->
@@ -147,6 +168,16 @@
       <SolidColorBrush x:Key="TreeViewItemBorderBrushSelected" Color="Transparent" />
       <SolidColorBrush x:Key="TreeViewItemBorderBrushSelectedPointerOver" Color="Transparent" />
       <SolidColorBrush x:Key="TreeViewItemBorderBrushSelectedPressed" Color="Transparent" />
+
+      <!-- Same DataGridCell focus + background overrides for Light theme.
+           See Dark dictionary above. -->
+      <SolidColorBrush x:Key="DataGridCellFocusVisualPrimaryBrush" Color="{StaticResource FocusBorderColor}" />
+      <SolidColorBrush x:Key="DataGridCellFocusVisualSecondaryBrush" Color="{StaticResource FocusBorderColor}" />
+      <SolidColorBrush x:Key="DataGridCellBackgroundBrushSelected" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="DataGridCellBackgroundBrushFocused" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="DataGridCellBackgroundBrushSelectedFocused" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="DataGridCellBackgroundBrushSelectedUnfocused" Color="{StaticResource SelectionColor}" />
+      <SolidColorBrush x:Key="DataGridCellForegroundBrushFocused" Color="{StaticResource ForegroundColor}" />
 
       <!-- Per-kind metadata icon brushes (light theme: Material 700/800 — darker and
            more saturated so glyphs stay legible against the near-white editor background). -->

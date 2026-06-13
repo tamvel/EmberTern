@@ -88,38 +88,50 @@ public partial class TableDetailTabView : UserControl
         {
             _currentVm.PropertyChanged -= OnVmPropertyChanged;
             _currentVm.AddFieldRequested -= OnAddFieldRequested;
+            _currentVm.EditFieldRequested -= OnEditFieldRequested;
+            _currentVm.CreateForeignKeyRequested -= OnCreateForeignKeyRequested;
         }
         _currentVm = DataContext as TableDetailTabViewModel;
         if (_currentVm is not null)
         {
             _currentVm.PropertyChanged += OnVmPropertyChanged;
             _currentVm.AddFieldRequested += OnAddFieldRequested;
+            _currentVm.EditFieldRequested += OnEditFieldRequested;
+            _currentVm.CreateForeignKeyRequested += OnCreateForeignKeyRequested;
             PushDdl();
             PopulateDataGrid(_currentVm.DataResult);
         }
     }
 
     private async System.Threading.Tasks.Task<FieldDefinition?> OnAddFieldRequested()
+        => await OpenAddFieldDialogAsync(originalField: null, canRename: true).ConfigureAwait(true);
+
+    // Edit-mode entry: seeds the same dialog from the existing FieldInfo +
+    // canRename gate. Caller (VM.EditFieldAsync) computes canRename via
+    // CanRenameField and passes it through; we forward to the dialog VM so
+    // the FieldName TextBox can disable and the hint can render.
+    private async System.Threading.Tasks.Task<FieldDefinition?> OnEditFieldRequested(FieldInfo original, bool canRename)
+        => await OpenAddFieldDialogAsync(original, canRename).ConfigureAwait(true);
+
+    // Shared dialog-open path: fetch domains + generators once, build the VM
+    // (Add or Edit mode), open the dialog, return its result. Single code
+    // path keeps both modes wiring-identical except for the two extra ctor
+    // args.
+    private async System.Threading.Tasks.Task<FieldDefinition?> OpenAddFieldDialogAsync(FieldInfo? originalField, bool canRename)
     {
         if (_currentVm is null) return null;
-        // Walk up to the host Window so we can resolve the MainWindowViewModel
-        // (carrier of MetadataReader). Also serves as the dialog's owner.
         var window = this.FindAncestorOfType<Window>();
         if (window is null) return null;
         var mainVm = window.DataContext as MainWindowViewModel;
         if (mainVm is null) return null;
 
-        // Fetch domains + generators from the live metadata reader. Failures fall
-        // through to empty lists — the dialog still works against the basic-type
-        // tab and a manually-entered generator name. Domains carry their SQL type
-        // (e.g. T_ID — INTEGER) so the ComboBox shows it inline.
         IReadOnlyList<DomainSpec> domains = System.Array.Empty<DomainSpec>();
         var generators = new List<string>();
         try
         {
             domains = await mainVm.MetadataReader.ListDomainsAsync().ConfigureAwait(true);
         }
-        catch { /* best effort — empty list lets the dialog still open */ }
+        catch { /* best effort */ }
         try
         {
             var generatorObjs = await mainVm.MetadataReader.ListAsync(MetadataObjectKind.Generator).ConfigureAwait(true);
@@ -127,10 +139,109 @@ public partial class TableDetailTabView : UserControl
         }
         catch { /* best effort */ }
 
-        var dialogVm = new AddFieldDialogViewModel(_currentVm.TableName, domains, generators);
+        var dialogVm = new AddFieldDialogViewModel(_currentVm.TableName, domains, generators, originalField, canRename);
         var dialog = new AddFieldDialog { DataContext = dialogVm };
-        var result = await dialog.ShowDialog<FieldDefinition?>(window);
-        return result;
+        return await dialog.ShowDialog<FieldDefinition?>(window);
+    }
+
+    // Session 3 — opens the real FK wizard. Resolves the source-table state
+    // (Fields, list of all tables in the DB) up-front; ref-table fields + PK
+    // are fetched on demand via callbacks when the user picks a target.
+    // Returns the dialog's ForeignKeySpec? (null on Cancel) which the VM
+    // hands to ExecuteCreateForeignKeyAsync.
+    private async System.Threading.Tasks.Task<ForeignKeySpec?> OnCreateForeignKeyRequested()
+    {
+        if (_currentVm is null) return null;
+        var window = this.FindAncestorOfType<Window>();
+        if (window is null) return null;
+        var mainVm = window.DataContext as MainWindowViewModel;
+        if (mainVm is null) return null;
+
+        // Source-side: snapshot the current table's field names. The wizard
+        // doesn't hot-reload them — if structure changes mid-edit the user
+        // simply cancels and reopens.
+        var sourceFieldNames = new List<string>();
+        foreach (var f in _currentVm.Fields) sourceFieldNames.Add(f.Name);
+
+        // List of available target tables. Best-effort: failures fall through
+        // to an empty list (user can't pick a target → validation will block).
+        IReadOnlyList<string> tableNames = System.Array.Empty<string>();
+        try
+        {
+            var tables = await mainVm.MetadataReader.ListAsync(MetadataObjectKind.Table).ConfigureAwait(true);
+            var names = new List<string>(tables.Count);
+            foreach (var t in tables) names.Add(t.Name);
+            tableNames = names;
+        }
+        catch { /* best effort */ }
+
+        // Callback 1: load columns of a specific referenced table.
+        // GetFieldsAsync returns FieldInfo (declaration order via Position);
+        // we project to name list for the dialog's checkbox column.
+        async System.Threading.Tasks.Task<IReadOnlyList<string>> LoadFields(string tableName)
+        {
+            try
+            {
+                var fields = await mainVm.TableDetailReader.GetFieldsAsync(tableName).ConfigureAwait(true);
+                var list = new List<string>(fields.Count);
+                foreach (var f in fields) list.Add(f.Name);
+                return list;
+            }
+            catch
+            {
+                return System.Array.Empty<string>();
+            }
+        }
+
+        // Callback 2: load the referenced table's PK column names. Reuses
+        // the same GetFieldsAsync result — IsPrimaryKey is already populated
+        // there, so we filter rather than firing a separate Constraints query.
+        async System.Threading.Tasks.Task<IReadOnlyList<string>> LoadPrimaryKey(string tableName)
+        {
+            try
+            {
+                var fields = await mainVm.TableDetailReader.GetFieldsAsync(tableName).ConfigureAwait(true);
+                var list = new List<string>();
+                foreach (var f in fields)
+                {
+                    if (f.IsPrimaryKey) list.Add(f.Name);
+                }
+                return list;
+            }
+            catch
+            {
+                return System.Array.Empty<string>();
+            }
+        }
+
+        var dialogVm = new ForeignKeyDialogViewModel(
+            _currentVm.TableName,
+            sourceFieldNames,
+            tableNames,
+            LoadFields,
+            LoadPrimaryKey);
+        return await ForeignKeyDialog.ShowAsync(window, dialogVm).ConfigureAwait(true);
+    }
+
+    // Double-click on a Pola row opens the Edit Field dialog. Filters out
+    // double-taps on column headers + empty rows (DataContext is not a
+    // FieldRowViewModel). Inline cell-edit takes precedence when the grid
+    // is in edit mode (IsFieldsReadOnly=false) — Avalonia's DataGrid
+    // intercepts the double-click for cell entry first, so this handler
+    // only fires when we're in read-only state. That matches the spec
+    // ("dwuklik na wierszu pola = Edytuj pole").
+    private void OnFieldsGridDoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (_currentVm is null) return;
+        if (e.Source is not Avalonia.Visual visual) return;
+        var row = visual.FindAncestorOfType<DataGridRow>(includeSelf: true);
+        if (row is null) return;
+        if (row.DataContext is not FieldRowViewModel) return;
+        if (_currentVm.EditFieldCommand.CanExecute(null))
+        {
+            _currentVm.EditFieldCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -560,6 +671,23 @@ public partial class TableDetailTabView : UserControl
         if (sender is Control { DataContext: DependencyLeafNode leaf } && _currentVm is not null)
         {
             _currentVm.RequestOpen(leaf);
+            e.Handled = true;
+        }
+    }
+
+    // Double-click a row in the field-dependencies panel → open the object,
+    // exactly like the Zależności tree leaf double-click. Walks to the row,
+    // confirms the DataContext is a FieldDependencyItem, and fires its
+    // NavigateCommand (gated on CanNavigate). Non-navigable kinds (Field /
+    // unknown) silently no-op via the command's CanExecute.
+    private void OnFieldDependencyDoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (e.Source is not Avalonia.Visual visual) return;
+        var row = visual.FindAncestorOfType<DataGridRow>(includeSelf: true);
+        if (row?.DataContext is not FieldDependencyItem item) return;
+        if (item.NavigateCommand.CanExecute(null))
+        {
+            item.NavigateCommand.Execute(null);
             e.Handled = true;
         }
     }

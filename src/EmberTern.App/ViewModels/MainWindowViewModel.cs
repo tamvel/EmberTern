@@ -84,6 +84,8 @@ public partial class MainWindowViewModel : ViewModelBase
         Metadata.OpenDdlRequested += OnOpenDdlRequested;
         Metadata.CopyNameRequested += OnCopyNameRequested;
         Metadata.StatusReported += OnMetadataStatusReported;
+        Metadata.NewTableRequested += OnNewTableRequestedFromTree;
+        Metadata.DeleteTableRequested += OnDeleteTableRequested;
         Messages = new ObservableCollection<QueryMessageViewModel>();
         // Workspace tabs start empty — no Query tab until a connection becomes active.
         // Each ConnectionProfile owns its own Query+DDL tab list via _workspacesByConnection.
@@ -1081,6 +1083,33 @@ public partial class MainWindowViewModel : ViewModelBase
         await _service.DisconnectAsync().ConfigureAwait(true);
     }
 
+    /// <summary>
+    /// User-facing connection delete. Confirms first (HIGH-risk: saved
+    /// settings, per-connection saved queries, and workspace state are all
+    /// dropped irreversibly), then performs the removal. Routed from the
+    /// connection node's Delete command and the sidebar toolbar's
+    /// Delete-selected button.
+    /// </summary>
+    public async Task DeleteWithConfirmationAsync(ConnectionProfile profile)
+    {
+        var confirmed = await RequestConfirmAsync(new ConfirmRequest
+        {
+            Title = UiStrings.ConnectionDeleteConfirmTitle,
+            Message = string.Format(CultureInfo.CurrentCulture, UiStrings.ConnectionDeleteConfirmFormat, profile.Name),
+            ConfirmLabel = UiStrings.ConnectionDeleteConfirmYes,
+            CancelLabel = UiStrings.DialogCancel,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
+        if (!confirmed) return;
+        Delete(profile);
+    }
+
+    /// <summary>
+    /// Raw connection removal — no confirmation. Used by
+    /// <see cref="DeleteWithConfirmationAsync"/> after the user confirms, and
+    /// directly by tests. UI never calls this without going through the
+    /// confirming wrapper.
+    /// </summary>
     public void Delete(ConnectionProfile profile)
     {
         if (_service.ActiveProfile?.Id == profile.Id)
@@ -1140,6 +1169,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     internal FirebirdDdlExecutor DdlExecutor => _ddlExecutor;
     internal FirebirdMetadataReader MetadataReader => _metadataReader;
+    // Exposed for the FK wizard's view-side callbacks (ref-table column /
+    // PK lookups). The reader's open methods are session-scoped via
+    // CommandLock so concurrent reads from the wizard + main load are safe.
+    internal FirebirdTableDetailReader TableDetailReader => _tableDetailReader;
 
     public bool CanCreateTable => _service.IsConnected;
 
@@ -1165,7 +1198,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private async Task OnNewTableCompileRequested(NewTableTabViewModel newTable)
     {
-        var trimmed = newTable.TableName.Trim();
+        // Identifiers in Firebird DDL are case-significant unless quoted; we
+        // emit them upper-cased (canonical RDB$ form) here as a belt-and-braces
+        // pass after the UI-side UPPERCASE coercion. Doesn't hurt if the VM
+        // already uppercased — same string in, same string out.
+        var trimmed = newTable.TableName.Trim().ToUpperInvariant();
         try
         {
             var sql = DdlGenerator.BuildCreateTable(trimmed, newTable.BuildSpec());
@@ -1173,15 +1210,24 @@ public partial class MainWindowViewModel : ViewModelBase
             AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewTableExecutedFormat, trimmed));
             await Metadata.RefreshAsync().ConfigureAwait(true);
 
-            // Close the tab carrying this NewTableTabViewModel.
+            // Keep the user in context: close the New Table tab and open a
+            // TableDetail tab on the freshly-created table. Goes through
+            // OnOpenDdlRequested so dedup + tree refresh share the same path
+            // as a double-click on the sidebar leaf.
+            WorkspaceTabViewModel? newTab = null;
             foreach (var t in WorkspaceTabs)
             {
                 if (t.Kind == WorkspaceTabKind.NewTable && ReferenceEquals(t.NewTable, newTable))
                 {
-                    CloseTab(t);
+                    newTab = t;
                     break;
                 }
             }
+            if (newTab is not null) CloseTab(newTab);
+            // OnOpenDdlRequested is async void (event-handler shape) — fire-and-forget.
+            // The TableDetail tab is added + selected synchronously inside the
+            // method; EnsureLoadedAsync runs as a background continuation.
+            OnOpenDdlRequested(new MetadataObject(trimmed, MetadataObjectKind.Table));
         }
         catch (DdlExecutionException ex)
         {
@@ -1476,6 +1522,73 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectedBottomTabIndex = 1;
     }
 
+    // Tables-category context menu → New Table. Reuses the existing
+    // NewTableCommand so there's one New-Table flow (workspace tab + Compile).
+    private void OnNewTableRequestedFromTree()
+    {
+        if (NewTableCommand.CanExecute(null)) NewTableCommand.Execute(null);
+    }
+
+    // Table leaf context menu → Delete Table. Confirm → DROP TABLE → refresh
+    // tree + close any open tabs for that table. On error, surface the raw
+    // Firebird message (incl. dependency errors — we never auto-drop deps).
+    private async void OnDeleteTableRequested(MetadataObject obj)
+    {
+        if (obj.Kind != MetadataObjectKind.Table) return;
+
+        var confirmed = await RequestConfirmAsync(new ConfirmRequest
+        {
+            Title = UiStrings.MetadataDeleteTableConfirmTitle,
+            Message = string.Format(CultureInfo.CurrentCulture, UiStrings.MetadataDeleteTableConfirmFormat, obj.Name),
+            ConfirmLabel = UiStrings.MetadataDeleteTableConfirmYes,
+            CancelLabel = UiStrings.DialogCancel,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
+        if (!confirmed) return;
+
+        var sql = DdlGenerator.BuildDropTable(obj.Name);
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            AddMessage(MessageSeverity.Error, string.Format(CultureInfo.CurrentCulture, UiStrings.MetadataDeleteTableFailedFormat, obj.Name, ex.Message));
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            AddMessage(MessageSeverity.Error, string.Format(CultureInfo.CurrentCulture, UiStrings.MetadataDeleteTableFailedFormat, obj.Name, ex.Message));
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.MetadataDeleteTableExecutedFormat, obj.Name));
+
+        // Close any open Ddl / TableDetail tabs that target this table.
+        CloseTabsForObject(obj.Kind, obj.Name);
+
+        // Refresh the metadata tree so the table disappears from the navigator.
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Closes every workspace tab (DDL or TableDetail) keyed on the given
+    /// (kind, name). Internal so tests can drive it without standing up the
+    /// DROP path. Tab-close semantics match the user clicking ×.
+    /// </summary>
+    internal void CloseTabsForObject(MetadataObjectKind kind, string name)
+    {
+        // Snapshot — CloseTab mutates WorkspaceTabs.
+        var doomed = WorkspaceTabs
+            .Where(t => t.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail
+                        && t.ObjectKind == kind
+                        && string.Equals(t.ObjectName, name, StringComparison.Ordinal))
+            .ToList();
+        foreach (var tab in doomed) CloseTab(tab);
+    }
+
     [RelayCommand(CanExecute = nameof(CanExecute))]
     public async Task ExecuteQueryAsync()
     {
@@ -1574,23 +1687,58 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool CanFormatSql => IsQueryTabActive;
 
     [RelayCommand(CanExecute = nameof(CanClearActiveEditor))]
-    private void ClearActiveEditor()
+    private async Task ClearActiveEditorAsync()
     {
         // Only meaningful for Query tabs — DDL tabs are read-only. CanExecute gate
         // ensures the button is greyed out on DDL.
-        if (IsQueryTabActive)
+        if (!IsQueryTabActive) return;
+        // Nothing to lose → clear silently (also avoids a pointless prompt when
+        // the editor is already empty).
+        if (string.IsNullOrEmpty(QueryText)) return;
+
+        var confirmed = await RequestConfirmAsync(new ConfirmRequest
         {
-            QueryText = string.Empty;
-        }
+            Title = UiStrings.ClearEditorConfirmTitle,
+            Message = UiStrings.ClearEditorConfirmMessage,
+            ConfirmLabel = UiStrings.ClearEditorConfirmYes,
+            CancelLabel = UiStrings.DialogCancel,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
+        if (!confirmed) return;
+        QueryText = string.Empty;
     }
 
     [RelayCommand(CanExecute = nameof(CanCloseActiveTab))]
-    private void CloseActiveTab()
+    private async Task CloseActiveTabAsync()
     {
         if (SelectedWorkspaceTab is { IsClosable: true } tab)
         {
-            CloseTab(tab);
+            await RequestCloseTabAsync(tab).ConfigureAwait(true);
         }
+    }
+
+    /// <summary>
+    /// User-initiated tab close. Confirms before discarding a New Table tab
+    /// that has unsaved form content (DDL / TableDetail tabs are reopenable
+    /// from the tree, so they close silently). Programmatic closes
+    /// (post-compile, delete-table cleanup) call <see cref="CloseTab"/>
+    /// directly and never prompt.
+    /// </summary>
+    public async Task RequestCloseTabAsync(WorkspaceTabViewModel tab)
+    {
+        if (tab.Kind == WorkspaceTabKind.NewTable && tab.NewTable is { HasContent: true } form)
+        {
+            var confirmed = await RequestConfirmAsync(new ConfirmRequest
+            {
+                Title = UiStrings.NewTableCloseConfirmTitle,
+                Message = string.Format(CultureInfo.CurrentCulture, UiStrings.NewTableCloseConfirmFormat, form.DisplayTitle),
+                ConfirmLabel = UiStrings.NewTableCloseConfirmYes,
+                CancelLabel = UiStrings.DialogCancel,
+                IsDestructive = true,
+            }).ConfigureAwait(true);
+            if (!confirmed) return;
+        }
+        CloseTab(tab);
     }
 
     public string? BuildCopyText(CopyGridMode mode, int rowIndex, int columnIndex)
@@ -1957,6 +2105,25 @@ public partial class MainWindowViewModel : ViewModelBase
         if (_previousTransactionState != TransactionState.Active && current == TransactionState.Active)
         {
             AddMessage(MessageSeverity.Info, UiStrings.TransactionStartedMessage);
+        }
+        // Active → Idle transition means a Commit or Rollback just completed.
+        // Either way, the on-screen TableDetail tabs may now be out of sync
+        // with the live catalog (rollback reverts ALTERs the user fired in
+        // the tx; commit confirms them). Refresh every open TableDetail so
+        // the grid reflects the DB state and any user-pending edits are
+        // dropped — matches the spec "rollback przywraca stan z bazy +
+        // czyści pending changes".
+        if (_previousTransactionState == TransactionState.Active && current == TransactionState.Idle)
+        {
+            foreach (var tab in WorkspaceTabs)
+            {
+                if (tab.Kind == WorkspaceTabKind.TableDetail && tab.TableDetail is { } detail)
+                {
+                    // Fire-and-forget — errors land in detail.ErrorMessage via
+                    // the standard SafeLoadAsync chain.
+                    _ = detail.RefreshAfterTransactionAsync();
+                }
+            }
         }
         _previousTransactionState = current;
 

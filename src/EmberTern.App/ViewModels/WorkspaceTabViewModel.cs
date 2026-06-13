@@ -99,6 +99,9 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     [RelayCommand]
     private void Activate() => _owner.SelectTab(this);
 
+    // Routes through the confirming wrapper so a New Table tab with unsaved
+    // form content prompts before discard. DDL / TableDetail tabs close
+    // silently (reopenable from the tree).
     [RelayCommand]
-    private void Close() => _owner.CloseTab(this);
+    private async Task CloseAsync() => await _owner.RequestCloseTabAsync(this).ConfigureAwait(true);
 }

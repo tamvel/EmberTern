@@ -261,6 +261,21 @@
     <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
   </Style>
 
+  <!-- DataGridCell focus visual. FluentTheme's template inserts a focus
+       Rectangle inside the cell border with a small inset margin; on some
+       systems the bottom edge gets clipped because the rectangle's bounds
+       end exactly at the cell's bottom padding edge. Pulling the margin in
+       by 1 px on every side and dropping stroke thickness to 1 keeps the
+       full rectangle inside the cell at every zoom level. The stroke uses
+       FocusBorderBrush (blue) — paired with the resource-key override on
+       DataGridCellFocusVisualPrimaryBrush in Colors.axaml so any other
+       FluentTheme code paths painting "focus visual" also pick our blue. -->
+  <Style Selector="DataGridCell /template/ Rectangle#FocusVisual">
+    <Setter Property="Margin" Value="1" />
+    <Setter Property="StrokeThickness" Value="1" />
+    <Setter Property="Stroke" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
   <!-- ListBoxItem selection / hover — same overrides we did for DataGridRow and
        TreeViewItem so Saved Queries (and any other ListBox) inherits the unified
        SelectionBrush instead of FluentTheme's SystemAccent yellow. -->

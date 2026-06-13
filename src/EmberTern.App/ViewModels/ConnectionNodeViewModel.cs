@@ -161,8 +161,13 @@ public partial class ConnectionNodeViewModel : ViewModelBase
     [RelayCommand]
     private void Copy() => _owner?.Copy(Profile);
 
+    // Goes through the confirming wrapper — connection delete is HIGH risk
+    // (config + saved queries + workspace state, irreversible).
     [RelayCommand]
-    private void Delete() => _owner?.Delete(Profile);
+    private async Task DeleteAsync()
+    {
+        if (_owner is not null) await _owner.DeleteWithConfirmationAsync(Profile).ConfigureAwait(true);
+    }
 
     // Sort the siblings around this node. If this node is inside a folder, sorts
     // that folder's connections; if at root, sorts root-level connections and
