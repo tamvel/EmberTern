@@ -1,5 +1,4 @@
 using System;
-using System.Data;
 using System.Threading.Tasks;
 using FirebirdSql.Data.FirebirdClient;
 
@@ -47,8 +46,14 @@ public sealed class TransactionService : IDisposable
         await _connectionService.CommandLock.WaitAsync().ConfigureAwait(false);
         try
         {
+            // Explicit TPB instead of IsolationLevel.ReadCommitted. The managed
+            // driver maps IsolationLevel.ReadCommitted to a TPB that ends in
+            // isc_tpb_WAIT — which makes EmberTern block indefinitely on a lock
+            // conflict. We want isc_tpb_NOWAIT (immediate error), matching
+            // IBExpert's default "Data transaction" profile:
+            //   isc_tpb_write + isc_tpb_read_committed + isc_tpb_rec_version + isc_tpb_nowait
             _activeTransaction = (FbTransaction)await connection
-                .BeginTransactionAsync(IsolationLevel.ReadCommitted)
+                .BeginTransactionAsync(BuildWorkingTransactionOptions())
                 .ConfigureAwait(false);
             _statementCount = 0;
             SetState(TransactionState.Active);
@@ -61,6 +66,41 @@ public sealed class TransactionService : IDisposable
         finally
         {
             _connectionService.CommandLock.Release();
+        }
+
+        // Best-effort: when EMBERTERN_TX_DIAG is set, append the real server-side
+        // TPB parameters (from MON$TRANSACTIONS) to the debug log so we can confirm
+        // nowait actually took effect. Zero cost when the env var is unset.
+        await LogTransactionParametersIfEnabledAsync().ConfigureAwait(false);
+    }
+
+    // Working-transaction TPB. Read-write, read committed, record version, NO WAIT.
+    // Internal so a unit test can pin the flag set without a live Firebird.
+    internal static FbTransactionOptions BuildWorkingTransactionOptions() => new()
+    {
+        TransactionBehavior =
+            FbTransactionBehavior.Write
+            | FbTransactionBehavior.ReadCommitted
+            | FbTransactionBehavior.RecVersion
+            | FbTransactionBehavior.NoWait,
+    };
+
+    private async Task LogTransactionParametersIfEnabledAsync()
+    {
+        if (Environment.GetEnvironmentVariable("EMBERTERN_TX_DIAG") is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var diagnostics = new FirebirdDiagnostics(_connectionService, this);
+            var summary = await diagnostics.DescribeCurrentTransactionAsync().ConfigureAwait(false);
+            FirebirdDiagnostics.AppendDebugLog("TX-BEGIN " + summary);
+        }
+        catch
+        {
+            // Diagnostics must never break a transaction begin.
         }
     }
 

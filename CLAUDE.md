@@ -1872,12 +1872,64 @@ Two more smoke-test findings, fixed properly (no DDL-only workarounds). **864 �
 
 84. **A CommunityToolkit `[ObservableProperty]` whose value is set directly (not only via another notifying property) needs `[NotifyPropertyChangedFor(...)]` for any computed property that depends on it — including its own `HasX` visibility flag.** `_validationMessage` had no `[NotifyPropertyChangedFor(nameof(HasValidationMessage))]`, so `IsValid()` setting `ValidationMessage = "..."` changed the text but never re-raised `HasValidationMessage`; the bound `IsVisible` stayed false and the message never appeared ("click and nothing happens"). It "worked" only when an adjacent field that *did* notify `HasValidationMessage` happened to change. **Rule**: when a `HasX`/`IsX`-style getter derives from an `[ObservableProperty]` field, annotate the FIELD with `[NotifyPropertyChangedFor(nameof(HasX))]` — don't rely on a sibling property to trigger the re-evaluation.
 
+### Transaction TPB hardening — Milestone 1: C1 + diagnostics (shipped 2026-06-13)
+
+First of a two-part transaction-handling fix. Driven by a real-world bug report: with an open transaction in EmberTern, the user could not perform some operations (notably DDL) in IBExpert on the same database. A full audit (see `memory/feedback_firebird_transactions.md`) found two distinct causes — this milestone fixes the smaller one (TPB flags) and adds the diagnostics needed to verify the larger one before fixing it. **868 → 892 tests** (+24). No connection-architecture change yet (that is Milestone 2 / C2).
+
+**Audit findings (verified against the actual driver binary, not from memory).**
+1. The single transaction-creation site — [`TransactionService.BeginTransactionAsync`](src/EmberTern.Firebird/TransactionService.cs) — used `connection.BeginTransactionAsync(IsolationLevel.ReadCommitted)`. The managed `FirebirdSql.Data.FirebirdClient` 10.3.4 maps that to a TPB ending in **`isc_tpb_wait`**, not `isc_tpb_nowait` — opposite of IBExpert's default "Data transaction" profile.
+2. **`FirebirdClient` 10.3.4 genuinely forbids two concurrent transactions on one `FbConnection`.** Confirmed by scanning the shipped assembly: the literal guard string `"A transaction is currently active. Parallel transactions are not supported."` is present, and the connection exposes a single `HasActiveTransaction` slot. The Firebird *engine* supports many transactions per attachment (that's how IBExpert does it — one attachment, multiple native transaction handles), but the managed `FbConnection` wrapper does not expose it. ⇒ "a separate short metadata transaction on the same connection" is **impossible** while a working tx is open; true decoupling needs a **second connection** (Milestone 2).
+3. The real cause of the IBExpert blocking is **not** `wait` — it is that the long-lived read-write working transaction is shared by all the read-only metadata readers ([`FirebirdMetadataReader`](src/EmberTern.Firebird/FirebirdMetadataReader.cs), [`FirebirdDdlReader`](src/EmberTern.Firebird/FirebirdDdlReader.cs), [`FirebirdTableDetailReader`](src/EmberTern.Firebird/FirebirdTableDetailReader.cs)) via `cmd.Transaction = _transactionService?.ActiveTransaction`. When a working tx is active, browsing the schema runs *inside* it and pins object metadata → blocks DDL from other connections.
+
+**C1 — explicit TPB.** [`TransactionService.BuildWorkingTransactionOptions()`](src/EmberTern.Firebird/TransactionService.cs) now returns an `FbTransactionOptions` with `FbTransactionBehavior.Write | ReadCommitted | RecVersion | NoWait` — i.e. `isc_tpb_write + isc_tpb_read_committed + isc_tpb_rec_version + isc_tpb_nowait`, matching IBExpert. `BeginTransactionAsync` uses it instead of `IsolationLevel.ReadCommitted`. Effect: EmberTern fails fast on a lock conflict instead of hanging indefinitely. **This does NOT by itself stop the IBExpert blocking** (that is finding #3 → C2).
+
+**Diagnostics infrastructure** (no UI, per scope). New [`FirebirdDiagnostics`](src/EmberTern.Firebird/FirebirdDiagnostics.cs):
+- `GetCurrentTransactionIdAsync` (`SELECT CURRENT_TRANSACTION`), `DescribeCurrentTransactionAsync` (one-liner: id + isolation + lock-resolution + read-only, from `MON$TRANSACTIONS WHERE MON$TRANSACTION_ID = CURRENT_TRANSACTION`), `GetTransactionsAsync` (`MON$TRANSACTIONS`), `GetAttachmentsAsync` (`MON$ATTACHMENTS`), `BuildReportAsync` (full text dump).
+- Decoders (internal, unit-tested): `DecodeIsolationMode` (0=consistency, 1=concurrency, 2=read_committed rec_version, 3=no_rec_version, 4=read_consistency), `DecodeLockTimeout` (-1=wait infinite, 0=no wait, N=wait Ns), transaction/attachment state.
+- Same access pattern as the other readers: holds `CommandLock`, attaches to the working tx so `CURRENT_TRANSACTION` resolves to it; never opens its own tx.
+- **Begin-time log hook**: when env var `EMBERTERN_TX_DIAG` is set, `BeginTransactionAsync` appends the real server-side TPB (`TX-BEGIN tx=N isolation=[...] lock=[no wait] readOnly=False`) to `%TEMP%\EmberTern-debug.log`. Zero cost when unset. This is the one-switch way to confirm nowait took effect against a live server.
+
+**Manual verification protocol (requires the user's live FB5 + IBExpert — not runnable here).**
+1. Set `EMBERTERN_TX_DIAG=1`, launch, connect, press F5 on any SELECT → the working tx opens. Check `%TEMP%\EmberTern-debug.log` → expect `lock=[no wait]`, `isolation=[read committed (rec_version)]`. Confirms C1.
+2. Leave the tx open (no Commit). Open a table in TableDetail / view another object's DDL → those reads attach to the open working tx.
+3. In IBExpert, attempt `ALTER TABLE` / `DROP` on a touched object.
+**Predicted result: still blocked.** `nowait` changes how EmberTern reacts to a conflict, not its lock/metadata footprint — the open working tx still pins every object the readers touched. This is the empirical confirmation that C2 (Milestone 2) is required.
+
+**C2 pre-implementation analysis (next session — do NOT build yet).**
+
+Reader routing in the two-connection model:
+
+| Path | Connection | Reason |
+|---|---|---|
+| `FirebirdQueryExecutor` (F5), `FirebirdDdlExecutor`, `FirebirdDataEditor` | **#1 working** | user SQL/DDL/DML — must see own uncommitted changes |
+| `FirebirdMetadataReader` (`ListAsync` / `ListColumnsAsync` / `ListDomainsAsync`) | **#2 metadata** | pure browse, read-only, never needs uncommitted state |
+| `FirebirdDdlReader.FetchDdlAsync` (standalone DDL tab) | **#2 metadata** | browse (edge: a just-altered object's DDL lags until commit) |
+| `FirebirdTableDetailReader` — initial browse load (`EnsureLoadedAsync`) | **#2 metadata** | browse |
+| `FirebirdTableDetailReader` — `RefreshStructureAsync` after a structural edit | **#1 working** | must show the user's uncommitted ALTER (the "Add field, see it, Rollback to undo" UX) |
+| `FirebirdTableDetailReader.GetDataPreviewAsync` in the Dane *edit* context | **#1 working** | must show the user's uncommitted DML |
+| `FirebirdDiagnostics` (current-tx) | **#1 working** (attach) | reports the working tx itself |
+
+Key design point — **`FirebirdTableDetailReader` and `FirebirdDdlReader` need *contextual* routing**, not a fixed connection: browse → #2, post-edit refresh → #1. `FirebirdMetadataReader` is unconditionally #2. The routing rule is by **intent** (browse vs. show-my-uncommitted-change), not by tx-active state — otherwise an unrelated browse while a working tx is open would still pin objects on #1.
+
+Classes to modify in C2:
+- `FirebirdConnectionService` — own a second read-only `FbConnection` (metadata) + its own `SemaphoreSlim` (separate `CommandLock`); open/close it in lockstep with the primary, same profile/credentials; add `RequireOpenMetadataConnection()`.
+- The three readers — take which connection + lock to use (per-call or two instances). Honor the no-interface rule (pass the `FbConnection` + lock, or add a small internal selector).
+- `MainWindowViewModel` — wire browse readers to #2, executors/editor to #1.
+- `TableDetailTabViewModel` — distinguish browse-load from post-edit-refresh and pick the connection accordingly; `RefreshStructureAsync` must stay on #1.
+
+Impact on `RefreshStructureAsync` + uncommitted visibility: `RefreshStructureAsync` MUST read on #1 so a just-applied (uncommitted) ALTER is visible; the plain initial load reads on #2. Consequence to accept: the metadata **tree** (always #2) will not reflect an uncommitted DDL change until Commit — correct/expected (the tree shows committed schema). Cost of the second connection: one extra `MON$ATTACHMENTS` entry + a second physical attachment (`Pooling=false`), same credentials — negligible for a dev tool, and lighter than the alternative (which doesn't exist on this driver).
+
+**Gotcha promoted to architecture lore.**
+
+85. **`IsolationLevel.ReadCommitted` on `FirebirdSql.Data.FirebirdClient` maps to a TPB ending in `isc_tpb_WAIT`.** The ADO.NET `IsolationLevel` enum can't express the wait/nowait or rec_version axes, and the driver's default for ReadCommitted is `wait` — so EmberTern blocked indefinitely on lock conflicts. To match IBExpert (and to fail fast), build an explicit `FbTransactionOptions { TransactionBehavior = Write | ReadCommitted | RecVersion | NoWait }` and pass it to `BeginTransactionAsync(options)`. **Rule**: never start a Firebird transaction from a bare `IsolationLevel` — always go through explicit `FbTransactionOptions` so wait/nowait and rec_version are deliberate. The single transaction-creation site is `TransactionService.BeginTransactionAsync`; any new one must do the same. Confirm the live TPB via `MON$TRANSACTIONS.MON$LOCK_TIMEOUT` (0 = nowait) — `EMBERTERN_TX_DIAG=1` logs it on every begin.
+
 ## Current state
 
 - **Build**: clean (zero warnings, `TreatWarningsAsErrors=true` enforced).
-- **Tests**: 868 / 868 passing.
+- **Tests**: 892 / 892 passing.
 - **App**: builds + launches cleanly (8-second-uptime smoke). Table editor: Pola (inline edit + Add/Drop/Move field + Drop FK), Ograniczenia (Add/Drop PK/FK/Check/Unique, PK/Unique with optional USING index config), Indeksy (Add/Drop index + constraint-backed-index guard), Dane (paged inline edit), Opis (editable + Save/Clear), DDL. Computed By has a complete dependency model enforced in the UI (New Table grid cells DISABLE per-row, not just the DDL); domain selection governs/shows the type. Commit/Rollback reachable from every TableDetail sub-tab. New Table grid scrolls horizontally to all columns. Validation/compile messages always surface.
-- **Branch state**: working on master. Latest milestone: **Table-editor polish (4 sessions)** — UX bugfixes, Index Management V1, table-description editing, complete Computed-By dependency model (UI + DDL), New Table horizontal scroll fix, commit path on all TableDetail sub-tabs, and validation-message visibility fix.
+- **Transactions**: working transaction uses explicit TPB `write + read_committed + rec_version + nowait` (IBExpert-matching). Readers still attach to the working tx when active (Milestone 2 / C2 will move pure-browse reads to a dedicated second connection). `EMBERTERN_TX_DIAG=1` logs real server-side TPB to `%TEMP%\EmberTern-debug.log` on every begin.
+- **Branch state**: working on master. Latest milestone: **Transaction TPB hardening — Milestone 1 (C1 + diagnostics)**. Next: **Milestone 2 / C2** — second read-only connection for metadata browsing (analysis + routing table already in this file).
 
 ## V1 — definition of done (all met)
 
