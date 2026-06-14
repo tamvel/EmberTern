@@ -175,6 +175,9 @@ internal static class UiStrings
     public const string GridCopiedCellLabel = "cell";
     public const string GridCopiedRowLabel = "row";
     public const string GridCopiedRowsFormat = "{0} rows";
+    // Context-menu toggle for grid column layout — when checked, columns auto-size to
+    // content and manual widths aren't remembered; when unchecked, manual widths persist.
+    public const string GridAutoFitColumns = "Auto-fit columns";
 
     public const string ResultsEmptyHint = "Run a query to see results.";
     public const string MessagesEmptyHint = "No messages yet.";

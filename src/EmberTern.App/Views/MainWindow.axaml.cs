@@ -13,10 +13,12 @@ using Avalonia.Styling;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Behaviors;
 using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
+using EmberTern.Core.Settings;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Workspace;
 
@@ -178,6 +180,9 @@ public partial class MainWindow : Window
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         if (_currentVm is null) return;
+        // Flush every still-attached grid's layout while ActualWidth is still valid
+        // (before the visual tree is torn down on close).
+        GridLayoutBehavior.FlushAll();
         var state = _currentVm.CaptureWorkspace();
         state.WindowBounds = new WindowBounds
         {
@@ -290,6 +295,10 @@ public partial class MainWindow : Window
             {
                 var settingsDir = Path.GetDirectoryName(_currentVm.Store.FilePath)!;
                 _workspaceStore = new WorkspaceStore(settingsDir, _currentVm.Store.Protector);
+                // Grid layout (column order/width/auto-fit) persists through the same
+                // settings.dat — wire the shared store from the VM's location so tests
+                // never touch the real %AppData% (see gotcha #88).
+                GridLayoutBehavior.Store = new GridProfileStore(settingsDir, _currentVm.Store.Protector);
                 _pendingRestore = _workspaceStore.Load();
                 if (_pendingRestore is not null)
                 {

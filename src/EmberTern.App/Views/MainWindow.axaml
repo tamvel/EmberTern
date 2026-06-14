@@ -914,6 +914,7 @@
                            IsVisible="{Binding ShowResultsEmptyHint}" />
                 <DataGrid x:Name="ResultGrid"
                           Grid.Row="1"
+                          behaviors:GridLayoutBehavior.GridId="QueryResults"
                           IsReadOnly="True"
                           GridLinesVisibility="Horizontal"
                           HeadersVisibility="Column"

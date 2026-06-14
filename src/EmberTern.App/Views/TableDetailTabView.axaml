@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EmberTern.App.ViewModels"
              xmlns:app="using:EmberTern.App"
+             xmlns:behaviors="using:EmberTern.App.Behaviors"
              xmlns:conv="using:EmberTern.App.Converters"
              xmlns:metadata="using:EmberTern.Core.Metadata"
              xmlns:ae="using:AvaloniaEdit"
@@ -68,6 +69,7 @@
         <Grid RowDefinitions="*,4,180">
         <DataGrid x:Name="FieldsGrid"
                   Grid.Row="0"
+                  behaviors:GridLayoutBehavior.GridId="TableDetail.Fields"
                   ItemsSource="{Binding EditableFields}"
                   SelectedItem="{Binding SelectedFieldRow, Mode=TwoWay}"
                   PointerPressed="OnFieldsGridPointerPressed"
@@ -430,6 +432,7 @@
                    Classes.empty="{Binding !HasPrimaryKeyConstraints}"
                    Header="{Binding PrimaryKeyTabHeader}">
             <DataGrid x:Name="PrimaryKeyGrid"
+                      behaviors:GridLayoutBehavior.GridId="TableDetail.Constraints.PrimaryKey"
                       ItemsSource="{Binding PrimaryKeyConstraints}"
                       SelectedItem="{Binding SelectedPrimaryKey, Mode=TwoWay}"
                       PointerPressed="OnConstraintGridPointerPressed"
@@ -474,6 +477,7 @@
                    Classes.empty="{Binding !HasForeignKeyConstraints}"
                    Header="{Binding ForeignKeyTabHeader}">
             <DataGrid x:Name="ForeignKeyGrid"
+                      behaviors:GridLayoutBehavior.GridId="TableDetail.Constraints.ForeignKey"
                       ItemsSource="{Binding ForeignKeyConstraints}"
                       SelectedItem="{Binding SelectedForeignKey, Mode=TwoWay}"
                       PointerPressed="OnConstraintGridPointerPressed"
@@ -527,6 +531,7 @@
                    Classes.empty="{Binding !HasCheckConstraints}"
                    Header="{Binding CheckTabHeader}">
             <DataGrid x:Name="CheckGrid"
+                      behaviors:GridLayoutBehavior.GridId="TableDetail.Constraints.Check"
                       ItemsSource="{Binding CheckConstraints}"
                       SelectedItem="{Binding SelectedCheck, Mode=TwoWay}"
                       PointerPressed="OnConstraintGridPointerPressed"
@@ -566,6 +571,7 @@
                    Classes.empty="{Binding !HasUniqueConstraints}"
                    Header="{Binding UniqueTabHeader}">
             <DataGrid x:Name="UniqueGrid"
+                      behaviors:GridLayoutBehavior.GridId="TableDetail.Constraints.Unique"
                       ItemsSource="{Binding UniqueConstraints}"
                       SelectedItem="{Binding SelectedUnique, Mode=TwoWay}"
                       PointerPressed="OnConstraintGridPointerPressed"
@@ -611,6 +617,7 @@
 
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabIndexes}">
         <DataGrid x:Name="IndexesGrid"
+                  behaviors:GridLayoutBehavior.GridId="TableDetail.Indexes"
                   ItemsSource="{Binding Indexes}"
                   SelectedItem="{Binding SelectedIndex, Mode=TwoWay}"
                   PointerPressed="OnIndexGridPointerPressed"
@@ -882,6 +889,7 @@
                      IsVisible="{Binding ShowDataError}" />
           <DataGrid Grid.Row="3"
                     x:Name="DataPreviewGrid"
+                    behaviors:GridLayoutBehavior.GridId="TableDetail.Data"
                     Classes="data-edit"
                     ItemsSource="{Binding EditableRows}"
                     SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
