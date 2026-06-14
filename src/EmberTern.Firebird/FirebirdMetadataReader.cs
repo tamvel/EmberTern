@@ -44,7 +44,15 @@ public sealed class FirebirdMetadataReader
         // an implicit read tx (auto-committed per command). The connection's
         // CommandLock serializes us against every other reader / executor — FbConnection
         // is single-threaded and concurrent commands hang or throw.
-        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        //
+        // Capture the lock ONCE: LaneLock() resolves to the metadata or data semaphore
+        // based on MetadataIsIndependent, which can flip mid-call (e.g. a connection-level
+        // error breaks the metadata attachment). Re-evaluating it at Release would then
+        // release a DIFFERENT semaphore than we acquired — permanently leaking the one we
+        // hold. That semaphore lives on the long-lived connection service, so a leak
+        // survives reconnect and only a process restart clears it (gotcha below).
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -82,7 +90,7 @@ public sealed class FirebirdMetadataReader
         }
         finally
         {
-            LaneLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -104,7 +112,10 @@ public sealed class FirebirdMetadataReader
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<ColumnSpec>();
 
         var connection = LaneConnection();
-        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock once — see ListAsync for why re-evaluating LaneLock() at
+        // Release can leak a semaphore.
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -136,7 +147,7 @@ public sealed class FirebirdMetadataReader
         }
         finally
         {
-            LaneLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -150,7 +161,10 @@ public sealed class FirebirdMetadataReader
     public async Task<IReadOnlyList<DomainSpec>> ListDomainsAsync(CancellationToken cancellationToken = default)
     {
         var connection = LaneConnection();
-        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock once — see ListAsync for why re-evaluating LaneLock() at
+        // Release can leak a semaphore.
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -182,7 +196,7 @@ public sealed class FirebirdMetadataReader
         }
         finally
         {
-            LaneLock().Release();
+            commandLock.Release();
         }
     }
 

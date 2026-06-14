@@ -189,4 +189,58 @@ public class TableDetailDataEditTests
         Assert.True(vm.IsDataReadOnly);
         Assert.False(vm.CanEditData);
     }
+
+    // ─── PK detection from the authoritative PRIMARY KEY constraint ───────
+
+    [Fact]
+    public void PrimaryKeyColumnsFromConstraints_ReturnsPkConstraintFields()
+    {
+        var pk = TableDetailTabViewModel.PrimaryKeyColumnsFromConstraints(new[]
+        {
+            new ConstraintInfo { Name = "FK_X", ConstraintType = "FOREIGN KEY", Fields = "A" },
+            new ConstraintInfo { Name = "PK_T", ConstraintType = "PRIMARY KEY", Fields = "ID, REGION" },
+        });
+        Assert.Equal(new[] { "ID", "REGION" }, pk);
+    }
+
+    [Fact]
+    public void PrimaryKeyColumnsFromConstraints_NoPk_ReturnsEmpty()
+    {
+        var pk = TableDetailTabViewModel.PrimaryKeyColumnsFromConstraints(new[]
+        {
+            new ConstraintInfo { Name = "U", ConstraintType = "UNIQUE", Fields = "X" },
+        });
+        Assert.Empty(pk);
+    }
+
+    [Fact]
+    public void RefreshPrimaryKeyColumns_DerivesFromConstraint_WhenFieldFlagMissing()
+    {
+        // The exact reported bug: FieldsSql's per-field PK flag missed the PK
+        // (IsPrimaryKey=false on every field) yet the table HAS a PRIMARY KEY
+        // constraint. PK detection must still succeed — otherwise the table is
+        // wrongly stuck in "only INSERT available" while IBExpert allows UPDATE.
+        var vm = new TableDetailTabViewModel("T");
+        vm.Fields.Add(new FieldInfo { Position = 0, Name = "ID", IsPrimaryKey = false });
+        vm.Fields.Add(new FieldInfo { Position = 1, Name = "NAME" });
+        vm.Constraints.Add(new ConstraintInfo { Name = "PK_T", ConstraintType = "PRIMARY KEY", Fields = "ID" });
+
+        vm.RefreshPrimaryKeyColumns();
+
+        Assert.True(vm.HasPrimaryKey);
+        Assert.Equal(new[] { "ID" }, vm.PrimaryKeyColumns);
+        Assert.Equal(string.Empty, vm.EditModeHint);
+    }
+
+    [Fact]
+    public void RefreshPrimaryKeyColumns_FallsBackToFieldFlag_WhenNoConstraintLoaded()
+    {
+        // Before the Constraints step loads (or when the catalog truly only carries
+        // the per-field flag), fall back to FieldInfo.IsPrimaryKey.
+        var vm = new TableDetailTabViewModel("T");
+        vm.Fields.Add(new FieldInfo { Position = 0, Name = "ID", IsPrimaryKey = true });
+        vm.RefreshPrimaryKeyColumns();
+        Assert.True(vm.HasPrimaryKey);
+        Assert.Equal(new[] { "ID" }, vm.PrimaryKeyColumns);
+    }
 }

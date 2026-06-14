@@ -153,7 +153,7 @@ public sealed class FirebirdTableDetailReader
                 var fields = reader.IsDBNull(3) ? string.Empty : reader.GetString(3).Trim();
                 var constraintType = reader.IsDBNull(4) ? null : reader.GetString(4).Trim();
                 var inactiveFlag = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
-                var statistics = reader.IsDBNull(6) ? (double?)null : reader.GetDouble(6);
+                var statistics = NormalizeStatistics(reader.IsDBNull(6) ? (double?)null : reader.GetDouble(6));
                 var expression = reader.IsDBNull(7) ? null : reader.GetString(7).Trim();
 
                 results.Add(new IndexInfo
@@ -881,6 +881,15 @@ public sealed class FirebirdTableDetailReader
         "FROM RDB$INDICES i " +
         "WHERE i.RDB$RELATION_NAME = @tableName " +
         "ORDER BY i.RDB$INDEX_NAME";
+
+    // Firebird stores index selectivity in RDB$INDICES.RDB$STATISTICS as a DOUBLE
+    // in [0, 1]. For an index whose statistics have never been computed — a freshly
+    // created index, or any index on an EMPTY table (SET STATISTICS on zero rows
+    // leaves selectivity undefined) — Firebird uses the sentinel value -1, NOT NULL.
+    // Passing that straight to the grid renders a meaningless "-1.000000" in every
+    // such cell. Treat any negative selectivity as "unknown" → null → blank cell.
+    internal static double? NormalizeStatistics(double? raw)
+        => raw is { } v && v < 0 ? null : raw;
 
     // Constraint subquery is narrowed to PRIMARY KEY / FOREIGN KEY (UNIQUE
     // constraint backing indexes are surfaced through IsUnique). Anything

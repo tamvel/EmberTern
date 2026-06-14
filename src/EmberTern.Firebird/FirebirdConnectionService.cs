@@ -63,6 +63,37 @@ public sealed class FirebirdConnectionService : IDisposable
 
     public event EventHandler? ActiveConnectionChanged;
 
+    // Raised when the in-memory active profile is replaced in place (user edited the
+    // currently-connected connection and saved). Distinct from ActiveConnectionChanged
+    // so consumers can refresh status/profile display WITHOUT triggering the heavier
+    // connection-switch flow (workspace stash/reload, column-cache clear).
+    public event EventHandler? ActiveProfileUpdated;
+
+    /// <summary>
+    /// Replaces the captured active profile with an edited copy of the SAME connection
+    /// (matched by Id), so transaction-profile resolution (read at begin time) and the
+    /// status bar immediately reflect the new settings. No reconnect: connection-string
+    /// changes (host/db/credentials/charset) only take effect on the next reconnect;
+    /// transaction profiles and status display update right away. Returns true when the
+    /// active profile was actually replaced.
+    /// </summary>
+    public bool UpdateActiveProfile(ConnectionProfile profile)
+    {
+        if (!ShouldReplaceActiveProfile(_activeProfile, profile))
+        {
+            return false;
+        }
+
+        _activeProfile = profile;
+        ActiveProfileUpdated?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    // Pure decision so a unit test can pin it without a live connection: replace only
+    // when something is active and the incoming edit targets that same connection Id.
+    internal static bool ShouldReplaceActiveProfile(ConnectionProfile? active, ConnectionProfile? incoming)
+        => active is not null && incoming is not null && active.Id == incoming.Id;
+
     internal SemaphoreSlim CommandLock => _commandLock;
 
     // Per-role command lock. Metadata falls back to the data lock when the second
@@ -164,6 +195,71 @@ public sealed class FirebirdConnectionService : IDisposable
         {
             throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
         }
+    }
+
+    /// <summary>
+    /// Runs administrative maintenance statements (e.g. <c>SET STATISTICS INDEX</c>)
+    /// each in its OWN short, auto-committed transaction on a transient connection to
+    /// the active database — fully independent of the Data/Metadata working transactions
+    /// (C2 lanes). This matches how IBExpert recomputes statistics: the operation
+    /// completes immediately and leaves NO transaction pending for the user to Commit.
+    /// A separate attachment is used precisely because the managed FbConnection allows
+    /// only one transaction at a time, so we must not piggy-back on (or block) a working
+    /// transaction. Returns a per-statement result aligned with <paramref name="statements"/>:
+    /// null = success, otherwise the server error message (so a batch can continue past a
+    /// single failure and report which ones failed).
+    /// </summary>
+    public async Task<IReadOnlyList<string?>> ExecuteAdminBatchAsync(
+        IReadOnlyList<string> statements,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(statements);
+        if (statements.Count == 0)
+        {
+            return Array.Empty<string?>();
+        }
+        if (_activeProfile is null)
+        {
+            throw new InvalidOperationException("No active Firebird connection.");
+        }
+
+        var results = new string?[statements.Count];
+        var connectionString = BuildConnectionString(_activeProfile);
+        await using var connection = new FbConnection(connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        for (var i = 0; i < statements.Count; i++)
+        {
+            FbTransaction? tx = null;
+            try
+            {
+                tx = (FbTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+                await using var cmd = connection.CreateCommand();
+                cmd.CommandText = statements[i];
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = tx;
+                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
+                results[i] = null;
+            }
+            catch (FbException ex)
+            {
+                results[i] = ex.Message;
+                if (tx is not null)
+                {
+                    try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { /* best-effort */ }
+                }
+            }
+            finally
+            {
+                if (tx is not null)
+                {
+                    await tx.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+        }
+
+        return results;
     }
 
     public FbConnection RequireOpenConnection() => RequireOpenConnection(ConnectionRole.Data);

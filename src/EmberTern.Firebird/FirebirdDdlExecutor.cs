@@ -32,6 +32,18 @@ public sealed class FirebirdDdlExecutor
     }
 
     /// <summary>
+    /// Runs administrative maintenance statements (e.g. <c>SET STATISTICS INDEX</c>) in
+    /// their own short, auto-committed transactions — independent of the working
+    /// transaction, so nothing is left pending for the user to Commit (IBExpert-style).
+    /// Delegates to <see cref="FirebirdConnectionService.ExecuteAdminBatchAsync"/>;
+    /// returns per-statement results (null = ok, otherwise the error message).
+    /// </summary>
+    public Task<IReadOnlyList<string?>> ExecuteAutonomousBatchAsync(
+        IReadOnlyList<string> statements,
+        CancellationToken cancellationToken = default)
+        => _connectionService.ExecuteAdminBatchAsync(statements, cancellationToken);
+
+    /// <summary>
     /// Splits <paramref name="sql"/> on top-level semicolons, then executes each
     /// non-empty statement in order. Auto-begins the user's working transaction
     /// when none is active (mirrors <see cref="FirebirdQueryExecutor"/>'s F5

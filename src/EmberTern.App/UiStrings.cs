@@ -73,6 +73,9 @@ internal static class UiStrings
     public const string TransactionRollbackDataTooltip = "Roll back data transaction";
     public const string TransactionCommitMetadataTooltip = "Commit metadata transaction";
     public const string TransactionRollbackMetadataTooltip = "Roll back metadata transaction";
+    // Unified single-pair tooltips — the app commits/rolls back whichever lane(s) are open.
+    public const string TransactionCommitTooltip = "Commit";
+    public const string TransactionRollbackTooltip = "Roll back";
     // Execution-lane feedback: which profile the auto-router chose for a statement.
     // {0} = lane (Data/Metadata), {1} = profile label (e.g. "Read Committed").
     public const string ExecutedViaProfileFormat = "Executed via {0} profile ({1}).";
@@ -274,6 +277,10 @@ internal static class UiStrings
     public const string DataEditDeleteConfirmYes = "Delete";
     public const string DataEditNoPrimaryKeyHint = "Table has no primary key — only INSERT is available.";
     public const string DataEditNotConnectedHint = "Connect to a database to edit data.";
+    // Cell context-menu: set the right-clicked cell to NULL. Enabled only for
+    // nullable, non-computed columns; routes through the same UpdateCellAsync
+    // path as a manual edit.
+    public const string DataEditSetNull = "Set NULL";
 
     public const string BlobEditorTitle = "Edit BLOB";
     public const string BlobEditorBinaryPlaceholder = "Binary BLOB ({0} bytes) — cannot be edited as text.";
@@ -510,6 +517,12 @@ internal static class UiStrings
     // Shown when the user tries to drop an index that backs a PK / FK / UNIQUE
     // constraint — those are managed via the Ograniczenia tab.
     public const string IndexConstraintBackedFormat = "Index '{0}' backs a constraint — drop the constraint from the Ograniczenia tab instead.";
+    // SET STATISTICS INDEX — recompute index selectivity (single + all).
+    public const string IndexMenuRecomputeStatistics = "Recompute statistics";
+    public const string IndexMenuRecomputeAllStatistics = "Recompute all statistics";
+    public const string IndexStatsRecomputedOneFormat = "Recomputed statistics for index '{0}'.";
+    public const string IndexStatsRecomputedAllFormat = "Recomputed statistics for {0} of {1} index(es).";
+    public const string IndexStatsRecomputeFailedFormat = "Failed to recompute statistics for: {0} ({1})";
 
     // ─── Table description editing (Opis tab) ─────────────────────────────
     public const string TableDescriptionEditLabel = "Table description";

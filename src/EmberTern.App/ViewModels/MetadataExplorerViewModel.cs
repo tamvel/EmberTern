@@ -85,8 +85,7 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     [RelayCommand]
     public async Task RefreshAsync()
     {
-        // Only connected nodes have anything to refresh. Iterate categories that were
-        // previously expanded so the user doesn't have to collapse/re-expand to see fresh data.
+        // Only connected nodes have anything to refresh.
         foreach (var connection in Connections)
         {
             if (!connection.IsConnected)
@@ -100,10 +99,24 @@ public partial class MetadataExplorerViewModel : ViewModelBase
                 {
                     continue;
                 }
-                ResetGroupToPlaceholder(group);
-                if (group.IsExpanded)
+
+                // Re-fetch every category that already held data. Categories are
+                // eager-loaded on connect but stay COLLAPSED, so the previous code —
+                // which only reloaded EXPANDED groups and reset everything else to a
+                // bare placeholder — wiped the "(N)" count off every collapsed category
+                // and never brought it back (the user saw all counters vanish after a
+                // refresh). Reloading the loaded/expanded ones restores the counts in
+                // place; LoadGroupAsync only clears + repopulates AFTER its fetch
+                // succeeds, so a transient error keeps the old data instead of blanking
+                // it. Categories that never loaded (errored / unsupported on this FB
+                // version) reset to a placeholder for the user to expand-and-retry.
+                if (group.IsLoaded || group.IsExpanded)
                 {
                     await LoadGroupAsync(group).ConfigureAwait(true);
+                }
+                else
+                {
+                    ResetGroupToPlaceholder(group);
                 }
             }
         }

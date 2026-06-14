@@ -565,44 +565,25 @@
                   <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <!-- Data lane Commit / Rollback (connection #1). -->
+              <!-- Single unified Commit / Rollback pair. The app auto-routes each
+                   statement to the Data or Metadata lane, so the user never picks a
+                   lane: Commit settles every open lane, Rollback reverts every
+                   active/error lane (both, when both are open). Enabled state follows
+                   the actual transaction(s); visibility follows the tab as before. -->
               <Button Classes="icon"
                       Content="✓"
                       FontSize="14"
                       Foreground="{DynamicResource CommitButtonBrush}"
-                      ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitDataTooltip}"
-                      Command="{Binding CommitCommand}"
-                      IsEnabled="{Binding IsTransactionActive}"
-                      IsVisible="{Binding ShowDataTransactionButtons}" />
+                      ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
+                      Command="{Binding CommitAllCommand}"
+                      IsVisible="{Binding ShowTransactionButtons}" />
               <Button Classes="icon"
                       Content="✕"
                       FontSize="14"
                       Foreground="{DynamicResource RollbackButtonBrush}"
-                      ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackDataTooltip}"
-                      Command="{Binding RollbackCommand}"
-                      IsEnabled="{Binding !IsTransactionIdle}"
-                      IsVisible="{Binding ShowDataTransactionButtons}" />
-              <!-- Metadata lane Commit / Rollback (connection #2). Separated + table-tinted
-                   so it reads as a distinct lane. -->
-              <Border Width="1" Margin="4,4"
-                      Background="{DynamicResource BorderBrush}"
-                      IsVisible="{Binding ShowMetadataTransactionButtons}" />
-              <Button Classes="icon"
-                      Content="✓"
-                      FontSize="14"
-                      Foreground="{DynamicResource IconColor_Table}"
-                      ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitMetadataTooltip}"
-                      Command="{Binding CommitMetadataCommand}"
-                      IsEnabled="{Binding IsMetadataTransactionActive}"
-                      IsVisible="{Binding ShowMetadataTransactionButtons}" />
-              <Button Classes="icon"
-                      Content="✕"
-                      FontSize="14"
-                      Foreground="{DynamicResource IconColor_Table}"
-                      ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackMetadataTooltip}"
-                      Command="{Binding RollbackMetadataCommand}"
-                      IsEnabled="{Binding !IsMetadataTransactionIdle}"
-                      IsVisible="{Binding ShowMetadataTransactionButtons}" />
+                      ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackTooltip}"
+                      Command="{Binding RollbackAllCommand}"
+                      IsVisible="{Binding ShowTransactionButtons}" />
               <!-- Refresh reuses the Dane sub-tab's existing reload path (with current
                    sort params). Visible only when the Dane sub-tab is active inside a
                    TableDetail tab. -->

@@ -134,7 +134,13 @@ public partial class TableDetailTabViewModel : ViewModelBase
         // collection so the panel auto-syncs without an explicit hook in
         // each callsite).
         DependedOnBy.CollectionChanged += OnDependedOnByCollectionChanged;
+        // "Recompute all statistics" is enabled only when the table has indexes —
+        // re-evaluate its CanExecute when the loaded index list changes.
+        Indexes.CollectionChanged += OnIndexesCollectionChanged;
     }
+
+    private void OnIndexesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => RecomputeAllIndexStatisticsCommand.NotifyCanExecuteChanged();
 
     // Mirror Fields → EditableFields whenever Fields changes (load + post-Compile
     // re-load both clear-and-rebuild Fields). EditableFields is what the Pola
@@ -785,18 +791,49 @@ public partial class TableDetailTabViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Recomputes <see cref="PrimaryKeyColumns"/> from the current <see cref="Fields"/>.
-    /// Called after each Fields load and whenever fields change. Public so the
-    /// LoadAsync path can drive the refresh deterministically; also called from
-    /// <see cref="RebuildEditableRows"/> indirectly via the load chain.
+    /// Recomputes <see cref="PrimaryKeyColumns"/>. The authoritative source is the
+    /// PRIMARY KEY entry in <see cref="Constraints"/> — loaded straight from
+    /// RDB$RELATION_CONSTRAINTS → RDB$INDEX_SEGMENTS (the same reliable path that fills
+    /// the Ograniczenia tab). We deliberately do NOT trust the per-field
+    /// <see cref="FieldInfo.IsPrimaryKey"/> flag as the primary source: it comes from a
+    /// correlated subquery in FieldsSql whose <c>s.RDB$FIELD_NAME = rf.RDB$FIELD_NAME</c>
+    /// CHAR comparison can return 0 for a table that genuinely HAS a primary key, which
+    /// left <see cref="HasPrimaryKey"/> false and surfaced "Table has no primary key —
+    /// only INSERT is available" on a table IBExpert happily UPDATEs. The flag is used
+    /// only as a fallback (e.g. before the constraints have loaded). Called after the
+    /// Fields AND the Constraints load steps, and from <see cref="RebuildEditableRows"/>.
     /// </summary>
     public void RefreshPrimaryKeyColumns()
     {
-        PrimaryKeyColumns = Fields.Where(f => f.IsPrimaryKey).Select(f => f.Name).ToList();
+        var fromConstraint = PrimaryKeyColumnsFromConstraints(Constraints);
+        PrimaryKeyColumns = fromConstraint.Count > 0
+            ? fromConstraint
+            : Fields.Where(f => f.IsPrimaryKey).Select(f => f.Name).ToList();
         OnPropertyChanged(nameof(PrimaryKeyColumns));
         OnPropertyChanged(nameof(HasPrimaryKey));
         OnPropertyChanged(nameof(EditModeHint));
         DeleteRowCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Extracts the primary-key column names from a loaded constraint set: the fields of
+    /// the PRIMARY KEY constraint (the reader stores them comma-separated via LIST()).
+    /// Empty when there is no PK constraint. Pure + internal so it's unit-testable.
+    /// </summary>
+    internal static IReadOnlyList<string> PrimaryKeyColumnsFromConstraints(IEnumerable<ConstraintInfo> constraints)
+    {
+        foreach (var c in constraints)
+        {
+            if (string.Equals(c.ConstraintType, "PRIMARY KEY", StringComparison.OrdinalIgnoreCase))
+            {
+                return (c.Fields ?? string.Empty)
+                    .Split(',')
+                    .Select(f => f.Trim())
+                    .Where(f => f.Length > 0)
+                    .ToList();
+            }
+        }
+        return Array.Empty<string>();
     }
 
     public bool CanAddRow => _dataEditor is not null;
@@ -969,6 +1006,48 @@ public partial class TableDetailTabViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasEditStatusMessage));
     }
 
+    /// <summary>
+    /// True when the data-preview column at <paramref name="columnIndex"/> accepts
+    /// NULL — gates the cell context-menu's "Set NULL". Nullable means: a matching
+    /// <see cref="FieldInfo"/> exists, it is NOT declared NOT NULL, it is not a
+    /// primary-key column, and it is not a computed (read-only) column.
+    /// </summary>
+    public bool IsColumnNullable(int columnIndex)
+    {
+        var name = ResolveColumnName(columnIndex);
+        if (name is null) return false;
+        var field = Fields.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (field is null) return false;
+        if (field.NotNull || field.IsPrimaryKey) return false;
+        if (!string.IsNullOrWhiteSpace(field.ComputedSource)) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Sets the right-clicked cell to NULL through the EXACT SAME
+    /// <see cref="UpdateCellAsync"/> path a manual edit uses — same change-tracking,
+    /// same UPDATE statement, same optimistic-write/revert handling. No separate save
+    /// path. Only acts on nullable columns. Because there is no in-grid CellEditEnding
+    /// to trigger Avalonia's cell-template rebuild, the row is repainted afterwards.
+    /// </summary>
+    public async Task SetCellNullAsync(object?[] row, int columnIndex)
+    {
+        if (row is null) return;
+        if (columnIndex < 0 || columnIndex >= row.Length) return;
+        if (_dataEditor is null) return;
+        if (!IsColumnNullable(columnIndex)) return;
+        if (row[columnIndex] is null) return; // already NULL — nothing to do
+
+        await UpdateCellAsync(row, columnIndex, null).ConfigureAwait(true);
+
+        // UpdateCellAsync repaints (ReplaceRowInGrid) only on its revert paths; on the
+        // success path the row reference is unchanged and nothing told the grid to
+        // rebuild the cell (no CellEditEnding fired for a context-menu action). Force
+        // the repaint. If the update reverted (cloned the row away), this no-ops because
+        // the original 'row' is no longer in EditableRows.
+        ReplaceRowInGrid(row);
+    }
+
     // Force the DataGrid to rebuild this row's cells by swapping the reference
     // with a fresh array. ObservableCollection's indexer-set raises a Replace
     // event regardless of reference equality, but DataGrid checks reference
@@ -1135,6 +1214,10 @@ public partial class TableDetailTabViewModel : ViewModelBase
                     var constraints = await _reader.GetConstraintsAsync(TableName, cancellationToken).ConfigureAwait(true);
                     Constraints.Clear();
                     foreach (var c in constraints) Constraints.Add(c);
+                    // PK now comes from the PRIMARY KEY constraint (authoritative) — the
+                    // Fields step may have derived it from the unreliable per-field flag,
+                    // so recompute it here now that Constraints is populated.
+                    RefreshPrimaryKeyColumns();
                 });
 
             await SafeLoadAsync(
@@ -1891,6 +1974,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DropIndexCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RecomputeIndexStatisticsCommand))]
     private IndexInfo? _selectedIndex;
 
     public bool CanManageIndexes => _ddlExecutor is not null;
@@ -2019,6 +2103,121 @@ public partial class TableDetailTabViewModel : ViewModelBase
         {
             ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.IndexExecuteFailedFormat, ex.Message);
             return null;
+        }
+    }
+
+    // ─── Index statistics (Przelicz statystykę / Przelicz wszystkie) ──────
+    //
+    // SET STATISTICS INDEX recomputes a single index's selectivity. It runs in its own
+    // short, AUTO-COMMITTED administrative transaction (ExecuteAutonomousBatchAsync) —
+    // NOT the working transaction — so the operation completes immediately and the user
+    // never has to press Commit (matching IBExpert). "Recompute all" passes the already-
+    // loaded index list (no extra fetch); each statement is committed independently, so
+    // a single failure doesn't abort the rest, and the failures are reported.
+
+    // Informational (non-error) completion line shown under the sub-tabs next to
+    // ErrorMessage. Set after a recompute completes.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatusMessage))]
+    private string? _statusMessage;
+
+    public bool HasStatusMessage => !string.IsNullOrEmpty(StatusMessage);
+
+    public bool CanRecomputeIndexStatistics => _ddlExecutor is not null && SelectedIndex is not null;
+    public bool CanRecomputeAllIndexStatistics => _ddlExecutor is not null && Indexes.Count > 0;
+
+    [RelayCommand(CanExecute = nameof(CanRecomputeIndexStatistics))]
+    private Task RecomputeIndexStatistics()
+    {
+        if (SelectedIndex is not { } index || string.IsNullOrWhiteSpace(index.Name))
+        {
+            return Task.CompletedTask;
+        }
+        return RecomputeStatisticsForAsync(new[] { index.Name }, single: true);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRecomputeAllIndexStatistics))]
+    private Task RecomputeAllIndexStatistics()
+    {
+        var names = Indexes
+            .Select(i => i.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .ToList();
+        return RecomputeStatisticsForAsync(names, single: false);
+    }
+
+    /// <summary>
+    /// Recomputes <c>SET STATISTICS INDEX</c> for each named index in its OWN short
+    /// auto-committed admin transaction (no working transaction, no manual Commit —
+    /// IBExpert behaviour). A failure on one index is recorded and the rest still run.
+    /// Refreshes the structure so the Statistics column shows the committed values, then
+    /// surfaces a completion message. Public so a unit test can drive it with a
+    /// disconnected executor (which exercises the all-failed branch).
+    /// </summary>
+    public async Task RecomputeStatisticsForAsync(IReadOnlyList<string> indexNames, bool single)
+    {
+        if (_ddlExecutor is null) return;
+        if (indexNames is null || indexNames.Count == 0) return;
+
+        ErrorMessage = null;
+        StatusMessage = null;
+
+        // Build one SET STATISTICS per (valid) index name; keep names + SQL aligned.
+        var names = new List<string>(indexNames.Count);
+        var sqls = new List<string>(indexNames.Count);
+        foreach (var name in indexNames)
+        {
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            var sql = SafeBuildIndex(() => DdlGenerator.BuildSetIndexStatistics(name));
+            if (sql is null) continue; // builder validation failed; ErrorMessage already set
+            names.Add(name);
+            sqls.Add(sql);
+        }
+        if (sqls.Count == 0) return;
+
+        // Autonomous, auto-committed admin transaction(s) — leaves no pending tx.
+        IReadOnlyList<string?> results;
+        try
+        {
+            results = await _ddlExecutor.ExecuteAutonomousBatchAsync(sqls).ConfigureAwait(true);
+        }
+        catch (InvalidOperationException)
+        {
+            // No active connection — treat every statement as failed.
+            results = System.Linq.Enumerable.Repeat<string?>(UiStrings.DataEditNotConnectedHint, sqls.Count).ToList();
+        }
+
+        var ok = 0;
+        var failures = new List<string>();
+        for (var i = 0; i < names.Count; i++)
+        {
+            var error = i < results.Count ? results[i] : "unknown";
+            if (error is null) ok++;
+            else failures.Add(names[i]);
+        }
+
+        // Refresh so the Statistics column reflects the (committed) recomputed selectivity.
+        await RefreshStructureAsync().ConfigureAwait(true);
+
+        // Completion info — set AFTER the refresh so the reload doesn't clear it.
+        if (single)
+        {
+            StatusMessage = failures.Count == 0
+                ? string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.IndexStatsRecomputedOneFormat, names[0])
+                : null;
+        }
+        else
+        {
+            StatusMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.IndexStatsRecomputedAllFormat, ok, names.Count);
+        }
+
+        if (failures.Count > 0)
+        {
+            ErrorMessage = string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                UiStrings.IndexStatsRecomputeFailedFormat,
+                string.Join(", ", failures),
+                string.Empty);
         }
     }
 
@@ -2243,9 +2442,26 @@ public partial class TableDetailTabViewModel : ViewModelBase
         // Identical mechanics to RefreshStructureAsync — kept separate so the
         // call site reads clearly at the owner level (search for
         // RefreshAfterTransactionAsync to find every transaction-driven
-        // refresh).
+        // refresh). Use this ONLY after a METADATA-lane commit/rollback (DDL may
+        // have changed the schema). After a DATA-lane commit/rollback the schema
+        // is unchanged — use RefreshDataAfterTransactionAsync instead.
         return RefreshStructureAsync(ct);
     }
+
+    /// <summary>
+    /// Lightweight post-transaction refresh for a DATA-lane commit/rollback: reloads
+    /// ONLY the data preview, never the structure. A data edit (UPDATE/INSERT/DELETE)
+    /// can't change the schema, so re-fetching fields/constraints/indexes/dependencies/
+    /// DDL is pure waste — that full reload is what froze the UI for seconds and, while
+    /// it tore down and rebuilt the Fields model, transiently dropped
+    /// <see cref="HasPrimaryKey"/> to false ("Table has no primary key — only INSERT is
+    /// available"). <see cref="ReloadDataPreviewAsync"/> keeps Fields/PK intact
+    /// (EnsureLoadedAsync is idempotent — it does NOT reset the structure load) and is
+    /// essential on rollback (the grid's optimistic writes must be reverted to the real
+    /// DB values).
+    /// </summary>
+    public Task RefreshDataAfterTransactionAsync(System.Threading.CancellationToken ct = default)
+        => ReloadDataPreviewAsync(ct);
     public bool CanDropField => _ddlExecutor is not null && SelectedField is not null;
     public bool CanMoveFieldUp => _ddlExecutor is not null && SelectedField is not null && Fields.IndexOf(SelectedField) > 0;
     public bool CanMoveFieldDown => _ddlExecutor is not null && SelectedField is not null && Fields.IndexOf(SelectedField) >= 0 && Fields.IndexOf(SelectedField) < Fields.Count - 1;

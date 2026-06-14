@@ -721,11 +721,11 @@ public static class DdlGenerator
 
     // ─── Index generation (Index Management V1) ──────────────────────────
     //
-    // Add + Drop only. Firebird has no ALTER INDEX that changes columns /
-    // uniqueness / direction — a future "edit index" is Drop + Create over
+    // Add + Drop + recompute-statistics. Firebird has no ALTER INDEX that changes
+    // columns / uniqueness / direction — a future "edit index" is Drop + Create over
     // these builders. Indexes backing a PK / FK / UNIQUE constraint are managed
-    // through the constraint (the VM blocks dropping them here). ACTIVE/INACTIVE
-    // and SET STATISTICS are true ALTERs but out of V1 scope.
+    // through the constraint (the VM blocks dropping them here). ACTIVE/INACTIVE is
+    // still out of scope.
 
     /// <summary>
     /// <c>CREATE [UNIQUE] [DESCENDING] INDEX "ix" ON "T" ("A", "B")</c>, or
@@ -778,6 +778,20 @@ public static class DdlGenerator
         if (string.IsNullOrWhiteSpace(indexName))
             throw new ArgumentException("Index name is required.", nameof(indexName));
         return $"DROP INDEX {Quote(indexName.Trim())}";
+    }
+
+    /// <summary>
+    /// <c>SET STATISTICS INDEX "ix"</c> — recomputes the index's selectivity.
+    /// This is Firebird's statement for refreshing a SINGLE index's statistics
+    /// (valid on FB 1.5 / 2.x / 3 / 4 / 5). Firebird has no <c>ANALYZE INDEX</c>
+    /// (that is Oracle syntax); to recompute every index of a table, the caller
+    /// issues one <c>SET STATISTICS INDEX</c> per index.
+    /// </summary>
+    public static string BuildSetIndexStatistics(string indexName)
+    {
+        if (string.IsNullOrWhiteSpace(indexName))
+            throw new ArgumentException("Index name is required.", nameof(indexName));
+        return $"SET STATISTICS INDEX {Quote(indexName.Trim())}";
     }
 
     private static void ValidateConstraintBasics(string tableName, string constraintName, IReadOnlyList<string> fields)

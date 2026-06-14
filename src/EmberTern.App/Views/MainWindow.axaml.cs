@@ -650,8 +650,10 @@ public partial class MainWindow : Window
         var updated = await dialog.ShowDialog<EmberTern.Core.Connections.ConnectionProfile?>(this);
         if (updated is not null)
         {
-            _currentVm.Store.Upsert(updated);
-            _currentVm.ReloadConnections();
+            // Persists + (when this is the active connection) refreshes the live profile
+            // so the status bar + next transaction pick up the edited settings, then
+            // rebuilds the tree.
+            _currentVm.ApplyEditedProfile(updated);
         }
     }
 

@@ -291,6 +291,21 @@ public class FirebirdTableDetailReaderTests
         Assert.Equal(expected, FirebirdTableDetailReader.NormalizeIndexType(constraintType));
     }
 
+    [Theory]
+    // Firebird stores -1 in RDB$STATISTICS for indexes with no computed selectivity
+    // (freshly created / empty table). That sentinel must surface as null (blank cell),
+    // never as a literal "-1". Any negative is treated as the sentinel.
+    [InlineData(-1.0, null)]
+    [InlineData(-0.5, null)]
+    [InlineData(null, null)]
+    [InlineData(0.0, 0.0)]
+    [InlineData(0.0001234, 0.0001234)]
+    [InlineData(1.0, 1.0)]
+    public void NormalizeStatistics_MapsNegativeSentinelToNull(double? raw, double? expected)
+    {
+        Assert.Equal(expected, FirebirdTableDetailReader.NormalizeStatistics(raw));
+    }
+
     [Fact]
     public void IndexInfo_NewPropertiesDefaultsAreSensible()
     {

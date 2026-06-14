@@ -96,6 +96,28 @@ public class IndexManagementTests
         Assert.Throws<ArgumentException>(() => DdlGenerator.BuildDropIndex(name));
     }
 
+    // ─── DdlGenerator.BuildSetIndexStatistics (Recompute statistics) ──────
+
+    [Fact]
+    public void BuildSetIndexStatistics_Quotes()
+    {
+        Assert.Equal("SET STATISTICS INDEX \"IDX_X\"", DdlGenerator.BuildSetIndexStatistics("IDX_X"));
+    }
+
+    [Fact]
+    public void BuildSetIndexStatistics_EscapesInternalQuotes()
+    {
+        Assert.Equal("SET STATISTICS INDEX \"I\"\"X\"", DdlGenerator.BuildSetIndexStatistics("I\"X"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void BuildSetIndexStatistics_ThrowsOnEmpty(string name)
+    {
+        Assert.Throws<ArgumentException>(() => DdlGenerator.BuildSetIndexStatistics(name));
+    }
+
     // ─── IndexDialogViewModel ─────────────────────────────────────────────
 
     [Fact]
@@ -244,6 +266,60 @@ public class IndexManagementTests
         await vm.DropIndexCommand.ExecuteAsync(null);
 
         Assert.Null(vm.ErrorMessage);
+    }
+
+    // ─── Recompute statistics (Przelicz statystykę / wszystkie) ──────────
+
+    [Fact]
+    public void CanRecomputeIndexStatistics_RequiresExecutorAndSelection()
+    {
+        // No executor → never available.
+        var noExec = new TableDetailTabViewModel("T");
+        Assert.False(noExec.CanRecomputeIndexStatistics);
+
+        using var harness = new ExecutorHarness();
+        Assert.False(harness.Vm.CanRecomputeIndexStatistics);     // no selection yet
+        harness.Vm.SelectedIndex = new IndexInfo { Name = "IDX_A" };
+        Assert.True(harness.Vm.CanRecomputeIndexStatistics);
+    }
+
+    [Fact]
+    public void CanRecomputeAllIndexStatistics_RequiresExecutorAndIndexes()
+    {
+        var noExec = new TableDetailTabViewModel("T");
+        Assert.False(noExec.CanRecomputeAllIndexStatistics);
+
+        using var harness = new ExecutorHarness();
+        Assert.False(harness.Vm.CanRecomputeAllIndexStatistics);  // no indexes
+        harness.Vm.Indexes.Add(new IndexInfo { Name = "IDX_A" });
+        Assert.True(harness.Vm.CanRecomputeAllIndexStatistics);
+    }
+
+    [Fact]
+    public async Task RecomputeAll_Disconnected_ContinuesPastFailures_ReportsEachAndCount()
+    {
+        using var harness = new ExecutorHarness();
+        var vm = harness.Vm;
+
+        await vm.RecomputeStatisticsForAsync(new[] { "IDX_A", "IDX_B", "IDX_C" }, single: false);
+
+        // Every index was attempted despite each one failing (disconnected executor)
+        // — completion line reports 0 of 3, error lists all three names.
+        Assert.NotNull(vm.StatusMessage);
+        Assert.Contains("0 of 3", vm.StatusMessage);
+        Assert.NotNull(vm.ErrorMessage);
+        Assert.Contains("IDX_A", vm.ErrorMessage);
+        Assert.Contains("IDX_B", vm.ErrorMessage);
+        Assert.Contains("IDX_C", vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task RecomputeStatisticsFor_EmptyList_NoOp()
+    {
+        using var harness = new ExecutorHarness();
+        await harness.Vm.RecomputeStatisticsForAsync(System.Array.Empty<string>(), single: false);
+        Assert.Null(harness.Vm.StatusMessage);
+        Assert.Null(harness.Vm.ErrorMessage);
     }
 
     private sealed class ExecutorHarness : IDisposable

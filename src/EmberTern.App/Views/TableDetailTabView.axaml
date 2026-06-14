@@ -639,6 +639,11 @@
                         Command="{Binding AddIndexCommand}" />
               <MenuItem Header="{x:Static app:UiStrings.IndexMenuDrop}"
                         Command="{Binding DropIndexCommand}" />
+              <Separator />
+              <MenuItem Header="{x:Static app:UiStrings.IndexMenuRecomputeStatistics}"
+                        Command="{Binding RecomputeIndexStatisticsCommand}" />
+              <MenuItem Header="{x:Static app:UiStrings.IndexMenuRecomputeAllStatistics}"
+                        Command="{Binding RecomputeAllIndexStatisticsCommand}" />
             </ContextMenu>
           </DataGrid.ContextMenu>
           <DataGrid.Columns>
@@ -905,7 +910,19 @@
                     HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                     VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                     Background="{DynamicResource BackgroundBrush}"
-                    IsVisible="{Binding HasDataResult}" />
+                    IsVisible="{Binding HasDataResult}">
+            <DataGrid.ContextMenu>
+              <!-- Per-cell "Set NULL". The right-clicked row + column are resolved in
+                   OnDataGridPointerPressed, which also enables/disables this item by the
+                   clicked column's nullability. The Click handler routes through the VM's
+                   SetCellNullAsync → UpdateCellAsync (the existing edit/save path). -->
+              <ContextMenu>
+                <MenuItem x:Name="SetNullMenuItem"
+                          Header="{x:Static app:UiStrings.DataEditSetNull}"
+                          Click="OnSetCellNullClick" />
+              </ContextMenu>
+            </DataGrid.ContextMenu>
+          </DataGrid>
         </Grid>
       </TabItem>
 
@@ -968,6 +985,13 @@
                  FontSize="11"
                  TextWrapping="Wrap"
                  IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <!-- Non-error completion info (e.g. "Recomputed statistics for N of M indexes"). -->
+      <TextBlock Text="{Binding StatusMessage}"
+                 Classes="subtle"
+                 Margin="10,4"
+                 FontSize="11"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding HasStatusMessage}" />
     </StackPanel>
   </Grid>
 

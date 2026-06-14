@@ -44,7 +44,10 @@ public sealed class FirebirdDiagnostics
     public async Task<long> GetCurrentTransactionIdAsync(CancellationToken cancellationToken = default)
     {
         var connection = LaneConnection();
-        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock once so Release targets the SAME semaphore we acquired even
+        // if MetadataIsIndependent flips mid-call (see FirebirdMetadataReader.ListAsync).
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -60,7 +63,7 @@ public sealed class FirebirdDiagnostics
         }
         finally
         {
-            LaneLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -72,7 +75,10 @@ public sealed class FirebirdDiagnostics
     public async Task<string> DescribeCurrentTransactionAsync(CancellationToken cancellationToken = default)
     {
         var connection = LaneConnection();
-        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock once so Release targets the SAME semaphore we acquired even
+        // if MetadataIsIndependent flips mid-call (see FirebirdMetadataReader.ListAsync).
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -100,7 +106,7 @@ public sealed class FirebirdDiagnostics
         }
         finally
         {
-            LaneLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -108,7 +114,10 @@ public sealed class FirebirdDiagnostics
     public async Task<IReadOnlyList<MonTransactionInfo>> GetTransactionsAsync(CancellationToken cancellationToken = default)
     {
         var connection = LaneConnection();
-        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock once so Release targets the SAME semaphore we acquired even
+        // if MetadataIsIndependent flips mid-call (see FirebirdMetadataReader.ListAsync).
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -138,7 +147,7 @@ public sealed class FirebirdDiagnostics
         }
         finally
         {
-            LaneLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -146,7 +155,10 @@ public sealed class FirebirdDiagnostics
     public async Task<IReadOnlyList<MonAttachmentInfo>> GetAttachmentsAsync(CancellationToken cancellationToken = default)
     {
         var connection = LaneConnection();
-        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock once so Release targets the SAME semaphore we acquired even
+        // if MetadataIsIndependent flips mid-call (see FirebirdMetadataReader.ListAsync).
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -176,7 +188,7 @@ public sealed class FirebirdDiagnostics
         }
         finally
         {
-            LaneLock().Release();
+            commandLock.Release();
         }
     }
 

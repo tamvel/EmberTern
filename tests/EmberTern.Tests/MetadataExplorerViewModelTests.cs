@@ -107,6 +107,37 @@ public class MetadataExplorerViewModelTests
         Assert.DoesNotContain(harness.Store.LoadAll(), p => p.Id == profile.Id);
     }
 
+    [Fact]
+    public void ApplyEditedProfile_PersistsEditsAndRebuildsTree()
+    {
+        using var harness = new Harness();
+        var profile = new ConnectionProfile { Name = "ERP", Host = "h", Port = 3050 };
+        harness.Store.Upsert(profile);
+        harness.Main.ReloadConnections();
+
+        // Edit the SAME connection (same Id), change name + transaction profile.
+        var edited = new ConnectionProfile
+        {
+            Id = profile.Id,
+            Name = "ERP-EDITED",
+            Host = "h",
+            Port = 3050,
+            DataTransactionProfile = TransactionProfile.Snapshot,
+        };
+
+        harness.Main.ApplyEditedProfile(edited);
+
+        // Persisted in place (same Id, no duplicate) ...
+        var all = harness.Store.LoadAll();
+        Assert.Single(all);
+        Assert.Equal("ERP-EDITED", all[0].Name);
+        Assert.Equal(TransactionProfile.Snapshot, all[0].DataTransactionProfile);
+
+        // ... and the sidebar tree reflects the new name.
+        Assert.Single(harness.Main.Metadata.Connections);
+        Assert.Equal("ERP-EDITED", harness.Main.Metadata.Connections[0].Profile.Name);
+    }
+
     private sealed class Harness : IDisposable
     {
         public Harness()

@@ -35,6 +35,11 @@ public partial class TableDetailTabView : UserControl
     // new value from the right kind of editing element (TextBox / picker / etc).
     private readonly List<CellEditorKind> _dataPreviewEditorKinds = new();
 
+    // The data cell under the last right-click — drives the "Set NULL" context-menu
+    // item. Recorded in OnDataGridPointerPressed (before the menu opens).
+    private object?[]? _dataNullRow;
+    private int _dataNullColumnIndex = -1;
+
     private enum CellEditorKind
     {
         Text,
@@ -80,6 +85,12 @@ public partial class TableDetailTabView : UserControl
             _dataPreviewGrid.Sorting += OnDataPreviewSorting;
             _dataPreviewGrid.CellEditEnding += OnCellEditEnding;
             _dataPreviewGrid.RowEditEnding += OnRowEditEnding;
+            // Per-cell pointer event (fires from inside the DataGridCell, carrying the
+            // exact Row + Column) — the reliable way to know which cell was right-clicked
+            // for the "Set NULL" context menu. A grid-level PointerPressed + internal
+            // DataGridCell.OwningColumn reflection didn't resolve the cell on the
+            // editable data grid, leaving the item perpetually disabled.
+            _dataPreviewGrid.CellPointerPressed += OnDataCellPointerPressed;
         }
         ApplyEditorTheme();
         ActualThemeVariantChanged += (_, _) => ApplyEditorTheme();
@@ -371,6 +382,52 @@ public partial class TableDetailTabView : UserControl
         {
             grid.SelectedItem = index;
         }
+    }
+
+    // Right-click on a data cell → record the clicked ROW + COLUMN so the context
+    // menu's "Set NULL" acts on the exact cell, and enable the item only for nullable
+    // columns. Uses Avalonia's dedicated CellPointerPressed event, which is raised by
+    // the DataGridCell itself with the Row + Column already resolved — no reflection,
+    // and it fires reliably on the editable data grid (a grid-level PointerPressed +
+    // internal DataGridCell.OwningColumn reflection did not, which is why the item was
+    // perpetually greyed out). Fires before the ContextMenu opens.
+    private void OnDataCellPointerPressed(object? sender, DataGridCellPointerPressedEventArgs e)
+    {
+        if (sender is not DataGrid grid) return;
+        if (!e.PointerPressedEventArgs.GetCurrentPoint(grid).Properties.IsRightButtonPressed) return;
+
+        _dataNullRow = null;
+        _dataNullColumnIndex = -1;
+
+        if (e.Row?.DataContext is object?[] rowData)
+        {
+            grid.SelectedItem = rowData;
+            _dataNullRow = rowData;
+        }
+        if (e.Column is not null)
+        {
+            // Column reorder is disabled on this grid, so Columns order == creation
+            // order == the VM's column index (DataResult.Columns order).
+            _dataNullColumnIndex = grid.Columns.IndexOf(e.Column);
+        }
+
+        if (grid.ContextMenu?.Items.Count > 0 && grid.ContextMenu.Items[0] is MenuItem setNull)
+        {
+            setNull.IsEnabled =
+                _currentVm is not null
+                && _dataNullRow is not null
+                && _dataNullColumnIndex >= 0
+                && _currentVm.IsColumnNullable(_dataNullColumnIndex);
+        }
+    }
+
+    private void OnSetCellNullClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null) return;
+        if (_dataNullRow is null || _dataNullColumnIndex < 0) return;
+        // Routes through the existing UpdateCellAsync path — same change-tracking
+        // and UPDATE as a manual edit; no separate save path.
+        _ = _currentVm.SetCellNullAsync(_dataNullRow, _dataNullColumnIndex);
     }
 
     // Double-click on a Pola row opens the Edit Field dialog. Filters out
