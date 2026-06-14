@@ -15,36 +15,86 @@ public enum TransactionState
 public sealed class TransactionService : IDisposable
 {
     private readonly FirebirdConnectionService _connectionService;
+    private readonly ConnectionRole _role;
+    private readonly Func<ConnectionProfile?, TransactionProfile> _profileSelector;
+    // Degraded-mode fallback (metadata lane only): when the second attachment is
+    // unavailable the metadata service transparently delegates its whole transaction
+    // lifecycle to the data service, so there is only ever ONE transaction on the
+    // shared connection. Null for the data lane.
+    private readonly TransactionService? _fallback;
     private FbTransaction? _activeTransaction;
     private TransactionState _state = TransactionState.Idle;
     private int _statementCount;
 
+    // Convenience ctor: the data lane, reading DataTransactionProfile. Keeps existing
+    // call sites (and tests) building a plain data-lane service.
     public TransactionService(FirebirdConnectionService connectionService)
+        : this(connectionService, ConnectionRole.Data,
+               p => p?.DataTransactionProfile ?? TransactionProfile.ReadCommitted)
+    {
+    }
+
+    public TransactionService(
+        FirebirdConnectionService connectionService,
+        ConnectionRole role,
+        Func<ConnectionProfile?, TransactionProfile> profileSelector,
+        TransactionService? fallback = null)
     {
         _connectionService = connectionService;
+        _role = role;
+        _profileSelector = profileSelector;
+        _fallback = fallback;
         _connectionService.ActiveConnectionChanged += OnConnectionChanged;
     }
 
-    public TransactionState State => _state;
-    public bool IsActive => _state == TransactionState.Active;
-    public bool IsIdle => _state == TransactionState.Idle;
-    public bool IsError => _state == TransactionState.Error;
-    public int StatementCount => _statementCount;
-    public bool HasExecutedStatements => _statementCount > 0;
-    public FbTransaction? ActiveTransaction => _activeTransaction;
+    public ConnectionRole Role => _role;
+
+    // True when this metadata-lane service must delegate to the data lane because the
+    // second attachment failed to open (or was never independent). Always false for the
+    // data lane.
+    private bool ShouldDelegate
+        => _role == ConnectionRole.Metadata && _fallback is not null && !_connectionService.MetadataIsIndependent;
+
+    // The role this service actually runs commands on right now: its own when the
+    // metadata attachment is independent, the data role otherwise.
+    private ConnectionRole EffectiveRole
+        => _role == ConnectionRole.Metadata && _connectionService.MetadataIsIndependent
+            ? ConnectionRole.Metadata
+            : ConnectionRole.Data;
+
+    public TransactionState State => ShouldDelegate ? _fallback!.State : _state;
+    public bool IsActive => State == TransactionState.Active;
+    public bool IsIdle => State == TransactionState.Idle;
+    public bool IsError => State == TransactionState.Error;
+    public int StatementCount => ShouldDelegate ? _fallback!.StatementCount : _statementCount;
+    public bool HasExecutedStatements => StatementCount > 0;
+    public FbTransaction? ActiveTransaction => ShouldDelegate ? _fallback!.ActiveTransaction : _activeTransaction;
+
+    // Connection + lock for the lane this service runs on. Readers/executors that hold
+    // a reference to this service use these so the connection, lock, and transaction
+    // always come from the same lane (and follow degraded-mode aliasing automatically).
+    public FbConnection RequireOpenConnection() => _connectionService.RequireOpenConnection(EffectiveRole);
+    internal SemaphoreSlim CommandLock => _connectionService.GetCommandLock(EffectiveRole);
 
     public event EventHandler? TransactionStateChanged;
 
     public async Task BeginTransactionAsync()
     {
+        if (ShouldDelegate)
+        {
+            await _fallback!.BeginTransactionAsync().ConfigureAwait(false);
+            return;
+        }
+
         if (_activeTransaction is not null)
         {
             return;
         }
 
-        var connection = _connectionService.RequireOpenConnection();
+        var connection = _connectionService.RequireOpenConnection(EffectiveRole);
+        var commandLock = _connectionService.GetCommandLock(EffectiveRole);
         // Serialize against in-flight reader commands — FbConnection is single-threaded.
-        await _connectionService.CommandLock.WaitAsync().ConfigureAwait(false);
+        await commandLock.WaitAsync().ConfigureAwait(false);
         try
         {
             // Explicit TPB instead of IsolationLevel.ReadCommitted. The managed
@@ -67,7 +117,7 @@ public sealed class TransactionService : IDisposable
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            commandLock.Release();
         }
 
         // Best-effort: when EMBERTERN_TX_DIAG is set, append the real server-side
@@ -76,10 +126,11 @@ public sealed class TransactionService : IDisposable
         await LogTransactionParametersIfEnabledAsync().ConfigureAwait(false);
     }
 
-    // The profile to use for the next transaction. Read from the active
-    // connection; falls back to the safe default when nothing is connected.
+    // The profile to use for the next transaction. Read from the active connection via
+    // this lane's selector (DataTransactionProfile or MetadataTransactionProfile);
+    // falls back to the safe default when nothing is connected.
     private TransactionProfile ResolveActiveProfile()
-        => _connectionService.ActiveProfile?.TransactionProfile ?? TransactionProfile.ReadCommitted;
+        => _profileSelector(_connectionService.ActiveProfile);
 
     // Maps each IBExpert-style profile to its TPB. Internal + static so a unit
     // test can pin every mapping without a live Firebird. Access-mode note:
@@ -139,13 +190,20 @@ public sealed class TransactionService : IDisposable
 
     public async Task CommitAsync()
     {
+        if (ShouldDelegate)
+        {
+            await _fallback!.CommitAsync().ConfigureAwait(false);
+            return;
+        }
+
         if (_activeTransaction is null)
         {
             return;
         }
 
+        var commandLock = _connectionService.GetCommandLock(EffectiveRole);
         var tx = _activeTransaction;
-        await _connectionService.CommandLock.WaitAsync().ConfigureAwait(false);
+        await commandLock.WaitAsync().ConfigureAwait(false);
         try
         {
             await tx.CommitAsync().ConfigureAwait(false);
@@ -164,22 +222,29 @@ public sealed class TransactionService : IDisposable
             {
                 await tx.DisposeAsync().ConfigureAwait(false);
             }
-            _connectionService.CommandLock.Release();
+            commandLock.Release();
         }
     }
 
     public async Task RollbackAsync()
     {
+        if (ShouldDelegate)
+        {
+            await _fallback!.RollbackAsync().ConfigureAwait(false);
+            return;
+        }
+
         if (_activeTransaction is null)
         {
             SetState(TransactionState.Idle);
             return;
         }
 
+        var commandLock = _connectionService.GetCommandLock(EffectiveRole);
         var tx = _activeTransaction;
         _activeTransaction = null;
         _statementCount = 0;
-        await _connectionService.CommandLock.WaitAsync().ConfigureAwait(false);
+        await commandLock.WaitAsync().ConfigureAwait(false);
         try
         {
             await tx.RollbackAsync().ConfigureAwait(false);
@@ -191,13 +256,18 @@ public sealed class TransactionService : IDisposable
         finally
         {
             await tx.DisposeAsync().ConfigureAwait(false);
-            _connectionService.CommandLock.Release();
+            commandLock.Release();
             SetState(TransactionState.Idle);
         }
     }
 
     public void NotifyStatementExecuted()
     {
+        if (ShouldDelegate)
+        {
+            _fallback!.NotifyStatementExecuted();
+            return;
+        }
         if (_activeTransaction is null)
         {
             return;

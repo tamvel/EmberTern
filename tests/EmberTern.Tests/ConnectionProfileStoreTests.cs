@@ -79,13 +79,15 @@ public class ConnectionProfileStoreTests
     }
 
     [Fact]
-    public void NewProfile_DefaultsToReadCommitted()
+    public void NewProfile_DefaultsBothLanesToReadCommitted()
     {
-        Assert.Equal(TransactionProfile.ReadCommitted, new ConnectionProfile().TransactionProfile);
+        var p = new ConnectionProfile();
+        Assert.Equal(TransactionProfile.ReadCommitted, p.DataTransactionProfile);
+        Assert.Equal(TransactionProfile.ReadCommitted, p.MetadataTransactionProfile);
     }
 
     [Fact]
-    public void RoundtripsTransactionProfile_AsStringName()
+    public void RoundtripsBothTransactionProfiles_AsStringNames()
     {
         var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + System.Guid.NewGuid().ToString("N"));
         try
@@ -95,17 +97,20 @@ public class ConnectionProfileStoreTests
             {
                 Name = "Admin",
                 DatabasePath = "/srv/db/test.fdb",
-                TransactionProfile = TransactionProfile.ReadWriteTableStability,
+                DataTransactionProfile = TransactionProfile.Snapshot,
+                MetadataTransactionProfile = TransactionProfile.ReadWriteTableStability,
             };
             store.Upsert(profile);
 
-            // Persisted as the enum NAME, not a magic number (readable + reorder-safe).
+            // Persisted as the enum NAMEs, not magic numbers (readable + reorder-safe).
             var json = File.ReadAllText(store.FilePath);
+            Assert.Contains("Snapshot", json);
             Assert.Contains("ReadWriteTableStability", json);
 
             var reloaded = store.LoadAll();
             Assert.Single(reloaded);
-            Assert.Equal(TransactionProfile.ReadWriteTableStability, reloaded[0].TransactionProfile);
+            Assert.Equal(TransactionProfile.Snapshot, reloaded[0].DataTransactionProfile);
+            Assert.Equal(TransactionProfile.ReadWriteTableStability, reloaded[0].MetadataTransactionProfile);
         }
         finally
         {
@@ -114,7 +119,7 @@ public class ConnectionProfileStoreTests
     }
 
     [Fact]
-    public void LegacyJsonWithoutTransactionProfile_LoadsAsReadCommitted()
+    public void LegacyJsonWithoutTransactionProfiles_LoadsBothAsReadCommitted()
     {
         var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + System.Guid.NewGuid().ToString("N"));
         try
@@ -128,7 +133,33 @@ public class ConnectionProfileStoreTests
             var store = new ConnectionProfileStore(dir);
             var reloaded = store.LoadAll();
             Assert.Single(reloaded);
-            Assert.Equal(TransactionProfile.ReadCommitted, reloaded[0].TransactionProfile);
+            Assert.Equal(TransactionProfile.ReadCommitted, reloaded[0].DataTransactionProfile);
+            Assert.Equal(TransactionProfile.ReadCommitted, reloaded[0].MetadataTransactionProfile);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LegacySingleTransactionProfile_MigratesToDataLane_MetadataStaysReadCommitted()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(dir);
+            // A pre-split connections.json carrying the single "TransactionProfile" field.
+            File.WriteAllText(
+                Path.Combine(dir, "connections.json"),
+                "[{\"Name\":\"Legacy\",\"DatabasePath\":\"/db/x.fdb\",\"TransactionProfile\":\"ReadWriteTableStability\"}]");
+
+            var store = new ConnectionProfileStore(dir);
+            var reloaded = store.LoadAll();
+            Assert.Single(reloaded);
+            // Variant A: old value → Data, Metadata defaults to the safe ReadCommitted.
+            Assert.Equal(TransactionProfile.ReadWriteTableStability, reloaded[0].DataTransactionProfile);
+            Assert.Equal(TransactionProfile.ReadCommitted, reloaded[0].MetadataTransactionProfile);
         }
         finally
         {
@@ -153,13 +184,14 @@ public class ConnectionProfileStoreTests
             var store = new ConnectionProfileStore(dir, FakeProtector());
             store.Upsert(new ConnectionProfile { Name = "Sec", DatabasePath = "/db/x.fdb", Password = "secret" });
 
-            // On disk: protected form present, plaintext password absent, no legacy field.
-            var json = File.ReadAllText(store.FilePath);
-            Assert.Contains("ProtectedPassword", json);
-            Assert.Contains("ENC:secret", json);
-            Assert.DoesNotContain("\"secret\"", json);
-            Assert.DoesNotContain("\"Password\"", json);
-            Assert.Contains("SchemaVersion", json);
+            // Whole-file encryption: the on-disk content is the protector's output, not
+            // raw JSON (the FakeProtector prefixes "ENC:"; a real DPAPI protector would
+            // produce opaque ciphertext — so the password isn't visible in production).
+            var onDisk = File.ReadAllText(store.FilePath);
+            Assert.StartsWith("ENC:", onDisk);
+            // The protector was applied over the JSON, so the inner schema is present
+            // only after decrypting — the raw file is not plain JSON.
+            Assert.False(onDisk.TrimStart().StartsWith("{", StringComparison.Ordinal));
 
             // In memory: round-trips back to the plaintext.
             var reloaded = store.LoadAll();
@@ -173,31 +205,30 @@ public class ConnectionProfileStoreTests
     }
 
     [Fact]
-    public void LegacyPlaintextArray_IsMigratedToEncryptedContainer()
+    public void LegacyPlaintextArray_IsMigratedToEncryptedFile_AndDeleted()
     {
         var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + System.Guid.NewGuid().ToString("N"));
         try
         {
             Directory.CreateDirectory(dir);
             // A pre-encryption connections.json: bare array, plaintext "Password".
+            var legacyPath = Path.Combine(dir, "connections.json");
             File.WriteAllText(
-                Path.Combine(dir, "connections.json"),
+                legacyPath,
                 "[{\"Name\":\"Legacy\",\"DatabasePath\":\"/db/x.fdb\",\"Password\":\"plain\"}]");
 
             var store = new ConnectionProfileStore(dir, FakeProtector());
 
-            // Load decrypts/migrates and returns the plaintext.
+            // Load migrates the legacy file into the unified store and returns plaintext.
             var reloaded = store.LoadAll();
             Assert.Single(reloaded);
             Assert.Equal("plain", reloaded[0].Password);
 
-            // The file was rewritten in place as the encrypted v1 container.
-            var json = File.ReadAllText(store.FilePath);
-            Assert.Contains("SchemaVersion", json);
-            Assert.Contains("ProtectedPassword", json);
-            Assert.Contains("ENC:plain", json);
-            Assert.DoesNotContain("\"plain\"", json);
-            Assert.DoesNotContain("\"Password\"", json);
+            // The legacy connections.json is deleted; the unified settings.dat replaces it
+            // and is encrypted (whole-file protector applied).
+            Assert.False(File.Exists(legacyPath));
+            Assert.True(File.Exists(store.FilePath));
+            Assert.StartsWith("ENC:", File.ReadAllText(store.FilePath));
         }
         finally
         {
@@ -206,24 +237,23 @@ public class ConnectionProfileStoreTests
     }
 
     [Fact]
-    public void Unprotect_Failure_DegradesToEmptyPassword()
+    public void UndecryptableFile_DegradesToEmptySettings()
     {
         var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + System.Guid.NewGuid().ToString("N"));
         try
         {
-            // Write an encrypted v1 file with a working protector...
+            // Write an encrypted file with a working protector...
             new ConnectionProfileStore(dir, FakeProtector())
                 .Upsert(new ConnectionProfile { Name = "Sec", DatabasePath = "/db/x.fdb", Password = "secret" });
 
             // ...then load it with a protector that can't decrypt (e.g. a DPAPI blob
-            // from another machine/account). The password degrades to empty rather
-            // than crashing the load.
+            // from another machine/account). Whole-file encryption means the ENTIRE file
+            // is unreadable — it degrades to empty rather than crashing (and is NOT
+            // overwritten, so it may still decrypt on the right machine).
             var throwing = new SecretProtector(s => s, _ => throw new InvalidOperationException("cannot decrypt"));
             var reloaded = new ConnectionProfileStore(dir, throwing).LoadAll();
 
-            Assert.Single(reloaded);
-            Assert.Equal(string.Empty, reloaded[0].Password);
-            Assert.Equal("Sec", reloaded[0].Name);
+            Assert.Empty(reloaded);
         }
         finally
         {

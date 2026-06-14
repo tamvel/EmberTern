@@ -80,10 +80,11 @@
                     HorizontalAlignment="Stretch" />
         </StackPanel>
 
+        <!-- Data transaction profile — SQL Editor F5 + data preview/edit. -->
         <StackPanel Spacing="4">
-          <TextBlock Text="{Binding TransactionProfileLabel}" Classes="field-label" />
+          <TextBlock Text="{Binding DataTransactionProfileLabel}" Classes="field-label" />
           <ComboBox ItemsSource="{Binding TransactionProfiles}"
-                    SelectedItem="{Binding SelectedTransactionProfile, Mode=TwoWay}"
+                    SelectedItem="{Binding SelectedDataTransactionProfile, Mode=TwoWay}"
                     HorizontalAlignment="Stretch">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="vm:TransactionProfileOption">
@@ -91,19 +92,42 @@
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
-          <!-- Plain description for the safe profiles -->
-          <TextBlock Text="{Binding TransactionProfileDescription}"
+          <TextBlock Text="{Binding DataTransactionProfileDescription}"
                      Classes="subtle"
                      FontSize="11"
                      TextWrapping="Wrap"
-                     IsVisible="{Binding !ShowConsistencyWarning}" />
-          <!-- Prominent warning for the consistency (table stability) profiles -->
-          <TextBlock Text="{Binding TransactionProfileDescription}"
+                     IsVisible="{Binding !ShowDataConsistencyWarning}" />
+          <TextBlock Text="{Binding DataTransactionProfileDescription}"
                      Foreground="{DynamicResource WarningBrush}"
                      FontSize="11"
                      FontWeight="SemiBold"
                      TextWrapping="Wrap"
-                     IsVisible="{Binding ShowConsistencyWarning}" />
+                     IsVisible="{Binding ShowDataConsistencyWarning}" />
+        </StackPanel>
+
+        <!-- Metadata transaction profile — DDL from the structure editor + Shift+F5. -->
+        <StackPanel Spacing="4">
+          <TextBlock Text="{Binding MetadataTransactionProfileLabel}" Classes="field-label" />
+          <ComboBox ItemsSource="{Binding TransactionProfiles}"
+                    SelectedItem="{Binding SelectedMetadataTransactionProfile, Mode=TwoWay}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:TransactionProfileOption">
+                <TextBlock Text="{Binding Label}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Text="{Binding MetadataTransactionProfileDescription}"
+                     Classes="subtle"
+                     FontSize="11"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding !ShowMetadataConsistencyWarning}" />
+          <TextBlock Text="{Binding MetadataTransactionProfileDescription}"
+                     Foreground="{DynamicResource WarningBrush}"
+                     FontSize="11"
+                     FontWeight="SemiBold"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding ShowMetadataConsistencyWarning}" />
         </StackPanel>
 
         <Expander Header="{Binding AdvancedSectionLabel}" IsExpanded="False">

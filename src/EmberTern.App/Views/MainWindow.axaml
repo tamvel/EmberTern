@@ -27,6 +27,7 @@
   <Window.KeyBindings>
     <KeyBinding Gesture="F5" Command="{Binding ExecuteQueryCommand}" />
     <KeyBinding Gesture="Ctrl+Enter" Command="{Binding ExecuteQueryCommand}" />
+    <KeyBinding Gesture="Shift+F5" Command="{Binding ExecuteQueryOnMetadataCommand}" />
     <KeyBinding Gesture="Alt+F" Command="{Binding FormatSqlCommand}" />
   </Window.KeyBindings>
 
@@ -61,13 +62,25 @@
                      FontSize="12"
                      VerticalAlignment="Center"
                      IsVisible="{Binding HasActiveConnection}" />
+          <!-- Dual transaction-profile chips: Data (#1) + Metadata (#2). -->
           <Border Background="{DynamicResource AccentMutedBrush}"
                   CornerRadius="3"
                   Padding="6,1"
                   Margin="2,0,0,0"
                   VerticalAlignment="Center"
                   IsVisible="{Binding HasActiveConnection}">
-            <TextBlock Text="{Binding ActiveTransactionProfileText}"
+            <TextBlock Text="{Binding DataTransactionProfileText}"
+                       FontSize="11"
+                       Foreground="White"
+                       VerticalAlignment="Center" />
+          </Border>
+          <Border Background="{DynamicResource AccentMutedBrush}"
+                  CornerRadius="3"
+                  Padding="6,1"
+                  Margin="2,0,0,0"
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HasActiveConnection}">
+            <TextBlock Text="{Binding MetadataTransactionProfileText}"
                        FontSize="11"
                        Foreground="White"
                        VerticalAlignment="Center" />
@@ -466,6 +479,15 @@
                              VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
+              <!-- Execute on Metadata (Shift+F5): runs the current SQL on connection #2
+                   under the Metadata profile. Same query-tab visibility as Execute. -->
+              <Button Classes="icon"
+                      Content="{x:Static app:UiStrings.ToolbarExecuteMetadataIcon}"
+                      FontSize="12"
+                      Foreground="{DynamicResource IconColor_Table}"
+                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarExecuteMetadataTooltip}"
+                      Command="{Binding ExecuteQueryOnMetadataCommand}"
+                      IsVisible="{Binding ShowExecuteButton}" />
               <Button Classes="flat"
                       Padding="10,4"
                       Command="{Binding CancelQueryCommand}"
@@ -475,22 +497,44 @@
                   <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
+              <!-- Data lane Commit / Rollback (connection #1). -->
               <Button Classes="icon"
                       Content="✓"
                       FontSize="14"
                       Foreground="{DynamicResource CommitButtonBrush}"
-                      ToolTip.Tip="{Binding CommitLabel}"
+                      ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitDataTooltip}"
                       Command="{Binding CommitCommand}"
                       IsEnabled="{Binding IsTransactionActive}"
-                      IsVisible="{Binding ShowTransactionButtons}" />
+                      IsVisible="{Binding ShowDataTransactionButtons}" />
               <Button Classes="icon"
                       Content="✕"
                       FontSize="14"
                       Foreground="{DynamicResource RollbackButtonBrush}"
-                      ToolTip.Tip="{Binding RollbackLabel}"
+                      ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackDataTooltip}"
                       Command="{Binding RollbackCommand}"
                       IsEnabled="{Binding !IsTransactionIdle}"
-                      IsVisible="{Binding ShowTransactionButtons}" />
+                      IsVisible="{Binding ShowDataTransactionButtons}" />
+              <!-- Metadata lane Commit / Rollback (connection #2). Separated + table-tinted
+                   so it reads as a distinct lane. -->
+              <Border Width="1" Margin="4,4"
+                      Background="{DynamicResource BorderBrush}"
+                      IsVisible="{Binding ShowMetadataTransactionButtons}" />
+              <Button Classes="icon"
+                      Content="✓"
+                      FontSize="14"
+                      Foreground="{DynamicResource IconColor_Table}"
+                      ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitMetadataTooltip}"
+                      Command="{Binding CommitMetadataCommand}"
+                      IsEnabled="{Binding IsMetadataTransactionActive}"
+                      IsVisible="{Binding ShowMetadataTransactionButtons}" />
+              <Button Classes="icon"
+                      Content="✕"
+                      FontSize="14"
+                      Foreground="{DynamicResource IconColor_Table}"
+                      ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackMetadataTooltip}"
+                      Command="{Binding RollbackMetadataCommand}"
+                      IsEnabled="{Binding !IsMetadataTransactionIdle}"
+                      IsVisible="{Binding ShowMetadataTransactionButtons}" />
               <!-- Refresh reuses the Dane sub-tab's existing reload path (with current
                    sort params). Visible only when the Dane sub-tab is active inside a
                    TableDetail tab. -->
@@ -790,6 +834,7 @@
                   BorderThickness="0,1,0,0"
                   IsVisible="{Binding IsQueryTabActive}">
             <StackPanel Orientation="Horizontal" Spacing="8" Margin="14,0" VerticalAlignment="Center">
+              <!-- Data lane status -->
               <Ellipse Width="8" Height="8"
                        Fill="{DynamicResource SubtleForegroundBrush}"
                        IsVisible="{Binding IsTransactionIdle}" />
@@ -803,6 +848,25 @@
                          Classes="subtle"
                          Classes.error="{Binding IsTransactionError}"
                          VerticalAlignment="Center" />
+              <!-- Metadata lane status (shown only when the metadata attachment is independent) -->
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                          IsVisible="{Binding MetadataLaneIndependent}">
+                <Border Width="1" Height="12" Margin="0,0"
+                        Background="{DynamicResource BorderBrush}" />
+                <Ellipse Width="8" Height="8"
+                         Fill="{DynamicResource SubtleForegroundBrush}"
+                         IsVisible="{Binding IsMetadataTransactionIdle}" />
+                <Ellipse Width="8" Height="8"
+                         Fill="{DynamicResource TransactionActiveBrush}"
+                         IsVisible="{Binding IsMetadataTransactionActive}" />
+                <Ellipse Width="8" Height="8"
+                         Fill="{DynamicResource ErrorBrush}"
+                         IsVisible="{Binding IsMetadataTransactionError}" />
+                <TextBlock Text="{Binding MetadataTransactionBarText}"
+                           Classes="subtle"
+                           Classes.error="{Binding IsMetadataTransactionError}"
+                           VerticalAlignment="Center" />
+              </StackPanel>
             </StackPanel>
           </Border>
         </Grid>

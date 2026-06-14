@@ -1,75 +1,53 @@
-using System;
-using System.IO;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using EmberTern.Core.Security;
+using EmberTern.Core.Settings;
 
 namespace EmberTern.Core.Workspace;
 
+// Section facade over the unified ApplicationSettingsStore (settings.dat). Public API
+// unchanged from when this owned workspace.json — Load still returns null when there is
+// no usable saved state (the View treats null as "nothing to restore"). Save is
+// read-modify-write on the Workspace section so it preserves Connections / Folders /
+// UserSettings in the shared file.
 public sealed class WorkspaceStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
-
-    private readonly string _filePath;
+    private readonly ApplicationSettingsStore _settings;
 
     public WorkspaceStore()
-        : this(DefaultStoreDirectory())
+        : this(new ApplicationSettingsStore())
+    {
+    }
+
+    public WorkspaceStore(SecretProtector protector)
+        : this(new ApplicationSettingsStore(protector))
     {
     }
 
     public WorkspaceStore(string directory)
+        : this(new ApplicationSettingsStore(directory))
     {
-        Directory.CreateDirectory(directory);
-        _filePath = Path.Combine(directory, "workspace.json");
     }
 
-    public string FilePath => _filePath;
+    public WorkspaceStore(string directory, SecretProtector? protector)
+        : this(new ApplicationSettingsStore(directory, protector))
+    {
+    }
 
+    private WorkspaceStore(ApplicationSettingsStore settings)
+    {
+        _settings = settings;
+    }
+
+    public string FilePath => _settings.FilePath;
+
+    // Null when the unified file is missing / empty / corrupt / undecryptable — the
+    // View's restore path keys off null to mean "no saved workspace".
     public WorkspaceState? Load()
-    {
-        if (!File.Exists(_filePath))
-        {
-            return null;
-        }
-
-        try
-        {
-            var json = File.ReadAllText(_filePath);
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                return null;
-            }
-            return JsonSerializer.Deserialize<WorkspaceState>(json, JsonOptions);
-        }
-        // Corrupt JSON, partial writes, locked file, etc. — silently fall back to "no
-        // saved state" rather than crashing app startup. Workspace state is convenience,
-        // not data the user can't recreate.
-        catch (JsonException)
-        {
-            return null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
+        => _settings.Load()?.Workspace;
 
     public void Save(WorkspaceState state)
     {
-        var json = JsonSerializer.Serialize(state, JsonOptions);
-        File.WriteAllText(_filePath, json);
-    }
-
-    private static string DefaultStoreDirectory()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "EmberTern");
+        var settings = _settings.Load() ?? new ApplicationSettings();
+        settings.Workspace = state;
+        _settings.Save(settings);
     }
 }

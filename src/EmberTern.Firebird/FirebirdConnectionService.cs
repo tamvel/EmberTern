@@ -9,6 +9,19 @@ using FirebirdSql.Data.FirebirdClient;
 
 namespace EmberTern.Firebird;
 
+/// <summary>
+/// Which physical attachment a command runs on. C2 opens two connections to the
+/// same database: <see cref="Data"/> (#1) carries user SQL/DML and the data
+/// working transaction; <see cref="Metadata"/> (#2) carries metadata browsing and
+/// the metadata working transaction (DDL). Two attachments are required because the
+/// managed FirebirdClient forbids two transactions on one FbConnection.
+/// </summary>
+public enum ConnectionRole
+{
+    Data,
+    Metadata,
+}
+
 public sealed class FirebirdConnectionService : IDisposable
 {
     static FirebirdConnectionService()
@@ -20,6 +33,7 @@ public sealed class FirebirdConnectionService : IDisposable
     }
 
     private FbConnection? _activeConnection;
+    private FbConnection? _metadataConnection;
     private ConnectionProfile? _activeProfile;
 
     // FbConnection is single-threaded — concurrent commands on the same connection
@@ -29,15 +43,32 @@ public sealed class FirebirdConnectionService : IDisposable
     // This lock serializes them all. Different from a transaction gate — it gates
     // COMMAND EXECUTION, not transaction begins. Readers attach to the user's
     // working tx (or a per-command implicit tx) regardless.
+    //
+    // Each connection has its OWN lock — commands on #1 and #2 are independent and
+    // must not serialize against each other (that's the whole point of two
+    // attachments: data work and metadata work proceed in parallel).
     private readonly SemaphoreSlim _commandLock = new(1, 1);
+    private readonly SemaphoreSlim _metadataCommandLock = new(1, 1);
 
     public bool IsConnected => _activeConnection is { State: System.Data.ConnectionState.Open };
+
+    // True when the metadata attachment (#2) opened successfully and is distinct from
+    // the data attachment. When false (e.g. the server rejected the second attach), the
+    // Metadata role transparently aliases the Data role so metadata work still functions
+    // — it just shares the data connection/lock/transaction (pre-C2 behaviour).
+    public bool MetadataIsIndependent
+        => _metadataConnection is { State: System.Data.ConnectionState.Open };
 
     public ConnectionProfile? ActiveProfile => _activeProfile;
 
     public event EventHandler? ActiveConnectionChanged;
 
     internal SemaphoreSlim CommandLock => _commandLock;
+
+    // Per-role command lock. Metadata falls back to the data lock when the second
+    // attachment is unavailable, keeping serialization correct on the shared connection.
+    internal SemaphoreSlim GetCommandLock(ConnectionRole role)
+        => role == ConnectionRole.Metadata && MetadataIsIndependent ? _metadataCommandLock : _commandLock;
 
     public async Task ConnectAsync(ConnectionProfile profile, CancellationToken cancellationToken = default)
     {
@@ -63,29 +94,58 @@ public sealed class FirebirdConnectionService : IDisposable
 
         _activeConnection = connection;
         _activeProfile = profile;
+
+        // Open the second (metadata) attachment to the same database, best-effort.
+        // Same profile/credentials, no pooling. If it fails (e.g. server connection
+        // limit) we log and degrade: the Metadata role aliases the Data connection.
+        try
+        {
+            var metadata = new FbConnection(connectionString);
+            await metadata.OpenAsync(cancellationToken).ConfigureAwait(false);
+            _metadataConnection = metadata;
+        }
+        catch (Exception ex)
+        {
+            _metadataConnection = null;
+            LogConnectionAttempt("MetadataConnectFailed: " + ex.Message, profile, connectionString);
+        }
+
         ActiveConnectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task DisconnectAsync()
     {
-        if (_activeConnection is null)
+        if (_activeConnection is null && _metadataConnection is null)
+        {
+            return;
+        }
+
+        await CloseAndDisposeAsync(_metadataConnection).ConfigureAwait(false);
+        _metadataConnection = null;
+
+        await CloseAndDisposeAsync(_activeConnection).ConfigureAwait(false);
+        _activeConnection = null;
+        _activeProfile = null;
+        ActiveConnectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static async Task CloseAndDisposeAsync(FbConnection? connection)
+    {
+        if (connection is null)
         {
             return;
         }
 
         try
         {
-            await _activeConnection.CloseAsync().ConfigureAwait(false);
+            await connection.CloseAsync().ConfigureAwait(false);
         }
         catch
         {
             // best-effort close — we still want to release the handle
         }
 
-        await _activeConnection.DisposeAsync().ConfigureAwait(false);
-        _activeConnection = null;
-        _activeProfile = null;
-        ActiveConnectionChanged?.Invoke(this, EventArgs.Empty);
+        await connection.DisposeAsync().ConfigureAwait(false);
     }
 
     public async Task TestConnectionAsync(ConnectionProfile profile, CancellationToken cancellationToken = default)
@@ -106,8 +166,17 @@ public sealed class FirebirdConnectionService : IDisposable
         }
     }
 
-    public FbConnection RequireOpenConnection()
+    public FbConnection RequireOpenConnection() => RequireOpenConnection(ConnectionRole.Data);
+
+    // Returns the open connection for the given role. Metadata falls back to the data
+    // connection when the second attachment is unavailable (degraded mode), so the
+    // connection/lock/transaction triple stays consistent for a reader on that role.
+    public FbConnection RequireOpenConnection(ConnectionRole role)
     {
+        if (role == ConnectionRole.Metadata && MetadataIsIndependent)
+        {
+            return _metadataConnection!;
+        }
         if (_activeConnection is null || _activeConnection.State != System.Data.ConnectionState.Open)
         {
             throw new InvalidOperationException("No active Firebird connection.");
@@ -117,6 +186,17 @@ public sealed class FirebirdConnectionService : IDisposable
 
     public void Dispose()
     {
+        try
+        {
+            _metadataConnection?.Close();
+        }
+        catch
+        {
+            // ignore
+        }
+        _metadataConnection?.Dispose();
+        _metadataConnection = null;
+
         try
         {
             _activeConnection?.Close();

@@ -45,12 +45,17 @@ public sealed class FirebirdQueryExecutor
         var sw = Stopwatch.StartNew();
 
         bool lockHeld = false;
+        // Run on this executor's lane: the data connection for F5, the metadata
+        // connection for "Execute on Metadata" (Shift+F5). The lock resolves without
+        // throwing; the connection is resolved inside the try so a missing connection
+        // surfaces as a clean QueryExecutionException.
+        var commandLock = _transactionService?.CommandLock ?? _connectionService.CommandLock;
         try
         {
-            var connection = _connectionService.RequireOpenConnection();
+            var connection = _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
             // Serialize against in-flight reader commands (metadata eager-load, DDL fetch,
             // autocomplete column fetch, TableDetail load). FbConnection is single-threaded.
-            await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             lockHeld = true;
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = sql;
@@ -125,7 +130,7 @@ public sealed class FirebirdQueryExecutor
         {
             if (lockHeld)
             {
-                _connectionService.CommandLock.Release();
+                commandLock.Release();
             }
         }
     }

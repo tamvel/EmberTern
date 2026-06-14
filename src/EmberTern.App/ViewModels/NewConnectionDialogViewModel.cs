@@ -43,7 +43,8 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
     public string UsernameLabel => UiStrings.DialogFieldUsername;
     public string PasswordLabel => UiStrings.DialogFieldPassword;
     public string CharsetLabel => UiStrings.DialogFieldCharset;
-    public string TransactionProfileLabel => UiStrings.DialogFieldTransactionProfile;
+    public string DataTransactionProfileLabel => UiStrings.DialogFieldDataTransactionProfile;
+    public string MetadataTransactionProfileLabel => UiStrings.DialogFieldMetadataTransactionProfile;
     public string DialectLabel => UiStrings.DialogFieldDialect;
     public string ClientLibraryLabel => UiStrings.DialogFieldClientLibrary;
     public string ClientLibraryHint => UiStrings.DialogFieldClientLibraryHint;
@@ -79,17 +80,27 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
     [ObservableProperty]
     private string _clientLibraryPath = string.Empty;
 
-    // The picker binds SelectedItem to this wrapper (Avalonia has no
-    // SelectedValueBinding — gotcha #57). The setter mirrors into the enum-typed
-    // TransactionProfile; the description + warning re-evaluate off the option.
+    // Two independent profile pickers (C2): Data governs SQL Editor F5 + data
+    // preview/edit; Metadata governs DDL from the structure editor + Shift+F5. The
+    // picker binds SelectedItem to these wrappers (Avalonia has no SelectedValueBinding
+    // — gotcha #57); the descriptions + warnings re-evaluate off the option.
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TransactionProfileDescription))]
-    [NotifyPropertyChangedFor(nameof(ShowConsistencyWarning))]
-    private TransactionProfileOption _selectedTransactionProfile = TransactionProfileCatalog.All[0];
+    [NotifyPropertyChangedFor(nameof(DataTransactionProfileDescription))]
+    [NotifyPropertyChangedFor(nameof(ShowDataConsistencyWarning))]
+    private TransactionProfileOption _selectedDataTransactionProfile = TransactionProfileCatalog.All[0];
 
-    public TransactionProfile TransactionProfile => SelectedTransactionProfile.Value;
-    public string TransactionProfileDescription => SelectedTransactionProfile.Description;
-    public bool ShowConsistencyWarning => SelectedTransactionProfile.IsConsistencyWarning;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MetadataTransactionProfileDescription))]
+    [NotifyPropertyChangedFor(nameof(ShowMetadataConsistencyWarning))]
+    private TransactionProfileOption _selectedMetadataTransactionProfile = TransactionProfileCatalog.All[0];
+
+    public TransactionProfile DataTransactionProfile => SelectedDataTransactionProfile.Value;
+    public string DataTransactionProfileDescription => SelectedDataTransactionProfile.Description;
+    public bool ShowDataConsistencyWarning => SelectedDataTransactionProfile.IsConsistencyWarning;
+
+    public TransactionProfile MetadataTransactionProfile => SelectedMetadataTransactionProfile.Value;
+    public string MetadataTransactionProfileDescription => SelectedMetadataTransactionProfile.Description;
+    public bool ShowMetadataConsistencyWarning => SelectedMetadataTransactionProfile.IsConsistencyWarning;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsTesting))]
@@ -174,7 +185,8 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
         Charset = profile.Charset;
         Dialect = profile.Dialect;
         ClientLibraryPath = profile.ClientLibraryPath;
-        SelectedTransactionProfile = TransactionProfileCatalog.For(profile.TransactionProfile);
+        SelectedDataTransactionProfile = TransactionProfileCatalog.For(profile.DataTransactionProfile);
+        SelectedMetadataTransactionProfile = TransactionProfileCatalog.For(profile.MetadataTransactionProfile);
         OnPropertyChanged(nameof(IsEditing));
         OnPropertyChanged(nameof(DialogTitle));
     }
@@ -205,7 +217,8 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
             Charset = string.IsNullOrWhiteSpace(Charset) ? CharsetCatalog.Default : Charset,
             Dialect = Dialect == 1 ? 1 : 3,
             ClientLibraryPath = ClientLibraryPath?.Trim() ?? string.Empty,
-            TransactionProfile = TransactionProfile,
+            DataTransactionProfile = DataTransactionProfile,
+            MetadataTransactionProfile = MetadataTransactionProfile,
         };
 
         if (_editingProfileId is not null)

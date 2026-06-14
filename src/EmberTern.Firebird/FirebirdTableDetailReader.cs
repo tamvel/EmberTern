@@ -13,23 +13,48 @@ namespace EmberTern.Firebird;
 public sealed class FirebirdTableDetailReader
 {
     private readonly FirebirdConnectionService _connectionService;
-    private readonly TransactionService? _transactionService;
+    // Two lanes (C2): structure reads (fields / indexes / constraints / description /
+    // dependencies / DDL refresh) run on the METADATA lane; the Dane data preview +
+    // row count run on the DATA lane. A single reader instance serves both — each
+    // method picks the lane.
+    private readonly TransactionService? _metadataTransactionService;
+    private readonly TransactionService? _dataTransactionService;
 
     public FirebirdTableDetailReader(FirebirdConnectionService connectionService)
-        : this(connectionService, null)
+        : this(connectionService, null, null)
     {
     }
 
+    // Back-compat: a single transaction service drives both lanes (tests / legacy).
     public FirebirdTableDetailReader(FirebirdConnectionService connectionService, TransactionService? transactionService)
+        : this(connectionService, transactionService, transactionService)
+    {
+    }
+
+    public FirebirdTableDetailReader(
+        FirebirdConnectionService connectionService,
+        TransactionService? metadataTransactionService,
+        TransactionService? dataTransactionService)
     {
         _connectionService = connectionService;
-        _transactionService = transactionService;
+        _metadataTransactionService = metadataTransactionService;
+        _dataTransactionService = dataTransactionService;
     }
 
-    // Readers never open their own transaction. When the user has a working tx
-    // active we attach to it; otherwise the managed driver runs the SELECT in
-    // an implicit read tx (auto-committed per command). Either way we don't
-    // touch the user's tx state and we can't race against other readers.
+    // Readers never open their own transaction. When a working tx is active on the lane
+    // we attach to it; otherwise the managed driver runs the SELECT in an implicit read
+    // tx (auto-committed per command). Either way we don't touch the user's tx state.
+    private FbConnection MetaConnection()
+        => _metadataTransactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+    private SemaphoreSlim MetaLock()
+        => _metadataTransactionService?.CommandLock ?? _connectionService.CommandLock;
+    private FbTransaction? MetaTx => _metadataTransactionService?.ActiveTransaction;
+
+    private FbConnection DataConnection()
+        => _dataTransactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+    private SemaphoreSlim DataLock()
+        => _dataTransactionService?.CommandLock ?? _connectionService.CommandLock;
+    private FbTransaction? DataTx => _dataTransactionService?.ActiveTransaction;
 
     public async Task<IReadOnlyList<FieldInfo>> GetFieldsAsync(
         string tableName,
@@ -37,14 +62,14 @@ public sealed class FirebirdTableDetailReader
     {
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<FieldInfo>();
 
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = MetaConnection();
+        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = FieldsSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = _transactionService?.ActiveTransaction;
+            cmd.Transaction = MetaTx;
             cmd.Parameters.AddWithValue("@tableName", tableName);
 
             var results = new List<FieldInfo>();
@@ -98,7 +123,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            MetaLock().Release();
         }
     }
 
@@ -108,14 +133,14 @@ public sealed class FirebirdTableDetailReader
     {
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<IndexInfo>();
 
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = MetaConnection();
+        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = IndexesSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = _transactionService?.ActiveTransaction;
+            cmd.Transaction = MetaTx;
             cmd.Parameters.AddWithValue("@tableName", tableName);
 
             var results = new List<IndexInfo>();
@@ -151,7 +176,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            MetaLock().Release();
         }
     }
 
@@ -161,14 +186,14 @@ public sealed class FirebirdTableDetailReader
     {
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<ConstraintInfo>();
 
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = MetaConnection();
+        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = ConstraintsSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = _transactionService?.ActiveTransaction;
+            cmd.Transaction = MetaTx;
             cmd.Parameters.AddWithValue("@tableName", tableName);
 
             var results = new List<ConstraintInfo>();
@@ -195,7 +220,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            MetaLock().Release();
         }
     }
 
@@ -205,15 +230,15 @@ public sealed class FirebirdTableDetailReader
     {
         if (string.IsNullOrEmpty(tableName)) return string.Empty;
 
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = MetaConnection();
+        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText =
                 "SELECT RDB$DESCRIPTION FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = @tableName";
             cmd.CommandTimeout = 0;
-            cmd.Transaction = _transactionService?.ActiveTransaction;
+            cmd.Transaction = MetaTx;
             cmd.Parameters.AddWithValue("@tableName", tableName);
 
             string? description = null;
@@ -233,7 +258,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            MetaLock().Release();
         }
     }
 
@@ -246,8 +271,8 @@ public sealed class FirebirdTableDetailReader
             return (Array.Empty<DependencyInfo>(), Array.Empty<DependencyInfo>());
         }
 
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = MetaConnection();
+        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var dependsOn = new List<DependencyInfo>();
@@ -255,7 +280,7 @@ public sealed class FirebirdTableDetailReader
             {
                 cmd.CommandText = DependsOnSql;
                 cmd.CommandTimeout = 0;
-                cmd.Transaction = _transactionService?.ActiveTransaction;
+                cmd.Transaction = MetaTx;
                 // Bind each distinct parameter name — see DependsOnSql comment
                 // for why we don't reuse @tableName across branches.
                 cmd.Parameters.AddWithValue("@tableName", tableName);
@@ -280,7 +305,7 @@ public sealed class FirebirdTableDetailReader
             {
                 cmd.CommandText = DependedOnBySql;
                 cmd.CommandTimeout = 0;
-                cmd.Transaction = _transactionService?.ActiveTransaction;
+                cmd.Transaction = MetaTx;
                 cmd.Parameters.AddWithValue("@tableName", tableName);
                 cmd.Parameters.AddWithValue("@t2", tableName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -319,7 +344,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            MetaLock().Release();
         }
     }
 
@@ -358,15 +383,15 @@ public sealed class FirebirdTableDetailReader
 
         var (startRow, endRow) = ComputeRowRange(page, pageSize);
 
-        var connection = _connectionService.RequireOpenConnection();
+        var connection = DataConnection();
         var sw = Stopwatch.StartNew();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await DataLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = BuildDataPreviewSql(tableName, startRow, endRow, orderBy);
             cmd.CommandTimeout = 0;
-            cmd.Transaction = _transactionService?.ActiveTransaction;
+            cmd.Transaction = DataTx;
 
             var columns = new List<QueryColumn>();
             var rows = new List<object?[]>();
@@ -402,7 +427,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            DataLock().Release();
         }
     }
 
@@ -421,14 +446,14 @@ public sealed class FirebirdTableDetailReader
         if (string.IsNullOrEmpty(tableName)) return 0;
         if (cap <= 0) return 0;
 
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = DataConnection();
+        await DataLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = BuildRowCountSql(tableName, cap);
             cmd.CommandTimeout = 0;
-            cmd.Transaction = _transactionService?.ActiveTransaction;
+            cmd.Transaction = DataTx;
             var raw = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
             return raw switch
             {
@@ -444,7 +469,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            DataLock().Release();
         }
     }
 
@@ -469,7 +494,7 @@ public sealed class FirebirdTableDetailReader
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;
         cmd.CommandTimeout = 0;
-        cmd.Transaction = _transactionService?.ActiveTransaction;
+        cmd.Transaction = MetaTx;
         cmd.Parameters.AddWithValue("@tableName", tableName);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))

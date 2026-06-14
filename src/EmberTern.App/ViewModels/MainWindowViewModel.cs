@@ -26,8 +26,13 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FolderStore _folderStore;
     private FolderState _folderState = new();
     private readonly FirebirdConnectionService _service;
+    // Data lane (connection #1): SQL Editor F5, data preview/edit.
     private readonly TransactionService _transactionService;
-    private readonly FirebirdQueryExecutor _executor;
+    // Metadata lane (connection #2): DDL from the structure editor, Shift+F5, metadata
+    // browsing. Falls back to the data lane when the second attachment is unavailable.
+    private readonly TransactionService _metadataTransactionService;
+    private readonly FirebirdQueryExecutor _executor;          // F5       → data lane
+    private readonly FirebirdQueryExecutor _metadataExecutor;  // Shift+F5 → metadata lane
     private readonly FirebirdMetadataReader _metadataReader;
     private readonly FirebirdDdlReader _ddlReader;
     private readonly FirebirdTableDetailReader _tableDetailReader;
@@ -35,6 +40,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdDdlExecutor _ddlExecutor;
     private CancellationTokenSource? _executionCts;
     private TransactionState _previousTransactionState = TransactionState.Idle;
+    private TransactionState _previousMetadataTransactionState = TransactionState.Idle;
     // Per-connection tabs. Key = ConnectionProfile.Id. Populated on disconnect/switch
     // (stashing the active connection's tabs) and drained on connect (restoring them
     // into WorkspaceTabs). Survives the lifetime of the VM and is persisted via
@@ -64,7 +70,10 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public MainWindowViewModel(ConnectionProfileStore store, FirebirdConnectionService service, TransactionService transactionService)
-        : this(store, service, transactionService, new FolderStore(System.IO.Path.GetDirectoryName(store.FilePath)!))
+        // Thread the connection store's protector into FolderStore so every facade over
+        // the shared settings.dat encrypts consistently — an Identity-protector save here
+        // would write the unified file unencrypted and clobber the DPAPI-protected one.
+        : this(store, service, transactionService, new FolderStore(System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector))
     {
     }
 
@@ -75,12 +84,23 @@ public partial class MainWindowViewModel : ViewModelBase
         _folderState = _folderStore.Load();
         _service = service;
         _transactionService = transactionService;
+        // Metadata lane reads MetadataTransactionProfile; degrades to the data lane when
+        // the second attachment is unavailable (fallback) so DDL still works.
+        _metadataTransactionService = new TransactionService(
+            _service,
+            ConnectionRole.Metadata,
+            p => p?.MetadataTransactionProfile ?? Core.Connections.TransactionProfile.ReadCommitted,
+            fallback: _transactionService);
         _executor = new FirebirdQueryExecutor(_service, _transactionService);
-        _metadataReader = new FirebirdMetadataReader(_service, _transactionService);
-        _ddlReader = new FirebirdDdlReader(_service, _transactionService);
-        _tableDetailReader = new FirebirdTableDetailReader(_service, _transactionService);
+        _metadataExecutor = new FirebirdQueryExecutor(_service, _metadataTransactionService);
+        // Browsing + DDL run on the metadata lane (so they don't pin objects in the data
+        // working tx). The TableDetail reader splits per method: structure → metadata,
+        // data preview → data.
+        _metadataReader = new FirebirdMetadataReader(_service, _metadataTransactionService);
+        _ddlReader = new FirebirdDdlReader(_service, _metadataTransactionService);
+        _tableDetailReader = new FirebirdTableDetailReader(_service, _metadataTransactionService, _transactionService);
         _dataEditor = new FirebirdDataEditor(_service, _transactionService);
-        _ddlExecutor = new FirebirdDdlExecutor(_service, _transactionService);
+        _ddlExecutor = new FirebirdDdlExecutor(_service, _metadataTransactionService);
         Metadata = new MetadataExplorerViewModel(_service, _metadataReader);
         Metadata.OpenDdlRequested += OnOpenDdlRequested;
         Metadata.CopyNameRequested += OnCopyNameRequested;
@@ -101,6 +121,7 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         _service.ActiveConnectionChanged += OnActiveConnectionChanged;
         _transactionService.TransactionStateChanged += OnTransactionStateChanged;
+        _metadataTransactionService.TransactionStateChanged += OnTransactionStateChanged;
         ReloadConnections();
         UpdateStatusFromConnection();
     }
@@ -143,6 +164,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveNewTable))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
+    [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
+    [NotifyPropertyChangedFor(nameof(ShowMetadataTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowQueryPanel))]
     [NotifyPropertyChangedFor(nameof(ActiveDdlText))]
     [NotifyPropertyChangedFor(nameof(ActiveTableDetail))]
@@ -222,6 +245,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ShowExecuteButton))]
     [NotifyPropertyChangedFor(nameof(ShowCancelButton))]
     [NotifyCanExecuteChangedFor(nameof(ExecuteQueryCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExecuteQueryOnMetadataCommand))]
     private bool _isExecuting;
 
     [ObservableProperty]
@@ -257,15 +281,26 @@ public partial class MainWindowViewModel : ViewModelBase
     public string ActiveConnectionName => _service.ActiveProfile?.Name ?? string.Empty;
     public bool HasActiveConnection => _service.ActiveProfile is not null;
 
-    // Title-bar chip: which transaction profile new transactions will use, so the
-    // user always knows what they are working on (e.g. "TX: Read Committed").
-    public string ActiveTransactionProfileText
+    // Title-bar chips: which profile each lane's NEXT transaction will use, so the user
+    // always knows what they are working on (e.g. "Data: Read Committed" /
+    // "Meta: Read Write Table Stability").
+    public string DataTransactionProfileText
     {
         get
         {
-            var profile = _service.ActiveProfile?.TransactionProfile
+            var profile = _service.ActiveProfile?.DataTransactionProfile
                 ?? Core.Connections.TransactionProfile.ReadCommitted;
-            return string.Format(UiStrings.TransactionProfileChipFormat, TransactionProfileCatalog.LabelFor(profile));
+            return string.Format(UiStrings.TransactionProfileDataChipFormat, TransactionProfileCatalog.LabelFor(profile));
+        }
+    }
+
+    public string MetadataTransactionProfileText
+    {
+        get
+        {
+            var profile = _service.ActiveProfile?.MetadataTransactionProfile
+                ?? Core.Connections.TransactionProfile.ReadCommitted;
+            return string.Format(UiStrings.TransactionProfileMetadataChipFormat, TransactionProfileCatalog.LabelFor(profile));
         }
     }
 
@@ -281,17 +316,41 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool CanExecute => !IsExecuting;
 
+    // --- Data lane transaction state (SQL Editor F5, data preview/edit) ---
     public bool IsTransactionIdle => _transactionService.IsIdle;
     public bool IsTransactionActive => _transactionService.IsActive;
     public bool IsTransactionError => _transactionService.IsError;
     public bool HasExecutedInTransaction => _transactionService.HasExecutedStatements;
-    public string TransactionBarText => _transactionService.State switch
+    public string TransactionBarText => BuildTransactionBarText(UiStrings.TransactionDataBarPrefix, _transactionService);
+
+    // --- Metadata lane transaction state (DDL, Shift+F5) ---
+    public bool IsMetadataTransactionIdle => _metadataTransactionService.IsIdle;
+    public bool IsMetadataTransactionActive => _metadataTransactionService.IsActive;
+    public bool IsMetadataTransactionError => _metadataTransactionService.IsError;
+    public bool HasExecutedInMetadataTransaction => _metadataTransactionService.HasExecutedStatements;
+    public string MetadataTransactionBarText => BuildTransactionBarText(UiStrings.TransactionMetadataBarPrefix, _metadataTransactionService);
+
+    // The metadata lane is only shown as a separate group when it has its own
+    // attachment; in degraded mode it aliases the data lane and showing both would
+    // duplicate the same transaction.
+    public bool MetadataLaneIndependent => _service.MetadataIsIndependent;
+
+    // Commit/Rollback button groups appear where their lane is reachable OR active:
+    // Data on the Query / Dane surfaces; Metadata on the structure surfaces (and on the
+    // Query tab once a Shift+F5 metadata tx is open).
+    public bool ShowDataTransactionButtons => IsQueryTabActive || IsDataTabActive || IsTransactionActive || IsTransactionError;
+    public bool ShowMetadataTransactionButtons
+        => MetadataLaneIndependent
+           && (IsTableDetailTabActive || IsNewTableTabActive || IsQueryTabActive
+               || IsMetadataTransactionActive || IsMetadataTransactionError);
+
+    private static string BuildTransactionBarText(string lanePrefix, TransactionService tx) => tx.State switch
     {
-        TransactionState.Active when _transactionService.HasExecutedStatements
-            => $"{UiStrings.TransactionBarActive} · {string.Format(UiStrings.TransactionStatementCountFormat, _transactionService.StatementCount)}",
-        TransactionState.Active => UiStrings.TransactionBarActive,
-        TransactionState.Error => UiStrings.TransactionBarError,
-        _ => UiStrings.TransactionBarInactive,
+        TransactionState.Active when tx.HasExecutedStatements
+            => $"{lanePrefix}: {UiStrings.TransactionBarActive} · {string.Format(UiStrings.TransactionStatementCountFormat, tx.StatementCount)}",
+        TransactionState.Active => $"{lanePrefix}: {UiStrings.TransactionBarActive}",
+        TransactionState.Error => $"{lanePrefix}: {UiStrings.TransactionBarError}",
+        _ => $"{lanePrefix}: {UiStrings.TransactionBarInactive}",
     };
     public void ReloadConnections()
     {
@@ -1081,7 +1140,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public async Task DisconnectAsync()
     {
-        if (_transactionService.IsActive)
+        // Either lane (data or metadata) may hold an open working transaction; both are
+        // rolled back on disconnect. Confirm if either is active.
+        if (_transactionService.IsActive || _metadataTransactionService.IsActive)
         {
             var confirmed = await RequestConfirmAsync(new ConfirmRequest
             {
@@ -1095,7 +1156,14 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 return;
             }
-            await _transactionService.RollbackAsync().ConfigureAwait(true);
+            if (_metadataTransactionService.IsActive)
+            {
+                await _metadataTransactionService.RollbackAsync().ConfigureAwait(true);
+            }
+            if (_transactionService.IsActive)
+            {
+                await _transactionService.RollbackAsync().ConfigureAwait(true);
+            }
         }
 
         ClearError();
@@ -1154,6 +1222,8 @@ public partial class MainWindowViewModel : ViewModelBase
             Charset = profile.Charset,
             Dialect = profile.Dialect,
             ClientLibraryPath = profile.ClientLibraryPath,
+            DataTransactionProfile = profile.DataTransactionProfile,
+            MetadataTransactionProfile = profile.MetadataTransactionProfile,
         };
         _store.Upsert(clone);
         ReloadConnections();
@@ -1615,8 +1685,17 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var tab in doomed) CloseTab(tab);
     }
 
+    // F5 — run on the DATA lane (connection #1, Data profile).
     [RelayCommand(CanExecute = nameof(CanExecute))]
-    public async Task ExecuteQueryAsync()
+    public Task ExecuteQueryAsync() => RunExecuteAsync(metadata: false);
+
+    // Shift+F5 — run on the METADATA lane (connection #2, Metadata profile). The user
+    // uses this to run a hand-written ALTER PROCEDURE / ALTER TRIGGER under the metadata
+    // profile without changing the connection's data profile.
+    [RelayCommand(CanExecute = nameof(CanExecute))]
+    public Task ExecuteQueryOnMetadataAsync() => RunExecuteAsync(metadata: true);
+
+    private async Task RunExecuteAsync(bool metadata)
     {
         // If the user has highlighted a fragment in the editor, execute only that;
         // otherwise execute the whole editor content (legacy behaviour).
@@ -1638,9 +1717,14 @@ public partial class MainWindowViewModel : ViewModelBase
         ClearError();
         _executionCts = new CancellationTokenSource();
 
+        // Always log which lane/profile this statement runs under, so the user never has
+        // to guess whether F5 or Shift+F5 was used (explicit C1 requirement).
+        var executor = metadata ? _metadataExecutor : _executor;
+        AddMessage(MessageSeverity.Info, BuildExecutedViaMessage(metadata));
+
         try
         {
-            var result = await _executor.ExecuteAsync(sql, _executionCts.Token).ConfigureAwait(true);
+            var result = await executor.ExecuteAsync(sql, _executionCts.Token).ConfigureAwait(true);
             CurrentResult = result;
             CurrentResultVersionTag = Guid.NewGuid().ToString("N");
 
@@ -1684,6 +1768,17 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [RelayCommand]
     private void CancelQuery() => _executionCts?.Cancel();
+
+    // "Executed via Data profile (Read Committed)." / "Executed via Metadata profile
+    // (Read Write Table Stability)." — surfaced in the Messages log on every execute.
+    private string BuildExecutedViaMessage(bool metadata)
+    {
+        var lane = metadata ? UiStrings.TransactionLaneMetadata : UiStrings.TransactionLaneData;
+        var profile = metadata
+            ? (_service.ActiveProfile?.MetadataTransactionProfile ?? Core.Connections.TransactionProfile.ReadCommitted)
+            : (_service.ActiveProfile?.DataTransactionProfile ?? Core.Connections.TransactionProfile.ReadCommitted);
+        return string.Format(UiStrings.ExecutedViaProfileFormat, lane, TransactionProfileCatalog.LabelFor(profile));
+    }
 
     [RelayCommand(CanExecute = nameof(CanFormatSql))]
     private void FormatSql()
@@ -2044,14 +2139,27 @@ public partial class MainWindowViewModel : ViewModelBase
         return max + 1;
     }
 
+    // Data lane (SQL Editor F5, data preview/edit).
     [RelayCommand]
-    private async Task CommitAsync()
+    private Task CommitAsync() => CommitLaneAsync(_transactionService, UiStrings.TransactionLaneData);
+
+    [RelayCommand]
+    private Task RollbackAsync() => RollbackLaneAsync(_transactionService, UiStrings.TransactionLaneData);
+
+    // Metadata lane (DDL from the structure editor, Shift+F5).
+    [RelayCommand]
+    private Task CommitMetadataAsync() => CommitLaneAsync(_metadataTransactionService, UiStrings.TransactionLaneMetadata);
+
+    [RelayCommand]
+    private Task RollbackMetadataAsync() => RollbackLaneAsync(_metadataTransactionService, UiStrings.TransactionLaneMetadata);
+
+    private async Task CommitLaneAsync(TransactionService tx, string lane)
     {
-        var count = _transactionService.StatementCount;
+        var count = tx.StatementCount;
         try
         {
-            await _transactionService.CommitAsync().ConfigureAwait(true);
-            AddMessage(MessageSeverity.Info, string.Format(UiStrings.TransactionCommittedFormat, count));
+            await tx.CommitAsync().ConfigureAwait(true);
+            AddMessage(MessageSeverity.Info, string.Format(UiStrings.TransactionLaneCommittedFormat, lane, count));
         }
         catch (TransactionFailedException ex)
         {
@@ -2060,12 +2168,11 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
-    private async Task RollbackAsync()
+    private async Task RollbackLaneAsync(TransactionService tx, string lane)
     {
-        var count = _transactionService.StatementCount;
-        await _transactionService.RollbackAsync().ConfigureAwait(true);
-        AddMessage(MessageSeverity.Info, string.Format(UiStrings.TransactionRolledBackFormat, count));
+        var count = tx.StatementCount;
+        await tx.RollbackAsync().ConfigureAwait(true);
+        AddMessage(MessageSeverity.Info, string.Format(UiStrings.TransactionLaneRolledBackFormat, lane, count));
     }
 
     private void AddMessage(MessageSeverity severity, string text)
@@ -2118,7 +2225,11 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsConnected));
         OnPropertyChanged(nameof(ActiveConnectionName));
         OnPropertyChanged(nameof(HasActiveConnection));
-        OnPropertyChanged(nameof(ActiveTransactionProfileText));
+        OnPropertyChanged(nameof(DataTransactionProfileText));
+        OnPropertyChanged(nameof(MetadataTransactionProfileText));
+        OnPropertyChanged(nameof(MetadataLaneIndependent));
+        OnPropertyChanged(nameof(ShowDataTransactionButtons));
+        OnPropertyChanged(nameof(ShowMetadataTransactionButtons));
         OnPropertyChanged(nameof(CanCreateTable));
         NewTableCommand.NotifyCanExecuteChanged();
     }
@@ -2138,21 +2249,35 @@ public partial class MainWindowViewModel : ViewModelBase
         // marshalled onto the UI thread. Running those off-thread is what broke
         // the DataGrid binding layer and left the grid unresponsive ("UI locked"
         // after reorder+commit, #6).
-        var current = _transactionService.State;
-        var becameActive = _previousTransactionState != TransactionState.Active && current == TransactionState.Active;
+        // One handler, both lanes (the data + metadata services share it). In degraded
+        // mode the metadata service delegates to the data one, so we treat it as inert
+        // (Idle) to avoid double-counting the same transaction.
+        var metaIndependent = _service.MetadataIsIndependent;
+
+        var dataCurrent = _transactionService.State;
+        var dataBecameActive = _previousTransactionState != TransactionState.Active && dataCurrent == TransactionState.Active;
         // Active → Idle means a Commit or Rollback just completed; the on-screen
         // TableDetail tabs may be out of sync with the live catalog (rollback
         // reverts ALTERs fired in the tx; commit confirms them) — refresh each.
-        var committedOrRolledBack = _previousTransactionState == TransactionState.Active && current == TransactionState.Idle;
-        _previousTransactionState = current;
+        var dataCommittedOrRolledBack = _previousTransactionState == TransactionState.Active && dataCurrent == TransactionState.Idle;
+        _previousTransactionState = dataCurrent;
+
+        var metaCurrent = metaIndependent ? _metadataTransactionService.State : TransactionState.Idle;
+        var metaBecameActive = _previousMetadataTransactionState != TransactionState.Active && metaCurrent == TransactionState.Active;
+        var metaCommittedOrRolledBack = _previousMetadataTransactionState == TransactionState.Active && metaCurrent == TransactionState.Idle;
+        _previousMetadataTransactionState = metaCurrent;
 
         void Apply()
         {
-            if (becameActive)
+            if (dataBecameActive)
             {
-                AddMessage(MessageSeverity.Info, UiStrings.TransactionStartedMessage);
+                AddMessage(MessageSeverity.Info, string.Format(UiStrings.TransactionLaneStartedFormat, UiStrings.TransactionLaneData));
             }
-            if (committedOrRolledBack)
+            if (metaBecameActive)
+            {
+                AddMessage(MessageSeverity.Info, string.Format(UiStrings.TransactionLaneStartedFormat, UiStrings.TransactionLaneMetadata));
+            }
+            if (dataCommittedOrRolledBack || metaCommittedOrRolledBack)
             {
                 foreach (var tab in WorkspaceTabs)
                 {
@@ -2170,14 +2295,26 @@ public partial class MainWindowViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsTransactionError));
             OnPropertyChanged(nameof(HasExecutedInTransaction));
             OnPropertyChanged(nameof(TransactionBarText));
+            OnPropertyChanged(nameof(IsMetadataTransactionIdle));
+            OnPropertyChanged(nameof(IsMetadataTransactionActive));
+            OnPropertyChanged(nameof(IsMetadataTransactionError));
+            OnPropertyChanged(nameof(HasExecutedInMetadataTransaction));
+            OnPropertyChanged(nameof(MetadataTransactionBarText));
+            OnPropertyChanged(nameof(ShowDataTransactionButtons));
+            OnPropertyChanged(nameof(ShowMetadataTransactionButtons));
+            CommitCommand.NotifyCanExecuteChanged();
+            RollbackCommand.NotifyCanExecuteChanged();
+            CommitMetadataCommand.NotifyCanExecuteChanged();
+            RollbackMetadataCommand.NotifyCanExecuteChanged();
 
-            // The Query tab carries the transaction-active marker. It only exists
-            // while a connection is active; when none is, there's no marker to set.
+            // The Query tab carries the transaction-active marker. It shows when EITHER
+            // lane has executed statements (F5 → data, Shift+F5 → metadata).
+            var anyExecuted = HasExecutedInTransaction || HasExecutedInMetadataTransaction;
             foreach (var tab in WorkspaceTabs)
             {
                 if (tab.Kind == WorkspaceTabKind.Query)
                 {
-                    tab.ShowActiveTransactionMarker = HasExecutedInTransaction;
+                    tab.ShowActiveTransactionMarker = anyExecuted;
                     break;
                 }
             }

@@ -60,8 +60,12 @@ public sealed class FirebirdDdlExecutor
             }
         }
 
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Run on this executor's lane (metadata in production). The connection, lock,
+        // and transaction all come from the injected TransactionService so DDL lands on
+        // the metadata attachment under the metadata profile.
+        var connection = _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+        var commandLock = _transactionService?.CommandLock ?? _connectionService.CommandLock;
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             foreach (var statement in statements)
@@ -86,7 +90,7 @@ public sealed class FirebirdDdlExecutor
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            commandLock.Release();
         }
 
         // Counter tick after release so the transaction bar updates outside the

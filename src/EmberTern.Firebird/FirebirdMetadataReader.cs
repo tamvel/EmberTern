@@ -23,19 +23,28 @@ public sealed class FirebirdMetadataReader
         _transactionService = transactionService;
     }
 
+    // Connection + lock for this reader's lane. In production the reader is built with
+    // the metadata TransactionService, so browsing runs on the metadata attachment and
+    // never pins objects in the user's data working transaction. Falls back to the data
+    // connection when no transaction service is injected (tests).
+    private FbConnection LaneConnection()
+        => _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+    private SemaphoreSlim LaneLock()
+        => _transactionService?.CommandLock ?? _connectionService.CommandLock;
+
     public async Task<IReadOnlyList<MetadataObject>> ListAsync(
         MetadataObjectKind kind,
         CancellationToken cancellationToken = default)
     {
         var sql = SqlFor(kind);
-        var connection = _connectionService.RequireOpenConnection();
+        var connection = LaneConnection();
 
         // Readers never open their own transaction. When the user has a working tx
         // active we attach to it; otherwise the managed driver runs the SELECT in
         // an implicit read tx (auto-committed per command). The connection's
         // CommandLock serializes us against every other reader / executor — FbConnection
         // is single-threaded and concurrent commands hang or throw.
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -73,7 +82,7 @@ public sealed class FirebirdMetadataReader
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            LaneLock().Release();
         }
     }
 
@@ -94,8 +103,8 @@ public sealed class FirebirdMetadataReader
     {
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<ColumnSpec>();
 
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = LaneConnection();
+        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -127,7 +136,7 @@ public sealed class FirebirdMetadataReader
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            LaneLock().Release();
         }
     }
 
@@ -140,8 +149,8 @@ public sealed class FirebirdMetadataReader
     /// </summary>
     public async Task<IReadOnlyList<DomainSpec>> ListDomainsAsync(CancellationToken cancellationToken = default)
     {
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = LaneConnection();
+        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -173,7 +182,7 @@ public sealed class FirebirdMetadataReader
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            LaneLock().Release();
         }
     }
 

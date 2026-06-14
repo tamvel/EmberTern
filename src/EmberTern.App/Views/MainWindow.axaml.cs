@@ -42,7 +42,12 @@ public partial class MainWindow : Window
     private DropPosition _currentDropPosition;
     private const double DragThreshold = 8.0;
 
-    private readonly WorkspaceStore _workspaceStore = new();
+    // Built lazily when the VM attaches (OnDataContextChanged), from the VM's store
+    // directory + protector — so the View's workspace section writes into the SAME
+    // shared settings.dat the VM uses. Deliberately NOT a field initializer with the
+    // default dir: that would (a) hit the real %AppData% during headless tests and
+    // (b) trigger legacy-file migration before any VM is attached.
+    private WorkspaceStore? _workspaceStore;
     private WorkspaceState? _pendingRestore;
     // Tracks the bounds last seen while WindowState was Normal so a closing-while-maximized
     // session doesn't blow away the user's preferred Restore-size and position.
@@ -97,7 +102,6 @@ public partial class MainWindow : Window
             sidebar.PointerCaptureLost += OnSidebarPointerCaptureLost;
         }
 
-        _pendingRestore = _workspaceStore.Load();
         _lastNormalBounds = new WindowBounds
         {
             X = Position.X, Y = Position.Y,
@@ -185,7 +189,7 @@ public partial class MainWindow : Window
         };
         try
         {
-            _workspaceStore.Save(state);
+            _workspaceStore?.Save(state);
         }
         catch (IOException)
         {
@@ -278,12 +282,19 @@ public partial class MainWindow : Window
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
 
             // Restore VM state once, the first time a VM is attached. Done here (not in
-            // Opened) so QueryText is set before we push it into the editor below.
-            // Bounds restore happens separately in OnWindowOpened — keep _pendingRestore
-            // alive until both consumers have used it.
-            if (!_vmRestored && _pendingRestore is not null)
+            // Opened) so QueryText is set before we push it into the editor below, and so
+            // the workspace store is built from the VM's settings location (never the real
+            // %AppData% in tests). Bounds restore happens separately in OnWindowOpened —
+            // keep _pendingRestore alive until both consumers have used it.
+            if (!_vmRestored)
             {
-                _currentVm.RestoreWorkspace(_pendingRestore);
+                var settingsDir = Path.GetDirectoryName(_currentVm.Store.FilePath)!;
+                _workspaceStore = new WorkspaceStore(settingsDir, _currentVm.Store.Protector);
+                _pendingRestore = _workspaceStore.Load();
+                if (_pendingRestore is not null)
+                {
+                    _currentVm.RestoreWorkspace(_pendingRestore);
+                }
                 _vmRestored = true;
             }
 

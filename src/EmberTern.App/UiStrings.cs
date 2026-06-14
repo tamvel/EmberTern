@@ -61,6 +61,23 @@ internal static class UiStrings
     public const string TransactionStartedMessage = "Transaction started.";
     public const string TransactionCommittedFormat = "Transaction committed ({0} statement(s)).";
     public const string TransactionRolledBackFormat = "Transaction rolled back ({0} statement(s)).";
+    // Lane-qualified transaction strings (C2 — Data / Metadata working transactions).
+    public const string TransactionLaneData = "Data";
+    public const string TransactionLaneMetadata = "Metadata";
+    public const string TransactionLaneStartedFormat = "{0} transaction started.";
+    public const string TransactionLaneCommittedFormat = "{0} transaction committed ({1} statement(s)).";
+    public const string TransactionLaneRolledBackFormat = "{0} transaction rolled back ({1} statement(s)).";
+    public const string TransactionDataBarPrefix = "Data";
+    public const string TransactionMetadataBarPrefix = "Meta";
+    public const string TransactionCommitDataTooltip = "Commit data transaction";
+    public const string TransactionRollbackDataTooltip = "Roll back data transaction";
+    public const string TransactionCommitMetadataTooltip = "Commit metadata transaction";
+    public const string TransactionRollbackMetadataTooltip = "Roll back metadata transaction";
+    // Execution-lane feedback: which profile a statement ran under (Shift+F5 vs F5).
+    // {0} = lane (Data/Metadata), {1} = profile label (e.g. "Read Committed").
+    public const string ExecutedViaProfileFormat = "Executed via {0} profile ({1}).";
+    public const string ToolbarExecuteMetadataIcon = "▶▶";
+    public const string ToolbarExecuteMetadataTooltip = "Execute on Metadata connection / profile (Shift+F5)";
     public const string DisconnectConfirmTitle = "Active transaction";
     public const string DisconnectConfirmMessage = "Disconnecting will roll back the active transaction.\n\nDisconnect anyway?";
     public const string DisconnectConfirmYes = "Disconnect";
@@ -92,6 +109,8 @@ internal static class UiStrings
     public const string DialogFieldClientLibrary = "Client library (fbclient.dll)";
     public const string DialogFieldClientLibraryHint = "Leave empty to use the default. Set when connecting to a Firebird version different from the default client (e.g. Firebird 3 server while Firebird 5 client is on PATH).";
     public const string DialogFieldTransactionProfile = "Transaction profile";
+    public const string DialogFieldDataTransactionProfile = "Data transaction profile";
+    public const string DialogFieldMetadataTransactionProfile = "Metadata transaction profile";
     public const string DialogTestConnection = "Test connection";
     public const string DialogSave = "Save";
     public const string DialogCancel = "Cancel";
@@ -109,6 +128,9 @@ internal static class UiStrings
     public const string TransactionProfileReadWriteTableStabilityDesc = "Read-write with table stability (consistency). Warning: locks whole tables and can block other users.";
     // Active profile chip in the title bar, e.g. "TX: Read Committed".
     public const string TransactionProfileChipFormat = "TX: {0}";
+    // Dual chips (C2) — Data + Metadata profiles shown side by side in the title bar.
+    public const string TransactionProfileDataChipFormat = "Data: {0}";
+    public const string TransactionProfileMetadataChipFormat = "Meta: {0}";
 
     public const string TestInProgress = "Testing connection…";
     public const string TestSuccess = "Connection successful.";

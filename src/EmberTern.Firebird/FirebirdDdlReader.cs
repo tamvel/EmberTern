@@ -25,11 +25,19 @@ public sealed class FirebirdDdlReader
         _transactionService = transactionService;
     }
 
+    // Connection + lock for this reader's lane (metadata in production), so DDL browsing
+    // runs on the metadata attachment. Falls back to the data connection when no
+    // transaction service is injected (tests).
+    private FbConnection LaneConnection()
+        => _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+    private SemaphoreSlim LaneLock()
+        => _transactionService?.CommandLock ?? _connectionService.CommandLock;
+
     public async Task<string> FetchDdlAsync(MetadataObject obj, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(obj);
 
-        var connection = _connectionService.RequireOpenConnection();
+        var connection = LaneConnection();
         var serverMajor = ParseServerMajor(connection.ServerVersion);
         // Source BLOBs in this database may be a mix of UTF-8 (modern tools) and the connection
         // charset (older IBExpert writes). DecodeSourceBlob tries strict UTF-8 first and falls
@@ -44,7 +52,8 @@ public sealed class FirebirdDdlReader
         // RDB$RELATION_CONSTRAINTS, RDB$INDICES separately), and FbConnection
         // is single-threaded.
         var tx = _transactionService?.ActiveTransaction;
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             return obj.Kind switch
@@ -74,7 +83,7 @@ public sealed class FirebirdDdlReader
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            commandLock.Release();
         }
     }
 

@@ -33,11 +33,18 @@ public sealed class FirebirdDiagnostics
         _transactionService = transactionService;
     }
 
+    // Connection + lock for the lane being diagnosed, so the begin-time log for a
+    // metadata transaction describes the metadata attachment (not the data one).
+    private FbConnection LaneConnection()
+        => _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+    private SemaphoreSlim LaneLock()
+        => _transactionService?.CommandLock ?? _connectionService.CommandLock;
+
     /// <summary>The Firebird transaction id seen by the current command path.</summary>
     public async Task<long> GetCurrentTransactionIdAsync(CancellationToken cancellationToken = default)
     {
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = LaneConnection();
+        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -53,7 +60,7 @@ public sealed class FirebirdDiagnostics
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            LaneLock().Release();
         }
     }
 
@@ -64,8 +71,8 @@ public sealed class FirebirdDiagnostics
     /// </summary>
     public async Task<string> DescribeCurrentTransactionAsync(CancellationToken cancellationToken = default)
     {
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = LaneConnection();
+        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -93,15 +100,15 @@ public sealed class FirebirdDiagnostics
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            LaneLock().Release();
         }
     }
 
     /// <summary>All transactions currently visible in MON$TRANSACTIONS.</summary>
     public async Task<IReadOnlyList<MonTransactionInfo>> GetTransactionsAsync(CancellationToken cancellationToken = default)
     {
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = LaneConnection();
+        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -131,15 +138,15 @@ public sealed class FirebirdDiagnostics
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            LaneLock().Release();
         }
     }
 
     /// <summary>All attachments currently visible in MON$ATTACHMENTS.</summary>
     public async Task<IReadOnlyList<MonAttachmentInfo>> GetAttachmentsAsync(CancellationToken cancellationToken = default)
     {
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connection = LaneConnection();
+        await LaneLock().WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -169,7 +176,7 @@ public sealed class FirebirdDiagnostics
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            LaneLock().Release();
         }
     }
 

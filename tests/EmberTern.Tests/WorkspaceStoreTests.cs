@@ -172,16 +172,17 @@ public class WorkspaceStoreTests
     }
 
     [Fact]
-    public void Load_DefaultsForLegacyStateWithoutSavedQueries()
+    public void Load_MigratesLegacyWorkspaceJson_AndDefaultsMissingFields()
     {
-        // A workspace.json written before this milestone has no SavedQueries / ActiveSavedQueryId
-        // / QueryPanelVisible fields. System.Text.Json should fill the defaults (empty list, null,
-        // true) without throwing.
+        // A legacy workspace.json (written before the unified settings.dat) with no
+        // SavedQueries / ActiveSavedQueryId / QueryPanelVisible fields. On first Load the
+        // unified store migrates it and System.Text.Json fills the defaults (empty list,
+        // null, true) without throwing.
         var dir = NewTempDir();
         try
         {
-            var store = new WorkspaceStore(dir);
-            File.WriteAllText(store.FilePath, """
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "workspace.json"), """
                 {
                   "Workspaces": {
                     "pid": {
@@ -192,12 +193,19 @@ public class WorkspaceStoreTests
                 }
                 """);
 
+            var store = new WorkspaceStore(dir);
             var state = store.Load();
+
             Assert.NotNull(state);
             Assert.True(state!.QueryPanelVisible);
             var ws = state.Workspaces["pid"];
             Assert.Empty(ws.SavedQueries);
             Assert.Null(ws.ActiveSavedQueryId);
+            Assert.Equal("select 1;", ws.Tabs[0].SqlText);
+
+            // Migration consumed the legacy file and produced the unified one.
+            Assert.False(File.Exists(Path.Combine(dir, "workspace.json")));
+            Assert.True(File.Exists(store.FilePath));
         }
         finally
         {

@@ -1,7 +1,6 @@
-using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
+using EmberTern.Core.Security;
+using EmberTern.Core.Settings;
 
 namespace EmberTern.Core.Connections;
 
@@ -31,69 +30,49 @@ public sealed class FolderState
     public bool ExpandStateInitialized { get; set; }
 }
 
+// Section facade over the unified ApplicationSettingsStore (settings.dat). Public API
+// unchanged from when this owned folders.json. Save is read-modify-write on the Folders
+// section so it preserves Connections / Workspace / UserSettings in the shared file.
 public sealed class FolderStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-    };
-
-    private readonly string _filePath;
+    private readonly ApplicationSettingsStore _settings;
 
     public FolderStore()
-        : this(DefaultStoreDirectory())
+        : this(new ApplicationSettingsStore())
+    {
+    }
+
+    public FolderStore(SecretProtector protector)
+        : this(new ApplicationSettingsStore(protector))
     {
     }
 
     public FolderStore(string directory)
+        : this(new ApplicationSettingsStore(directory))
     {
-        Directory.CreateDirectory(directory);
-        _filePath = Path.Combine(directory, "folders.json");
     }
 
-    public string FilePath => _filePath;
+    public FolderStore(string directory, SecretProtector? protector)
+        : this(new ApplicationSettingsStore(directory, protector))
+    {
+    }
 
+    private FolderStore(ApplicationSettingsStore settings)
+    {
+        _settings = settings;
+    }
+
+    public string FilePath => _settings.FilePath;
+
+    // Missing / corrupt / unreadable file → fresh empty state (same forgiving stance as
+    // before), via ApplicationSettingsStore.Load returning null.
     public FolderState Load()
-    {
-        if (!File.Exists(_filePath))
-        {
-            return new FolderState();
-        }
-
-        try
-        {
-            var json = File.ReadAllText(_filePath);
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                return new FolderState();
-            }
-            return JsonSerializer.Deserialize<FolderState>(json, JsonOptions) ?? new FolderState();
-        }
-        // Same forgiving stance as ConnectionProfileStore / WorkspaceStore: corrupt
-        // or unreadable files reset to defaults rather than crashing startup.
-        catch (JsonException)
-        {
-            return new FolderState();
-        }
-        catch (IOException)
-        {
-            return new FolderState();
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return new FolderState();
-        }
-    }
+        => _settings.Load()?.Folders ?? new FolderState();
 
     public void Save(FolderState state)
     {
-        var json = JsonSerializer.Serialize(state, JsonOptions);
-        File.WriteAllText(_filePath, json);
-    }
-
-    private static string DefaultStoreDirectory()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "EmberTern");
+        var settings = _settings.Load() ?? new ApplicationSettings();
+        settings.Folders = state;
+        _settings.Save(settings);
     }
 }

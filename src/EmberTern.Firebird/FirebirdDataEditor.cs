@@ -111,8 +111,10 @@ public sealed class FirebirdDataEditor
 
     private async Task ExecuteAsync(string sql, Action<FbCommand> bindParameters, CancellationToken cancellationToken)
     {
-        var connection = _connectionService.RequireOpenConnection();
-        await _connectionService.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(true);
+        // Data lane: inline edits run on the data attachment under the data working tx.
+        var connection = _transactionService.RequireOpenConnection();
+        var commandLock = _transactionService.CommandLock;
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(true);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -128,7 +130,7 @@ public sealed class FirebirdDataEditor
         }
         finally
         {
-            _connectionService.CommandLock.Release();
+            commandLock.Release();
         }
 
         // Counter tick happens after release so the transaction-bar update doesn't
