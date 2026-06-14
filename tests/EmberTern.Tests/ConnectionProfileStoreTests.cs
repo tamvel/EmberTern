@@ -4,6 +4,7 @@ using System.Linq;
 using EmberTern.App.Security;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Security;
+using EmberTern.Core.Settings;
 using Xunit;
 
 namespace EmberTern.Tests;
@@ -188,7 +189,10 @@ public class ConnectionProfileStoreTests
             // raw JSON (the FakeProtector prefixes "ENC:"; a real DPAPI protector would
             // produce opaque ciphertext — so the password isn't visible in production).
             var onDisk = File.ReadAllText(store.FilePath);
-            Assert.StartsWith("ENC:", onDisk);
+            // Container header first, then the encrypted payload (FakeProtector prefixes
+            // "ENC:"; real DPAPI would be opaque). The raw file is never plain JSON.
+            Assert.StartsWith(SettingsFileContainer.Magic, onDisk);
+            Assert.Contains("ENC:", onDisk);
             // The protector was applied over the JSON, so the inner schema is present
             // only after decrypting — the raw file is not plain JSON.
             Assert.False(onDisk.TrimStart().StartsWith("{", StringComparison.Ordinal));
@@ -228,7 +232,9 @@ public class ConnectionProfileStoreTests
             // and is encrypted (whole-file protector applied).
             Assert.False(File.Exists(legacyPath));
             Assert.True(File.Exists(store.FilePath));
-            Assert.StartsWith("ENC:", File.ReadAllText(store.FilePath));
+            var onDisk = File.ReadAllText(store.FilePath);
+            Assert.StartsWith(SettingsFileContainer.Magic, onDisk);
+            Assert.Contains("ENC:", onDisk);
         }
         finally
         {

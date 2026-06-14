@@ -22,8 +22,10 @@ public static class DpapiSecretProtector
     // value (they fall back to empty on the next load).
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("EmberTern.v1.secret");
 
-    // Wraps Protect/Unprotect into the Core seam for injection into stores.
-    public static SecretProtector Create() => new(Protect, Unprotect);
+    // Wraps Protect/Unprotect into the Core seam for injection into stores. Declares the
+    // DPAPI scheme so the settings-file container header records how the payload was
+    // encrypted (lets a load pick this protector and reject unknown future schemes).
+    public static SecretProtector Create() => new(EncryptionSchemes.Dpapi, Protect, Unprotect);
 
     public static string Protect(string plaintext)
     {

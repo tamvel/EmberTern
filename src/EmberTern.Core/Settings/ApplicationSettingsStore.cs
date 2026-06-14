@@ -69,12 +69,24 @@ public sealed class ApplicationSettingsStore
 
     internal SecretProtector Protector => _protector;
 
+    // Set when the last Load degraded instead of returning data — a file from a newer
+    // build (container version, encryption scheme, or data SchemaVersion ahead of us).
+    // Null after a normal load. Surfaced for diagnostics/tests; the facades don't read it.
+    public string? LastLoadDiagnostic { get; private set; }
+
+    // Set when the last Save refused to write because the file already on disk was
+    // produced by a newer build (downgrade protection — see ExistingFileIsFromFuture).
+    // Null after a normal save.
+    public string? LastSaveDiagnostic { get; private set; }
+
     // Returns the persisted settings, or null when there is nothing usable to load:
     // the file is missing (and no legacy files to migrate), empty, corrupt, or can't be
     // decrypted. Callers (the section facades) treat null as "no saved state" and start
     // from defaults. A null return never overwrites whatever is on disk.
     public ApplicationSettings? Load()
     {
+        LastLoadDiagnostic = null;
+
         if (!File.Exists(_filePath))
         {
             // First run on this build (or a fresh install). Pull in any legacy files.
@@ -83,18 +95,71 @@ public sealed class ApplicationSettingsStore
 
         try
         {
-            var stored = File.ReadAllText(_filePath);
-            if (string.IsNullOrWhiteSpace(stored))
+            var raw = File.ReadAllText(_filePath);
+            if (string.IsNullOrWhiteSpace(raw))
             {
                 return null;
             }
 
-            var json = _protector.Unprotect(stored);
-            var settings = JsonSerializer.Deserialize<ApplicationSettings>(json, JsonOptions);
-            if (settings is not null)
+            string payload;
+            string scheme;
+            if (SettingsFileContainer.TryParse(raw, out var header, out var parsedPayload))
             {
-                MigrateTransactionProfiles(settings);
+                // DOWNGRADE PROTECTION (container axis): a header version we don't know
+                // means a newer build changed the envelope layout. Refuse to read it (and
+                // Save refuses to overwrite it) so the newer file is left intact.
+                if (header.ContainerVersion > SettingsFileContainer.CurrentContainerVersion)
+                {
+                    LastLoadDiagnostic =
+                        $"settings.dat container version {header.ContainerVersion} is newer than supported " +
+                        $"{SettingsFileContainer.CurrentContainerVersion}; refusing to read or overwrite " +
+                        "(written by a newer EmberTern build).";
+                    return null;
+                }
+
+                scheme = header.EncryptionScheme;
+                payload = parsedPayload;
             }
+            else
+            {
+                // Legacy headerless settings.dat: the whole file is the payload, encrypted
+                // by whatever protector this build injects (DPAPI in production, Identity
+                // in tests). It is re-wrapped with a container header on the next Save.
+                scheme = _protector.Scheme;
+                payload = raw;
+            }
+
+            var protector = ResolveProtector(scheme);
+            if (protector is null)
+            {
+                // DOWNGRADE PROTECTION (encryption axis): a scheme we have no protector for
+                // — typically a newer encryption algorithm. We can't decrypt it; leave it.
+                LastLoadDiagnostic =
+                    $"settings.dat uses encryption scheme '{scheme}' which this build cannot handle; " +
+                    "refusing to read or overwrite (likely written by a newer EmberTern build).";
+                return null;
+            }
+
+            var json = protector.Unprotect(payload);
+            var settings = JsonSerializer.Deserialize<ApplicationSettings>(json, JsonOptions);
+            if (settings is null)
+            {
+                return null;
+            }
+
+            // DOWNGRADE PROTECTION (data axis): the payload decrypted fine but its data
+            // SchemaVersion is from the future. We don't understand those fields and a Save
+            // would silently drop them — refuse so the newer build's file stays intact.
+            if (settings.SchemaVersion > CurrentSchemaVersion)
+            {
+                LastLoadDiagnostic =
+                    $"settings.dat schema version {settings.SchemaVersion} is newer than supported " +
+                    $"{CurrentSchemaVersion}; refusing to migrate or overwrite " +
+                    "(written by a newer EmberTern build).";
+                return null;
+            }
+
+            MigrateToCurrentVersion(settings);
             return settings;
         }
         // Corrupt JSON, partial write, locked file, or an undecryptable blob (DPAPI from
@@ -119,20 +184,179 @@ public sealed class ApplicationSettingsStore
         }
     }
 
-    public void Save(ApplicationSettings settings)
+    // Picks the protector for a stored payload's declared scheme. Today the store holds a
+    // single injected protector; this is the seam where future schemes (AES, passphrase
+    // export/import) get registered. Returns null for a scheme we can't handle — the
+    // caller degrades safely (downgrade protection). A plaintext ("none") payload is
+    // always readable regardless of the injected protector (e.g. a dev/exported file
+    // opened by a DPAPI build); writing still uses the injected protector.
+    private SecretProtector? ResolveProtector(string scheme)
     {
-        settings.SchemaVersion = CurrentSchemaVersion;
-        var json = JsonSerializer.Serialize(settings, JsonOptions);
-        var stored = _protector.Protect(json);
-        AtomicWrite(_filePath, stored);
+        if (string.Equals(scheme, _protector.Scheme, StringComparison.OrdinalIgnoreCase))
+        {
+            return _protector;
+        }
+        if (string.Equals(scheme, EncryptionSchemes.None, StringComparison.OrdinalIgnoreCase))
+        {
+            return SecretProtector.Identity;
+        }
+        return null;
     }
 
-    // Maps the pre-split single TransactionProfile (carried on the read-only
-    // LegacyTransactionProfile shim) onto the Data/Metadata pair — variant A:
-    // Data inherits the old value, Metadata defaults to the safe ReadCommitted so a
-    // metadata-only profile change can't leak into everyday data work. Idempotent:
-    // after the next Save the legacy field is gone, so subsequent loads no-op.
-    private static void MigrateTransactionProfiles(ApplicationSettings settings)
+    public void Save(ApplicationSettings settings)
+    {
+        LastSaveDiagnostic = null;
+
+        // DOWNGRADE PROTECTION: never clobber a settings.dat that a newer build wrote.
+        // The in-memory change is dropped (the older build can't represent the newer
+        // data anyway); the newer file survives so the user loses nothing on next launch
+        // of the newer build.
+        if (ExistingFileIsFromFuture(out var diagnostic))
+        {
+            LastSaveDiagnostic = diagnostic;
+            return;
+        }
+
+        settings.SchemaVersion = CurrentSchemaVersion;
+        var json = JsonSerializer.Serialize(settings, JsonOptions);
+        var payload = _protector.Protect(json);
+        var container = SettingsFileContainer.Wrap(
+            SettingsFileContainer.CurrentContainerVersion, _protector.Scheme, payload);
+        AtomicWrite(_filePath, container);
+    }
+
+    // True only when the file already on disk was written by a NEWER build than this one
+    // (newer container layout, an encryption scheme we can't read, or a newer data
+    // SchemaVersion). Corrupt / undecryptable-but-known-scheme files are NOT treated as
+    // future — they are safe to replace, matching the prior overwrite behaviour (we never
+    // want to strand the user forever on a genuinely broken file).
+    private bool ExistingFileIsFromFuture(out string diagnostic)
+    {
+        diagnostic = string.Empty;
+        if (!File.Exists(_filePath))
+        {
+            return false;
+        }
+
+        string raw;
+        try
+        {
+            raw = File.ReadAllText(_filePath);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        string payload;
+        string scheme;
+        if (SettingsFileContainer.TryParse(raw, out var header, out var parsedPayload))
+        {
+            if (header.ContainerVersion > SettingsFileContainer.CurrentContainerVersion)
+            {
+                diagnostic = $"Refusing to overwrite settings.dat: container version {header.ContainerVersion} " +
+                             $"is newer than supported {SettingsFileContainer.CurrentContainerVersion}.";
+                return true;
+            }
+            scheme = header.EncryptionScheme;
+            payload = parsedPayload;
+        }
+        else
+        {
+            scheme = _protector.Scheme;
+            payload = raw;
+        }
+
+        var protector = ResolveProtector(scheme);
+        if (protector is null)
+        {
+            diagnostic = $"Refusing to overwrite settings.dat: unknown encryption scheme '{scheme}' " +
+                         "(written by a newer EmberTern build).";
+            return true;
+        }
+
+        try
+        {
+            var json = protector.Unprotect(payload);
+            var existing = JsonSerializer.Deserialize<ApplicationSettings>(json, JsonOptions);
+            if (existing is not null && existing.SchemaVersion > CurrentSchemaVersion)
+            {
+                diagnostic = $"Refusing to overwrite settings.dat: schema version {existing.SchemaVersion} " +
+                             $"is newer than supported {CurrentSchemaVersion}.";
+                return true;
+            }
+        }
+        catch (Exception)
+        {
+            // Corrupt / undecryptable with a known scheme → not a future file; allow the
+            // replace (consistent with prior behaviour; never strand on a broken file).
+            return false;
+        }
+
+        return false;
+    }
+
+    // Brings a freshly-loaded ApplicationSettings up to CurrentSchemaVersion. Two layers:
+    //
+    //  1. A defensive, version-independent consume of the v1→v2 transaction-profile shim
+    //     (idempotent — no-op when the shim field is absent). Kept so a stray legacy field
+    //     can never leak back into a saved file regardless of the recorded version.
+    //
+    //  2. A stepwise migration ladder. Each step upgrades by exactly ONE version and is
+    //     independent of the others, so a future contributor adds:
+    //
+    //         case 2:
+    //             Migrate_2_3(settings);
+    //             break;
+    //
+    //     without needing to understand any earlier step. Files from the future are
+    //     already rejected in Load (downgrade protection), so here we always have
+    //     SchemaVersion <= CurrentSchemaVersion.
+    private void MigrateToCurrentVersion(ApplicationSettings settings)
+    {
+        Migrate_1_2(settings);
+
+        while (settings.SchemaVersion < CurrentSchemaVersion)
+        {
+            switch (settings.SchemaVersion)
+            {
+                case 1:
+                    // 1 → 2: split the single TransactionProfile into Data/Metadata lanes.
+                    // The data fix-up is the shim consumed by Migrate_1_2 above; this step
+                    // only advances the version stamp.
+                    break;
+
+                // Future steps go here, one per version. Template:
+                // case 2:
+                //     Migrate_2_3(settings);
+                //     break;
+
+                default:
+                    // No registered step for this version. Stop rather than loop forever;
+                    // Save stamps CurrentSchemaVersion onto the (current-shaped) data.
+                    settings.SchemaVersion = CurrentSchemaVersion;
+                    return;
+            }
+
+            settings.SchemaVersion++;
+        }
+    }
+
+    // v1 → v2: the pre-split single ConnectionProfile.TransactionProfile (carried on the
+    // read-only LegacyTransactionProfile shim) maps onto the Data/Metadata pair — variant
+    // A: Data inherits the old value, Metadata defaults to the safe ReadCommitted so a
+    // metadata-only profile change can't leak into everyday data work. Idempotent: after
+    // the next Save the legacy field is gone, so subsequent loads no-op.
+    private static void Migrate_1_2(ApplicationSettings settings)
     {
         foreach (var connection in settings.Connections)
         {

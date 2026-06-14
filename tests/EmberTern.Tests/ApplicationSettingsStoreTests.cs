@@ -103,7 +103,9 @@ public class ApplicationSettingsStoreTests
             store.Save(new ApplicationSettings { Connections = { new ConnectionProfile { Name = "A", Password = "p" } } });
 
             var onDisk = File.ReadAllText(store.FilePath);
-            Assert.StartsWith("ENC:", onDisk);
+            // Container header first, then the encrypted payload — the raw file is never plain JSON.
+            Assert.StartsWith(SettingsFileContainer.Magic, onDisk);
+            Assert.Contains("ENC:", onDisk);
             Assert.False(onDisk.TrimStart().StartsWith("{", StringComparison.Ordinal));
         }
         finally
@@ -240,7 +242,9 @@ public class ApplicationSettingsStoreTests
             Assert.Equal("Legacy", r!.Connections[0].Name);
             Assert.Equal("plain", r.Connections[0].Password);
             Assert.False(File.Exists(Path.Combine(dir, "connections.json")));
-            Assert.StartsWith("ENC:", File.ReadAllText(store.FilePath));
+            var onDisk = File.ReadAllText(store.FilePath);
+            Assert.StartsWith(SettingsFileContainer.Magic, onDisk);
+            Assert.Contains("ENC:", onDisk);
         }
         finally
         {

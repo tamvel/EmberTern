@@ -18,16 +18,29 @@ public sealed class SecretProtector
     private readonly Func<string, string> _protect;
     private readonly Func<string, string> _unprotect;
 
+    // Convenience overload: a protector with no declared scheme reports None (plaintext).
+    // Kept so existing call sites and test fakes compile unchanged.
     public SecretProtector(Func<string, string> protect, Func<string, string> unprotect)
+        : this(EncryptionSchemes.None, protect, unprotect)
     {
+    }
+
+    public SecretProtector(string scheme, Func<string, string> protect, Func<string, string> unprotect)
+    {
+        Scheme = scheme ?? throw new ArgumentNullException(nameof(scheme));
         _protect = protect ?? throw new ArgumentNullException(nameof(protect));
         _unprotect = unprotect ?? throw new ArgumentNullException(nameof(unprotect));
     }
 
+    // Stable identifier (one of EncryptionSchemes.*) for the algorithm this protector
+    // applies. Written into the settings.dat container header so a load can pick the
+    // matching protector before decrypting. The Identity/no-op protector reports None.
+    public string Scheme { get; }
+
     // No-op protector: stored value == plaintext. Used by tests and as the safe
     // default when no platform protector is injected. Production wires DPAPI via
     // EmberTern.App.Security.DpapiSecretProtector.
-    public static SecretProtector Identity { get; } = new(static s => s, static s => s);
+    public static SecretProtector Identity { get; } = new(EncryptionSchemes.None, static s => s, static s => s);
 
     // Plaintext -> stored (encrypted, typically Base64). Never called with a null;
     // callers pass string.Empty for "no secret".
