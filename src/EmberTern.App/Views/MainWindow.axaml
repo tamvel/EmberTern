@@ -27,7 +27,6 @@
   <Window.KeyBindings>
     <KeyBinding Gesture="F5" Command="{Binding ExecuteQueryCommand}" />
     <KeyBinding Gesture="Ctrl+Enter" Command="{Binding ExecuteQueryCommand}" />
-    <KeyBinding Gesture="Shift+F5" Command="{Binding ExecuteQueryOnMetadataCommand}" />
     <KeyBinding Gesture="Alt+F" Command="{Binding FormatSqlCommand}" />
   </Window.KeyBindings>
 
@@ -43,11 +42,16 @@
             DoubleTapped="OnTitleBarDoubleTapped">
       <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
 
-        <!-- Brand + active connection name -->
+        <!-- Brand + active connection name. Every item is VerticalAlignment=Center; the
+             parent StackPanel is centered in the fixed 36px row, so all items share one
+             vertical axis. No manual margin nudges. -->
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
                     VerticalAlignment="Center" Margin="10,0,4,0">
+          <!-- Square slot (source is 256x256) so Uniform fits exactly with no
+               horizontal slop and the logo centre lines up with the text. -->
           <Image Source="avares://EmberTern/Assets/Branding/EmberTern_logo.png"
-                 Width="43" Height="28"
+                 Width="26" Height="26"
+                 Stretch="Uniform"
                  RenderOptions.BitmapInterpolationMode="HighQuality"
                  VerticalAlignment="Center" />
           <TextBlock Text="{Binding AppTitle}"
@@ -56,40 +60,60 @@
           <Border Width="1" Height="14"
                   Background="{DynamicResource BorderBrush}"
                   Margin="4,0"
+                  VerticalAlignment="Center"
                   IsVisible="{Binding HasActiveConnection}" />
           <TextBlock Text="{Binding ActiveConnectionName}"
                      Classes="subtle"
                      FontSize="12"
                      VerticalAlignment="Center"
                      IsVisible="{Binding HasActiveConnection}" />
-          <!-- Dual transaction-profile chips: Data (#1) + Metadata (#2). -->
-          <Border Background="{DynamicResource AccentMutedBrush}"
-                  CornerRadius="3"
-                  Padding="6,1"
-                  Margin="2,0,0,0"
+          <!-- Right separator: mirrors the left one so the connection name reads as its
+               own section between the brand and the transaction-profile block. Same
+               inline Border pattern (1px, 14 high, BorderBrush) used across the titlebar. -->
+          <Border Width="1" Height="14"
+                  Background="{DynamicResource BorderBrush}"
+                  Margin="4,0"
                   VerticalAlignment="Center"
-                  IsVisible="{Binding HasActiveConnection}">
-            <TextBlock Text="{Binding DataTransactionProfileText}"
-                       FontSize="11"
-                       Foreground="White"
-                       VerticalAlignment="Center" />
-          </Border>
-          <Border Background="{DynamicResource AccentMutedBrush}"
-                  CornerRadius="3"
-                  Padding="6,1"
-                  Margin="2,0,0,0"
-                  VerticalAlignment="Center"
-                  IsVisible="{Binding HasActiveConnection}">
-            <TextBlock Text="{Binding MetadataTransactionProfileText}"
-                       FontSize="11"
-                       Foreground="White"
-                       VerticalAlignment="Center" />
-          </Border>
+                  IsVisible="{Binding HasActiveConnection}" />
+          <!-- Transaction-profile block: a 2x2 Grid (rows = Data / Meta). The Auto
+               label column sizes to the wider of "Data:"/"Meta:", so both badges
+               left-align in column 1. RowSpacing/ColumnSpacing give the gaps — no
+               per-element margins. Whole block centered as a unit. -->
+          <Grid ColumnDefinitions="Auto,Auto" RowDefinitions="Auto,Auto"
+                RowSpacing="2" ColumnSpacing="4"
+                VerticalAlignment="Center"
+                IsVisible="{Binding HasActiveConnection}">
+            <TextBlock Grid.Row="0" Grid.Column="0"
+                       Text="{x:Static app:UiStrings.TransactionProfileDataLabel}"
+                       FontSize="10" VerticalAlignment="Center" />
+            <Border Grid.Row="0" Grid.Column="1"
+                    Background="{DynamicResource DataLaneChipBrush}"
+                    CornerRadius="2" Padding="4,0"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding DataTransactionProfileTooltip}">
+              <TextBlock Text="{Binding DataProfileName}"
+                         FontSize="10" FontWeight="SemiBold" Foreground="White" />
+            </Border>
+            <TextBlock Grid.Row="1" Grid.Column="0"
+                       Text="{x:Static app:UiStrings.TransactionProfileMetadataLabel}"
+                       FontSize="10" VerticalAlignment="Center" />
+            <Border Grid.Row="1" Grid.Column="1"
+                    Background="{DynamicResource MetadataLaneChipBrush}"
+                    CornerRadius="2" Padding="4,0"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding MetadataTransactionProfileTooltip}">
+              <TextBlock Text="{Binding MetadataProfileName}"
+                         FontSize="10" FontWeight="SemiBold" Foreground="White" />
+            </Border>
+          </Grid>
         </StackPanel>
 
         <!-- Connection toolbar (moved from sidebar) -->
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2"
-                    VerticalAlignment="Center" Margin="14,0,0,0">
+                    VerticalAlignment="Center" Margin="4,0,0,0">
+          <!-- Leading divider between the brand/profile section and the toolbar.
+               Same style as the toolbar's own group separators (1px, Margin 4,6). -->
+          <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
           <Button Classes="icon" Content="+"
                   ToolTip.Tip="New Connection"
                   Click="OnNewConnectionClick" />
@@ -479,15 +503,6 @@
                              VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <!-- Execute on Metadata (Shift+F5): runs the current SQL on connection #2
-                   under the Metadata profile. Same query-tab visibility as Execute. -->
-              <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.ToolbarExecuteMetadataIcon}"
-                      FontSize="12"
-                      Foreground="{DynamicResource IconColor_Table}"
-                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarExecuteMetadataTooltip}"
-                      Command="{Binding ExecuteQueryOnMetadataCommand}"
-                      IsVisible="{Binding ShowExecuteButton}" />
               <Button Classes="flat"
                       Padding="10,4"
                       Command="{Binding CancelQueryCommand}"

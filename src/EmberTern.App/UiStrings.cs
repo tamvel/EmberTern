@@ -73,11 +73,9 @@ internal static class UiStrings
     public const string TransactionRollbackDataTooltip = "Roll back data transaction";
     public const string TransactionCommitMetadataTooltip = "Commit metadata transaction";
     public const string TransactionRollbackMetadataTooltip = "Roll back metadata transaction";
-    // Execution-lane feedback: which profile a statement ran under (Shift+F5 vs F5).
+    // Execution-lane feedback: which profile the auto-router chose for a statement.
     // {0} = lane (Data/Metadata), {1} = profile label (e.g. "Read Committed").
     public const string ExecutedViaProfileFormat = "Executed via {0} profile ({1}).";
-    public const string ToolbarExecuteMetadataIcon = "▶▶";
-    public const string ToolbarExecuteMetadataTooltip = "Execute on Metadata connection / profile (Shift+F5)";
     public const string DisconnectConfirmTitle = "Active transaction";
     public const string DisconnectConfirmMessage = "Disconnecting will roll back the active transaction.\n\nDisconnect anyway?";
     public const string DisconnectConfirmYes = "Disconnect";
@@ -126,11 +124,13 @@ internal static class UiStrings
     public const string TransactionProfileSnapshotDesc = "Stable snapshot of the database taken at transaction start. Does not see later commits.";
     public const string TransactionProfileReadOnlyTableStabilityDesc = "Read-only with table stability (consistency). Warning: locks whole tables and can block other users.";
     public const string TransactionProfileReadWriteTableStabilityDesc = "Read-write with table stability (consistency). Warning: locks whole tables and can block other users.";
-    // Active profile chip in the title bar, e.g. "TX: Read Committed".
-    public const string TransactionProfileChipFormat = "TX: {0}";
-    // Dual chips (C2) — Data + Metadata profiles shown side by side in the title bar.
-    public const string TransactionProfileDataChipFormat = "Data: {0}";
-    public const string TransactionProfileMetadataChipFormat = "Meta: {0}";
+    // Title-bar transaction-profile block (C2): two stacked lines, each a static lane
+    // label + the full profile name in a lane-colored badge. Vertical layout keeps the
+    // block narrow while the full name stays readable without hovering.
+    public const string TransactionProfileDataLabel = "Data:";
+    public const string TransactionProfileMetadataLabel = "Meta:";
+    public const string TransactionProfileDataChipTooltipFormat = "Data lane: {0}";
+    public const string TransactionProfileMetadataChipTooltipFormat = "Metadata lane: {0}";
 
     public const string TestInProgress = "Testing connection…";
     public const string TestSuccess = "Connection successful.";

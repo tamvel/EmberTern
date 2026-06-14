@@ -90,6 +90,11 @@
            toggle re-evaluates without rebuilding the tree. -->
       <SolidColorBrush x:Key="IconColor_Table"       Color="#4FC3F7" />
       <SolidColorBrush x:Key="IconColor_View"        Color="#81C784" />
+
+      <!-- Transaction-lane chip backgrounds (C2): Data = blue, Metadata = purple,
+           kept clearly distinct so the two title-bar chips read apart at a glance. -->
+      <SolidColorBrush x:Key="DataLaneChipBrush"     Color="#2D6BBF" />
+      <SolidColorBrush x:Key="MetadataLaneChipBrush" Color="#8157C2" />
       <SolidColorBrush x:Key="IconColor_Procedure"   Color="#FFB74D" />
       <SolidColorBrush x:Key="IconColor_Trigger"     Color="#E57373" />
       <SolidColorBrush x:Key="IconColor_Function"    Color="#FFF176" />
@@ -183,6 +188,11 @@
            more saturated so glyphs stay legible against the near-white editor background). -->
       <SolidColorBrush x:Key="IconColor_Table"       Color="#0277BD" />
       <SolidColorBrush x:Key="IconColor_View"        Color="#2E7D32" />
+
+      <!-- Transaction-lane chip backgrounds (C2): Data = blue, Metadata = purple.
+           Deeper on light so white chip text stays legible. -->
+      <SolidColorBrush x:Key="DataLaneChipBrush"     Color="#1F5BAA" />
+      <SolidColorBrush x:Key="MetadataLaneChipBrush" Color="#6A3DB5" />
       <SolidColorBrush x:Key="IconColor_Procedure"   Color="#E65100" />
       <SolidColorBrush x:Key="IconColor_Trigger"     Color="#C62828" />
       <SolidColorBrush x:Key="IconColor_Function"    Color="#F9A825" />

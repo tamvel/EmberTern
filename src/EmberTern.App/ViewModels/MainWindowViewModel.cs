@@ -245,7 +245,6 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ShowExecuteButton))]
     [NotifyPropertyChangedFor(nameof(ShowCancelButton))]
     [NotifyCanExecuteChangedFor(nameof(ExecuteQueryCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ExecuteQueryOnMetadataCommand))]
     private bool _isExecuting;
 
     [ObservableProperty]
@@ -281,28 +280,24 @@ public partial class MainWindowViewModel : ViewModelBase
     public string ActiveConnectionName => _service.ActiveProfile?.Name ?? string.Empty;
     public bool HasActiveConnection => _service.ActiveProfile is not null;
 
-    // Title-bar chips: which profile each lane's NEXT transaction will use, so the user
-    // always knows what they are working on (e.g. "Data: Read Committed" /
-    // "Meta: Read Write Table Stability").
-    public string DataTransactionProfileText
-    {
-        get
-        {
-            var profile = _service.ActiveProfile?.DataTransactionProfile
-                ?? Core.Connections.TransactionProfile.ReadCommitted;
-            return string.Format(UiStrings.TransactionProfileDataChipFormat, TransactionProfileCatalog.LabelFor(profile));
-        }
-    }
+    // Title-bar transaction-profile block: two stacked lines, each a static lane label
+    // ("Data:" / "Meta:") plus the full profile name in a lane-colored badge. These
+    // expose the badge text (profile name only); the label prefix is static in XAML.
+    public string DataProfileName => TransactionProfileCatalog.LabelFor(DataProfile);
 
-    public string MetadataTransactionProfileText
-    {
-        get
-        {
-            var profile = _service.ActiveProfile?.MetadataTransactionProfile
-                ?? Core.Connections.TransactionProfile.ReadCommitted;
-            return string.Format(UiStrings.TransactionProfileMetadataChipFormat, TransactionProfileCatalog.LabelFor(profile));
-        }
-    }
+    public string MetadataProfileName => TransactionProfileCatalog.LabelFor(MetadataProfile);
+
+    public string DataTransactionProfileTooltip
+        => string.Format(UiStrings.TransactionProfileDataChipTooltipFormat, TransactionProfileCatalog.LabelFor(DataProfile));
+
+    public string MetadataTransactionProfileTooltip
+        => string.Format(UiStrings.TransactionProfileMetadataChipTooltipFormat, TransactionProfileCatalog.LabelFor(MetadataProfile));
+
+    private Core.Connections.TransactionProfile DataProfile
+        => _service.ActiveProfile?.DataTransactionProfile ?? Core.Connections.TransactionProfile.ReadCommitted;
+
+    private Core.Connections.TransactionProfile MetadataProfile
+        => _service.ActiveProfile?.MetadataTransactionProfile ?? Core.Connections.TransactionProfile.ReadCommitted;
 
     public bool HasCurrentResult => CurrentResult is { HasResultSet: true };
     public bool ShowResultsEmptyHint => !HasCurrentResult;
@@ -1685,17 +1680,15 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var tab in doomed) CloseTab(tab);
     }
 
-    // F5 — run on the DATA lane (connection #1, Data profile).
+    // F5 / Ctrl+Enter — the single Execute. The lane is chosen automatically from the
+    // SQL: data statements (SELECT/INSERT/UPDATE/DELETE/MERGE/EXECUTE …) run on the
+    // Data lane (connection #1, data profile); DDL/DCL (CREATE/ALTER/DROP/COMMENT/
+    // GRANT/…) on the Metadata lane (connection #2, metadata profile). Ambiguous input
+    // falls back to Data — the safest lane. There is no manual lane override by design.
     [RelayCommand(CanExecute = nameof(CanExecute))]
-    public Task ExecuteQueryAsync() => RunExecuteAsync(metadata: false);
+    public Task ExecuteQueryAsync() => RunExecuteAsync();
 
-    // Shift+F5 — run on the METADATA lane (connection #2, Metadata profile). The user
-    // uses this to run a hand-written ALTER PROCEDURE / ALTER TRIGGER under the metadata
-    // profile without changing the connection's data profile.
-    [RelayCommand(CanExecute = nameof(CanExecute))]
-    public Task ExecuteQueryOnMetadataAsync() => RunExecuteAsync(metadata: true);
-
-    private async Task RunExecuteAsync(bool metadata)
+    private async Task RunExecuteAsync()
     {
         // If the user has highlighted a fragment in the editor, execute only that;
         // otherwise execute the whole editor content (legacy behaviour).
@@ -1704,6 +1697,10 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             return;
         }
+
+        // Auto-route by statement kind. Ambiguous → Data (read_committed + nowait,
+        // never blocks). See SqlStatementClassifier for the EXECUTE BLOCK reasoning.
+        var metadata = SqlStatementClassifier.Classify(sql) == StatementLane.Metadata;
 
         if (!_service.IsConnected)
         {
@@ -1717,8 +1714,8 @@ public partial class MainWindowViewModel : ViewModelBase
         ClearError();
         _executionCts = new CancellationTokenSource();
 
-        // Always log which lane/profile this statement runs under, so the user never has
-        // to guess whether F5 or Shift+F5 was used (explicit C1 requirement).
+        // Always log which lane/profile the auto-router chose, so the user never has to
+        // guess which transaction this statement ran under.
         var executor = metadata ? _metadataExecutor : _executor;
         AddMessage(MessageSeverity.Info, BuildExecutedViaMessage(metadata));
 
@@ -2225,8 +2222,10 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsConnected));
         OnPropertyChanged(nameof(ActiveConnectionName));
         OnPropertyChanged(nameof(HasActiveConnection));
-        OnPropertyChanged(nameof(DataTransactionProfileText));
-        OnPropertyChanged(nameof(MetadataTransactionProfileText));
+        OnPropertyChanged(nameof(DataProfileName));
+        OnPropertyChanged(nameof(MetadataProfileName));
+        OnPropertyChanged(nameof(DataTransactionProfileTooltip));
+        OnPropertyChanged(nameof(MetadataTransactionProfileTooltip));
         OnPropertyChanged(nameof(MetadataLaneIndependent));
         OnPropertyChanged(nameof(ShowDataTransactionButtons));
         OnPropertyChanged(nameof(ShowMetadataTransactionButtons));
