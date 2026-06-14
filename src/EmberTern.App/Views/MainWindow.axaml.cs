@@ -57,6 +57,28 @@ public partial class MainWindow : Window
     private bool _vmRestored;
     private bool _boundsRestored;
 
+    // Resizable / collapsible layout (Part 2 + 3). Definitions are reached through
+    // their parent grids (a ColumnDefinition isn't a Control). Width/height + the
+    // collapsed flag persist in WorkspaceState, the same way WindowBounds does.
+    private ColumnDefinition? _sidebarColumn;
+    private RowDefinition? _resultsRow;
+    private Border? _sidebarPanel;
+    private GridSplitter? _sidebarSplitter;
+    private Border? _sidebarRail;
+    private GridSplitter? _resultsSplitter;
+    private double _expandedSidebarWidth = DefaultSidebarWidth;
+    private double _resultsHeight = DefaultResultsHeight;
+    private bool _sidebarCollapsed;
+    private bool _layoutRestored;
+    private const double DefaultSidebarWidth = 280;
+    private const double MinSidebarWidth = 220;
+    private const double MaxSidebarWidth = 600;
+    private const double DefaultResultsHeight = 280;
+    private const double MinResultsHeight = 120;
+    // Column-structure tracking for the Results grid so paging / sort re-binds
+    // don't rebuild columns (preserves persisted widths + sort-arrow headers).
+    private readonly System.Collections.Generic.List<string> _resultColumnNames = new();
+
     public MainWindow()
     {
         InitializeComponent();
@@ -90,7 +112,31 @@ public partial class MainWindow : Window
             // would then act on the previously-selected row (or nothing). Select the
             // row under the cursor first; leave Handled=false so ContextMenu still opens.
             _resultGrid.PointerPressed += OnResultGridPointerPressed;
+            // 3-state header sort (asc → desc → none). Avalonia's DataGridColumnEventArgs
+            // can't be cancelled, so instead of using the built-in (2-state) sort we keep
+            // the grid non-sortable and detect header clicks via a tunneled PointerPressed,
+            // driving the cycle through the VM (client-side sort over the materialized set
+            // via the shared RowIndexComparer).
+            _resultGrid.AddHandler(PointerPressedEvent, OnResultHeaderPointerPressed, RoutingStrategies.Tunnel);
         }
+
+        // Resizable-layout controls. ColumnDefinition / RowDefinition aren't Controls,
+        // so we reach them through their (named) parent grids; the splitters + sidebar
+        // panel are Controls and resolve via FindControl.
+        var mainBody = this.FindControl<Grid>("MainBodyGrid");
+        if (mainBody is not null && mainBody.ColumnDefinitions.Count > 0)
+        {
+            _sidebarColumn = mainBody.ColumnDefinitions[0];
+        }
+        var workspace = this.FindControl<Grid>("WorkspaceGrid");
+        if (workspace is not null && workspace.RowDefinitions.Count >= 3)
+        {
+            _resultsRow = workspace.RowDefinitions[2];
+        }
+        _sidebarPanel = this.FindControl<Border>("SidebarPanel");
+        _sidebarSplitter = this.FindControl<GridSplitter>("SidebarSplitter");
+        _sidebarRail = this.FindControl<Border>("SidebarRail");
+        _resultsSplitter = this.FindControl<GridSplitter>("ResultsSplitter");
 
         var sidebar = this.FindControl<TreeView>("SidebarTree");
         if (sidebar is not null)
@@ -192,6 +238,23 @@ public partial class MainWindow : Window
             Height = _lastNormalBounds.Height,
             WindowState = WindowState.ToString(),
         };
+
+        // Persist layout (same pattern as WindowBounds — set on the captured state
+        // here, read from the loaded state in ApplyLayoutFromPendingRestore).
+        // Sidebar: the live column width when expanded, else the remembered width.
+        if (!_sidebarCollapsed && _sidebarColumn is { Width.IsAbsolute: true, Width.Value: > 0 })
+        {
+            _expandedSidebarWidth = _sidebarColumn.Width.Value;
+        }
+        state.SidebarWidth = _expandedSidebarWidth;
+        state.SidebarCollapsed = _sidebarCollapsed;
+        // Results: the live row height when the Query tab is showing it, else the
+        // remembered height (it's collapsed to 0 on other tabs).
+        if (_currentVm.IsQueryTabActive && _resultsRow is { Height.IsAbsolute: true, Height.Value: > 0 })
+        {
+            _resultsHeight = _resultsRow.Height.Value;
+        }
+        state.ResultsPanelHeight = _resultsHeight;
         try
         {
             _workspaceStore?.Save(state);
@@ -311,6 +374,12 @@ public partial class MainWindow : Window
             {
                 _editor.Text = _currentVm.QueryText;
             }
+
+            // Apply persisted sidebar width/collapse + results height once the VM
+            // (and thus _pendingRestore) is available, then size the results row for
+            // the current tab.
+            ApplyLayoutFromPendingRestore();
+            ApplyResultsRowForActiveTab();
         }
     }
 
@@ -588,8 +657,13 @@ public partial class MainWindow : Window
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainWindowViewModel.CurrentResultVersionTag))
+        if (e.PropertyName == nameof(MainWindowViewModel.CurrentResultVersionTag)
+            || e.PropertyName == nameof(MainWindowViewModel.ResultPageVersionTag))
         {
+            // CurrentResultVersionTag → structure may have changed (rebuild columns);
+            // ResultPageVersionTag → paging/sort changed (re-slice rows + sort arrows).
+            // PopulateResultGrid handles both: it keeps columns when the structure
+            // matches and only re-binds ItemsSource + repaints the arrow header.
             PopulateResultGrid(_currentVm?.CurrentResult);
         }
         else if (e.PropertyName == nameof(MainWindowViewModel.SelectedWorkspaceTab)
@@ -597,6 +671,13 @@ public partial class MainWindow : Window
               || e.PropertyName == nameof(MainWindowViewModel.QueryText))
         {
             if (_currentVm is null) return;
+
+            // Results row collapses to 0 on non-Query tabs and restores its saved
+            // height when the Query tab is active.
+            if (e.PropertyName == nameof(MainWindowViewModel.SelectedWorkspaceTab))
+            {
+                ApplyResultsRowForActiveTab();
+            }
 
             // Push DDL text into the read-only editor; two-way binding TextEditor.Text is flaky.
             if (_ddlEditor is not null)
@@ -698,30 +779,236 @@ public partial class MainWindow : Window
             return;
         }
 
-        _resultGrid.Columns.Clear();
-        _resultGrid.ItemsSource = null;
-
         if (result is null || !result.HasResultSet)
         {
+            _resultGrid.Columns.Clear();
+            _resultGrid.ItemsSource = null;
+            _resultColumnNames.Clear();
             return;
         }
 
-        for (int i = 0; i < result.Columns.Count; i++)
+        // Rebuild columns only when the structure (count + names) changes — so a
+        // paging / sort re-bind keeps the existing columns (and their persisted
+        // widths) and just re-slices the ItemsSource + repaints the sort arrow.
+        bool sameStructure = _resultColumnNames.Count == result.Columns.Count;
+        if (sameStructure)
         {
-            var column = result.Columns[i];
-            _resultGrid.Columns.Add(new DataGridTextColumn
+            for (int i = 0; i < result.Columns.Count; i++)
             {
-                Header = column.Name,
-                Binding = new Binding($"[{i}]")
+                if (!string.Equals(result.Columns[i].Name, _resultColumnNames[i], StringComparison.Ordinal))
                 {
-                    StringFormat = "{0}",
-                    FallbackValue = string.Empty,
-                    TargetNullValue = string.Empty,
-                },
-            });
+                    sameStructure = false;
+                    break;
+                }
+            }
         }
 
-        _resultGrid.ItemsSource = result.Rows;
+        if (!sameStructure)
+        {
+            _resultGrid.Columns.Clear();
+            _resultColumnNames.Clear();
+            for (int i = 0; i < result.Columns.Count; i++)
+            {
+                _resultColumnNames.Add(result.Columns[i].Name);
+                _resultGrid.Columns.Add(new DataGridTextColumn
+                {
+                    Header = result.Columns[i].Name,
+                    Binding = new Binding($"[{i}]")
+                    {
+                        StringFormat = "{0}",
+                        FallbackValue = string.Empty,
+                        TargetNullValue = string.Empty,
+                    },
+                });
+            }
+        }
+
+        UpdateResultHeaderArrows();
+        _resultGrid.ItemsSource = _currentVm?.PagedResultRows;
+    }
+
+    // Paints a ▲/▼ glyph onto the sorted column's header (and strips it from the
+    // others). We drive sort state ourselves (3-state), so Avalonia's built-in
+    // arrow indicator isn't used — this is the visible sort cue.
+    private void UpdateResultHeaderArrows()
+    {
+        if (_resultGrid is null || _currentVm is null) return;
+        int sortCol = _currentVm.ResultSortColumnIndex;
+        bool desc = _currentVm.ResultSortDescending;
+        for (int i = 0; i < _resultGrid.Columns.Count && i < _resultColumnNames.Count; i++)
+        {
+            var name = _resultColumnNames[i];
+            _resultGrid.Columns[i].Header = i == sortCol ? name + (desc ? "  ▼" : "  ▲") : name;
+        }
+    }
+
+    private void OnResultHeaderPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_currentVm is null || _resultGrid is null) return;
+        if (!e.GetCurrentPoint(_resultGrid).Properties.IsLeftButtonPressed) return;
+        if (e.Source is not Visual visual) return;
+        var header = visual.FindAncestorOfType<DataGridColumnHeader>(includeSelf: true);
+        if (header is null) return;
+
+        // DataGridColumnHeader.OwningColumn is internal (gotcha #43), so map the
+        // header back to a column index by its (arrow-stripped) text against the
+        // tracked column names. CanUserReorderColumns is false, so first match is
+        // unambiguous for distinct names; duplicate names fall back to first match.
+        var baseName = StripSortArrow(header.Content?.ToString());
+        if (baseName is null) return;
+        int index = -1;
+        for (int i = 0; i < _resultColumnNames.Count; i++)
+        {
+            if (string.Equals(_resultColumnNames[i], baseName, StringComparison.Ordinal))
+            {
+                index = i;
+                break;
+            }
+        }
+        if (index < 0) return;
+        _currentVm.CycleResultSort(index);
+    }
+
+    private const string SortArrowAscending = "  ▲";
+    private const string SortArrowDescending = "  ▼";
+
+    private static string? StripSortArrow(string? header)
+    {
+        if (header is null) return null;
+        if (header.EndsWith(SortArrowAscending, StringComparison.Ordinal))
+            return header[..^SortArrowAscending.Length];
+        if (header.EndsWith(SortArrowDescending, StringComparison.Ordinal))
+            return header[..^SortArrowDescending.Length];
+        return header;
+    }
+
+    // ── Resizable / collapsible layout (Part 2 + 3) ──────────────────────────
+
+    private void ApplyLayoutFromPendingRestore()
+    {
+        if (_layoutRestored) return;
+        _layoutRestored = true;
+
+        var s = _pendingRestore;
+        var width = s?.SidebarWidth ?? DefaultSidebarWidth;
+        if (width < MinSidebarWidth) width = MinSidebarWidth;
+        if (width > MaxSidebarWidth) width = MaxSidebarWidth;
+        _expandedSidebarWidth = width;
+
+        var height = s?.ResultsPanelHeight ?? DefaultResultsHeight;
+        if (height < MinResultsHeight) height = MinResultsHeight;
+        _resultsHeight = height;
+
+        if (s?.SidebarCollapsed == true)
+        {
+            CollapseSidebar();
+        }
+        else
+        {
+            SetSidebarWidth(_expandedSidebarWidth);
+        }
+    }
+
+    private void SetSidebarWidth(double width)
+    {
+        if (_sidebarColumn is null) return;
+        if (width < MinSidebarWidth) width = MinSidebarWidth;
+        if (width > MaxSidebarWidth) width = MaxSidebarWidth;
+        _sidebarColumn.Width = new GridLength(width);
+    }
+
+    private void CollapseSidebar()
+    {
+        if (_sidebarColumn is null) return;
+        if (!_sidebarCollapsed && _sidebarColumn.Width.IsAbsolute && _sidebarColumn.Width.Value > 0)
+        {
+            _expandedSidebarWidth = _sidebarColumn.Width.Value;
+        }
+        _sidebarCollapsed = true;
+        // Hard-clamp the column to exactly 0px. Width=0 alone isn't enough: the
+        // column's MinWidth (220) / MaxWidth (600) still permit a non-zero width,
+        // and the adjacent GridSplitter's layout pass re-reserves the prior pixel
+        // width — leaving an empty ~280px gap. Forcing Min AND Max to 0 makes 0 the
+        // only legal width, so the workspace column (*) takes all remaining space.
+        _sidebarColumn.MinWidth = 0;
+        _sidebarColumn.MaxWidth = 0;
+        _sidebarColumn.Width = new GridLength(0);
+        if (_sidebarPanel is not null) _sidebarPanel.IsVisible = false;
+        if (_sidebarSplitter is not null) _sidebarSplitter.IsVisible = false;
+        // Show the left-edge grab rail so the user can re-expand with one click.
+        if (_sidebarRail is not null) _sidebarRail.IsVisible = true;
+    }
+
+    private void ExpandSidebar()
+    {
+        if (_sidebarColumn is null) return;
+        _sidebarCollapsed = false;
+        // Restore the resize constraints lifted in CollapseSidebar.
+        _sidebarColumn.MaxWidth = MaxSidebarWidth;
+        _sidebarColumn.MinWidth = MinSidebarWidth;
+        if (_sidebarPanel is not null) _sidebarPanel.IsVisible = true;
+        if (_sidebarSplitter is not null) _sidebarSplitter.IsVisible = true;
+        if (_sidebarRail is not null) _sidebarRail.IsVisible = false;
+        // Restore the last width used before collapsing (not the default).
+        SetSidebarWidth(_expandedSidebarWidth);
+    }
+
+    private void OnToggleSidebarClick(object? sender, RoutedEventArgs e)
+    {
+        if (_sidebarCollapsed) ExpandSidebar();
+        else CollapseSidebar();
+    }
+
+    // The collapsed-state grab rail. Fires on press (reliable on the 12px target,
+    // unlike Click) and only ever expands — the rail is shown only while collapsed.
+    private void OnSidebarRailPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Visual v && !e.GetCurrentPoint(v).Properties.IsLeftButtonPressed) return;
+        if (_sidebarCollapsed) ExpandSidebar();
+        e.Handled = true;
+    }
+
+    // Double-click the separator toggles full collapse (VS Code / DataGrip style):
+    // visible → hide entirely; hidden → restore the last width. (When collapsed the
+    // splitter isn't shown — the left-edge rail's click drives the restore — but the
+    // toggle is kept symmetric here so either gesture works.)
+    private void OnSidebarSplitterDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (_sidebarCollapsed) ExpandSidebar();
+        else CollapseSidebar();
+        e.Handled = true;
+    }
+
+    // Sizes the results row for the active tab: saved height on the Query tab,
+    // collapsed to 0 elsewhere. Captures the live (possibly dragged) height before
+    // collapsing so it round-trips when the user returns to the Query tab.
+    private void ApplyResultsRowForActiveTab()
+    {
+        if (_resultsRow is null || _currentVm is null) return;
+        if (_currentVm.IsQueryTabActive)
+        {
+            _resultsRow.MinHeight = MinResultsHeight;
+            _resultsRow.Height = new GridLength(_resultsHeight);
+        }
+        else
+        {
+            if (_resultsRow.Height.IsAbsolute && _resultsRow.Height.Value > 0)
+            {
+                _resultsHeight = _resultsRow.Height.Value;
+            }
+            _resultsRow.MinHeight = 0;
+            _resultsRow.Height = new GridLength(0);
+        }
+    }
+
+    private void OnResultsSplitterDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        _resultsHeight = DefaultResultsHeight;
+        if (_resultsRow is not null && _currentVm?.IsQueryTabActive == true)
+        {
+            _resultsRow.Height = new GridLength(DefaultResultsHeight);
+        }
+        e.Handled = true;
     }
 
     private void OnThemeToggleClick(object? sender, RoutedEventArgs e)

@@ -240,6 +240,163 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(TruncatedBannerText))]
     private string _currentResultVersionTag = string.Empty;
 
+    // ── Results grid: client-side paging + 3-state sort ───────────────────
+    //
+    // Reuses the page-state SHAPE of TableDetailTabViewModel's pagination
+    // (1-based page / First-Prev-Next-Last + Has*Page + hint), but the SQL
+    // editor's result set is already materialized (capped at 5000 rows by the
+    // executor), so paging + sorting run in-memory over CurrentResult.Rows —
+    // no re-query. Sorting reuses the shared RowIndexComparer (object?[] by
+    // column index). 3-state cycle: asc → desc → none (original order).
+
+    // Same default page size as the Table Data View (DataPreviewRowLimit).
+    public const int ResultPageSize = 200;
+
+    private List<object?[]> _sortedRows = new();
+    private int? _resultSortColumn;       // null = no sort (original row order)
+    private bool _resultSortDescending;
+    private int _resultPage = 1;          // 1-based
+
+    // Bumped on every paging / sort change so the code-behind re-slices the
+    // grid's ItemsSource (and repaints sort arrows) without a full column
+    // rebuild — CurrentResultVersionTag stays reserved for structure changes.
+    [ObservableProperty]
+    private string _resultPageVersionTag = string.Empty;
+
+    // The slice of (sorted) rows for the current page. The grid binds here.
+    public IReadOnlyList<object?[]> PagedResultRows { get; private set; } = Array.Empty<object?[]>();
+
+    // -1 = unsorted. Read by the code-behind to paint the ▲/▼ header arrow.
+    public int ResultSortColumnIndex => _resultSortColumn ?? -1;
+    public bool ResultSortDescending => _resultSortDescending;
+
+    public int ResultPage => _resultPage;
+    private int TotalResultPages =>
+        _sortedRows.Count == 0 ? 1 : (_sortedRows.Count + ResultPageSize - 1) / ResultPageSize;
+
+    public bool HasResultPreviousPage => _resultPage > 1;
+    public bool HasResultNextPage => _resultPage < TotalResultPages;
+
+    public string ResultPaginationHint => HasCurrentResult
+        ? string.Format(
+            CultureInfo.CurrentCulture,
+            UiStrings.ResultsPaginationHintFormat,
+            _resultPage,
+            TotalResultPages,
+            _sortedRows.Count)
+        : string.Empty;
+
+    // New result set → drop sort + return to page 1, then recompute the view.
+    partial void OnCurrentResultChanged(QueryResult? value)
+    {
+        _resultSortColumn = null;
+        _resultSortDescending = false;
+        _resultPage = 1;
+        RebuildResultView();
+    }
+
+    // Re-sort (if a sort column is set) + clamp the page + slice the current
+    // page out. Bumps ResultPageVersionTag so the grid re-binds. Pure VM logic;
+    // unit-tested.
+    internal void RebuildResultView()
+    {
+        var rows = CurrentResult?.Rows;
+        if (rows is null || rows.Count == 0)
+        {
+            _sortedRows = new List<object?[]>();
+            _resultPage = 1;
+            PagedResultRows = Array.Empty<object?[]>();
+        }
+        else
+        {
+            var list = new List<object?[]>(rows);
+            if (_resultSortColumn is int col)
+            {
+                var comparer = new RowIndexComparer(col);
+                list.Sort((a, b) => _resultSortDescending ? comparer.Compare(b, a) : comparer.Compare(a, b));
+            }
+            _sortedRows = list;
+
+            if (_resultPage > TotalResultPages) _resultPage = TotalResultPages;
+            if (_resultPage < 1) _resultPage = 1;
+
+            int start = (_resultPage - 1) * ResultPageSize;
+            int count = Math.Min(ResultPageSize, list.Count - start);
+            PagedResultRows = count > 0 ? list.GetRange(start, count) : Array.Empty<object?[]>();
+        }
+
+        OnPropertyChanged(nameof(PagedResultRows));
+        OnPropertyChanged(nameof(HasResultPreviousPage));
+        OnPropertyChanged(nameof(HasResultNextPage));
+        OnPropertyChanged(nameof(ResultPage));
+        OnPropertyChanged(nameof(ResultPaginationHint));
+        ResultFirstPageCommand.NotifyCanExecuteChanged();
+        ResultPreviousPageCommand.NotifyCanExecuteChanged();
+        ResultNextPageCommand.NotifyCanExecuteChanged();
+        ResultLastPageCommand.NotifyCanExecuteChanged();
+        ResultPageVersionTag = Guid.NewGuid().ToString("N");
+    }
+
+    // Header click: 3-state cycle on the given column index.
+    //   unsorted → ascending → descending → unsorted.
+    // Clicking a different column starts fresh at ascending. Returns to page 1
+    // because the row that was at the top changes.
+    internal void CycleResultSort(int columnIndex)
+    {
+        if (CurrentResult is not { HasResultSet: true }) return;
+        if (columnIndex < 0) return;
+
+        if (_resultSortColumn != columnIndex)
+        {
+            _resultSortColumn = columnIndex;
+            _resultSortDescending = false;
+        }
+        else if (!_resultSortDescending)
+        {
+            _resultSortDescending = true;
+        }
+        else
+        {
+            _resultSortColumn = null;
+            _resultSortDescending = false;
+        }
+
+        _resultPage = 1;
+        OnPropertyChanged(nameof(ResultSortColumnIndex));
+        OnPropertyChanged(nameof(ResultSortDescending));
+        RebuildResultView();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasResultPreviousPage))]
+    private void ResultFirstPage()
+    {
+        _resultPage = 1;
+        RebuildResultView();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasResultPreviousPage))]
+    private void ResultPreviousPage()
+    {
+        if (_resultPage <= 1) return;
+        _resultPage--;
+        RebuildResultView();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasResultNextPage))]
+    private void ResultNextPage()
+    {
+        if (!HasResultNextPage) return;
+        _resultPage++;
+        RebuildResultView();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasResultNextPage))]
+    private void ResultLastPage()
+    {
+        _resultPage = TotalResultPages;
+        RebuildResultView();
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExecute))]
     [NotifyPropertyChangedFor(nameof(ShowExecuteButton))]

@@ -73,4 +73,13 @@ public sealed class WorkspaceState
     // Whether the saved-queries side panel is shown. Global (not per-connection)
     // because layout preference is consistent across sessions and ERPs.
     public bool QueryPanelVisible { get; set; } = true;
+
+    // Global layout preferences (like WindowBounds + QueryPanelVisible — not
+    // per-connection). The View reads these from the loaded state and writes
+    // them back at close, the same way it handles WindowBounds. Defaults match
+    // the original fixed sizes so a legacy file (without these fields) restores
+    // the exact prior layout.
+    public double SidebarWidth { get; set; } = 280;
+    public bool SidebarCollapsed { get; set; }
+    public double ResultsPanelHeight { get; set; } = 280;
 }

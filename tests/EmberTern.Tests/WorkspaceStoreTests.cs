@@ -172,6 +172,43 @@ public class WorkspaceStoreTests
     }
 
     [Fact]
+    public void Save_Then_Load_RoundtripsLayoutFields()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new WorkspaceStore(dir);
+            store.Save(new WorkspaceState
+            {
+                SidebarWidth = 340,
+                SidebarCollapsed = true,
+                ResultsPanelHeight = 410,
+            });
+
+            var reloaded = store.Load();
+
+            Assert.NotNull(reloaded);
+            Assert.Equal(340, reloaded!.SidebarWidth);
+            Assert.True(reloaded.SidebarCollapsed);
+            Assert.Equal(410, reloaded.ResultsPanelHeight);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WorkspaceState_LayoutDefaults_MatchOriginalFixedSizes()
+    {
+        // Legacy files (without the layout fields) must restore the exact prior layout.
+        var s = new WorkspaceState();
+        Assert.Equal(280, s.SidebarWidth);
+        Assert.False(s.SidebarCollapsed);
+        Assert.Equal(280, s.ResultsPanelHeight);
+    }
+
+    [Fact]
     public void Load_MigratesLegacyWorkspaceJson_AndDefaultsMissingFields()
     {
         // A legacy workspace.json (written before the unified settings.dat) with no

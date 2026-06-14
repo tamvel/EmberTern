@@ -728,26 +728,6 @@ public partial class TableDetailTabView : UserControl
         _ => null,
     };
 
-    // Compares two object?[] rows by a captured column index. Avalonia's
-    // built-in sort uses this when DataGridColumn.CustomSortComparer is set,
-    // bypassing the (broken-for-array-rows) property-path resolution.
-    private sealed class RowIndexComparer : IComparer
-    {
-        private readonly int _index;
-        public RowIndexComparer(int index) => _index = index;
-
-        public int Compare(object? x, object? y)
-        {
-            var xv = (x as object?[]) is { } xa && _index < xa.Length ? xa[_index] : null;
-            var yv = (y as object?[]) is { } ya && _index < ya.Length ? ya[_index] : null;
-            if (xv is null && yv is null) return 0;
-            if (xv is null) return -1;
-            if (yv is null) return 1;
-            if (xv is IComparable xcmp && xv.GetType() == yv.GetType()) return xcmp.CompareTo(yv);
-            return string.Compare(xv.ToString(), yv.ToString(), StringComparison.CurrentCulture);
-        }
-    }
-
     private void PushDdl()
     {
         if (_ddlEditor is null || _currentVm is null) return;

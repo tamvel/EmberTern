@@ -14,6 +14,15 @@
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
+  <!-- Form field caption above an input. Centralized here (was duplicated verbatim
+       in every dialog's local Window.Styles). Application-level styles apply inside
+       dialog windows too, so each dialog just uses Classes="field-label". -->
+  <Style Selector="TextBlock.field-label">
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+  </Style>
+
   <Style Selector="TextBlock.title">
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="FontSize" Value="14" />
@@ -72,6 +81,23 @@
     <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
   </Style>
 
+  <!-- Collapsed-sidebar grab rail: a thin full-height vertical strip pinned to the
+       left edge (VS Code / DataGrip activity-bar style). A Border (not a Button) so
+       it doesn't swallow PointerPressed in its own class handler — the strip is only
+       12px wide and reliable hit-testing matters. PointerPressed re-expands. -->
+  <Style Selector="Border.sidebar-rail">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+    <Setter Property="Width" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Border.sidebar-rail:pointerover">
+    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+  </Style>
+
   <Style Selector="Button.flat">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
@@ -93,7 +119,7 @@
   <Style Selector="Button.primary">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="Foreground" Value="White" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
     <Setter Property="Padding" Value="12,4" />
     <Setter Property="CornerRadius" Value="3" />
     <Setter Property="Cursor" Value="Hand" />
@@ -127,8 +153,8 @@
   </Style>
 
   <Style Selector="Button.caption.close:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="#E81123" />
-    <Setter Property="TextElement.Foreground" Value="White" />
+    <Setter Property="Background" Value="{DynamicResource CloseButtonHoverBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
   <Style Selector="TabControl">

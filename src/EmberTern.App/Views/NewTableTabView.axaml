@@ -11,11 +11,8 @@
              Background="{DynamicResource BackgroundBrush}">
 
   <UserControl.Styles>
-    <Style Selector="TextBlock.field-label">
-      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="Margin" Value="0,0,0,4" />
-    </Style>
+    <!-- field-label lives in Themes/ControlStyles.axaml (app-wide). Only the
+         grid-sizing styles below are local to this view. -->
     <Style Selector="DataGridRow">
       <Setter Property="Height" Value="34" />
     </Style>

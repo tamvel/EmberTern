@@ -15,14 +15,6 @@
         Background="{DynamicResource BackgroundBrush}"
         Foreground="{DynamicResource ForegroundBrush}">
 
-  <Window.Styles>
-    <Style Selector="TextBlock.field-label">
-      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="Margin" Value="0,0,0,4" />
-    </Style>
-  </Window.Styles>
-
   <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
 
     <!-- Header -->

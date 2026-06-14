@@ -90,6 +90,8 @@ internal static class UiStrings
     public const string StatusBarDisconnected = "Disconnected";
 
     public const string ThemeToggleTooltip = "Toggle dark / light theme";
+    public const string SidebarToggleTooltip = "Show / hide the connections panel";
+    public const string SidebarExpandTooltip = "Show the connections panel";
 
     public const string DialogNewConnectionTitle = "New Connection";
     public const string DialogEditConnectionTitle = "Edit Connection";
@@ -187,6 +189,8 @@ internal static class UiStrings
     public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
     public const string ResultsTruncatedFormat = "Results limited to {0} rows.";
     public const string RowsFetchedFormat = "{0} rows in {1} ms";
+    // {0} = current page, {1} = total pages, {2} = total rows in the result set.
+    public const string ResultsPaginationHintFormat = "Page {0} of {1} · {2} rows";
 
     // Main tab names stay Polish — pre-existing intentional choice.
     public const string TableDetailTabFields = "Pola";
