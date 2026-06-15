@@ -93,21 +93,31 @@
                + Drop + FK items rely on SelectedField; the New item works
                with or without a selection. -->
           <DataGrid.ContextMenu>
-            <ContextMenu>
+            <!-- Every item is a structure-edit action, so the whole menu is gated on
+                 CanAddField (the structure-edit capability = a DDL executor was wired).
+                 Read-only system tables get neither, so the items hide rather than grey.
+                 Item-level IsVisible guarantees the hide; the ContextMenu-level IsVisible
+                 suppresses the (otherwise empty) popup where the framework honors it. -->
+            <ContextMenu IsVisible="{Binding CanAddField}">
               <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuAdd}"
                         Command="{Binding AddFieldCommand}"
-                        InputGesture="Insert" />
+                        InputGesture="Insert"
+                        IsVisible="{Binding CanAddField}" />
               <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuEdit}"
                         Command="{Binding EditFieldCommand}"
-                        InputGesture="F2" />
+                        InputGesture="F2"
+                        IsVisible="{Binding CanAddField}" />
               <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuDrop}"
                         Command="{Binding DropFieldCommand}"
-                        InputGesture="Delete" />
-              <Separator />
+                        InputGesture="Delete"
+                        IsVisible="{Binding CanAddField}" />
+              <Separator IsVisible="{Binding CanAddField}" />
               <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuCreateForeignKey}"
-                        Command="{Binding CreateForeignKeyCommand}" />
+                        Command="{Binding CreateForeignKeyCommand}"
+                        IsVisible="{Binding CanAddField}" />
               <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuDropForeignKey}"
-                        Command="{Binding DropFieldForeignKeyCommand}" />
+                        Command="{Binding DropFieldForeignKeyCommand}"
+                        IsVisible="{Binding CanAddField}" />
             </ContextMenu>
           </DataGrid.ContextMenu>
           <!-- Keyboard shortcuts scoped to the grid — fire only when the grid
@@ -459,11 +469,13 @@
                       VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
-                <ContextMenu>
+                <ContextMenu IsVisible="{Binding CanManageConstraints}">
                   <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddPrimaryKey}"
-                            Command="{Binding AddPrimaryKeyCommand}" />
+                            Command="{Binding AddPrimaryKeyCommand}"
+                            IsVisible="{Binding CanManageConstraints}" />
                   <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropPrimaryKey}"
-                            Command="{Binding DropConstraintCommand}" />
+                            Command="{Binding DropConstraintCommand}"
+                            IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
               </DataGrid.ContextMenu>
               <DataGrid.Columns>
@@ -504,11 +516,13 @@
                       VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
-                <ContextMenu>
+                <ContextMenu IsVisible="{Binding CanManageConstraints}">
                   <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddForeignKey}"
-                            Command="{Binding CreateForeignKeyCommand}" />
+                            Command="{Binding CreateForeignKeyCommand}"
+                            IsVisible="{Binding CanManageConstraints}" />
                   <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropForeignKey}"
-                            Command="{Binding DropConstraintCommand}" />
+                            Command="{Binding DropConstraintCommand}"
+                            IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
               </DataGrid.ContextMenu>
               <DataGrid.Columns>
@@ -558,11 +572,13 @@
                       VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
-                <ContextMenu>
+                <ContextMenu IsVisible="{Binding CanManageConstraints}">
                   <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddCheck}"
-                            Command="{Binding AddCheckCommand}" />
+                            Command="{Binding AddCheckCommand}"
+                            IsVisible="{Binding CanManageConstraints}" />
                   <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropCheck}"
-                            Command="{Binding DropConstraintCommand}" />
+                            Command="{Binding DropConstraintCommand}"
+                            IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
               </DataGrid.ContextMenu>
               <DataGrid.Columns>
@@ -598,11 +614,13 @@
                       VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
-                <ContextMenu>
+                <ContextMenu IsVisible="{Binding CanManageConstraints}">
                   <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddUnique}"
-                            Command="{Binding AddUniqueCommand}" />
+                            Command="{Binding AddUniqueCommand}"
+                            IsVisible="{Binding CanManageConstraints}" />
                   <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropUnique}"
-                            Command="{Binding DropConstraintCommand}" />
+                            Command="{Binding DropConstraintCommand}"
+                            IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
               </DataGrid.ContextMenu>
               <DataGrid.Columns>
@@ -644,16 +662,20 @@
                   VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                   Background="{DynamicResource BackgroundBrush}">
           <DataGrid.ContextMenu>
-            <ContextMenu>
+            <ContextMenu IsVisible="{Binding CanManageIndexes}">
               <MenuItem Header="{x:Static app:UiStrings.IndexMenuAdd}"
-                        Command="{Binding AddIndexCommand}" />
+                        Command="{Binding AddIndexCommand}"
+                        IsVisible="{Binding CanManageIndexes}" />
               <MenuItem Header="{x:Static app:UiStrings.IndexMenuDrop}"
-                        Command="{Binding DropIndexCommand}" />
-              <Separator />
+                        Command="{Binding DropIndexCommand}"
+                        IsVisible="{Binding CanManageIndexes}" />
+              <Separator IsVisible="{Binding CanManageIndexes}" />
               <MenuItem Header="{x:Static app:UiStrings.IndexMenuRecomputeStatistics}"
-                        Command="{Binding RecomputeIndexStatisticsCommand}" />
+                        Command="{Binding RecomputeIndexStatisticsCommand}"
+                        IsVisible="{Binding CanManageIndexes}" />
               <MenuItem Header="{x:Static app:UiStrings.IndexMenuRecomputeAllStatistics}"
-                        Command="{Binding RecomputeAllIndexStatisticsCommand}" />
+                        Command="{Binding RecomputeAllIndexStatisticsCommand}"
+                        IsVisible="{Binding CanManageIndexes}" />
             </ContextMenu>
           </DataGrid.ContextMenu>
           <DataGrid.Columns>
@@ -918,10 +940,11 @@
                    OnDataGridPointerPressed, which also enables/disables this item by the
                    clicked column's nullability. The Click handler routes through the VM's
                    SetCellNullAsync → UpdateCellAsync (the existing edit/save path). -->
-              <ContextMenu>
+              <ContextMenu IsVisible="{Binding CanEditData}">
                 <MenuItem x:Name="SetNullMenuItem"
                           Header="{x:Static app:UiStrings.DataEditSetNull}"
-                          Click="OnSetCellNullClick" />
+                          Click="OnSetCellNullClick"
+                          IsVisible="{Binding CanEditData}" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>
@@ -933,7 +956,10 @@
              working transaction via the same RefreshStructureAsync path as other
              structural edits. Buttons disabled when no DDL executor is wired. -->
         <Grid RowDefinitions="Auto,*" Background="{DynamicResource BackgroundBrush}">
-          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4">
+          <!-- Edit controls (label + Save + Clear) hide entirely without a DDL executor
+               (read-only system tables) — the description TextBox below stays for viewing. -->
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4"
+                      IsVisible="{Binding CanEditDescription}">
             <TextBlock Text="{x:Static app:UiStrings.TableDescriptionEditLabel}"
                        Classes="subtle"
                        FontSize="11"

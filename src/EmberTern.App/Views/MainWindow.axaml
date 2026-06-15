@@ -670,15 +670,17 @@
                    sub-tab; commands route through ActiveTableDetail. -->
               <Border Width="1" Margin="4,4"
                       Background="{DynamicResource BorderBrush}"
-                      IsVisible="{Binding IsFieldsTabActive}" />
+                      IsVisible="{Binding ShowFieldEditTools}" />
               <!-- Compile is the primary structural action on the Pola sub-tab — make
                    it stand out from the flat field icons via the accent-filled primary
-                   style + hammer (build) icon + label, mirroring the SQL Execute button. -->
+                   style + hammer (build) icon + label, mirroring the SQL Execute button.
+                   ShowFieldEditTools = Pola sub-tab active AND the tab can edit structure
+                   (a DDL executor was wired). Read-only system tables hide the whole cluster. -->
               <Button Classes="primary"
                       Padding="8,4"
                       ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
                       Command="{Binding ActiveTableDetail.CompileCommand}"
-                      IsVisible="{Binding IsFieldsTabActive}">
+                      IsVisible="{Binding ShowFieldEditTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}"
                                   Foreground="{DynamicResource OnAccentBrush}"
                                   Width="16" Height="16" />
@@ -689,31 +691,31 @@
               <ToggleButton Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleFieldEditTooltip}"
                             IsChecked="{Binding ActiveTableDetail.IsFieldEditMode, Mode=TwoWay}"
-                            IsVisible="{Binding IsFieldsTabActive}">
+                            IsVisible="{Binding ShowFieldEditTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
               </ToggleButton>
               <Button Classes="icon"
                       ToolTip.Tip="{x:Static app:UiStrings.FieldEditAddTooltip}"
                       Command="{Binding ActiveTableDetail.AddFieldCommand}"
-                      IsVisible="{Binding IsFieldsTabActive}">
+                      IsVisible="{Binding ShowFieldEditTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
               </Button>
               <Button Classes="icon"
                       ToolTip.Tip="{x:Static app:UiStrings.FieldEditDropTooltip}"
                       Command="{Binding ActiveTableDetail.DropFieldCommand}"
-                      IsVisible="{Binding IsFieldsTabActive}">
+                      IsVisible="{Binding ShowFieldEditTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
               </Button>
               <Button Classes="icon"
                       ToolTip.Tip="{x:Static app:UiStrings.FieldEditMoveUpTooltip}"
                       Command="{Binding ActiveTableDetail.MoveFieldUpCommand}"
-                      IsVisible="{Binding IsFieldsTabActive}">
+                      IsVisible="{Binding ShowFieldEditTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
               </Button>
               <Button Classes="icon"
                       ToolTip.Tip="{x:Static app:UiStrings.FieldEditMoveDownTooltip}"
                       Command="{Binding ActiveTableDetail.MoveFieldDownCommand}"
-                      IsVisible="{Binding IsFieldsTabActive}">
+                      IsVisible="{Binding ShowFieldEditTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
               </Button>
               <!-- ⚡ Compile + grid row commands for the New Table tab. All five
@@ -760,17 +762,17 @@
                    when not visible thanks to IsVisible on the Border. -->
               <Border Width="1" Margin="4,4"
                       Background="{DynamicResource BorderBrush}"
-                      IsVisible="{Binding IsDataTabActive}" />
+                      IsVisible="{Binding ShowDataEditTools}" />
               <Button Classes="icon"
                       ToolTip.Tip="{x:Static app:UiStrings.DataEditAddRowTooltip}"
                       Command="{Binding ActiveTableDetail.AddRowCommand}"
-                      IsVisible="{Binding IsDataTabActive}">
+                      IsVisible="{Binding ShowDataEditTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
               </Button>
               <Button Classes="icon"
                       ToolTip.Tip="{x:Static app:UiStrings.DataEditDeleteRowTooltip}"
                       Command="{Binding ActiveTableDetail.DeleteRowCommand}"
-                      IsVisible="{Binding IsDataTabActive}">
+                      IsVisible="{Binding ShowDataEditTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
               </Button>
               <!-- Pagination section. Same ActiveTableDetail binding pattern. -->

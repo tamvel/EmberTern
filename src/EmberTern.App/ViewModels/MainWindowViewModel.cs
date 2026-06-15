@@ -173,6 +173,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsTableDetailTabActive))]
     [NotifyPropertyChangedFor(nameof(IsDataTabActive))]
     [NotifyPropertyChangedFor(nameof(IsFieldsTabActive))]
+    [NotifyPropertyChangedFor(nameof(ShowFieldEditTools))]
+    [NotifyPropertyChangedFor(nameof(ShowDataEditTools))]
     [NotifyPropertyChangedFor(nameof(IsNewTableTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveNewTable))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
@@ -210,6 +212,19 @@ public partial class MainWindowViewModel : ViewModelBase
     // main toolbar's ⚡ ＋ − ↑ ↓ structural-edit buttons.
     public bool IsFieldsTabActive
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TableDetail, TableDetail: { IsFieldsSubTabActive: true } };
+    // Structural-edit affordances (⚡ Compile / edit-toggle / ＋ Add / − Drop / ↑↓ Move
+    // field) are shown only when the Pola sub-tab is active AND the tab can actually
+    // edit structure. "Can edit structure" is the existing capability gate
+    // (TableDetailTabViewModel.CanAddField => a DDL executor was wired) — the single
+    // source of truth, no IsReadOnly flag. System-table TableDetail tabs are built
+    // without the executor (see CreateTableDetail), so these stay HIDDEN — a read-only
+    // object category, not a normal table with greyed-out controls.
+    public bool ShowFieldEditTools => IsFieldsTabActive && (ActiveTableDetail?.CanAddField ?? false);
+    // Data-edit affordances (＋ Add row / − Delete row). Shown only when the Dane
+    // sub-tab is active AND a data editor was wired (CanEditData). Refresh +
+    // pagination stay on IsDataTabActive — they're read paths and remain visible for
+    // read-only tables.
+    public bool ShowDataEditTools => IsDataTabActive && (ActiveTableDetail?.CanEditData ?? false);
     // Commit / Rollback are shown on any sub-tab where structural or data changes
     // can be committed: the Query tab (F5 statements), the Dane sub-tab (inline
     // INSERT/UPDATE/DELETE), and the Pola sub-tab (Add Field / Drop Field run
@@ -1185,12 +1200,10 @@ public partial class MainWindowViewModel : ViewModelBase
                 // restored-active tab loads automatically and inactive tabs load
                 // lazily when the user clicks them.
                 var obj = new MetadataObject(tab.ObjectName, detailKind);
-                var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader, _dataEditor, _ddlExecutor, _metadataReader)
-                {
-                    DdlText = tab.DdlText ?? string.Empty,
-                };
-                detail.OpenObjectRequested += OnOpenDdlRequested;
-                detail.ConfirmationRequested += RequestConfirmAsync;
+                // Same factory as the direct-open path — system-table tabs restore
+                // read-only (no data editor / DDL executor) exactly as they opened.
+                var detail = CreateTableDetail(obj);
+                detail.DdlText = tab.DdlText ?? string.Empty;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateTableDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
@@ -1683,6 +1696,40 @@ public partial class MainWindowViewModel : ViewModelBase
         return true;
     }
 
+    // Kinds that open in the rich TableDetail view instead of a plain DDL tab.
+    // Table-shaped kinds only: a user table (writable) and a system table
+    // (read-only). Future external tables would slot in here. Views / procedures /
+    // triggers / functions / packages are structurally different and stay DDL tabs
+    // (or get their own detail view in a later milestone) — do NOT force them
+    // through TableDetail.
+    internal static bool OpensAsTableDetail(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.Table or MetadataObjectKind.SystemTable;
+
+    // The SINGLE construction point for TableDetail VMs. Capability is decided here
+    // and only here, keyed on the object kind: a writable user table gets the data
+    // editor + DDL executor; a read-only kind (system table) gets NEITHER. The
+    // existing capability gates (CanEditData / CanAddField / CanManageConstraints /
+    // CanManageIndexes / CanCompile, all of which derive from the presence of those
+    // services) then turn every edit affordance off — no second source of truth, no
+    // IsReadOnly flag. Both the direct-open path (OnOpenDdlRequested) and the
+    // workspace-restore path (LoadWorkspaceFor) go through here, so the two cannot
+    // diverge — read-only capabilities are guaranteed identical whether a system
+    // table is opened fresh or restored from disk.
+    internal TableDetailTabViewModel CreateTableDetail(MetadataObject obj)
+    {
+        bool writable = obj.Kind == MetadataObjectKind.Table;
+        var detail = new TableDetailTabViewModel(
+            obj.Name,
+            _tableDetailReader,
+            _ddlReader,
+            writable ? _dataEditor : null,
+            writable ? _ddlExecutor : null,
+            _metadataReader);
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
+        return detail;
+    }
+
     private async void OnOpenDdlRequested(MetadataObject obj)
     {
         // Focus an existing tab for the same object if one is already open —
@@ -1701,11 +1748,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
         try
         {
-            if (obj.Kind == MetadataObjectKind.Table)
+            if (OpensAsTableDetail(obj.Kind))
             {
-                var detail = new TableDetailTabViewModel(obj.Name, _tableDetailReader, _ddlReader, _dataEditor, _ddlExecutor, _metadataReader);
-                detail.OpenObjectRequested += OnOpenDdlRequested;
-                detail.ConfirmationRequested += RequestConfirmAsync;
+                var detail = CreateTableDetail(obj);
                 var newTab = WorkspaceTabViewModel.CreateTableDetail(this, obj, detail, _service.ActiveProfile?.Id);
                 WorkspaceTabs.Add(newTab);
                 // SelectTab kicks off EnsureLoadedAsync as a side-effect; we await
@@ -2188,12 +2233,14 @@ public partial class MainWindowViewModel : ViewModelBase
         if (e.PropertyName == nameof(TableDetailTabViewModel.IsDataSubTabActive))
         {
             OnPropertyChanged(nameof(IsDataTabActive));
+            OnPropertyChanged(nameof(ShowDataEditTools));
             OnPropertyChanged(nameof(ShowTransactionButtons));
             RefreshDataPreviewCommand.NotifyCanExecuteChanged();
         }
         else if (e.PropertyName == nameof(TableDetailTabViewModel.IsFieldsSubTabActive))
         {
             OnPropertyChanged(nameof(IsFieldsTabActive));
+            OnPropertyChanged(nameof(ShowFieldEditTools));
             OnPropertyChanged(nameof(ShowTransactionButtons));
         }
     }
