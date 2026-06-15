@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -825,19 +826,18 @@ public partial class TableDetailTabView : UserControl
     private void OnFieldRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(FieldRowViewModel.IsModified)) return;
-        if (_fieldsGrid is null) return;
-        // Walk visible rows to find the one matching the VM and re-apply class.
-        // We don't track containers explicitly; LoadingRow re-fires on virtualization
-        // recycle, so this path only matters for currently realized rows.
-        if (sender is not FieldRowViewModel row) return;
-        foreach (var item in _fieldsGrid.ItemsSource!)
+        if (_fieldsGrid is null || sender is not FieldRowViewModel row) return;
+        // Find the realized container for this row VM and re-apply the "pending" class
+        // LIVE, so the tint clears the moment IsModified flips false (revert, or the
+        // row VM rebuilt clean after Compile) — not only on the next LoadingRow. This
+        // is what fixes the stale brown row after an edit completes.
+        foreach (var dgr in _fieldsGrid.GetVisualDescendants().OfType<DataGridRow>())
         {
-            if (!ReferenceEquals(item, row)) continue;
-            // No public API for "get container for item"; LoadingRow has done the
-            // initial pass. Class changes via .Classes[] would require the row;
-            // skipping mid-edit toggle is acceptable — RowEditEnding's
-            // UpdatePendingClass covers the post-commit redraw.
-            break;
+            if (ReferenceEquals(dgr.DataContext, row))
+            {
+                UpdatePendingClass(dgr, row);
+                break;
+            }
         }
     }
 

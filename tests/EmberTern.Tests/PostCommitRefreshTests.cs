@@ -17,24 +17,41 @@ namespace EmberTern.Tests;
 public class PostCommitRefreshTests
 {
     [Fact]
-    public void DecidePostTransactionRefresh_RoutesByLane()
+    public void DecidePostTransactionRefresh_Commit_NeverRefreshes()
     {
-        // data settled, metadata not → DATA-only reload (the common data-edit + Commit case)
+        // A COMMIT never refreshes — the UI already shows the committed state, and a
+        // post-commit reload opens an extra transaction that re-fires any ON-COMMIT
+        // database trigger (the user's XXX_WS_TRANS_ON_COMMIT audit storm).
+        Assert.Equal(
+            MainWindowViewModel.PostTransactionRefresh.None,
+            MainWindowViewModel.DecidePostTransactionRefresh(dataSettled: true, metadataSettled: false, wasRollback: false));
+        Assert.Equal(
+            MainWindowViewModel.PostTransactionRefresh.None,
+            MainWindowViewModel.DecidePostTransactionRefresh(dataSettled: false, metadataSettled: true, wasRollback: false));
+        Assert.Equal(
+            MainWindowViewModel.PostTransactionRefresh.None,
+            MainWindowViewModel.DecidePostTransactionRefresh(dataSettled: true, metadataSettled: true, wasRollback: false));
+    }
+
+    [Fact]
+    public void DecidePostTransactionRefresh_Rollback_RoutesByLane()
+    {
+        // data rolled back, metadata not → DATA-only reload (revert optimistic grid writes)
         Assert.Equal(
             MainWindowViewModel.PostTransactionRefresh.DataOnly,
-            MainWindowViewModel.DecidePostTransactionRefresh(dataSettled: true, metadataSettled: false));
-        // metadata settled → full structure reload (schema may have changed via DDL)
+            MainWindowViewModel.DecidePostTransactionRefresh(dataSettled: true, metadataSettled: false, wasRollback: true));
+        // metadata rolled back → full structure reload (revert reverted DDL)
         Assert.Equal(
             MainWindowViewModel.PostTransactionRefresh.Structure,
-            MainWindowViewModel.DecidePostTransactionRefresh(dataSettled: false, metadataSettled: true));
+            MainWindowViewModel.DecidePostTransactionRefresh(dataSettled: false, metadataSettled: true, wasRollback: true));
         // both coalesced → structure wins (its reload re-reads the data preview too)
         Assert.Equal(
             MainWindowViewModel.PostTransactionRefresh.Structure,
-            MainWindowViewModel.DecidePostTransactionRefresh(dataSettled: true, metadataSettled: true));
+            MainWindowViewModel.DecidePostTransactionRefresh(dataSettled: true, metadataSettled: true, wasRollback: true));
         // nothing settled → no refresh
         Assert.Equal(
             MainWindowViewModel.PostTransactionRefresh.None,
-            MainWindowViewModel.DecidePostTransactionRefresh(dataSettled: false, metadataSettled: false));
+            MainWindowViewModel.DecidePostTransactionRefresh(dataSettled: false, metadataSettled: false, wasRollback: true));
     }
 
     [Fact]

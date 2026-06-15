@@ -44,9 +44,19 @@ public partial class NewConnectionDialog : Window
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("Firebird database")
+                new FilePickerFileType("Firebird databases")
                 {
-                    Patterns = new[] { "*.fdb", "*.gdb" },
+                    // Real-world extensions seen in the field: .fb AND .fdb (Firebird),
+                    // .gdb (legacy InterBase/FB), .ib (InterBase). .fb was the miss — the
+                    // user's DB is SZKOLENIE.FB and the .fdb-only filter hid it.
+                    // Avalonia glob patterns are case-sensitive on Linux/macOS, so list
+                    // upper-case variants too; Windows is case-insensitive and ignores
+                    // the duplicates.
+                    Patterns = new[]
+                    {
+                        "*.fdb", "*.fb", "*.gdb", "*.ib",
+                        "*.FDB", "*.FB", "*.GDB", "*.IB",
+                    },
                 },
                 FilePickerFileTypes.All,
             },

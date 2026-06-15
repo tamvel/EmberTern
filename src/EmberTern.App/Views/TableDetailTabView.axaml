@@ -120,13 +120,21 @@
             <KeyBinding Gesture="Delete" Command="{Binding DropFieldCommand}" />
           </DataGrid.KeyBindings>
           <DataGrid.Styles>
-            <!-- Subtle background tint on rows with pending edits. Row-level Classes
-                 can't bind to per-item state from XAML in Avalonia 12 — apply via the
-                 cell rectangle template part triggered by the row VM's IsModified
-                 flag using the DataTrigger pattern. -->
+            <!-- Subtle accent tint on rows with a pending (uncompiled) structural edit.
+                 The "pending" class is toggled in code-behind off the row VM's IsModified
+                 flag (LoadingRow + a live PropertyChanged hook so it clears the instant
+                 the edit is reverted / compiled). RowModifiedBrush already carries the
+                 ~20% alpha — full Opacity here (the old WarningBrush-at-0.12 read as a
+                 loud brown once combined with selection). -->
             <Style Selector="DataGridRow.pending /template/ Rectangle#BackgroundRectangle">
-              <Setter Property="Fill" Value="{DynamicResource WarningBrush}" />
-              <Setter Property="Opacity" Value="0.12" />
+              <Setter Property="Fill" Value="{DynamicResource RowModifiedBrush}" />
+              <Setter Property="Opacity" Value="1" />
+            </Style>
+            <!-- A selected pending row keeps the normal selection colour (selection
+                 wins visually); declared after the .pending rule so it takes precedence. -->
+            <Style Selector="DataGridRow.pending:selected /template/ Rectangle#BackgroundRectangle">
+              <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+              <Setter Property="Opacity" Value="1" />
             </Style>
           </DataGrid.Styles>
           <DataGrid.Columns>
@@ -221,16 +229,19 @@
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
+            <!-- Editable: Size (length for CHAR/VARCHAR; precision for NUMERIC/DECIMAL)
+                 and Scale (NUMERIC/DECIMAL). Gated by the grid-level edit-mode toggle
+                 (IsReadOnly={IsFieldsReadOnly}). EnqueueRowEdits rebuilds the type via
+                 the same DdlGenerator pipeline the Edit-Field dialog uses, so changing
+                 these here generates the identical ALTER COLUMN TYPE statement. -->
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnSize}"
-                                Binding="{Binding Size}"
+                                Binding="{Binding Size, Mode=TwoWay}"
                                 SortMemberPath="Size"
-                                MinWidth="50"
-                                IsReadOnly="True" />
+                                MinWidth="50" />
             <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnScale}"
-                                Binding="{Binding Scale, Converter={x:Static conv:ZeroToEmptyConverter.Instance}}"
+                                Binding="{Binding Scale, Mode=TwoWay}"
                                 SortMemberPath="Scale"
-                                MinWidth="50"
-                                IsReadOnly="True" />
+                                MinWidth="50" />
             <!-- Editable: NotNull (CheckBox). -->
             <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.TableDetailColumnNotNull}"
                                     Binding="{Binding NotNull, Mode=TwoWay}"

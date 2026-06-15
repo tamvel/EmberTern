@@ -95,6 +95,12 @@ internal static class UiStrings
     public const string ThemeToggleTooltip = "Toggle dark / light theme";
     public const string SidebarToggleTooltip = "Show / hide the connections panel";
     public const string SidebarExpandTooltip = "Show the connections panel";
+    public const string ResultsPanelMaximizeTooltip = "Maximize / restore results (double-click the splitter)";
+
+    // Max length for a connection profile name. 60 chars comfortably holds
+    // "ENV - Client - Database"-style names while keeping the titlebar chip and
+    // sidebar rows from being pushed off-screen by an abusive name.
+    public const int ConnectionNameMaxLength = 60;
 
     public const string DialogNewConnectionTitle = "New Connection";
     public const string DialogEditConnectionTitle = "Edit Connection";

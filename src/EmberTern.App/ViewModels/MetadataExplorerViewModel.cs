@@ -85,6 +85,7 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     [RelayCommand]
     public async Task RefreshAsync()
     {
+        Diagnostics.RefreshTrace.Log("RefreshTree", "begin");
         // Only connected nodes have anything to refresh.
         foreach (var connection in Connections)
         {
@@ -122,6 +123,7 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         }
 
         ApplyFilter();
+        Diagnostics.RefreshTrace.Log("RefreshTree", "end");
     }
 
     internal async Task LoadGroupAsync(MetadataNodeViewModel group)

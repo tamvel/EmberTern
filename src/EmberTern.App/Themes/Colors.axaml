@@ -24,6 +24,11 @@
       <Color x:Key="RowAlternateColor">#0DFFFFFF</Color>
       <!-- Drag-and-drop drop-target overlay: ~33% of the dark accent blue. ARGB hex. -->
       <Color x:Key="DropTargetColor">#552D6BBF</Color>
+      <!-- Subtle accent overlay (~20% accent blue, ARGB alpha-first) marking a row
+           with an unsaved structural edit in the Pola grid. Reads as "changed", not
+           the loud WarningBrush brown it replaced. Same value in both themes (accent
+           is the same blue). -->
+      <Color x:Key="RowModifiedColor">#332D6BBF</Color>
       <Color x:Key="CommitButtonForeground">#4CAF50</Color>
       <Color x:Key="RollbackButtonForeground">#F44336</Color>
       <!-- Chrome-on-color tokens. These read identically in Dark + Light because
@@ -67,6 +72,7 @@
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
       <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
+      <SolidColorBrush x:Key="RowModifiedBrush" Color="{StaticResource RowModifiedColor}" />
       <SolidColorBrush x:Key="CommitButtonBrush" Color="{StaticResource CommitButtonForeground}" />
       <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccentColor}" />
@@ -171,6 +177,11 @@
       <Color x:Key="RowAlternateColor">#0D000000</Color>
       <!-- Drag-and-drop drop-target overlay: ~33% of the light accent blue. ARGB hex. -->
       <Color x:Key="DropTargetColor">#552D6BBF</Color>
+      <!-- Subtle accent overlay (~20% accent blue, ARGB alpha-first) marking a row
+           with an unsaved structural edit in the Pola grid. Reads as "changed", not
+           the loud WarningBrush brown it replaced. Same value in both themes (accent
+           is the same blue). -->
+      <Color x:Key="RowModifiedColor">#332D6BBF</Color>
       <Color x:Key="CommitButtonForeground">#4CAF50</Color>
       <Color x:Key="RollbackButtonForeground">#F44336</Color>
       <!-- Chrome-on-color tokens — identical to the Dark dictionary on purpose
@@ -208,6 +219,7 @@
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
       <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
+      <SolidColorBrush x:Key="RowModifiedBrush" Color="{StaticResource RowModifiedColor}" />
       <SolidColorBrush x:Key="CommitButtonBrush" Color="{StaticResource CommitButtonForeground}" />
       <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccentColor}" />

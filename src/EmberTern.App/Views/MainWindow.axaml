@@ -80,9 +80,15 @@
           <StackPanel Orientation="Vertical" Spacing="2"
                       VerticalAlignment="Center"
                       IsVisible="{Binding HasActiveConnection}">
+            <!-- MaxWidth + ellipsis so a very long profile name can't expand the
+                 brand row and push the connection toolbar / window buttons off-screen.
+                 Full name on hover. -->
             <TextBlock Text="{Binding ActiveConnectionName}"
                        FontWeight="Bold"
                        FontSize="14"
+                       MaxWidth="260"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding ActiveConnectionName}"
                        Foreground="{DynamicResource ForegroundBrush}" />
             <Border Height="2"
                     HorizontalAlignment="Stretch"
@@ -391,6 +397,8 @@
                     <TextBlock Text="{Binding DisplayName}"
                                FontWeight="SemiBold"
                                FontSize="11"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding DisplayName}"
                                VerticalAlignment="Center" />
                   </StackPanel>
                 </Border>
@@ -1036,6 +1044,24 @@
         <!-- Bottom panel: Results / Messages tabs -->
         <Border Grid.Row="2" Background="{DynamicResource PanelBrush}"
                 IsVisible="{Binding IsQueryTabActive}">
+          <Grid>
+          <!-- Maximize / restore the results panel — same action as double-clicking
+               the splitter. Overlaid at the top-right of the tab strip. ChevronsUp
+               = maximize (grow upward), ChevronsDown = restore. -->
+          <Button Classes="icon"
+                  ZIndex="1"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Top"
+                  Margin="0,2,6,0"
+                  ToolTip.Tip="{x:Static app:UiStrings.ResultsPanelMaximizeTooltip}"
+                  Click="OnToggleResultsMaximizeClick">
+            <Panel>
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="14" Height="14"
+                                IsVisible="{Binding !IsResultsMaximized}" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="14" Height="14"
+                                IsVisible="{Binding IsResultsMaximized}" />
+            </Panel>
+          </Button>
           <TabControl SelectedIndex="{Binding SelectedBottomTabIndex, Mode=TwoWay}"
                       Padding="0">
             <TabItem Classes="bottom-tab" Header="{Binding ResultsLabel}">
@@ -1157,6 +1183,7 @@
               <Grid Background="{DynamicResource BackgroundBrush}" />
             </TabItem>
           </TabControl>
+          </Grid>
         </Border>
       </Grid>
     </Grid>

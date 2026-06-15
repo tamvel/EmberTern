@@ -206,9 +206,19 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
             return false;
         }
 
+        // Clamp the name as a backstop — the dialog TextBox already caps input at
+        // ConnectionNameMaxLength, but a pasted / restored / imported value could be
+        // longer. Trim first, then truncate so the persisted name can never overflow
+        // the titlebar chip / sidebar rows.
+        var trimmedName = Name.Trim();
+        if (trimmedName.Length > UiStrings.ConnectionNameMaxLength)
+        {
+            trimmedName = trimmedName.Substring(0, UiStrings.ConnectionNameMaxLength);
+        }
+
         profile = new ConnectionProfile
         {
-            Name = Name.Trim(),
+            Name = trimmedName,
             Host = string.IsNullOrWhiteSpace(Host) ? "localhost" : Host.Trim(),
             Port = Port > 0 ? Port : 3050,
             DatabasePath = DatabasePath.Trim(),

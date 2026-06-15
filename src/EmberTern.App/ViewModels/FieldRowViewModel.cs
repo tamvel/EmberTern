@@ -37,6 +37,12 @@ public partial class FieldRowViewModel : ObservableObject
         _typeText = original.Type;
         _domainName = original.Domain;
         _description = original.Description ?? string.Empty;
+        // Size/Scale are parsed from the USER-FACING type string ("VARCHAR(80)",
+        // "NUMERIC(15,2)") — NOT from FieldInfo.Size, which is the raw byte length
+        // (RDB$FIELD_LENGTH = 8 for a NUMERIC(15,2)) and would generate wrong DDL.
+        var (arg1, arg2) = ParseTypeArgs(original.Type);
+        _size = arg1;
+        _scale = arg2;
 
         // Mirror the owner's IsFieldEditMode flag into our own IsCellEditable
         // so always-visible cell ComboBoxes (Type, Domain) gray out when edit
@@ -50,6 +56,20 @@ public partial class FieldRowViewModel : ObservableObject
             // visually selects the right domain once it's available.
             _owner.AvailableDomains.CollectionChanged += OnAvailableDomainsChanged;
         }
+    }
+
+    // Unhooks the owner-event subscriptions. MUST be called before a row VM is
+    // discarded (TableDetailTabViewModel rebuilds EditableFields on every Fields
+    // mutation) — otherwise each refresh leaves a dead row VM still wired to the
+    // owner's PropertyChanged + AvailableDomains.CollectionChanged, accumulating
+    // across reloads (the event-subscription leak behind the refresh storm).
+    private bool _detached;
+    public void Detach()
+    {
+        if (_detached || _owner is null) return;
+        _detached = true;
+        _owner.PropertyChanged -= OnOwnerPropertyChanged;
+        _owner.AvailableDomains.CollectionChanged -= OnAvailableDomainsChanged;
     }
 
     private void OnOwnerPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -121,6 +141,7 @@ public partial class FieldRowViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsModified))]
     [NotifyPropertyChangedFor(nameof(SelectedTypeItem))]
+    [NotifyPropertyChangedFor(nameof(EffectiveTypeText))]
     private string _typeText;
 
     /// <summary>
@@ -231,9 +252,100 @@ public partial class FieldRowViewModel : ObservableObject
         !string.Equals(Name, Original.Name, System.StringComparison.Ordinal)
         || NotNull != Original.NotNull
         || !string.Equals(DefaultValue ?? string.Empty, Original.DefaultValue ?? string.Empty, System.StringComparison.Ordinal)
-        || !string.Equals(TypeText, Original.Type, System.StringComparison.Ordinal)
+        || !string.Equals(EffectiveTypeText, Original.Type, System.StringComparison.OrdinalIgnoreCase)
         || !string.Equals(DomainName ?? string.Empty, Original.Domain ?? string.Empty, System.StringComparison.Ordinal)
         || !string.Equals(Description ?? string.Empty, Original.Description ?? string.Empty, System.StringComparison.Ordinal);
+
+    // ─── Editable Size / Scale (length / precision / scale) ───────────────
+    //
+    // Surfaces the user-facing arguments of the column's type so the Pola grid
+    // can edit them inline (parity with the Edit-Field dialog, which the user
+    // wants matched). For CHAR/VARCHAR/CSTRING, Size is the length; for
+    // NUMERIC/DECIMAL, Size is the precision and Scale the scale. Other types
+    // ignore both. EffectiveTypeText reassembles the full Firebird type through
+    // the SAME DdlGenerator.FormatTypeOrDomain pipeline the dialog uses — no
+    // duplicated formatting logic.
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsModified))]
+    [NotifyPropertyChangedFor(nameof(EffectiveTypeText))]
+    private int? _size;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsModified))]
+    [NotifyPropertyChangedFor(nameof(EffectiveTypeText))]
+    private int? _scale;
+
+    private string BaseType => StripSize(TypeText);
+    private bool IsCharType
+    {
+        get
+        {
+            var b = BaseType.ToUpperInvariant();
+            return b is "CHAR" or "VARCHAR" or "CSTRING";
+        }
+    }
+    private bool IsNumericType
+    {
+        get
+        {
+            var b = BaseType.ToUpperInvariant();
+            return b is "NUMERIC" or "DECIMAL";
+        }
+    }
+
+    /// <summary>
+    /// The full Firebird type string assembled from the current base type +
+    /// Size/Scale, via the shared <see cref="DdlGenerator.FormatTypeOrDomain"/>.
+    /// Used by <see cref="IsModified"/> and by the inline-edit pipeline to build
+    /// the ALTER COLUMN TYPE clause — identical formatting to the dialog.
+    /// </summary>
+    public string EffectiveTypeText => DdlGenerator.FormatTypeOrDomain(BuildTypeDefinition());
+
+    /// <summary>
+    /// Builds a type-only <see cref="FieldDefinition"/> (no domain) from the
+    /// row's current base type + Size/Scale, mapping Size→length for character
+    /// types and Size→precision for numeric types. Domain handling stays in the
+    /// inline-edit handler.
+    /// </summary>
+    public FieldDefinition BuildTypeDefinition() => new()
+    {
+        BasicType = BaseType,
+        Size = IsCharType ? Size : null,
+        Precision = IsNumericType ? Size : null,
+        Scale = IsNumericType ? Scale : null,
+    };
+
+    /// <summary>
+    /// Restores TypeText / Domain / Size / Scale to the original column shape.
+    /// Used by the inline-edit handler when a type/size change is rejected
+    /// because the field has dependencies (rename/type-change blocked).
+    /// </summary>
+    public void RevertTypeToOriginal()
+    {
+        TypeText = Original.Type;
+        DomainName = Original.Domain;
+        var (a, b) = ParseTypeArgs(Original.Type);
+        Size = a;
+        Scale = b;
+    }
+
+    // "VARCHAR(80)" → (80, null); "NUMERIC(15,2)" → (15, 2);
+    // "INTEGER" / "DOUBLE PRECISION" → (null, null). Tolerant of spaces.
+    private static (int?, int?) ParseTypeArgs(string? type)
+    {
+        if (string.IsNullOrEmpty(type)) return (null, null);
+        var open = type.IndexOf('(');
+        if (open < 0) return (null, null);
+        var close = type.IndexOf(')', open + 1);
+        if (close < 0) return (null, null);
+        var inner = type.Substring(open + 1, close - open - 1);
+        var parts = inner.Split(',');
+        int? a = null, b = null;
+        if (parts.Length > 0 && int.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var pa)) a = pa;
+        if (parts.Length > 1 && int.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var pb)) b = pb;
+        return (a, b);
+    }
 
     // ─── Read-only forwards (kept so XAML can keep its old Binding paths) ──
 
@@ -247,8 +359,6 @@ public partial class FieldRowViewModel : ObservableObject
     public string? Charset => Original.Charset;
     public string? ForeignKeyTable => Original.ForeignKeyTable;
     public bool IsAutoIncrement => Original.IsAutoIncrement;
-    public int? Size => Original.Size;
-    public int? Scale => Original.Scale;
 
     // ─── Owner-surfaced collections for the in-cell editors ────────────────
 

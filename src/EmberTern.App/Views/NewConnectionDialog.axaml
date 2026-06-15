@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:app="using:EmberTern.App"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
@@ -29,7 +30,9 @@
 
         <StackPanel Spacing="4">
           <TextBlock Text="{Binding NameLabel}" Classes="field-label" />
-          <TextBox Text="{Binding Name, Mode=TwoWay}" PlaceholderText="Local development" />
+          <TextBox Text="{Binding Name, Mode=TwoWay}"
+                   MaxLength="{x:Static app:UiStrings.ConnectionNameMaxLength}"
+                   PlaceholderText="Local development" />
         </StackPanel>
 
         <Grid ColumnDefinitions="*,12,110" RowDefinitions="Auto,Auto">

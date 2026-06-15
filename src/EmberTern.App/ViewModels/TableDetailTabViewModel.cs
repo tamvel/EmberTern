@@ -146,10 +146,44 @@ public partial class TableDetailTabViewModel : ViewModelBase
     // re-load both clear-and-rebuild Fields). EditableFields is what the Pola
     // grid binds to; FieldRowViewModel forwards read-only props and surfaces
     // owner-side AvailableDomains / BasicTypes / CanEditStructure for the in-cell editors.
+    // True while LoadStructureAsync bulk-replaces Fields (Clear + N×Add). Without
+    // this guard, OnFieldsCollectionChanged fired on EACH of those N+1 mutations
+    // and rebuilt the ENTIRE EditableFields collection every time — O(N²) row-VM
+    // allocations per load, every one leaking an owner-event subscription. With
+    // the guard the rebuild happens exactly once, at the end of the bulk update.
+    private bool _bulkFieldsLoading;
+
     private void OnFieldsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (_bulkFieldsLoading) return;
+        RebuildEditableFields();
+    }
+
+    // Detaches the outgoing row VMs (unhooks their owner-event subscriptions —
+    // the leak fix) before clearing, then rebuilds one wrapper per field.
+    private void RebuildEditableFields()
+    {
+        foreach (var row in EditableFields) row.Detach();
         EditableFields.Clear();
         foreach (var f in Fields) EditableFields.Add(new FieldRowViewModel(f, this));
+    }
+
+    // Bulk-replaces Fields and rebuilds EditableFields exactly once. Used by the
+    // load chain instead of an open-coded Clear + foreach Add (which would fire
+    // OnFieldsCollectionChanged N+1 times).
+    private void ReplaceFields(IReadOnlyList<FieldInfo> fields)
+    {
+        _bulkFieldsLoading = true;
+        try
+        {
+            Fields.Clear();
+            foreach (var f in fields) Fields.Add(f);
+        }
+        finally
+        {
+            _bulkFieldsLoading = false;
+        }
+        RebuildEditableFields();
     }
 
     /// <summary>
@@ -161,15 +195,6 @@ public partial class TableDetailTabViewModel : ViewModelBase
 
     private Task<bool> RequestConfirmAsync(ConfirmRequest request)
         => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
-
-    // Strips the size/precision suffix from a type string for base-type
-    // comparison: "VARCHAR(50)" → "VARCHAR", "NUMERIC(15,2)" → "NUMERIC".
-    private static string StripTypeSize(string? type)
-    {
-        if (string.IsNullOrEmpty(type)) return string.Empty;
-        var paren = type.IndexOf('(');
-        return paren < 0 ? type : type.Substring(0, paren).TrimEnd();
-    }
 
     public string TableName { get; }
 
@@ -236,16 +261,22 @@ public partial class TableDetailTabViewModel : ViewModelBase
         var domainChanged = !string.Equals(
             row.DomainName ?? string.Empty, original.Domain ?? string.Empty,
             System.StringComparison.OrdinalIgnoreCase);
-        var baseTypeChanged = !string.Equals(
-            StripTypeSize(row.TypeText), StripTypeSize(original.Type),
+        // Full-type comparison via EffectiveTypeText (base + Size/Scale through the
+        // shared DdlGenerator.FormatTypeOrDomain pipeline). This catches size/length
+        // and precision/scale edits that the old base-only comparison missed
+        // (VARCHAR(50)→VARCHAR(100), NUMERIC(15,2)→NUMERIC(18,4)).
+        var typeChanged = !string.Equals(
+            row.EffectiveTypeText, original.Type,
             System.StringComparison.OrdinalIgnoreCase);
         if (domainChanged && !string.IsNullOrWhiteSpace(row.DomainName))
         {
             typeClause = row.DomainName;
         }
-        else if (baseTypeChanged && !string.IsNullOrWhiteSpace(row.TypeText))
+        else if (typeChanged
+                 && string.IsNullOrWhiteSpace(row.DomainName)
+                 && !string.IsNullOrWhiteSpace(row.EffectiveTypeText))
         {
-            typeClause = row.TypeText;
+            typeClause = row.EffectiveTypeText;
         }
 
         var target = new AlterFieldTarget
@@ -273,8 +304,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
             if (attemptedRename) row.Name = original.Name;
             if (attemptedTypeChange)
             {
-                row.TypeText = original.Type;
-                row.DomainName = original.Domain;
+                row.RevertTypeToOriginal();
             }
             if (attemptedRename || attemptedTypeChange)
             {
@@ -1191,116 +1221,129 @@ public partial class TableDetailTabViewModel : ViewModelBase
         DataError = string.Empty;
         try
         {
-            // Sequential by design — FbConnection services one command at a time, so
-            // Task.WhenAll across these calls would throw "Connection in use". Each
-            // call uses its own short-lived ReadCommitted tx (see reader code).
-            //
-            // Each step is independently try/caught. A failure in (say) the
-            // Constraints query on a particular FB version must not strand the
-            // Fields / Indexes / DDL tabs empty too. The first error message
-            // wins for the tab-level ErrorMessage (used to surface in Messages
-            // and inside the view); the per-step DataError is separate so the
-            // Dane tab can show "this query failed" while the rest renders.
-
-            await SafeLoadAsync(
-                async () =>
-                {
-                    var fields = await _reader.GetFieldsAsync(TableName, cancellationToken).ConfigureAwait(true);
-                    Fields.Clear();
-                    foreach (var f in fields) Fields.Add(f);
-                    RefreshPrimaryKeyColumns();
-                });
-
-            await SafeLoadAsync(
-                async () =>
-                {
-                    var constraints = await _reader.GetConstraintsAsync(TableName, cancellationToken).ConfigureAwait(true);
-                    Constraints.Clear();
-                    foreach (var c in constraints) Constraints.Add(c);
-                    // PK now comes from the PRIMARY KEY constraint (authoritative) — the
-                    // Fields step may have derived it from the unreliable per-field flag,
-                    // so recompute it here now that Constraints is populated.
-                    RefreshPrimaryKeyColumns();
-                });
-
-            await SafeLoadAsync(
-                async () =>
-                {
-                    var indexes = await _reader.GetIndexesAsync(TableName, cancellationToken).ConfigureAwait(true);
-                    Indexes.Clear();
-                    foreach (var i in indexes) Indexes.Add(i);
-                });
-
-            await SafeLoadAsync(
-                async () =>
-                {
-                    var (dependsOn, dependedOnBy) = await _reader.GetDependenciesAsync(TableName, cancellationToken).ConfigureAwait(true);
-                    DependsOn.Clear();
-                    foreach (var d in dependsOn) DependsOn.Add(d);
-                    DependedOnBy.Clear();
-                    foreach (var d in dependedOnBy) DependedOnBy.Add(d);
-
-                    DependsOnTree.Clear();
-                    foreach (var g in BuildDependencyTree(dependsOn)) DependsOnTree.Add(g);
-                    DependedOnByTree.Clear();
-                    foreach (var g in BuildDependencyTree(dependedOnBy)) DependedOnByTree.Add(g);
-                });
-
-            await SafeLoadAsync(
-                async () =>
-                {
-                    var ddl = await _ddlReader.FetchDdlAsync(
-                        new MetadataObject(TableName, MetadataObjectKind.Table),
-                        cancellationToken).ConfigureAwait(true);
-                    DdlText = ddl;
-                });
-
-            await SafeLoadAsync(
-                async () =>
-                {
-                    var description = await _reader.GetDescriptionAsync(TableName, cancellationToken).ConfigureAwait(true);
-                    Description = description;
-                    DescriptionLoaded = true;
-                });
-
-            // Domain list for the inline Domain ComboBox in the Pola grid. Wraps
-            // a separate reader call — if it throws (FB2.5 etc.) the inline
-            // Domain combo stays empty but the rest of the tab still renders.
-            // Fetched via _metadataReader because that's where ListDomainsAsync
-            // lives; injected from the owner.
-            if (_metadataReader is not null)
-            {
-                await SafeLoadAsync(
-                    async () =>
-                    {
-                        var domains = await _metadataReader.ListDomainsAsync(cancellationToken).ConfigureAwait(true);
-                        AvailableDomains.Clear();
-                        // Leading "(none)" sentinel so the inline Domain combo can
-                        // clear a column back to a basic type (#5).
-                        AvailableDomains.Add(new DomainSpec(UiStrings.DomainNoneOption, string.Empty));
-                        foreach (var d in domains) AvailableDomains.Add(d);
-                    });
-            }
-
-            // Data preview gets its own visible error slot (DataError → shown
-            // on the Dane tab); other tabs render normally even when this fails
-            // (large tables, permission denied, dialect mismatch on quoted IDs).
-            try
-            {
-                var preview = await _reader.GetDataPreviewAsync(TableName, CurrentPage, PageSize, cancellationToken).ConfigureAwait(true);
-                DataResult = preview;
-                DataResultVersionTag = System.Guid.NewGuid().ToString("N");
-            }
-            catch (MetadataReadException ex)
-            {
-                DataResult = null;
-                DataError = ex.Message;
-                DataResultVersionTag = System.Guid.NewGuid().ToString("N");
-            }
+            await LoadStructureCoreAsync(cancellationToken).ConfigureAwait(true);
+            await LoadDataPreviewCoreAsync(cancellationToken).ConfigureAwait(true);
         }
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    // Loads everything EXCEPT the data preview: fields, constraints, indexes,
+    // dependencies, DDL, description, domains. Separated from the data preview so
+    // a metadata-only structure refresh (e.g. a column type/length edit that
+    // doesn't change the column SET) can skip the expensive `SELECT *` reload —
+    // the single biggest contributor to the post-commit refresh storm.
+    //
+    // Sequential by design — FbConnection services one command at a time, so
+    // Task.WhenAll across these calls would throw "Connection in use". Each step
+    // is independently try/caught (SafeLoadAsync): a failure in one query must not
+    // strand the other sub-tabs empty.
+    private async Task LoadStructureCoreAsync(CancellationToken cancellationToken)
+    {
+        if (_reader is null || _ddlReader is null) return;
+        Diagnostics.RefreshTrace.Log("LoadStructure", $"begin table={TableName}");
+
+        await SafeLoadAsync(
+            async () =>
+            {
+                var fields = await _reader.GetFieldsAsync(TableName, cancellationToken).ConfigureAwait(true);
+                ReplaceFields(fields);
+                RefreshPrimaryKeyColumns();
+            });
+
+        await SafeLoadAsync(
+            async () =>
+            {
+                var constraints = await _reader.GetConstraintsAsync(TableName, cancellationToken).ConfigureAwait(true);
+                Constraints.Clear();
+                foreach (var c in constraints) Constraints.Add(c);
+                // PK now comes from the PRIMARY KEY constraint (authoritative) — the
+                // Fields step may have derived it from the unreliable per-field flag,
+                // so recompute it here now that Constraints is populated.
+                RefreshPrimaryKeyColumns();
+            });
+
+        await SafeLoadAsync(
+            async () =>
+            {
+                var indexes = await _reader.GetIndexesAsync(TableName, cancellationToken).ConfigureAwait(true);
+                Indexes.Clear();
+                foreach (var i in indexes) Indexes.Add(i);
+            });
+
+        await SafeLoadAsync(
+            async () =>
+            {
+                var (dependsOn, dependedOnBy) = await _reader.GetDependenciesAsync(TableName, cancellationToken).ConfigureAwait(true);
+                DependsOn.Clear();
+                foreach (var d in dependsOn) DependsOn.Add(d);
+                DependedOnBy.Clear();
+                foreach (var d in dependedOnBy) DependedOnBy.Add(d);
+
+                DependsOnTree.Clear();
+                foreach (var g in BuildDependencyTree(dependsOn)) DependsOnTree.Add(g);
+                DependedOnByTree.Clear();
+                foreach (var g in BuildDependencyTree(dependedOnBy)) DependedOnByTree.Add(g);
+            });
+
+        await SafeLoadAsync(
+            async () =>
+            {
+                var ddl = await _ddlReader.FetchDdlAsync(
+                    new MetadataObject(TableName, MetadataObjectKind.Table),
+                    cancellationToken).ConfigureAwait(true);
+                DdlText = ddl;
+            });
+
+        await SafeLoadAsync(
+            async () =>
+            {
+                var description = await _reader.GetDescriptionAsync(TableName, cancellationToken).ConfigureAwait(true);
+                Description = description;
+                DescriptionLoaded = true;
+            });
+
+        // Domain list for the inline Domain ComboBox in the Pola grid. Wraps
+        // a separate reader call — if it throws (FB2.5 etc.) the inline
+        // Domain combo stays empty but the rest of the tab still renders.
+        // Fetched via _metadataReader because that's where ListDomainsAsync
+        // lives; injected from the owner.
+        if (_metadataReader is not null)
+        {
+            await SafeLoadAsync(
+                async () =>
+                {
+                    var domains = await _metadataReader.ListDomainsAsync(cancellationToken).ConfigureAwait(true);
+                    AvailableDomains.Clear();
+                    // Leading "(none)" sentinel so the inline Domain combo can
+                    // clear a column back to a basic type (#5).
+                    AvailableDomains.Add(new DomainSpec(UiStrings.DomainNoneOption, string.Empty));
+                    foreach (var d in domains) AvailableDomains.Add(d);
+                });
+        }
+        Diagnostics.RefreshTrace.Log("LoadStructure", $"end table={TableName}");
+    }
+
+    // The data preview step (`SELECT * … ROWS m TO n`). Own visible error slot
+    // (DataError → shown on the Dane tab); other tabs render normally even when
+    // this fails (large tables, permission denied, dialect mismatch on quoted IDs).
+    private async Task LoadDataPreviewCoreAsync(CancellationToken cancellationToken)
+    {
+        if (_reader is null) return;
+        Diagnostics.RefreshTrace.Log("LoadDataPreview", $"SELECT * table={TableName} page={CurrentPage} size={PageSize}");
+        try
+        {
+            var preview = await _reader.GetDataPreviewAsync(TableName, CurrentPage, PageSize, cancellationToken).ConfigureAwait(true);
+            DataResult = preview;
+            DataResultVersionTag = System.Guid.NewGuid().ToString("N");
+        }
+        catch (MetadataReadException ex)
+        {
+            DataResult = null;
+            DataError = ex.Message;
+            DataResultVersionTag = System.Guid.NewGuid().ToString("N");
         }
     }
 
@@ -2347,11 +2390,35 @@ public partial class TableDetailTabViewModel : ViewModelBase
     // current page, and selected-row PK values before discarding _loadTask;
     // restores them after the re-fetch completes so the user lands on the
     // same row they left.
-    public async Task RefreshStructureAsync(System.Threading.CancellationToken ct = default)
+    // Coalesces concurrent refreshes: when one is already running (e.g. Compile's
+    // refresh hasn't finished when the post-commit refresh fires), the second call
+    // joins the in-flight task instead of stacking a duplicate full reload.
+    private Task? _refreshInFlight;
+
+    public Task RefreshStructureAsync(System.Threading.CancellationToken ct = default)
     {
-        // Snapshot — capture by VALUE before we drop _loadTask, because the
-        // collections will be cleared during LoadAsync's Fields/Constraints/Indexes
-        // re-population steps.
+        if (_refreshInFlight is { } running)
+        {
+            Diagnostics.RefreshTrace.Log("RefreshStructure", $"coalesced (in-flight) table={TableName}");
+            return running;
+        }
+        var task = RefreshStructureCoreAsync(ct);
+        _refreshInFlight = task;
+        return AwaitAndClearRefresh(task);
+    }
+
+    private async Task AwaitAndClearRefresh(Task task)
+    {
+        try { await task.ConfigureAwait(true); }
+        finally { _refreshInFlight = null; }
+    }
+
+    private async Task RefreshStructureCoreAsync(System.Threading.CancellationToken ct)
+    {
+        Diagnostics.RefreshTrace.Log("RefreshStructure", $"begin table={TableName}");
+
+        // Snapshot — capture by VALUE before the collections are cleared during the
+        // structure reload's Fields/Constraints/Indexes re-population steps.
         var snap = new StructureSnapshot
         {
             ActiveSubTabIndex = ActiveSubTabIndex,
@@ -2365,16 +2432,60 @@ public partial class TableDetailTabViewModel : ViewModelBase
                 : null,
         };
 
-        _loadTask = null;
-        await EnsureLoadedAsync(ct).ConfigureAwait(true);
-        // Clear the pending DDL queue — any user-pending edits no longer
-        // describe the current schema (rolled back, compiled, or refreshed
-        // out from under them).
+        // Remember the column SET so we can decide whether the data preview needs a
+        // (potentially very expensive) reload — see below.
+        var oldColumns = Fields.Select(f => f.Name).ToList();
+
+        IsLoading = true;
+        ErrorMessage = null;
+        try
+        {
+            await LoadStructureCoreAsync(ct).ConfigureAwait(true);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+        // Structure is current. Mark the load satisfied so EnsureLoadedAsync stays
+        // idempotent (it must not re-run the full LoadAsync, which would re-issue
+        // the data-preview SELECT *). ReloadDataPreviewAsync awaits this safely.
+        _loadTask = Task.CompletedTask;
+
+        // Clear the pending DDL queue — any user-pending edits no longer describe
+        // the current schema (rolled back, compiled, or refreshed out from under them).
         PendingChanges.Clear();
         RestoreStructureSnapshot(snap);
 
+        // Reload the data preview ONLY when the column SET actually changed
+        // (add/drop/rename). A type/length/precision edit, a NOT NULL/default
+        // toggle, or a constraint/index change keeps the same columns — re-running
+        // `SELECT *` there is pure waste and, on a table with a MOD/computed column
+        // or an ORDER BY over a non-indexed column, is the source of the post-commit
+        // refresh storm (thousands of computed-column evaluations).
+        var newColumns = Fields.Select(f => f.Name).ToList();
+        if (!ColumnSetEqual(oldColumns, newColumns))
+        {
+            Diagnostics.RefreshTrace.Log("RefreshStructure", $"column set changed → reload data preview table={TableName}");
+            await ReloadDataPreviewAsync(ct).ConfigureAwait(true);
+        }
+        else
+        {
+            Diagnostics.RefreshTrace.Log("RefreshStructure", $"column set unchanged → SKIP data preview table={TableName}");
+        }
+
         // Notify the view (column-width preservation lives there).
         StructureRefreshed?.Invoke(this, System.EventArgs.Empty);
+        Diagnostics.RefreshTrace.Log("RefreshStructure", $"end table={TableName}");
+    }
+
+    private static bool ColumnSetEqual(List<string> a, List<string> b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (!string.Equals(a[i], b[i], StringComparison.OrdinalIgnoreCase)) return false;
+        }
+        return true;
     }
 
     /// <summary>

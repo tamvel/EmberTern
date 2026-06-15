@@ -82,6 +82,9 @@
   <StreamGeometry x:Key="Icon.ChevronLeft">M15 18 L9 12 L15 6</StreamGeometry>
   <StreamGeometry x:Key="Icon.ChevronRight">M9 18 L15 12 L9 6</StreamGeometry>
   <StreamGeometry x:Key="Icon.ChevronLast">M7 18 L13 12 L7 6 M17 6 V18</StreamGeometry>
+  <!-- chevrons-up / chevrons-down (Lucide): maximize / restore the results panel. -->
+  <StreamGeometry x:Key="Icon.ChevronsUp">M17 11 L12 6 L7 11 M17 18 L12 13 L7 18</StreamGeometry>
+  <StreamGeometry x:Key="Icon.ChevronsDown">M7 6 L12 11 L17 6 M7 13 L12 18 L17 13</StreamGeometry>
 
   <!-- Window controls -->
   <StreamGeometry x:Key="Icon.WindowMinimize">M5 12 H19</StreamGeometry>

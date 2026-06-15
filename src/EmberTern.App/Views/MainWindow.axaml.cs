@@ -62,6 +62,7 @@ public partial class MainWindow : Window
     // their parent grids (a ColumnDefinition isn't a Control). Width/height + the
     // collapsed flag persist in WorkspaceState, the same way WindowBounds does.
     private ColumnDefinition? _sidebarColumn;
+    private RowDefinition? _editorRow;
     private RowDefinition? _resultsRow;
     private Border? _sidebarPanel;
     private GridSplitter? _sidebarSplitter;
@@ -70,6 +71,10 @@ public partial class MainWindow : Window
     private double _expandedSidebarWidth = DefaultSidebarWidth;
     private double _resultsHeight = DefaultResultsHeight;
     private bool _sidebarCollapsed;
+    // True while the results panel is maximized (editor row collapsed, results
+    // row takes all space). Toggled by the splitter double-click AND the tab-strip
+    // button; restoring returns to the previous (possibly dragged) results height.
+    private bool _resultsMaximized;
     private bool _layoutRestored;
     private const double DefaultSidebarWidth = 280;
     private const double MinSidebarWidth = 220;
@@ -132,6 +137,7 @@ public partial class MainWindow : Window
         var workspace = this.FindControl<Grid>("WorkspaceGrid");
         if (workspace is not null && workspace.RowDefinitions.Count >= 3)
         {
+            _editorRow = workspace.RowDefinitions[0];
             _resultsRow = workspace.RowDefinitions[2];
         }
         _sidebarPanel = this.FindControl<Border>("SidebarPanel");
@@ -996,29 +1002,72 @@ public partial class MainWindow : Window
         if (_resultsRow is null || _currentVm is null) return;
         if (_currentVm.IsQueryTabActive)
         {
-            _resultsRow.MinHeight = MinResultsHeight;
-            _resultsRow.Height = new GridLength(_resultsHeight);
+            if (_resultsMaximized)
+            {
+                ApplyResultsMaximized();
+            }
+            else
+            {
+                _resultsRow.MinHeight = MinResultsHeight;
+                _resultsRow.Height = new GridLength(_resultsHeight);
+                if (_editorRow is not null) _editorRow.Height = new GridLength(1, GridUnitType.Star);
+            }
         }
         else
         {
-            if (_resultsRow.Height.IsAbsolute && _resultsRow.Height.Value > 0)
+            if (!_resultsMaximized && _resultsRow.Height.IsAbsolute && _resultsRow.Height.Value > 0)
             {
                 _resultsHeight = _resultsRow.Height.Value;
             }
             _resultsRow.MinHeight = 0;
             _resultsRow.Height = new GridLength(0);
+            // Keep the editor row a star so it fills when results are hidden (non-Query tab).
+            if (_editorRow is not null) _editorRow.Height = new GridLength(1, GridUnitType.Star);
         }
+    }
+
+    // Maximized layout: editor row collapses, results row takes all the space.
+    private void ApplyResultsMaximized()
+    {
+        if (_resultsRow is null) return;
+        if (_editorRow is not null) _editorRow.Height = new GridLength(0);
+        _resultsRow.MinHeight = MinResultsHeight;
+        _resultsRow.Height = new GridLength(1, GridUnitType.Star);
+    }
+
+    // Tri-state toggle shared by the splitter double-click and the tab-strip button:
+    //   Normal (editor + results) ⇄ Results maximized.
+    // Only meaningful on the Query tab (the only place the results panel shows).
+    // Restoring returns to the previous (possibly dragged) results height.
+    private void ToggleResultsMaximized()
+    {
+        if (_currentVm?.IsQueryTabActive != true) return;
+
+        if (!_resultsMaximized)
+        {
+            // Capture the live (dragged) height so Restore lands back on it.
+            if (_resultsRow is { } row && row.Height.IsAbsolute && row.Height.Value > 0)
+            {
+                _resultsHeight = row.Height.Value;
+            }
+            _resultsMaximized = true;
+        }
+        else
+        {
+            _resultsMaximized = false;
+        }
+        ApplyResultsRowForActiveTab();
+        _currentVm?.SetResultsMaximized(_resultsMaximized);
     }
 
     private void OnResultsSplitterDoubleTapped(object? sender, TappedEventArgs e)
     {
-        _resultsHeight = DefaultResultsHeight;
-        if (_resultsRow is not null && _currentVm?.IsQueryTabActive == true)
-        {
-            _resultsRow.Height = new GridLength(DefaultResultsHeight);
-        }
+        ToggleResultsMaximized();
         e.Handled = true;
     }
+
+    private void OnToggleResultsMaximizeClick(object? sender, RoutedEventArgs e)
+        => ToggleResultsMaximized();
 
     private void OnThemeToggleClick(object? sender, RoutedEventArgs e)
     {

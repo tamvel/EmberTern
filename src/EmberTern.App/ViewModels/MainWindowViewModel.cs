@@ -44,6 +44,15 @@ public partial class MainWindowViewModel : ViewModelBase
     private CancellationTokenSource? _executionCts;
     private TransactionState _previousTransactionState = TransactionState.Idle;
     private TransactionState _previousMetadataTransactionState = TransactionState.Idle;
+    // Set just before a Commit/Rollback settles a lane, read by OnTransactionStateChanged
+    // to decide whether the post-settle refresh runs (commit → no refresh, rollback →
+    // refresh to revert). See DecidePostTransactionRefresh for why a commit must NOT refresh.
+    private bool _lastTransactionSettleWasRollback;
+    // Most-recently-activated-last ordering of open tabs. Drives "return to the tab
+    // I came from" when the active tab is closed (e.g. open a table → jump to a
+    // procedure from its dependencies → close the procedure → land back on the
+    // table, not a random index-neighbour). Pruned on close, cleared on bulk reset.
+    private readonly List<WorkspaceTabViewModel> _tabActivationHistory = new();
     // Per-connection tabs. Key = ConnectionProfile.Id. Populated on disconnect/switch
     // (stashing the active connection's tabs) and drained on connect (restoring them
     // into WorkspaceTabs). Survives the lifetime of the VM and is persisted via
@@ -1252,6 +1261,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private void ClearWorkspaceTabs()
     {
         WorkspaceTabs.Clear();
+        _tabActivationHistory.Clear();
         SelectedWorkspaceTab = null;
         QueryText = string.Empty;
         _suppressSavedQuerySync = true;
@@ -1733,6 +1743,11 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var t in WorkspaceTabs) t.IsSelected = false;
         tab.IsSelected = true;
         SelectedWorkspaceTab = tab;
+        // Record activation order so CloseTab can return to the previously-active tab.
+        // Move-to-end semantics: re-activating an already-visited tab makes it the
+        // most recent.
+        _tabActivationHistory.Remove(tab);
+        _tabActivationHistory.Add(tab);
 
         // Lazy-load TableDetail content on first activation. Restored tabs and
         // background tabs stay empty until the user clicks them — eager loading
@@ -1752,11 +1767,42 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!tab.IsClosable) return;
         var index = WorkspaceTabs.IndexOf(tab);
         if (index < 0) return;
+        var wasSelected = SelectedWorkspaceTab == tab;
         WorkspaceTabs.RemoveAt(index);
-        if (SelectedWorkspaceTab == tab && WorkspaceTabs.Count > 0)
+        _tabActivationHistory.Remove(tab);
+
+        if (wasSelected && WorkspaceTabs.Count > 0)
         {
-            SelectTab(WorkspaceTabs[Math.Min(index, WorkspaceTabs.Count - 1)]);
+            // Return to the most-recently-active tab that's still open (the tab the
+            // user came from), not the arbitrary index-neighbour. Falls back to the
+            // index-neighbour only when history has nothing usable left.
+            var target = PreviousActiveTab() ?? WorkspaceTabs[Math.Min(index, WorkspaceTabs.Count - 1)];
+            SelectTab(target);
         }
+    }
+
+    /// <summary>
+    /// True while the SQL-editor results panel is maximized. Drives the tab-strip
+    /// toggle button's icon (maximize vs. restore). Set by the view's
+    /// <c>ToggleResultsMaximized</c> — the actual row sizing lives in code-behind
+    /// (GridLength isn't a VM concern), this is just the bound display state.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isResultsMaximized;
+
+    internal void SetResultsMaximized(bool value) => IsResultsMaximized = value;
+
+    // The newest still-open tab in the activation history (the closing tab has
+    // already been pruned, so the last entry is the prior activation). Skips any
+    // stale entries that are no longer in WorkspaceTabs.
+    private WorkspaceTabViewModel? PreviousActiveTab()
+    {
+        for (int i = _tabActivationHistory.Count - 1; i >= 0; i--)
+        {
+            var candidate = _tabActivationHistory[i];
+            if (WorkspaceTabs.Contains(candidate)) return candidate;
+        }
+        return null;
     }
 
     private void OnCopyNameRequested(string name)
@@ -2369,6 +2415,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task CommitLaneAsync(TransactionService tx, string lane)
     {
         var count = tx.StatementCount;
+        // Commit ⇒ no post-settle refresh (UI already current); see DecidePostTransactionRefresh.
+        _lastTransactionSettleWasRollback = false;
+        Diagnostics.RefreshTrace.Log("Commit", $"lane={lane} statements={count} (no post-commit refresh)");
         try
         {
             await tx.CommitAsync().ConfigureAwait(true);
@@ -2384,6 +2433,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task RollbackLaneAsync(TransactionService tx, string lane)
     {
         var count = tx.StatementCount;
+        // Rollback ⇒ post-settle refresh runs to revert the in-memory / optimistic state.
+        _lastTransactionSettleWasRollback = true;
+        Diagnostics.RefreshTrace.Log("Rollback", $"lane={lane} statements={count} (refresh to revert)");
         await tx.RollbackAsync().ConfigureAwait(true);
         AddMessage(MessageSeverity.Info, string.Format(UiStrings.TransactionLaneRolledBackFormat, lane, count));
     }
@@ -2492,12 +2544,26 @@ public partial class MainWindowViewModel : ViewModelBase
         Structure,  // metadata-lane commit/rollback — full structure reload (DDL)
     }
 
-    // Pure decision so it's unit-testable without a live connection. Metadata wins when
-    // both lanes settle together (a full structure reload re-reads the data preview too).
-    internal static PostTransactionRefresh DecidePostTransactionRefresh(bool dataSettled, bool metadataSettled)
-        => metadataSettled ? PostTransactionRefresh.Structure
-         : dataSettled ? PostTransactionRefresh.DataOnly
-         : PostTransactionRefresh.None;
+    // Pure decision so it's unit-testable without a live connection.
+    //
+    // A COMMIT needs NO refresh: the UI already shows the committed state — the
+    // structure editor calls RefreshStructureAsync when it APPLIES the ALTER (before
+    // the user commits), and data edits paint optimistically. Refreshing after a
+    // commit only opens an extra transaction (TRA_95413 in the trace); on a database
+    // with an ON TRANSACTION COMMIT trigger (e.g. the user's XXX_WS_TRANS_ON_COMMIT
+    // audit trigger → GET_NAGL_WERDYSP → hundreds of BIN_AND/MOD calls) that extra
+    // commit re-fires the trigger — the "massive activity after commit". So commit ⇒ None.
+    //
+    // A ROLLBACK MUST refresh: the in-memory model / optimistic grid writes have to be
+    // reverted to the real (rolled-back) DB state. Metadata rollback → full structure
+    // reload; data rollback → data preview reload. Metadata wins when both settle.
+    internal static PostTransactionRefresh DecidePostTransactionRefresh(bool dataSettled, bool metadataSettled, bool wasRollback)
+    {
+        if (!wasRollback) return PostTransactionRefresh.None;
+        return metadataSettled ? PostTransactionRefresh.Structure
+             : dataSettled ? PostTransactionRefresh.DataOnly
+             : PostTransactionRefresh.None;
+    }
 
     private void OnTransactionStateChanged(object? sender, EventArgs e)
     {
@@ -2549,15 +2615,19 @@ public partial class MainWindowViewModel : ViewModelBase
             // primary key". A DATA-lane refresh reloads ONLY the data preview, keeping
             // Fields/PK intact. metaCommitted wins when both coalesce (its full reload
             // already re-reads the data preview too).
-            var refresh = DecidePostTransactionRefresh(dataCommittedOrRolledBack, metaCommittedOrRolledBack);
+            var refresh = DecidePostTransactionRefresh(dataCommittedOrRolledBack, metaCommittedOrRolledBack, _lastTransactionSettleWasRollback);
             if (refresh != PostTransactionRefresh.None)
             {
+                Diagnostics.RefreshTrace.Log("Transaction",
+                    $"settled data={dataCommittedOrRolledBack} meta={metaCommittedOrRolledBack} rollback={_lastTransactionSettleWasRollback} → {refresh} over open TableDetail tabs");
                 foreach (var tab in WorkspaceTabs)
                 {
                     if (tab.Kind == WorkspaceTabKind.TableDetail && tab.TableDetail is { } detail)
                     {
                         // Fire-and-forget — errors land in detail.ErrorMessage / DataError
-                        // via the standard SafeLoadAsync chain.
+                        // via the standard SafeLoadAsync chain. A metadata-lane settle does
+                        // a structure refresh (now coalesced + data-preview only when the
+                        // column set changed); a data-lane settle reloads the preview only.
                         _ = refresh == PostTransactionRefresh.Structure
                             ? detail.RefreshAfterTransactionAsync()
                             : detail.RefreshDataAfterTransactionAsync();
