@@ -59,7 +59,7 @@ public sealed class FirebirdDdlReader
             return obj.Kind switch
             {
                 MetadataObjectKind.Table => await BuildTableDdlAsync(connection, tx, obj.Name, cancellationToken).ConfigureAwait(false),
-                MetadataObjectKind.View => await BuildViewDdlAsync(connection, tx, obj.Name, fallback, cancellationToken).ConfigureAwait(false),
+                MetadataObjectKind.View => await BuildViewDdlAsync(connection, tx, obj.Name, fallback, orAlter: false, cancellationToken).ConfigureAwait(false),
                 MetadataObjectKind.Procedure => await BuildProcedureDdlAsync(connection, tx, obj.Name, serverMajor, fallback, cancellationToken).ConfigureAwait(false),
                 MetadataObjectKind.Trigger => await BuildTriggerDdlAsync(connection, tx, obj.Name, fallback, cancellationToken).ConfigureAwait(false),
                 MetadataObjectKind.Function => await BuildFunctionDdlAsync(connection, tx, obj.Name, serverMajor, fallback, cancellationToken).ConfigureAwait(false),
@@ -222,7 +222,38 @@ public sealed class FirebirdDdlReader
 
     // -- Views ----------------------------------------------------------------
 
-    private static async Task<string> BuildViewDdlAsync(FbConnection connection, FbTransaction? tx, string name, Encoding fallback, CancellationToken ct)
+    /// <summary>
+    /// Fetches a view's source rebuilt as an editable <c>CREATE OR ALTER VIEW</c>
+    /// statement — the working surface for the View Detail SQL tab. Reuses the
+    /// same blob + column-list logic as the read-only <see cref="FetchDdlAsync"/>
+    /// DDL path; the only difference is the <c>OR ALTER</c> verb so re-Compiling
+    /// alters the view in place. Same lane/lock + tx-attach pattern as every
+    /// other read here.
+    /// </summary>
+    public async Task<string> FetchViewSourceAsync(MetadataObject obj, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        var connection = LaneConnection();
+        var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
+        var tx = _transactionService?.ActiveTransaction;
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await BuildViewDdlAsync(connection, tx, obj.Name, fallback, orAlter: true, cancellationToken).ConfigureAwait(false);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read source for VIEW {obj.Name}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    private static async Task<string> BuildViewDdlAsync(FbConnection connection, FbTransaction? tx, string name, Encoding fallback, bool orAlter, CancellationToken ct)
     {
         var source = await ReadBlobAsync(connection, tx,
             "SELECT RDB$VIEW_SOURCE FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = @name",
@@ -248,7 +279,7 @@ public sealed class FirebirdDdlReader
         }
 
         var sb = new StringBuilder();
-        sb.Append("CREATE VIEW ").Append(Quote(name));
+        sb.Append(orAlter ? "CREATE OR ALTER VIEW " : "CREATE VIEW ").Append(Quote(name));
         if (columns.Length > 0)
         {
             sb.Append(" (").Append(columns).Append(')');

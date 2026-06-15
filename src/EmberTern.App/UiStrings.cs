@@ -382,6 +382,22 @@ internal static class UiStrings
     public const string NewTableTabDefaultTitle = "New Table";
     public const string NewTableExecutedFormat = "CREATE TABLE \"{0}\" executed.";
 
+    // ─── View Detail (View Detail V1) ───────────────────────────────────────
+    public const string ViewDetailTabSql = "SQL";
+    public const string ViewDetailTabFields = "Fields";
+    public const string ViewDetailTabDependencies = "Dependencies";
+    public const string ViewDetailTabData = "Data";
+    public const string ViewDetailTabDescription = "Description";
+    public const string ViewDetailTabDdl = "DDL";
+    public const string ViewDetailDescriptionEmpty = "No description.";
+    public const string ViewDetailLoadingHint = "Loading view…";
+    public const string ToolbarNewViewTooltip = "New View";
+    public const string ViewCompileIcon = "⚡";
+    public const string ViewCompileTooltip = "Compile view (CREATE OR ALTER VIEW)";
+    public const string ViewCompileFailedFormat = "Compile failed: {0}";
+    public const string NewViewTabDefaultTitle = "New View";
+    public const string NewViewExecutedFormat = "View \"{0}\" created.";
+
     public const string FieldEditCompileIcon = "⚡";
     public const string FieldEditCompileTooltip = "Compile pending DDL changes";
     public const string FieldEditAddIcon = "+";

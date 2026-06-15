@@ -177,6 +177,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ShowDataEditTools))]
     [NotifyPropertyChangedFor(nameof(IsNewTableTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveNewTable))]
+    [NotifyPropertyChangedFor(nameof(IsViewDetailTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveViewDetail))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
@@ -202,6 +204,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsNewTableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.NewTable };
     public NewTableTabViewModel? ActiveNewTable
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.NewTable } t ? t.NewTable : null;
+    /// <summary>True when the active workspace tab is a View Detail tab.</summary>
+    public bool IsViewDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ViewDetail };
+    public ViewDetailTabViewModel? ActiveViewDetail
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ViewDetail } t ? t.ViewDetail : null;
     // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
     // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
     // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
@@ -236,10 +242,12 @@ public partial class MainWindowViewModel : ViewModelBase
     // so the user needs the Commit/Rollback buttons there to finalize (#3).
     // IsTableDetailTabActive covers all sub-tabs (it's keyed on the workspace
     // tab kind, not the inner sub-tab).
-    public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive;
-    // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable);
+    // ViewDetail joins this set: Compile opens the working (metadata) transaction,
+    // so Commit/Rollback must be reachable from a View Detail tab too.
+    public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive;
+    // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail);
     // the anchored Query tab is never closable so the button hides when it's active.
-    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable };
+    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail };
     // Saved Queries panel is only meaningful while the Query tab is active.
     // When a DDL or TableDetail tab is active the panel collapses regardless of
     // the user's IsQueryPanelVisible toggle preference (the preference itself
@@ -1136,6 +1144,22 @@ public partial class MainWindowViewModel : ViewModelBase
                     DdlText = ddl,
                 });
             }
+            else if (tab.Kind == WorkspaceTabKind.ViewDetail)
+            {
+                // Skip transient New View tabs (IsNew) — the view doesn't exist yet,
+                // so restoring it would just fail to load. Persist real views as
+                // ViewDetail so restore re-opens the full 6-tab surface (not DDL-only).
+                if (tab.ViewDetail is { IsNew: true }) continue;
+                var ddl = tab.ViewDetail is { } vd ? vd.DdlText : tab.DdlText;
+                ws.Tabs.Add(new WorkspaceTab
+                {
+                    Kind = CoreTabKind.ViewDetail,
+                    ObjectName = tab.ObjectName,
+                    ObjectKind = tab.ObjectKind,
+                    ConnectionProfileId = tab.ConnectionProfileId,
+                    DdlText = ddl,
+                });
+            }
             else
             {
                 ws.Tabs.Add(new WorkspaceTab
@@ -1205,6 +1229,18 @@ public partial class MainWindowViewModel : ViewModelBase
                 var detail = CreateTableDetail(obj);
                 detail.DdlText = tab.DdlText ?? string.Empty;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateTableDetail(this, obj, detail, tab.ConnectionProfileId));
+            }
+            else if (tab.Kind == CoreTabKind.ViewDetail
+                  && tab.ObjectKind is { } viewKind
+                  && !string.IsNullOrEmpty(tab.ObjectName))
+            {
+                // Native ViewDetail restore (no DDL-only fallback). Lazy-loads on
+                // first activation via SelectTab — same anti-race pattern as
+                // TableDetail. Cached DDL seeds the DDL tab before fetch returns.
+                var obj = new MetadataObject(tab.ObjectName, viewKind);
+                var detail = CreateViewDetail(obj);
+                detail.DdlText = tab.DdlText ?? string.Empty;
+                WorkspaceTabs.Add(WorkspaceTabViewModel.CreateViewDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
 
@@ -1514,6 +1550,55 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public bool CanCreateView => _service.IsConnected;
+
+    // New View: opens a View Detail tab in IsNew mode with the SQL tab seeded
+    // from the CREATE VIEW template. No visual designer — the user edits SQL
+    // directly and presses Compile (per milestone scope). The other tabs stay
+    // empty until the view is created; on Compile success OnViewCreated refreshes
+    // the tree, closes this tab and reopens the real view.
+    [RelayCommand(CanExecute = nameof(CanCreateView))]
+    private void NewView()
+    {
+        var detail = new ViewDetailTabViewModel(UiStrings.NewViewTabDefaultTitle, _tableDetailReader, _ddlReader, _ddlExecutor)
+        {
+            IsNew = true,
+            SourceText = ViewDetailTabViewModel.NewViewTemplate,
+        };
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ViewCreated += name => OnViewCreated(detail, name);
+
+        var obj = new MetadataObject(UiStrings.NewViewTabDefaultTitle, MetadataObjectKind.View);
+        var tab = WorkspaceTabViewModel.CreateViewDetail(this, obj, detail, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+    }
+
+    private async void OnViewCreated(ViewDetailTabViewModel detail, string? viewName)
+    {
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewViewExecutedFormat, viewName ?? string.Empty));
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+
+        // Close the New View tab.
+        WorkspaceTabViewModel? newTab = null;
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.ViewDetail && ReferenceEquals(t.ViewDetail, detail))
+            {
+                newTab = t;
+                break;
+            }
+        }
+        if (newTab is not null) CloseTab(newTab);
+
+        // Reopen the freshly-created view as a normal (existing) ViewDetail tab
+        // when we could parse its name; otherwise the user finds it in the tree.
+        if (!string.IsNullOrEmpty(viewName))
+        {
+            OnOpenDdlRequested(new MetadataObject(viewName, MetadataObjectKind.View));
+        }
+    }
+
     // Persist a freshly-added connection into a folder. Called by the view after
     // the dialog returns with a profile; isolated here so tests can drive the
     // folder-placement logic without standing up the dialog.
@@ -1705,6 +1790,27 @@ public partial class MainWindowViewModel : ViewModelBase
     internal static bool OpensAsTableDetail(MetadataObjectKind kind)
         => kind is MetadataObjectKind.Table or MetadataObjectKind.SystemTable;
 
+    // Views open in the dedicated View Detail surface (editable SQL source +
+    // Fields / Dependencies / Data / Description / DDL), not a plain DDL tab.
+    // Kept as a separate predicate from OpensAsTableDetail because the two build
+    // structurally different detail VMs.
+    internal static bool OpensAsViewDetail(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.View;
+
+    // Single construction point for ViewDetail VMs — mirrors CreateTableDetail.
+    // A view is read-only data (no inline editing) but its SQL source IS editable,
+    // so the DDL executor is wired for Compile while no data editor is.
+    internal ViewDetailTabViewModel CreateViewDetail(MetadataObject obj)
+    {
+        var detail = new ViewDetailTabViewModel(
+            obj.Name,
+            _tableDetailReader,
+            _ddlReader,
+            _ddlExecutor);
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        return detail;
+    }
+
     // The SINGLE construction point for TableDetail VMs. Capability is decided here
     // and only here, keyed on the object kind: a writable user table gets the data
     // editor + DDL executor; a read-only kind (system table) gets NEITHER. The
@@ -1737,7 +1843,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // TableDetail tabs key on (Kind, Name).
         foreach (var tab in WorkspaceTabs)
         {
-            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail
+            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail
                 && tab.ObjectKind == obj.Kind
                 && string.Equals(tab.ObjectName, obj.Name, StringComparison.Ordinal))
             {
@@ -1755,6 +1861,21 @@ public partial class MainWindowViewModel : ViewModelBase
                 WorkspaceTabs.Add(newTab);
                 // SelectTab kicks off EnsureLoadedAsync as a side-effect; we await
                 // the same task here so we can surface any post-load error.
+                SelectTab(newTab);
+                await detail.EnsureLoadedAsync().ConfigureAwait(true);
+                if (!string.IsNullOrEmpty(detail.ErrorMessage))
+                {
+                    AddMessage(MessageSeverity.Error, detail.ErrorMessage);
+                    SelectedBottomTabIndex = 1;
+                }
+                return;
+            }
+
+            if (OpensAsViewDetail(obj.Kind))
+            {
+                var detail = CreateViewDetail(obj);
+                var newTab = WorkspaceTabViewModel.CreateViewDetail(this, obj, detail, _service.ActiveProfile?.Id);
+                WorkspaceTabs.Add(newTab);
                 SelectTab(newTab);
                 await detail.EnsureLoadedAsync().ConfigureAwait(true);
                 if (!string.IsNullOrEmpty(detail.ErrorMessage))
@@ -1804,6 +1925,11 @@ public partial class MainWindowViewModel : ViewModelBase
             && _service.IsConnected)
         {
             _ = detail.EnsureLoadedAsync();
+        }
+        else if (tab is { Kind: WorkspaceTabKind.ViewDetail, ViewDetail: { } viewDetail }
+            && _service.IsConnected)
+        {
+            _ = viewDetail.EnsureLoadedAsync();
         }
     }
 
@@ -2578,6 +2704,11 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowMetadataTransactionButtons));
         OnPropertyChanged(nameof(CanCreateTable));
         NewTableCommand.NotifyCanExecuteChanged();
+        // New View shares the same connection-state gate as New Table; without
+        // this re-notification its command stayed at its construction-time
+        // CanExecute (false) and the toolbar button never enabled on connect.
+        OnPropertyChanged(nameof(CanCreateView));
+        NewViewCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

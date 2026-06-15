@@ -10,6 +10,7 @@ public enum WorkspaceTabKind
     Ddl,
     TableDetail,
     NewTable,
+    ViewDetail,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -76,6 +77,22 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             TableDetail = detail,
         };
 
+    public static WorkspaceTabViewModel CreateViewDetail(MainWindowViewModel owner, MetadataObject obj, ViewDetailTabViewModel detail, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.ViewDetail,
+            BaseTitle = obj.Name,
+            IsClosable = true,
+            ObjectKind = obj.Kind,
+            ObjectName = obj.Name,
+            DdlText = detail.DdlText,
+            ConnectionProfileId = connectionProfileId,
+            Icon = MetadataNodeViewModel.IconFor(obj.Kind),
+            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
+            ViewDetail = detail,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -89,6 +106,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public string IconGeometryKey { get; private init; } = string.Empty;
     public TableDetailTabViewModel? TableDetail { get; private init; }
     public NewTableTabViewModel? NewTable { get; private init; }
+    public ViewDetailTabViewModel? ViewDetail { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]

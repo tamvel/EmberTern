@@ -22,6 +22,10 @@ public static class SqlFormatter
 {
     private const string ConjunctionIndent = "  ";
 
+    // Indent for a CREATE [OR ALTER] VIEW column list — IBExpert puts each output
+    // column on its own line indented four spaces under the view name.
+    private const string ViewColumnIndent = "    ";
+
     // Wrap threshold. Lines longer than this trigger a post-emit wrap pass that
     // packs SELECT column lists / IN (...) value lists onto multiple lines, with
     // continuation lines aligned IBExpert-style:
@@ -450,6 +454,16 @@ public static class SqlFormatter
         {
             var t = meaningful[i];
 
+            // CREATE [OR ALTER] VIEW <name> [(col, col, …)] AS — format the header
+            // IBExpert-style: name + space + "(", each column on its own indented
+            // line, ")" glued to the last column, then "as" on its own line.
+            var viewConsumed = TryEmitViewHeader(meaningful, i, sb, ref prev);
+            if (viewConsumed > 0)
+            {
+                i += viewConsumed - 1;
+                continue;
+            }
+
             var phrase = MatchStructuralPhrase(meaningful, i);
             if (phrase.Length > 0)
             {
@@ -480,6 +494,85 @@ public static class SqlFormatter
         return sb.ToString();
     }
 
+    // Emits a CREATE [OR ALTER] VIEW header when token `i` is the VIEW keyword
+    // followed by an identifier. Returns the number of tokens consumed (name +
+    // optional column list + optional AS), or 0 when token `i` is not a view
+    // header. Pure structural formatting — strings / quoted identifiers / comments
+    // are still passed through MaybeLowercase (which only touches Word tokens).
+    private static int TryEmitViewHeader(List<Token> tokens, int i, StringBuilder sb, ref Token? prev)
+    {
+        var t = tokens[i];
+        if (t.Kind != TokenKind.Word || !string.Equals(t.Text, "VIEW", StringComparison.OrdinalIgnoreCase))
+            return 0;
+        if (i + 1 >= tokens.Count) return 0;
+        var nameTok = tokens[i + 1];
+        if (nameTok.Kind != TokenKind.Word && nameTok.Kind != TokenKind.QuotedIdent) return 0;
+
+        if (NeedsSpaceBefore(prev, t, sb)) sb.Append(' ');
+        sb.Append("view ");
+        sb.Append(MaybeLowercase(nameTok));
+        int j = i + 2;
+        prev = nameTok;
+
+        // Optional column list: "(" col ["," col]* ")".
+        if (j < tokens.Count && tokens[j] is { Kind: TokenKind.Punctuation, Text: "(" })
+        {
+            sb.Append(" (");
+            j++;
+            int depth = 1;
+            bool needIndent = true;
+            Token? colPrev = null;
+            while (j < tokens.Count && depth > 0)
+            {
+                var ct = tokens[j];
+                if (ct.Kind == TokenKind.Punctuation && ct.Text == "(")
+                {
+                    if (needIndent) { sb.Append('\n').Append(ViewColumnIndent); needIndent = false; }
+                    depth++;
+                    sb.Append('(');
+                }
+                else if (ct.Kind == TokenKind.Punctuation && ct.Text == ")")
+                {
+                    depth--;
+                    sb.Append(')');
+                    colPrev = ct;
+                    j++;
+                    if (depth == 0) break;
+                    continue;
+                }
+                else if (depth == 1 && ct.Kind == TokenKind.Punctuation && ct.Text == ",")
+                {
+                    TrimTrailingSpaces(sb);
+                    sb.Append(',');
+                    needIndent = true;
+                }
+                else
+                {
+                    if (needIndent) { sb.Append('\n').Append(ViewColumnIndent); needIndent = false; }
+                    else if (NeedsSpaceBefore(colPrev, ct, sb)) sb.Append(' ');
+                    sb.Append(MaybeLowercase(ct));
+                }
+                colPrev = ct;
+                j++;
+            }
+            prev = j > 0 ? tokens[j - 1] : prev;
+        }
+
+        // Optional AS on its own line (the view-body separator). Column-alias AS
+        // (e.g. "x.id as foo") is untouched — it never follows the view header.
+        if (j < tokens.Count
+            && tokens[j].Kind == TokenKind.Word
+            && string.Equals(tokens[j].Text, "AS", StringComparison.OrdinalIgnoreCase))
+        {
+            TrimTrailingSpaces(sb);
+            sb.Append('\n').Append("as");
+            prev = tokens[j];
+            j++;
+        }
+
+        return j - i;
+    }
+
     private enum PhraseKind { None, TopLevel, Conjunction }
     private readonly record struct Phrase(PhraseKind Kind, int Length);
 
@@ -488,7 +581,21 @@ public static class SqlFormatter
         var t = tokens[i];
         if (t.Kind != TokenKind.Word) return new Phrase(PhraseKind.None, 0);
 
-        if (Conjunctions.Contains(t.Text)) return new Phrase(PhraseKind.Conjunction, 1);
+        if (Conjunctions.Contains(t.Text))
+        {
+            // "OR ALTER" (as in CREATE OR ALTER VIEW/PROCEDURE/TRIGGER) is a DDL
+            // phrase, not a boolean OR — it must NOT break onto its own indented
+            // line. Without this guard the OR-conjunction rule turned
+            // "create or alter view …" into "create\n  or alter view …".
+            if (string.Equals(t.Text, "OR", StringComparison.OrdinalIgnoreCase)
+                && i + 1 < tokens.Count
+                && tokens[i + 1].Kind == TokenKind.Word
+                && string.Equals(tokens[i + 1].Text, "ALTER", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Phrase(PhraseKind.None, 0);
+            }
+            return new Phrase(PhraseKind.Conjunction, 1);
+        }
 
         if (TopLevelTwo.TryGetValue(t.Text, out var second))
         {

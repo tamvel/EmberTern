@@ -53,6 +53,10 @@
   <!-- New Table — composed from Lucide primitives (no `table-plus` in Lucide core):
        a small rounded table grid (top-left) + a plus (bottom-right) = "create table". -->
   <StreamGeometry x:Key="Icon.TablePlus">M5 3 H12 A2 2 0 0 1 14 5 V12 A2 2 0 0 1 12 14 H5 A2 2 0 0 1 3 12 V5 A2 2 0 0 1 5 3 Z M3 8.5 H14 M8.5 3 V14 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
+  <!-- New View: an eye (lens + pupil) shrunk into the top-left + the SAME
+       bottom-right "+" overlay as Icon.TablePlus, so "New View" reads as a create
+       action visually consistent with "New Table". -->
+  <StreamGeometry x:Key="Icon.ViewPlus">M2 9.5 C4.5 4 11.5 4 14 9.5 C11.5 15 4.5 15 2 9.5 Z M5.4 9.5 A2.6 2.6 0 1 0 10.6 9.5 A2.6 2.6 0 1 0 5.4 9.5 Z M18.5 15 V22 M15 18.5 H22</StreamGeometry>
   <!-- Pencil-ruler (Lucide pencil-ruler): design / edit table structure (the inline
        field-edit toggle). Relative "m…" sub-paths re-anchored to absolute M + l. -->
   <StreamGeometry x:Key="Icon.PencilRuler">M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13 M8 6 l2-2 M18 16 l2-2 M17 11 l4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17 M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z M15 5 l4 4</StreamGeometry>

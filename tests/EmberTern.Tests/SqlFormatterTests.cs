@@ -47,6 +47,71 @@ public class SqlFormatterTests
                 + "FROM NAGL N JOIN POZYCJE P ON P.ID_NAGL = N.ID"));
     }
 
+    // ─── View DDL formatting (Views V1 follow-up) ─────────────────────────
+
+    [Fact]
+    public void CreateOrAlter_StaysOnOneLine()
+    {
+        // The "OR" in "OR ALTER" must NOT be treated as a boolean conjunction
+        // (which would break it onto its own indented line).
+        Assert.Equal(
+            "create or alter view v_x (\n    id_nagl)\nas\nselect id_nagl\nfrom nagl",
+            SqlFormatter.Format("CREATE OR ALTER VIEW V_X (ID_NAGL) AS SELECT ID_NAGL FROM NAGL"));
+    }
+
+    [Fact]
+    public void CreateView_SingleColumn_HeaderFormatted()
+    {
+        Assert.Equal(
+            "create view v_x (\n    id_nagl)\nas\nselect id_nagl\nfrom nagl",
+            SqlFormatter.Format("CREATE VIEW V_X (ID_NAGL) AS SELECT ID_NAGL FROM NAGL"));
+    }
+
+    [Fact]
+    public void CreateView_MultiColumn_EachColumnOnOwnLine()
+    {
+        var formatted = SqlFormatter.Format(
+            "CREATE OR ALTER VIEW XXX_DOMEK_VIEW (ID_DOMEK, KONTRAHENT, NAZWA, AKTYWNY) AS "
+            + "SELECT X.ID_DOMEK, X.KONTRAHENT, X.NAZWA, X.AKTYWNY FROM XXX_DOMEK X");
+        Assert.Equal(
+            "create or alter view xxx_domek_view (\n"
+            + "    id_domek,\n"
+            + "    kontrahent,\n"
+            + "    nazwa,\n"
+            + "    aktywny)\n"
+            + "as\n"
+            + "select x.id_domek, x.kontrahent, x.nazwa, x.aktywny\n"
+            + "from xxx_domek x",
+            formatted);
+    }
+
+    [Fact]
+    public void CreateView_NoColumnList_AsOnOwnLine()
+    {
+        Assert.Equal(
+            "create view v_x\nas\nselect 1\nfrom rdb$database",
+            SqlFormatter.Format("CREATE VIEW V_X AS SELECT 1 FROM RDB$DATABASE"));
+    }
+
+    [Fact]
+    public void View_Formatting_IsIdempotent()
+    {
+        var once = SqlFormatter.Format(
+            "CREATE OR ALTER VIEW XXX_DOMEK_VIEW (ID_DOMEK, KONTRAHENT, NAZWA) AS "
+            + "SELECT X.ID_DOMEK, X.KONTRAHENT, X.NAZWA FROM XXX_DOMEK X");
+        Assert.Equal(once, SqlFormatter.Format(once));
+    }
+
+    [Fact]
+    public void BooleanOr_StillBreaks_WhenNotPartOfOrAlter()
+    {
+        // Regression guard: the OR-ALTER exception must not disable the normal
+        // boolean-OR line break inside a WHERE clause.
+        Assert.Equal(
+            "select 1\nfrom t\nwhere a = 1\n  or b = 2",
+            SqlFormatter.Format("SELECT 1 FROM T WHERE A = 1 OR B = 2"));
+    }
+
     [Fact]
     public void ClauseKeywords_BreakOntoNewLines()
     {

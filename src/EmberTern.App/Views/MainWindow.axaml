@@ -200,6 +200,12 @@
             <controls:SvgIcon Data="{StaticResource Icon.TablePlus}"
                               Foreground="{DynamicResource IconColor_Table}" />
           </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewViewTooltip}"
+                  Command="{Binding NewViewCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.ViewPlus}"
+                              Foreground="{DynamicResource IconColor_View}" />
+          </Button>
         </StackPanel>
 
         <!-- Drag spacer (column 2 = *) -->
@@ -756,6 +762,25 @@
                       IsVisible="{Binding IsNewTableTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
               </Button>
+              <!-- ⚡ Compile for a View Detail tab (CREATE OR ALTER VIEW). Visible
+                   on any view sub-tab; always acts on the editable SQL source. -->
+              <Button Classes="primary"
+                      Padding="8,4"
+                      ToolTip.Tip="{x:Static app:UiStrings.ViewCompileTooltip}"
+                      Command="{Binding ActiveViewDetail.CompileCommand}"
+                      IsVisible="{Binding IsViewDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}"
+                                  Foreground="{DynamicResource OnAccentBrush}"
+                                  Width="16" Height="16" />
+              </Button>
+              <!-- Format SQL for the View source — reuses the shared SqlFormatter
+                   (same Icon.Braces + tooltip as the SQL Editor's format button). -->
+              <Button Classes="icon"
+                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+                      Command="{Binding ActiveViewDetail.FormatSqlCommand}"
+                      IsVisible="{Binding IsViewDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
+              </Button>
               <!-- Data-edit add/delete row buttons. Bound through ActiveTableDetail
                    because the commands live on TableDetailTabViewModel. Visible only
                    on the Dane sub-tab; the leading separator collapses to zero width
@@ -869,6 +894,9 @@
               <views:NewTableTabView x:Name="NewTableView"
                                      DataContext="{Binding ActiveNewTable}"
                                      IsVisible="{Binding DataContext.IsNewTableTabActive, ElementName=RootWindow}" />
+              <views:ViewDetailTabView x:Name="ViewDetailView"
+                                       DataContext="{Binding ActiveViewDetail}"
+                                       IsVisible="{Binding DataContext.IsViewDetailTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query

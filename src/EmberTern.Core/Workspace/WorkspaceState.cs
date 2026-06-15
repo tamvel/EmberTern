@@ -8,6 +8,7 @@ public enum WorkspaceTabKind
     Query,
     Ddl,
     TableDetail,
+    ViewDetail,
 }
 
 // Stored verbatim as JSON. Properties are settable so System.Text.Json can

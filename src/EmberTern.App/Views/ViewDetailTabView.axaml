@@ -1,0 +1,339 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:app="using:EmberTern.App"
+             xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:behaviors="using:EmberTern.App.Behaviors"
+             xmlns:conv="using:EmberTern.App.Converters"
+             xmlns:metadata="using:EmberTern.Core.Metadata"
+             xmlns:ae="using:AvaloniaEdit"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="EmberTern.App.Views.ViewDetailTabView"
+             x:Name="RootControl"
+             x:DataType="vm:ViewDetailTabViewModel"
+             Background="{DynamicResource BackgroundBrush}">
+
+  <UserControl.Styles>
+    <Style Selector="DataGridRow">
+      <Setter Property="Height" Value="22" />
+    </Style>
+    <Style Selector="DataGridCell">
+      <Setter Property="Padding" Value="6 2" />
+    </Style>
+    <Style Selector="TextBlock.null-cell">
+      <Setter Property="FontStyle" Value="Italic" />
+      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="*,Auto">
+
+    <TabControl Grid.Row="0"
+                SelectedIndex="{Binding ActiveSubTabIndex, Mode=TwoWay}"
+                Padding="0">
+
+      <!-- SQL — editable CREATE OR ALTER VIEW source. The primary working
+           surface. Compile lives in the main app toolbar (gated on
+           IsViewDetailTabActive). -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabSql}">
+        <ae:TextEditor x:Name="ViewSqlEditor"
+                       ShowLineNumbers="True"
+                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       FontSize="13"
+                       HorizontalScrollBarVisibility="Auto"
+                       VerticalScrollBarVisibility="Auto"
+                       Background="{DynamicResource BackgroundBrush}"
+                       Foreground="{DynamicResource ForegroundBrush}" />
+      </TabItem>
+
+      <!-- Fields — read-only view columns. Views expose name / type / nullability /
+           charset; PK/FK/constraint metadata doesn't apply, so those columns are
+           omitted (don't invent metadata Firebird doesn't provide for views). -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabFields}">
+        <DataGrid x:Name="FieldsGrid"
+                  behaviors:GridLayoutBehavior.GridId="ViewDetail.Fields"
+                  ItemsSource="{Binding Fields}"
+                  IsReadOnly="True"
+                  FontSize="11"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  CanUserSortColumns="True"
+                  CanUserResizeColumns="True"
+                  CanUserReorderColumns="True"
+                  ColumnWidth="Auto"
+                  RowBackground="Transparent"
+                  HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                  VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                  Background="{DynamicResource BackgroundBrush}">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnPosition}"
+                                Binding="{Binding DisplayPosition}"
+                                SortMemberPath="DisplayPosition"
+                                MinWidth="32" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
+                                Binding="{Binding Name}"
+                                SortMemberPath="Name"
+                                MinWidth="120" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnType}"
+                                Binding="{Binding Type}"
+                                SortMemberPath="Type"
+                                MinWidth="120" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnNotNull}"
+                                Binding="{Binding NotNull, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
+                                SortMemberPath="NotNull"
+                                MinWidth="70" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnCharset}"
+                                Binding="{Binding Charset}"
+                                SortMemberPath="Charset"
+                                MinWidth="70" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDescription}"
+                                Binding="{Binding Description}"
+                                SortMemberPath="Description"
+                                MinWidth="120" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </TabItem>
+
+      <!-- Dependencies — reuses the same dual-tree layout + templates as
+           TableDetail (Used by / Depends on). -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabDependencies}">
+        <Grid ColumnDefinitions="*,4,*">
+          <Grid Grid.Column="0" RowDefinitions="Auto,*">
+            <TextBlock Grid.Row="0"
+                       Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
+                       FontSize="11"
+                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                       Margin="0,4,0,4" />
+            <TreeView Grid.Row="1"
+                      ItemsSource="{Binding DependedOnByTree}"
+                      Background="{DynamicResource BackgroundBrush}">
+              <TreeView.DataTemplates>
+                <TreeDataTemplate DataType="vm:DependencyGroupNode"
+                                  ItemsSource="{Binding Children}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                      Width="15" Height="15"
+                                      VerticalAlignment="Center">
+                      <controls:SvgIcon.Foreground>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="IconResourceKey" />
+                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </controls:SvgIcon.Foreground>
+                    </controls:SvgIcon>
+                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
+                  </StackPanel>
+                </TreeDataTemplate>
+                <DataTemplate DataType="vm:DependencyLeafNode">
+                  <Border HorizontalAlignment="Stretch"
+                          Background="Transparent"
+                          DoubleTapped="OnDependencyNodeDoubleTapped">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                        Width="15" Height="15"
+                                        VerticalAlignment="Center">
+                        <controls:SvgIcon.Foreground>
+                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                            <Binding Path="IconResourceKey" />
+                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                          </MultiBinding>
+                        </controls:SvgIcon.Foreground>
+                      </controls:SvgIcon>
+                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding FieldName}"
+                                 FontSize="10"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </TreeView.DataTemplates>
+            </TreeView>
+          </Grid>
+
+          <GridSplitter Grid.Column="1"
+                        Width="4"
+                        Background="{DynamicResource BorderBrush}"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch" />
+
+          <Grid Grid.Column="2" RowDefinitions="Auto,*">
+            <TextBlock Grid.Row="0"
+                       Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
+                       FontSize="11"
+                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                       Margin="0,4,0,4" />
+            <TreeView Grid.Row="1"
+                      ItemsSource="{Binding DependsOnTree}"
+                      Background="{DynamicResource BackgroundBrush}">
+              <TreeView.DataTemplates>
+                <TreeDataTemplate DataType="vm:DependencyGroupNode"
+                                  ItemsSource="{Binding Children}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                      Width="15" Height="15"
+                                      VerticalAlignment="Center">
+                      <controls:SvgIcon.Foreground>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="IconResourceKey" />
+                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </controls:SvgIcon.Foreground>
+                    </controls:SvgIcon>
+                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
+                  </StackPanel>
+                </TreeDataTemplate>
+                <DataTemplate DataType="vm:DependencyLeafNode">
+                  <Border HorizontalAlignment="Stretch"
+                          Background="Transparent"
+                          DoubleTapped="OnDependencyNodeDoubleTapped">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                        Width="15" Height="15"
+                                        VerticalAlignment="Center">
+                        <controls:SvgIcon.Foreground>
+                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                            <Binding Path="IconResourceKey" />
+                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                          </MultiBinding>
+                        </controls:SvgIcon.Foreground>
+                      </controls:SvgIcon>
+                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding FieldName}"
+                                 FontSize="10"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </TreeView.DataTemplates>
+            </TreeView>
+          </Grid>
+        </Grid>
+      </TabItem>
+
+      <!-- Data — read-only SELECT * preview, same paged infrastructure as
+           TableDetail. Pagination controls are self-contained here (no inline
+           data editing on a view). -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabData}">
+        <Grid RowDefinitions="Auto,Auto,*">
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4" Margin="8,4">
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
+                    Command="{Binding GoToFirstPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" />
+            </Button>
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
+                    Command="{Binding GoToPreviousPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" />
+            </Button>
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
+                    Command="{Binding GoToNextPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" />
+            </Button>
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
+                    Command="{Binding GoToLastPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" />
+            </Button>
+            <TextBlock Text="{Binding DataPreviewHint}"
+                       Classes="subtle"
+                       FontSize="11"
+                       VerticalAlignment="Center"
+                       Margin="6,0,0,0" />
+          </StackPanel>
+          <TextBlock Grid.Row="1"
+                     Text="{Binding DataError}"
+                     Classes="subtle error"
+                     FontSize="11"
+                     Margin="8,0,8,4"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding ShowDataError}" />
+          <DataGrid Grid.Row="2"
+                    x:Name="DataPreviewGrid"
+                    behaviors:GridLayoutBehavior.GridId="ViewDetail.Data"
+                    IsReadOnly="True"
+                    FontSize="11"
+                    GridLinesVisibility="Horizontal"
+                    HeadersVisibility="Column"
+                    CanUserSortColumns="True"
+                    CanUserResizeColumns="True"
+                    CanUserReorderColumns="False"
+                    ColumnWidth="Auto"
+                    RowBackground="Transparent"
+                    HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                    VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                    Background="{DynamicResource BackgroundBrush}"
+                    IsVisible="{Binding HasDataResult}" />
+        </Grid>
+      </TabItem>
+
+      <!-- Description — editable COMMENT ON VIEW. Save/Clear run in the working
+           (metadata) transaction via the same workflow as table descriptions;
+           Commit/Rollback finalize. Reuses the table-description strings. -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabDescription}">
+        <Grid RowDefinitions="Auto,*" Background="{DynamicResource BackgroundBrush}">
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4"
+                      IsVisible="{Binding CanEditDescription}">
+            <TextBlock Text="{x:Static app:UiStrings.TableDescriptionEditLabel}"
+                       Classes="subtle"
+                       FontSize="11"
+                       VerticalAlignment="Center" />
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
+                    Command="{Binding SaveDescriptionCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.Save}" />
+            </Button>
+            <Button Classes="flat"
+                    Padding="8,2"
+                    Content="{x:Static app:UiStrings.TableDescriptionClear}"
+                    Command="{Binding ClearDescriptionCommand}" />
+          </StackPanel>
+          <TextBox Grid.Row="1"
+                   Text="{Binding EditableDescription, Mode=TwoWay}"
+                   IsEnabled="{Binding CanEditDescription}"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   FontSize="11"
+                   Margin="8,0,8,8"
+                   Background="{DynamicResource BackgroundBrush}" />
+        </Grid>
+      </TabItem>
+
+      <!-- DDL — read-only reconstructed CREATE VIEW. -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabDdl}">
+        <ae:TextEditor x:Name="ViewDdlEditor"
+                       ShowLineNumbers="True"
+                       IsReadOnly="True"
+                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       FontSize="13"
+                       HorizontalScrollBarVisibility="Auto"
+                       VerticalScrollBarVisibility="Auto"
+                       Background="{DynamicResource BackgroundBrush}"
+                       Foreground="{DynamicResource ForegroundBrush}" />
+      </TabItem>
+
+    </TabControl>
+
+    <StackPanel Grid.Row="1" Orientation="Vertical">
+      <TextBlock Text="{x:Static app:UiStrings.ViewDetailLoadingHint}"
+                 Classes="subtle"
+                 Margin="10,4"
+                 FontSize="11"
+                 IsVisible="{Binding IsLoading}" />
+      <TextBlock Text="{Binding ErrorMessage}"
+                 Classes="subtle error"
+                 Margin="10,4"
+                 FontSize="11"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </StackPanel>
+  </Grid>
+
+</UserControl>

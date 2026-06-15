@@ -533,16 +533,25 @@ public static class DdlGenerator
 
     /// <summary>Like <see cref="BuildCommentColumn"/> but for tables.</summary>
     public static string BuildCommentTable(string tableName, string? comment)
-    {
-        if (string.IsNullOrWhiteSpace(tableName))
-            throw new ArgumentException("Table name is required.", nameof(tableName));
+        => BuildRelationComment("TABLE", tableName, comment);
 
-        var t = Quote(tableName.Trim());
+    /// <summary>Like <see cref="BuildCommentTable"/> but for views — Firebird
+    /// requires the dedicated <c>COMMENT ON VIEW</c> form (a view is not a table
+    /// to the COMMENT statement).</summary>
+    public static string BuildCommentView(string viewName, string? comment)
+        => BuildRelationComment("VIEW", viewName, comment);
+
+    private static string BuildRelationComment(string objectType, string name, string? comment)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Object name is required.", nameof(name));
+
+        var n = Quote(name.Trim());
         if (string.IsNullOrWhiteSpace(comment))
         {
-            return string.Format(CultureInfo.InvariantCulture, "COMMENT ON TABLE {0} IS NULL", t);
+            return string.Format(CultureInfo.InvariantCulture, "COMMENT ON {0} {1} IS NULL", objectType, n);
         }
-        return string.Format(CultureInfo.InvariantCulture, "COMMENT ON TABLE {0} IS '{1}'", t, EscapeSqlLiteral(comment));
+        return string.Format(CultureInfo.InvariantCulture, "COMMENT ON {0} {1} IS '{2}'", objectType, n, EscapeSqlLiteral(comment));
     }
 
     private static string EscapeSqlLiteral(string s) => s.Replace("'", "''");
