@@ -15,6 +15,7 @@ using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.Behaviors;
 using EmberTern.App.Completion;
+using EmberTern.App.Controls;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
@@ -32,7 +33,7 @@ public partial class MainWindow : Window
     private MainWindowViewModel? _currentVm;
     private SqlCompletionController? _completion;
 
-    private TextBlock? _maxRestoreGlyph;
+    private SvgIcon? _maxRestoreGlyph;
 
     // Drag-and-drop state. The DragDrop API on TreeView in Avalonia 12 is unreliable
     // (item containers are virtualized, drop events drop while the cursor is over
@@ -87,7 +88,7 @@ public partial class MainWindow : Window
         _editor = this.FindControl<TextEditor>("SqlEditor");
         _ddlEditor = this.FindControl<TextEditor>("DdlEditor");
         _resultGrid = this.FindControl<DataGrid>("ResultGrid");
-        _maxRestoreGlyph = this.FindControl<TextBlock>("MaxRestoreGlyph");
+        _maxRestoreGlyph = this.FindControl<SvgIcon>("MaxRestoreGlyph");
 
         ApplyEditorThemeColors();
         if (_editor is not null)
@@ -306,7 +307,13 @@ public partial class MainWindow : Window
     {
         if (e.Property == WindowStateProperty && _maxRestoreGlyph is not null)
         {
-            _maxRestoreGlyph.Text = WindowState == WindowState.Maximized ? "❐" : "◻";
+            var key = WindowState == WindowState.Maximized
+                ? "Icon.WindowRestore"
+                : "Icon.WindowMaximize";
+            if (this.TryFindResource(key, out var geometry) && geometry is Geometry g)
+            {
+                _maxRestoreGlyph.Data = g;
+            }
         }
 
         // Snapshot the size while in Normal state. Used at Closing so a maximized

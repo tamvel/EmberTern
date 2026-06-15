@@ -25,6 +25,7 @@ public partial class MetadataNodeViewModel : ViewModelBase
             GroupLabel = LabelFor(kind),
             Icon = IconFor(kind),
             IconResourceKey = ResourceKeyFor(kind),
+            IconGeometryKey = GeometryKeyFor(kind),
         };
         // TreeViewItem hides the expand chevron when HasItems is false; lazy-loaded
         // groups would never be expandable. Seed a placeholder so the chevron shows;
@@ -42,6 +43,7 @@ public partial class MetadataNodeViewModel : ViewModelBase
             GroupLabel = obj.Name,
             Icon = IconFor(obj.Kind),
             IconResourceKey = ResourceKeyFor(obj.Kind),
+            IconGeometryKey = GeometryKeyFor(obj.Kind),
         };
 
     public static MetadataNodeViewModel CreatePlaceholder(MetadataExplorerViewModel owner)
@@ -62,6 +64,11 @@ public partial class MetadataNodeViewModel : ViewModelBase
     // looks it up via IconBrushConverter, which re-evaluates on theme toggle. Keeping
     // a key (not a brush) in the VM preserves the "Core/VM hold no Avalonia types" rule.
     public string IconResourceKey { get; private init; } = string.Empty;
+    // Geometry resource key (e.g. "Icon.Table") into Themes/IconGeometries.axaml.
+    // The XAML side resolves it to a Geometry via IconGeometryConverter and renders an
+    // SvgIcon; color still flows through IconResourceKey + IconBrushConverter. Holding a
+    // key (not a Geometry) keeps the "VM holds no Avalonia types" rule. Empty for placeholders.
+    public string IconGeometryKey { get; private init; } = string.Empty;
     public ObservableCollection<MetadataNodeViewModel> Children { get; }
 
     // GroupLabel is the raw label (e.g. "Tables" for groups, name for leaves).
@@ -224,4 +231,11 @@ public partial class MetadataNodeViewModel : ViewModelBase
         MetadataObjectKind.SystemTable => "IconColor_SystemTable",
         _ => string.Empty,
     };
+
+    // Geometry resource key for the SVG icon system (Etap 2). The keys in
+    // Themes/IconGeometries.axaml are named "Icon.<KindName>" 1:1 with the enum, so the
+    // mapping is just $"Icon.{kind}" — every kind in MetadataObjectKind has a matching
+    // <StreamGeometry x:Key="Icon.<Kind>">. The legacy IconFor(...) glyphs are retained
+    // only as a fallback / for tests; live UI renders these geometries.
+    internal static string GeometryKeyFor(MetadataObjectKind kind) => $"Icon.{kind}";
 }

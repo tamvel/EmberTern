@@ -44,15 +44,24 @@
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
     <Setter Property="Padding" Value="8,4" />
+    <Setter Property="CornerRadius" Value="4" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
 
+  <!-- Hover: IconHoverBrush is a touch stronger than HoverOverlay so the rounded
+       hover chip on a toolbar icon is clearly visible in both themes. -->
   <Style Selector="Button.icon:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+    <Setter Property="Background" Value="{DynamicResource IconHoverBrush}" />
   </Style>
 
   <Style Selector="Button.icon:focus /template/ ContentPresenter">
     <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
+  <!-- Disabled: dim the whole button (Opacity) so the icon reads as unavailable
+       regardless of its semantic Foreground (which would otherwise stay vivid). -->
+  <Style Selector="Button.icon:disabled">
+    <Setter Property="Opacity" Value="0.4" />
   </Style>
 
   <!-- ToggleButton.icon mirrors Button.icon's defaults, but the FluentTheme's
@@ -64,10 +73,14 @@
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
     <Setter Property="Padding" Value="8,4" />
+    <Setter Property="CornerRadius" Value="4" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
   <Style Selector="ToggleButton.icon:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+    <Setter Property="Background" Value="{DynamicResource IconHoverBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.icon:disabled">
+    <Setter Property="Opacity" Value="0.4" />
   </Style>
   <Style Selector="ToggleButton.icon:checked /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
@@ -116,6 +129,10 @@
     <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
   </Style>
 
+  <Style Selector="Button.flat:disabled">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+
   <Style Selector="Button.primary">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
@@ -133,6 +150,10 @@
   <Style Selector="Button.primary:pressed /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
     <Setter Property="Opacity" Value="0.85" />
+  </Style>
+
+  <Style Selector="Button.primary:disabled">
+    <Setter Property="Opacity" Value="0.5" />
   </Style>
 
   <Style Selector="Button.caption">

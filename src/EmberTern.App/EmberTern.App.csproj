@@ -10,6 +10,11 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <!-- Icon SVGs are source-of-truth only (repo). Runtime renders the geometries
+         in Themes/IconGeometries.axaml, so the .svg files are excluded from the
+         build output — zero app-size impact. The ICONS.md catalog is also docs-only. -->
+    <AvaloniaResource Remove="Assets\Icons\**\*.svg" />
+    <AvaloniaResource Remove="Assets\Icons\**\*.md" />
   </ItemGroup>
 
   <ItemGroup>

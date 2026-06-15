@@ -59,6 +59,10 @@ public partial class FieldDependencyItem : ObservableObject
     /// recolors live on theme toggle, exactly like the tree.</summary>
     public string IconResourceKey => Kind is { } k ? MetadataNodeViewModel.ResourceKeyFor(k) : string.Empty;
 
+    /// <summary>Geometry key (e.g. "Icon.Trigger") for the SVG icon system; resolved by
+    /// IconGeometryConverter. Same per-kind mapping as the tree. Empty for unmapped kinds.</summary>
+    public string IconGeometryKey => Kind is { } k ? MetadataNodeViewModel.GeometryKeyFor(k) : string.Empty;
+
     /// <summary>✓ when this trigger fires on INSERT for the field; blank for
     /// non-triggers (where the catalog carries no operation semantics) or when
     /// the trigger doesn't fire on INSERT.</summary>

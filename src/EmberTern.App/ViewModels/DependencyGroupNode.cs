@@ -14,6 +14,7 @@ public sealed class DependencyLeafNode
     public DependencyInfo Dependency { get; init; } = new();
     public string Icon { get; init; } = string.Empty;
     public string IconResourceKey { get; init; } = string.Empty;
+    public string IconGeometryKey { get; init; } = string.Empty;
 
     public string ObjectName => Dependency.ObjectName;
     public string? FieldName => Dependency.FieldName;
@@ -25,6 +26,7 @@ public sealed class DependencyGroupNode
     public IReadOnlyList<DependencyLeafNode> Children { get; init; } = Array.Empty<DependencyLeafNode>();
     public string Icon { get; init; } = string.Empty;
     public string IconResourceKey { get; init; } = string.Empty;
+    public string IconGeometryKey { get; init; } = string.Empty;
 
     public int Count => Children.Count;
     public string Header => $"{ObjectType} ({Count})";

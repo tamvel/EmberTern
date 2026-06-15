@@ -29,6 +29,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             IsClosable = false,
             Icon = "≣",
             IconResourceKey = "IconColor_Query",
+            IconGeometryKey = "Icon.Query",
         };
 
     public static WorkspaceTabViewModel CreateDdl(MainWindowViewModel owner, MetadataObject obj, string ddlText, string? connectionProfileId)
@@ -43,6 +44,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ConnectionProfileId = connectionProfileId,
             Icon = MetadataNodeViewModel.IconFor(obj.Kind),
             IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
         };
 
     public static WorkspaceTabViewModel CreateNewTable(MainWindowViewModel owner, NewTableTabViewModel newTable, string? connectionProfileId)
@@ -54,6 +56,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ConnectionProfileId = connectionProfileId,
             Icon = MetadataNodeViewModel.IconFor(MetadataObjectKind.Table),
             IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(MetadataObjectKind.Table),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(MetadataObjectKind.Table),
             NewTable = newTable,
         };
 
@@ -69,6 +72,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ConnectionProfileId = connectionProfileId,
             Icon = MetadataNodeViewModel.IconFor(obj.Kind),
             IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
             TableDetail = detail,
         };
 
@@ -80,6 +84,9 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public string? ConnectionProfileId { get; private init; }
     public string Icon { get; private init; } = string.Empty;
     public string IconResourceKey { get; private init; } = string.Empty;
+    // Geometry key into IconGeometries.axaml (e.g. "Icon.Query"); resolved by
+    // IconGeometryConverter to render the tab's SvgIcon. See MetadataNodeViewModel.
+    public string IconGeometryKey { get; private init; } = string.Empty;
     public TableDetailTabViewModel? TableDetail { get; private init; }
     public NewTableTabViewModel? NewTable { get; private init; }
 

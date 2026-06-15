@@ -411,6 +411,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
         {
             var icon = category.Kind is { } k ? MetadataNodeViewModel.IconFor(k) : string.Empty;
             var iconKey = category.Kind is { } k2 ? MetadataNodeViewModel.ResourceKeyFor(k2) : string.Empty;
+            var iconGeometry = category.Kind is { } k3 ? MetadataNodeViewModel.GeometryKeyFor(k3) : string.Empty;
 
             IReadOnlyList<DependencyLeafNode> leaves = Array.Empty<DependencyLeafNode>();
             if (byType.TryGetValue(category.ObjectTypeKey, out var matched))
@@ -421,6 +422,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
                         Dependency = d,
                         Icon = icon,
                         IconResourceKey = iconKey,
+                        IconGeometryKey = iconGeometry,
                     })
                     .ToList();
             }
@@ -431,6 +433,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
                 Children = leaves,
                 Icon = icon,
                 IconResourceKey = iconKey,
+                IconGeometryKey = iconGeometry,
             });
         }
         return groups;

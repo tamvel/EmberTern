@@ -53,6 +53,7 @@ public partial class ConnectionNodeViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusIndicator))]
+    [NotifyPropertyChangedFor(nameof(StatusBrushKey))]
     [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
     [NotifyCanExecuteChangedFor(nameof(DisconnectCommand))]
     [NotifyCanExecuteChangedFor(nameof(ReconnectCommand))]
@@ -74,6 +75,11 @@ public partial class ConnectionNodeViewModel : ViewModelBase
     public string DisplayName => $"{Profile.Name} ({Profile.Host}:{Profile.Port})";
 
     public string StatusIndicator => IsConnected ? "●" : "○";
+
+    // Theme-resource key for the connection (server) SvgIcon's color, resolved through
+    // IconBrushConverter: green when connected, subtle/grey when not. Replaces the old
+    // ●/○ status glyph — status now reads from the icon's color. Notified off IsConnected.
+    public string StatusBrushKey => IsConnected ? "ConnectedBrush" : "SubtleForegroundBrush";
 
     /// <summary>
     /// Unsubscribes from <see cref="FirebirdConnectionService.ActiveConnectionChanged"/>.

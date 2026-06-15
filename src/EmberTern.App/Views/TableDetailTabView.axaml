@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EmberTern.App.ViewModels"
              xmlns:app="using:EmberTern.App"
+             xmlns:controls="using:EmberTern.App.Controls"
              xmlns:behaviors="using:EmberTern.App.Behaviors"
              xmlns:conv="using:EmberTern.App.Converters"
              xmlns:metadata="using:EmberTern.Core.Metadata"
@@ -384,18 +385,16 @@
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="vm:FieldDependencyItem">
                       <StackPanel Orientation="Horizontal" Spacing="6" Margin="6,0">
-                        <TextBlock Text="{Binding Icon}"
-                                   FontSize="12"
-                                   Width="14"
-                                   TextAlignment="Center"
-                                   VerticalAlignment="Center">
-                          <TextBlock.Foreground>
+                        <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                          Width="15" Height="15"
+                                          VerticalAlignment="Center">
+                          <controls:SvgIcon.Foreground>
                             <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                               <Binding Path="IconResourceKey" />
                               <Binding ElementName="RootControl" Path="ActualThemeVariant" />
                             </MultiBinding>
-                          </TextBlock.Foreground>
-                        </TextBlock>
+                          </controls:SvgIcon.Foreground>
+                        </controls:SvgIcon>
                         <TextBlock Text="{Binding ObjectType}"
                                    VerticalAlignment="Center" />
                       </StackPanel>
@@ -735,18 +734,16 @@
                 <TreeDataTemplate DataType="vm:DependencyGroupNode"
                                   ItemsSource="{Binding Children}">
                   <StackPanel Orientation="Horizontal" Spacing="5">
-                    <TextBlock Text="{Binding Icon}"
-                               FontSize="12"
-                               Width="14"
-                               TextAlignment="Center"
-                               VerticalAlignment="Center">
-                      <TextBlock.Foreground>
+                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                      Width="15" Height="15"
+                                      VerticalAlignment="Center">
+                      <controls:SvgIcon.Foreground>
                         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                           <Binding Path="IconResourceKey" />
                           <Binding ElementName="RootControl" Path="ActualThemeVariant" />
                         </MultiBinding>
-                      </TextBlock.Foreground>
-                    </TextBlock>
+                      </controls:SvgIcon.Foreground>
+                    </controls:SvgIcon>
                     <TextBlock Text="{Binding Header}"
                                FontSize="11"
                                VerticalAlignment="Center" />
@@ -757,18 +754,16 @@
                           Background="Transparent"
                           DoubleTapped="OnDependencyNodeDoubleTapped">
                     <StackPanel Orientation="Horizontal" Spacing="5">
-                      <TextBlock Text="{Binding Icon}"
-                                 FontSize="12"
-                                 Width="14"
-                                 TextAlignment="Center"
-                                 VerticalAlignment="Center">
-                        <TextBlock.Foreground>
+                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                        Width="15" Height="15"
+                                        VerticalAlignment="Center">
+                        <controls:SvgIcon.Foreground>
                           <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                             <Binding Path="IconResourceKey" />
                             <Binding ElementName="RootControl" Path="ActualThemeVariant" />
                           </MultiBinding>
-                        </TextBlock.Foreground>
-                      </TextBlock>
+                        </controls:SvgIcon.Foreground>
+                      </controls:SvgIcon>
                       <TextBlock Text="{Binding ObjectName}"
                                  FontSize="11"
                                  VerticalAlignment="Center" />
@@ -806,18 +801,16 @@
                 <TreeDataTemplate DataType="vm:DependencyGroupNode"
                                   ItemsSource="{Binding Children}">
                   <StackPanel Orientation="Horizontal" Spacing="5">
-                    <TextBlock Text="{Binding Icon}"
-                               FontSize="12"
-                               Width="14"
-                               TextAlignment="Center"
-                               VerticalAlignment="Center">
-                      <TextBlock.Foreground>
+                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                      Width="15" Height="15"
+                                      VerticalAlignment="Center">
+                      <controls:SvgIcon.Foreground>
                         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                           <Binding Path="IconResourceKey" />
                           <Binding ElementName="RootControl" Path="ActualThemeVariant" />
                         </MultiBinding>
-                      </TextBlock.Foreground>
-                    </TextBlock>
+                      </controls:SvgIcon.Foreground>
+                    </controls:SvgIcon>
                     <TextBlock Text="{Binding Header}"
                                FontSize="11"
                                VerticalAlignment="Center" />
@@ -828,18 +821,16 @@
                           Background="Transparent"
                           DoubleTapped="OnDependencyNodeDoubleTapped">
                     <StackPanel Orientation="Horizontal" Spacing="5">
-                      <TextBlock Text="{Binding Icon}"
-                                 FontSize="12"
-                                 Width="14"
-                                 TextAlignment="Center"
-                                 VerticalAlignment="Center">
-                        <TextBlock.Foreground>
+                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                        Width="15" Height="15"
+                                        VerticalAlignment="Center">
+                        <controls:SvgIcon.Foreground>
                           <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                             <Binding Path="IconResourceKey" />
                             <Binding ElementName="RootControl" Path="ActualThemeVariant" />
                           </MultiBinding>
-                        </TextBlock.Foreground>
-                      </TextBlock>
+                        </controls:SvgIcon.Foreground>
+                      </controls:SvgIcon>
                       <TextBlock Text="{Binding ObjectName}"
                                  FontSize="11"
                                  VerticalAlignment="Center" />
@@ -937,9 +928,10 @@
                        FontSize="11"
                        VerticalAlignment="Center" />
             <Button Classes="icon"
-                    Content="{x:Static app:UiStrings.TableDescriptionSaveIcon}"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
-                    Command="{Binding SaveDescriptionCommand}" />
+                    Command="{Binding SaveDescriptionCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.Save}" />
+            </Button>
             <Button Classes="flat"
                     Padding="8,2"
                     Content="{x:Static app:UiStrings.TableDescriptionClear}"

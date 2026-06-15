@@ -3,6 +3,7 @@
         xmlns:vm="using:EmberTern.App.ViewModels"
         xmlns:app="using:EmberTern.App"
         xmlns:views="using:EmberTern.App.Views"
+        xmlns:controls="using:EmberTern.App.Controls"
         xmlns:behaviors="using:EmberTern.App.Behaviors"
         xmlns:ae="using:AvaloniaEdit"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -50,10 +51,11 @@
           <!-- Sidebar collapse / restore toggle (VS Code style). One click hides
                the connections panel; one click brings it back at its last width. -->
           <Button Classes="icon"
-                  Content="☰"
                   ToolTip.Tip="{x:Static app:UiStrings.SidebarToggleTooltip}"
                   Click="OnToggleSidebarClick"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center">
+            <controls:SvgIcon Data="{StaticResource Icon.PanelLeft}" />
+          </Button>
           <!-- Square slot (source is 256x256) so Uniform fits exactly with no
                horizontal slop and the logo centre lines up with the text. -->
           <Image Source="avares://EmberTern/Assets/Branding/EmberTern_logo.png"
@@ -69,11 +71,23 @@
                   Margin="4,0"
                   VerticalAlignment="Center"
                   IsVisible="{Binding HasActiveConnection}" />
-          <TextBlock Text="{Binding ActiveConnectionName}"
-                     Classes="subtle"
-                     FontSize="12"
-                     VerticalAlignment="Center"
-                     IsVisible="{Binding HasActiveConnection}" />
+          <!-- Active DB name = key "where am I connected" info. Bold 14, full-contrast
+               ForegroundBrush (white), plus a 2px ConnectedBrush underline (same green
+               as the active-connection status) — Rider/DataGrip-style accent: instantly
+               recognizable, no badge / glow / border / colored text. The underline is a
+               stretched 2px Border inside a vertical StackPanel, so it spans exactly the
+               name width. -->
+          <StackPanel Orientation="Vertical" Spacing="2"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding HasActiveConnection}">
+            <TextBlock Text="{Binding ActiveConnectionName}"
+                       FontWeight="Bold"
+                       FontSize="14"
+                       Foreground="{DynamicResource ForegroundBrush}" />
+            <Border Height="2"
+                    HorizontalAlignment="Stretch"
+                    Background="{DynamicResource ConnectedBrush}" />
+          </StackPanel>
           <!-- Right separator: mirrors the left one so the connection name reads as its
                own section between the brand and the transaction-profile block. Same
                inline Border pattern (1px, 14 high, BorderBrush) used across the titlebar. -->
@@ -121,44 +135,65 @@
           <!-- Leading divider between the brand/profile section and the toolbar.
                Same style as the toolbar's own group separators (1px, Margin 4,6). -->
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
-          <Button Classes="icon" Content="+"
-                  ToolTip.Tip="New Connection"
-                  Click="OnNewConnectionClick" />
           <Button Classes="icon"
-                  Content="{x:Static app:UiStrings.FolderNewIcon}"
+                  ToolTip.Tip="New Connection"
+                  Click="OnNewConnectionClick">
+            <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+          </Button>
+          <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.FolderNewTooltip}"
-                  Click="OnNewFolderClick" />
-          <Button Classes="icon" Content="✎"
+                  Click="OnNewFolderClick">
+            <controls:SvgIcon Data="{StaticResource Icon.FolderPlus}" />
+          </Button>
+          <Button Classes="icon"
                   ToolTip.Tip="Edit Connection"
-                  Command="{Binding Metadata.EditSelectedCommand}" />
-          <Button Classes="icon" Content="⧉"
+                  Command="{Binding Metadata.EditSelectedCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.Pencil}" />
+          </Button>
+          <Button Classes="icon"
                   ToolTip.Tip="Copy Connection"
-                  Command="{Binding Metadata.CopySelectedCommand}" />
-          <Button Classes="icon" Content="✕"
+                  Command="{Binding Metadata.CopySelectedCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.Copy}" />
+          </Button>
+          <Button Classes="icon"
                   ToolTip.Tip="Delete Connection"
-                  Command="{Binding Metadata.DeleteSelectedCommand}" />
+                  Command="{Binding Metadata.DeleteSelectedCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.Trash}"
+                              Foreground="{DynamicResource WarningIconBrush}" />
+          </Button>
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
-          <Button Classes="icon" Content="▶"
+          <Button Classes="icon"
                   ToolTip.Tip="Connect"
-                  Command="{Binding Metadata.ConnectSelectedCommand}" />
-          <Button Classes="icon" Content="⏹"
+                  Command="{Binding Metadata.ConnectSelectedCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.PlugZap}"
+                              Foreground="{DynamicResource AccentIconBrush}" />
+          </Button>
+          <Button Classes="icon"
                   ToolTip.Tip="Disconnect"
-                  Command="{Binding Metadata.DisconnectSelectedCommand}" />
-          <Button Classes="icon" Content="↺"
+                  Command="{Binding Metadata.DisconnectSelectedCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.Unplug}" />
+          </Button>
+          <Button Classes="icon"
                   ToolTip.Tip="Reconnect"
-                  Command="{Binding Metadata.ReconnectSelectedCommand}" />
-          <Button Classes="icon" Content="↻"
+                  Command="{Binding Metadata.ReconnectSelectedCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.RotateCw}" />
+          </Button>
+          <Button Classes="icon"
                   ToolTip.Tip="{Binding Metadata.RefreshTooltip}"
-                  Command="{Binding Metadata.RefreshCommand}" />
+                  Command="{Binding Metadata.RefreshCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}"
+                              Foreground="{DynamicResource InfoIconBrush}" />
+          </Button>
           <!-- Table-creation section sits AFTER all connection-related buttons.
                Icon ▦＋ mirrors the metadata tree's Table glyph with a plus —
                visually rhymes with the sidebar where new tables will appear. -->
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
           <Button Classes="icon"
-                  Content="{x:Static app:UiStrings.ToolbarNewTableIcon}"
-                  Foreground="{DynamicResource IconColor_Table}"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewTableTooltip}"
-                  Command="{Binding NewTableCommand}" />
+                  Command="{Binding NewTableCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.TablePlus}"
+                              Foreground="{DynamicResource IconColor_Table}" />
+          </Button>
         </StackPanel>
 
         <!-- Drag spacer (column 2 = *) -->
@@ -167,21 +202,24 @@
         <Button Grid.Column="3" Classes="icon"
                 ToolTip.Tip="{Binding ThemeToggleTooltip}"
                 Click="OnThemeToggleClick"
-                Content="◐"
                 VerticalAlignment="Center"
-                Margin="0,0,6,0" />
+                Margin="0,0,6,0">
+          <controls:SvgIcon Data="{StaticResource Icon.ThemeToggle}" />
+        </Button>
 
         <!-- Window controls -->
         <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Stretch">
           <Button Classes="caption" Click="OnMinimizeClick" ToolTip.Tip="Minimize">
-            <TextBlock Text="—" FontSize="12" />
+            <controls:SvgIcon Data="{StaticResource Icon.WindowMinimize}" Width="16" Height="16" />
           </Button>
           <Button Classes="caption" Click="OnMaxRestoreClick" ToolTip.Tip="Maximize / Restore"
                   x:Name="MaxRestoreButton">
-            <TextBlock x:Name="MaxRestoreGlyph" Text="◻" FontSize="11" />
+            <controls:SvgIcon x:Name="MaxRestoreGlyph"
+                              Data="{StaticResource Icon.WindowMaximize}"
+                              Width="16" Height="16" />
           </Button>
           <Button Classes="caption close" Click="OnCloseClick" ToolTip.Tip="Close">
-            <TextBlock Text="✕" FontSize="11" />
+            <controls:SvgIcon Data="{StaticResource Icon.WindowClose}" Width="16" Height="16" />
           </Button>
         </StackPanel>
       </Grid>
@@ -289,11 +327,9 @@
                   <Panel>
                     <StackPanel Orientation="Horizontal" Spacing="5"
                                 IsVisible="{Binding IsNotRenaming}">
-                      <TextBlock Text="{x:Static app:UiStrings.FolderNodeIcon}"
-                                 FontSize="11"
-                                 Width="14"
-                                 TextAlignment="Center"
-                                 VerticalAlignment="Center" />
+                      <controls:SvgIcon Data="{StaticResource Icon.Folder}"
+                                        Width="15" Height="15"
+                                        VerticalAlignment="Center" />
                       <TextBlock Text="{Binding Name}"
                                  FontWeight="SemiBold"
                                  FontSize="11"
@@ -339,10 +375,19 @@
                     </ContextMenu>
                   </Border.ContextMenu>
                   <StackPanel Orientation="Horizontal" Spacing="5">
-                    <TextBlock Text="{Binding StatusIndicator}"
-                               Foreground="{DynamicResource ConnectedBrush}"
-                               FontSize="12"
-                               VerticalAlignment="Center" />
+                    <!-- Connection (server) icon; color encodes status via StatusBrushKey
+                         through IconBrushConverter: green connected, subtle disconnected.
+                         Replaces the old ●/○ status glyph. -->
+                    <controls:SvgIcon Data="{StaticResource Icon.Connection}"
+                                      Width="15" Height="15"
+                                      VerticalAlignment="Center">
+                      <controls:SvgIcon.Foreground>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="StatusBrushKey" />
+                          <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </controls:SvgIcon.Foreground>
+                    </controls:SvgIcon>
                     <TextBlock Text="{Binding DisplayName}"
                                FontWeight="SemiBold"
                                FontSize="11"
@@ -386,24 +431,22 @@
                     </ContextMenu>
                   </Border.ContextMenu>
                   <StackPanel Orientation="Horizontal" Spacing="5">
-                    <!-- Bare colored unicode glyph (DataGrip / IBExpert style) — no chip box.
-                         Width pinned so leaves align vertically regardless of glyph metrics.
-                         Foreground resolves the per-kind resource key against the *current*
-                         theme dictionary via IconBrushConverter; the second binding to the
-                         window's ActualThemeVariant forces re-evaluation on theme toggle. -->
-                    <TextBlock Text="{Binding Icon}"
-                               FontSize="12"
-                               Width="14"
-                               TextAlignment="Center"
-                               VerticalAlignment="Center"
-                               IsVisible="{Binding !IsPlaceholder}">
-                      <TextBlock.Foreground>
+                    <!-- Per-kind SVG icon (Lucide, DataGrip-style). Shape resolves from the
+                         geometry key via IconGeometryConverter (theme-invariant); color
+                         resolves the per-kind resource key against the *current* theme via
+                         IconBrushConverter, with the ActualThemeVariant binding forcing
+                         re-evaluation on theme toggle. Hidden for placeholders (empty key). -->
+                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                      Width="15" Height="15"
+                                      VerticalAlignment="Center"
+                                      IsVisible="{Binding !IsPlaceholder}">
+                      <controls:SvgIcon.Foreground>
                         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                           <Binding Path="IconResourceKey" />
                           <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
                         </MultiBinding>
-                      </TextBlock.Foreground>
-                    </TextBlock>
+                      </controls:SvgIcon.Foreground>
+                    </controls:SvgIcon>
                     <TextBlock Text="{Binding DisplayLabel}"
                                VerticalAlignment="Center"
                                Classes.subtle="{Binding IsPlaceholder}"
@@ -491,26 +534,40 @@
                       <Style Selector="Border.active-tab">
                         <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
                       </Style>
+                      <!-- Active tab title: SemiBold + full-contrast (only the selected
+                           tab; inactive tabs untouched). Pairs with the 2px accent top
+                           line for a clear Rider/DataGrip active-tab read. -->
+                      <Style Selector="Border.active-tab TextBlock">
+                        <Setter Property="FontWeight" Value="SemiBold" />
+                        <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+                      </Style>
                     </Border.Styles>
-                    <StackPanel Orientation="Horizontal" Spacing="0">
+                    <!-- Rider/DataGrip-style active-tab indicator: a 2px accent line at
+                         the top of the SELECTED tab. The 2px row is always reserved so
+                         active/inactive tabs keep identical height + content baseline;
+                         only the selected tab paints the accent (over the existing
+                         background swap, which alone read too subtly). -->
+                    <Grid RowDefinitions="2,*">
+                      <Border Grid.Row="0"
+                              Background="{DynamicResource AccentBrush}"
+                              IsVisible="{Binding IsSelected}" />
+                      <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="0">
                       <Button Classes="flat"
                               Padding="8,4"
                               Background="Transparent"
                               BorderThickness="0"
                               Command="{Binding ActivateCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding Icon}"
-                                     FontSize="11"
-                                     Width="12"
-                                     TextAlignment="Center"
-                                     VerticalAlignment="Center">
-                            <TextBlock.Foreground>
+                          <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                            Width="14" Height="14"
+                                            VerticalAlignment="Center">
+                            <controls:SvgIcon.Foreground>
                               <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                                 <Binding Path="IconResourceKey" />
                                 <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
                               </MultiBinding>
-                            </TextBlock.Foreground>
-                          </TextBlock>
+                            </controls:SvgIcon.Foreground>
+                          </controls:SvgIcon>
                           <TextBlock Text="{Binding DisplayTitle}"
                                      FontSize="11"
                                      VerticalAlignment="Center" />
@@ -522,11 +579,12 @@
                               Background="Transparent"
                               BorderThickness="0"
                               ToolTip.Tip="Close tab"
-                              Content="×"
-                              FontSize="12"
                               IsVisible="{Binding IsClosable}"
-                              Command="{Binding CloseCommand}" />
-                    </StackPanel>
+                              Command="{Binding CloseCommand}">
+                        <controls:SvgIcon Data="{StaticResource Icon.X}" Width="12" Height="12" />
+                      </Button>
+                      </StackPanel>
+                    </Grid>
                   </Border>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
@@ -548,7 +606,9 @@
                       Command="{Binding ExecuteQueryCommand}"
                       IsVisible="{Binding ShowExecuteButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="▶" FontSize="11" VerticalAlignment="Center" />
+                  <controls:SvgIcon Data="{StaticResource Icon.Play}"
+                                    Foreground="{DynamicResource OnAccentBrush}"
+                                    Width="14" Height="14" VerticalAlignment="Center" />
                   <TextBlock Text="{Binding ExecuteLabel}" VerticalAlignment="Center" />
                   <TextBlock Text="{Binding ExecuteHint}"
                              FontSize="10"
@@ -561,7 +621,9 @@
                       Command="{Binding CancelQueryCommand}"
                       IsVisible="{Binding ShowCancelButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="⏹" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource ErrorBrush}" />
+                  <controls:SvgIcon Data="{StaticResource Icon.Stop}"
+                                    Foreground="{DynamicResource DangerIconBrush}"
+                                    Width="14" Height="14" VerticalAlignment="Center" />
                   <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
@@ -571,28 +633,29 @@
                    active/error lane (both, when both are open). Enabled state follows
                    the actual transaction(s); visibility follows the tab as before. -->
               <Button Classes="icon"
-                      Content="✓"
-                      FontSize="14"
-                      Foreground="{DynamicResource CommitButtonBrush}"
                       ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
                       Command="{Binding CommitAllCommand}"
-                      IsVisible="{Binding ShowTransactionButtons}" />
+                      IsVisible="{Binding ShowTransactionButtons}">
+                <controls:SvgIcon Data="{StaticResource Icon.Check}"
+                                  Foreground="{DynamicResource SuccessIconBrush}" />
+              </Button>
               <Button Classes="icon"
-                      Content="✕"
-                      FontSize="14"
-                      Foreground="{DynamicResource RollbackButtonBrush}"
                       ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackTooltip}"
                       Command="{Binding RollbackAllCommand}"
-                      IsVisible="{Binding ShowTransactionButtons}" />
+                      IsVisible="{Binding ShowTransactionButtons}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}"
+                                  Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
               <!-- Refresh reuses the Dane sub-tab's existing reload path (with current
                    sort params). Visible only when the Dane sub-tab is active inside a
                    TableDetail tab. -->
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.ToolbarRefreshDataIcon}"
-                      FontSize="14"
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarRefreshDataTooltip}"
                       Command="{Binding RefreshDataPreviewCommand}"
-                      IsVisible="{Binding IsDataTabActive}" />
+                      IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}"
+                                  Foreground="{DynamicResource InfoIconBrush}" />
+              </Button>
               <!-- Structural edit (Pola sub-tab): Compile + Add + Drop + Move Up / Down.
                    Add / Drop run immediately in the active tx; Move queues a pending
                    change drained by ⚡ Compile. All five share IsVisible on the Pola
@@ -600,68 +663,89 @@
               <Border Width="1" Margin="4,4"
                       Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding IsFieldsTabActive}" />
-              <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.FieldEditCompileIcon}"
+              <!-- Compile is the primary structural action on the Pola sub-tab — make
+                   it stand out from the flat field icons via the accent-filled primary
+                   style + hammer (build) icon + label, mirroring the SQL Execute button. -->
+              <Button Classes="primary"
+                      Padding="8,4"
                       ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
                       Command="{Binding ActiveTableDetail.CompileCommand}"
-                      IsVisible="{Binding IsFieldsTabActive}" />
+                      IsVisible="{Binding IsFieldsTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}"
+                                  Foreground="{DynamicResource OnAccentBrush}"
+                                  Width="16" Height="16" />
+              </Button>
               <!-- Inline-edit toggle. Off by default on existing tables — explicit
                    opt-in stops accidental schema edits from a misclick. Highlights
                    when active via Classes="active-toggle" toggled below. -->
               <ToggleButton Classes="icon"
-                            Content="{x:Static app:UiStrings.ToolbarToggleFieldEditIcon}"
-                            Foreground="{DynamicResource IconColor_Table}"
                             ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleFieldEditTooltip}"
                             IsChecked="{Binding ActiveTableDetail.IsFieldEditMode, Mode=TwoWay}"
-                            IsVisible="{Binding IsFieldsTabActive}" />
+                            IsVisible="{Binding IsFieldsTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
+              </ToggleButton>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.FieldEditAddIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.FieldEditAddTooltip}"
                       Command="{Binding ActiveTableDetail.AddFieldCommand}"
-                      IsVisible="{Binding IsFieldsTabActive}" />
+                      IsVisible="{Binding IsFieldsTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.FieldEditDropIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.FieldEditDropTooltip}"
                       Command="{Binding ActiveTableDetail.DropFieldCommand}"
-                      IsVisible="{Binding IsFieldsTabActive}" />
+                      IsVisible="{Binding IsFieldsTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.FieldEditMoveUpIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.FieldEditMoveUpTooltip}"
                       Command="{Binding ActiveTableDetail.MoveFieldUpCommand}"
-                      IsVisible="{Binding IsFieldsTabActive}" />
+                      IsVisible="{Binding IsFieldsTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.FieldEditMoveDownIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.FieldEditMoveDownTooltip}"
                       Command="{Binding ActiveTableDetail.MoveFieldDownCommand}"
-                      IsVisible="{Binding IsFieldsTabActive}" />
+                      IsVisible="{Binding IsFieldsTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
+              </Button>
               <!-- ⚡ Compile + grid row commands for the New Table tab. All five
                    visible only when the New Table tab is active. The grid itself
                    carries no inline toolbar — these are the only entry points. -->
-              <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.FieldEditCompileIcon}"
+              <!-- New Table compile = create the table; the screen's primary action.
+                   Same accent-filled primary + hammer + label treatment as Pola. -->
+              <Button Classes="primary"
+                      Padding="8,4"
                       ToolTip.Tip="{x:Static app:UiStrings.NewTableDialogCompile}"
                       Command="{Binding ActiveNewTable.CompileCommand}"
-                      IsVisible="{Binding IsNewTableTabActive}" />
+                      IsVisible="{Binding IsNewTableTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}"
+                                  Foreground="{DynamicResource OnAccentBrush}"
+                                  Width="16" Height="16" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.FieldEditAddIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.NewTableAddRowTooltip}"
                       Command="{Binding ActiveNewTable.AddFieldCommand}"
-                      IsVisible="{Binding IsNewTableTabActive}" />
+                      IsVisible="{Binding IsNewTableTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.FieldEditDropIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.NewTableDeleteRowTooltip}"
                       Command="{Binding ActiveNewTable.DeleteFieldCommand}"
-                      IsVisible="{Binding IsNewTableTabActive}" />
+                      IsVisible="{Binding IsNewTableTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.FieldEditMoveUpIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.NewTableMoveUpTooltip}"
                       Command="{Binding ActiveNewTable.MoveFieldUpCommand}"
-                      IsVisible="{Binding IsNewTableTabActive}" />
+                      IsVisible="{Binding IsNewTableTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.FieldEditMoveDownIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.NewTableMoveDownTooltip}"
                       Command="{Binding ActiveNewTable.MoveFieldDownCommand}"
-                      IsVisible="{Binding IsNewTableTabActive}" />
+                      IsVisible="{Binding IsNewTableTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
+              </Button>
               <!-- Data-edit add/delete row buttons. Bound through ActiveTableDetail
                    because the commands live on TableDetailTabViewModel. Visible only
                    on the Dane sub-tab; the leading separator collapses to zero width
@@ -670,67 +754,78 @@
                       Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding IsDataTabActive}" />
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.DataEditAddRowIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.DataEditAddRowTooltip}"
                       Command="{Binding ActiveTableDetail.AddRowCommand}"
-                      IsVisible="{Binding IsDataTabActive}" />
+                      IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.DataEditDeleteRowIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.DataEditDeleteRowTooltip}"
                       Command="{Binding ActiveTableDetail.DeleteRowCommand}"
-                      IsVisible="{Binding IsDataTabActive}" />
+                      IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
+              </Button>
               <!-- Pagination section. Same ActiveTableDetail binding pattern. -->
               <Border Width="1" Margin="4,4"
                       Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding IsDataTabActive}" />
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.TableDetailPaginationFirstIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
                       Command="{Binding ActiveTableDetail.GoToFirstPageCommand}"
-                      IsVisible="{Binding IsDataTabActive}" />
+                      IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.TableDetailPaginationPreviousIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
                       Command="{Binding ActiveTableDetail.GoToPreviousPageCommand}"
-                      IsVisible="{Binding IsDataTabActive}" />
+                      IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.TableDetailPaginationNextIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
                       Command="{Binding ActiveTableDetail.GoToNextPageCommand}"
-                      IsVisible="{Binding IsDataTabActive}" />
+                      IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.TableDetailPaginationLastIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
                       Command="{Binding ActiveTableDetail.GoToLastPageCommand}"
-                      IsVisible="{Binding IsDataTabActive}" />
+                      IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" />
+              </Button>
               <Border Width="1" Margin="4,4"
                       Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding IsQueryTabActive}" />
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.ToolbarNewQueryIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewQueryTooltip}"
                       Command="{Binding NewQueryCommand}"
-                      IsVisible="{Binding IsQueryTabActive}" />
+                      IsVisible="{Binding IsQueryTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.ToolbarToggleQueryPanelIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleQueryPanelTooltip}"
                       Command="{Binding ToggleQueryPanelCommand}"
-                      IsVisible="{Binding IsQueryTabActive}" />
+                      IsVisible="{Binding IsQueryTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.PanelRight}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.ToolbarClearEditorIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarClearEditorTooltip}"
                       Command="{Binding ClearActiveEditorCommand}"
-                      IsVisible="{Binding IsQueryTabActive}" />
+                      IsVisible="{Binding IsQueryTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Eraser}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.ToolbarFormatSqlIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding FormatSqlCommand}"
-                      IsVisible="{Binding IsQueryTabActive}" />
+                      IsVisible="{Binding IsQueryTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
+              </Button>
               <Button Classes="icon"
-                      Content="{x:Static app:UiStrings.ToolbarCloseTabIcon}"
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarCloseTabTooltip}"
                       Command="{Binding CloseActiveTabCommand}"
-                      IsVisible="{Binding IsClosableTabActive}" />
+                      IsVisible="{Binding IsClosableTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.X}" />
+              </Button>
             </StackPanel>
           </Border>
 
@@ -788,17 +883,22 @@
                                VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
                       <Button Classes="icon"
-                              Content="{x:Static app:UiStrings.ToolbarNewQueryIcon}"
                               ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewQueryTooltip}"
-                              Command="{Binding NewQueryCommand}" />
+                              Command="{Binding NewQueryCommand}">
+                        <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+                      </Button>
                       <Button Classes="icon"
-                              Content="🗑"
                               ToolTip.Tip="{x:Static app:UiStrings.QueryDeleteTooltip}"
-                              Command="{Binding DeleteSelectedQueryCommand}" />
+                              Command="{Binding DeleteSelectedQueryCommand}">
+                        <controls:SvgIcon Data="{StaticResource Icon.Trash}"
+                                          Foreground="{DynamicResource WarningIconBrush}" />
+                      </Button>
                       <Button Classes="icon"
-                              Content="⌦"
                               ToolTip.Tip="{x:Static app:UiStrings.QueryClearAllTooltip}"
-                              Command="{Binding ClearAllQueriesCommand}" />
+                              Command="{Binding ClearAllQueriesCommand}">
+                        <controls:SvgIcon Data="{StaticResource Icon.ListX}"
+                                          Foreground="{DynamicResource WarningIconBrush}" />
+                      </Button>
                     </StackPanel>
                   </Grid>
                 </Border>
@@ -854,11 +954,12 @@
                                        VerticalAlignment="Center" />
                             <Button Grid.Column="1"
                                     Classes="icon row-hover-icon"
-                                    Content="{x:Static app:UiStrings.QueryRenameIcon}"
                                     ToolTip.Tip="{x:Static app:UiStrings.QueryRenameTooltip}"
                                     Padding="3,1"
-                                    FontSize="10"
-                                    Command="{Binding BeginRenameCommand}" />
+                                    Command="{Binding BeginRenameCommand}">
+                              <controls:SvgIcon Data="{StaticResource Icon.Pencil}"
+                                                Width="13" Height="13" />
+                            </Button>
                           </Grid>
                           <TextBox Text="{Binding EditingName, Mode=TwoWay}"
                                    FontSize="11"
@@ -958,21 +1059,25 @@
                         IsVisible="{Binding HasCurrentResult}">
                   <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                     <Button Classes="icon"
-                            Content="{x:Static app:UiStrings.TableDetailPaginationFirstIcon}"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
-                            Command="{Binding ResultFirstPageCommand}" />
+                            Command="{Binding ResultFirstPageCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="14" Height="14" />
+                    </Button>
                     <Button Classes="icon"
-                            Content="{x:Static app:UiStrings.TableDetailPaginationPreviousIcon}"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
-                            Command="{Binding ResultPreviousPageCommand}" />
+                            Command="{Binding ResultPreviousPageCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="14" Height="14" />
+                    </Button>
                     <Button Classes="icon"
-                            Content="{x:Static app:UiStrings.TableDetailPaginationNextIcon}"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
-                            Command="{Binding ResultNextPageCommand}" />
+                            Command="{Binding ResultNextPageCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="14" Height="14" />
+                    </Button>
                     <Button Classes="icon"
-                            Content="{x:Static app:UiStrings.TableDetailPaginationLastIcon}"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
-                            Command="{Binding ResultLastPageCommand}" />
+                            Command="{Binding ResultLastPageCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="14" Height="14" />
+                    </Button>
                     <TextBlock Text="{Binding ResultPaginationHint}"
                                Classes="subtle"
                                FontSize="11"

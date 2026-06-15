@@ -35,6 +35,21 @@
       <Color x:Key="OnAccentSubtleColor">#80FFFFFF</Color>
       <Color x:Key="CloseButtonHoverColor">#E81123</Color>
 
+      <!-- Semantic icon colors (dark theme). Subtle, professional tones — not the
+           loud primary green/red. Applied via Foreground on SvgIcon:
+           Accent=execute-class, Success=commit, Danger=rollback/abort,
+           Warning=delete, Info=refresh, Neutral=everything else. Disabled state is
+           conveyed by button Opacity, not a separate color. -->
+      <Color x:Key="AccentIconColor">#5B9BD5</Color>
+      <Color x:Key="SuccessIconColor">#6DBE7E</Color>
+      <Color x:Key="DangerIconColor">#D77373</Color>
+      <Color x:Key="WarningIconColor">#DBA13C</Color>
+      <Color x:Key="InfoIconColor">#5BA7D0</Color>
+      <Color x:Key="NeutralIconColor">#C8CCD2</Color>
+      <!-- Icon-button hover overlay — a touch stronger than HoverOverlay so a
+           toolbar icon's hover reads clearly. ARGB: ~13% white on dark. -->
+      <Color x:Key="IconHoverColor">#22FFFFFF</Color>
+
       <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
       <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />
       <SolidColorBrush x:Key="ElevatedPanelBrush" Color="{StaticResource ElevatedPanelColor}" />
@@ -57,6 +72,14 @@
       <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccentColor}" />
       <SolidColorBrush x:Key="OnAccentSubtleBrush" Color="{StaticResource OnAccentSubtleColor}" />
       <SolidColorBrush x:Key="CloseButtonHoverBrush" Color="{StaticResource CloseButtonHoverColor}" />
+
+      <SolidColorBrush x:Key="AccentIconBrush" Color="{StaticResource AccentIconColor}" />
+      <SolidColorBrush x:Key="SuccessIconBrush" Color="{StaticResource SuccessIconColor}" />
+      <SolidColorBrush x:Key="DangerIconBrush" Color="{StaticResource DangerIconColor}" />
+      <SolidColorBrush x:Key="WarningIconBrush" Color="{StaticResource WarningIconColor}" />
+      <SolidColorBrush x:Key="InfoIconBrush" Color="{StaticResource InfoIconColor}" />
+      <SolidColorBrush x:Key="NeutralIconBrush" Color="{StaticResource NeutralIconColor}" />
+      <SolidColorBrush x:Key="IconHoverBrush" Color="{StaticResource IconHoverColor}" />
 
       <!-- Override FluentTheme's TreeViewItem state brushes. Without these the dark
            theme inherits SystemAccentColor-derived backgrounds (yellow/beige on a
@@ -156,6 +179,18 @@
       <Color x:Key="OnAccentSubtleColor">#80FFFFFF</Color>
       <Color x:Key="CloseButtonHoverColor">#E81123</Color>
 
+      <!-- Semantic icon colors (light theme): darker + more saturated than the dark
+           variants so icons stay legible on the near-white surfaces. Same semantic
+           keys; see the Dark dictionary for the mapping. -->
+      <Color x:Key="AccentIconColor">#2D6BBF</Color>
+      <Color x:Key="SuccessIconColor">#2E8B4F</Color>
+      <Color x:Key="DangerIconColor">#C23B3B</Color>
+      <Color x:Key="WarningIconColor">#B5790E</Color>
+      <Color x:Key="InfoIconColor">#2A7AA8</Color>
+      <Color x:Key="NeutralIconColor">#3C3C3C</Color>
+      <!-- ARGB: ~9% black on light. -->
+      <Color x:Key="IconHoverColor">#18000000</Color>
+
       <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
       <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />
       <SolidColorBrush x:Key="ElevatedPanelBrush" Color="{StaticResource ElevatedPanelColor}" />
@@ -178,6 +213,14 @@
       <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccentColor}" />
       <SolidColorBrush x:Key="OnAccentSubtleBrush" Color="{StaticResource OnAccentSubtleColor}" />
       <SolidColorBrush x:Key="CloseButtonHoverBrush" Color="{StaticResource CloseButtonHoverColor}" />
+
+      <SolidColorBrush x:Key="AccentIconBrush" Color="{StaticResource AccentIconColor}" />
+      <SolidColorBrush x:Key="SuccessIconBrush" Color="{StaticResource SuccessIconColor}" />
+      <SolidColorBrush x:Key="DangerIconBrush" Color="{StaticResource DangerIconColor}" />
+      <SolidColorBrush x:Key="WarningIconBrush" Color="{StaticResource WarningIconColor}" />
+      <SolidColorBrush x:Key="InfoIconBrush" Color="{StaticResource InfoIconColor}" />
+      <SolidColorBrush x:Key="NeutralIconBrush" Color="{StaticResource NeutralIconColor}" />
+      <SolidColorBrush x:Key="IconHoverBrush" Color="{StaticResource IconHoverColor}" />
 
       <!-- Same TreeViewItem state-brush overrides for Light. See Dark dictionary above. -->
       <SolidColorBrush x:Key="TreeViewItemBackground" Color="Transparent" />
@@ -227,4 +270,24 @@
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>
+
+  <!-- ============================================================================
+       FluentTheme accent override — THEME-INVARIANT, so it lives at the root of this
+       dictionary (NOT inside a ThemeDictionary). A default Win11 install resolves
+       SystemAccentColor to an orange/gold; FluentTheme derives the checked-CheckBox
+       fill, RadioButton, ComboBox/ListBox item selection, ToggleSwitch, Slider, etc.
+       from it — that's the amber leakage the per-control overrides (TreeViewItem*,
+       DataGridCell*) don't catch. Overriding SystemAccentColor + its 6-step ramp here
+       (top-level Application.Resources scope, which FluentTheme reads before the
+       platform default) recolors all of them to the EmberTern accent blue at once.
+       Our accent is the same blue in both themes, so a single theme-invariant value is
+       correct AND simpler than duplicating into both ThemeDictionaries. This is the one
+       sanctioned non-theme-scoped color block; every other color stays theme-scoped. -->
+  <Color x:Key="SystemAccentColor">#2D6BBF</Color>
+  <Color x:Key="SystemAccentColorLight1">#4582CC</Color>
+  <Color x:Key="SystemAccentColorLight2">#6699D9</Color>
+  <Color x:Key="SystemAccentColorLight3">#85B0E6</Color>
+  <Color x:Key="SystemAccentColorDark1">#275CA3</Color>
+  <Color x:Key="SystemAccentColorDark2">#214D87</Color>
+  <Color x:Key="SystemAccentColorDark3">#1B4072</Color>
 </ResourceDictionary>

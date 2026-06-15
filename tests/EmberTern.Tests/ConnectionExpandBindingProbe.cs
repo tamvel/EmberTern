@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -6,12 +7,15 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EmberTern.App;
 using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
 using EmberTern.Core.Connections;
+using EmberTern.Core.Metadata;
 using EmberTern.Firebird;
 using Xunit;
 using Xunit.Abstractions;
@@ -137,6 +141,81 @@ public sealed class ConnectionExpandBindingProbe
 
             window.Close();
             try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Proves the FluentTheme SystemAccentColor override is in place: a default Win11
+    // install resolves SystemAccentColor to an orange/gold, which leaks into every
+    // Fluent control that derives from it (CheckBox checked fill, RadioButton,
+    // ComboBox/ListBox selection, ToggleSwitch). We override it to the EmberTern accent
+    // blue in both theme dictionaries. This pins that the override resolves through the
+    // real app resource scope (where FluentTheme reads it) for both variants — i.e. no
+    // amber leakage regression.
+    [Fact]
+    public async System.Threading.Tasks.Task SystemAccentColor_OverriddenToEmberternBlue()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var expected = Color.Parse("#2D6BBF");
+            var window = new Window();
+            window.Show();
+
+            // Top-level (theme-invariant) override → resolves identically under both
+            // requested variants. Pin both so a regression in either theme is caught.
+            foreach (var variant in new[] { ThemeVariant.Dark, ThemeVariant.Light })
+            {
+                window.RequestedThemeVariant = variant;
+                Dispatcher.UIThread.RunJobs();
+                var ok = window.TryFindResource("SystemAccentColor", out var val);
+                log.AppendLine($"{variant}: found={ok} value={val}");
+                Assert.True(ok, $"SystemAccentColor must resolve under {variant}.\n" + log);
+                Assert.Equal(expected, Assert.IsType<Color>(val));
+            }
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Etap 2: every MetadataObjectKind's geometry key must resolve to a real Geometry
+    // through IconGeometryConverter (the live SVG-icon pipeline), plus the tree-chrome
+    // keys (Query tab / Connection node / Folder). A missing/typo'd key renders a BLANK
+    // icon at runtime — no crash, so the smoke test wouldn't catch it; this would. Also
+    // future-proofs: a new enum value without a matching <StreamGeometry> fails here.
+    [Fact]
+    public async System.Threading.Tasks.Task IconGeometries_AllKindsAndChromeResolve()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var window = new Window();
+            window.Show();
+
+            Geometry? Resolve(string key) =>
+                IconGeometryConverter.Instance.Convert(key, typeof(Geometry), null, CultureInfo.InvariantCulture) as Geometry;
+
+            foreach (MetadataObjectKind kind in Enum.GetValues<MetadataObjectKind>())
+            {
+                var key = MetadataNodeViewModel.GeometryKeyFor(kind);
+                var geometry = Resolve(key);
+                log.AppendLine($"{kind} -> {key} -> {(geometry is null ? "NULL" : "ok")}");
+                Assert.True(geometry is not null, $"No geometry resolved for {key} ({kind}).\n" + log);
+            }
+
+            foreach (var key in new[] { "Icon.Query", "Icon.Connection", "Icon.Folder" })
+            {
+                Assert.True(Resolve(key) is not null, $"No geometry resolved for chrome key {key}.\n" + log);
+            }
+
+            window.Close();
         }, CancellationToken.None);
 
         _out.WriteLine(log.ToString());

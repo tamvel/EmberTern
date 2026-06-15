@@ -1,0 +1,144 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:EmberTern.App.Controls">
+
+  <!-- ============================================================================
+       Central icon geometry dictionary — runtime source for all SvgIcon controls.
+
+       Icons are Lucide (https://lucide.dev, ISC license): 24×24 viewBox, stroke-
+       based, 2px stroke, round caps/joins. The matching source-of-truth .svg files
+       live under Assets/Icons/<category>/ (excluded from the build output — repo
+       source only; runtime uses these geometries).
+
+       Reuse before create — see the "Icon System" section in CLAUDE.md.
+       Add a new icon by: 1) dropping the Lucide .svg into Assets/Icons/<category>/,
+       2) adding its path data here as <StreamGeometry x:Key="Icon.Name">.
+       Color flows through a theme token on Foreground — NEVER bake a color here.
+       ============================================================================ -->
+
+  <!-- Actions -->
+  <StreamGeometry x:Key="Icon.Play">M8 5 L19 12 L8 19 Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Stop">M6 6 H18 V18 H6 Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Check">M5 12.5 L10 17.5 L19 6.5</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Undo">M10 8 L5 12.5 L10 17 M5 12.5 H15 A4.5 4.5 0 0 1 15 21.5</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Plus">M12 5 V19 M5 12 H19</StreamGeometry>
+  <!-- Lucide minus / arrow-up / arrow-down — field Drop / Move Up / Move Down + data
+       Delete row. Authored as clean primitives (trivial line/chevron shapes). -->
+  <StreamGeometry x:Key="Icon.Minus">M5 12 H19</StreamGeometry>
+  <StreamGeometry x:Key="Icon.ArrowUp">M5 12 l7-7 7 7 M12 19 V5</StreamGeometry>
+  <StreamGeometry x:Key="Icon.ArrowDown">M12 5 V19 M19 12 l-7 7-7-7</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Pencil">M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497zM15 5l4 4</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Trash">M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6</StreamGeometry>
+  <StreamGeometry x:Key="Icon.ListX">M11 12H3M16 6H3M16 18H3M19 10l-4 4M15 10l4 4</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Save">M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7M7 3v4a1 1 0 0 0 1 1h7</StreamGeometry>
+  <!-- X (Lucide x): generic close / dismiss — tab strip close + Close-tab toolbar.
+       Window caption close keeps its own Icon.WindowClose (window-chrome domain). -->
+  <StreamGeometry x:Key="Icon.X">M18 6 L6 18 M6 6 L18 18</StreamGeometry>
+  <!-- Copy (Lucide copy): front rounded-rect (x8 y8 14×14 rx2 → authored as M…Z)
+       + the back document path (verbatim Lucide). -->
+  <StreamGeometry x:Key="Icon.Copy">M10 8 H20 A2 2 0 0 1 22 10 V20 A2 2 0 0 1 20 22 H10 A2 2 0 0 1 8 20 V10 A2 2 0 0 1 10 8 Z M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2</StreamGeometry>
+  <!-- Eraser (Lucide eraser): the 2nd Lucide path's relative "m5.082 11.09" is
+       re-anchored to absolute "M5.082 11.09" so concatenation doesn't shift it
+       relative to the 1st figure's endpoint (see gotcha on multi-path icons). -->
+  <StreamGeometry x:Key="Icon.Eraser">M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21 M5.082 11.09 l8.828 8.828</StreamGeometry>
+  <!-- Braces (Lucide braces): "{ }" code — Format SQL. Both sub-paths start
+       absolute M and use only explicit commands — verbatim. -->
+  <StreamGeometry x:Key="Icon.Braces">M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1 M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1</StreamGeometry>
+  <!-- Hammer (Lucide hammer): build / compile structural DDL. The three relative
+       "m…" sub-paths are re-anchored to absolute M + explicit l so figure
+       concatenation doesn't carry the previous endpoint. -->
+  <StreamGeometry x:Key="Icon.Hammer">M15 12 l-9.373 9.373a1 1 0 0 1-3.001-3L12 9 M18 15 l4-4 M21.5 11.5 l-1.914-1.914A2 2 0 0 1 19 8.172v-.344a2 2 0 0 0-.586-1.414l-1.657-1.657A6 6 0 0 0 12.516 3H9l1.243 1.243A6 6 0 0 1 12 8.485V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5</StreamGeometry>
+  <!-- Folder-plus (Lucide folder-plus): all sub-paths start absolute M — verbatim. -->
+  <StreamGeometry x:Key="Icon.FolderPlus">M12 10v6 M9 13h6 M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z</StreamGeometry>
+  <!-- New Table — composed from Lucide primitives (no `table-plus` in Lucide core):
+       a small rounded table grid (top-left) + a plus (bottom-right) = "create table". -->
+  <StreamGeometry x:Key="Icon.TablePlus">M5 3 H12 A2 2 0 0 1 14 5 V12 A2 2 0 0 1 12 14 H5 A2 2 0 0 1 3 12 V5 A2 2 0 0 1 5 3 Z M3 8.5 H14 M8.5 3 V14 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
+  <!-- Pencil-ruler (Lucide pencil-ruler): design / edit table structure (the inline
+       field-edit toggle). Relative "m…" sub-paths re-anchored to absolute M + l. -->
+  <StreamGeometry x:Key="Icon.PencilRuler">M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13 M8 6 l2-2 M18 16 l2-2 M17 11 l4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17 M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z M15 5 l4 4</StreamGeometry>
+
+  <!-- Connection -->
+  <!-- Plug-zap (Lucide plug-zap): connect — energized plug reads as an action and
+       stays legible at toolbar size (clearer than a plain plug). The relative
+       "m…" sub-paths are re-anchored to absolute M + explicit l. -->
+  <StreamGeometry x:Key="Icon.PlugZap">M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z M2 22 l3-3 M7.5 13.5 10 11 M10.5 16.5 13 14 M18 3 l-4 4h6l-4 4</StreamGeometry>
+  <!-- Unplug (Lucide unplug): disconnect. The two relative "m…" sub-paths
+       ("m19 5", "m2 22", "m12 6") are re-anchored to absolute M with explicit l
+       so figure concatenation doesn't carry the previous endpoint. -->
+  <StreamGeometry x:Key="Icon.Unplug">M19 5 l3-3 M2 22 l3-3 M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z M7.5 13.5 10 11 M10.5 16.5 13 14 M12 6 l6 6 l2.3-2.3 a2.4 2.4 0 0 0 0-3.4 l-2.6-2.6 a2.4 2.4 0 0 0-3.4 0 Z</StreamGeometry>
+
+  <!-- Transactions -->
+  <StreamGeometry x:Key="Icon.RotateCw">M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8M21 3v5h-5</StreamGeometry>
+  <StreamGeometry x:Key="Icon.RefreshCw">M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M3 21v-5h5</StreamGeometry>
+
+  <!-- Navigation / appearance -->
+  <StreamGeometry x:Key="Icon.ThemeToggle">M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z</StreamGeometry>
+  <!-- Panel-left / panel-right (Lucide): rounded-rect (x3 y3 18×18 rx2) + a vertical
+       divider at x9 / x15. Drive the sidebar collapse + Saved-Queries-panel toggles. -->
+  <StreamGeometry x:Key="Icon.PanelLeft">M5 3 H19 A2 2 0 0 1 21 5 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V5 A2 2 0 0 1 5 3 Z M9 3 V21</StreamGeometry>
+  <StreamGeometry x:Key="Icon.PanelRight">M5 3 H19 A2 2 0 0 1 21 5 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V5 A2 2 0 0 1 5 3 Z M15 3 V21</StreamGeometry>
+  <!-- Chevrons (Lucide chevron-first/left/right/last): pagination first/prev/next/last. -->
+  <StreamGeometry x:Key="Icon.ChevronFirst">M17 18 L11 12 L17 6 M7 6 V18</StreamGeometry>
+  <StreamGeometry x:Key="Icon.ChevronLeft">M15 18 L9 12 L15 6</StreamGeometry>
+  <StreamGeometry x:Key="Icon.ChevronRight">M9 18 L15 12 L9 6</StreamGeometry>
+  <StreamGeometry x:Key="Icon.ChevronLast">M7 18 L13 12 L7 6 M17 6 V18</StreamGeometry>
+
+  <!-- Window controls -->
+  <StreamGeometry x:Key="Icon.WindowMinimize">M5 12 H19</StreamGeometry>
+  <StreamGeometry x:Key="Icon.WindowMaximize">M6 6 H18 V18 H6 Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.WindowRestore">M6 9 H16 V19 H6 Z M9 9 V6 H19 V16 H16</StreamGeometry>
+  <StreamGeometry x:Key="Icon.WindowClose">M6 6 L18 18 M18 6 L6 18</StreamGeometry>
+
+  <!-- ============================================================================
+       Metadata object kinds (Etap 2) — one geometry per MetadataObjectKind, keyed
+       "Icon.<KindName>" so MetadataNodeViewModel.GeometryKeyFor(kind) = $"Icon.{kind}".
+       Resolved at render time via IconGeometryConverter; color flows separately through
+       IconBrushConverter + the per-kind IconColor_* tokens. All authentic Lucide except
+       Domain (diamond) / Generator (hash) authored as clean primitives, and circles/
+       ellipses written in canonical relative-arc form. Plus tree-chrome icons: Query
+       (SQL editor tab), Connection (root node), Folder (connection folders). -->
+  <StreamGeometry x:Key="Icon.Table">M5 3 H19 A2 2 0 0 1 21 5 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V5 A2 2 0 0 1 5 3 Z M12 3 V21 M3 9 H21 M3 15 H21</StreamGeometry>
+  <StreamGeometry x:Key="Icon.View">M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0 M9 12 a3 3 0 1 0 6 0 a3 3 0 1 0-6 0</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Procedure">M5 3 H19 A2 2 0 0 1 21 5 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V5 A2 2 0 0 1 5 3 Z M7 11 l2-2-2-2 M11 13 h4</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Trigger">M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Function">M5 3 H19 A2 2 0 0 1 21 5 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V5 A2 2 0 0 1 5 3 Z M9 17c2 0 2.8-1 2.8-2.8V10c0-2 1-3.3 3.2-3 M9 11.2h5.7</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Generator">M4 9 H20 M4 15 H20 M10 3 L8 21 M16 3 L14 21</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Domain">M12 2 L22 12 L12 22 L2 12 Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Package">M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z M12 22V12 M3.29 7 L12 12 L20.71 7 M7.5 4.27 l9 5.15</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Exception">M21.73 18 l-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3 M12 9 v4 M12 17 h.01</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Role">M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.User">M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2 M8 7 a4 4 0 1 0 8 0 a4 4 0 1 0-8 0</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Index">M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z M16 7.5 a.5 .5 0 1 0 1 0 a.5 .5 0 1 0-1 0</StreamGeometry>
+  <StreamGeometry x:Key="Icon.SystemTable">M3 5 a9 3 0 1 0 18 0 a9 3 0 1 0-18 0 M3 5 V19 A9 3 0 0 0 21 19 V5 M3 12 A9 3 0 0 0 21 12</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Query">M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z M14 2v5a1 1 0 0 0 1 1h5 M10 12.5 8 15l2 2.5 M14 12.5 l2 2.5-2 2.5</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Connection">M4 2 H20 A2 2 0 0 1 22 4 V8 A2 2 0 0 1 20 10 H4 A2 2 0 0 1 2 8 V4 A2 2 0 0 1 4 2 Z M4 14 H20 A2 2 0 0 1 22 16 V20 A2 2 0 0 1 20 22 H4 A2 2 0 0 1 2 20 V16 A2 2 0 0 1 4 14 Z M6 6 h.01 M6 18 h.01</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Folder">M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z</StreamGeometry>
+
+  <!-- ============================================================================
+       SvgIcon ControlTheme — the single render path for every icon above.
+       A fixed 24×24 Canvas inside a Uniform Viewbox guarantees a consistent
+       coordinate space (and therefore consistent stroke weight) regardless of each
+       icon's actual bounds. Stroke = Foreground so a theme token colors the icon
+       and theme toggle re-evaluates live. Default size 16; override Width/Height
+       per use (e.g. 14 for workspace tabs, 12 for the tab-strip close button).
+       ============================================================================ -->
+  <ControlTheme x:Key="{x:Type controls:SvgIcon}" TargetType="controls:SvgIcon">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="Foreground" Value="{DynamicResource NeutralIconBrush}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Viewbox Stretch="Uniform">
+          <Canvas Width="24" Height="24">
+            <Path Data="{TemplateBinding Data}"
+                  Stroke="{TemplateBinding Foreground}"
+                  StrokeThickness="2"
+                  StrokeLineCap="Round"
+                  StrokeJoin="Round" />
+          </Canvas>
+        </Viewbox>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+</ResourceDictionary>
