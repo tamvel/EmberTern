@@ -675,9 +675,40 @@ public partial class TableDetailTabView : UserControl
     // itself — IsReadOnly=true keeps DataGrid out of the way. Click fires
     // UpdateCellAsync directly. The Field tells us how to encode the value
     // back: BOOLEAN → bool; SMALLINT-with-T_BOOLEANN → short 0/1.
+    //
+    // When the tab can't edit data (CanEditData false — e.g. a system table,
+    // which the factory builds without a data editor) an interactive CheckBox
+    // would still toggle because DataGrid.IsReadOnly doesn't reach into
+    // CellTemplate controls. So in read-only mode we render the same ✓ / blank
+    // glyph the Pola / Indeksy / Ograniczenia grids use (BoolToCheckmarkConverter)
+    // instead of a live control — truly non-interactive, visually unambiguous.
+    // CanEditData is the single source of truth; columns are rebuilt per data
+    // load and capability is fixed per VM, so reading it here is stable.
     private IDataTemplate BuildBooleanCellTemplate(int columnIndex, FieldInfo? field)
     {
         var encodeAsSmallint = string.Equals(field?.BaseTypeName, "SMALLINT", StringComparison.OrdinalIgnoreCase);
+        var editable = _currentVm?.CanEditData == true;
+
+        if (!editable)
+        {
+            return new FuncDataTemplate<object?[]>((row, _) =>
+            {
+                var glyph = new TextBlock
+                {
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(4, 0),
+                };
+                if (row is not null && columnIndex < row.Length)
+                {
+                    // Mirrors BoolToCheckmarkConverter ("✓" / "") after decoding the
+                    // underlying encoding (bool / short 0-1 / int / …).
+                    glyph.Text = ConvertToNullableBool(row[columnIndex]) == true ? "✓" : string.Empty;
+                }
+                return glyph;
+            });
+        }
+
         return new FuncDataTemplate<object?[]>((row, _) =>
         {
             var cb = new CheckBox
@@ -736,30 +767,17 @@ public partial class TableDetailTabView : UserControl
         if (window is null) return;
 
         var current = columnIndex < row.Length ? row[columnIndex] : null;
-        string? initial;
-        bool readOnly;
-        switch (current)
+        var initial = current switch
         {
-            case null:
-                initial = string.Empty;
-                readOnly = false;
-                break;
-            case string s:
-                initial = s;
-                readOnly = false;
-                break;
-            case byte[] bytes:
-                initial = string.Format(
-                    CultureInfo.CurrentCulture,
-                    UiStrings.BlobEditorBinaryPlaceholder,
-                    bytes.Length);
-                readOnly = true;
-                break;
-            default:
-                initial = current.ToString() ?? string.Empty;
-                readOnly = false;
-                break;
-        }
+            null => string.Empty,
+            string s => s,
+            byte[] bytes => string.Format(
+                CultureInfo.CurrentCulture,
+                UiStrings.BlobEditorBinaryPlaceholder,
+                bytes.Length),
+            _ => current.ToString() ?? string.Empty,
+        };
+        var readOnly = ResolveBlobReadOnly(current, _currentVm.CanEditData);
 
         var newText = await BlobEditorWindow.ShowAsync(window, initial, readOnly).ConfigureAwait(true);
         if (newText is null) return; // Cancel
@@ -769,6 +787,13 @@ public partial class TableDetailTabView : UserControl
 
         await _currentVm.UpdateCellAsync(row, columnIndex, string.IsNullOrEmpty(newText) ? null : newText);
     }
+
+    // BLOB editor open mode. Viewing is always allowed; editing is blocked for
+    // binary BLOBs (no faithful text round-trip) and whenever the tab can't edit
+    // data (CanEditData false — e.g. a read-only system table). CanEditData is the
+    // single source of truth. Internal + pure so it's unit-testable without a UI.
+    internal static bool ResolveBlobReadOnly(object? cellValue, bool canEditData)
+        => cellValue is byte[] || !canEditData;
 
     private static bool? ConvertToNullableBool(object? value) => value switch
     {

@@ -1,9 +1,12 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using EmberTern.App.ViewModels;
+using EmberTern.App.Views;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Query;
 using EmberTern.Core.Workspace;
 using EmberTern.Firebird;
 using Xunit;
@@ -179,6 +182,61 @@ public class SystemTableReadOnlyTests
         Assert.True(tab.TableDetail.CanAddField);
         Assert.True(tab.TableDetail.CanManageConstraints);
     }
+
+    // ─── Read-only data grid: Boolean cells + BLOB viewing ────────────────
+
+    [Fact]
+    public async Task ReadOnlyData_UpdateCellAsync_DoesNotMutateRow()
+    {
+        using var harness = new Harness();
+        var vm = harness.Main.CreateTableDetail(new MetadataObject("RDB$RELATIONS", MetadataObjectKind.SystemTable));
+
+        var row = new object?[] { true };
+        vm.DataResult = new QueryResult
+        {
+            Columns = new[] { new QueryColumn("FLAG", typeof(bool)) },
+            Rows = new[] { row },
+        };
+
+        Assert.True(vm.IsDataReadOnly);
+        Assert.False(vm.CanEditData);
+
+        // The Boolean cell renders a read-only ✓/blank glyph (no interactive
+        // CheckBox) when CanEditData is false; even if a write were somehow
+        // attempted, UpdateCellAsync no-ops without a data editor — the row is
+        // never mutated (it returns before the optimistic local write).
+        await vm.UpdateCellAsync(row, 0, false);
+        Assert.Equal(true, row[0]);
+    }
+
+    [Fact]
+    public void EditableData_GridIsWritable()
+    {
+        // Contrast: a normal table HAS a data editor, so the grid is writable —
+        // the Boolean cell renders an interactive CheckBox (the editable branch of
+        // BuildBooleanCellTemplate) rather than the read-only glyph.
+        using var harness = new Harness();
+        var vm = harness.Main.CreateTableDetail(new MetadataObject("CUSTOMERS", MetadataObjectKind.Table));
+
+        Assert.False(vm.IsDataReadOnly);
+        Assert.True(vm.CanEditData);
+    }
+
+    [Theory]
+    // Editable tab: text BLOBs open editable; binary stays read-only (no text round-trip).
+    [InlineData("some text", true, false)]
+    [InlineData(null, true, false)]
+    // Read-only tab (system table): viewing allowed, but always read-only.
+    [InlineData("some text", false, true)]
+    [InlineData(null, false, true)]
+    public void ResolveBlobReadOnly_TextValues(string? value, bool canEditData, bool expected)
+        => Assert.Equal(expected, TableDetailTabView.ResolveBlobReadOnly(value, canEditData));
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ResolveBlobReadOnly_BinaryAlwaysReadOnly(bool canEditData)
+        => Assert.True(TableDetailTabView.ResolveBlobReadOnly(new byte[] { 1, 2, 3 }, canEditData));
 
     private sealed class Harness : IDisposable
     {
