@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(dotnet new sln -n EmberTern --force)",
+      "PowerShell(dotnet sln EmberTern.sln add src\\\\EmberTern.Core\\\\EmberTern.Core.csproj src\\\\EmberTern.Firebird\\\\EmberTern.Firebird.csproj src\\\\EmberTern.App\\\\EmberTern.App.csproj tests\\\\EmberTern.Tests\\\\EmberTern.Tests.csproj)",
+      "PowerShell($exe = 'C:/Dane/C#/Źródła/EmberTern/src/EmberTern.App/bin/Debug/net9.0/EmberTern.exe'; $proc = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden; Start-Sleep -Seconds 5; if \\($proc.HasExited\\) { Write-Host \"EXIT EARLY: $\\($proc.ExitCode\\)\"; exit 1 } else { Stop-Process -Id $proc.Id -Force; Start-Sleep -Seconds 1; Write-Host \"OK alive 5s then closed\" })",
+      "Bash(dotnet build *)",
+      "Bash(dotnet test *)",
+      "Bash(timeout 8 src/EmberTern.App/bin/Debug/net9.0/EmberTern.exe)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(Select-String -Pattern \"warning|error|Build succeeded|Build FAILED\")",
+      "Bash(Select-Object -First 30)",
+      "Bash(cd \"/c/Dane/C#/Źródła/EmberTern\" && ls tests/EmberTern.Tests/ | grep -i \"tabledetail\\\\|ddl\")",
+      "Bash(echo \"exit=$?\")",
+      "Bash(timeout 5 dotnet run --no-build)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(timeout 6 src/EmberTern.App/bin/Debug/net9.0/EmberTern.exe)"
+    ]
+  }
+}
