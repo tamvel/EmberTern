@@ -63,7 +63,14 @@ public sealed class FirebirdTableDetailReader
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<FieldInfo>();
 
         var connection = MetaConnection();
-        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock ONCE: MetaLock() resolves to the metadata or data
+        // semaphore via MetadataIsIndependent, which can flip mid-call (e.g. the
+        // metadata attachment breaks). Re-evaluating it at Release would then
+        // release a DIFFERENT semaphore than we acquired — permanently leaking the
+        // one we hold (it lives on the long-lived connection service, so a leak
+        // survives reconnect and only a process restart clears it). See gotcha #98.
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -123,7 +130,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            MetaLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -134,7 +141,14 @@ public sealed class FirebirdTableDetailReader
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<IndexInfo>();
 
         var connection = MetaConnection();
-        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock ONCE: MetaLock() resolves to the metadata or data
+        // semaphore via MetadataIsIndependent, which can flip mid-call (e.g. the
+        // metadata attachment breaks). Re-evaluating it at Release would then
+        // release a DIFFERENT semaphore than we acquired — permanently leaking the
+        // one we hold (it lives on the long-lived connection service, so a leak
+        // survives reconnect and only a process restart clears it). See gotcha #98.
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -176,7 +190,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            MetaLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -187,7 +201,14 @@ public sealed class FirebirdTableDetailReader
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<ConstraintInfo>();
 
         var connection = MetaConnection();
-        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock ONCE: MetaLock() resolves to the metadata or data
+        // semaphore via MetadataIsIndependent, which can flip mid-call (e.g. the
+        // metadata attachment breaks). Re-evaluating it at Release would then
+        // release a DIFFERENT semaphore than we acquired — permanently leaking the
+        // one we hold (it lives on the long-lived connection service, so a leak
+        // survives reconnect and only a process restart clears it). See gotcha #98.
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -220,7 +241,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            MetaLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -231,7 +252,14 @@ public sealed class FirebirdTableDetailReader
         if (string.IsNullOrEmpty(tableName)) return string.Empty;
 
         var connection = MetaConnection();
-        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock ONCE: MetaLock() resolves to the metadata or data
+        // semaphore via MetadataIsIndependent, which can flip mid-call (e.g. the
+        // metadata attachment breaks). Re-evaluating it at Release would then
+        // release a DIFFERENT semaphore than we acquired — permanently leaking the
+        // one we hold (it lives on the long-lived connection service, so a leak
+        // survives reconnect and only a process restart clears it). See gotcha #98.
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -258,7 +286,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            MetaLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -276,7 +304,14 @@ public sealed class FirebirdTableDetailReader
         if (string.IsNullOrEmpty(procedureName)) return string.Empty;
 
         var connection = MetaConnection();
-        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock ONCE: MetaLock() resolves to the metadata or data
+        // semaphore via MetadataIsIndependent, which can flip mid-call (e.g. the
+        // metadata attachment breaks). Re-evaluating it at Release would then
+        // release a DIFFERENT semaphore than we acquired — permanently leaking the
+        // one we hold (it lives on the long-lived connection service, so a leak
+        // survives reconnect and only a process restart clears it). See gotcha #98.
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -303,7 +338,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            MetaLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -319,7 +354,14 @@ public sealed class FirebirdTableDetailReader
         if (string.IsNullOrEmpty(procedureName)) return Array.Empty<ProcedureParameterInfo>();
 
         var connection = MetaConnection();
-        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock ONCE: MetaLock() resolves to the metadata or data
+        // semaphore via MetadataIsIndependent, which can flip mid-call (e.g. the
+        // metadata attachment breaks). Re-evaluating it at Release would then
+        // release a DIFFERENT semaphore than we acquired — permanently leaking the
+        // one we hold (it lives on the long-lived connection service, so a leak
+        // survives reconnect and only a process restart clears it). See gotcha #98.
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -362,7 +404,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            MetaLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -376,7 +418,14 @@ public sealed class FirebirdTableDetailReader
         }
 
         var connection = MetaConnection();
-        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock ONCE: MetaLock() resolves to the metadata or data
+        // semaphore via MetadataIsIndependent, which can flip mid-call (e.g. the
+        // metadata attachment breaks). Re-evaluating it at Release would then
+        // release a DIFFERENT semaphore than we acquired — permanently leaking the
+        // one we hold (it lives on the long-lived connection service, so a leak
+        // survives reconnect and only a process restart clears it). See gotcha #98.
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var dependsOn = new List<DependencyInfo>();
@@ -424,7 +473,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            MetaLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -471,7 +520,14 @@ public sealed class FirebirdTableDetailReader
         }
 
         var connection = MetaConnection();
-        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock ONCE: MetaLock() resolves to the metadata or data
+        // semaphore via MetadataIsIndependent, which can flip mid-call (e.g. the
+        // metadata attachment breaks). Re-evaluating it at Release would then
+        // release a DIFFERENT semaphore than we acquired — permanently leaking the
+        // one we hold (it lives on the long-lived connection service, so a leak
+        // survives reconnect and only a process restart clears it). See gotcha #98.
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var dependsOn = new List<DependencyInfo>();
@@ -543,7 +599,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            MetaLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -584,7 +640,9 @@ public sealed class FirebirdTableDetailReader
 
         var connection = DataConnection();
         var sw = Stopwatch.StartNew();
-        await DataLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock ONCE (see the MetaLock note above / gotcha #98).
+        var commandLock = DataLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -626,7 +684,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            DataLock().Release();
+            commandLock.Release();
         }
     }
 
@@ -646,7 +704,9 @@ public sealed class FirebirdTableDetailReader
         if (cap <= 0) return 0;
 
         var connection = DataConnection();
-        await DataLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Capture the lock ONCE (see the MetaLock note above / gotcha #98).
+        var commandLock = DataLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var cmd = connection.CreateCommand();
@@ -668,7 +728,7 @@ public sealed class FirebirdTableDetailReader
         }
         finally
         {
-            DataLock().Release();
+            commandLock.Release();
         }
     }
 
