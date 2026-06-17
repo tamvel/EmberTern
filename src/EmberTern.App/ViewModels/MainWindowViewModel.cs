@@ -174,6 +174,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsDataTabActive))]
     [NotifyPropertyChangedFor(nameof(IsFieldsTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowFieldEditTools))]
+    [NotifyPropertyChangedFor(nameof(ShowStructureCompileTools))]
     [NotifyPropertyChangedFor(nameof(ShowDataEditTools))]
     [NotifyPropertyChangedFor(nameof(IsNewTableTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveNewTable))]
@@ -232,6 +233,12 @@ public partial class MainWindowViewModel : ViewModelBase
     // without the executor (see CreateTableDetail), so these stay HIDDEN — a read-only
     // object category, not a normal table with greyed-out controls.
     public bool ShowFieldEditTools => IsFieldsTabActive && (ActiveTableDetail?.CanAddField ?? false);
+    // ⚡ Compile + Discard apply/abandon the buffered structural changes. Unlike the
+    // Pola-specific Add/Drop/Move cluster (ShowFieldEditTools), these are valid on
+    // EVERY TableDetail sub-tab (a constraint queued on Ograniczenia or an index on
+    // Indeksy must still be Compilable), so they gate on the whole tab + the edit
+    // capability — not on the Pola sub-tab being active.
+    public bool ShowStructureCompileTools => IsTableDetailTabActive && (ActiveTableDetail?.CanAddField ?? false);
     // Data-edit affordances (＋ Add row / − Delete row). Shown only when the Dane
     // sub-tab is active AND a data editor was wired (CanEditData). Refresh +
     // pagination stay on IsDataTabActive — they're read paths and remain visible for

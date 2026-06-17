@@ -73,6 +73,16 @@ public partial class TableDetailTabView : UserControl
             // the ItemsSource on re-attach to force row regeneration (#7).
             _fieldsGrid.AttachedToVisualTree += OnFieldsGridAttached;
         }
+        // Buffered Table Designer: tint pending-Added / pending-Dropped rows in the
+        // constraint + index grids (these bind to Core ConstraintInfo / IndexInfo,
+        // which carry PendingState). One shared LoadingRow handler reads that state.
+        foreach (var name in new[] { "PrimaryKeyGrid", "ForeignKeyGrid", "CheckGrid", "UniqueGrid", "IndexesGrid" })
+        {
+            if (this.FindControl<DataGrid>(name) is { } grid)
+            {
+                grid.LoadingRow += OnCorePendingRowLoading;
+            }
+        }
         if (_dataPreviewGrid is not null)
         {
             // Avalonia paints the column-header arrow itself when (a) the
@@ -850,12 +860,13 @@ public partial class TableDetailTabView : UserControl
 
     private void OnFieldRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(FieldRowViewModel.IsModified)) return;
+        if (e.PropertyName != nameof(FieldRowViewModel.IsModified)
+            && e.PropertyName != nameof(FieldRowViewModel.PendingKind)) return;
         if (_fieldsGrid is null || sender is not FieldRowViewModel row) return;
-        // Find the realized container for this row VM and re-apply the "pending" class
-        // LIVE, so the tint clears the moment IsModified flips false (revert, or the
-        // row VM rebuilt clean after Compile) — not only on the next LoadingRow. This
-        // is what fixes the stale brown row after an edit completes.
+        // Find the realized container for this row VM and re-apply the pending
+        // class LIVE, so the tint reflects the working-model state the moment it
+        // changes (edit, revert, drop-mark, or the row VM rebuilt clean after
+        // Compile/Discard) — not only on the next LoadingRow.
         foreach (var dgr in _fieldsGrid.GetVisualDescendants().OfType<DataGridRow>())
         {
             if (ReferenceEquals(dgr.DataContext, row))
@@ -866,15 +877,51 @@ public partial class TableDetailTabView : UserControl
         }
     }
 
+    // Buffered Table Designer: tint a Pola row by its working-model state —
+    // pending-added (new column), pending-dropped (struck through), or
+    // pending/modified (queued edit). Mutually exclusive classes.
     private static void UpdatePendingClass(DataGridRow row, FieldRowViewModel vm)
     {
-        if (vm.IsModified)
+        row.Classes.Remove("pending");
+        row.Classes.Remove("pending-added");
+        row.Classes.Remove("pending-dropped");
+        switch (vm.PendingKind)
         {
-            if (!row.Classes.Contains("pending")) row.Classes.Add("pending");
+            case EmberTern.Core.Metadata.PendingChangeKind.Added:
+                row.Classes.Add("pending-added");
+                break;
+            case EmberTern.Core.Metadata.PendingChangeKind.Dropped:
+                row.Classes.Add("pending-dropped");
+                break;
+            default:
+                if (vm.IsModified) row.Classes.Add("pending");
+                break;
         }
-        else
+    }
+
+    // Shared LoadingRow handler for the constraint + index grids. Reads the
+    // PendingState off the row's Core object (ConstraintInfo / IndexInfo) and
+    // applies the pending-added / pending-dropped row class. Fires on every row
+    // realization (including the rebuild after an Add inserts a row or a Drop
+    // re-inserts a marked one), so the working-model tint stays in sync.
+    private void OnCorePendingRowLoading(object? sender, DataGridRowEventArgs e)
+    {
+        var state = e.Row.DataContext switch
         {
-            row.Classes.Remove("pending");
+            EmberTern.Core.Metadata.ConstraintInfo c => c.PendingState,
+            EmberTern.Core.Metadata.IndexInfo x => x.PendingState,
+            _ => EmberTern.Core.Metadata.PendingChangeKind.None,
+        };
+        e.Row.Classes.Remove("pending-added");
+        e.Row.Classes.Remove("pending-dropped");
+        switch (state)
+        {
+            case EmberTern.Core.Metadata.PendingChangeKind.Added:
+                e.Row.Classes.Add("pending-added");
+                break;
+            case EmberTern.Core.Metadata.PendingChangeKind.Dropped:
+                e.Row.Classes.Add("pending-dropped");
+                break;
         }
     }
 

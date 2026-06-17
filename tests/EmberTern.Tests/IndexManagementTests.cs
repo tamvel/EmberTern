@@ -216,19 +216,24 @@ public class IndexManagementTests
     // ─── VM Add/Drop — disconnected executor error paths ──────────────────
 
     [Fact]
-    public async Task ExecuteAddIndex_Disconnected_SetsError()
+    public async Task ExecuteAddIndex_Buffered_QueuesPendingAddedNoError()
     {
         using var harness = new ExecutorHarness();
         await harness.Vm.ExecuteAddIndexAsync(new IndexSpec("IX", new[] { "A" }, false, false, null));
-        Assert.NotNull(harness.Vm.ErrorMessage);
+        // BUFFERED: queues CREATE INDEX + a pending-Added row, no DDL → no error.
+        Assert.Null(harness.Vm.ErrorMessage);
+        Assert.Single(harness.Vm.PendingChanges);
+        Assert.Contains(harness.Vm.Indexes, i => i.Name == "IX" && i.PendingState == PendingChangeKind.Added);
     }
 
     [Fact]
-    public async Task ExecuteDropIndex_Disconnected_SetsError()
+    public async Task ExecuteDropIndex_Buffered_QueuesNoError()
     {
         using var harness = new ExecutorHarness();
         await harness.Vm.ExecuteDropIndexAsync("IX");
-        Assert.NotNull(harness.Vm.ErrorMessage);
+        // BUFFERED: queues DROP INDEX, no DDL → no error.
+        Assert.Null(harness.Vm.ErrorMessage);
+        Assert.Single(harness.Vm.PendingChanges);
     }
 
     [Fact]

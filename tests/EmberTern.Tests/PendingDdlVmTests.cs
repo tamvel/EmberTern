@@ -61,12 +61,11 @@ public class PendingDdlVmTests
         Assert.Contains("ADD \"NEW_COL\"", preview);
     }
 
-    // NOTE: Move Up/Down now execute immediately through FirebirdDdlExecutor
-    // (matching Add Field / Drop Field semantics), not via the pending-DDL
-    // queue. The pure-API queueing helper AddMovePending is retained for
-    // testing and any future "batch move" workflow. These two tests pin the
-    // queue-construction shape via AddMovePending so the SQL-emit format
-    // stays regression-pinned.
+    // NOTE: the Table Designer is BUFFERED again — every structural edit
+    // (Add/Drop/Move field, constraint, index) queues a PendingDdlChange and
+    // NOTHING runs until ⚡ Compile applies the batch in one autonomous
+    // transaction (see TableDesignerBufferedTests). AddMovePending is the pure
+    // queue helper these two tests use to regression-pin the MoveField SQL shape.
     [Fact]
     public void AddMovePending_QueuesAlterStatement_UpDirection()
     {

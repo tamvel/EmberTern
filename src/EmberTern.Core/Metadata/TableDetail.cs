@@ -2,6 +2,22 @@ using System;
 
 namespace EmberTern.Core.Metadata;
 
+/// <summary>
+/// Working-model state of a row in the Table Designer's grids before
+/// <c>Compile/Apply</c>. The structure designer is buffered: a structural edit
+/// mutates the in-memory model (grids reflect the working model, not the live
+/// catalog) and queues a <see cref="PendingDdlChange"/>; nothing reaches the
+/// database until Compile runs the whole batch in one autonomous, auto-committed
+/// transaction. <see cref="None"/> = unchanged (live-catalog) row.
+/// </summary>
+public enum PendingChangeKind
+{
+    None,
+    Added,
+    Dropped,
+    Modified,
+}
+
 public sealed class FieldInfo
 {
     public int Position { get; init; }
@@ -59,6 +75,12 @@ public sealed class IndexInfo
     // through IsUnique instead.
     public string IndexType { get; init; } = string.Empty;
 
+    /// <summary>Table-Designer working-model state (Added / Dropped) before
+    /// Compile. <see cref="PendingChangeKind.None"/> for live-catalog rows.
+    /// Settable (not init) so a Drop can mark an existing row pending without
+    /// rebuilding it. Never read from the catalog.</summary>
+    public PendingChangeKind PendingState { get; set; } = PendingChangeKind.None;
+
     public bool IsPrimary
         => string.Equals(IndexType, "PRIMARY KEY", StringComparison.OrdinalIgnoreCase);
 
@@ -103,6 +125,12 @@ public sealed class ConstraintInfo
     // RDB$INDEX_TYPE = 0 (ASC, the default), true ⇒ 1 (DESC). Always false for
     // CHECK constraints (no backing index).
     public bool IsDescending { get; init; }
+
+    /// <summary>Table-Designer working-model state (Added / Dropped) before
+    /// Compile. <see cref="PendingChangeKind.None"/> for live-catalog rows.
+    /// Settable (not init) so a Drop can mark an existing row pending without
+    /// rebuilding it. Never read from the catalog.</summary>
+    public PendingChangeKind PendingState { get; set; } = PendingChangeKind.None;
 
     // Single-string display of UPDATE / DELETE rules for the FK grid's
     // "Warunek" column. RESTRICT is the SQL default — suppress it from the

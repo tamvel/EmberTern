@@ -676,26 +676,33 @@
                 <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}"
                                   Foreground="{DynamicResource InfoIconBrush}" />
               </Button>
-              <!-- Structural edit (Pola sub-tab): Compile + Add + Drop + Move Up / Down.
-                   Add / Drop run immediately in the active tx; Move queues a pending
-                   change drained by ⚡ Compile. All five share IsVisible on the Pola
-                   sub-tab; commands route through ActiveTableDetail. -->
+              <!-- Buffered Table Designer. ⚡ Compile + ⟲ Discard apply / abandon the
+                   queued structural changes and are valid on EVERY TableDetail sub-tab
+                   (ShowStructureCompileTools). The Pola-specific cluster (toggle / Add /
+                   Drop / Move) below stays on ShowFieldEditTools (Pola sub-tab only).
+                   NOTHING runs DDL on click — a structural edit only mutates the working
+                   model + queues a change; Compile runs the whole batch in one autonomous
+                   auto-committed transaction. Read-only system tables hide the cluster. -->
               <Border Width="1" Margin="4,4"
                       Background="{DynamicResource BorderBrush}"
-                      IsVisible="{Binding ShowFieldEditTools}" />
-              <!-- Compile is the primary structural action on the Pola sub-tab — make
-                   it stand out from the flat field icons via the accent-filled primary
-                   style + hammer (build) icon + label, mirroring the SQL Execute button.
-                   ShowFieldEditTools = Pola sub-tab active AND the tab can edit structure
-                   (a DDL executor was wired). Read-only system tables hide the whole cluster. -->
+                      IsVisible="{Binding ShowStructureCompileTools}" />
+              <!-- Compile is the primary structural action — accent-filled primary style
+                   + hammer (build) icon, mirroring the SQL Execute button. Enabled only
+                   when there are pending changes (CompileCommand.CanExecute). -->
               <Button Classes="primary"
                       Padding="8,4"
                       ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
                       Command="{Binding ActiveTableDetail.CompileCommand}"
-                      IsVisible="{Binding ShowFieldEditTools}">
+                      IsVisible="{Binding ShowStructureCompileTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}"
                                   Foreground="{DynamicResource OnAccentBrush}"
                                   Width="16" Height="16" />
+              </Button>
+              <Button Classes="icon"
+                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditDiscardTooltip}"
+                      Command="{Binding ActiveTableDetail.DiscardPendingChangesCommand}"
+                      IsVisible="{Binding ShowStructureCompileTools}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
               <!-- Inline-edit toggle. Off by default on existing tables — explicit
                    opt-in stops accidental schema edits from a misclick. Highlights

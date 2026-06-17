@@ -54,6 +54,28 @@
       <Setter Property="FontStyle" Value="Italic" />
       <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
     </Style>
+    <!-- Buffered Table Designer pending-row tints. Apply to EVERY grid in this
+         view (Pola / Ograniczenia / Indeksy): a pending-Added row gets a green
+         wash, a pending-Dropped row a red wash, until Compile/Discard. The class
+         is toggled in code-behind (FieldRowViewModel.PendingKind for Pola;
+         ConstraintInfo/IndexInfo.PendingState for the others). A selected pending
+         row keeps the normal selection colour (declared last → wins). -->
+    <Style Selector="DataGridRow.pending-added /template/ Rectangle#BackgroundRectangle">
+      <Setter Property="Fill" Value="{DynamicResource RowAddedBrush}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="DataGridRow.pending-dropped /template/ Rectangle#BackgroundRectangle">
+      <Setter Property="Fill" Value="{DynamicResource RowDroppedBrush}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="DataGridRow.pending-added:selected /template/ Rectangle#BackgroundRectangle">
+      <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="DataGridRow.pending-dropped:selected /template/ Rectangle#BackgroundRectangle">
+      <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
   </UserControl.Styles>
 
   <Grid RowDefinitions="*,Auto">

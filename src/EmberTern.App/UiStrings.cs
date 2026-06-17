@@ -476,7 +476,8 @@ internal static class UiStrings
     public const string ProcedureExecuteDialogCancel = "Cancel";
 
     public const string FieldEditCompileIcon = "⚡";
-    public const string FieldEditCompileTooltip = "Compile pending DDL changes";
+    public const string FieldEditCompileTooltip = "Compile pending changes (apply DDL + auto-commit)";
+    public const string FieldEditDiscardTooltip = "Discard pending changes";
     public const string FieldEditAddIcon = "+";
     public const string FieldEditAddTooltip = "Add field";
     public const string FieldEditDropIcon = "−";

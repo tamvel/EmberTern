@@ -244,6 +244,28 @@ public partial class FieldRowViewModel : ObservableObject
     private string _description;
 
     /// <summary>
+    /// Working-model state of this row in the buffered Table Designer:
+    /// <see cref="PendingChangeKind.Added"/> for a not-yet-compiled new column,
+    /// <see cref="PendingChangeKind.Dropped"/> for a column marked for deletion
+    /// (kept visible, struck through), <see cref="PendingChangeKind.Modified"/>
+    /// once an inline/dialog edit has been queued, <see cref="PendingChangeKind.None"/>
+    /// for a clean live-catalog row. Drives the row tint + the Move/Drop gates
+    /// (a dropped row can't be re-dropped or moved).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPendingAdded))]
+    [NotifyPropertyChangedFor(nameof(IsPendingDropped))]
+    [NotifyPropertyChangedFor(nameof(HasPendingChange))]
+    private PendingChangeKind _pendingKind;
+
+    public bool IsPendingAdded => PendingKind == PendingChangeKind.Added;
+    public bool IsPendingDropped => PendingKind == PendingChangeKind.Dropped;
+
+    /// <summary>True when the row carries any working-model change (Added /
+    /// Dropped, or Modified / inline-edited). Drives the Pola row tint.</summary>
+    public bool HasPendingChange => PendingKind != PendingChangeKind.None || IsModified;
+
+    /// <summary>
     /// True when at least one editable property differs from its original.
     /// The Pola DataGrid binds a row-level class to this so modified rows get
     /// a subtle WarningBrush tint until Compile drains the pending queue.

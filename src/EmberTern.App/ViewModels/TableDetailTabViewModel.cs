@@ -290,6 +290,12 @@ public partial class TableDetailTabViewModel : ViewModelBase
 
         var statements = DdlGenerator.BuildAlterStatements(TableName, original, target, canRename);
         foreach (var s in statements) PendingChanges.Add(s);
+        // Mark the row Modified so it keeps its pending tint after the inline
+        // edit commits (a pending-Added row stays Added).
+        if (statements.Count > 0 && row.PendingKind != PendingChangeKind.Added)
+        {
+            row.PendingKind = PendingChangeKind.Modified;
+        }
 
         // UX: when the user attempted a rename / type-change but the field has
         // incoming dependencies, BuildAlterStatements silently skipped them.
@@ -1645,11 +1651,11 @@ public partial class TableDetailTabViewModel : ViewModelBase
     /// partially-applied changes. Symmetric to
     /// <see cref="ExecuteAddFieldAsync"/> / <see cref="ExecuteDropFieldAsync"/>.
     /// </summary>
-    public async Task ExecuteEditFieldAsync(FieldInfo original, FieldDefinition target)
+    public Task ExecuteEditFieldAsync(FieldInfo original, FieldDefinition target)
     {
-        if (original is null) return;
-        if (target is null) return;
-        if (_ddlExecutor is null) return;
+        if (original is null) return Task.CompletedTask;
+        if (target is null) return Task.CompletedTask;
+        if (_ddlExecutor is null) return Task.CompletedTask;
 
         var canRename = CanRenameField(original.Name);
         var alterTarget = new AlterFieldTarget
@@ -1669,29 +1675,28 @@ public partial class TableDetailTabViewModel : ViewModelBase
         {
             // No-op: user clicked OK without changing anything (or only changed
             // properties we don't ALTER inline — Computed / Check / AutoIncrement
-            // / PrimaryKey). Don't refresh; don't touch ErrorMessage.
-            return;
+            // / PrimaryKey). Don't queue; don't touch ErrorMessage.
+            return Task.CompletedTask;
         }
 
+        // BUFFERED: queue the ALTERs + reflect the new values on the matching
+        // Pola row (marked Modified). NO DDL runs here — Compile applies the batch.
         ErrorMessage = null;
-        foreach (var change in statements)
+        foreach (var change in statements) PendingChanges.Add(change);
+
+        var row = EditableFields.FirstOrDefault(r =>
+            string.Equals(r.Original.Name, original.Name, StringComparison.OrdinalIgnoreCase));
+        if (row is not null)
         {
-            try
-            {
-                await _ddlExecutor.ExecuteAsync(change.Sql).ConfigureAwait(true);
-            }
-            catch (DdlExecutionException ex)
-            {
-                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
-                return;
-            }
-            catch (InvalidOperationException ex)
-            {
-                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
-                return;
-            }
+            row.Name = target.Name;
+            row.TypeText = alterTarget.TypeClause;
+            row.DomainName = string.IsNullOrWhiteSpace(target.Domain) ? null : target.Domain;
+            row.NotNull = target.NotNull;
+            row.DefaultValue = target.DefaultValue ?? string.Empty;
+            row.Description = target.Description ?? string.Empty;
+            if (row.PendingKind != PendingChangeKind.Added) row.PendingKind = PendingChangeKind.Modified;
         }
-        await RefreshStructureAsync().ConfigureAwait(true);
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -1715,10 +1720,10 @@ public partial class TableDetailTabViewModel : ViewModelBase
     /// jumps the inner UI to Constraints → Foreign Keys so the user sees
     /// the new entry. Errors land in <see cref="ErrorMessage"/>.
     /// </summary>
-    public async Task ExecuteCreateForeignKeyAsync(ForeignKeySpec spec)
+    public Task ExecuteCreateForeignKeyAsync(ForeignKeySpec spec)
     {
-        if (spec is null) return;
-        if (_ddlExecutor is null) return;
+        if (spec is null) return Task.CompletedTask;
+        if (_ddlExecutor is null) return Task.CompletedTask;
 
         ErrorMessage = null;
         string sql;
@@ -1731,32 +1736,38 @@ public partial class TableDetailTabViewModel : ViewModelBase
             // Validation gap that survived the dialog (defensive — dialog's
             // IsValid + BuildAddForeignKey's own throw catch this earlier).
             ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ForeignKeyExecuteFailedFormat, ex.Message);
-            return;
+            return Task.CompletedTask;
         }
 
-        try
+        // BUFFERED: queue the FK DDL + show it as a pending-Added row in the
+        // Foreign Keys sub-grid. NO DDL runs here — Compile applies the batch.
+        PendingChanges.Add(new PendingDdlChange
         {
-            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
-        }
-        catch (DdlExecutionException ex)
+            Kind = PendingDdlChangeKind.Other,
+            Description = "Add FOREIGN KEY " + spec.ConstraintName,
+            Sql = sql,
+        });
+        Constraints.Add(new ConstraintInfo
         {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ForeignKeyExecuteFailedFormat, ex.Message);
-            return;
-        }
-        catch (System.InvalidOperationException ex)
-        {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ForeignKeyExecuteFailedFormat, ex.Message);
-            return;
-        }
-
-        // Refresh: re-fetch fields/constraints/indexes/ddl from the live
-        // catalog. The new FK shows up in Constraints; the snapshot
-        // mechanism preserves user's selection / sort / page.
-        await RefreshStructureAsync().ConfigureAwait(true);
-
-        // Jump to Ograniczenia → Foreign Keys and select the new constraint.
+            Name = spec.ConstraintName,
+            ConstraintType = "FOREIGN KEY",
+            Fields = string.Join(", ", spec.LocalFields),
+            RefTable = spec.ReferencedTable,
+            RefFields = string.Join(", ", spec.ReferencedFields),
+            UpdateRule = RuleLabel(spec.OnUpdate),
+            DeleteRule = RuleLabel(spec.OnDelete),
+            PendingState = PendingChangeKind.Added,
+        });
         SelectNewConstraint(ConstraintsForeignKeysIndex, ForeignKeyConstraints, spec.ConstraintName);
+        return Task.CompletedTask;
     }
+
+    private static string RuleLabel(ForeignKeyAction action) => action switch
+    {
+        ForeignKeyAction.Cascade => "CASCADE",
+        ForeignKeyAction.SetNull => "SET NULL",
+        _ => string.Empty,
+    };
 
     // ─── Constraint management (Constraint Management Sprint V1) ──────────
     //
@@ -1883,36 +1894,52 @@ public partial class TableDetailTabViewModel : ViewModelBase
     /// constraint selected. Public for tests (no dialog, no confirm).
     /// </summary>
     public Task ExecuteAddPrimaryKeyAsync(ConstraintFieldSpec spec)
-        => ExecuteConstraintAddAsync(
+        => StageConstraintAddAsync(
             spec is null ? null : SafeBuild(() => DdlGenerator.BuildAddPrimaryKey(TableName, spec.Name, spec.Fields, spec.IndexName, spec.Descending)),
-            ConstraintsPrimaryKeyIndex,
-            () => PrimaryKeyConstraints,
-            spec?.Name,
-            r => SelectedPrimaryKey = r);
+            spec is null ? null : new ConstraintInfo
+            {
+                Name = spec.Name,
+                ConstraintType = "PRIMARY KEY",
+                Fields = string.Join(", ", spec.Fields),
+                IndexName = spec.IndexName ?? string.Empty,
+                IsDescending = spec.Descending,
+                PendingState = PendingChangeKind.Added,
+            },
+            ConstraintsPrimaryKeyIndex);
 
     /// <summary>
-    /// Executes ADD CONSTRAINT … UNIQUE. Symmetric to
+    /// BUFFERED ADD CONSTRAINT … UNIQUE. Symmetric to
     /// <see cref="ExecuteAddPrimaryKeyAsync"/>.
     /// </summary>
     public Task ExecuteAddUniqueAsync(ConstraintFieldSpec spec)
-        => ExecuteConstraintAddAsync(
+        => StageConstraintAddAsync(
             spec is null ? null : SafeBuild(() => DdlGenerator.BuildAddUnique(TableName, spec.Name, spec.Fields, spec.IndexName, spec.Descending)),
-            ConstraintsUniqueIndex,
-            () => UniqueConstraints,
-            spec?.Name,
-            r => SelectedUnique = r);
+            spec is null ? null : new ConstraintInfo
+            {
+                Name = spec.Name,
+                ConstraintType = "UNIQUE",
+                Fields = string.Join(", ", spec.Fields),
+                IndexName = spec.IndexName ?? string.Empty,
+                IsDescending = spec.Descending,
+                PendingState = PendingChangeKind.Added,
+            },
+            ConstraintsUniqueIndex);
 
     /// <summary>
-    /// Executes ADD CONSTRAINT … CHECK. Symmetric to
+    /// BUFFERED ADD CONSTRAINT … CHECK. Symmetric to
     /// <see cref="ExecuteAddPrimaryKeyAsync"/>.
     /// </summary>
     public Task ExecuteAddCheckAsync(CheckConstraintSpec spec)
-        => ExecuteConstraintAddAsync(
+        => StageConstraintAddAsync(
             spec is null ? null : SafeBuild(() => DdlGenerator.BuildAddCheck(TableName, spec.Name, spec.Expression)),
-            ConstraintsCheckIndex,
-            () => CheckConstraints,
-            spec?.Name,
-            r => SelectedCheck = r);
+            spec is null ? null : new ConstraintInfo
+            {
+                Name = spec.Name,
+                ConstraintType = "CHECK",
+                CheckClause = spec.Expression,
+                PendingState = PendingChangeKind.Added,
+            },
+            ConstraintsCheckIndex);
 
     /// <summary>
     /// Executes ALTER TABLE … DROP CONSTRAINT in the user's working transaction
@@ -1920,10 +1947,10 @@ public partial class TableDetailTabViewModel : ViewModelBase
     /// <see cref="DropConstraintCommand"/>). After the drop the user stays on
     /// the current inner sub-tab; the gone row clears its selection.
     /// </summary>
-    public async Task ExecuteDropConstraintAsync(string constraintName)
+    public Task ExecuteDropConstraintAsync(string constraintName)
     {
-        if (string.IsNullOrWhiteSpace(constraintName)) return;
-        if (_ddlExecutor is null) return;
+        if (string.IsNullOrWhiteSpace(constraintName)) return Task.CompletedTask;
+        if (_ddlExecutor is null) return Task.CompletedTask;
 
         ErrorMessage = null;
         string sql;
@@ -1934,58 +1961,79 @@ public partial class TableDetailTabViewModel : ViewModelBase
         catch (System.ArgumentException ex)
         {
             ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ConstraintExecuteFailedFormat, ex.Message);
-            return;
+            return Task.CompletedTask;
         }
 
-        if (!await TryExecuteConstraintSqlAsync(sql).ConfigureAwait(true)) return;
-        await RefreshStructureAsync().ConfigureAwait(true);
+        var existing = Constraints.FirstOrDefault(c => string.Equals(c.Name, constraintName, StringComparison.OrdinalIgnoreCase));
+        if (existing is { PendingState: PendingChangeKind.Added })
+        {
+            // Un-add a not-yet-compiled constraint: drop the queued ADD + the row.
+            RemovePendingByMarker(PendingDdlChangeKind.Other, $"ADD CONSTRAINT \"{constraintName.Replace("\"", "\"\"")}\"");
+            Constraints.Remove(existing);
+            return Task.CompletedTask;
+        }
+
+        PendingChanges.Add(new PendingDdlChange
+        {
+            Kind = PendingDdlChangeKind.Other,
+            Description = "Drop constraint " + constraintName,
+            Sql = sql,
+        });
+        if (existing is not null) MarkConstraintDropped(existing);
+        return Task.CompletedTask;
     }
 
-    // Shared ADD path: execute the (already-built) SQL, refresh, then jump to
-    // the matching inner sub-tab and select the new constraint by name. A null
-    // sql means the builder threw on a validation gap (SafeBuild set
-    // ErrorMessage already) → bail.
-    private async Task ExecuteConstraintAddAsync(
-        string? sql,
-        int innerIndex,
-        System.Func<IReadOnlyList<ConstraintInfo>> listSelector,
-        string? newName,
-        System.Action<ConstraintInfo?> assignSelection)
+    // BUFFERED shared ADD path: queue the (already-built) DDL, insert the
+    // pending-Added row into Constraints so the working model shows it, then
+    // jump to the matching inner sub-tab and select it. A null sql/row means a
+    // null spec or a builder validation gap (SafeBuild set ErrorMessage) → bail.
+    private Task StageConstraintAddAsync(string? sql, ConstraintInfo? pendingRow, int innerIndex)
     {
-        if (_ddlExecutor is null) return;
-        if (sql is null) return; // builder failed validation; ErrorMessage set
+        if (_ddlExecutor is null) return Task.CompletedTask;
+        if (sql is null || pendingRow is null) return Task.CompletedTask;
 
-        if (!await TryExecuteConstraintSqlAsync(sql).ConfigureAwait(true)) return;
-        await RefreshStructureAsync().ConfigureAwait(true);
-
-        ActiveSubTabIndex = ConstraintsSubTabIndex;
-        ConstraintsActiveSubTabIndex = innerIndex;
-        var match = newName is null
-            ? null
-            : listSelector().FirstOrDefault(c => string.Equals(c.Name, newName, StringComparison.OrdinalIgnoreCase));
-        assignSelection(match);
-    }
-
-    // Runs constraint DDL through the executor with the standard error
-    // handling. Returns true on success, false (with ErrorMessage set) on a
-    // DDL / connection failure — caller then skips the refresh.
-    private async Task<bool> TryExecuteConstraintSqlAsync(string sql)
-    {
         ErrorMessage = null;
-        try
+        PendingChanges.Add(new PendingDdlChange
         {
-            await _ddlExecutor!.ExecuteAsync(sql).ConfigureAwait(true);
-            return true;
-        }
-        catch (DdlExecutionException ex)
+            Kind = PendingDdlChangeKind.Other,
+            Description = $"Add {pendingRow.ConstraintType} {pendingRow.Name}",
+            Sql = sql,
+        });
+        Constraints.Add(pendingRow);
+        SelectNewConstraint(innerIndex, ConstraintListFor(innerIndex), pendingRow.Name);
+        return Task.CompletedTask;
+    }
+
+    private IReadOnlyList<ConstraintInfo> ConstraintListFor(int innerIndex) => innerIndex switch
+    {
+        ConstraintsForeignKeysIndex => ForeignKeyConstraints,
+        ConstraintsCheckIndex => CheckConstraints,
+        ConstraintsUniqueIndex => UniqueConstraints,
+        _ => PrimaryKeyConstraints,
+    };
+
+    // Marks a live constraint row pending-Dropped (kept visible, tinted) and
+    // forces the filtered-view-bound grid to re-render it via a Replace.
+    private void MarkConstraintDropped(ConstraintInfo c)
+    {
+        c.PendingState = PendingChangeKind.Dropped;
+        var idx = Constraints.IndexOf(c);
+        if (idx >= 0) Constraints[idx] = c;
+    }
+
+    // Removes the first queued PendingDdlChange of the given kind whose SQL
+    // contains the marker (used to un-queue an ADD when its pending row is
+    // dropped before Compile).
+    private void RemovePendingByMarker(PendingDdlChangeKind kind, string marker)
+    {
+        for (int i = PendingChanges.Count - 1; i >= 0; i--)
         {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ConstraintExecuteFailedFormat, ex.Message);
-            return false;
-        }
-        catch (InvalidOperationException ex)
-        {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.ConstraintExecuteFailedFormat, ex.Message);
-            return false;
+            if (PendingChanges[i].Kind == kind
+                && PendingChanges[i].Sql.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            {
+                PendingChanges.RemoveAt(i);
+                break;
+            }
         }
     }
 
@@ -2099,55 +2147,70 @@ public partial class TableDetailTabViewModel : ViewModelBase
     /// Executes CREATE INDEX in the user's working transaction, refreshes, then
     /// jumps to the Indeksy sub-tab with the new index selected. Public for tests.
     /// </summary>
-    public async Task ExecuteAddIndexAsync(IndexSpec spec)
+    public Task ExecuteAddIndexAsync(IndexSpec spec)
     {
-        if (spec is null) return;
-        if (_ddlExecutor is null) return;
+        if (spec is null) return Task.CompletedTask;
+        if (_ddlExecutor is null) return Task.CompletedTask;
 
         var sql = SafeBuildIndex(() => DdlGenerator.BuildCreateIndex(
             TableName, spec.Name, spec.Fields, spec.Unique, spec.Descending, spec.ComputedExpression));
-        if (sql is null) return;
-        if (!await TryExecuteIndexSqlAsync(sql).ConfigureAwait(true)) return;
+        if (sql is null) return Task.CompletedTask;
 
-        await RefreshStructureAsync().ConfigureAwait(true);
+        // BUFFERED: queue CREATE INDEX + show a pending-Added row. NO DDL here.
+        PendingChanges.Add(new PendingDdlChange
+        {
+            Kind = PendingDdlChangeKind.Other,
+            Description = "Add index " + spec.Name,
+            Sql = sql,
+        });
+        Indexes.Add(new IndexInfo
+        {
+            Name = spec.Name,
+            Fields = string.Join(", ", spec.Fields),
+            IsUnique = spec.Unique,
+            IsDescending = spec.Descending,
+            Expression = spec.ComputedExpression,
+            PendingState = PendingChangeKind.Added,
+        });
         ActiveSubTabIndex = IndexesSubTabIndex;
         SelectedIndex = Indexes.FirstOrDefault(i => string.Equals(i.Name, spec.Name, StringComparison.OrdinalIgnoreCase));
+        return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Executes DROP INDEX in the user's working transaction and refreshes.
-    /// Public for tests (the confirm + constraint-backed guard live in
-    /// <see cref="DropIndexCommand"/>).
+    /// BUFFERED. Marks an index pending-Dropped (or un-adds a pending-Added one)
+    /// and queues a DROP INDEX change. NO DDL runs here. Public for tests (the
+    /// confirm + constraint-backed guard live in <see cref="DropIndexCommand"/>).
     /// </summary>
-    public async Task ExecuteDropIndexAsync(string indexName)
+    public Task ExecuteDropIndexAsync(string indexName)
     {
-        if (string.IsNullOrWhiteSpace(indexName)) return;
-        if (_ddlExecutor is null) return;
+        if (string.IsNullOrWhiteSpace(indexName)) return Task.CompletedTask;
+        if (_ddlExecutor is null) return Task.CompletedTask;
 
         var sql = SafeBuildIndex(() => DdlGenerator.BuildDropIndex(indexName));
-        if (sql is null) return;
-        if (!await TryExecuteIndexSqlAsync(sql).ConfigureAwait(true)) return;
-        await RefreshStructureAsync().ConfigureAwait(true);
-    }
+        if (sql is null) return Task.CompletedTask;
 
-    private async Task<bool> TryExecuteIndexSqlAsync(string sql)
-    {
-        ErrorMessage = null;
-        try
+        var existing = Indexes.FirstOrDefault(i => string.Equals(i.Name, indexName, StringComparison.OrdinalIgnoreCase));
+        if (existing is { PendingState: PendingChangeKind.Added })
         {
-            await _ddlExecutor!.ExecuteAsync(sql).ConfigureAwait(true);
-            return true;
+            RemovePendingByMarker(PendingDdlChangeKind.Other, $"INDEX \"{indexName.Replace("\"", "\"\"")}\"");
+            Indexes.Remove(existing);
+            return Task.CompletedTask;
         }
-        catch (DdlExecutionException ex)
+
+        PendingChanges.Add(new PendingDdlChange
         {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.IndexExecuteFailedFormat, ex.Message);
-            return false;
-        }
-        catch (InvalidOperationException ex)
+            Kind = PendingDdlChangeKind.Other,
+            Description = "Drop index " + indexName,
+            Sql = sql,
+        });
+        if (existing is not null)
         {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.IndexExecuteFailedFormat, ex.Message);
-            return false;
+            existing.PendingState = PendingChangeKind.Dropped;
+            var idx = Indexes.IndexOf(existing);
+            if (idx >= 0) Indexes[idx] = existing; // force the bound grid to re-render
         }
+        return Task.CompletedTask;
     }
 
     private string? SafeBuildIndex(System.Func<string> build)
@@ -2311,86 +2374,112 @@ public partial class TableDetailTabViewModel : ViewModelBase
         return SaveDescriptionCoreAsync();
     }
 
-    private async Task SaveDescriptionCoreAsync()
+    // BUFFERED. Queues the COMMENT ON TABLE change (Opis tab already shows the
+    // edited text via EditableDescription). Repeated description edits collapse
+    // to a single queued statement. NO DDL runs here — Compile applies it.
+    private Task SaveDescriptionCoreAsync()
     {
-        if (_ddlExecutor is null) return;
+        if (_ddlExecutor is null) return Task.CompletedTask;
         ErrorMessage = null;
         var comment = string.IsNullOrWhiteSpace(EditableDescription) ? null : EditableDescription;
         var sql = DdlGenerator.BuildCommentTable(TableName, comment);
-        try
+        RemovePendingByMarker(PendingDdlChangeKind.Other, "COMMENT ON TABLE");
+        PendingChanges.Add(new PendingDdlChange
         {
-            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
-        }
-        catch (DdlExecutionException ex)
-        {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ex.Message);
-            return;
-        }
-        catch (InvalidOperationException ex)
-        {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ex.Message);
-            return;
-        }
-        await RefreshStructureAsync().ConfigureAwait(true);
+            Kind = PendingDdlChangeKind.Other,
+            Description = "Set table description",
+            Sql = sql,
+        });
+        return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Executes the ALTER TABLE … ADD statement immediately (in the user's
-    /// working transaction — DDL Executor auto-begins one if needed) and reloads
-    /// the table detail so the new column appears in the Pola grid. Errors
-    /// surface as <see cref="ErrorMessage"/>; the Commit / Rollback toolbar
-    /// buttons remain the user's escape hatch.
+    /// BUFFERED. Queues an ADD-FIELD change and shows the new column in the Pola
+    /// grid as a pending-Added row. NO DDL runs here — the structure designer is
+    /// "edit the model → Compile/Apply → auto-commit". Returns a completed task
+    /// (kept Task-returning so the command's <c>await</c> stays unchanged).
     /// </summary>
-    public async Task ExecuteAddFieldAsync(FieldDefinition definition)
+    public Task ExecuteAddFieldAsync(FieldDefinition definition)
     {
-        if (definition is null) return;
-        if (_ddlExecutor is null) return;
+        if (definition is null) return Task.CompletedTask;
+        if (_ddlExecutor is null) return Task.CompletedTask;
 
         ErrorMessage = null;
-        var sql = DdlGenerator.BuildAddField(TableName, definition);
-        try
-        {
-            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
-        }
-        catch (DdlExecutionException ex)
-        {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
-            return;
-        }
-        catch (InvalidOperationException ex)
-        {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
-            return;
-        }
-        await RefreshStructureAsync().ConfigureAwait(true);
+        AddPendingAddField(definition);
+        // Reflect in the working model: append a pending-Added row so the grid
+        // shows the column the user just defined, before Compile.
+        var display = BuildDisplayFieldInfo(definition);
+        var row = new FieldRowViewModel(display, this) { PendingKind = PendingChangeKind.Added };
+        EditableFields.Add(row);
+        return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Executes the ALTER TABLE … DROP statement immediately (in tx) and reloads
-    /// the table detail. Symmetric to <see cref="ExecuteAddFieldAsync"/>.
+    /// BUFFERED. Marks a column for deletion (kept visible, struck through) and
+    /// queues a DROP-FIELD change. Dropping a not-yet-compiled pending-Added row
+    /// instead removes it from the model and un-queues its ADD. NO DDL runs here.
     /// </summary>
-    public async Task ExecuteDropFieldAsync(string fieldName)
+    public Task ExecuteDropFieldAsync(string fieldName)
     {
-        if (string.IsNullOrWhiteSpace(fieldName)) return;
-        if (_ddlExecutor is null) return;
+        if (string.IsNullOrWhiteSpace(fieldName)) return Task.CompletedTask;
+        if (_ddlExecutor is null) return Task.CompletedTask;
 
         ErrorMessage = null;
-        var sql = DdlGenerator.BuildDropField(TableName, fieldName);
-        try
+        var row = EditableFields.FirstOrDefault(r =>
+            string.Equals(r.Name, fieldName, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(r.Original.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+
+        if (row is { PendingKind: PendingChangeKind.Added })
         {
-            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+            // Un-add: a column that was only queued (never in the catalog) just
+            // disappears, and its queued ADD is removed — no DROP needed.
+            RemovePendingAddField(row.Original.Name);
+            row.Detach();
+            EditableFields.Remove(row);
+            if (ReferenceEquals(SelectedFieldRow, row)) SelectedFieldRow = null;
+            return Task.CompletedTask;
         }
-        catch (DdlExecutionException ex)
+
+        PendingChanges.Add(new PendingDdlChange
         {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
-            return;
-        }
-        catch (InvalidOperationException ex)
+            Kind = PendingDdlChangeKind.DropField,
+            Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionDropFormat, fieldName),
+            Sql = DdlGenerator.BuildDropField(TableName, fieldName),
+        });
+        if (row is not null) row.PendingKind = PendingChangeKind.Dropped;
+        return Task.CompletedTask;
+    }
+
+    // Builds a display-only FieldInfo from a dialog FieldDefinition so a
+    // pending-Added column can be wrapped in a FieldRowViewModel and shown in
+    // the Pola grid before Compile. Position is appended past the current rows.
+    private FieldInfo BuildDisplayFieldInfo(FieldDefinition def) => new()
+    {
+        Position = EditableFields.Count,
+        Name = def.Name,
+        Type = DdlGenerator.FormatTypeOrDomain(def),
+        NotNull = def.NotNull,
+        DefaultValue = string.IsNullOrWhiteSpace(def.DefaultValue) ? null : def.DefaultValue,
+        Description = string.IsNullOrWhiteSpace(def.Description) ? null : def.Description,
+        Domain = string.IsNullOrWhiteSpace(def.Domain) ? null : def.Domain,
+        ComputedSource = string.IsNullOrWhiteSpace(def.ComputedExpression) ? null : def.ComputedExpression,
+        IsPrimaryKey = def.PrimaryKey,
+    };
+
+    // Removes the queued ADD-FIELD change for a column being un-added (matches on
+    // the quoted field name the BuildAddField statement emits).
+    private void RemovePendingAddField(string fieldName)
+    {
+        var marker = $"ADD \"{fieldName.Replace("\"", "\"\"")}\"";
+        for (int i = PendingChanges.Count - 1; i >= 0; i--)
         {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
-            return;
+            if (PendingChanges[i].Kind == PendingDdlChangeKind.AddField
+                && PendingChanges[i].Sql.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            {
+                PendingChanges.RemoveAt(i);
+                break;
+            }
         }
-        await RefreshStructureAsync().ConfigureAwait(true);
     }
 
     // Force the next EnsureLoadedAsync to re-fetch fields/constraints/indexes/DDL
@@ -2622,8 +2711,8 @@ public partial class TableDetailTabViewModel : ViewModelBase
         }).ConfigureAwait(true);
         if (!confirmed) return;
 
-        // Immediate execute in the user's working transaction — symmetric to
-        // Add Field. Rollback from the main toolbar undoes the drop.
+        // BUFFERED: marks the column for deletion in the working model + queues a
+        // DROP-FIELD change. No DDL runs until ⚡ Compile.
         await ExecuteDropFieldAsync(field.Name).ConfigureAwait(true);
     }
 
@@ -2651,31 +2740,37 @@ public partial class TableDetailTabViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Executes an ALTER TABLE … POSITION immediately in the user's working
-    /// transaction (auto-begin) and reloads — symmetric to Add/Drop. Selected
-    /// field is preserved by name through <see cref="RefreshStructureAsync"/>.
+    /// BUFFERED. Reorders the column in the working model (visible immediately in
+    /// the Pola grid) and queues an ALTER … POSITION change. NO DDL runs here.
     /// </summary>
-    public async Task ExecuteMoveAsync(string fieldName, int oneBasedPosition)
+    public Task ExecuteMoveAsync(string fieldName, int oneBasedPosition)
     {
-        if (string.IsNullOrWhiteSpace(fieldName)) return;
-        if (_ddlExecutor is null) return;
+        if (string.IsNullOrWhiteSpace(fieldName)) return Task.CompletedTask;
+        if (_ddlExecutor is null) return Task.CompletedTask;
         ErrorMessage = null;
-        var sql = DdlGenerator.BuildMoveField(TableName, fieldName, oneBasedPosition);
-        try
+
+        // Visually reorder the bound EditableFields so the grid reflects the move.
+        var row = EditableFields.FirstOrDefault(r =>
+            string.Equals(r.Original.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+        if (row is not null)
         {
-            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+            var target = Math.Clamp(oneBasedPosition - 1, 0, EditableFields.Count - 1);
+            var current = EditableFields.IndexOf(row);
+            if (current >= 0 && current != target)
+            {
+                EditableFields.RemoveAt(current);
+                EditableFields.Insert(target, row);
+                SelectedFieldRow = row;
+            }
         }
-        catch (DdlExecutionException ex)
+
+        PendingChanges.Add(new PendingDdlChange
         {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
-            return;
-        }
-        catch (InvalidOperationException ex)
-        {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
-            return;
-        }
-        await RefreshStructureAsync().ConfigureAwait(true);
+            Kind = PendingDdlChangeKind.MoveField,
+            Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionMoveFormat, fieldName, oneBasedPosition),
+            Sql = DdlGenerator.BuildMoveField(TableName, fieldName, oneBasedPosition),
+        });
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -2699,34 +2794,72 @@ public partial class TableDetailTabViewModel : ViewModelBase
         if (PendingChanges.Count == 0) return;
 
         ErrorMessage = null;
-        // Drain the pending list as we go — partial success leaves the still-pending
-        // statements in place so the user can fix and retry. We snapshot the list
-        // first so removing-from-front doesn't shift indices under the loop.
-        var snapshot = PendingChanges.ToList();
-        foreach (var change in snapshot)
+        // Apply the WHOLE batch in ONE autonomous, auto-committed transaction:
+        // join every queued statement and hand it to the executor once.
+        // FirebirdDdlExecutor splits on top-level ';' (BEGIN/END aware) and runs
+        // all statements in a single transaction — so a multi-step structural
+        // edit is atomic (all-or-nothing). On failure the queue is left intact so
+        // the user can fix the offending change and Compile again.
+        var batch = string.Join(
+            ";\n",
+            PendingChanges.Select(c => c.Sql.TrimEnd().TrimEnd(';')));
+        try
         {
-            try
-            {
-                await _ddlExecutor.ExecuteAsync(change.Sql).ConfigureAwait(true);
-            }
-            catch (DdlExecutionException ex)
-            {
-                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
-                return;
-            }
-            catch (InvalidOperationException ex)
-            {
-                ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
-                return;
-            }
-            PendingChanges.Remove(change);
+            await _ddlExecutor.ExecuteAsync(batch).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+            return;
         }
 
-        // Full success — refresh the live structure so Fields / Constraints /
-        // Indexes / DDL all reflect the new shape. Goes through the central
-        // RefreshStructureAsync helper so the user's sub-tab, selected field,
-        // sort state, page, and column widths all survive the rebuild.
+        // Full success — RefreshStructureAsync clears the pending queue and
+        // re-reads Fields / Constraints / Indexes / DDL from the live catalog,
+        // so the grids drop their pending markers and show the committed shape.
+        // (DDL auto-committed; there is no metadata Commit/Rollback step.)
         await RefreshStructureAsync().ConfigureAwait(true);
+    }
+
+    public bool CanDiscardPending => HasPendingChanges;
+
+    /// <summary>
+    /// Discards every queued structural change and reprojects the grids back to
+    /// the live-catalog (DB-truth) state — pending-Added rows vanish, dropped
+    /// rows un-strike, modified rows reset — WITHOUT a database round-trip.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanDiscardPending))]
+    private void DiscardPendingChanges()
+    {
+        if (PendingChanges.Count == 0) return;
+        ErrorMessage = null;
+        PendingChanges.Clear();
+
+        // Fields: rebuild the editable wrappers from Fields (the catalog truth) —
+        // drops pending-Added rows, resets Dropped/Modified markers + edited values.
+        RebuildEditableFields();
+        SelectedFieldRow = null;
+
+        // Constraints / Indexes: remove pending-Added rows; un-mark Dropped ones.
+        for (int i = Constraints.Count - 1; i >= 0; i--)
+        {
+            var c = Constraints[i];
+            if (c.PendingState == PendingChangeKind.Added) Constraints.RemoveAt(i);
+            else if (c.PendingState == PendingChangeKind.Dropped) { c.PendingState = PendingChangeKind.None; Constraints[i] = c; }
+        }
+        for (int i = Indexes.Count - 1; i >= 0; i--)
+        {
+            var x = Indexes[i];
+            if (x.PendingState == PendingChangeKind.Added) Indexes.RemoveAt(i);
+            else if (x.PendingState == PendingChangeKind.Dropped) { x.PendingState = PendingChangeKind.None; Indexes[i] = x; }
+        }
+
+        // Description back to the catalog value.
+        EditableDescription = Description ?? string.Empty;
     }
 
     /// <summary>
@@ -2756,8 +2889,10 @@ public partial class TableDetailTabViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasPendingChanges));
         OnPropertyChanged(nameof(CanCompile));
+        OnPropertyChanged(nameof(CanDiscardPending));
         OnPropertyChanged(nameof(DdlWithPendingPreview));
         CompileCommand.NotifyCanExecuteChanged();
+        DiscardPendingChangesCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnDdlTextChanged(string value)

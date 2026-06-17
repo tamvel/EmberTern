@@ -272,7 +272,7 @@ public class TableEditorGapFixTests
     }
 
     [Fact]
-    public async Task DropFieldForeignKeyCommand_Disconnected_AttemptsDrop()
+    public async Task DropFieldForeignKeyCommand_Confirmed_QueuesDropAndMarksConstraint()
     {
         using var service = new FirebirdConnectionService();
         var executor = new FirebirdDdlExecutor(service, null);
@@ -285,9 +285,12 @@ public class TableEditorGapFixTests
         Assert.True(vm.CanDropFieldForeignKey);
         await vm.DropFieldForeignKeyCommand.ExecuteAsync(null);
 
-        // Confirmed → drop attempted against disconnected executor → error set
-        // (proves it routed through the shared Drop Constraint path).
-        Assert.NotNull(vm.ErrorMessage);
+        // BUFFERED: confirmed → routes through the shared Drop Constraint path,
+        // which QUEUES the drop and marks the live constraint pending-Dropped.
+        // No DDL runs (Compile applies the batch), so no error.
+        Assert.Null(vm.ErrorMessage);
+        Assert.Single(vm.PendingChanges);
+        Assert.Equal(EmberTern.Core.Metadata.PendingChangeKind.Dropped, vm.Constraints[0].PendingState);
     }
 
     // ─── #2 : USING [ASC|DESC] INDEX clause on PK / UNIQUE ────────────────
@@ -352,7 +355,7 @@ public class TableEditorGapFixTests
     }
 
     [Fact]
-    public async Task SaveDescription_Disconnected_SetsError()
+    public async Task SaveDescription_Queues_NoDdlNoError()
     {
         using var service = new FirebirdConnectionService();
         var executor = new FirebirdDdlExecutor(service, null);
@@ -362,11 +365,13 @@ public class TableEditorGapFixTests
 
         await vm.SaveDescriptionCommand.ExecuteAsync(null);
 
-        Assert.NotNull(vm.ErrorMessage);
+        // BUFFERED: queues a COMMENT ON TABLE change, no DDL runs → no error.
+        Assert.Null(vm.ErrorMessage);
+        Assert.Single(vm.PendingChanges);
     }
 
     [Fact]
-    public async Task ClearDescription_EmptiesAndAttemptsSave()
+    public async Task ClearDescription_EmptiesAndQueuesSave()
     {
         using var service = new FirebirdConnectionService();
         var executor = new FirebirdDdlExecutor(service, null);
@@ -376,6 +381,8 @@ public class TableEditorGapFixTests
         await vm.ClearDescriptionCommand.ExecuteAsync(null);
 
         Assert.Equal(string.Empty, vm.EditableDescription);
-        Assert.NotNull(vm.ErrorMessage); // save attempted against disconnected executor
+        // BUFFERED: queues the COMMENT ON TABLE … IS NULL change, no error.
+        Assert.Null(vm.ErrorMessage);
+        Assert.Single(vm.PendingChanges);
     }
 }

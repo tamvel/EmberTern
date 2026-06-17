@@ -376,22 +376,26 @@ public class ConstraintManagementTests
     }
 
     [Fact]
-    public async Task ExecuteAddPrimaryKey_Disconnected_SetsErrorNoThrow()
+    public async Task ExecuteAddPrimaryKey_Buffered_QueuesPendingAddedNoError()
     {
         using var harness = new ExecutorHarness();
-        // Executor present but no open connection — the Add is attempted, the
-        // DDL builds fine, ExecuteAsync fails, and the failure surfaces as
-        // ErrorMessage rather than an exception.
+        // BUFFERED: the Add queues a pending change + a pending-Added constraint
+        // row. NO DDL runs (Compile applies the batch), so no error even with a
+        // disconnected executor.
         await harness.Vm.ExecuteAddPrimaryKeyAsync(new ConstraintFieldSpec("PK_T", new[] { "ID" }));
-        Assert.NotNull(harness.Vm.ErrorMessage);
+        Assert.Null(harness.Vm.ErrorMessage);
+        Assert.Single(harness.Vm.PendingChanges);
+        Assert.Contains(harness.Vm.Constraints, c => c.Name == "PK_T" && c.PendingState == PendingChangeKind.Added);
     }
 
     [Fact]
-    public async Task ExecuteAddCheck_Disconnected_SetsError()
+    public async Task ExecuteAddCheck_Buffered_QueuesNoError()
     {
         using var harness = new ExecutorHarness();
         await harness.Vm.ExecuteAddCheckAsync(new CheckConstraintSpec("CHK_T", "ID > 0"));
-        Assert.NotNull(harness.Vm.ErrorMessage);
+        Assert.Null(harness.Vm.ErrorMessage);
+        Assert.Single(harness.Vm.PendingChanges);
+        Assert.Contains(harness.Vm.Constraints, c => c.Name == "CHK_T" && c.PendingState == PendingChangeKind.Added);
     }
 
     [Fact]
@@ -403,11 +407,13 @@ public class ConstraintManagementTests
     }
 
     [Fact]
-    public async Task ExecuteDropConstraint_Disconnected_SetsError()
+    public async Task ExecuteDropConstraint_Buffered_QueuesNoError()
     {
         using var harness = new ExecutorHarness();
         await harness.Vm.ExecuteDropConstraintAsync("FK_T");
-        Assert.NotNull(harness.Vm.ErrorMessage);
+        // BUFFERED: queues a DROP CONSTRAINT change, no DDL runs → no error.
+        Assert.Null(harness.Vm.ErrorMessage);
+        Assert.Single(harness.Vm.PendingChanges);
     }
 
     [Fact]
@@ -426,7 +432,7 @@ public class ConstraintManagementTests
     }
 
     [Fact]
-    public async Task DropConstraintCommand_ConfirmTrue_AttemptsDrop()
+    public async Task DropConstraintCommand_ConfirmTrue_QueuesDrop()
     {
         using var harness = new ExecutorHarness();
         var vm = harness.Vm;
@@ -436,8 +442,9 @@ public class ConstraintManagementTests
 
         await vm.DropConstraintCommand.ExecuteAsync(null);
 
-        // Confirmed → drop attempted against disconnected executor → error set.
-        Assert.NotNull(vm.ErrorMessage);
+        // BUFFERED: confirmed → queues a DROP CONSTRAINT change, no DDL → no error.
+        Assert.Null(vm.ErrorMessage);
+        Assert.Single(vm.PendingChanges);
     }
 
     private sealed class ExecutorHarness : IDisposable
