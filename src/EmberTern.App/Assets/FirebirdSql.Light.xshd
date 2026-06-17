@@ -35,7 +35,7 @@
     <!-- Functions must precede general keywords so CASE/WHEN/THEN/ELSE/END
          resolve to the function color. -->
     <Keywords color="Function">
-      <Word>CASE</Word><Word>WHEN</Word><Word>THEN</Word><Word>ELSE</Word><Word>END</Word>
+      <Word>CASE</Word><Word>WHEN</Word><Word>THEN</Word><Word>ELSE</Word>
       <Word>CAST</Word><Word>COALESCE</Word><Word>NULLIF</Word><Word>IIF</Word><Word>DECODE</Word>
       <Word>CONVERT</Word><Word>EXTRACT</Word><Word>OVERLAY</Word>
       <Word>COUNT</Word><Word>SUM</Word><Word>AVG</Word><Word>MIN</Word><Word>MAX</Word><Word>LIST</Word>
@@ -83,7 +83,7 @@
       <Word>DOMAIN</Word><Word>EXCEPTION</Word><Word>ROLE</Word>
       <Word>GRANT</Word><Word>REVOKE</Word><Word>EXECUTE</Word>
       <Word>RETURNS</Word><Word>RETURN</Word>
-      <Word>BEGIN</Word>
+      <Word>BEGIN</Word><Word>END</Word>
       <Word>FOR</Word><Word>WHILE</Word><Word>DO</Word>
       <Word>IF</Word>
       <Word>EXIT</Word><Word>SUSPEND</Word><Word>LEAVE</Word>

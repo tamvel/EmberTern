@@ -921,6 +921,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
         if (_dataEditor is null) return;
         if (!_pkSnapshots.TryGetValue(row, out var pkValues)) return;
 
+        HasPendingDataEdits = true;
         var confirmed = await RequestConfirmAsync(new ConfirmRequest
         {
             Title = UiStrings.DataEditDeleteConfirmTitle,
@@ -962,11 +963,18 @@ public partial class TableDetailTabViewModel : ViewModelBase
     /// in memory — the actual INSERT happens later via <see cref="CommitNewRowAsync"/>
     /// once all values are set.
     /// </summary>
+    // True once a data cell/row has been edited in the current working transaction.
+    // The owner uses it to scope the post-rollback data-preview reload to ONLY the
+    // tabs that were actually edited — never a blanket refresh of every open tab (the
+    // refresh-storm fix, gotcha #119). Cleared after a data-preview reload / commit.
+    public bool HasPendingDataEdits { get; set; }
+
     public async Task UpdateCellAsync(object?[] row, int columnIndex, object? newValue)
     {
         if (row is null) return;
         if (columnIndex < 0 || columnIndex >= row.Length) return;
         if (_dataEditor is null) return;
+        HasPendingDataEdits = true;
 
         var oldValue = row[columnIndex];
 
@@ -1122,6 +1130,7 @@ public partial class TableDetailTabViewModel : ViewModelBase
         if (_dataEditor is null) return;
         if (!_newRows.Contains(row)) return;
         if (DataResult is not { HasResultSet: true } r) return;
+        HasPendingDataEdits = true;
 
         var values = new List<KeyValuePair<string, object?>>(r.Columns.Count);
         for (int i = 0; i < r.Columns.Count && i < row.Length; i++)
@@ -1412,6 +1421,8 @@ public partial class TableDetailTabViewModel : ViewModelBase
             DataResult = preview;
             DataError = string.Empty;
             DataResultVersionTag = System.Guid.NewGuid().ToString("N");
+            HasPendingDataEdits = false; // grid now matches the DB
+
         }
         catch (MetadataReadException ex)
         {

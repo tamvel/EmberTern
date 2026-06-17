@@ -398,6 +398,83 @@ internal static class UiStrings
     public const string NewViewTabDefaultTitle = "New View";
     public const string NewViewExecutedFormat = "View \"{0}\" created.";
 
+    // ─── Procedure Detail (Procedure Detail V1) ─────────────────────────────
+    public const string ProcedureDetailTabEditor = "Editor";
+    public const string ProcedureDetailTabDescription = "Description";
+    public const string ProcedureDetailTabDependencies = "Dependencies";
+    public const string ProcedureDetailTabDdl = "DDL";
+    public const string ProcedureDetailParamInputFormat = "Input ({0})";
+    public const string ProcedureDetailParamOutputFormat = "Output ({0})";
+    public const string ProcedureDetailLoadingHint = "Loading procedure…";
+    public const string ProcedureCompileTooltip = "Compile procedure (CREATE OR ALTER PROCEDURE)";
+    public const string ProcedureCompileFailedFormat = "Compile failed: {0}";
+    public const string ToolbarNewProcedureTooltip = "New Procedure";
+    public const string NewProcedureTabDefaultTitle = "New Procedure";
+    public const string NewProcedureExecutedFormat = "Procedure \"{0}\" created.";
+
+    // ─── Procedure Detail V1.1 (modes, locals, execute, comment) ────────────
+    public const string ProcedureDetailTabResult = "Result";
+    public const string ProcedureDetailLocalsVariablesFormat = "Variables ({0})";
+    public const string ProcedureDetailLocalsCursorsFormat = "Cursors ({0})";
+    public const string ProcedureDetailLocalsSubprogramsFormat = "Subprograms ({0})";
+    public const string ProcedureDetailLocalsColumnDetail = "Detail";
+    public const string ProcedureParseFailedNotice =
+        "Couldn't parse the source into structured form — Easy mode is showing the last loaded state. Edit in Source mode, or fix the header.";
+    public const string ProcedureModeSourceLabel = "Source";
+    public const string ProcedureModeEasyLabel = "Easy";
+    public const string ProcedureModeToggleTooltip = "Toggle Source / Easy mode";
+    public const string ProcedureExecuteTooltip = "Execute procedure";
+    public const string ProcedureCommentTooltip = "Comment body — disable the procedure body (/* */)";
+    public const string ProcedureUncommentTooltip = "Uncomment body — re-enable the procedure body";
+    public const string ProcedureParamAddTooltip = "Add parameter";
+    public const string ProcedureParamDeleteTooltip = "Delete parameter";
+    public const string ProcedureParamMoveUpTooltip = "Move parameter up";
+    public const string ProcedureParamMoveDownTooltip = "Move parameter down";
+    public const string ProcedureExecRowsFormat = "{0} row(s) returned.";
+    public const string ProcedureExecCompleted = "Procedure executed.";
+    // {0} = count, {1} = elapsed ms.
+    public const string ProcedureExecInfoRowsFormat = "Executed in {1} ms · {0} row(s) returned";
+    public const string ProcedureExecInfoAffectedFormat = "Executed in {1} ms · {0} row(s) affected";
+    public const string ProcedureExecInfoCompletedFormat = "Executed in {0} ms · completed";
+    public const string ProcedureExecutedViaDataProfile = "Executed procedure via Data profile.";
+    public const string ProcedureExecEmptyHint = "Run Execute to see results.";
+
+    // New-element templates (FB-valid PSQL) used when adding a cursor / subprogram.
+    public const string ProcedureSnippetVariable = "declare variable NewVariable integer;\n";
+    public const string ProcedureSnippetCursor = "DECLARE NEW_CURSOR CURSOR FOR (\n    SELECT /* columns */\n    FROM /* table */\n);";
+    public const string ProcedureSnippetSubprogram = "DECLARE PROCEDURE NEW_PROCEDURE\nAS\nBEGIN\n    /* body */\nEND";
+    public const string ProcedureSnippetFunction = "DECLARE FUNCTION NEW_FUNCTION\nRETURNS INTEGER\nAS\nBEGIN\n    /* body */\n    RETURN 0;\nEND";
+    public const string ProcedureLocalsSourceEmptyHint = "Select an item to edit its source.";
+
+    // New-subprogram kind prompt (Procedure / Function).
+    public const string SubprogramKindDialogTitle = "New Subprogram";
+    public const string SubprogramKindDialogPrompt = "Create a procedure or a function?";
+    public const string SubprogramKindProcedure = "Procedure";
+    public const string SubprogramKindFunction = "Function";
+
+    // Variable / parameter grid column headers not already present.
+    public const string ProcedureFieldTypeOf = "TYPE OF";
+    public const string ProcedureFieldSubType = "Sub Type";
+    public const string ProcedureFieldCharset = "Charset";
+    public const string ProcedureFieldCollate = "Collate";
+    public const string ProcedureFieldDescription = "Description";
+    public const string ProcedureCursorScroll = "Scroll";
+
+    // Local-element editor toolbars (Variables / Cursors / Subprograms — model-backed).
+    public const string ProcedureLocalAddTooltip = "Add";
+    public const string ProcedureLocalDeleteTooltip = "Delete";
+    public const string ProcedureLocalMoveUpTooltip = "Move up";
+    public const string ProcedureLocalMoveDownTooltip = "Move down";
+
+    // Execute Procedure parameter dialog
+    public const string ProcedureExecuteDialogTitle = "Execute Procedure";
+    public const string ProcedureExecuteDialogColumnName = "Parameter";
+    public const string ProcedureExecuteDialogColumnType = "Type";
+    public const string ProcedureExecuteDialogColumnValue = "Value";
+    public const string ProcedureExecuteDialogColumnNull = "NULL";
+    public const string ProcedureExecuteDialogRun = "Execute";
+    public const string ProcedureExecuteDialogCancel = "Cancel";
+
     public const string FieldEditCompileIcon = "⚡";
     public const string FieldEditCompileTooltip = "Compile pending DDL changes";
     public const string FieldEditAddIcon = "+";

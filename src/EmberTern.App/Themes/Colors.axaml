@@ -24,6 +24,9 @@
       <Color x:Key="RowAlternateColor">#0DFFFFFF</Color>
       <!-- Drag-and-drop drop-target overlay: ~33% of the dark accent blue. ARGB hex. -->
       <Color x:Key="DropTargetColor">#552D6BBF</Color>
+      <!-- Occurrence highlight (selecting an identifier boxes its other occurrences):
+           faint warm gold, distinct from the blue selection. ARGB alpha-first. -->
+      <Color x:Key="OccurrenceHighlightColor">#33C8A030</Color>
       <!-- Subtle accent overlay (~20% accent blue, ARGB alpha-first) marking a row
            with an unsaved structural edit in the Pola grid. Reads as "changed", not
            the loud WarningBrush brown it replaced. Same value in both themes (accent
@@ -72,6 +75,7 @@
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
       <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
+      <SolidColorBrush x:Key="OccurrenceHighlightBrush" Color="{StaticResource OccurrenceHighlightColor}" />
       <SolidColorBrush x:Key="RowModifiedBrush" Color="{StaticResource RowModifiedColor}" />
       <SolidColorBrush x:Key="CommitButtonBrush" Color="{StaticResource CommitButtonForeground}" />
       <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />
@@ -177,6 +181,9 @@
       <Color x:Key="RowAlternateColor">#0D000000</Color>
       <!-- Drag-and-drop drop-target overlay: ~33% of the light accent blue. ARGB hex. -->
       <Color x:Key="DropTargetColor">#552D6BBF</Color>
+      <!-- Occurrence highlight (selecting an identifier boxes its other occurrences):
+           faint warm gold, distinct from the blue selection. ARGB alpha-first. -->
+      <Color x:Key="OccurrenceHighlightColor">#33C8A030</Color>
       <!-- Subtle accent overlay (~20% accent blue, ARGB alpha-first) marking a row
            with an unsaved structural edit in the Pola grid. Reads as "changed", not
            the loud WarningBrush brown it replaced. Same value in both themes (accent
@@ -219,6 +226,7 @@
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
       <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
+      <SolidColorBrush x:Key="OccurrenceHighlightBrush" Color="{StaticResource OccurrenceHighlightColor}" />
       <SolidColorBrush x:Key="RowModifiedBrush" Color="{StaticResource RowModifiedColor}" />
       <SolidColorBrush x:Key="CommitButtonBrush" Color="{StaticResource CommitButtonForeground}" />
       <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />

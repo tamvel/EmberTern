@@ -23,7 +23,17 @@ public sealed class FirebirdQueryExecutor
 
     public int RowLimit { get; init; } = DefaultRowLimit;
 
-    public async Task<QueryResult> ExecuteAsync(string sql, CancellationToken cancellationToken = default)
+    public Task<QueryResult> ExecuteAsync(string sql, CancellationToken cancellationToken = default)
+        => ExecuteCoreAsync(sql, null, cancellationToken);
+
+    /// <summary>Executes a parameterized statement — used by Execute Procedure so
+    /// input values are bound (never embedded as SQL literals). Parameter names in
+    /// <paramref name="sql"/> must match <see cref="QueryParameter.Name"/> (e.g.
+    /// <c>@p0</c>). A null <see cref="QueryParameter.Value"/> binds SQL NULL.</summary>
+    public Task<QueryResult> ExecuteAsync(string sql, IReadOnlyList<QueryParameter> parameters, CancellationToken cancellationToken = default)
+        => ExecuteCoreAsync(sql, parameters, cancellationToken);
+
+    private async Task<QueryResult> ExecuteCoreAsync(string sql, IReadOnlyList<QueryParameter>? parameters, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(sql))
         {
@@ -63,6 +73,13 @@ public sealed class FirebirdQueryExecutor
             if (_transactionService?.ActiveTransaction is { } tx)
             {
                 cmd.Transaction = tx;
+            }
+            if (parameters is { Count: > 0 })
+            {
+                foreach (var p in parameters)
+                {
+                    cmd.Parameters.AddWithValue(p.Name, p.Value ?? DBNull.Value);
+                }
             }
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);

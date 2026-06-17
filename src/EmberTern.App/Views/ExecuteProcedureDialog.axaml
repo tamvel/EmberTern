@@ -1,0 +1,92 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EmberTern.App"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.ExecuteProcedureDialog"
+        x:DataType="vm:ExecuteProcedureDialogViewModel"
+        Title="{x:Static app:UiStrings.ProcedureExecuteDialogTitle}"
+        Width="660"
+        SizeToContent="Height"
+        MaxHeight="700"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="20,16">
+      <TextBlock Text="{x:Static app:UiStrings.ProcedureExecuteDialogTitle}" Classes="h1" />
+    </Border>
+
+    <!-- Column headers -->
+    <Grid Grid.Row="1" ColumnDefinitions="170,130,46,*" Margin="16,8,16,2">
+      <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ProcedureExecuteDialogColumnName}" Classes="field-label" />
+      <TextBlock Grid.Column="1" Text="{x:Static app:UiStrings.ProcedureExecuteDialogColumnType}" Classes="field-label" />
+      <TextBlock Grid.Column="2" Text="{x:Static app:UiStrings.ProcedureExecuteDialogColumnNull}" Classes="field-label" />
+      <TextBlock Grid.Column="3" Text="{x:Static app:UiStrings.ProcedureExecuteDialogColumnValue}" Classes="field-label" />
+    </Grid>
+
+    <ScrollViewer Grid.Row="2" Margin="16,0,16,8" VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Params}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:ExecuteProcedureParamRowViewModel">
+            <Grid ColumnDefinitions="170,130,46,*" Margin="0,3" MinHeight="30">
+              <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="{Binding TypeText}" FontSize="11"
+                         Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
+              <CheckBox Grid.Column="2" IsChecked="{Binding IsNull, Mode=TwoWay}" VerticalAlignment="Center" />
+              <Panel Grid.Column="3" VerticalAlignment="Center">
+                <!-- CHAR / VARCHAR -->
+                <TextBox IsVisible="{Binding IsSingleLineTextKind}" IsEnabled="{Binding IsValueEnabled}"
+                         Text="{Binding TextValue, Mode=TwoWay}" FontSize="11" />
+                <!-- BLOB (text / binary) -->
+                <TextBox IsVisible="{Binding IsMultilineKind}" IsEnabled="{Binding IsValueEnabled}"
+                         Text="{Binding TextValue, Mode=TwoWay}"
+                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" FontSize="11"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                <NumericUpDown IsVisible="{Binding IsNumericKind}" IsEnabled="{Binding IsValueEnabled}"
+                               Value="{Binding NumericValue, Mode=TwoWay}" FontSize="11" />
+                <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsDateTimeKind}">
+                  <CalendarDatePicker IsVisible="{Binding IsDateKind}"
+                                      SelectedDate="{Binding DateValue, Mode=TwoWay}"
+                                      IsEnabled="{Binding IsValueEnabled}" />
+                  <TimePicker IsVisible="{Binding IsTimeKind}"
+                              SelectedTime="{Binding TimeValue, Mode=TwoWay}"
+                              IsEnabled="{Binding IsValueEnabled}"
+                              ClockIdentifier="24HourClock" UseSeconds="True" />
+                </StackPanel>
+                <CheckBox IsVisible="{Binding IsBooleanKind}" IsEnabled="{Binding IsValueEnabled}"
+                          IsChecked="{Binding BoolValue, Mode=TwoWay}" />
+              </Panel>
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <Border Grid.Row="3"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="20,12">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Classes="flat"
+                Content="{x:Static app:UiStrings.DialogCancel}"
+                Command="{Binding CancelCommand}" />
+        <Button Classes="primary"
+                Content="{x:Static app:UiStrings.ProcedureExecuteDialogRun}"
+                Command="{Binding AcceptCommand}"
+                IsDefault="True" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>

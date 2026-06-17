@@ -23,12 +23,14 @@ namespace EmberTern.Firebird;
 public sealed class FirebirdDdlExecutor
 {
     private readonly FirebirdConnectionService _connectionService;
-    private readonly TransactionService? _transactionService;
 
+    // V1.4 Phase A: metadata DDL auto-commits via an autonomous transaction, so the
+    // executor no longer participates in the metadata working transaction. The
+    // transactionService parameter is retained for call-site stability (and a
+    // possible Phase B/D revisit) but is intentionally unused.
     public FirebirdDdlExecutor(FirebirdConnectionService connectionService, TransactionService? transactionService = null)
     {
         _connectionService = connectionService;
-        _transactionService = transactionService;
     }
 
     /// <summary>
@@ -60,56 +62,20 @@ public sealed class FirebirdDdlExecutor
         var statements = SplitStatements(sql);
         if (statements.Count == 0) return;
 
-        if (_transactionService is { IsActive: false })
-        {
-            try
-            {
-                await _transactionService.BeginTransactionAsync().ConfigureAwait(false);
-            }
-            catch (TransactionFailedException ex)
-            {
-                throw new DdlExecutionException(ex.Message, ex);
-            }
-        }
-
-        // Run on this executor's lane (metadata in production). The connection, lock,
-        // and transaction all come from the injected TransactionService so DDL lands on
-        // the metadata attachment under the metadata profile.
-        var connection = _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
-        var commandLock = _transactionService?.CommandLock ?? _connectionService.CommandLock;
-        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // V1.4 Phase A: a Compile/Apply runs in ONE autonomous transaction on a
+        // transient connection and auto-commits on success — atomic across the
+        // batch (e.g. ADD FIELD + CREATE GENERATOR + CREATE TRIGGER) and
+        // independent of the working-transaction lanes. The user no longer Commits
+        // structural changes manually; the metadata Commit/Rollback buttons stay
+        // inactive because no metadata working tx is begun here.
         try
         {
-            foreach (var statement in statements)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                await using var cmd = connection.CreateCommand();
-                cmd.CommandText = statement;
-                cmd.CommandTimeout = 0;
-                if (_transactionService?.ActiveTransaction is { } tx)
-                {
-                    cmd.Transaction = tx;
-                }
-                try
-                {
-                    await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (FbException ex)
-                {
-                    throw new DdlExecutionException(ex.Message, ex);
-                }
-            }
+            await _connectionService.ExecuteAutonomousAsync(statements, cancellationToken).ConfigureAwait(false);
         }
-        finally
+        catch (FbException ex)
         {
-            commandLock.Release();
+            throw new DdlExecutionException(ex.Message, ex);
         }
-
-        // Counter tick after release so the transaction bar updates outside the
-        // lock. One tick per Compile call regardless of statement count is the
-        // expected UX — the user thinks of the whole batch as one structural
-        // edit, not five separate statements.
-        _transactionService?.NotifyStatementExecuted();
     }
 
     /// <summary>

@@ -262,6 +262,205 @@ public sealed class FirebirdTableDetailReader
         }
     }
 
+    // ─── Stored-procedure metadata (Procedure Detail) ──────────────────────
+    //
+    // A procedure lives in RDB$PROCEDURES (not RDB$RELATIONS) and its dependency
+    // rows carry RDB$*_TYPE = 5 (Procedure), so the table/view description +
+    // dependency queries above DON'T apply — these are procedure-scoped. Same
+    // metadata-lane access pattern (MetaConnection/MetaLock/MetaTx) as the rest.
+
+    public async Task<string> GetProcedureDescriptionAsync(
+        string procedureName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(procedureName)) return string.Empty;
+
+        var connection = MetaConnection();
+        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText =
+                "SELECT RDB$DESCRIPTION FROM RDB$PROCEDURES WHERE RDB$PROCEDURE_NAME = @name";
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = MetaTx;
+            cmd.Parameters.AddWithValue("@name", procedureName);
+
+            string? description = null;
+            await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)
+                    && !reader.IsDBNull(0))
+                {
+                    description = reader.GetString(0);
+                }
+            }
+            return NormalizeDescription(description);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read description for procedure {procedureName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            MetaLock().Release();
+        }
+    }
+
+    /// <summary>Reads a procedure's parameters of one direction.
+    /// <paramref name="paramType"/> is the RDB$PARAMETER_TYPE value: 0 = input,
+    /// 1 = output. Position in the returned list is the 1-based display index
+    /// within that direction.</summary>
+    public async Task<IReadOnlyList<ProcedureParameterInfo>> GetProcedureParametersAsync(
+        string procedureName,
+        int paramType,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(procedureName)) return Array.Empty<ProcedureParameterInfo>();
+
+        var connection = MetaConnection();
+        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = ProcedureParametersSql;
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = MetaTx;
+            cmd.Parameters.AddWithValue("@name", procedureName);
+            cmd.Parameters.AddWithValue("@pt", (short)paramType);
+
+            var results = new List<ProcedureParameterInfo>();
+            int position = 0;
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var name = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim();
+                var fieldType = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+                var subType = reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2);
+                var fieldLength = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3);
+                var fieldPrecision = reader.IsDBNull(4) ? (int?)null : reader.GetInt32(4);
+                var fieldScale = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
+                var nullFlag = reader.IsDBNull(6) ? (int?)null : reader.GetInt32(6);
+                var defaultSource = reader.IsDBNull(7) ? null : reader.GetString(7).Trim();
+                var description = reader.IsDBNull(8) ? null : reader.GetString(8).Trim();
+
+                results.Add(new ProcedureParameterInfo
+                {
+                    Position = ++position,
+                    Name = name,
+                    Type = FormatFieldType(fieldType, fieldLength, fieldScale, fieldPrecision, subType),
+                    NotNull = nullFlag == 1,
+                    DefaultValue = StripDefaultPrefix(defaultSource),
+                    Description = string.IsNullOrEmpty(description) ? null : description,
+                });
+            }
+            return results;
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read parameters for procedure {procedureName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            MetaLock().Release();
+        }
+    }
+
+    public async Task<(IReadOnlyList<DependencyInfo> DependsOn, IReadOnlyList<DependencyInfo> DependedOnBy)> GetProcedureDependenciesAsync(
+        string procedureName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(procedureName))
+        {
+            return (Array.Empty<DependencyInfo>(), Array.Empty<DependencyInfo>());
+        }
+
+        var connection = MetaConnection();
+        await MetaLock().WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var dependsOn = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = ProcedureDependsOnSql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", procedureName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependsOn.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        FieldName = reader.IsDBNull(1) ? null : reader.GetString(1).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2)),
+                    });
+                }
+            }
+
+            var dependedOnBy = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = ProcedureDependedOnBySql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", procedureName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependedOnBy.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(1) ? (int?)null : reader.GetInt32(1)),
+                    });
+                }
+            }
+
+            return (dependsOn, dependedOnBy);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read dependencies for procedure {procedureName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            MetaLock().Release();
+        }
+    }
+
+    // Reuses the structured field columns + FormatFieldType so the parameter type
+    // matches the Pola-grid convention. ORDER BY the catalog parameter number;
+    // the 1-based display Position is assigned client-side per direction.
+    internal const string ProcedureParametersSql =
+        "SELECT TRIM(pp.RDB$PARAMETER_NAME), " +
+        "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
+        "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, " +
+        "       COALESCE(pp.RDB$NULL_FLAG, f.RDB$NULL_FLAG), " +
+        "       pp.RDB$DEFAULT_SOURCE, pp.RDB$DESCRIPTION " +
+        "FROM RDB$PROCEDURE_PARAMETERS pp " +
+        "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = pp.RDB$FIELD_SOURCE " +
+        "WHERE pp.RDB$PROCEDURE_NAME = @name AND pp.RDB$PARAMETER_TYPE = @pt " +
+        "ORDER BY pp.RDB$PARAMETER_NUMBER";
+
+    // Procedure dependencies use RDB$*_TYPE = 5 (Procedure). "Depends on" = what
+    // this procedure references (it is the DEPENDENT); "depended on by" = what
+    // references this procedure (it is the DEPENDED_ON). One @name reference per
+    // query, so no distinct-name binding is needed (cf. the table dependency
+    // UNION queries — see DependsOnSql comment, gotcha #47).
+    internal const string ProcedureDependsOnSql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDED_ON_NAME), TRIM(d.RDB$FIELD_NAME), " +
+        "    CAST(d.RDB$DEPENDED_ON_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDENT_NAME) = @name AND d.RDB$DEPENDENT_TYPE = 5 " +
+        "ORDER BY 3, 1";
+
+    internal const string ProcedureDependedOnBySql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDENT_NAME), " +
+        "    CAST(d.RDB$DEPENDENT_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 5 " +
+        "ORDER BY 2, 1";
+
     public async Task<(IReadOnlyList<DependencyInfo> DependsOn, IReadOnlyList<DependencyInfo> DependedOnBy)> GetDependenciesAsync(
         string tableName,
         CancellationToken cancellationToken = default)

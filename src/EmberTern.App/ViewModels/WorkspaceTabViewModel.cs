@@ -11,6 +11,7 @@ public enum WorkspaceTabKind
     TableDetail,
     NewTable,
     ViewDetail,
+    ProcedureDetail,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -93,6 +94,22 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ViewDetail = detail,
         };
 
+    public static WorkspaceTabViewModel CreateProcedureDetail(MainWindowViewModel owner, MetadataObject obj, ProcedureDetailTabViewModel detail, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.ProcedureDetail,
+            BaseTitle = obj.Name,
+            IsClosable = true,
+            ObjectKind = obj.Kind,
+            ObjectName = obj.Name,
+            DdlText = detail.DdlText,
+            ConnectionProfileId = connectionProfileId,
+            Icon = MetadataNodeViewModel.IconFor(obj.Kind),
+            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
+            ProcedureDetail = detail,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -107,6 +124,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public TableDetailTabViewModel? TableDetail { get; private init; }
     public NewTableTabViewModel? NewTable { get; private init; }
     public ViewDetailTabViewModel? ViewDetail { get; private init; }
+    public ProcedureDetailTabViewModel? ProcedureDetail { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]

@@ -262,6 +262,112 @@ public sealed class FirebirdConnectionService : IDisposable
         return results;
     }
 
+    /// <summary>
+    /// Runs all <paramref name="statements"/> in ONE autonomous transaction on a
+    /// transient connection (begin → all → commit; rollback on any failure), then
+    /// closes it. Used for metadata DDL Compile/Apply (V1.4 Phase A) so a multi-
+    /// statement apply (e.g. ADD FIELD + CREATE GENERATOR + CREATE TRIGGER) stays
+    /// atomic AND auto-commits — independent of the working-transaction lanes.
+    /// Propagates the FbException (after rollback) to the caller.
+    /// </summary>
+    public async Task ExecuteAutonomousAsync(IReadOnlyList<string> statements, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(statements);
+        if (statements.Count == 0) return;
+        if (_activeProfile is null)
+        {
+            throw new InvalidOperationException("No active Firebird connection.");
+        }
+
+        var connectionString = BuildConnectionString(_activeProfile);
+        await using var connection = new FbConnection(connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        var tx = (FbTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            foreach (var statement in statements)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await using var cmd = connection.CreateCommand();
+                cmd.CommandText = statement;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = tx;
+                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Diagnostics (gated by EMBERTERN_TX_DIAG): on a metadata lock / "object in
+            // use" conflict, dump the live MON$TRANSACTIONS / MON$ATTACHMENTS picture
+            // from this transient connection so we can see EXACTLY which attachment +
+            // transaction still holds the object the ALTER tried to change.
+            if (IsLockOrInUse(ex))
+            {
+                await DumpInUseDiagnosticsAsync(connection, ex, cancellationToken).ConfigureAwait(false);
+            }
+            try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { /* best-effort */ }
+            throw;
+        }
+        finally
+        {
+            await tx.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    private static bool IsLockOrInUse(Exception ex)
+    {
+        var m = ex.Message;
+        return m is not null
+            && (m.Contains("lock conflict", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("in use", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("unsuccessful metadata update", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Best-effort, env-gated MON$ dump on the failing transient connection. Uses a
+    // fresh short read transaction so it sees committed MON$ rows. Never throws.
+    private static async Task DumpInUseDiagnosticsAsync(FbConnection connection, Exception ex, CancellationToken cancellationToken)
+    {
+        if (Environment.GetEnvironmentVariable("EMBERTERN_TX_DIAG") is null) return;
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("DDL-IN-USE failure: " + ex.Message.Trim());
+            sb.AppendLine("--- active MON$TRANSACTIONS (attachment / state / isolation) ---");
+            await using var dtx = (FbTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await using (var cmd = connection.CreateCommand())
+                {
+                    cmd.Transaction = dtx;
+                    cmd.CommandText =
+                        "SELECT t.MON$TRANSACTION_ID, t.MON$ATTACHMENT_ID, t.MON$STATE, t.MON$ISOLATION_MODE, " +
+                        "a.MON$USER, a.MON$REMOTE_PROCESS " +
+                        "FROM MON$TRANSACTIONS t LEFT JOIN MON$ATTACHMENTS a ON a.MON$ATTACHMENT_ID = t.MON$ATTACHMENT_ID " +
+                        "ORDER BY t.MON$TRANSACTION_ID";
+                    await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        sb.AppendFormat(System.Globalization.CultureInfo.InvariantCulture,
+                            "  tx={0} att={1} state={2} isolation={3} user={4} process={5}",
+                            reader.IsDBNull(0) ? 0 : reader.GetValue(0),
+                            reader.IsDBNull(1) ? 0 : reader.GetValue(1),
+                            reader.IsDBNull(2) ? -1 : reader.GetValue(2),
+                            reader.IsDBNull(3) ? -1 : reader.GetValue(3),
+                            reader.IsDBNull(4) ? "" : reader.GetString(4).Trim(),
+                            reader.IsDBNull(5) ? "" : reader.GetString(5).Trim())
+                          .AppendLine();
+                    }
+                }
+                await dtx.CommitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch { try { await dtx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { } }
+            FirebirdDiagnostics.AppendDebugLog(sb.ToString());
+        }
+        catch { /* diagnostics must never mask the original error */ }
+    }
+
     public FbConnection RequireOpenConnection() => RequireOpenConnection(ConnectionRole.Data);
 
     // Returns the open connection for the given role. Metadata falls back to the data

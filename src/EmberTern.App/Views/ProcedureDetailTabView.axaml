@@ -1,0 +1,476 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:app="using:EmberTern.App"
+             xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:behaviors="using:EmberTern.App.Behaviors"
+             xmlns:conv="using:EmberTern.App.Converters"
+             xmlns:ae="using:AvaloniaEdit"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="640"
+             x:Class="EmberTern.App.Views.ProcedureDetailTabView"
+             x:Name="RootControl"
+             x:DataType="vm:ProcedureDetailTabViewModel"
+             Background="{DynamicResource BackgroundBrush}">
+
+  <UserControl.Styles>
+    <!-- Taller rows so the editable Not-Null checkboxes fit and the metadata grids
+         read like the other editable grids in the app (New Table uses 34). -->
+    <Style Selector="DataGridRow">
+      <Setter Property="Height" Value="30" />
+    </Style>
+    <Style Selector="DataGridCell">
+      <Setter Property="Padding" Value="6 2" />
+    </Style>
+    <Style Selector="TextBlock.null-cell">
+      <Setter Property="FontStyle" Value="Italic" />
+      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="*,Auto">
+
+    <TabControl Grid.Row="0"
+                SelectedIndex="{Binding ActiveSubTabIndex, Mode=TwoWay}"
+                Padding="0">
+
+      <!-- Editor — Source mode (full text) OR Easy mode (metadata panels ABOVE a
+           body-only editor). Compile / Format / Comment / Execute live in the main
+           app toolbar (gated on IsProcedureDetailTabActive). -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabEditor}">
+        <Grid>
+          <!-- Source mode -->
+          <ae:TextEditor x:Name="ProcSqlEditor"
+                         IsVisible="{Binding IsSourceMode}"
+                         ShowLineNumbers="True"
+                         FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                         FontSize="13"
+                         HorizontalScrollBarVisibility="Auto"
+                         VerticalScrollBarVisibility="Auto"
+                         Background="{DynamicResource BackgroundBrush}"
+                         Foreground="{DynamicResource ForegroundBrush}" />
+
+          <!-- Easy mode: metadata (top) over body editor (bottom) -->
+          <Grid IsVisible="{Binding EasyMode}" RowDefinitions="240,4,*">
+
+            <TabControl Grid.Row="0" Padding="0">
+              <!-- Input parameters (editable, full field model — columns built in code-behind). -->
+              <TabItem Classes="sub-tab" Header="{Binding InputTabHeader}">
+                <Grid RowDefinitions="Auto,*">
+                  <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="2" Margin="4,2">
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureParamAddTooltip}"
+                            Command="{Binding AddInputParamCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureParamDeleteTooltip}"
+                            Command="{Binding DeleteInputParamCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureParamMoveUpTooltip}"
+                            Command="{Binding MoveInputParamUpCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureParamMoveDownTooltip}"
+                            Command="{Binding MoveInputParamDownCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
+                    </Button>
+                  </StackPanel>
+                  <DataGrid Grid.Row="1" x:Name="InputParamsGrid"
+                            ItemsSource="{Binding InputParams}"
+                            SelectedItem="{Binding SelectedInputParam, Mode=TwoWay}"
+                            IsReadOnly="False" AutoGenerateColumns="False"
+                            CanUserSortColumns="False" CanUserResizeColumns="True"
+                            CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="11"
+                            GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                            HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                            VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                            Background="{DynamicResource BackgroundBrush}" />
+                </Grid>
+              </TabItem>
+
+              <!-- Output parameters (editable; no default). -->
+              <TabItem Classes="sub-tab" Header="{Binding OutputTabHeader}">
+                <Grid RowDefinitions="Auto,*">
+                  <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="2" Margin="4,2">
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureParamAddTooltip}"
+                            Command="{Binding AddOutputParamCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureParamDeleteTooltip}"
+                            Command="{Binding DeleteOutputParamCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureParamMoveUpTooltip}"
+                            Command="{Binding MoveOutputParamUpCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureParamMoveDownTooltip}"
+                            Command="{Binding MoveOutputParamDownCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
+                    </Button>
+                  </StackPanel>
+                  <DataGrid Grid.Row="1" x:Name="OutputParamsGrid"
+                            ItemsSource="{Binding OutputParams}"
+                            SelectedItem="{Binding SelectedOutputParam, Mode=TwoWay}"
+                            IsReadOnly="False" AutoGenerateColumns="False"
+                            CanUserSortColumns="False" CanUserResizeColumns="True"
+                            CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="11"
+                            GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                            HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                            VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                            Background="{DynamicResource BackgroundBrush}" />
+                </Grid>
+              </TabItem>
+
+              <!-- Variables (editable, full field model — reuses the field Type/Domain dropdowns). -->
+              <TabItem Classes="sub-tab" Header="{Binding VariablesTabHeader}">
+                <Grid RowDefinitions="Auto,*">
+                  <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="2" Margin="4,2">
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalAddTooltip}"
+                            Command="{Binding AddVariableCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalDeleteTooltip}"
+                            Command="{Binding DeleteVariableCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalMoveUpTooltip}"
+                            Command="{Binding MoveVariableUpCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalMoveDownTooltip}"
+                            Command="{Binding MoveVariableDownCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
+                    </Button>
+                  </StackPanel>
+                  <DataGrid Grid.Row="1" x:Name="VariablesGrid"
+                            ItemsSource="{Binding Variables}"
+                            SelectedItem="{Binding SelectedVariable, Mode=TwoWay}"
+                            IsReadOnly="False" AutoGenerateColumns="False"
+                            CanUserSortColumns="False" CanUserResizeColumns="True"
+                            CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="11"
+                            GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                            HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                            VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                            Background="{DynamicResource BackgroundBrush}" />
+                </Grid>
+              </TabItem>
+
+              <!-- Cursors — IBExpert-style split: names (left) + editable source (right). -->
+              <TabItem Classes="sub-tab" Header="{Binding CursorsTabHeader}">
+                <Grid RowDefinitions="Auto,*">
+                  <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="2" Margin="4,2">
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalAddTooltip}"
+                            Command="{Binding AddCursorCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalDeleteTooltip}"
+                            Command="{Binding DeleteCursorCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalMoveUpTooltip}"
+                            Command="{Binding MoveCursorUpCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalMoveDownTooltip}"
+                            Command="{Binding MoveCursorDownCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
+                    </Button>
+                  </StackPanel>
+                  <Grid Grid.Row="1" ColumnDefinitions="200,4,*">
+                    <ListBox Grid.Column="0" ItemsSource="{Binding Cursors}"
+                             SelectedItem="{Binding SelectedCursor, Mode=TwoWay}"
+                             FontSize="11" Background="{DynamicResource BackgroundBrush}">
+                      <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ProcedureCursorRowViewModel">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <TextBox Grid.Column="0" Text="{Binding Name, Mode=TwoWay}" FontSize="11"
+                                     BorderThickness="0" Background="Transparent" Padding="0" />
+                            <CheckBox Grid.Column="1" IsChecked="{Binding Scroll, Mode=TwoWay}"
+                                      Content="{x:Static app:UiStrings.ProcedureCursorScroll}"
+                                      FontSize="10" VerticalAlignment="Center"
+                                      ToolTip.Tip="{x:Static app:UiStrings.ProcedureCursorScroll}" />
+                          </Grid>
+                        </DataTemplate>
+                      </ListBox.ItemTemplate>
+                    </ListBox>
+                    <GridSplitter Grid.Column="1" Width="4" Background="{DynamicResource BorderBrush}"
+                                  HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                    <ae:TextEditor x:Name="CursorSourceEditor" Grid.Column="2"
+                                   IsReadOnly="False" ShowLineNumbers="True"
+                                   FontFamily="Cascadia Code,Consolas,Menlo,monospace" FontSize="12"
+                                   HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                   Background="{DynamicResource BackgroundBrush}"
+                                   Foreground="{DynamicResource ForegroundBrush}" />
+                  </Grid>
+                </Grid>
+              </TabItem>
+
+              <!-- Subprograms — IBExpert-style split: names (left) + editable source (right). -->
+              <TabItem Classes="sub-tab" Header="{Binding SubprogramsTabHeader}">
+                <Grid RowDefinitions="Auto,*">
+                  <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="2" Margin="4,2">
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalAddTooltip}"
+                            Command="{Binding AddSubprogramCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalDeleteTooltip}"
+                            Command="{Binding DeleteSubprogramCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalMoveUpTooltip}"
+                            Command="{Binding MoveSubprogramUpCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
+                    </Button>
+                    <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureLocalMoveDownTooltip}"
+                            Command="{Binding MoveSubprogramDownCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
+                    </Button>
+                  </StackPanel>
+                  <Grid Grid.Row="1" ColumnDefinitions="200,4,*">
+                    <ListBox Grid.Column="0" ItemsSource="{Binding Subprograms}"
+                             SelectedItem="{Binding SelectedSubprogram, Mode=TwoWay}"
+                             FontSize="11" Background="{DynamicResource BackgroundBrush}">
+                      <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ProcedureSubprogramRowViewModel">
+                          <Grid ColumnDefinitions="Auto,*">
+                            <TextBlock Grid.Column="0" Text="{Binding Kind}" FontSize="9"
+                                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                                       VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBox Grid.Column="1" Text="{Binding Name, Mode=TwoWay}" FontSize="11"
+                                     BorderThickness="0" Background="Transparent" Padding="0" />
+                          </Grid>
+                        </DataTemplate>
+                      </ListBox.ItemTemplate>
+                    </ListBox>
+                    <GridSplitter Grid.Column="1" Width="4" Background="{DynamicResource BorderBrush}"
+                                  HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                    <ae:TextEditor x:Name="SubprogramSourceEditor" Grid.Column="2"
+                                   IsReadOnly="False" ShowLineNumbers="True"
+                                   FontFamily="Cascadia Code,Consolas,Menlo,monospace" FontSize="12"
+                                   HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                   Background="{DynamicResource BackgroundBrush}"
+                                   Foreground="{DynamicResource ForegroundBrush}" />
+                  </Grid>
+                </Grid>
+              </TabItem>
+            </TabControl>
+
+            <GridSplitter Grid.Row="1" Height="4" ResizeDirection="Rows"
+                          Background="{DynamicResource BorderBrush}"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+            <ae:TextEditor x:Name="ProcBodyEditor"
+                           Grid.Row="2"
+                           ShowLineNumbers="True"
+                           FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                           FontSize="13"
+                           HorizontalScrollBarVisibility="Auto"
+                           VerticalScrollBarVisibility="Auto"
+                           Background="{DynamicResource BackgroundBrush}"
+                           Foreground="{DynamicResource ForegroundBrush}" />
+          </Grid>
+        </Grid>
+      </TabItem>
+
+      <!-- Description — editable COMMENT ON PROCEDURE. -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabDescription}">
+        <Grid RowDefinitions="Auto,*" Background="{DynamicResource BackgroundBrush}">
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4"
+                      IsVisible="{Binding CanEditDescription}">
+            <TextBlock Text="{x:Static app:UiStrings.TableDescriptionEditLabel}"
+                       Classes="subtle" FontSize="11" VerticalAlignment="Center" />
+            <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
+                    Command="{Binding SaveDescriptionCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.Save}" />
+            </Button>
+            <Button Classes="flat" Padding="8,2"
+                    Content="{x:Static app:UiStrings.TableDescriptionClear}"
+                    Command="{Binding ClearDescriptionCommand}" />
+          </StackPanel>
+          <TextBox Grid.Row="1"
+                   Text="{Binding EditableDescription, Mode=TwoWay}"
+                   IsEnabled="{Binding CanEditDescription}"
+                   AcceptsReturn="True" TextWrapping="Wrap" FontSize="11"
+                   Margin="8,0,8,8" Background="{DynamicResource BackgroundBrush}" />
+        </Grid>
+      </TabItem>
+
+      <!-- Dependencies — dual tree (Used by / Depends on). -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabDependencies}">
+        <Grid ColumnDefinitions="*,4,*">
+          <Grid Grid.Column="0" RowDefinitions="Auto,*">
+            <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
+                       FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,4,0,4" />
+            <TreeView Grid.Row="1" ItemsSource="{Binding DependedOnByTree}"
+                      Background="{DynamicResource BackgroundBrush}">
+              <TreeView.DataTemplates>
+                <TreeDataTemplate DataType="vm:DependencyGroupNode" ItemsSource="{Binding Children}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                      Width="15" Height="15" VerticalAlignment="Center">
+                      <controls:SvgIcon.Foreground>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="IconResourceKey" />
+                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </controls:SvgIcon.Foreground>
+                    </controls:SvgIcon>
+                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
+                  </StackPanel>
+                </TreeDataTemplate>
+                <DataTemplate DataType="vm:DependencyLeafNode">
+                  <Border HorizontalAlignment="Stretch" Background="Transparent"
+                          DoubleTapped="OnDependencyNodeDoubleTapped">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                        Width="15" Height="15" VerticalAlignment="Center">
+                        <controls:SvgIcon.Foreground>
+                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                            <Binding Path="IconResourceKey" />
+                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                          </MultiBinding>
+                        </controls:SvgIcon.Foreground>
+                      </controls:SvgIcon>
+                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding FieldName}" FontSize="10"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
+                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </TreeView.DataTemplates>
+            </TreeView>
+          </Grid>
+
+          <GridSplitter Grid.Column="1" Width="4" Background="{DynamicResource BorderBrush}"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+          <Grid Grid.Column="2" RowDefinitions="Auto,*">
+            <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
+                       FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,4,0,4" />
+            <TreeView Grid.Row="1" ItemsSource="{Binding DependsOnTree}"
+                      Background="{DynamicResource BackgroundBrush}">
+              <TreeView.DataTemplates>
+                <TreeDataTemplate DataType="vm:DependencyGroupNode" ItemsSource="{Binding Children}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                      Width="15" Height="15" VerticalAlignment="Center">
+                      <controls:SvgIcon.Foreground>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="IconResourceKey" />
+                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </controls:SvgIcon.Foreground>
+                    </controls:SvgIcon>
+                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
+                  </StackPanel>
+                </TreeDataTemplate>
+                <DataTemplate DataType="vm:DependencyLeafNode">
+                  <Border HorizontalAlignment="Stretch" Background="Transparent"
+                          DoubleTapped="OnDependencyNodeDoubleTapped">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                        Width="15" Height="15" VerticalAlignment="Center">
+                        <controls:SvgIcon.Foreground>
+                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                            <Binding Path="IconResourceKey" />
+                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                          </MultiBinding>
+                        </controls:SvgIcon.Foreground>
+                      </controls:SvgIcon>
+                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding FieldName}" FontSize="10"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
+                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </TreeView.DataTemplates>
+            </TreeView>
+          </Grid>
+        </Grid>
+      </TabItem>
+
+      <!-- DDL — read-only reconstructed CREATE OR ALTER PROCEDURE. -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabDdl}">
+        <ae:TextEditor x:Name="ProcDdlEditor"
+                       ShowLineNumbers="True" IsReadOnly="True"
+                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       FontSize="13"
+                       HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                       Background="{DynamicResource BackgroundBrush}"
+                       Foreground="{DynamicResource ForegroundBrush}" />
+      </TabItem>
+
+      <!-- Result — read-only Execute Procedure output (self-contained) with paging
+           that reuses the Table/View Data experience (First/Prev/Next/Last + hint).
+           Client-side over the materialized result — never re-runs the proc. -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabResult}">
+        <Grid RowDefinitions="Auto,*">
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4" Margin="8,4"
+                      IsVisible="{Binding HasExecResult}">
+            <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
+                    Command="{Binding ExecFirstPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" />
+            </Button>
+            <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
+                    Command="{Binding ExecPreviousPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" />
+            </Button>
+            <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
+                    Command="{Binding ExecNextPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" />
+            </Button>
+            <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
+                    Command="{Binding ExecLastPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" />
+            </Button>
+            <TextBlock Text="{Binding ExecPaginationHint}" Classes="subtle" FontSize="11"
+                       VerticalAlignment="Center" Margin="6,0,0,0" />
+          </StackPanel>
+
+          <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ProcedureExecEmptyHint}" Classes="subtle"
+                     FontSize="11" Margin="8,4" IsVisible="{Binding !HasExecInfo}" />
+          <TextBlock Grid.Row="1" Text="{Binding ExecError}" Classes="subtle error" FontSize="11"
+                     Margin="8,4" TextWrapping="Wrap" IsVisible="{Binding ShowExecError}" />
+          <DataGrid Grid.Row="1" x:Name="ProcResultGrid"
+                    behaviors:GridLayoutBehavior.GridId="ProcedureDetail.Result"
+                    IsReadOnly="True" FontSize="11"
+                    GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                    CanUserSortColumns="False" CanUserResizeColumns="True"
+                    ColumnWidth="Auto" RowBackground="Transparent"
+                    HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                    VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                    Background="{DynamicResource BackgroundBrush}"
+                    IsVisible="{Binding HasExecResult}" />
+        </Grid>
+      </TabItem>
+
+    </TabControl>
+
+    <!-- Persistent execution-info panel — visible after any Execute regardless of
+         the active tab, so procedures with no result set still give feedback
+         (status / time / rows / affected / error). -->
+    <StackPanel Grid.Row="1" Orientation="Vertical">
+      <Border IsVisible="{Binding HasExecInfo}"
+              Background="{DynamicResource ElevatedPanelBrush}"
+              BorderBrush="{DynamicResource BorderBrush}"
+              BorderThickness="0,1,0,0"
+              Padding="10,5">
+        <Panel>
+          <TextBlock Text="{Binding ExecInfo}" Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                     IsVisible="{Binding !ExecInfoIsError}" />
+          <TextBlock Text="{Binding ExecInfo}" Classes="subtle error" FontSize="11" TextWrapping="Wrap"
+                     IsVisible="{Binding ExecInfoIsError}" />
+        </Panel>
+      </Border>
+      <TextBlock Text="{x:Static app:UiStrings.ProcedureDetailLoadingHint}" Classes="subtle"
+                 Margin="10,4" FontSize="11" IsVisible="{Binding IsLoading}" />
+      <TextBlock Text="{Binding ErrorMessage}" Classes="subtle error" Margin="10,4" FontSize="11"
+                 TextWrapping="Wrap" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </StackPanel>
+  </Grid>
+
+</UserControl>

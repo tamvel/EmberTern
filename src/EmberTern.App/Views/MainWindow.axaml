@@ -206,6 +206,12 @@
             <controls:SvgIcon Data="{StaticResource Icon.ViewPlus}"
                               Foreground="{DynamicResource IconColor_View}" />
           </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewProcedureTooltip}"
+                  Command="{Binding NewProcedureCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.ProcedurePlus}"
+                              Foreground="{DynamicResource IconColor_Procedure}" />
+          </Button>
         </StackPanel>
 
         <!-- Drag spacer (column 2 = *) -->
@@ -781,6 +787,61 @@
                       IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
+              <!-- Procedure Detail: Source ⇄ Easy mode toggle (checked = Easy).
+                   Disabled for a brand-new procedure (Source only — no catalog to
+                   seed Easy mode). -->
+              <ToggleButton Classes="icon"
+                            ToolTip.Tip="{x:Static app:UiStrings.ProcedureModeToggleTooltip}"
+                            IsChecked="{Binding ActiveProcedureDetail.EasyMode, Mode=TwoWay}"
+                            IsEnabled="{Binding ActiveProcedureDetail.CanUseEasyMode}"
+                            IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
+              </ToggleButton>
+              <!-- ⚡ Compile for a Procedure Detail tab (CREATE OR ALTER PROCEDURE).
+                   Acts on the active mode (Easy → reassembled; Source → raw text). -->
+              <Button Classes="primary"
+                      Padding="8,4"
+                      ToolTip.Tip="{x:Static app:UiStrings.ProcedureCompileTooltip}"
+                      Command="{Binding ActiveProcedureDetail.CompileCommand}"
+                      IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}"
+                                  Foreground="{DynamicResource OnAccentBrush}"
+                                  Width="16" Height="16" />
+              </Button>
+              <!-- Execute Procedure (Data lane, parameterized) — primary action,
+                   green accent so it reads as "run" at a glance. -->
+              <Button Classes="icon"
+                      ToolTip.Tip="{x:Static app:UiStrings.ProcedureExecuteTooltip}"
+                      Command="{Binding ActiveProcedureDetail.ExecuteProcedureCommand}"
+                      IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Play}"
+                                  Foreground="{DynamicResource SuccessIconBrush}" />
+              </Button>
+              <!-- Format SQL — the single shared SqlFormatter (now PSQL-aware:
+                   BEGIN/END indentation, CASE…END kept inline, idempotent). -->
+              <Button Classes="icon"
+                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+                      Command="{Binding ActiveProcedureDetail.FormatSqlCommand}"
+                      IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
+              </Button>
+              <!-- Comment Body (blue) / Uncomment Body (red) — wrap the outer
+                   BEGIN…END in /* */. Distinct colours so the action is identifiable
+                   without the tooltip. -->
+              <Button Classes="icon"
+                      ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
+                      Command="{Binding ActiveProcedureDetail.CommentBodyCommand}"
+                      IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Comment}"
+                                  Foreground="{DynamicResource InfoIconBrush}" />
+              </Button>
+              <Button Classes="icon"
+                      ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
+                      Command="{Binding ActiveProcedureDetail.UncommentBodyCommand}"
+                      IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}"
+                                  Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
               <!-- Data-edit add/delete row buttons. Bound through ActiveTableDetail
                    because the commands live on TableDetailTabViewModel. Visible only
                    on the Dane sub-tab; the leading separator collapses to zero width
@@ -897,6 +958,9 @@
               <views:ViewDetailTabView x:Name="ViewDetailView"
                                        DataContext="{Binding ActiveViewDetail}"
                                        IsVisible="{Binding DataContext.IsViewDetailTabActive, ElementName=RootWindow}" />
+              <views:ProcedureDetailTabView x:Name="ProcedureDetailView"
+                                            DataContext="{Binding ActiveProcedureDetail}"
+                                            IsVisible="{Binding DataContext.IsProcedureDetailTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query

@@ -292,6 +292,70 @@ public sealed class FirebirdDdlReader
 
     // -- Procedures -----------------------------------------------------------
 
+    /// <summary>
+    /// Fetches a procedure's source rebuilt as an editable
+    /// <c>CREATE OR ALTER PROCEDURE</c> statement — the working surface for the
+    /// Procedure Detail Editor tab. Reuses the same reconstruction as the
+    /// read-only <see cref="FetchDdlAsync"/> DDL path (a procedure always rebuilds
+    /// as CREATE OR ALTER, so source and DDL are identical in V1). Same lane/lock +
+    /// tx-attach pattern as every other read here.
+    /// </summary>
+    public async Task<string> FetchProcedureSourceAsync(MetadataObject obj, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        var connection = LaneConnection();
+        var serverMajor = ParseServerMajor(connection.ServerVersion);
+        var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
+        var tx = _transactionService?.ActiveTransaction;
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await BuildProcedureDdlAsync(connection, tx, obj.Name, serverMajor, fallback, cancellationToken).ConfigureAwait(false);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read source for PROCEDURE {obj.Name}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Fetches a procedure's BODY alone — <c>RDB$PROCEDURE_SOURCE</c> is exactly
+    /// the text after <c>AS</c> (the DECLARE…BEGIN…END), with no header. This is
+    /// what Procedure Detail Easy mode edits, alongside catalog-derived params, so
+    /// no PSQL parsing is needed to LOAD the procedure into structured form.
+    /// </summary>
+    public async Task<string> FetchProcedureBodyAsync(MetadataObject obj, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        var connection = LaneConnection();
+        var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
+        var tx = _transactionService?.ActiveTransaction;
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var body = await ReadBlobAsync(connection, tx,
+                "SELECT RDB$PROCEDURE_SOURCE FROM RDB$PROCEDURES WHERE RDB$PROCEDURE_NAME = @name",
+                obj.Name, fallback, cancellationToken).ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(body) ? string.Empty : body.Trim();
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read body for PROCEDURE {obj.Name}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
     private static async Task<string> BuildProcedureDdlAsync(FbConnection connection, FbTransaction? tx, string name, int serverMajor, Encoding fallback, CancellationToken ct)
     {
         var sb = new StringBuilder();

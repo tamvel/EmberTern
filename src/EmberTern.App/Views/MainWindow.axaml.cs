@@ -106,7 +106,9 @@ public partial class MainWindow : Window
                 dotTableResolver: ResolveDotTable,
                 cachedColumnsProvider: GetCachedColumns,
                 ensureColumnsAsync: EnsureColumnsAsync);
+            Completion.OccurrenceHighlighter.Attach(_editor);
         }
+        if (_ddlEditor is not null) Completion.OccurrenceHighlighter.Attach(_ddlEditor);
         // Re-apply on theme toggle. ActualThemeVariantChanged fires after the
         // resolved variant flips, so the read in ApplySyntaxHighlighting is
         // already on the new theme by the time we get the callback.

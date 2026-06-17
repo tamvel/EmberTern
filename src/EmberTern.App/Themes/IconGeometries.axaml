@@ -57,6 +57,10 @@
        bottom-right "+" overlay as Icon.TablePlus, so "New View" reads as a create
        action visually consistent with "New Table". -->
   <StreamGeometry x:Key="Icon.ViewPlus">M2 9.5 C4.5 4 11.5 4 14 9.5 C11.5 15 4.5 15 2 9.5 Z M5.4 9.5 A2.6 2.6 0 1 0 10.6 9.5 A2.6 2.6 0 1 0 5.4 9.5 Z M18.5 15 V22 M15 18.5 H22</StreamGeometry>
+  <!-- New Procedure: a small rounded terminal square (top-left) with a ">" prompt +
+       the SAME bottom-right "+" overlay as Icon.TablePlus / Icon.ViewPlus, so
+       "New Procedure" reads as a create action consistent with the others. -->
+  <StreamGeometry x:Key="Icon.ProcedurePlus">M5 3 H12 A2 2 0 0 1 14 5 V12 A2 2 0 0 1 12 14 H5 A2 2 0 0 1 3 12 V5 A2 2 0 0 1 5 3 Z M6 6.5 l2 2 -2 2 M9.5 10.5 h3 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
   <!-- Pencil-ruler (Lucide pencil-ruler): design / edit table structure (the inline
        field-edit toggle). Relative "m…" sub-paths re-anchored to absolute M + l. -->
   <StreamGeometry x:Key="Icon.PencilRuler">M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13 M8 6 l2-2 M18 16 l2-2 M17 11 l4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17 M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z M15 5 l4 4</StreamGeometry>
@@ -80,6 +84,10 @@
   <!-- Panel-left / panel-right (Lucide): rounded-rect (x3 y3 18×18 rx2) + a vertical
        divider at x9 / x15. Drive the sidebar collapse + Saved-Queries-panel toggles. -->
   <StreamGeometry x:Key="Icon.PanelLeft">M5 3 H19 A2 2 0 0 1 21 5 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V5 A2 2 0 0 1 5 3 Z M9 3 V21</StreamGeometry>
+  <!-- Comment selection: message-square with text lines = "add comment". -->
+  <StreamGeometry x:Key="Icon.Comment">M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z M7 9 H17 M7 13 H13</StreamGeometry>
+  <!-- Uncomment selection: message-square with a slash = "remove comment". -->
+  <StreamGeometry x:Key="Icon.Uncomment">M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z M8 8 L16 16</StreamGeometry>
   <StreamGeometry x:Key="Icon.PanelRight">M5 3 H19 A2 2 0 0 1 21 5 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V5 A2 2 0 0 1 5 3 Z M15 3 V21</StreamGeometry>
   <!-- Chevrons (Lucide chevron-first/left/right/last): pagination first/prev/next/last. -->
   <StreamGeometry x:Key="Icon.ChevronFirst">M17 18 L11 12 L17 6 M7 6 V18</StreamGeometry>

@@ -179,6 +179,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveNewTable))]
     [NotifyPropertyChangedFor(nameof(IsViewDetailTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveViewDetail))]
+    [NotifyPropertyChangedFor(nameof(IsProcedureDetailTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveProcedureDetail))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
@@ -208,6 +210,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsViewDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ViewDetail };
     public ViewDetailTabViewModel? ActiveViewDetail
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ViewDetail } t ? t.ViewDetail : null;
+    /// <summary>True when the active workspace tab is a Procedure Detail tab.</summary>
+    public bool IsProcedureDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ProcedureDetail };
+    public ProcedureDetailTabViewModel? ActiveProcedureDetail
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ProcedureDetail } t ? t.ProcedureDetail : null;
     // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
     // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
     // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
@@ -244,10 +250,12 @@ public partial class MainWindowViewModel : ViewModelBase
     // tab kind, not the inner sub-tab).
     // ViewDetail joins this set: Compile opens the working (metadata) transaction,
     // so Commit/Rollback must be reachable from a View Detail tab too.
-    public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive;
-    // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail);
+    // ProcedureDetail joins this set: Compile opens the working (metadata)
+    // transaction, so Commit/Rollback must be reachable from a Procedure Detail tab.
+    public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive;
+    // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail);
     // the anchored Query tab is never closable so the button hides when it's active.
-    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail };
+    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail };
     // Saved Queries panel is only meaningful while the Query tab is active.
     // When a DDL or TableDetail tab is active the panel collapses regardless of
     // the user's IsQueryPanelVisible toggle preference (the preference itself
@@ -1073,6 +1081,7 @@ public partial class MainWindowViewModel : ViewModelBase
             Workspaces = new Dictionary<string, ConnectionWorkspace>(_workspacesByConnection),
             LastActiveConnectionId = _service.ActiveProfile?.Id,
             QueryPanelVisible = IsQueryPanelVisible,
+            ProcedureEasyMode = ProcedureEasyModePreference,
         };
     }
 
@@ -1085,6 +1094,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         IsQueryPanelVisible = state.QueryPanelVisible;
+        ProcedureEasyModePreference = state.ProcedureEasyMode;
 
         // Workspace tabs stay empty at startup — there's no active connection yet.
         // The user's first Connect call will pull the matching entry out of the dict
@@ -1154,6 +1164,22 @@ public partial class MainWindowViewModel : ViewModelBase
                 ws.Tabs.Add(new WorkspaceTab
                 {
                     Kind = CoreTabKind.ViewDetail,
+                    ObjectName = tab.ObjectName,
+                    ObjectKind = tab.ObjectKind,
+                    ConnectionProfileId = tab.ConnectionProfileId,
+                    DdlText = ddl,
+                });
+            }
+            else if (tab.Kind == WorkspaceTabKind.ProcedureDetail)
+            {
+                // Skip transient New Procedure tabs (IsNew) — the procedure doesn't
+                // exist yet. Persist real procedures as ProcedureDetail so restore
+                // re-opens the full surface (not DDL-only).
+                if (tab.ProcedureDetail is { IsNew: true }) continue;
+                var ddl = tab.ProcedureDetail is { } pd ? pd.DdlText : tab.DdlText;
+                ws.Tabs.Add(new WorkspaceTab
+                {
+                    Kind = CoreTabKind.ProcedureDetail,
                     ObjectName = tab.ObjectName,
                     ObjectKind = tab.ObjectKind,
                     ConnectionProfileId = tab.ConnectionProfileId,
@@ -1241,6 +1267,18 @@ public partial class MainWindowViewModel : ViewModelBase
                 var detail = CreateViewDetail(obj);
                 detail.DdlText = tab.DdlText ?? string.Empty;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateViewDetail(this, obj, detail, tab.ConnectionProfileId));
+            }
+            else if (tab.Kind == CoreTabKind.ProcedureDetail
+                  && tab.ObjectKind is { } procKind
+                  && !string.IsNullOrEmpty(tab.ObjectName))
+            {
+                // Native ProcedureDetail restore (no DDL-only fallback). Lazy-loads
+                // on first activation via SelectTab. Cached DDL seeds the DDL tab
+                // before fetch returns.
+                var obj = new MetadataObject(tab.ObjectName, procKind);
+                var detail = CreateProcedureDetail(obj);
+                detail.DdlText = tab.DdlText ?? string.Empty;
+                WorkspaceTabs.Add(WorkspaceTabViewModel.CreateProcedureDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
 
@@ -1599,6 +1637,57 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public bool CanCreateProcedure => _service.IsConnected;
+
+    // New Procedure: opens a Procedure Detail tab in IsNew mode with the Editor
+    // seeded from the CREATE OR ALTER PROCEDURE template. No visual designer — the
+    // user edits SQL directly and presses Compile (per milestone scope). The other
+    // tabs stay empty until the procedure is created; on Compile success
+    // OnProcedureCreated refreshes the tree, closes this tab and reopens the real
+    // procedure.
+    [RelayCommand(CanExecute = nameof(CanCreateProcedure))]
+    private void NewProcedure()
+    {
+        var detail = new ProcedureDetailTabViewModel(UiStrings.NewProcedureTabDefaultTitle, _tableDetailReader, _ddlReader, _ddlExecutor)
+        {
+            IsNew = true,
+            SourceText = ProcedureDetailTabViewModel.NewProcedureTemplate,
+        };
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.RunExecuteRequested = RunProcedureExecuteAsync;
+        detail.ProcedureCreated += name => OnProcedureCreated(detail, name);
+
+        var obj = new MetadataObject(UiStrings.NewProcedureTabDefaultTitle, MetadataObjectKind.Procedure);
+        var tab = WorkspaceTabViewModel.CreateProcedureDetail(this, obj, detail, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+    }
+
+    private async void OnProcedureCreated(ProcedureDetailTabViewModel detail, string? procedureName)
+    {
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewProcedureExecutedFormat, procedureName ?? string.Empty));
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+
+        // Close the New Procedure tab.
+        WorkspaceTabViewModel? newTab = null;
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.ProcedureDetail && ReferenceEquals(t.ProcedureDetail, detail))
+            {
+                newTab = t;
+                break;
+            }
+        }
+        if (newTab is not null) CloseTab(newTab);
+
+        // Reopen the freshly-created procedure as a normal (existing) tab when we
+        // could parse its name; otherwise the user finds it in the tree.
+        if (!string.IsNullOrEmpty(procedureName))
+        {
+            OnOpenDdlRequested(new MetadataObject(procedureName, MetadataObjectKind.Procedure));
+        }
+    }
+
     // Persist a freshly-added connection into a folder. Called by the view after
     // the dialog returns with a profile; isolated here so tests can drive the
     // folder-placement logic without standing up the dialog.
@@ -1797,6 +1886,14 @@ public partial class MainWindowViewModel : ViewModelBase
     internal static bool OpensAsViewDetail(MetadataObjectKind kind)
         => kind is MetadataObjectKind.View;
 
+    // Procedures open in the dedicated Procedure Detail surface (editable
+    // CREATE OR ALTER PROCEDURE source + Compile / Description / Dependencies /
+    // DDL, with Input/Output parameter grids under the editor), not a plain DDL
+    // tab. Separate predicate from the view/table ones because it builds a
+    // structurally different detail VM.
+    internal static bool OpensAsProcedureDetail(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.Procedure;
+
     // Single construction point for ViewDetail VMs — mirrors CreateTableDetail.
     // A view is read-only data (no inline editing) but its SQL source IS editable,
     // so the DDL executor is wired for Compile while no data editor is.
@@ -1809,6 +1906,73 @@ public partial class MainWindowViewModel : ViewModelBase
             _ddlExecutor);
         detail.OpenObjectRequested += OnOpenDdlRequested;
         return detail;
+    }
+
+    // Single construction point for ProcedureDetail VMs — mirrors CreateViewDetail.
+    // The procedure source IS editable (Compile), so the DDL executor is wired;
+    // there is no data editor (procedures have no Data tab).
+    // Last-used Procedure Detail editor mode (false = Source, true = Easy),
+    // mirrored to WorkspaceState.ProcedureEasyMode. Applied to each newly opened
+    // existing procedure; updated when the user toggles a procedure's mode so the
+    // preference follows them across procedures and app restarts.
+    internal bool ProcedureEasyModePreference { get; set; }
+
+    internal ProcedureDetailTabViewModel CreateProcedureDetail(MetadataObject obj)
+    {
+        var detail = new ProcedureDetailTabViewModel(
+            obj.Name,
+            _tableDetailReader,
+            _ddlReader,
+            _ddlExecutor);
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.RunExecuteRequested = RunProcedureExecuteAsync;
+        // Best-effort domain list for the Variables grid's Domain combo (Easy mode).
+        _ = LoadProcedureDomainsAsync(detail);
+        // Restore the remembered mode (existing procedures only — New stays Source).
+        if (detail.CanUseEasyMode) detail.EasyMode = ProcedureEasyModePreference;
+        detail.PropertyChanged += OnProcedureDetailPropertyChanged;
+        return detail;
+    }
+
+    private async Task LoadProcedureDomainsAsync(ProcedureDetailTabViewModel detail)
+    {
+        try
+        {
+            var domains = await _metadataReader.ListDomainsAsync().ConfigureAwait(true);
+            detail.SetAvailableDomains(domains);
+        }
+        catch (MetadataReadException) { /* best effort — combo just has "(none)" */ }
+    }
+
+    private void OnProcedureDetailPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProcedureDetailTabViewModel.EasyMode)
+            && sender is ProcedureDetailTabViewModel { CanUseEasyMode: true } d)
+        {
+            ProcedureEasyModePreference = d.EasyMode;
+        }
+    }
+
+    // Runs an Execute Procedure statement on the Data lane with bound parameters
+    // (no literal embedding). Wraps the result/error so the procedure tab can show
+    // it in its own Result region. EXECUTE PROCEDURE/SELECT are Data-lane per the
+    // classifier — auto-begins the data working tx; the user Commits/Rolls back.
+    private async Task<ProcedureExecOutcome> RunProcedureExecuteAsync(string sql, IReadOnlyList<QueryParameter> parameters)
+    {
+        try
+        {
+            var result = await _executor.ExecuteAsync(sql, parameters).ConfigureAwait(true);
+            AddMessage(MessageSeverity.Info, UiStrings.ProcedureExecutedViaDataProfile);
+            return new ProcedureExecOutcome(result, null);
+        }
+        catch (QueryExecutionException ex)
+        {
+            return new ProcedureExecOutcome(null, ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new ProcedureExecOutcome(null, ex.Message);
+        }
     }
 
     // The SINGLE construction point for TableDetail VMs. Capability is decided here
@@ -1843,7 +2007,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // TableDetail tabs key on (Kind, Name).
         foreach (var tab in WorkspaceTabs)
         {
-            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail
+            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail
                 && tab.ObjectKind == obj.Kind
                 && string.Equals(tab.ObjectName, obj.Name, StringComparison.Ordinal))
             {
@@ -1875,6 +2039,21 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 var detail = CreateViewDetail(obj);
                 var newTab = WorkspaceTabViewModel.CreateViewDetail(this, obj, detail, _service.ActiveProfile?.Id);
+                WorkspaceTabs.Add(newTab);
+                SelectTab(newTab);
+                await detail.EnsureLoadedAsync().ConfigureAwait(true);
+                if (!string.IsNullOrEmpty(detail.ErrorMessage))
+                {
+                    AddMessage(MessageSeverity.Error, detail.ErrorMessage);
+                    SelectedBottomTabIndex = 1;
+                }
+                return;
+            }
+
+            if (OpensAsProcedureDetail(obj.Kind))
+            {
+                var detail = CreateProcedureDetail(obj);
+                var newTab = WorkspaceTabViewModel.CreateProcedureDetail(this, obj, detail, _service.ActiveProfile?.Id);
                 WorkspaceTabs.Add(newTab);
                 SelectTab(newTab);
                 await detail.EnsureLoadedAsync().ConfigureAwait(true);
@@ -1930,6 +2109,11 @@ public partial class MainWindowViewModel : ViewModelBase
             && _service.IsConnected)
         {
             _ = viewDetail.EnsureLoadedAsync();
+        }
+        else if (tab is { Kind: WorkspaceTabKind.ProcedureDetail, ProcedureDetail: { } procedureDetail }
+            && _service.IsConnected)
+        {
+            _ = procedureDetail.EnsureLoadedAsync();
         }
     }
 
@@ -2709,6 +2893,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // CanExecute (false) and the toolbar button never enabled on connect.
         OnPropertyChanged(nameof(CanCreateView));
         NewViewCommand.NotifyCanExecuteChanged();
+        // New Procedure shares the same connection-state gate.
+        OnPropertyChanged(nameof(CanCreateProcedure));
+        NewProcedureCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection
@@ -2741,6 +2928,74 @@ public partial class MainWindowViewModel : ViewModelBase
         return metadataSettled ? PostTransactionRefresh.Structure
              : dataSettled ? PostTransactionRefresh.DataOnly
              : PostTransactionRefresh.None;
+    }
+
+    // Re-entrancy guard so two coalesced settle events can't start two overlapping
+    // post-transaction refresh batches (gotcha #119).
+    private bool _postTxRefreshInFlight;
+
+    // Applies the post-transaction refresh — SCOPED, never a blanket fan-out over every
+    // open TableDetail tab (that was the refresh storm: each tab's structure reload runs
+    // ~7 heavy RDB$ queries, each an implicit auto-committed tx, each re-firing the user's
+    // ON TRANSACTION_COMMIT audit trigger — gotcha #119).
+    //   • Structure (metadata rollback, e.g. a raw F5 ALTER) → refresh ONLY the active
+    //     TableDetail tab (the object the user is on). Structure edits via the editor are
+    //     autonomous (Phase A) and self-refresh at apply-time, so other tabs are untouched.
+    //   • DataOnly (data rollback) → reload the preview ONLY for tabs that actually had
+    //     data edits in this transaction (revert optimistic writes); all others untouched.
+    /// <summary>One scoped refresh target: which TableDetail tab to refresh and whether
+    /// it's a structure (true) or data-preview (false) refresh.</summary>
+    internal readonly record struct RefreshTarget(TableDetailTabViewModel Detail, bool Structure);
+
+    /// <summary>
+    /// PURE selection of which TableDetail tabs a post-transaction refresh touches —
+    /// the heart of the refresh-storm fix (gotcha #119), unit-testable without a live tx.
+    /// NEVER a blanket fan-out over every open tab:
+    ///   • Structure → ONLY the active TableDetail tab (the object the user is on).
+    ///   • DataOnly  → ONLY tabs with pending data edits (revert optimistic writes).
+    /// </summary>
+    internal static IReadOnlyList<RefreshTarget> SelectRefreshTargets(
+        PostTransactionRefresh refresh,
+        IReadOnlyList<WorkspaceTabViewModel> tabs,
+        WorkspaceTabViewModel? activeTab)
+    {
+        var targets = new List<RefreshTarget>();
+        if (refresh == PostTransactionRefresh.Structure)
+        {
+            if (activeTab is { Kind: WorkspaceTabKind.TableDetail, TableDetail: { } active })
+                targets.Add(new RefreshTarget(active, Structure: true));
+        }
+        else if (refresh == PostTransactionRefresh.DataOnly)
+        {
+            foreach (var tab in tabs)
+                if (tab.Kind == WorkspaceTabKind.TableDetail && tab.TableDetail is { HasPendingDataEdits: true } edited)
+                    targets.Add(new RefreshTarget(edited, Structure: false));
+        }
+        return targets;
+    }
+
+    private async void RunScopedPostTransactionRefresh(PostTransactionRefresh refresh)
+    {
+        if (refresh == PostTransactionRefresh.None || _postTxRefreshInFlight) return;
+        var targets = SelectRefreshTargets(refresh, WorkspaceTabs, SelectedWorkspaceTab);
+        if (targets.Count == 0) return;
+        _postTxRefreshInFlight = true;
+        try
+        {
+            Diagnostics.RefreshTrace.Log("Transaction", $"scoped {refresh} refresh of {targets.Count} tab(s) (NOT a blanket fan-out)");
+            var tasks = new List<Task>(targets.Count);
+            foreach (var t in targets)
+                tasks.Add(t.Structure ? t.Detail.RefreshAfterTransactionAsync() : t.Detail.RefreshDataAfterTransactionAsync());
+            await Task.WhenAll(tasks).ConfigureAwait(true);
+        }
+        catch
+        {
+            // Each refresh surfaces its own error via SafeLoadAsync → ErrorMessage/DataError.
+        }
+        finally
+        {
+            _postTxRefreshInFlight = false;
+        }
     }
 
     private void OnTransactionStateChanged(object? sender, EventArgs e)
@@ -2794,23 +3049,14 @@ public partial class MainWindowViewModel : ViewModelBase
             // Fields/PK intact. metaCommitted wins when both coalesce (its full reload
             // already re-reads the data preview too).
             var refresh = DecidePostTransactionRefresh(dataCommittedOrRolledBack, metaCommittedOrRolledBack, _lastTransactionSettleWasRollback);
-            if (refresh != PostTransactionRefresh.None)
+            RunScopedPostTransactionRefresh(refresh);
+            // Data COMMIT: optimistic in-grid values are now committed (= correct), so no
+            // reload is needed — just clear the per-tab pending-edit flags. (A data
+            // ROLLBACK reloads the edited tabs below, which clears their flags.)
+            if (dataCommittedOrRolledBack && !_lastTransactionSettleWasRollback)
             {
-                Diagnostics.RefreshTrace.Log("Transaction",
-                    $"settled data={dataCommittedOrRolledBack} meta={metaCommittedOrRolledBack} rollback={_lastTransactionSettleWasRollback} → {refresh} over open TableDetail tabs");
                 foreach (var tab in WorkspaceTabs)
-                {
-                    if (tab.Kind == WorkspaceTabKind.TableDetail && tab.TableDetail is { } detail)
-                    {
-                        // Fire-and-forget — errors land in detail.ErrorMessage / DataError
-                        // via the standard SafeLoadAsync chain. A metadata-lane settle does
-                        // a structure refresh (now coalesced + data-preview only when the
-                        // column set changed); a data-lane settle reloads the preview only.
-                        _ = refresh == PostTransactionRefresh.Structure
-                            ? detail.RefreshAfterTransactionAsync()
-                            : detail.RefreshDataAfterTransactionAsync();
-                    }
-                }
+                    if (tab.TableDetail is { } committed) committed.HasPendingDataEdits = false;
             }
 
             OnPropertyChanged(nameof(IsTransactionIdle));

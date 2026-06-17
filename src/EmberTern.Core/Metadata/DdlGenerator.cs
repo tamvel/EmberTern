@@ -541,6 +541,135 @@ public static class DdlGenerator
     public static string BuildCommentView(string viewName, string? comment)
         => BuildRelationComment("VIEW", viewName, comment);
 
+    /// <summary>Like <see cref="BuildCommentTable"/> but for stored procedures —
+    /// Firebird's <c>COMMENT ON PROCEDURE</c> form. (The shared helper is named
+    /// "RelationComment" for historical reasons; a procedure isn't a relation,
+    /// but the COMMENT statement shape is identical.)</summary>
+    public static string BuildCommentProcedure(string procedureName, string? comment)
+        => BuildRelationComment("PROCEDURE", procedureName, comment);
+
+    /// <summary>
+    /// Reassembles a full <c>CREATE OR ALTER PROCEDURE</c> from the editable parts
+    /// (Procedure Detail Easy mode). Deterministic — the inverse of
+    /// <see cref="Sql.ProcedureSignatureParser"/>. Parameter type text and the body
+    /// are emitted verbatim; names are quoted. Output params never carry a default.
+    /// </summary>
+    public static string BuildCreateOrAlterProcedure(
+        string name,
+        IReadOnlyList<Sql.ProcedureParameter> inputs,
+        IReadOnlyList<Sql.ProcedureParameter> outputs,
+        string body)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Procedure name is required.", nameof(name));
+
+        var sb = new StringBuilder();
+        sb.Append("CREATE OR ALTER PROCEDURE ").Append(QuoteLight(name.Trim())).AppendLine();
+
+        if (inputs is { Count: > 0 })
+        {
+            sb.AppendLine("(");
+            AppendProcedureParamLines(sb, inputs, includeDefault: true);
+            sb.AppendLine(")");
+        }
+
+        if (outputs is { Count: > 0 })
+        {
+            sb.AppendLine("RETURNS");
+            sb.AppendLine("(");
+            AppendProcedureParamLines(sb, outputs, includeDefault: false);
+            sb.AppendLine(")");
+        }
+
+        sb.AppendLine("AS");
+        sb.Append(string.IsNullOrWhiteSpace(body) ? "BEGIN\nEND" : body.Trim());
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Regenerates a procedure body (the text after <c>AS</c>) from the structured
+    /// <see cref="Sql.ProcedureBodyModel"/>: the DECLARE section (variables, then
+    /// cursors, then subprograms) followed by the executable <c>BEGIN…END</c> block.
+    /// Deterministic inverse of <see cref="Sql.ProcedureBodySplitter.Split"/> —
+    /// variables emit a canonical <c>DECLARE VARIABLE</c> form; cursor and subprogram
+    /// declarations are emitted verbatim (already full <c>DECLARE …;</c> statements).
+    /// </summary>
+    public static string BuildProcedureBody(Sql.ProcedureBodyModel model)
+    {
+        if (model is null) throw new ArgumentNullException(nameof(model));
+
+        var sb = new StringBuilder();
+
+        foreach (var v in model.Variables)
+        {
+            if (string.IsNullOrWhiteSpace(v.Name)) continue;
+            sb.Append("DECLARE VARIABLE ").Append(QuoteLight(v.Name.Trim()))
+              .Append(' ').Append((v.TypeText ?? string.Empty).Trim());
+            if (v.NotNull) sb.Append(" NOT NULL");
+            if (!string.IsNullOrWhiteSpace(v.Default))
+                sb.Append(" = ").Append(v.Default!.Trim());
+            sb.Append(';').Append('\n');
+        }
+
+        foreach (var c in model.Cursors)
+        {
+            var decl = (c.Declaration ?? string.Empty).Trim();
+            if (decl.Length == 0) continue;
+            if (!decl.EndsWith(";", StringComparison.Ordinal)) decl += ";";
+            sb.Append(decl).Append('\n');
+        }
+
+        foreach (var sp in model.Subprograms)
+        {
+            var decl = (sp.Declaration ?? string.Empty).Trim();
+            if (decl.Length == 0) continue;
+            sb.Append(decl).Append('\n');
+        }
+
+        if (sb.Length > 0) sb.Append('\n');
+
+        var execBody = (model.ExecutableBody ?? string.Empty).Trim();
+        sb.Append(execBody.Length == 0 ? "BEGIN\nEND" : execBody);
+        return sb.ToString();
+    }
+
+    private static void AppendProcedureParamLines(StringBuilder sb, IReadOnlyList<Sql.ProcedureParameter> ps, bool includeDefault)
+    {
+        for (int k = 0; k < ps.Count; k++)
+        {
+            var p = ps[k];
+            sb.Append("    ").Append(QuoteLight((p.Name ?? string.Empty).Trim()))
+              .Append(' ').Append((p.TypeText ?? string.Empty).Trim());
+            if (p.NotNull) sb.Append(" NOT NULL");
+            if (includeDefault && !string.IsNullOrWhiteSpace(p.DefaultValue))
+                sb.Append(" = ").Append(p.DefaultValue!.Trim());
+            if (k < ps.Count - 1) sb.Append(',');
+            sb.AppendLine();
+        }
+    }
+
+    // Quote only when needed (lowercase / leading non-letter / special chars) so a
+    // reassembled procedure reads like the catalog DDL (unquoted SHOUTY_CASE), not
+    // "ALL" "QUOTED". Matches FirebirdDdlReader.Quote's lighter convention — distinct
+    // from the always-quote Quote used elsewhere in this generator.
+    private static string QuoteLight(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "\"\"";
+        bool needs = !char.IsLetter(name[0]) || char.IsLower(name[0]);
+        if (!needs)
+        {
+            foreach (var c in name)
+            {
+                if (!(char.IsUpper(c) || char.IsDigit(c) || c == '_' || c == '$'))
+                {
+                    needs = true;
+                    break;
+                }
+            }
+        }
+        return needs ? "\"" + name.Replace("\"", "\"\"") + "\"" : name;
+    }
+
     private static string BuildRelationComment(string objectType, string name, string? comment)
     {
         if (string.IsNullOrWhiteSpace(name))

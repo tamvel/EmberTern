@@ -9,6 +9,7 @@ public enum WorkspaceTabKind
     Ddl,
     TableDetail,
     ViewDetail,
+    ProcedureDetail,
 }
 
 // Stored verbatim as JSON. Properties are settable so System.Text.Json can
@@ -83,4 +84,9 @@ public sealed class WorkspaceState
     public double SidebarWidth { get; set; } = 280;
     public bool SidebarCollapsed { get; set; }
     public double ResultsPanelHeight { get; set; } = 280;
+
+    // Last-used Procedure Detail editor mode (false = Source, true = Easy). Global
+    // (not per-connection) — a UI preference like QueryPanelVisible. Restored for
+    // newly opened procedures and across app restarts. New procedures stay Source.
+    public bool ProcedureEasyMode { get; set; }
 }
