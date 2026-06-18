@@ -40,7 +40,14 @@ public class App : Application
             // migrates any legacy plaintext connections.json on first load).
             var store = new ConnectionProfileStore(DpapiSecretProtector.Create());
             _service = new FirebirdConnectionService();
-            _transactionService = new TransactionService(_service);
+            // Data working tx is ALWAYS the safe NOWAIT default — the TPB profile is no
+            // longer user-configurable (replaced by the DDL-only Developer Mode switch),
+            // so a stored non-default profile (e.g. legacy table-stability) must never
+            // make data work WAIT or lock tables. Force ReadCommitted regardless.
+            _transactionService = new TransactionService(
+                _service,
+                ConnectionRole.Data,
+                _ => EmberTern.Core.Connections.TransactionProfile.ReadCommitted);
 
             desktop.MainWindow = new MainWindow
             {

@@ -90,19 +90,35 @@ public sealed class FirebirdDdlExecutor
         }
     }
 
-    // Krok 1: fixed NOWAIT (write + read_committed + rec_version + nowait) — the
-    // explicit FbTransactionOptions the old transient path never supplied, which is
-    // why configured profiles never reached Compile. Behaviour is identical to
-    // before (NOWAIT, fail-fast). The Standard/Developer switch will choose NOWAIT
-    // vs WAIT + lock timeout here in a later step; nothing else needs to change.
-    private static FbTransactionOptions BuildDdlTransactionOptions() => new()
+    // Lock timeout (seconds) for Developer Mode's WAIT transactions — bounds the wait
+    // so a Compile of a continuously-used object fails with a clear message instead of
+    // hanging indefinitely.
+    internal const int DdlLockTimeoutSeconds = 10;
+
+    private FbTransactionOptions BuildDdlTransactionOptions()
+        => BuildDdlTransactionOptions(_connectionService.ActiveProfile?.DeveloperMode ?? false);
+
+    // Standard Mode → write + read_committed + rec_version + NOWAIT (fail-fast,
+    // identical to prior behaviour). Developer Mode → the same isolation but WAIT +
+    // a lock timeout, so DDL waits for an in-use object to be released rather than
+    // returning "object is in use" immediately. Pure + internal so a unit test pins
+    // both shapes without a live Firebird. Affects ONLY the DDL path; data ops are
+    // always NOWAIT.
+    internal static FbTransactionOptions BuildDdlTransactionOptions(bool developerMode)
     {
-        TransactionBehavior =
+        var behavior =
             FbTransactionBehavior.Write
             | FbTransactionBehavior.ReadCommitted
             | FbTransactionBehavior.RecVersion
-            | FbTransactionBehavior.NoWait,
-    };
+            | (developerMode ? FbTransactionBehavior.Wait : FbTransactionBehavior.NoWait);
+
+        var options = new FbTransactionOptions { TransactionBehavior = behavior };
+        if (developerMode)
+        {
+            options.WaitTimeout = TimeSpan.FromSeconds(DdlLockTimeoutSeconds);
+        }
+        return options;
+    }
 
     /// <summary>
     /// Splits a multi-statement DDL string on TOP-LEVEL semicolons.

@@ -25,11 +25,13 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
         _service = service;
     }
 
+    // SQL Dialect is no longer exposed in the UI (Dialect 3 is universal); the value is
+    // carried through unchanged so an existing Dialect=1 connection keeps working.
+    private int _carriedDialect = 3;
+
     public bool IsEditing => _editingProfileId is not null;
 
     public IReadOnlyList<string> Charsets => CharsetCatalog.Supported;
-    public IReadOnlyList<int> Dialects { get; } = new[] { 1, 3 };
-    public IReadOnlyList<TransactionProfileOption> TransactionProfiles => TransactionProfileCatalog.All;
 
     public string DialogTitle => IsEditing
         ? UiStrings.DialogEditConnectionTitle
@@ -43,9 +45,6 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
     public string UsernameLabel => UiStrings.DialogFieldUsername;
     public string PasswordLabel => UiStrings.DialogFieldPassword;
     public string CharsetLabel => UiStrings.DialogFieldCharset;
-    public string DataTransactionProfileLabel => UiStrings.DialogFieldDataTransactionProfile;
-    public string MetadataTransactionProfileLabel => UiStrings.DialogFieldMetadataTransactionProfile;
-    public string DialectLabel => UiStrings.DialogFieldDialect;
     public string ClientLibraryLabel => UiStrings.DialogFieldClientLibrary;
     public string ClientLibraryHint => UiStrings.DialogFieldClientLibraryHint;
     public string TestConnectionLabel => UiStrings.DialogTestConnection;
@@ -75,32 +74,12 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
     private string _charset = CharsetCatalog.Default;
 
     [ObservableProperty]
-    private int _dialect = 3;
-
-    [ObservableProperty]
     private string _clientLibraryPath = string.Empty;
 
-    // Two independent profile pickers (C2): Data governs SQL Editor F5 + data
-    // preview/edit; Metadata governs DDL from the structure editor + Shift+F5. The
-    // picker binds SelectedItem to these wrappers (Avalonia has no SelectedValueBinding
-    // — gotcha #57); the descriptions + warnings re-evaluate off the option.
+    // Single user-facing switch (replaces the TPB profile pickers): OFF = DDL fail-fast,
+    // ON = DDL waits for in-use objects (lock timeout). Only affects DDL, never data.
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DataTransactionProfileDescription))]
-    [NotifyPropertyChangedFor(nameof(ShowDataConsistencyWarning))]
-    private TransactionProfileOption _selectedDataTransactionProfile = TransactionProfileCatalog.All[0];
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MetadataTransactionProfileDescription))]
-    [NotifyPropertyChangedFor(nameof(ShowMetadataConsistencyWarning))]
-    private TransactionProfileOption _selectedMetadataTransactionProfile = TransactionProfileCatalog.All[0];
-
-    public TransactionProfile DataTransactionProfile => SelectedDataTransactionProfile.Value;
-    public string DataTransactionProfileDescription => SelectedDataTransactionProfile.Description;
-    public bool ShowDataConsistencyWarning => SelectedDataTransactionProfile.IsConsistencyWarning;
-
-    public TransactionProfile MetadataTransactionProfile => SelectedMetadataTransactionProfile.Value;
-    public string MetadataTransactionProfileDescription => SelectedMetadataTransactionProfile.Description;
-    public bool ShowMetadataConsistencyWarning => SelectedMetadataTransactionProfile.IsConsistencyWarning;
+    private bool _developerMode;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsTesting))]
@@ -183,10 +162,9 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
         Username = profile.Username;
         Password = profile.Password;
         Charset = profile.Charset;
-        Dialect = profile.Dialect;
+        _carriedDialect = profile.Dialect;
         ClientLibraryPath = profile.ClientLibraryPath;
-        SelectedDataTransactionProfile = TransactionProfileCatalog.For(profile.DataTransactionProfile);
-        SelectedMetadataTransactionProfile = TransactionProfileCatalog.For(profile.MetadataTransactionProfile);
+        DeveloperMode = profile.DeveloperMode;
         OnPropertyChanged(nameof(IsEditing));
         OnPropertyChanged(nameof(DialogTitle));
     }
@@ -225,10 +203,9 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
             Username = Username.Trim(),
             Password = Password,
             Charset = string.IsNullOrWhiteSpace(Charset) ? CharsetCatalog.Default : Charset,
-            Dialect = Dialect == 1 ? 1 : 3,
+            Dialect = _carriedDialect == 1 ? 1 : 3,
             ClientLibraryPath = ClientLibraryPath?.Trim() ?? string.Empty,
-            DataTransactionProfile = DataTransactionProfile,
-            MetadataTransactionProfile = MetadataTransactionProfile,
+            DeveloperMode = DeveloperMode,
         };
 
         if (_editingProfileId is not null)

@@ -15,6 +15,13 @@ public sealed class ConnectionProfile
     public int Dialect { get; set; } = 3;
     public string ClientLibraryPath { get; set; } = string.Empty;
 
+    // Developer Mode (single user-facing switch, replaces the old TPB profile pickers).
+    // OFF (default): DDL runs NOWAIT — fail-fast on an in-use object. ON: DDL runs WAIT
+    // + a lock timeout, so a Compile of an object currently used by other sessions waits
+    // briefly for it to be released instead of immediately returning "object is in use".
+    // Affects ONLY DDL (CREATE/ALTER/DROP/Compile); data operations always stay NOWAIT.
+    public bool DeveloperMode { get; set; }
+
     // Transaction profile for the DATA working transaction — SQL Editor F5, data
     // preview, and inline data editing run on connection #1 under this profile
     // (see TransactionProfile). Defaults to ReadCommitted.

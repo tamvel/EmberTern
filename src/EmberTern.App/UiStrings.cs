@@ -125,6 +125,14 @@ internal static class UiStrings
     public const string DialogCancel = "Cancel";
     public const string DialogBrowse = "Browse…";
 
+    // Developer Mode — the single user-facing switch that replaces the TPB profile
+    // pickers. No transaction terminology is exposed (NOWAIT/WAIT/consistency are
+    // implementation details).
+    public const string DialogFieldDeveloperMode = "Developer Mode";
+    public const string DeveloperModeDescription = "Lets you modify procedures, functions, triggers and other objects that are in use by active sessions. DDL operations may wait for the object to be released instead of returning an error immediately.";
+    public const string DeveloperModeBadge = "DEV MODE";
+    public const string DeveloperModeBadgeTooltip = "Developer Mode is on — DDL waits briefly for in-use objects instead of failing immediately.";
+
     // Transaction profile labels (IBExpert terms — kept in English on purpose).
     public const string TransactionProfileReadCommitted = "Read Committed";
     public const string TransactionProfileSnapshot = "Snapshot";

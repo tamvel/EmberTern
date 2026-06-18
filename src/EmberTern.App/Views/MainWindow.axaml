@@ -101,38 +101,18 @@
                   Background="{DynamicResource BorderBrush}"
                   Margin="4,0"
                   VerticalAlignment="Center"
-                  IsVisible="{Binding HasActiveConnection}" />
-          <!-- Transaction-profile block: a 2x2 Grid (rows = Data / Meta). The Auto
-               label column sizes to the wider of "Data:"/"Meta:", so both badges
-               left-align in column 1. RowSpacing/ColumnSpacing give the gaps — no
-               per-element margins. Whole block centered as a unit. -->
-          <Grid ColumnDefinitions="Auto,Auto" RowDefinitions="Auto,Auto"
-                RowSpacing="2" ColumnSpacing="4"
-                VerticalAlignment="Center"
-                IsVisible="{Binding HasActiveConnection}">
-            <TextBlock Grid.Row="0" Grid.Column="0"
-                       Text="{x:Static app:UiStrings.TransactionProfileDataLabel}"
-                       FontSize="10" VerticalAlignment="Center" />
-            <Border Grid.Row="0" Grid.Column="1"
-                    Background="{DynamicResource DataLaneChipBrush}"
-                    CornerRadius="2" Padding="4,0"
-                    VerticalAlignment="Center"
-                    ToolTip.Tip="{Binding DataTransactionProfileTooltip}">
-              <TextBlock Text="{Binding DataProfileName}"
-                         FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource OnAccentBrush}" />
-            </Border>
-            <TextBlock Grid.Row="1" Grid.Column="0"
-                       Text="{x:Static app:UiStrings.TransactionProfileMetadataLabel}"
-                       FontSize="10" VerticalAlignment="Center" />
-            <Border Grid.Row="1" Grid.Column="1"
-                    Background="{DynamicResource MetadataLaneChipBrush}"
-                    CornerRadius="2" Padding="4,0"
-                    VerticalAlignment="Center"
-                    ToolTip.Tip="{Binding MetadataTransactionProfileTooltip}">
-              <TextBlock Text="{Binding MetadataProfileName}"
-                         FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource OnAccentBrush}" />
-            </Border>
-          </Grid>
+                  IsVisible="{Binding IsDeveloperModeActive}" />
+          <!-- DEV MODE badge: shown only when the active connection has Developer Mode
+               on (DDL waits for in-use objects). No transaction terminology surfaced. -->
+          <Border Background="{DynamicResource ConnectedBrush}"
+                  CornerRadius="3" Padding="6,1"
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding IsDeveloperModeActive}"
+                  ToolTip.Tip="{x:Static app:UiStrings.DeveloperModeBadgeTooltip}">
+            <TextBlock Text="{x:Static app:UiStrings.DeveloperModeBadge}"
+                       FontSize="10" FontWeight="Bold"
+                       Foreground="{DynamicResource DevModeBadgeForegroundBrush}" />
+          </Border>
         </StackPanel>
 
         <!-- Connection toolbar (moved from sidebar) -->

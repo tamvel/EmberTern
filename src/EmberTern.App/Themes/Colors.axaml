@@ -13,6 +13,10 @@
       <Color x:Key="AccentMutedColor">#1A4F8F</Color>
       <Color x:Key="TransactionActiveColor">#F0A458</Color>
       <Color x:Key="ConnectedColor">#4EC994</Color>
+      <!-- DEV MODE badge text: DARK on the bright mint green. White on #4EC994 is only
+           ~1.7:1 (washed out at 10px bold); this deep green-black is ~9:1. -->
+      <Color x:Key="DevModeBadgeForegroundColor">#0E2A1C</Color>
+      <SolidColorBrush x:Key="DevModeBadgeForegroundBrush" Color="{StaticResource DevModeBadgeForegroundColor}" />
       <!-- Avalonia color hex is ARGB (alpha-first). #FFFFFF12 = opaque yellow-white;
            #12FFFFFF = 7% white overlay. We meant the latter. -->
       <Color x:Key="HoverOverlayColor">#12FFFFFF</Color>
@@ -177,6 +181,9 @@
       <Color x:Key="AccentMutedColor">#1A4F8F</Color>
       <Color x:Key="TransactionActiveColor">#B85C00</Color>
       <Color x:Key="ConnectedColor">#1A7F4B</Color>
+      <!-- DEV MODE badge text: WHITE on the dark forest green (~4.6:1, good). -->
+      <Color x:Key="DevModeBadgeForegroundColor">#FFFFFF</Color>
+      <SolidColorBrush x:Key="DevModeBadgeForegroundBrush" Color="{StaticResource DevModeBadgeForegroundColor}" />
       <Color x:Key="HoverOverlayColor">#10000000</Color>
       <Color x:Key="ErrorColor">#CC2929</Color>
       <Color x:Key="WarningColor">#C77800</Color>

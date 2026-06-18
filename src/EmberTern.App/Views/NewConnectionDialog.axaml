@@ -75,66 +75,19 @@
                     HorizontalAlignment="Stretch" />
         </StackPanel>
 
+        <!-- Developer Mode: the single switch that replaces the old TPB profile
+             pickers. No transaction terminology is shown to the user. -->
+        <StackPanel Spacing="4">
+          <CheckBox IsChecked="{Binding DeveloperMode, Mode=TwoWay}"
+                    Content="{x:Static app:UiStrings.DialogFieldDeveloperMode}" />
+          <TextBlock Text="{x:Static app:UiStrings.DeveloperModeDescription}"
+                     Classes="subtle"
+                     FontSize="11"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+
         <Expander Header="{Binding AdvancedSectionLabel}" IsExpanded="False">
           <StackPanel Spacing="14" Margin="0,10,0,0">
-
-            <!-- Data transaction profile — SQL Editor F5 + data preview/edit. -->
-            <StackPanel Spacing="4">
-              <TextBlock Text="{Binding DataTransactionProfileLabel}" Classes="field-label" />
-              <ComboBox ItemsSource="{Binding TransactionProfiles}"
-                        SelectedItem="{Binding SelectedDataTransactionProfile, Mode=TwoWay}"
-                        HorizontalAlignment="Stretch">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:TransactionProfileOption">
-                    <TextBlock Text="{Binding Label}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <TextBlock Text="{Binding DataTransactionProfileDescription}"
-                         Classes="subtle"
-                         FontSize="11"
-                         TextWrapping="Wrap"
-                         IsVisible="{Binding !ShowDataConsistencyWarning}" />
-              <TextBlock Text="{Binding DataTransactionProfileDescription}"
-                         Foreground="{DynamicResource WarningBrush}"
-                         FontSize="11"
-                         FontWeight="SemiBold"
-                         TextWrapping="Wrap"
-                         IsVisible="{Binding ShowDataConsistencyWarning}" />
-            </StackPanel>
-
-            <!-- Metadata transaction profile — DDL from the structure editor + Shift+F5. -->
-            <StackPanel Spacing="4">
-              <TextBlock Text="{Binding MetadataTransactionProfileLabel}" Classes="field-label" />
-              <ComboBox ItemsSource="{Binding TransactionProfiles}"
-                        SelectedItem="{Binding SelectedMetadataTransactionProfile, Mode=TwoWay}"
-                        HorizontalAlignment="Stretch">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:TransactionProfileOption">
-                    <TextBlock Text="{Binding Label}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <TextBlock Text="{Binding MetadataTransactionProfileDescription}"
-                         Classes="subtle"
-                         FontSize="11"
-                         TextWrapping="Wrap"
-                         IsVisible="{Binding !ShowMetadataConsistencyWarning}" />
-              <TextBlock Text="{Binding MetadataTransactionProfileDescription}"
-                         Foreground="{DynamicResource WarningBrush}"
-                         FontSize="11"
-                         FontWeight="SemiBold"
-                         TextWrapping="Wrap"
-                         IsVisible="{Binding ShowMetadataConsistencyWarning}" />
-            </StackPanel>
-
-            <StackPanel Spacing="4">
-              <TextBlock Text="{Binding DialectLabel}" Classes="field-label" />
-              <ComboBox ItemsSource="{Binding Dialects}"
-                        SelectedItem="{Binding Dialect, Mode=TwoWay}"
-                        HorizontalAlignment="Left"
-                        Width="120" />
-            </StackPanel>
 
             <StackPanel Spacing="4">
               <TextBlock Text="{Binding ClientLibraryLabel}" Classes="field-label" />

@@ -96,12 +96,14 @@ public partial class MainWindowViewModel : ViewModelBase
         _folderState = _folderStore.Load();
         _service = service;
         _transactionService = transactionService;
-        // Metadata lane reads MetadataTransactionProfile; degrades to the data lane when
-        // the second attachment is unavailable (fallback) so DDL still works.
+        // Metadata working tx is ALWAYS the safe NOWAIT default (TPB profiles are no
+        // longer user-configurable — Developer Mode's WAIT applies only to the DDL
+        // executor path, not this working tx). Degrades to the data lane when the
+        // second attachment is unavailable (fallback) so metadata work still functions.
         _metadataTransactionService = new TransactionService(
             _service,
             ConnectionRole.Metadata,
-            p => p?.MetadataTransactionProfile ?? Core.Connections.TransactionProfile.ReadCommitted,
+            _ => Core.Connections.TransactionProfile.ReadCommitted,
             fallback: _transactionService);
         _executor = new FirebirdQueryExecutor(_service, _transactionService);
         _metadataExecutor = new FirebirdQueryExecutor(_service, _metadataTransactionService);
@@ -512,6 +514,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private Core.Connections.TransactionProfile MetadataProfile
         => _service.ActiveProfile?.MetadataTransactionProfile ?? Core.Connections.TransactionProfile.ReadCommitted;
+
+    // Title-bar "DEV MODE" badge: shown only when the active connection has Developer
+    // Mode on (DDL waits for in-use objects instead of failing fast).
+    public bool IsDeveloperModeActive => _service.ActiveProfile?.DeveloperMode == true;
 
     public bool HasCurrentResult => CurrentResult is { HasResultSet: true };
     public bool ShowResultsEmptyHint => !HasCurrentResult;
@@ -2841,6 +2847,7 @@ public partial class MainWindowViewModel : ViewModelBase
             OnPropertyChanged(nameof(MetadataProfileName));
             OnPropertyChanged(nameof(DataTransactionProfileTooltip));
             OnPropertyChanged(nameof(MetadataTransactionProfileTooltip));
+            OnPropertyChanged(nameof(IsDeveloperModeActive));
         });
     }
 
@@ -2896,6 +2903,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(MetadataProfileName));
         OnPropertyChanged(nameof(DataTransactionProfileTooltip));
         OnPropertyChanged(nameof(MetadataTransactionProfileTooltip));
+        OnPropertyChanged(nameof(IsDeveloperModeActive));
         OnPropertyChanged(nameof(MetadataLaneIndependent));
         OnPropertyChanged(nameof(ShowDataTransactionButtons));
         OnPropertyChanged(nameof(ShowMetadataTransactionButtons));
