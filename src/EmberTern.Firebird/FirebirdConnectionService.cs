@@ -263,29 +263,37 @@ public sealed class FirebirdConnectionService : IDisposable
     }
 
     /// <summary>
-    /// Runs all <paramref name="statements"/> in ONE autonomous transaction on a
-    /// transient connection (begin → all → commit; rollback on any failure), then
-    /// closes it. Used for metadata DDL Compile/Apply (V1.4 Phase A) so a multi-
-    /// statement apply (e.g. ADD FIELD + CREATE GENERATOR + CREATE TRIGGER) stays
-    /// atomic AND auto-commits — independent of the working-transaction lanes.
-    /// Propagates the FbException (after rollback) to the caller.
+    /// Runs all <paramref name="statements"/> as DDL in ONE transaction on the MAIN
+    /// (data) connection — the SAME attachment user statements (Execute Procedure,
+    /// F5) run on — and auto-commits on success. Co-location is deliberate: Firebird
+    /// allows an attachment to ALTER an object it loaded itself, but a DIFFERENT
+    /// attachment hits "object is in use" (the cross-attachment self-block). Running
+    /// Compile on the main connection makes Execute-then-Compile work without that
+    /// error. NO transient attachment is opened (that was the self-block cause).
+    ///
+    /// The transaction uses the explicit <paramref name="options"/> (Krok 1: always
+    /// NOWAIT, matching prior behaviour; Developer Mode will swap this for WAIT +
+    /// lock timeout later). The caller MUST ensure no data working transaction is
+    /// active — one FbConnection allows only one transaction at a time (gotcha #89);
+    /// <see cref="FirebirdDdlExecutor"/> enforces that and surfaces a clear message.
+    /// Propagates the FbException (after rollback) to the caller. Holds the command
+    /// lock for the whole batch so it serializes against concurrent reads (gotcha #31).
     /// </summary>
-    public async Task ExecuteAutonomousAsync(IReadOnlyList<string> statements, CancellationToken cancellationToken = default)
+    public async Task ExecuteDdlAsync(IReadOnlyList<string> statements, FbTransactionOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(statements);
+        ArgumentNullException.ThrowIfNull(options);
         if (statements.Count == 0) return;
-        if (_activeProfile is null)
-        {
-            throw new InvalidOperationException("No active Firebird connection.");
-        }
 
-        var connectionString = BuildConnectionString(_activeProfile);
-        await using var connection = new FbConnection(connectionString);
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        // Resolve the open main connection BEFORE acquiring the lock so a missing
+        // connection surfaces as InvalidOperationException without leaking the lock.
+        var connection = RequireOpenConnection();
 
-        var tx = (FbTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await _commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        FbTransaction? tx = null;
         try
         {
+            tx = (FbTransaction)await connection.BeginTransactionAsync(options).ConfigureAwait(false);
             foreach (var statement in statements)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -299,20 +307,26 @@ public sealed class FirebirdConnectionService : IDisposable
         }
         catch (Exception ex)
         {
-            // Diagnostics (gated by EMBERTERN_TX_DIAG): on a metadata lock / "object in
-            // use" conflict, dump the live MON$TRANSACTIONS / MON$ATTACHMENTS picture
-            // from this transient connection so we can see EXACTLY which attachment +
-            // transaction still holds the object the ALTER tried to change.
+            // Roll back first so the main connection has no active tx — then the
+            // (env-gated) diagnostic dump can open its own short tx cleanly and show
+            // which attachment still holds the object the ALTER tried to change.
+            if (tx is not null)
+            {
+                try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { /* best-effort */ }
+            }
             if (IsLockOrInUse(ex))
             {
                 await DumpInUseDiagnosticsAsync(connection, ex, cancellationToken).ConfigureAwait(false);
             }
-            try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { /* best-effort */ }
             throw;
         }
         finally
         {
-            await tx.DisposeAsync().ConfigureAwait(false);
+            if (tx is not null)
+            {
+                await tx.DisposeAsync().ConfigureAwait(false);
+            }
+            _commandLock.Release();
         }
     }
 

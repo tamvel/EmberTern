@@ -23,14 +23,17 @@ namespace EmberTern.Firebird;
 public sealed class FirebirdDdlExecutor
 {
     private readonly FirebirdConnectionService _connectionService;
+    private readonly TransactionService? _transactionService;
 
-    // V1.4 Phase A: metadata DDL auto-commits via an autonomous transaction, so the
-    // executor no longer participates in the metadata working transaction. The
-    // transactionService parameter is retained for call-site stability (and a
-    // possible Phase B/D revisit) but is intentionally unused.
+    // Krok 1: DDL/Compile executes on the MAIN connection (co-location with the
+    // lane that runs Execute Procedure / F5) so a Compile of a just-executed object
+    // no longer hits the cross-attachment "object is in use" self-block. The
+    // TransactionService (the DATA lane) is consulted only to verify no working
+    // transaction is active before we begin our own autonomous DDL tx (gotcha #89).
     public FirebirdDdlExecutor(FirebirdConnectionService connectionService, TransactionService? transactionService = null)
     {
         _connectionService = connectionService;
+        _transactionService = transactionService;
     }
 
     /// <summary>
@@ -46,14 +49,21 @@ public sealed class FirebirdDdlExecutor
         => _connectionService.ExecuteAdminBatchAsync(statements, cancellationToken);
 
     /// <summary>
-    /// Splits <paramref name="sql"/> on top-level semicolons, then executes each
-    /// non-empty statement in order. Auto-begins the user's working transaction
-    /// when none is active (mirrors <see cref="FirebirdQueryExecutor"/>'s F5
-    /// path) so DDL participates in Commit / Rollback exactly like DML — the
-    /// user can Add a field, see it appear, then Rollback to undo.
-    /// Throws <see cref="DdlExecutionException"/> with the server's message on
-    /// the first FbException — the caller is expected to stop the Compile run
-    /// at that point.
+    /// Splits <paramref name="sql"/> on top-level semicolons, then runs the whole
+    /// batch in ONE transaction on the MAIN connection (co-location — see
+    /// <see cref="FirebirdConnectionService.ExecuteDdlAsync"/>), auto-committing on
+    /// success. The batch is atomic (e.g. ADD FIELD + CREATE GENERATOR + CREATE
+    /// TRIGGER all-or-nothing). Uses an explicit NOWAIT TPB — identical to prior
+    /// behaviour, but now genuinely explicit (the old autonomous path passed no
+    /// FbTransactionOptions, so it silently ignored any configured profile).
+    ///
+    /// gotcha #89: one FbConnection allows one transaction at a time, so a data
+    /// working transaction must be settled first. Surfaces a clear, actionable
+    /// message instead of the raw "Parallel transactions are not supported". The
+    /// self-block scenario (Execute Procedure → Commit/Rollback → Compile) has the
+    /// working tx already settled, so this does not impede it.
+    /// Throws <see cref="DdlExecutionException"/> with the server's message on the
+    /// first FbException — the caller stops the Compile run at that point.
     /// </summary>
     public async Task ExecuteAsync(string sql, CancellationToken cancellationToken = default)
     {
@@ -62,21 +72,37 @@ public sealed class FirebirdDdlExecutor
         var statements = SplitStatements(sql);
         if (statements.Count == 0) return;
 
-        // V1.4 Phase A: a Compile/Apply runs in ONE autonomous transaction on a
-        // transient connection and auto-commits on success — atomic across the
-        // batch (e.g. ADD FIELD + CREATE GENERATOR + CREATE TRIGGER) and
-        // independent of the working-transaction lanes. The user no longer Commits
-        // structural changes manually; the metadata Commit/Rollback buttons stay
-        // inactive because no metadata working tx is begun here.
+        if (_transactionService is { IsActive: true })
+        {
+            throw new DdlExecutionException(
+                "Commit or roll back the active transaction before running DDL.");
+        }
+
         try
         {
-            await _connectionService.ExecuteAutonomousAsync(statements, cancellationToken).ConfigureAwait(false);
+            await _connectionService
+                .ExecuteDdlAsync(statements, BuildDdlTransactionOptions(), cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (FbException ex)
         {
             throw new DdlExecutionException(ex.Message, ex);
         }
     }
+
+    // Krok 1: fixed NOWAIT (write + read_committed + rec_version + nowait) — the
+    // explicit FbTransactionOptions the old transient path never supplied, which is
+    // why configured profiles never reached Compile. Behaviour is identical to
+    // before (NOWAIT, fail-fast). The Standard/Developer switch will choose NOWAIT
+    // vs WAIT + lock timeout here in a later step; nothing else needs to change.
+    private static FbTransactionOptions BuildDdlTransactionOptions() => new()
+    {
+        TransactionBehavior =
+            FbTransactionBehavior.Write
+            | FbTransactionBehavior.ReadCommitted
+            | FbTransactionBehavior.RecVersion
+            | FbTransactionBehavior.NoWait,
+    };
 
     /// <summary>
     /// Splits a multi-statement DDL string on TOP-LEVEL semicolons.

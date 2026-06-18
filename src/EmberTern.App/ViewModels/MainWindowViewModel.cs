@@ -105,14 +105,20 @@ public partial class MainWindowViewModel : ViewModelBase
             fallback: _transactionService);
         _executor = new FirebirdQueryExecutor(_service, _transactionService);
         _metadataExecutor = new FirebirdQueryExecutor(_service, _metadataTransactionService);
-        // Browsing + DDL run on the metadata lane (so they don't pin objects in the data
-        // working tx). The TableDetail reader splits per method: structure → metadata,
-        // data preview → data.
+        // Browsing (metadata reader, DDL reader, TableDetail structure reads) runs on
+        // the metadata lane so it doesn't pin objects in the data working tx. The
+        // TableDetail reader splits per method: structure → metadata, data preview → data.
         _metadataReader = new FirebirdMetadataReader(_service, _metadataTransactionService);
         _ddlReader = new FirebirdDdlReader(_service, _metadataTransactionService);
         _tableDetailReader = new FirebirdTableDetailReader(_service, _metadataTransactionService, _transactionService);
         _dataEditor = new FirebirdDataEditor(_service, _transactionService);
-        _ddlExecutor = new FirebirdDdlExecutor(_service, _metadataTransactionService);
+        // Krok 1: DDL/Compile executes on the MAIN (data) connection — the same
+        // attachment Execute Procedure / F5 use — so a Compile of a just-executed
+        // object no longer hits "object is in use" (cross-attachment self-block). It
+        // auto-commits with an explicit NOWAIT TPB; the DATA TransactionService is
+        // passed so the executor can require the data working tx to be settled first
+        // (gotcha #89: one FbConnection, one transaction at a time).
+        _ddlExecutor = new FirebirdDdlExecutor(_service, _transactionService);
         Metadata = new MetadataExplorerViewModel(_service, _metadataReader);
         Metadata.OpenDdlRequested += OnOpenDdlRequested;
         Metadata.CopyNameRequested += OnCopyNameRequested;
