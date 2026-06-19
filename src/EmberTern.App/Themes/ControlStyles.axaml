@@ -189,9 +189,15 @@
     <Setter Property="MinHeight" Value="0" />
   </Style>
 
-  <!-- Bottom-panel tabs (Results / Messages / Output) — denser than the default
-       TabItem and using a filled active background instead of FluentTheme's
-       blue underline so they read as panel tabs, not navigation tabs. -->
+  <!-- ── Active-tab design language (shared by bottom-tab + sub-tab) ─────────
+       Active tab = a raised, filled segment: ElevatedPanel background + SemiBold +
+       full-contrast foreground, rounded corners. NO accent fill / outline / underline
+       (accent is reserved for connection name / DEV MODE / toolbar actions). Inactive
+       tabs read subtle on a transparent background. Height is identical in every state
+       (CornerRadius doesn't affect layout; no borders are added). bottom-tab and
+       sub-tab differ only in size — they share this one active-state language. -->
+
+  <!-- Bottom-panel + main editor tabs (Results / Messages / Output, Editor / Fields / …). -->
   <Style Selector="TabItem.bottom-tab">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="Padding" Value="8,4" />
@@ -199,16 +205,21 @@
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
+  <Style Selector="TabItem.bottom-tab /template/ Border#PART_LayoutRoot">
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+
   <Style Selector="TabItem.bottom-tab:pointerover /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
   </Style>
 
   <Style Selector="TabItem.bottom-tab:selected /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
   </Style>
 
   <Style Selector="TabItem.bottom-tab:selected">
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
   <!-- Hide FluentTheme's selected-indicator pipe for bottom tabs. -->
@@ -217,18 +228,30 @@
   </Style>
 
   <!-- Sub-tabs (smaller, tighter than bottom-tab). Used for nested TabControls
-       inside a TableDetail sub-tab (e.g. Ograniczenia → Klucz główny / Klucze
-       zewnętrzne / Check / Unique). Empty class greys the header label out
-       when the underlying collection has no rows. -->
+       (Ograniczenia → PK / FK / Check / Unique; Procedure Easy → Input / Output / …).
+       SAME active-state language as bottom-tab — elevated fill + SemiBold, no accent,
+       no border, no underline. .empty greys an empty group's label. -->
   <Style Selector="TabItem.sub-tab">
     <Setter Property="FontSize" Value="11" />
-    <!-- 11,4 (was 11,5): the -1px vertical offsets the 1px chip border added on
-         PART_LayoutRoot below, so the selected accent ring costs no net height. -->
-    <Setter Property="Padding" Value="11,4" />
+    <Setter Property="Padding" Value="11,5" />
     <Setter Property="MinHeight" Value="0" />
-    <!-- Inactive tabs read subtle; the selected one (below) flips to full contrast +
-         SemiBold + an elevated fill with a restrained 1px accent ring. -->
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TabItem.sub-tab /template/ Border#PART_LayoutRoot">
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+
+  <Style Selector="TabItem.sub-tab.empty">
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TabItem.sub-tab:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <Style Selector="TabItem.sub-tab:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
   </Style>
 
   <Style Selector="TabItem.sub-tab:selected">
@@ -236,33 +259,7 @@
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
-  <Style Selector="TabItem.sub-tab.empty">
-    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-  </Style>
-
-  <!-- Chip geometry shared by every sub-tab state: a rounded box with a 1px ring
-       that stays transparent until selected. Present in all states so switching
-       tabs never shifts layout (no jitter) and the selected ring costs no height. -->
-  <Style Selector="TabItem.sub-tab /template/ Border#PART_LayoutRoot">
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="CornerRadius" Value="4" />
-  </Style>
-
-  <Style Selector="TabItem.sub-tab:pointerover /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
-  </Style>
-
-  <!-- Selected sub-tab = an intentionally active "chip": elevated fill + a restrained
-       1px accent ring (VS / Rider style — not highlighted/glowing, no underline). The
-       SemiBold + full-contrast foreground come from TabItem.sub-tab:selected above. -->
-  <Style Selector="TabItem.sub-tab:selected /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-  </Style>
-
-  <!-- Hide FluentTheme's selected-indicator pipe for sub-tabs — the thin accent bar
-       read as accidental; the chip treatment above carries the active state. -->
+  <!-- Hide FluentTheme's selected-indicator pipe for sub-tabs. -->
   <Style Selector="TabItem.sub-tab /template/ Border#PART_SelectedPipe">
     <Setter Property="IsVisible" Value="False" />
   </Style>

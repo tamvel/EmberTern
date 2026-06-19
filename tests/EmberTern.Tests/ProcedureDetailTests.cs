@@ -321,12 +321,31 @@ public class ProcedureDetailTests
     }
 
     [Fact]
-    public void EasyMode_New_StaysSource()
+    public void EasyMode_New_CanUseEasy_StartsInEasyWithEditableName()
     {
-        var vm = new ProcedureDetailTabViewModel("NEW_PROCEDURE") { IsNew = true };
-        vm.EasyMode = true;             // guarded — Easy mode needs a catalog to seed
-        Assert.False(vm.EasyMode);
-        Assert.False(vm.CanUseEasyMode);
+        // Approved target design: a new procedure CAN use Easy mode and starts there.
+        var vm = new ProcedureDetailTabViewModel("NEW_PROCEDURE")
+        {
+            IsNew = true,
+            SourceText = ProcedureDetailTabViewModel.NewProcedureTemplate,
+        };
+        Assert.True(vm.CanUseEasyMode);
+
+        vm.EasyMode = true; // New Procedure starts in Easy (set by the New Procedure flow)
+        Assert.True(vm.EasyMode);
+        Assert.Equal("NEW_PROCEDURE", vm.EditableProcedureName);
+
+        // Editing the name + params + body flows into the compiled SQL (dirty/compile #3).
+        vm.EditableProcedureName = "CALC_TOTALS";
+        vm.AddInputParamCommand.Execute(null);
+        vm.InputParams[^1].Name = "FROM_DATE";
+        vm.InputParams[^1].TypeText = "DATE";
+        vm.ExecutableBody = "BEGIN RESULT = 1; SUSPEND; END";
+
+        var sql = vm.BuildCompileSql();
+        Assert.Contains("CREATE OR ALTER PROCEDURE CALC_TOTALS", sql);
+        Assert.Contains("FROM_DATE", sql);
+        Assert.Contains("RESULT = 1", sql);
     }
 
     [Fact]

@@ -58,6 +58,7 @@ public partial class ViewDetailTabViewModel : ViewModelBase
         FirebirdDdlExecutor? ddlExecutor)
     {
         ViewName = viewName;
+        EditableViewName = viewName;
         _reader = reader;
         _ddlReader = ddlReader;
         _ddlExecutor = ddlExecutor;
@@ -78,13 +79,21 @@ public partial class ViewDetailTabViewModel : ViewModelBase
 
     // ─── Source ⇄ Easy mode (mirrors ProcedureDetailTabViewModel) ─────────
     //
-    // Easy mode hides the CREATE VIEW header and presents the column list as an
-    // editable section (add / remove / reorder, name-only) above a body editor that
-    // holds just the AS SELECT … part. Source mode is the full editable statement.
-    // A brand-new view is authored in Source only (no catalog to seed Easy).
+    // Easy mode hides the CREATE VIEW header and presents the view name + column list
+    // as editable fields above a body editor that holds just the AS SELECT … part.
+    // Source mode is the full editable statement. A brand-new view can also be authored
+    // in Easy (started there by the New View flow): the editable name field supplies
+    // the object name (Source mode keeps it in the CREATE VIEW header text).
 
-    /// <summary>Easy mode is unavailable for a not-yet-created view.</summary>
-    public bool CanUseEasyMode => !IsNew;
+    /// <summary>Easy mode is available for every view, including a not-yet-created one
+    /// (New View starts in Easy with an editable name field).</summary>
+    public bool CanUseEasyMode => true;
+
+    /// <summary>Object name used by Easy mode (the CREATE VIEW header isn't shown there,
+    /// so the name lives here). Seeded from <see cref="ViewName"/> / the parsed source;
+    /// editable in the New View flow, read-only display for an existing view.</summary>
+    [ObservableProperty]
+    private string _editableViewName = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSourceMode))]
@@ -101,7 +110,6 @@ public partial class ViewDetailTabViewModel : ViewModelBase
     {
         if (value)
         {
-            if (IsNew) { EasyMode = false; return; }
             // Nothing loaded yet (mode preference applied before lazy load) — don't
             // parse an empty source or show a spurious notice; LoadAsync re-syncs.
             if (string.IsNullOrWhiteSpace(SourceText)) { ErrorMessage = null; return; }
@@ -205,6 +213,7 @@ public partial class ViewDetailTabViewModel : ViewModelBase
         var sig = ViewSignatureParser.Parse(source);
         if (!sig.Success) return false;
         _sourceOrAlter = sig.OrAlter;
+        if (!string.IsNullOrWhiteSpace(sig.Name)) EditableViewName = sig.Name!;
         Columns.Clear();
         foreach (var c in sig.Columns) Columns.Add(new ViewColumnRowViewModel(c));
         EditableBody = sig.Body;
@@ -219,7 +228,8 @@ public partial class ViewDetailTabViewModel : ViewModelBase
         var cols = new List<string>();
         foreach (var c in Columns)
             if (!string.IsNullOrWhiteSpace(c.Name)) cols.Add(c.Name.Trim());
-        return DdlGenerator.BuildCreateOrAlterView(ViewName, cols, EditableBody, _sourceOrAlter);
+        var name = string.IsNullOrWhiteSpace(EditableViewName) ? ViewName : EditableViewName.Trim();
+        return DdlGenerator.BuildCreateOrAlterView(name, cols, EditableBody, _sourceOrAlter);
     }
 
     /// <summary>The SQL to compile: Easy mode reassembles from the structured model;

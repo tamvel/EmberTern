@@ -14,14 +14,55 @@ public class ViewEasyModeTests
         => new(name);
 
     [Fact]
-    public void New_View_CannotUseEasyMode()
+    public void New_View_CanUseEasyMode_StartsInEasyWithEditableName()
     {
-        var vm = new ViewDetailTabViewModel("V_NEW") { IsNew = true };
-        Assert.False(vm.CanUseEasyMode);
+        // Approved target design: a new view CAN use Easy mode and starts there.
+        var vm = new ViewDetailTabViewModel("NEW_VIEW")
+        {
+            IsNew = true,
+            SourceText = ViewDetailTabViewModel.NewViewTemplate,
+        };
+        Assert.True(vm.CanUseEasyMode);
 
-        // Forcing the toggle on is coerced back off (Source-only for a new view).
+        vm.EasyMode = true; // New View starts in Easy (set by the New View flow)
+        Assert.True(vm.EasyMode);
+        Assert.Null(vm.ErrorMessage);
+        // Template parsed into the editable name + column list + body.
+        Assert.Equal("NEW_VIEW", vm.EditableViewName);
+        Assert.NotEmpty(vm.Columns);
+
+        // Editing the name flows into the compiled SQL (dirty/compile #3).
+        vm.EditableViewName = "CUSTOMER_VIEW";
+        Assert.Contains("CUSTOMER_VIEW", vm.BuildCompileSql());
+    }
+
+    [Fact]
+    public void New_View_Easy_EditsFlowIntoCompileSql()
+    {
+        var vm = new ViewDetailTabViewModel("NEW_VIEW")
+        {
+            IsNew = true,
+            SourceText = ViewDetailTabViewModel.NewViewTemplate,
+        };
         vm.EasyMode = true;
-        Assert.False(vm.EasyMode);
+
+        // Name edit.
+        vm.EditableViewName = "ORDERS_V";
+        // Column add.
+        vm.AddColumnCommand.Execute(null);
+        vm.Columns[^1].Name = "TOTAL";
+        // Body edit.
+        vm.EditableBody = "SELECT id, total FROM orders";
+
+        var sql = vm.BuildCompileSql();
+        Assert.Contains("ORDERS_V", sql);
+        Assert.Contains("TOTAL", sql);
+        Assert.Contains("SELECT id, total FROM orders", sql);
+
+        // Column remove is reflected too.
+        vm.SelectedColumn = vm.Columns[^1];
+        vm.DeleteColumnCommand.Execute(null);
+        Assert.DoesNotContain("TOTAL", vm.BuildCompileSql());
     }
 
     [Fact]

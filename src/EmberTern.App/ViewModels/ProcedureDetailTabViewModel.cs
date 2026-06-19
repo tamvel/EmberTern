@@ -61,6 +61,7 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase
         FirebirdDdlExecutor? ddlExecutor)
     {
         ProcedureName = procedureName;
+        EditableProcedureName = procedureName;
         _reader = reader;
         _ddlReader = ddlReader;
         _ddlExecutor = ddlExecutor;
@@ -135,12 +136,18 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase
 
     public string ProcedureName { get; }
 
-    /// <summary>True for a not-yet-created procedure (New Procedure flow). Authored
-    /// in Source mode only (Easy mode has no catalog to seed); the toggle is gated
-    /// on <see cref="CanUseEasyMode"/>.</summary>
+    /// <summary>True for a not-yet-created procedure (New Procedure flow). Can be
+    /// authored in Easy mode too — the New Procedure flow starts there with an editable
+    /// name field that supplies the object name (Source mode keeps it in the header).</summary>
     public bool IsNew { get; init; }
 
-    public bool CanUseEasyMode => !IsNew;
+    public bool CanUseEasyMode => true;
+
+    /// <summary>Object name used by Easy mode (the CREATE OR ALTER PROCEDURE header
+    /// isn't shown there). Seeded from <see cref="ProcedureName"/> / the parsed source;
+    /// editable in the New Procedure flow, read-only display for an existing procedure.</summary>
+    [ObservableProperty]
+    private string _editableProcedureName = string.Empty;
 
     // ─── Mode ─────────────────────────────────────────────────────────────
 
@@ -154,7 +161,6 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase
     {
         if (value)
         {
-            if (IsNew) { EasyMode = false; return; }
             // Nothing loaded yet (e.g. the mode preference is applied at tab
             // creation, before lazy load) — don't parse an empty source / show a
             // spurious notice; LoadAsync will populate the model.
@@ -165,6 +171,7 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase
             var sig = ProcedureSignatureParser.Parse(SourceText);
             if (sig.Success)
             {
+                if (!string.IsNullOrWhiteSpace(sig.Name)) EditableProcedureName = sig.Name!;
                 ReplaceParams(InputParams, sig.Inputs, isOutput: false);
                 ReplaceParams(OutputParams, sig.Outputs, isOutput: true);
                 SyncEasyModelFromBody(sig.Body);
@@ -186,7 +193,7 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase
     /// structured model (params + regenerated DECLARE section + executable body).</summary>
     internal string BuildFullSource()
         => DdlGenerator.BuildCreateOrAlterProcedure(
-            ProcedureName,
+            string.IsNullOrWhiteSpace(EditableProcedureName) ? ProcedureName : EditableProcedureName.Trim(),
             InputParams.Select(p => p.ToParameter()).ToList(),
             OutputParams.Select(p => p.ToParameter()).ToList(),
             DdlGenerator.BuildProcedureBody(BuildBodyModel()));
@@ -469,6 +476,50 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase
     private void MoveSubprogramUp() => SelectedSubprogram = MoveRow(Subprograms, SelectedSubprogram, -1);
     [RelayCommand(CanExecute = nameof(CanMoveSubprogramDown))]
     private void MoveSubprogramDown() => SelectedSubprogram = MoveRow(Subprograms, SelectedSubprogram, +1);
+
+    // ─── Unified collection edit (main-toolbar Section 3) ─────────────────
+    //
+    // The toolbar binds ONE set of Add/Remove/Move buttons; this routes them to the
+    // active Easy sub-tab's collection (0=Input 1=Output 2=Variables 3=Cursors
+    // 4=Subprograms). ActiveEasyCollectionIndex is bound to the Easy sub-tab
+    // TabControl's SelectedIndex. This is the contract future Trigger/Function/Package
+    // editors reuse — they expose the same four commands routing to their own active
+    // collection, and the main toolbar gains no new pattern.
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddCollectionItemCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveCollectionItemCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveCollectionItemUpCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveCollectionItemDownCommand))]
+    private int _activeEasyCollectionIndex;
+
+    private (IRelayCommand Add, IRelayCommand Remove, IRelayCommand Up, IRelayCommand Down) EasyCommands()
+        => ActiveEasyCollectionIndex switch
+        {
+            0 => (AddInputParamCommand, DeleteInputParamCommand, MoveInputParamUpCommand, MoveInputParamDownCommand),
+            1 => (AddOutputParamCommand, DeleteOutputParamCommand, MoveOutputParamUpCommand, MoveOutputParamDownCommand),
+            2 => (AddVariableCommand, DeleteVariableCommand, MoveVariableUpCommand, MoveVariableDownCommand),
+            3 => (AddCursorCommand, DeleteCursorCommand, MoveCursorUpCommand, MoveCursorDownCommand),
+            _ => (AddSubprogramCommand, DeleteSubprogramCommand, MoveSubprogramUpCommand, MoveSubprogramDownCommand),
+        };
+
+    /// <summary>All five Easy collections support Add/Remove/reorder.</summary>
+    public bool CollectionSupportsReorder => true;
+
+    [RelayCommand]
+    private void AddCollectionItem() => EasyCommands().Add.Execute(null);
+
+    private bool CanRemoveCollectionItem() => EasyCommands().Remove.CanExecute(null);
+    [RelayCommand(CanExecute = nameof(CanRemoveCollectionItem))]
+    private void RemoveCollectionItem() => EasyCommands().Remove.Execute(null);
+
+    private bool CanMoveCollectionItemUp() => EasyCommands().Up.CanExecute(null);
+    [RelayCommand(CanExecute = nameof(CanMoveCollectionItemUp))]
+    private void MoveCollectionItemUp() => EasyCommands().Up.Execute(null);
+
+    private bool CanMoveCollectionItemDown() => EasyCommands().Down.CanExecute(null);
+    [RelayCommand(CanExecute = nameof(CanMoveCollectionItemDown))]
+    private void MoveCollectionItemDown() => EasyCommands().Down.Execute(null);
 
     // ─── Description (editable COMMENT ON PROCEDURE) ──────────────────────
 

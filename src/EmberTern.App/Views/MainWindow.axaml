@@ -591,335 +591,180 @@
             </ItemsControl>
           </Border>
 
-          <!-- Editor toolbar. Final order (per V1.1 spec):
-                 ▶ Execute | ⏹ Cancel | ✓ Commit | ✕ Rollback | sep |
-                 + New query | ▤ Toggle panel | 🗑 Clear editor | ⎄ Format SQL | ✕ Close tab
-               Commit/Rollback moved here from the transaction bar — that strip is
-               status-only now (dot + text), no duplicate buttons. -->
+          <!-- Unified editor toolbar — fixed 5-section model, identical for every object
+               editor (Table / New Table / View / Procedure + future Trigger / Function /
+               Package):  [Mode] | [Main] | [Collection: + −  |  ↑ ↓] | [Helper] | [Close].
+               Each section + its leading separator collapse when empty for the active
+               editor (Toolbar*Visible flags). The Collection section binds the unified
+               router (AddCollectionItem…) routed to the active editor's active collection,
+               so there are NO per-editor collection bars and no special-case layouts. -->
           <Border Grid.Row="1"
                   Background="{DynamicResource PanelBrush}"
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal" Spacing="6" Margin="10,4" VerticalAlignment="Center">
-              <Button Classes="primary"
-                      Padding="10,4"
-                      Command="{Binding ExecuteQueryCommand}"
-                      IsVisible="{Binding ShowExecuteButton}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <controls:SvgIcon Data="{StaticResource Icon.Play}"
-                                    Foreground="{DynamicResource OnAccentBrush}"
-                                    Width="14" Height="14" VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding ExecuteLabel}" VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding ExecuteHint}"
-                             FontSize="10"
-                             Foreground="{DynamicResource OnAccentSubtleBrush}"
-                             VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
-              <Button Classes="flat"
-                      Padding="10,4"
-                      Command="{Binding CancelQueryCommand}"
-                      IsVisible="{Binding ShowCancelButton}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <controls:SvgIcon Data="{StaticResource Icon.Stop}"
-                                    Foreground="{DynamicResource DangerIconBrush}"
-                                    Width="14" Height="14" VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
-              <!-- Single unified Commit / Rollback pair. The app auto-routes each
-                   statement to the Data or Metadata lane, so the user never picks a
-                   lane: Commit settles every open lane, Rollback reverts every
-                   active/error lane (both, when both are open). Enabled state follows
-                   the actual transaction(s); visibility follows the tab as before. -->
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
-                      Command="{Binding CommitAllCommand}"
-                      IsVisible="{Binding ShowTransactionButtons}">
-                <controls:SvgIcon Data="{StaticResource Icon.Check}"
-                                  Foreground="{DynamicResource SuccessIconBrush}" />
-              </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackTooltip}"
-                      Command="{Binding RollbackAllCommand}"
-                      IsVisible="{Binding ShowTransactionButtons}">
-                <controls:SvgIcon Data="{StaticResource Icon.Undo}"
-                                  Foreground="{DynamicResource DangerIconBrush}" />
-              </Button>
-              <!-- Refresh reuses the Dane sub-tab's existing reload path (with current
-                   sort params). Visible only when the Dane sub-tab is active inside a
-                   TableDetail tab. -->
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarRefreshDataTooltip}"
-                      Command="{Binding RefreshDataPreviewCommand}"
-                      IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}"
-                                  Foreground="{DynamicResource InfoIconBrush}" />
-              </Button>
-              <!-- Buffered Table Designer. ⚡ Compile + ⟲ Discard apply / abandon the
-                   queued structural changes and are valid on EVERY TableDetail sub-tab
-                   (ShowStructureCompileTools). The Pola-specific cluster (toggle / Add /
-                   Drop / Move) below stays on ShowFieldEditTools (Pola sub-tab only).
-                   NOTHING runs DDL on click — a structural edit only mutates the working
-                   model + queues a change; Compile runs the whole batch in one autonomous
-                   auto-committed transaction. Read-only system tables hide the cluster. -->
-              <Border Width="1" Margin="4,4"
-                      Background="{DynamicResource BorderBrush}"
-                      IsVisible="{Binding ShowStructureCompileTools}" />
-              <!-- Compile is the primary structural action — accent-filled primary style
-                   + hammer (build) icon, mirroring the SQL Execute button. Enabled only
-                   when there are pending changes (CompileCommand.CanExecute). -->
-              <Button Classes="primary"
-                      Padding="8,4"
-                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
-                      Command="{Binding ActiveTableDetail.CompileCommand}"
-                      IsVisible="{Binding ShowStructureCompileTools}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}"
-                                  Foreground="{DynamicResource OnAccentBrush}"
-                                  Width="16" Height="16" />
-              </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditDiscardTooltip}"
-                      Command="{Binding ActiveTableDetail.DiscardPendingChangesCommand}"
-                      IsVisible="{Binding ShowStructureCompileTools}">
-                <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
-              </Button>
-              <!-- Inline-edit toggle. Off by default on existing tables — explicit
-                   opt-in stops accidental schema edits from a misclick. Highlights
-                   when active via Classes="active-toggle" toggled below. -->
-              <ToggleButton Classes="icon"
-                            ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleFieldEditTooltip}"
+
+              <!-- ── SECTION 1 · Mode toggle (Table Grid-Edit / View+Procedure Easy) ── -->
+              <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleFieldEditTooltip}"
                             IsChecked="{Binding ActiveTableDetail.IsFieldEditMode, Mode=TwoWay}"
                             IsVisible="{Binding ShowFieldEditTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
               </ToggleButton>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditAddTooltip}"
-                      Command="{Binding ActiveTableDetail.AddFieldCommand}"
-                      IsVisible="{Binding ShowFieldEditTools}">
-                <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
-              </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditDropTooltip}"
-                      Command="{Binding ActiveTableDetail.DropFieldCommand}"
-                      IsVisible="{Binding ShowFieldEditTools}">
-                <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
-              </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditMoveUpTooltip}"
-                      Command="{Binding ActiveTableDetail.MoveFieldUpCommand}"
-                      IsVisible="{Binding ShowFieldEditTools}">
-                <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
-              </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.FieldEditMoveDownTooltip}"
-                      Command="{Binding ActiveTableDetail.MoveFieldDownCommand}"
-                      IsVisible="{Binding ShowFieldEditTools}">
-                <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
-              </Button>
-              <!-- ⚡ Compile + grid row commands for the New Table tab. All five
-                   visible only when the New Table tab is active. The grid itself
-                   carries no inline toolbar — these are the only entry points. -->
-              <!-- New Table compile = create the table; the screen's primary action.
-                   Same accent-filled primary + hammer + label treatment as Pola. -->
-              <Button Classes="primary"
-                      Padding="8,4"
-                      ToolTip.Tip="{x:Static app:UiStrings.NewTableDialogCompile}"
-                      Command="{Binding ActiveNewTable.CompileCommand}"
-                      IsVisible="{Binding IsNewTableTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}"
-                                  Foreground="{DynamicResource OnAccentBrush}"
-                                  Width="16" Height="16" />
-              </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.NewTableAddRowTooltip}"
-                      Command="{Binding ActiveNewTable.AddFieldCommand}"
-                      IsVisible="{Binding IsNewTableTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
-              </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.NewTableDeleteRowTooltip}"
-                      Command="{Binding ActiveNewTable.DeleteFieldCommand}"
-                      IsVisible="{Binding IsNewTableTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
-              </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.NewTableMoveUpTooltip}"
-                      Command="{Binding ActiveNewTable.MoveFieldUpCommand}"
-                      IsVisible="{Binding IsNewTableTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
-              </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.NewTableMoveDownTooltip}"
-                      Command="{Binding ActiveNewTable.MoveFieldDownCommand}"
-                      IsVisible="{Binding IsNewTableTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
-              </Button>
-              <!-- View Detail: Source ⇄ Easy mode toggle (checked = Easy). FIRST element
-                   of the editor's toolbar section — the mode toggle sits in the same
-                   leading position for every object editor (View, Procedure, future
-                   Trigger / Function). Disabled for a brand-new view (Source only — no
-                   catalog to seed Easy mode). -->
-              <ToggleButton Classes="icon"
-                            ToolTip.Tip="{x:Static app:UiStrings.ViewModeToggleTooltip}"
+              <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ViewModeToggleTooltip}"
                             IsChecked="{Binding ActiveViewDetail.EasyMode, Mode=TwoWay}"
                             IsEnabled="{Binding ActiveViewDetail.CanUseEasyMode}"
                             IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
               </ToggleButton>
-              <!-- ⚡ Compile for a View Detail tab (CREATE OR ALTER VIEW). Visible
-                   on any view sub-tab; always acts on the editable SQL source. -->
-              <Button Classes="primary"
-                      Padding="8,4"
-                      ToolTip.Tip="{x:Static app:UiStrings.ViewCompileTooltip}"
-                      Command="{Binding ActiveViewDetail.CompileCommand}"
-                      IsVisible="{Binding IsViewDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}"
-                                  Foreground="{DynamicResource OnAccentBrush}"
-                                  Width="16" Height="16" />
-              </Button>
-              <!-- Format SQL for the View source — reuses the shared SqlFormatter
-                   (same Icon.Braces + tooltip as the SQL Editor's format button). -->
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
-                      Command="{Binding ActiveViewDetail.FormatSqlCommand}"
-                      IsVisible="{Binding IsViewDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
-              </Button>
-              <!-- Procedure Detail: Source ⇄ Easy mode toggle (checked = Easy). FIRST
-                   element of the editor's toolbar section (same leading position as the
-                   View editor's toggle above). Disabled for a brand-new procedure
-                   (Source only — no catalog to seed Easy mode). -->
-              <ToggleButton Classes="icon"
-                            ToolTip.Tip="{x:Static app:UiStrings.ProcedureModeToggleTooltip}"
+              <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureModeToggleTooltip}"
                             IsChecked="{Binding ActiveProcedureDetail.EasyMode, Mode=TwoWay}"
                             IsEnabled="{Binding ActiveProcedureDetail.CanUseEasyMode}"
                             IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
               </ToggleButton>
-              <!-- ⚡ Compile for a Procedure Detail tab (CREATE OR ALTER PROCEDURE).
-                   Acts on the active mode (Easy → reassembled; Source → raw text). -->
-              <Button Classes="primary"
-                      Padding="8,4"
-                      ToolTip.Tip="{x:Static app:UiStrings.ProcedureCompileTooltip}"
-                      Command="{Binding ActiveProcedureDetail.CompileCommand}"
-                      IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}"
-                                  Foreground="{DynamicResource OnAccentBrush}"
-                                  Width="16" Height="16" />
+              <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
+                      IsVisible="{Binding ToolbarSep1Visible}" />
+
+              <!-- ── SECTION 2 · Main actions (Execute / Compile / Commit / Rollback) ── -->
+              <Button Classes="primary" Padding="10,4"
+                      Command="{Binding ExecuteQueryCommand}" IsVisible="{Binding ShowExecuteButton}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource OnAccentBrush}"
+                                    Width="14" Height="14" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding ExecuteLabel}" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding ExecuteHint}" FontSize="10"
+                             Foreground="{DynamicResource OnAccentSubtleBrush}" VerticalAlignment="Center" />
+                </StackPanel>
               </Button>
-              <!-- Execute Procedure (Data lane, parameterized) — primary action,
-                   green accent so it reads as "run" at a glance. -->
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.ProcedureExecuteTooltip}"
-                      Command="{Binding ActiveProcedureDetail.ExecuteProcedureCommand}"
-                      IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Play}"
-                                  Foreground="{DynamicResource SuccessIconBrush}" />
+              <Button Classes="flat" Padding="10,4"
+                      Command="{Binding CancelQueryCommand}" IsVisible="{Binding ShowCancelButton}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}"
+                                    Width="14" Height="14" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
+                </StackPanel>
               </Button>
-              <!-- Format SQL — the single shared SqlFormatter (now PSQL-aware:
-                   BEGIN/END indentation, CASE…END kept inline, idempotent). -->
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
-                      Command="{Binding ActiveProcedureDetail.FormatSqlCommand}"
-                      IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
+                      Command="{Binding ActiveTableDetail.CompileCommand}" IsVisible="{Binding ShowStructureCompileTools}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
-              <!-- Comment Body (blue) / Uncomment Body (red) — wrap the outer
-                   BEGIN…END in /* */. Distinct colours so the action is identifiable
-                   without the tooltip. -->
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
-                      Command="{Binding ActiveProcedureDetail.CommentBodyCommand}"
-                      IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Comment}"
-                                  Foreground="{DynamicResource InfoIconBrush}" />
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FieldEditDiscardTooltip}"
+                      Command="{Binding ActiveTableDetail.DiscardPendingChangesCommand}" IsVisible="{Binding ShowStructureCompileTools}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
-                      Command="{Binding ActiveProcedureDetail.UncommentBodyCommand}"
-                      IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}"
-                                  Foreground="{DynamicResource DangerIconBrush}" />
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.NewTableDialogCompile}"
+                      Command="{Binding ActiveNewTable.CompileCommand}" IsVisible="{Binding IsNewTableTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
-              <!-- Data-edit add/delete row buttons. Bound through ActiveTableDetail
-                   because the commands live on TableDetailTabViewModel. Visible only
-                   on the Dane sub-tab; the leading separator collapses to zero width
-                   when not visible thanks to IsVisible on the Border. -->
-              <Border Width="1" Margin="4,4"
-                      Background="{DynamicResource BorderBrush}"
-                      IsVisible="{Binding ShowDataEditTools}" />
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.DataEditAddRowTooltip}"
-                      Command="{Binding ActiveTableDetail.AddRowCommand}"
-                      IsVisible="{Binding ShowDataEditTools}">
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.ViewCompileTooltip}"
+                      Command="{Binding ActiveViewDetail.CompileCommand}" IsVisible="{Binding IsViewDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+              </Button>
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCompileTooltip}"
+                      Command="{Binding ActiveProcedureDetail.CompileCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+              </Button>
+              <!-- Single unified Commit / Rollback pair (auto-routed to the open lane(s)). -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
+                      Command="{Binding CommitAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
+                <controls:SvgIcon Data="{StaticResource Icon.Check}" Foreground="{DynamicResource SuccessIconBrush}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackTooltip}"
+                      Command="{Binding RollbackAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
+              <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
+                      IsVisible="{Binding ToolbarSep2Visible}" />
+
+              <!-- ── SECTION 3 · Collection (unified router: + −  |  ↑ ↓) ────────────── -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.CollectionAddTooltip}"
+                      Command="{Binding AddCollectionItemCommand}" IsVisible="{Binding ShowCollectionTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
               </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.DataEditDeleteRowTooltip}"
-                      Command="{Binding ActiveTableDetail.DeleteRowCommand}"
-                      IsVisible="{Binding ShowDataEditTools}">
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.CollectionRemoveTooltip}"
+                      Command="{Binding RemoveCollectionItemCommand}" IsVisible="{Binding ShowCollectionTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
               </Button>
-              <!-- Pagination section. Same ActiveTableDetail binding pattern. -->
-              <Border Width="1" Margin="4,4"
-                      Background="{DynamicResource BorderBrush}"
-                      IsVisible="{Binding IsDataTabActive}" />
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToFirstPageCommand}"
-                      IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" />
+              <Border Width="1" Margin="2,5" Opacity="0.45" Background="{DynamicResource BorderBrush}"
+                      IsVisible="{Binding ShowCollectionReorder}" />
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.CollectionMoveUpTooltip}"
+                      Command="{Binding MoveCollectionItemUpCommand}" IsVisible="{Binding ShowCollectionReorder}">
+                <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
               </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToPreviousPageCommand}"
-                      IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" />
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.CollectionMoveDownTooltip}"
+                      Command="{Binding MoveCollectionItemDownCommand}" IsVisible="{Binding ShowCollectionReorder}">
+                <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
               </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToNextPageCommand}"
-                      IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" />
-              </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToLastPageCommand}"
-                      IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" />
-              </Button>
-              <Border Width="1" Margin="4,4"
-                      Background="{DynamicResource BorderBrush}"
-                      IsVisible="{Binding IsQueryTabActive}" />
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewQueryTooltip}"
-                      Command="{Binding NewQueryCommand}"
-                      IsVisible="{Binding IsQueryTabActive}">
+              <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
+                      IsVisible="{Binding ToolbarSep3Visible}" />
+
+              <!-- ── SECTION 4 · Helper actions ─────────────────────────────────────── -->
+              <!-- SQL editor -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewQueryTooltip}"
+                      Command="{Binding NewQueryCommand}" IsVisible="{Binding IsQueryTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
               </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleQueryPanelTooltip}"
-                      Command="{Binding ToggleQueryPanelCommand}"
-                      IsVisible="{Binding IsQueryTabActive}">
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleQueryPanelTooltip}"
+                      Command="{Binding ToggleQueryPanelCommand}" IsVisible="{Binding IsQueryTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.PanelRight}" />
               </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarClearEditorTooltip}"
-                      Command="{Binding ClearActiveEditorCommand}"
-                      IsVisible="{Binding IsQueryTabActive}">
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarClearEditorTooltip}"
+                      Command="{Binding ClearActiveEditorCommand}" IsVisible="{Binding IsQueryTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Eraser}" />
               </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
-                      Command="{Binding FormatSqlCommand}"
-                      IsVisible="{Binding IsQueryTabActive}">
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+                      Command="{Binding FormatSqlCommand}" IsVisible="{Binding IsQueryTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
-              <Button Classes="icon"
-                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarCloseTabTooltip}"
-                      Command="{Binding CloseActiveTabCommand}"
-                      IsVisible="{Binding IsClosableTabActive}">
+              <!-- Table Dane: refresh + pagination -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarRefreshDataTooltip}"
+                      Command="{Binding RefreshDataPreviewCommand}" IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" Foreground="{DynamicResource InfoIconBrush}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
+                      Command="{Binding ActiveTableDetail.GoToFirstPageCommand}" IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
+                      Command="{Binding ActiveTableDetail.GoToPreviousPageCommand}" IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
+                      Command="{Binding ActiveTableDetail.GoToNextPageCommand}" IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
+                      Command="{Binding ActiveTableDetail.GoToLastPageCommand}" IsVisible="{Binding IsDataTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" />
+              </Button>
+              <!-- View: format -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+                      Command="{Binding ActiveViewDetail.FormatSqlCommand}" IsVisible="{Binding IsViewDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
+              </Button>
+              <!-- Procedure: execute / format / comment / uncomment -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureExecuteTooltip}"
+                      Command="{Binding ActiveProcedureDetail.ExecuteProcedureCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+                      Command="{Binding ActiveProcedureDetail.FormatSqlCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
+                      Command="{Binding ActiveProcedureDetail.CommentBodyCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
+                      Command="{Binding ActiveProcedureDetail.UncommentBodyCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
+              <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
+                      IsVisible="{Binding ToolbarSep4Visible}" />
+
+              <!-- ── SECTION 5 · Close tab (always last) ────────────────────────────── -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarCloseTabTooltip}"
+                      Command="{Binding CloseActiveTabCommand}" IsVisible="{Binding IsClosableTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.X}" />
               </Button>
             </StackPanel>

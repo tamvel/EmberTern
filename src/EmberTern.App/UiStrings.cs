@@ -391,7 +391,7 @@ internal static class UiStrings
     public const string NewTableExecutedFormat = "CREATE TABLE \"{0}\" executed.";
 
     // ─── View Detail (View Detail V1) ───────────────────────────────────────
-    public const string ViewDetailTabSql = "SQL";
+    public const string ViewDetailTabSql = "Editor";
     public const string ViewDetailTabFields = "Fields";
     public const string ViewDetailTabDependencies = "Dependencies";
     public const string ViewDetailTabData = "Data";
@@ -407,9 +407,18 @@ internal static class UiStrings
     public const string NewViewExecutedFormat = "View \"{0}\" created.";
 
     // View Detail Easy mode (mirrors the Procedure Detail Source/Easy toggle).
+    // Unified toolbar Collection section (routes to the active editor's collection —
+    // fields / columns / params / variables / …). Generic labels: the router decides
+    // which collection the action applies to.
+    public const string CollectionAddTooltip = "Add item";
+    public const string CollectionRemoveTooltip = "Remove item";
+    public const string CollectionMoveUpTooltip = "Move up";
+    public const string CollectionMoveDownTooltip = "Move down";
+
     public const string ViewModeToggleTooltip = "Toggle Source / Easy mode";
     public const string ViewParseFailedNotice =
         "Could not parse the view source into the column list + SELECT body — staying on the last structured model. Switch to Source mode to edit the full statement.";
+    public const string ViewNameHeader = "View name";
     public const string ViewColumnsHeader = "Columns";
     public const string ViewColumnAddTooltip = "Add column";
     public const string ViewColumnDeleteTooltip = "Delete column";
@@ -419,6 +428,7 @@ internal static class UiStrings
     public const string ViewBodyHeader = "SELECT body";
 
     // ─── Procedure Detail (Procedure Detail V1) ─────────────────────────────
+    public const string ProcedureNameHeader = "Procedure name";
     public const string ProcedureDetailTabEditor = "Editor";
     public const string ProcedureDetailTabDescription = "Description";
     public const string ProcedureDetailTabDependencies = "Dependencies";

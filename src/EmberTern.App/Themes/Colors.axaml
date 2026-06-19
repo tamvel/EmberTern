@@ -31,14 +31,15 @@
       <!-- Occurrence highlight (selecting an identifier boxes its other occurrences):
            faint warm gold, distinct from the blue selection. ARGB alpha-first. -->
       <Color x:Key="OccurrenceHighlightColor">#33C8A030</Color>
-      <!-- Amber overlay marking a row with an unsaved modify edit in the Pola grid.
-           Amber so the three pending states read at a glance — green = added,
-           amber = modified, red = dropped — and none collides with the blue
-           hover/selection. NB: a low-alpha amber over the near-black editor surface
-           renders as dark brown (dark orange = brown), so this uses a brighter
-           Material-amber at ~30% alpha to read as amber on dark; on light it lands as
-           a pale amber. ARGB alpha-first; theme-invariant (reads on both). -->
-      <Color x:Key="RowModifiedColor">#4DFFC107</Color>
+      <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
+           grid. The three pending states read at a glance — green = added, indigo =
+           modified, red = dropped — and none collides with the blue hover/selection or
+           the amber warning/transaction state. Amber was rejected: a low-alpha WARM
+           colour over the near-black editor surface composites to brown, which reads as
+           a warning, not a pending edit. A cool hue stays true on dark (no muddiness)
+           and lands as a soft lavender on light. ~25% alpha, ARGB alpha-first;
+           theme-invariant. -->
+      <Color x:Key="RowModifiedColor">#407C4DFF</Color>
       <!-- Buffered Table Designer pending-row washes (~20% alpha, alpha-first ARGB). -->
       <Color x:Key="RowAddedColor">#3327AE60</Color>
       <Color x:Key="RowDroppedColor">#33E53935</Color>
@@ -199,14 +200,15 @@
       <!-- Occurrence highlight (selecting an identifier boxes its other occurrences):
            faint warm gold, distinct from the blue selection. ARGB alpha-first. -->
       <Color x:Key="OccurrenceHighlightColor">#33C8A030</Color>
-      <!-- Amber overlay marking a row with an unsaved modify edit in the Pola grid.
-           Amber so the three pending states read at a glance — green = added,
-           amber = modified, red = dropped — and none collides with the blue
-           hover/selection. NB: a low-alpha amber over the near-black editor surface
-           renders as dark brown (dark orange = brown), so this uses a brighter
-           Material-amber at ~30% alpha to read as amber on dark; on light it lands as
-           a pale amber. ARGB alpha-first; theme-invariant (reads on both). -->
-      <Color x:Key="RowModifiedColor">#4DFFC107</Color>
+      <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
+           grid. The three pending states read at a glance — green = added, indigo =
+           modified, red = dropped — and none collides with the blue hover/selection or
+           the amber warning/transaction state. Amber was rejected: a low-alpha WARM
+           colour over the near-black editor surface composites to brown, which reads as
+           a warning, not a pending edit. A cool hue stays true on dark (no muddiness)
+           and lands as a soft lavender on light. ~25% alpha, ARGB alpha-first;
+           theme-invariant. -->
+      <Color x:Key="RowModifiedColor">#407C4DFF</Color>
       <!-- Buffered Table Designer pending-row washes (~20% alpha, alpha-first ARGB). -->
       <Color x:Key="RowAddedColor">#3327AE60</Color>
       <Color x:Key="RowDroppedColor">#33E53935</Color>

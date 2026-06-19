@@ -197,6 +197,19 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ShowQueryPanel))]
     [NotifyPropertyChangedFor(nameof(ActiveDdlText))]
     [NotifyPropertyChangedFor(nameof(ActiveTableDetail))]
+    [NotifyPropertyChangedFor(nameof(ShowModeSection))]
+    [NotifyPropertyChangedFor(nameof(ShowMainSection))]
+    [NotifyPropertyChangedFor(nameof(ShowCollectionTools))]
+    [NotifyPropertyChangedFor(nameof(ShowCollectionReorder))]
+    [NotifyPropertyChangedFor(nameof(ShowHelperSection))]
+    [NotifyPropertyChangedFor(nameof(ToolbarSep1Visible))]
+    [NotifyPropertyChangedFor(nameof(ToolbarSep2Visible))]
+    [NotifyPropertyChangedFor(nameof(ToolbarSep3Visible))]
+    [NotifyPropertyChangedFor(nameof(ToolbarSep4Visible))]
+    [NotifyCanExecuteChangedFor(nameof(AddCollectionItemCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveCollectionItemCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveCollectionItemUpCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveCollectionItemDownCommand))]
     [NotifyPropertyChangedFor(nameof(ShowExecuteButton))]
     [NotifyPropertyChangedFor(nameof(ShowCancelButton))]
     [NotifyPropertyChangedFor(nameof(CanClearActiveEditor))]
@@ -271,6 +284,95 @@ public partial class MainWindowViewModel : ViewModelBase
     // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail);
     // the anchored Query tab is never closable so the button hides when it's active.
     public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail };
+
+    // ─── Unified editor toolbar — fixed 5-section model ───────────────────
+    //
+    // One toolbar, five sections in a fixed order for EVERY object editor:
+    //   [ Mode ] | [ Main ] | [ Collection: + − | ↑ ↓ ] | [ Helper ] | [ Close ]
+    // Each section + its leading separator collapse when empty for the active editor.
+    // Section 3 routes Add/Remove/Move to the active editor's collection via the four
+    // commands below; a future Trigger/Function/Package editor plugs a new case into
+    // ActiveCollection() and gets the toolbar for free — no new layout pattern.
+
+    // Section 1 — a mode toggle exists for Table (Grid-Edit), View + Procedure (Easy).
+    public bool ShowModeSection => ShowFieldEditTools || IsViewDetailTabActive || IsProcedureDetailTabActive;
+    // Section 2 — every editor has a primary action (Execute / Compile / Commit).
+    public bool ShowMainSection => SelectedWorkspaceTab is not null;
+    // Section 4 — helpers exist for SQL editor, View, Procedure, and the Dane sub-tab.
+    public bool ShowHelperSection => IsQueryTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsDataTabActive;
+
+    // A separator shows only between two non-empty adjacent sections.
+    private bool HasFrom2 => ShowMainSection || ShowCollectionTools || ShowHelperSection || IsClosableTabActive;
+    private bool HasFrom3 => ShowCollectionTools || ShowHelperSection || IsClosableTabActive;
+    private bool HasFrom4 => ShowHelperSection || IsClosableTabActive;
+    public bool ToolbarSep1Visible => ShowModeSection && HasFrom2;
+    public bool ToolbarSep2Visible => ShowMainSection && HasFrom3;
+    public bool ToolbarSep3Visible => ShowCollectionTools && HasFrom4;
+    public bool ToolbarSep4Visible => ShowHelperSection && IsClosableTabActive;
+
+    // Section 3 — collection-edit router. Resolves the active editor's Add/Remove/Move
+    // commands (+ whether it supports ↑↓). null when no editable collection is active
+    // (SQL editor, read-only system table, View/Procedure in Source mode, …).
+    private (System.Windows.Input.ICommand Add, System.Windows.Input.ICommand Remove,
+             System.Windows.Input.ICommand? Up, System.Windows.Input.ICommand? Down, bool Reorder)? ActiveCollection()
+    {
+        switch (SelectedWorkspaceTab?.Kind)
+        {
+            case WorkspaceTabKind.TableDetail when SelectedWorkspaceTab.TableDetail is { } t:
+                if (ShowFieldEditTools)
+                    return (t.AddFieldCommand, t.DropFieldCommand, t.MoveFieldUpCommand, t.MoveFieldDownCommand, true);
+                if (ShowDataEditTools)
+                    return (t.AddRowCommand, t.DeleteRowCommand, null, null, false);  // rows: no reorder
+                return null;
+            case WorkspaceTabKind.NewTable when SelectedWorkspaceTab.NewTable is { } n:
+                return (n.AddFieldCommand, n.DeleteFieldCommand, n.MoveFieldUpCommand, n.MoveFieldDownCommand, true);
+            case WorkspaceTabKind.ViewDetail when SelectedWorkspaceTab.ViewDetail is { EasyMode: true } v:
+                return (v.AddColumnCommand, v.DeleteColumnCommand, v.MoveColumnUpCommand, v.MoveColumnDownCommand, true);
+            case WorkspaceTabKind.ProcedureDetail when SelectedWorkspaceTab.ProcedureDetail is { EasyMode: true } p:
+                return (p.AddCollectionItemCommand, p.RemoveCollectionItemCommand, p.MoveCollectionItemUpCommand, p.MoveCollectionItemDownCommand, true);
+            default:
+                return null;
+        }
+    }
+
+    public bool ShowCollectionTools => ActiveCollection() is not null;
+    public bool ShowCollectionReorder => ActiveCollection() is { Reorder: true };
+
+    private bool CanAddCollectionItem() => ActiveCollection()?.Add.CanExecute(null) ?? false;
+    [RelayCommand(CanExecute = nameof(CanAddCollectionItem))]
+    private void AddCollectionItem() => ActiveCollection()?.Add.Execute(null);
+
+    private bool CanRemoveCollectionItem() => ActiveCollection()?.Remove.CanExecute(null) ?? false;
+    [RelayCommand(CanExecute = nameof(CanRemoveCollectionItem))]
+    private void RemoveCollectionItem() => ActiveCollection()?.Remove.Execute(null);
+
+    private bool CanMoveCollectionItemUp() => ActiveCollection() is { Up: { } u } && u.CanExecute(null);
+    [RelayCommand(CanExecute = nameof(CanMoveCollectionItemUp))]
+    private void MoveCollectionItemUp() => ActiveCollection()?.Up?.Execute(null);
+
+    private bool CanMoveCollectionItemDown() => ActiveCollection() is { Down: { } d } && d.CanExecute(null);
+    [RelayCommand(CanExecute = nameof(CanMoveCollectionItemDown))]
+    private void MoveCollectionItemDown() => ActiveCollection()?.Down?.Execute(null);
+
+    // Re-raise all toolbar-section flags + router CanExecute. Called on tab change and
+    // on the active editor's PropertyChanged (sub-tab / EasyMode / selection), so the
+    // toolbar tracks the active editor's live state coarsely but correctly.
+    private void RefreshToolbarSections()
+    {
+        OnPropertyChanged(nameof(ShowModeSection));
+        OnPropertyChanged(nameof(ShowMainSection));
+        OnPropertyChanged(nameof(ShowHelperSection));
+        OnPropertyChanged(nameof(ShowCollectionTools));
+        OnPropertyChanged(nameof(ShowCollectionReorder));
+        OnPropertyChanged(nameof(ToolbarSep1Visible));
+        OnPropertyChanged(nameof(ToolbarSep2Visible));
+        OnPropertyChanged(nameof(ToolbarSep3Visible));
+        OnPropertyChanged(nameof(ToolbarSep4Visible));
+        AddCollectionItemCommand.NotifyCanExecuteChanged();
+        RemoveCollectionItemCommand.NotifyCanExecuteChanged();
+        MoveCollectionItemUpCommand.NotifyCanExecuteChanged();
+        MoveCollectionItemDownCommand.NotifyCanExecuteChanged();
+    }
     // Saved Queries panel is only meaningful while the Query tab is active.
     // When a DDL or TableDetail tab is active the panel collapses regardless of
     // the user's IsQueryPanelVisible toggle preference (the preference itself
@@ -1624,6 +1726,10 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ViewCreated += name => OnViewCreated(detail, name);
+        // Start in Easy mode (approved target design): SourceText (the template) is
+        // already set, so the toggle parses it into the editable name + column list +
+        // body. The user can flip to Source at any time.
+        detail.EasyMode = true;
 
         var obj = new MetadataObject(UiStrings.NewViewTabDefaultTitle, MetadataObjectKind.View);
         var tab = WorkspaceTabViewModel.CreateViewDetail(this, obj, detail, _service.ActiveProfile?.Id);
@@ -1675,6 +1781,10 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.RunExecuteRequested = RunProcedureExecuteAsync;
         detail.ProcedureCreated += name => OnProcedureCreated(detail, name);
+        // Start in Easy mode (approved target design): the template SourceText is parsed
+        // into the editable name + Input/Output params + Variables/Cursors/Subprograms +
+        // body. The user can flip to Source at any time.
+        detail.EasyMode = true;
 
         var obj = new MetadataObject(UiStrings.NewProcedureTabDefaultTitle, MetadataObjectKind.Procedure);
         var tab = WorkspaceTabViewModel.CreateProcedureDetail(this, obj, detail, _service.ActiveProfile?.Id);
@@ -2543,6 +2653,11 @@ public partial class MainWindowViewModel : ViewModelBase
     // switch outer tabs first.
     private TableDetailTabViewModel? _trackedTableDetail;
 
+    // The active View / Procedure / New Table editor, observed so the unified toolbar's
+    // Collection section + section flags track its live state (EasyMode, sub-tab,
+    // selection). TableDetail is observed via _trackedTableDetail above.
+    private System.ComponentModel.INotifyPropertyChanged? _trackedCollectionChild;
+
     partial void OnSelectedWorkspaceTabChanged(WorkspaceTabViewModel? oldValue, WorkspaceTabViewModel? newValue)
     {
         if (_trackedTableDetail is not null)
@@ -2555,10 +2670,36 @@ public partial class MainWindowViewModel : ViewModelBase
             _trackedTableDetail = td;
             _trackedTableDetail.PropertyChanged += OnTableDetailPropertyChanged;
         }
+
+        if (_trackedCollectionChild is not null)
+        {
+            _trackedCollectionChild.PropertyChanged -= OnCollectionChildChanged;
+            _trackedCollectionChild = null;
+        }
+        System.ComponentModel.INotifyPropertyChanged? child = newValue?.Kind switch
+        {
+            WorkspaceTabKind.ViewDetail => newValue.ViewDetail,
+            WorkspaceTabKind.ProcedureDetail => newValue.ProcedureDetail,
+            WorkspaceTabKind.NewTable => newValue.NewTable,
+            _ => null,
+        };
+        if (child is not null)
+        {
+            _trackedCollectionChild = child;
+            _trackedCollectionChild.PropertyChanged += OnCollectionChildChanged;
+        }
+
+        RefreshToolbarSections();
     }
+
+    private void OnCollectionChildChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        => RefreshToolbarSections();
 
     private void OnTableDetailPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        // Any TableDetail change (sub-tab, selection, pending edits) can affect the
+        // unified toolbar's Collection routing — refresh coarsely.
+        RefreshToolbarSections();
         if (e.PropertyName == nameof(TableDetailTabViewModel.IsDataSubTabActive))
         {
             OnPropertyChanged(nameof(IsDataTabActive));
