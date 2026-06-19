@@ -283,32 +283,9 @@ public static class ProcedureBodySplitter
     private static string Slice(string s, int start, int end)
         => start >= 0 && end <= s.Length && end > start ? s.Substring(start, end - start).Trim() : string.Empty;
 
-    // Consumes a subprogram declaration through the close of its first BEGIN…END,
-    // then an optional trailing ';'. BEGIN/END nesting; string + comment aware
-    // (shares the CASE…END nesting limitation with ProcedureBodyScanner).
+    // Consumes a subprogram declaration through the close of its BEGIN…END body (and
+    // an optional trailing ';') via the shared CASE-aware scanner — a CASE…END inside
+    // the body no longer truncates the declaration on Source→Easy split.
     private static void SkipSubprogramBody(string s, ref int i)
-    {
-        int depth = 0;
-        bool sawBegin = false;
-        while (i < s.Length)
-        {
-            SqlScanHelpers.SkipTrivia(s, ref i);
-            if (i >= s.Length) break;
-            if (SqlScanHelpers.TrySkipQuoted(s, ref i)) continue;
-            if (!SqlScanHelpers.IsIdentifierChar(s[i])) { i++; continue; }
-
-            var u = SqlScanHelpers.ReadWord(s, ref i).ToUpperInvariant();
-            if (u == "BEGIN") { depth++; sawBegin = true; }
-            else if (u == "END")
-            {
-                if (depth > 0) depth--;
-                if (sawBegin && depth == 0)
-                {
-                    SqlScanHelpers.SkipTrivia(s, ref i);
-                    if (i < s.Length && s[i] == ';') i++;
-                    return;
-                }
-            }
-        }
-    }
+        => SqlScanHelpers.SkipToEndOfBlock(s, ref i);
 }

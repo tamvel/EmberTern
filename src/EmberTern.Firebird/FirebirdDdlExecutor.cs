@@ -122,12 +122,19 @@ public sealed class FirebirdDdlExecutor
 
     /// <summary>
     /// Splits a multi-statement DDL string on TOP-LEVEL semicolons.
-    /// "Top-level" means outside a <c>BEGIN … END</c> PSQL block — CREATE
-    /// TRIGGER bodies have their own internal semicolons (e.g. assignment
-    /// statements inside BEGIN/END) that must NOT terminate the outer CREATE
-    /// TRIGGER. The scanner tracks a single BEGIN/END nesting counter
-    /// (case-insensitive, word-boundary match) — enough for the shapes
-    /// EmberTern emits today (no nested triggers, no procedures).
+    /// "Top-level" means outside a <c>BEGIN … END</c> / <c>CASE … END</c> block —
+    /// PSQL bodies (CREATE TRIGGER / PROCEDURE / FUNCTION) have their own internal
+    /// semicolons (e.g. statements inside BEGIN/END) that must NOT terminate the
+    /// outer CREATE statement. The scanner tracks a single block-nesting counter
+    /// (case-insensitive, word-boundary match) where BOTH <c>BEGIN</c> and
+    /// <c>CASE</c> open and <c>END</c> closes — counting CASE is essential because a
+    /// <c>CASE … END</c> expression in a body (e.g. inside a WHERE clause) ends with
+    /// <c>END</c> too; without it that END would wrongly close the enclosing BEGIN
+    /// and split the procedure mid-body at the next <c>;</c> (yielding a truncated
+    /// statement → "Unexpected end of command"). String literals (<c>'…'</c>),
+    /// quoted identifiers (<c>"…"</c>), and comments (<c>-- …</c>, <c>/* … */</c>)
+    /// are copied verbatim and never inspected, so their semicolons / BEGIN / END /
+    /// CASE words don't affect splitting or nesting.
     /// </summary>
     internal static IReadOnlyList<string> SplitStatements(string sql)
     {
@@ -135,36 +142,94 @@ public sealed class FirebirdDdlExecutor
         if (string.IsNullOrWhiteSpace(sql)) return result;
 
         var current = new System.Text.StringBuilder();
-        var beginDepth = 0;
-        for (int i = 0; i < sql.Length; i++)
+        var blockDepth = 0;
+        int i = 0;
+        while (i < sql.Length)
         {
-            var c = sql[i];
-            if (c == ';' && beginDepth == 0)
+            char c = sql[i];
+
+            // Opaque runs — copy whole, never inspect for ';' / BEGIN / END / CASE.
+            if (c == '\'') { i = CopyString(sql, i, current); continue; }
+            if (c == '"') { i = CopyQuotedIdent(sql, i, current); continue; }
+            if (c == '-' && i + 1 < sql.Length && sql[i + 1] == '-') { i = CopyLineComment(sql, i, current); continue; }
+            if (c == '/' && i + 1 < sql.Length && sql[i + 1] == '*') { i = CopyBlockComment(sql, i, current); continue; }
+
+            if (c == ';' && blockDepth == 0)
             {
                 AppendIfNonEmpty(current, result);
                 current.Clear();
+                i++;
                 continue;
             }
-            current.Append(c);
 
-            // Word-boundary BEGIN/END detection. Match only when surrounded by
-            // non-identifier characters on both sides so 'BEGIN' inside an
-            // identifier (extremely unlikely in our DDL but cheap to guard) is
-            // ignored. Track the start position of each token.
-            if (IsWordBoundary(sql, i) && i + 1 < sql.Length)
+            // Word-boundary BEGIN/CASE (open) / END (close). Match only when bounded
+            // by non-identifier characters so the words inside a larger identifier
+            // are ignored. BEGIN…END and CASE…END both terminate with END, so
+            // counting CASE as an opener keeps the nesting balanced.
+            if (IsWordBoundary(sql, i - 1))
             {
-                if (Matches(sql, i + 1, "BEGIN") && IsWordEndAt(sql, i + 1 + 5))
+                if ((Matches(sql, i, "BEGIN") && IsWordEndAt(sql, i + 5))
+                    || (Matches(sql, i, "CASE") && IsWordEndAt(sql, i + 4)))
                 {
-                    beginDepth++;
+                    blockDepth++;
                 }
-                else if (Matches(sql, i + 1, "END") && IsWordEndAt(sql, i + 1 + 3))
+                else if (Matches(sql, i, "END") && IsWordEndAt(sql, i + 3))
                 {
-                    if (beginDepth > 0) beginDepth--;
+                    if (blockDepth > 0) blockDepth--;
                 }
             }
+
+            current.Append(c);
+            i++;
         }
         AppendIfNonEmpty(current, result);
         return result;
+    }
+
+    // Copies an opaque run starting at <paramref name="i"/> into <paramref name="sink"/>
+    // and returns the index just past it. Each handles its own terminator.
+    private static int CopyString(string s, int i, System.Text.StringBuilder sink)
+    {
+        int start = i++;
+        while (i < s.Length)
+        {
+            if (s[i] == '\'')
+            {
+                if (i + 1 < s.Length && s[i + 1] == '\'') { i += 2; continue; } // '' escape
+                i++;
+                break;
+            }
+            i++;
+        }
+        sink.Append(s, start, i - start);
+        return i;
+    }
+
+    private static int CopyQuotedIdent(string s, int i, System.Text.StringBuilder sink)
+    {
+        int start = i++;
+        while (i < s.Length && s[i] != '"') i++;
+        if (i < s.Length) i++;
+        sink.Append(s, start, i - start);
+        return i;
+    }
+
+    private static int CopyLineComment(string s, int i, System.Text.StringBuilder sink)
+    {
+        int start = i;
+        while (i < s.Length && s[i] != '\n') i++;
+        sink.Append(s, start, i - start);
+        return i;
+    }
+
+    private static int CopyBlockComment(string s, int i, System.Text.StringBuilder sink)
+    {
+        int start = i;
+        i += 2;
+        while (i + 1 < s.Length && !(s[i] == '*' && s[i + 1] == '/')) i++;
+        i = i + 1 < s.Length ? i + 2 : s.Length;
+        sink.Append(s, start, i - start);
+        return i;
     }
 
     private static bool IsWordBoundary(string s, int index)

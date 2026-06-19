@@ -22,12 +22,9 @@ public sealed class ProcedureBodyMetadata
 /// the TOP-LEVEL declarations: <c>DECLARE [VARIABLE] x …</c>, <c>DECLARE x CURSOR …</c>,
 /// and FB3 local subprograms <c>DECLARE PROCEDURE|FUNCTION …</c>. Read-only metadata —
 /// the body editor remains the single edit surface. Pure + testable without a DB.
-/// <para>
-/// Limitation: subprogram bodies are skipped via BEGIN/END nesting, which can be
-/// miscounted by a bare <c>END</c> from a <c>CASE … END</c> inside a subprogram.
-/// This affects only the read-only listing in rare CASE-in-subprogram shapes; the
-/// procedure is still edited + compiled as whole text, so nothing is lost.
-/// </para>
+/// Subprogram-body skipping goes through the shared CASE-aware block scanner
+/// (<see cref="SqlScanHelpers.SkipToEndOfBlock"/>), so a <c>CASE … END</c> inside a
+/// subprogram no longer miscounts the nesting (gotchas #117 / #128).
 /// </summary>
 public static class ProcedureBodyScanner
 {
@@ -116,37 +113,11 @@ public static class ProcedureBodyScanner
     /// matching <c>END</c> (the procedure body to disable/enable). Returns the
     /// inner-content range <c>[Start, End)</c> — the text strictly between the
     /// outer BEGIN and END — or null when there's no top-level BEGIN…END.
-    /// BEGIN/END nesting, string + comment aware. Pure + testable.</summary>
+    /// CASE-aware (a <c>CASE … END</c> in the body doesn't close the block early),
+    /// string + comment aware. Delegates to the shared
+    /// <see cref="SqlScanHelpers.FindOuterBeginEndContent"/>. Pure + testable.</summary>
     public static (int Start, int End)? FindOuterBodyContent(string? text)
-    {
-        if (string.IsNullOrEmpty(text)) return null;
-        var s = text!;
-        int i = 0;
-        int depth = 0;
-        int contentStart = -1;
-
-        while (i < s.Length)
-        {
-            SqlScanHelpers.SkipTrivia(s, ref i);
-            if (i >= s.Length) break;
-            if (SqlScanHelpers.TrySkipQuoted(s, ref i)) continue;
-            if (!SqlScanHelpers.IsIdentifierChar(s[i])) { i++; continue; }
-
-            int tokStart = i;
-            var u = SqlScanHelpers.ReadWord(s, ref i).ToUpperInvariant();
-            if (u == "BEGIN")
-            {
-                depth++;
-                if (depth == 1) contentStart = i; // content begins right after the outer BEGIN
-            }
-            else if (u == "END")
-            {
-                if (depth == 1) return (contentStart, tokStart);
-                if (depth > 1) depth--;
-            }
-        }
-        return null;
-    }
+        => SqlScanHelpers.FindOuterBeginEndContent(text);
 
     /// <summary>Wraps the outer procedure body in <c>/* … */</c> (Comment Body /
     /// "disable body"). Returns the transformed full text, or null when there's no
@@ -188,37 +159,8 @@ public static class ProcedureBodyScanner
         return text.Substring(0, range.Start) + "\n" + rebuilt + "\n" + text.Substring(range.End);
     }
 
-    // Consumes tokens until the subprogram's matching END (the close of its
-    // first BEGIN), then an optional trailing ';'. BEGIN/END nesting; string +
-    // comment aware (see class-level CASE…END limitation).
+    // Consumes the subprogram's BEGIN…END body (and an optional trailing ';') via the
+    // shared CASE-aware scanner — a CASE…END inside the body no longer ends it early.
     private static void SkipSubprogramBody(string s, ref int i)
-    {
-        int depth = 0;
-        bool sawBegin = false;
-        while (i < s.Length)
-        {
-            SqlScanHelpers.SkipTrivia(s, ref i);
-            if (i >= s.Length) break;
-            if (SqlScanHelpers.TrySkipQuoted(s, ref i)) continue;
-            if (!SqlScanHelpers.IsIdentifierChar(s[i])) { i++; continue; }
-
-            var w = SqlScanHelpers.ReadWord(s, ref i);
-            var u = w.ToUpperInvariant();
-            if (u == "BEGIN")
-            {
-                depth++;
-                sawBegin = true;
-            }
-            else if (u == "END")
-            {
-                if (depth > 0) depth--;
-                if (sawBegin && depth == 0)
-                {
-                    SqlScanHelpers.SkipTrivia(s, ref i);
-                    if (i < s.Length && s[i] == ';') i++;
-                    return;
-                }
-            }
-        }
-    }
+        => SqlScanHelpers.SkipToEndOfBlock(s, ref i);
 }

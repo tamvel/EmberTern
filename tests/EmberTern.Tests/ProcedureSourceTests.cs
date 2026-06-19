@@ -258,4 +258,87 @@ public class ProcedureSourceTests
         Assert.Contains("a = 1;", commented);
         Assert.StartsWith("create or alter procedure", commented);
     }
+
+    // ─── CASE-aware block scanning (gotchas #117 / #128) ──────────────────────
+    // A CASE … END in the body must NOT close the BEGIN block early — these pin the
+    // shared SqlScanHelpers block scanner the three call sites now route through.
+
+    [Fact]
+    public void FindOuterBodyContent_TopLevelCaseInBody_SpansWholeBody()
+    {
+        // Regression: the CASE's END must not terminate the body; the range must
+        // reach the OUTER end, so the statement AFTER the CASE is still inside it.
+        var body = "begin\n  x = case when a > 0 then 1 else 2 end;\n  suspend;\nend";
+        var range = ProcedureBodyScanner.FindOuterBodyContent(body);
+        Assert.NotNull(range);
+        var content = body.Substring(range!.Value.Start, range.Value.End - range.Value.Start);
+        Assert.Contains("suspend", content);
+    }
+
+    [Fact]
+    public void FindOuterBodyContent_NestedCase_SpansWholeBody()
+    {
+        var body = "begin\n  x = case when a then case when b then 1 else 2 end else 3 end;\n  y = 4;\nend";
+        var range = ProcedureBodyScanner.FindOuterBodyContent(body);
+        Assert.NotNull(range);
+        var content = body.Substring(range!.Value.Start, range.Value.End - range.Value.Start);
+        Assert.Contains("y = 4", content);
+    }
+
+    [Fact]
+    public void CommentBody_CaseInBody_WrapsWholeBody()
+    {
+        // The real bug: with naive BEGIN/END counting, only the text up to the CASE's
+        // END was wrapped and 'suspend' was left dangling outside the comment.
+        var body = "begin\n  x = case when a > 0 then 1 else 2 end;\n  suspend;\nend";
+        var commented = ProcedureBodyScanner.CommentBody(body);
+        Assert.NotNull(commented);
+        int open = commented!.IndexOf("/*", System.StringComparison.Ordinal);
+        int suspend = commented.IndexOf("suspend", System.StringComparison.Ordinal);
+        int close = commented.IndexOf("*/", System.StringComparison.Ordinal);
+        Assert.True(open >= 0 && close > open);
+        Assert.InRange(suspend, open, close); // 'suspend' is inside the /* … */ wrapper
+    }
+
+    [Fact]
+    public void FindOuterBodyContent_KeywordsInStringAndComment_Ignored()
+    {
+        // BEGIN/END/CASE inside a literal or comment must not affect nesting.
+        var body = "begin\n  msg = 'begin case end';\n  -- end case begin\n  z = 1;\nend";
+        var range = ProcedureBodyScanner.FindOuterBodyContent(body);
+        Assert.NotNull(range);
+        var content = body.Substring(range!.Value.Start, range.Value.End - range.Value.Start);
+        Assert.Contains("z = 1", content);
+    }
+
+    [Fact]
+    public void Scan_LocalProcedureWithCase_CapturesFullBody()
+    {
+        var m = ProcedureBodyScanner.Scan(
+            "DECLARE VARIABLE X INTEGER;\n" +
+            "DECLARE PROCEDURE SUB (P INTEGER) AS BEGIN P = CASE WHEN P > 0 THEN 1 ELSE 0 END; END\n" +
+            "BEGIN\n  X = 1;\nEND");
+        var sp = Assert.Single(m.Subprograms);
+        Assert.Equal("SUB", sp.Name);
+        Assert.Equal("PROCEDURE", sp.Detail);
+        // The CASE's END must not truncate the subprogram body — the body's own END
+        // (after the CASE) must be captured too.
+        Assert.Contains("END; END", sp.Source);
+        // Only the top-level X is a declaration; the subprogram body isn't mis-scanned.
+        var v = Assert.Single(m.Variables);
+        Assert.Equal("X", v.Name);
+    }
+
+    [Fact]
+    public void Scan_LocalFunctionWithCase_CapturesFullBody()
+    {
+        var m = ProcedureBodyScanner.Scan(
+            "DECLARE FUNCTION F (P INTEGER) RETURNS INTEGER AS " +
+            "BEGIN RETURN CASE WHEN P > 0 THEN 1 ELSE 0 END; END\n" +
+            "BEGIN\n  X = 1;\nEND");
+        var sp = Assert.Single(m.Subprograms);
+        Assert.Equal("F", sp.Name);
+        Assert.Equal("FUNCTION", sp.Detail);
+        Assert.Contains("END; END", sp.Source);
+    }
 }

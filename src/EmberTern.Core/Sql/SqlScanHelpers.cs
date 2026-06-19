@@ -216,4 +216,86 @@ internal static class SqlScanHelpers
         var t = seg.Trim();
         if (t.Length > 0) list.Add(t);
     }
+
+    // ─── CASE-aware BEGIN…END block scanning ──────────────────────────────────
+    //
+    // A bare BEGIN/END counter is corrupted by CASE … END (the CASE's END drops the
+    // counter with no matching BEGIN), truncating a block before its real END — the
+    // recurring defect class behind gotchas #117 / #128. The scanner below counts
+    // BOTH BEGIN and CASE as openers (CASE only once we're inside the BEGIN block)
+    // and END as the closer, and skips string literals + comments, so a CASE … END
+    // (or a BEGIN/END/CASE keyword inside a literal or comment) never ends the block
+    // early. Shared so every BEGIN…END region scanner uses one correct implementation.
+
+    /// <summary>
+    /// Locates the outermost <c>BEGIN … END</c> block starting at/after
+    /// <paramref name="from"/>. CASE counts as a nested opener (so a <c>CASE … END</c>
+    /// inside the block doesn't close it early); string literals and comments are
+    /// skipped. On success returns true and sets <paramref name="contentStart"/> /
+    /// <paramref name="contentEnd"/> to the range strictly between the outer
+    /// <c>BEGIN</c> and its matching <c>END</c>, and <paramref name="afterBlock"/> to
+    /// the index just past that <c>END</c> and an optional trailing <c>;</c>.
+    /// </summary>
+    private static bool TryScanBeginEndBlock(
+        string s, int from, out int contentStart, out int contentEnd, out int afterBlock)
+    {
+        contentStart = contentEnd = afterBlock = -1;
+        int i = from;
+        int depth = 0;
+        int cStart = -1;
+        while (i < s.Length)
+        {
+            SkipTrivia(s, ref i);
+            if (i >= s.Length) break;
+            if (TrySkipQuoted(s, ref i)) continue;
+            if (!IsIdentifierChar(s[i])) { i++; continue; }
+
+            int tokStart = i;
+            var u = ReadWord(s, ref i).ToUpperInvariant();
+            if (u == "BEGIN")
+            {
+                if (depth == 0) cStart = i; // content begins right after the outer BEGIN
+                depth++;
+            }
+            else if (u == "CASE")
+            {
+                if (cStart >= 0) depth++; // CASE only nests once we're inside the block
+            }
+            else if (u == "END")
+            {
+                if (cStart >= 0 && depth == 1)
+                {
+                    contentStart = cStart;
+                    contentEnd = tokStart;
+                    SkipTrivia(s, ref i);
+                    if (i < s.Length && s[i] == ';') i++;
+                    afterBlock = i;
+                    return true;
+                }
+                if (depth > 0) depth--;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Returns the content range strictly between the outermost
+    /// <c>BEGIN</c> and its matching <c>END</c> (CASE-aware, string + comment aware),
+    /// or null when there is no top-level <c>BEGIN … END</c>.</summary>
+    public static (int Start, int End)? FindOuterBeginEndContent(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return null;
+        return TryScanBeginEndBlock(text!, 0, out int cs, out int ce, out _)
+            ? (cs, ce)
+            : null;
+    }
+
+    /// <summary>Advances the cursor past the next <c>BEGIN … END</c> block (CASE-aware,
+    /// string + comment aware) and an optional trailing <c>;</c>. When there is no
+    /// <c>BEGIN … END</c> at/after the cursor, advances to the end of the string.</summary>
+    public static void SkipToEndOfBlock(string s, ref int i)
+    {
+        i = TryScanBeginEndBlock(s, i, out _, out _, out int afterBlock)
+            ? afterBlock
+            : s.Length;
+    }
 }

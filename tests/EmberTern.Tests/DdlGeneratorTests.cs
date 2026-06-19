@@ -258,4 +258,82 @@ public class DdlGeneratorTests
         Assert.Empty(FirebirdDdlExecutor.SplitStatements(""));
         Assert.Empty(FirebirdDdlExecutor.SplitStatements("   \n\t  "));
     }
+
+    [Fact]
+    public void SplitStatements_ProcedureWithCaseInBody_StaysOneStatement()
+    {
+        // Regression: a CASE … END expression in the body must NOT close the
+        // enclosing BEGIN block. Before the fix, the CASE's END dropped the nesting
+        // counter to 0, so the ';' after SUSPEND split the procedure mid-body —
+        // sending a truncated statement → "Unexpected end of command".
+        var sql = @"CREATE OR ALTER PROCEDURE P (AID INTEGER) RETURNS (V INTEGER) AS
+begin
+  for select sum(x)
+      from t
+      where (case when :aid > 0 then 1 else 0 end) = 1
+      into :v
+  do
+    suspend;
+end";
+        var split = FirebirdDdlExecutor.SplitStatements(sql);
+        Assert.Single(split);
+        Assert.Contains("suspend", split[0]);
+        Assert.EndsWith("end", split[0]);
+    }
+
+    [Fact]
+    public void SplitStatements_NestedCaseAndBegin_BalancesNesting()
+    {
+        var sql = @"CREATE OR ALTER PROCEDURE P AS
+begin
+  if (1 = 1) then
+  begin
+    x = case when a then 1 else 2 end;
+    y = 3;
+  end
+end";
+        Assert.Single(FirebirdDdlExecutor.SplitStatements(sql));
+    }
+
+    [Fact]
+    public void SplitStatements_SemicolonInsideStringLiteral_DoesNotSplit()
+    {
+        var split = FirebirdDdlExecutor.SplitStatements("EXECUTE PROCEDURE P('a;b');SELECT 1 FROM RDB$DATABASE");
+        Assert.Equal(2, split.Count);
+        Assert.Contains("'a;b'", split[0]);
+    }
+
+    [Fact]
+    public void SplitStatements_KeywordsInsideStringOrComment_DoNotAffectNesting()
+    {
+        // 'BEGIN'/'END'/'CASE' inside a literal or comment must be ignored, so the
+        // two real statements split normally.
+        var sql = "INSERT INTO T VALUES ('begin case end'); -- end\nUPDATE T SET X = 1";
+        Assert.Equal(2, FirebirdDdlExecutor.SplitStatements(sql).Count);
+    }
+
+    [Fact]
+    public void SplitStatements_DoubledQuoteEscapeWithKeyword_StaysOpaque()
+    {
+        // The '' escape must NOT terminate the literal early; the 'begin' keyword
+        // inside it must stay opaque (no nesting effect). Single trailing statement.
+        var sql = "EXECUTE STATEMENT 'select ''begin'' from rdb$database';";
+        var split = FirebirdDdlExecutor.SplitStatements(sql);
+        Assert.Single(split);
+        Assert.Contains("''begin''", split[0]);
+    }
+
+    [Fact]
+    public void SplitStatements_DeeplyNestedCase_BalancesNesting()
+    {
+        var sql = @"CREATE OR ALTER PROCEDURE P AS
+begin
+  x = case
+        when a then case when b then 1 else 2 end
+        else 3
+      end;
+  y = 4;
+end";
+        Assert.Single(FirebirdDdlExecutor.SplitStatements(sql));
+    }
 }

@@ -72,6 +72,42 @@ public class ProcedureBodyModelTests
         Assert.Contains("SUSPEND;", model.ExecutableBody);
     }
 
+    // ─── CASE-aware subprogram-body skipping (gotchas #117 / #128) ────────────
+    // A CASE … END inside a local subprogram must NOT truncate its declaration on the
+    // Source → model split, nor leak the rest of its body into the executable block.
+
+    [Fact]
+    public void Split_LocalProcedureWithCase_CapturesFullDeclaration()
+    {
+        var model = ProcedureBodySplitter.Split(
+            "DECLARE PROCEDURE SUB (P INTEGER) AS BEGIN P = CASE WHEN P > 0 THEN 1 ELSE 0 END; END\n" +
+            "BEGIN\n  X = 1;\nEND");
+        var sp = Assert.Single(model.Subprograms);
+        Assert.Equal("SUB", sp.Name);
+        Assert.Equal("PROCEDURE", sp.Kind);
+        Assert.Contains("END; END", sp.Declaration); // body's own END after the CASE is kept
+        Assert.StartsWith("BEGIN", model.ExecutableBody);
+        Assert.Contains("X = 1;", model.ExecutableBody);
+    }
+
+    [Fact]
+    public void Split_LocalFunctionWithCase_RoundTripsThroughBuild()
+    {
+        var body =
+            "DECLARE FUNCTION F (P INTEGER) RETURNS INTEGER AS " +
+            "BEGIN RETURN CASE WHEN P > 0 THEN 1 ELSE 0 END; END\n" +
+            "BEGIN\n  X = 1;\nEND";
+        var model = ProcedureBodySplitter.Split(body);
+        var rebuilt = DdlGenerator.BuildProcedureBody(model);
+        var reSplit = ProcedureBodySplitter.Split(rebuilt);
+
+        var sp = Assert.Single(reSplit.Subprograms);
+        Assert.Equal("F", sp.Name);
+        Assert.Equal("FUNCTION", sp.Kind);
+        Assert.Contains("END; END", sp.Declaration);
+        Assert.Contains("X = 1;", reSplit.ExecutableBody);
+    }
+
     [Fact]
     public void Split_NoDeclarations_AllBodyIsExecutable()
     {
