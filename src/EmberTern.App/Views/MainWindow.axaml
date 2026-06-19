@@ -46,26 +46,16 @@
         <!-- Brand + active connection name. Every item is VerticalAlignment=Center; the
              parent StackPanel is centered in the fixed 36px row, so all items share one
              vertical axis. No manual margin nudges. -->
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
-                    VerticalAlignment="Center" Margin="6,0,4,0">
-          <!-- Sidebar collapse / restore toggle (VS Code style). One click hides
-               the connections panel; one click brings it back at its last width. -->
-          <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.SidebarToggleTooltip}"
-                  Click="OnToggleSidebarClick"
-                  VerticalAlignment="Center">
-            <controls:SvgIcon Data="{StaticResource Icon.PanelLeft}" />
-          </Button>
-          <!-- Square slot (source is 256x256) so Uniform fits exactly with no
-               horizontal slop and the logo centre lines up with the text. -->
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
+                    VerticalAlignment="Center" Margin="8,0,2,0">
+          <!-- App logo = absolute first element, the brand mark (NOT a toolbar
+               button). Square slot (source 256x256) so Uniform fits with no slop.
+               The sidebar toggle moved into the action zone after the brand divider. -->
           <Image Source="avares://EmberTern/Assets/Branding/EmberTern_logo.png"
                  Width="26" Height="26"
                  Stretch="Uniform"
                  RenderOptions.BitmapInterpolationMode="HighQuality"
                  VerticalAlignment="Center" />
-          <TextBlock Text="{Binding AppTitle}"
-                     FontWeight="SemiBold" FontSize="13"
-                     VerticalAlignment="Center" />
           <Border Width="1" Height="14"
                   Background="{DynamicResource BorderBrush}"
                   Margin="4,0"
@@ -121,6 +111,12 @@
           <!-- Leading divider between the brand/profile section and the toolbar.
                Same style as the toolbar's own group separators (1px, Margin 4,6). -->
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
+          <!-- Sidebar collapse / restore toggle — first action after the brand divider. -->
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.SidebarToggleTooltip}"
+                  Click="OnToggleSidebarClick">
+            <controls:SvgIcon Data="{StaticResource Icon.PanelLeft}" />
+          </Button>
           <Button Classes="icon"
                   ToolTip.Tip="New Connection"
                   Click="OnNewConnectionClick">
