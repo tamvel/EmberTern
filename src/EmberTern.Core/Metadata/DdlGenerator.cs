@@ -549,6 +549,56 @@ public static class DdlGenerator
         => BuildRelationComment("PROCEDURE", procedureName, comment);
 
     /// <summary>
+    /// Reassembles a <c>CREATE [OR ALTER] VIEW</c> from the View Detail Easy-mode
+    /// parts — the inverse of <see cref="Sql.ViewSignatureParser"/>. The verb is
+    /// preserved (<paramref name="orAlter"/>) and the body emitted verbatim, so
+    /// Source → Easy → Source keeps the original shape. An empty
+    /// <paramref name="columns"/> list omits the <c>(...)</c> clause (so a view
+    /// authored without an explicit column list round-trips unchanged); a non-empty
+    /// list re-emits it. Names are quoted only when needed (<see cref="QuoteLight"/>),
+    /// matching the fetched-source form.
+    /// </summary>
+    public static string BuildCreateOrAlterView(
+        string name,
+        IReadOnlyList<string> columns,
+        string body,
+        bool orAlter)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("View name is required.", nameof(name));
+
+        var cols = new List<string>();
+        if (columns is not null)
+        {
+            foreach (var c in columns)
+                if (!string.IsNullOrWhiteSpace(c)) cols.Add(c.Trim());
+        }
+
+        var sb = new StringBuilder();
+        sb.Append(orAlter ? "CREATE OR ALTER VIEW " : "CREATE VIEW ").Append(QuoteLight(name.Trim()));
+
+        if (cols.Count > 0)
+        {
+            sb.AppendLine(" (");
+            for (int k = 0; k < cols.Count; k++)
+            {
+                sb.Append("  ").Append(QuoteLight(cols[k]));
+                if (k < cols.Count - 1) sb.Append(',');
+                sb.AppendLine();
+            }
+            sb.AppendLine(")");
+        }
+        else
+        {
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("AS");
+        sb.Append(body?.Trim() ?? string.Empty);
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Reassembles a full <c>CREATE OR ALTER PROCEDURE</c> from the editable parts
     /// (Procedure Detail Easy mode). Deterministic — the inverse of
     /// <see cref="Sql.ProcedureSignatureParser"/>. Parameter type text and the body

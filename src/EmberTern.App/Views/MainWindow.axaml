@@ -755,6 +755,18 @@
                       IsVisible="{Binding IsNewTableTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
               </Button>
+              <!-- View Detail: Source ⇄ Easy mode toggle (checked = Easy). FIRST element
+                   of the editor's toolbar section — the mode toggle sits in the same
+                   leading position for every object editor (View, Procedure, future
+                   Trigger / Function). Disabled for a brand-new view (Source only — no
+                   catalog to seed Easy mode). -->
+              <ToggleButton Classes="icon"
+                            ToolTip.Tip="{x:Static app:UiStrings.ViewModeToggleTooltip}"
+                            IsChecked="{Binding ActiveViewDetail.EasyMode, Mode=TwoWay}"
+                            IsEnabled="{Binding ActiveViewDetail.CanUseEasyMode}"
+                            IsVisible="{Binding IsViewDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
+              </ToggleButton>
               <!-- ⚡ Compile for a View Detail tab (CREATE OR ALTER VIEW). Visible
                    on any view sub-tab; always acts on the editable SQL source. -->
               <Button Classes="primary"
@@ -774,9 +786,10 @@
                       IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
-              <!-- Procedure Detail: Source ⇄ Easy mode toggle (checked = Easy).
-                   Disabled for a brand-new procedure (Source only — no catalog to
-                   seed Easy mode). -->
+              <!-- Procedure Detail: Source ⇄ Easy mode toggle (checked = Easy). FIRST
+                   element of the editor's toolbar section (same leading position as the
+                   View editor's toggle above). Disabled for a brand-new procedure
+                   (Source only — no catalog to seed Easy mode). -->
               <ToggleButton Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.ProcedureModeToggleTooltip}"
                             IsChecked="{Binding ActiveProcedureDetail.EasyMode, Mode=TwoWay}"

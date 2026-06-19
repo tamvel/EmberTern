@@ -34,18 +34,86 @@
                 SelectedIndex="{Binding ActiveSubTabIndex, Mode=TwoWay}"
                 Padding="0">
 
-      <!-- SQL — editable CREATE OR ALTER VIEW source. The primary working
-           surface. Compile lives in the main app toolbar (gated on
-           IsViewDetailTabActive). -->
+      <!-- SQL — Source mode (full CREATE OR ALTER VIEW) OR Easy mode (editable column
+           list ABOVE a body-only AS SELECT editor; the CREATE VIEW header is hidden
+           and regenerated on Compile). Compile / Format / the Source⇄Easy toggle live
+           in the main app toolbar (gated on IsViewDetailTabActive). -->
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabSql}">
-        <ae:TextEditor x:Name="ViewSqlEditor"
-                       ShowLineNumbers="True"
-                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="13"
-                       HorizontalScrollBarVisibility="Auto"
-                       VerticalScrollBarVisibility="Auto"
-                       Background="{DynamicResource BackgroundBrush}"
-                       Foreground="{DynamicResource ForegroundBrush}" />
+        <Grid>
+          <!-- Source mode -->
+          <ae:TextEditor x:Name="ViewSqlEditor"
+                         IsVisible="{Binding IsSourceMode}"
+                         ShowLineNumbers="True"
+                         FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                         FontSize="13"
+                         HorizontalScrollBarVisibility="Auto"
+                         VerticalScrollBarVisibility="Auto"
+                         Background="{DynamicResource BackgroundBrush}"
+                         Foreground="{DynamicResource ForegroundBrush}" />
+
+          <!-- Easy mode: editable column list (top) over the AS SELECT body editor. -->
+          <Grid IsVisible="{Binding EasyMode}" RowDefinitions="180,4,*">
+
+            <Grid Grid.Row="0" RowDefinitions="Auto,*">
+              <DockPanel Grid.Row="0" Margin="4,2">
+                <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
+                           Classes="field-label" Margin="4,0,8,0"
+                           Text="{x:Static app:UiStrings.ViewColumnsHeader}" />
+                <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Left">
+                  <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ViewColumnAddTooltip}"
+                          Command="{Binding AddColumnCommand}">
+                    <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
+                  </Button>
+                  <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ViewColumnDeleteTooltip}"
+                          Command="{Binding DeleteColumnCommand}">
+                    <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
+                  </Button>
+                  <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ViewColumnMoveUpTooltip}"
+                          Command="{Binding MoveColumnUpCommand}">
+                    <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
+                  </Button>
+                  <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ViewColumnMoveDownTooltip}"
+                          Command="{Binding MoveColumnDownCommand}">
+                    <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
+                  </Button>
+                </StackPanel>
+              </DockPanel>
+              <DataGrid Grid.Row="1" x:Name="ViewColumnsGrid"
+                        ItemsSource="{Binding Columns}"
+                        SelectedItem="{Binding SelectedColumn, Mode=TwoWay}"
+                        IsReadOnly="False" AutoGenerateColumns="False"
+                        CanUserSortColumns="False" CanUserResizeColumns="False"
+                        CanUserReorderColumns="False" FontSize="11"
+                        GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                        HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                        VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                        Background="{DynamicResource BackgroundBrush}">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="{x:Static app:UiStrings.ViewColumnName}"
+                                      Binding="{Binding Name, Mode=TwoWay}"
+                                      Width="*" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Grid>
+
+            <GridSplitter Grid.Row="1" ResizeDirection="Rows"
+                          HorizontalAlignment="Stretch"
+                          Background="{DynamicResource BorderBrush}" />
+
+            <Grid Grid.Row="2" RowDefinitions="Auto,*">
+              <TextBlock Grid.Row="0" Classes="field-label" Margin="8,4,8,2"
+                         Text="{x:Static app:UiStrings.ViewBodyHeader}" />
+              <ae:TextEditor Grid.Row="1" x:Name="ViewBodyEditor"
+                             ShowLineNumbers="True"
+                             FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                             FontSize="13"
+                             HorizontalScrollBarVisibility="Auto"
+                             VerticalScrollBarVisibility="Auto"
+                             Background="{DynamicResource BackgroundBrush}"
+                             Foreground="{DynamicResource ForegroundBrush}" />
+            </Grid>
+          </Grid>
+        </Grid>
       </TabItem>
 
       <!-- Fields — read-only view columns. Views expose name / type / nullability /

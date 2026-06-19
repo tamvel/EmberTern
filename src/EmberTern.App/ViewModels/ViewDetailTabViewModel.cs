@@ -62,6 +62,7 @@ public partial class ViewDetailTabViewModel : ViewModelBase
         _ddlReader = ddlReader;
         _ddlExecutor = ddlExecutor;
         Fields = new ObservableCollection<FieldInfo>();
+        Columns = new ObservableCollection<ViewColumnRowViewModel>();
         DependsOnTree = new ObservableCollection<DependencyGroupNode>();
         DependedOnByTree = new ObservableCollection<DependencyGroupNode>();
     }
@@ -74,6 +75,156 @@ public partial class ViewDetailTabViewModel : ViewModelBase
     /// reopens the real view. Compile in this mode raises <see cref="ViewCreated"/>.
     /// </summary>
     public bool IsNew { get; init; }
+
+    // ─── Source ⇄ Easy mode (mirrors ProcedureDetailTabViewModel) ─────────
+    //
+    // Easy mode hides the CREATE VIEW header and presents the column list as an
+    // editable section (add / remove / reorder, name-only) above a body editor that
+    // holds just the AS SELECT … part. Source mode is the full editable statement.
+    // A brand-new view is authored in Source only (no catalog to seed Easy).
+
+    /// <summary>Easy mode is unavailable for a not-yet-created view.</summary>
+    public bool CanUseEasyMode => !IsNew;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSourceMode))]
+    private bool _easyMode;
+
+    public bool IsSourceMode => !EasyMode;
+
+    // Whether the source used CREATE OR ALTER VIEW (vs a plain CREATE VIEW); preserved
+    // across the Easy round-trip so the verb isn't silently rewritten. Existing views
+    // are fetched as CREATE OR ALTER VIEW, so the default is true.
+    private bool _sourceOrAlter = true;
+
+    partial void OnEasyModeChanged(bool value)
+    {
+        if (value)
+        {
+            if (IsNew) { EasyMode = false; return; }
+            // Nothing loaded yet (mode preference applied before lazy load) — don't
+            // parse an empty source or show a spurious notice; LoadAsync re-syncs.
+            if (string.IsNullOrWhiteSpace(SourceText)) { ErrorMessage = null; return; }
+            // Source → Easy: parse the current source into the structured model so
+            // source edits carry over. On failure keep the last-good model + note it.
+            ErrorMessage = SyncEasyModelFromSource(SourceText) ? null : UiStrings.ViewParseFailedNotice;
+        }
+        else
+        {
+            // Easy → Source: regenerate the full statement from the structured model.
+            SourceText = BuildFullSource();
+        }
+    }
+
+    /// <summary>Editable AS-SELECT body — the Easy-mode body editor's content. The
+    /// CREATE VIEW header + column list come from the structured model, never typed
+    /// into this editor.</summary>
+    [ObservableProperty]
+    private string _editableBody = string.Empty;
+
+    /// <summary>Name-only column rows for the Easy-mode column section (order = the
+    /// CREATE VIEW (...) order).</summary>
+    public ObservableCollection<ViewColumnRowViewModel> Columns { get; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DeleteColumnCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveColumnUpCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveColumnDownCommand))]
+    private ViewColumnRowViewModel? _selectedColumn;
+
+    [RelayCommand]
+    private void AddColumn()
+    {
+        var col = new ViewColumnRowViewModel(
+            string.Format(CultureInfo.InvariantCulture, "COLUMN_{0}", Columns.Count + 1));
+        Columns.Add(col);
+        SelectedColumn = col;
+    }
+
+    public bool CanDeleteColumn => SelectedColumn is not null;
+
+    [RelayCommand(CanExecute = nameof(CanDeleteColumn))]
+    private void DeleteColumn()
+    {
+        if (SelectedColumn is null) return;
+        var idx = Columns.IndexOf(SelectedColumn);
+        Columns.Remove(SelectedColumn);
+        SelectedColumn = Columns.Count == 0 ? null : Columns[Math.Min(idx, Columns.Count - 1)];
+    }
+
+    public bool CanMoveColumnUp => SelectedColumn is not null && Columns.IndexOf(SelectedColumn) > 0;
+
+    [RelayCommand(CanExecute = nameof(CanMoveColumnUp))]
+    private void MoveColumnUp()
+    {
+        if (SelectedColumn is null) return;
+        var idx = Columns.IndexOf(SelectedColumn);
+        if (idx <= 0) return;
+        MoveColumn(idx, idx - 1);
+    }
+
+    public bool CanMoveColumnDown => SelectedColumn is not null
+        && Columns.IndexOf(SelectedColumn) >= 0
+        && Columns.IndexOf(SelectedColumn) < Columns.Count - 1;
+
+    [RelayCommand(CanExecute = nameof(CanMoveColumnDown))]
+    private void MoveColumnDown()
+    {
+        if (SelectedColumn is null) return;
+        var idx = Columns.IndexOf(SelectedColumn);
+        if (idx < 0 || idx >= Columns.Count - 1) return;
+        MoveColumn(idx, idx + 1);
+    }
+
+    // RemoveAt + Insert, NOT ObservableCollection.Move: Avalonia 12's DataGrid does
+    // not reliably repaint a NotifyCollectionChangedAction.Move (same gotcha the New
+    // Table field grid hit), so a Move left the grid showing the old order even though
+    // the collection — and therefore the generated DDL — had already reordered.
+    private void MoveColumn(int from, int to)
+    {
+        var item = Columns[from];
+        Columns.RemoveAt(from);
+        Columns.Insert(to, item);
+        SelectedColumn = item; // keep selection on the moved row (DataGrid clears it on RemoveAt)
+        RefreshColumnMoveState();
+    }
+
+    // The selected object doesn't change on a Move (only its index), so the
+    // index-dependent Move gates must be re-evaluated explicitly.
+    private void RefreshColumnMoveState()
+    {
+        MoveColumnUpCommand.NotifyCanExecuteChanged();
+        MoveColumnDownCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Parses <paramref name="source"/> into the Easy-mode model (columns +
+    /// AS body + verb). Returns false when the text doesn't match a CREATE [OR ALTER]
+    /// VIEW shape — the caller keeps the last-good model and may surface a notice.</summary>
+    internal bool SyncEasyModelFromSource(string? source)
+    {
+        var sig = ViewSignatureParser.Parse(source);
+        if (!sig.Success) return false;
+        _sourceOrAlter = sig.OrAlter;
+        Columns.Clear();
+        foreach (var c in sig.Columns) Columns.Add(new ViewColumnRowViewModel(c));
+        EditableBody = sig.Body;
+        SelectedColumn = Columns.Count > 0 ? Columns[0] : null;
+        return true;
+    }
+
+    /// <summary>Reassembles the full CREATE [OR ALTER] VIEW from the Easy-mode model.
+    /// An empty column list ⇒ no <c>(...)</c> clause (lossless for header-less views).</summary>
+    internal string BuildFullSource()
+    {
+        var cols = new List<string>();
+        foreach (var c in Columns)
+            if (!string.IsNullOrWhiteSpace(c.Name)) cols.Add(c.Name.Trim());
+        return DdlGenerator.BuildCreateOrAlterView(ViewName, cols, EditableBody, _sourceOrAlter);
+    }
+
+    /// <summary>The SQL to compile: Easy mode reassembles from the structured model;
+    /// Source mode uses the raw editor text. Internal so tests can assert it.</summary>
+    internal string BuildCompileSql() => EasyMode ? BuildFullSource() : SourceText;
 
     /// <summary>Editable CREATE OR ALTER VIEW source — the SQL tab's content.</summary>
     [ObservableProperty]
@@ -167,12 +318,21 @@ public partial class ViewDetailTabViewModel : ViewModelBase
     /// selection.</summary>
     public Action<string>? ReplaceSelectedOrAllText { get; set; }
 
+    // In Easy mode the formatted/active text is the AS-SELECT body editor; in Source
+    // mode it's the full-statement editor. The view's selection/replace callbacks
+    // target the matching editor, so Format acts on whichever editor is active.
+    private string ActiveEditorText
+    {
+        get => EasyMode ? EditableBody : SourceText;
+        set { if (EasyMode) EditableBody = value; else SourceText = value; }
+    }
+
     [RelayCommand]
     private void FormatSql()
     {
         var selected = SelectedTextProvider?.Invoke();
         var hasSelection = !string.IsNullOrEmpty(selected);
-        var source = hasSelection ? selected! : SourceText;
+        var source = hasSelection ? selected! : ActiveEditorText;
         if (string.IsNullOrEmpty(source)) return;
 
         var formatted = SqlFormatter.Format(source);
@@ -184,8 +344,8 @@ public partial class ViewDetailTabViewModel : ViewModelBase
         }
         else if (!hasSelection)
         {
-            // No view callback (tests / headless) — overwrite the whole source.
-            SourceText = formatted;
+            // No view callback (tests / headless) — overwrite the active text.
+            ActiveEditorText = formatted;
         }
     }
 
@@ -331,12 +491,15 @@ public partial class ViewDetailTabViewModel : ViewModelBase
     public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {
         if (_ddlExecutor is null) return;
-        if (string.IsNullOrWhiteSpace(SourceText)) return;
+        // Easy mode reassembles the statement from the structured model; Source mode
+        // compiles the raw editor text.
+        var sql = BuildCompileSql();
+        if (string.IsNullOrWhiteSpace(sql)) return;
 
         ErrorMessage = null;
         try
         {
-            await _ddlExecutor.ExecuteAsync(SourceText, cancellationToken).ConfigureAwait(true);
+            await _ddlExecutor.ExecuteAsync(sql, cancellationToken).ConfigureAwait(true);
         }
         catch (DdlExecutionException ex)
         {
@@ -351,7 +514,7 @@ public partial class ViewDetailTabViewModel : ViewModelBase
 
         if (IsNew)
         {
-            ViewCreated?.Invoke(TryParseViewName(SourceText));
+            ViewCreated?.Invoke(TryParseViewName(sql));
             return;
         }
 
@@ -426,6 +589,9 @@ public partial class ViewDetailTabViewModel : ViewModelBase
             {
                 SourceText = await _ddlReader.FetchViewSourceAsync(
                     new MetadataObject(ViewName, MetadataObjectKind.View), cancellationToken).ConfigureAwait(true);
+                // If the user is in Easy mode (e.g. after a Compile→Refresh), re-derive
+                // the structured model from the freshly loaded source.
+                if (EasyMode) SyncEasyModelFromSource(SourceText);
             });
 
             await SafeLoadAsync(async () =>

@@ -406,6 +406,18 @@ internal static class UiStrings
     public const string NewViewTabDefaultTitle = "New View";
     public const string NewViewExecutedFormat = "View \"{0}\" created.";
 
+    // View Detail Easy mode (mirrors the Procedure Detail Source/Easy toggle).
+    public const string ViewModeToggleTooltip = "Toggle Source / Easy mode";
+    public const string ViewParseFailedNotice =
+        "Could not parse the view source into the column list + SELECT body — staying on the last structured model. Switch to Source mode to edit the full statement.";
+    public const string ViewColumnsHeader = "Columns";
+    public const string ViewColumnAddTooltip = "Add column";
+    public const string ViewColumnDeleteTooltip = "Delete column";
+    public const string ViewColumnMoveUpTooltip = "Move column up";
+    public const string ViewColumnMoveDownTooltip = "Move column down";
+    public const string ViewColumnName = "Name";
+    public const string ViewBodyHeader = "SELECT body";
+
     // ─── Procedure Detail (Procedure Detail V1) ─────────────────────────────
     public const string ProcedureDetailTabEditor = "Editor";
     public const string ProcedureDetailTabDescription = "Description";

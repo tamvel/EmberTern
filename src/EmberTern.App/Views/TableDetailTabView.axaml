@@ -152,12 +152,12 @@
             <KeyBinding Gesture="Delete" Command="{Binding DropFieldCommand}" />
           </DataGrid.KeyBindings>
           <DataGrid.Styles>
-            <!-- Subtle accent tint on rows with a pending (uncompiled) structural edit.
+            <!-- Subtle amber tint on rows with a pending (uncompiled) modify edit.
                  The "pending" class is toggled in code-behind off the row VM's IsModified
                  flag (LoadingRow + a live PropertyChanged hook so it clears the instant
-                 the edit is reverted / compiled). RowModifiedBrush already carries the
-                 ~20% alpha — full Opacity here (the old WarningBrush-at-0.12 read as a
-                 loud brown once combined with selection). -->
+                 the edit is reverted / compiled). RowModifiedBrush is amber and already
+                 carries the ~20% alpha — full Opacity here. Amber keeps it distinct from
+                 the green added-wash, the red dropped-wash, and the blue hover/selection. -->
             <Style Selector="DataGridRow.pending /template/ Rectangle#BackgroundRectangle">
               <Setter Property="Fill" Value="{DynamicResource RowModifiedBrush}" />
               <Setter Property="Opacity" Value="1" />

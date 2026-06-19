@@ -183,6 +183,101 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
+    // Issue-4 instrument: when a View Detail tab is active and the source has been
+    // edited, the toolbar's ⚡ Compile button (bound to ActiveViewDetail.CompileCommand)
+    // MUST be enabled. Builds the REAL MainWindow so the binding + AsyncRelayCommand
+    // CanExecute under test are the production ones — gotcha #39 (prove the layer).
+    [Fact]
+    public async System.Threading.Tasks.Task ViewCompileButton_EnabledWhenViewTabActiveAndEdited()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-probe-view-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var store = new ConnectionProfileStore(tempDir);
+            using var service = new FirebirdConnectionService();
+            var vm = new MainWindowViewModel(store, service);
+
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // Open a View Detail tab and make it the active tab (the toolbar binds
+            // ⚡ Compile to ActiveViewDetail.CompileCommand).
+            var obj = new MetadataObject("V_PROBE", MetadataObjectKind.View);
+            var detail = vm.CreateViewDetail(obj);
+            var tab = WorkspaceTabViewModel.CreateViewDetail(vm, obj, detail, null);
+            vm.WorkspaceTabs.Add(tab);
+            vm.SelectedWorkspaceTab = tab;
+            // Re-finds the ⚡ button bound to the active view's CompileCommand and
+            // reports its real effective-enabled state. Re-found each step so a VM
+            // instance swap (which would itself be a bug) can't hide behind a stale ref.
+            bool HammerEnabled()
+            {
+                Dispatcher.UIThread.RunJobs();
+                var c = vm.ActiveViewDetail?.CompileCommand;
+                if (c is null) return false;
+                var btn = window.GetVisualDescendants().OfType<Button>()
+                    .FirstOrDefault(b => ReferenceEquals(b.Command, c));
+                return btn is not null && btn.IsEffectivelyEnabled;
+            }
+
+            // Walk every editor state the user listed, asserting the hammer stays
+            // enabled at each STEADY state (the toolbar binds to the same VM the editor
+            // mutates — H1; CanCompile is connection-independent so mode switches /
+            // parser failures can't gate it — H2/H5).
+
+            // (1) existing view → source edit → compile
+            detail.SourceText = "CREATE OR ALTER VIEW V_PROBE (A, B) AS SELECT 1 A, 2 B FROM RDB$DATABASE";
+            Assert.True(HammerEnabled(), "[1] source edit\n" + log);
+
+            // (2) existing view → Easy mode edit → compile
+            detail.EasyMode = true;
+            Assert.True(HammerEnabled(), "[2] easy mode\n" + log);
+            Assert.Equal(2, detail.Columns.Count);              // parsed (A, B)
+
+            // (3) add column → compile
+            detail.AddColumnCommand.Execute(null);
+            Assert.True(HammerEnabled(), "[3] add column\n" + log);
+            Assert.Equal(3, detail.Columns.Count);
+
+            // (4) delete column → compile
+            detail.SelectedColumn = detail.Columns[0];
+            detail.DeleteColumnCommand.Execute(null);
+            Assert.True(HammerEnabled(), "[4] delete column\n" + log);
+            Assert.Equal(2, detail.Columns.Count);
+
+            // (5) reorder column → compile (also re-pins issue 2: the collection order
+            //     actually changes via RemoveAt+Insert)
+            detail.SelectedColumn = detail.Columns[0];
+            var movedName = detail.Columns[0].Name;
+            detail.MoveColumnDownCommand.Execute(null);
+            Assert.True(HammerEnabled(), "[5] reorder column\n" + log);
+            Assert.Equal(movedName, detail.Columns[1].Name);   // first row moved down
+
+            // (6) Source → Easy → Source → compile
+            detail.EasyMode = false;
+            Assert.True(HammerEnabled(), "[6] back to source\n" + log);
+
+            // (bonus) parser failure must NOT gate Compile — last-good model kept,
+            //         notice shown, hammer stays enabled.
+            detail.SourceText = "this is not a view definition";
+            detail.EasyMode = true;
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[parse-fail] ErrorMessage = {detail.ErrorMessage}");
+            Assert.False(string.IsNullOrEmpty(detail.ErrorMessage), "[parse-fail] notice expected\n" + log);
+            Assert.True(HammerEnabled(), "[parse-fail] hammer must stay enabled\n" + log);
+
+            window.Close();
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
     // Etap 2: every MetadataObjectKind's geometry key must resolve to a real Geometry
     // through IconGeometryConverter (the live SVG-icon pipeline), plus the tree-chrome
     // keys (Query tab / Connection node / Folder). A missing/typo'd key renders a BLANK

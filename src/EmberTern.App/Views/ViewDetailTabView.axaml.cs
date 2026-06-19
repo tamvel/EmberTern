@@ -13,6 +13,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Query;
 
@@ -21,28 +22,37 @@ namespace EmberTern.App.Views;
 public partial class ViewDetailTabView : UserControl
 {
     private TextEditor? _sqlEditor;
+    private TextEditor? _bodyEditor;
     private TextEditor? _ddlEditor;
     private DataGrid? _dataPreviewGrid;
     private ViewDetailTabViewModel? _currentVm;
     private readonly List<string> _dataPreviewColumnNames = new();
-    // Guards the editor↔VM feedback loop: while we push SourceText INTO the
-    // editor, the TextChanged handler must not write it back. Same pattern as
-    // the main SqlEditor sync.
+    // Guards the editor↔VM feedback loop: while we push SourceText/EditableBody INTO
+    // an editor, the TextChanged handler must not write it back. Same pattern as the
+    // main SqlEditor sync.
     private bool _suppressSourceSync;
+    private bool _suppressBodySync;
+    private bool _completionAttached;
 
     public ViewDetailTabView()
     {
         InitializeComponent();
         _sqlEditor = this.FindControl<TextEditor>("ViewSqlEditor");
+        _bodyEditor = this.FindControl<TextEditor>("ViewBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("ViewDdlEditor");
         _dataPreviewGrid = this.FindControl<DataGrid>("DataPreviewGrid");
         if (_sqlEditor is not null)
         {
             _sqlEditor.TextChanged += OnSqlEditorTextChanged;
-            // Alt+F formats the source — same gesture as the SQL Editor. Handled
+            // Alt+F formats the active editor — same gesture as the SQL Editor. Handled
             // in code-behind because the global window-level Alt+F binding targets
             // the SQL Editor's VM; a focused-editor KeyDown is the reliable route.
             _sqlEditor.KeyDown += OnSqlEditorKeyDown;
+        }
+        if (_bodyEditor is not null)
+        {
+            _bodyEditor.TextChanged += OnBodyEditorTextChanged;
+            _bodyEditor.KeyDown += OnSqlEditorKeyDown;
         }
         if (_dataPreviewGrid is not null)
         {
@@ -54,6 +64,22 @@ public partial class ViewDetailTabView : UserControl
     }
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
+
+    // Attach autocomplete + double-click/Ctrl+Click navigation to the editable
+    // editors once the owning MainWindowViewModel is reachable. Reuses the SQL
+    // Editor's services via SqlEditorBehavior — same wiring as ProcedureDetailTabView,
+    // no second implementation.
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (_completionAttached) return;
+        if (this.FindAncestorOfType<Window>()?.DataContext is MainWindowViewModel mainVm)
+        {
+            if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm);
+            if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm);
+            _completionAttached = true;
+        }
+    }
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
@@ -67,9 +93,10 @@ public partial class ViewDetailTabView : UserControl
             _currentVm.PropertyChanged += OnVmPropertyChanged;
             // Wire the same selection-aware format callbacks the SQL Editor uses,
             // so FormatSqlCommand formats the selection-or-all against this editor.
-            _currentVm.SelectedTextProvider = GetSqlEditorSelection;
-            _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
+            _currentVm.SelectedTextProvider = GetActiveEditorSelection;
+            _currentVm.ReplaceSelectedOrAllText = ReplaceActiveEditorSelectionOrAll;
             PushSource();
+            PushBody();
             PushDdl();
             PopulateDataGrid();
         }
@@ -87,29 +114,35 @@ public partial class ViewDetailTabView : UserControl
         }
     }
 
-    // Selection in the SQL editor, or null when nothing is selected.
-    private string? GetSqlEditorSelection()
+    // The editor the toolbar Format / selection callbacks act on: the AS-SELECT body
+    // editor in Easy mode, the full-source editor in Source mode.
+    private TextEditor? ActiveEditor
+        => (_currentVm?.EasyMode ?? false) ? _bodyEditor : _sqlEditor;
+
+    // Selection in the active editor, or null when nothing is selected.
+    private string? GetActiveEditorSelection()
     {
-        if (_sqlEditor is null) return null;
-        var sel = _sqlEditor.SelectedText;
+        var ed = ActiveEditor;
+        var sel = ed?.SelectedText;
         return string.IsNullOrEmpty(sel) ? null : sel;
     }
 
-    // Replace the selection with the formatted text (re-selecting it), or
-    // overwrite the whole document when there's no selection. Editor TextChanged
-    // then syncs SourceText back to the VM.
-    private void ReplaceSqlEditorSelectionOrAll(string text)
+    // Replace the selection with the formatted text (re-selecting it), or overwrite
+    // the whole document when there's no selection. Editor TextChanged then syncs the
+    // active text (SourceText / EditableBody) back to the VM.
+    private void ReplaceActiveEditorSelectionOrAll(string text)
     {
-        if (_sqlEditor is null) return;
-        if (_sqlEditor.SelectionLength > 0)
+        var ed = ActiveEditor;
+        if (ed is null) return;
+        if (ed.SelectionLength > 0)
         {
-            var start = _sqlEditor.SelectionStart;
-            _sqlEditor.Document.Replace(start, _sqlEditor.SelectionLength, text);
-            _sqlEditor.Select(start, text.Length);
+            var start = ed.SelectionStart;
+            ed.Document.Replace(start, ed.SelectionLength, text);
+            ed.Select(start, text.Length);
         }
         else
         {
-            _sqlEditor.Text = text;
+            ed.Text = text;
         }
     }
 
@@ -118,6 +151,10 @@ public partial class ViewDetailTabView : UserControl
         if (e.PropertyName == nameof(ViewDetailTabViewModel.SourceText))
         {
             PushSource();
+        }
+        else if (e.PropertyName == nameof(ViewDetailTabViewModel.EditableBody))
+        {
+            PushBody();
         }
         else if (e.PropertyName == nameof(ViewDetailTabViewModel.DdlText))
         {
@@ -135,6 +172,12 @@ public partial class ViewDetailTabView : UserControl
         _currentVm.SourceText = _sqlEditor.Text;
     }
 
+    private void OnBodyEditorTextChanged(object? sender, EventArgs e)
+    {
+        if (_suppressBodySync || _currentVm is null || _bodyEditor is null) return;
+        _currentVm.EditableBody = _bodyEditor.Text;
+    }
+
     private void PushSource()
     {
         if (_sqlEditor is null || _currentVm is null) return;
@@ -143,6 +186,16 @@ public partial class ViewDetailTabView : UserControl
         _suppressSourceSync = true;
         try { _sqlEditor.Text = text; }
         finally { _suppressSourceSync = false; }
+    }
+
+    private void PushBody()
+    {
+        if (_bodyEditor is null || _currentVm is null) return;
+        var text = _currentVm.EditableBody ?? string.Empty;
+        if (_bodyEditor.Text == text) return;
+        _suppressBodySync = true;
+        try { _bodyEditor.Text = text; }
+        finally { _suppressBodySync = false; }
     }
 
     private void PushDdl()
@@ -260,6 +313,7 @@ public partial class ViewDetailTabView : UserControl
             selection = brush;
         }
         ApplyToEditor(_sqlEditor, syntax, selection);
+        ApplyToEditor(_bodyEditor, syntax, selection);
         ApplyToEditor(_ddlEditor, syntax, selection);
     }
 
