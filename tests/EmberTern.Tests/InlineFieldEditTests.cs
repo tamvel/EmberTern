@@ -123,4 +123,58 @@ public class InlineFieldEditTests
         Assert.False(vm.CanRenameField("OLD_NAME"));
         Assert.True(vm.CanRenameField("OTHER_FIELD"));
     }
+
+    // ─── Regression: Type/Domain ComboBox edits enqueue WITHOUT an explicit call ──
+    // The Type & Domain cells are always-visible ComboBoxes in IsReadOnly template
+    // columns, so the DataGrid's RowEditEnding never fires for them. The fix routes
+    // every editable-property change through OnInlineFieldEdited → EnqueueRowEdits, so
+    // a type/domain change auto-queues a pending change (re-enabling Compile). These
+    // tests deliberately do NOT call EnqueueRowEdits explicitly.
+
+    [Fact]
+    public void TypeCombo_Change_AutoEnqueues_NoExplicitCall()
+    {
+        var (vm, row) = BuildVmWithSingleField();
+        Assert.False(vm.HasPendingChanges);
+
+        row.SelectedTypeItem = "BIGINT"; // the ComboBox SelectedItem path
+
+        Assert.True(vm.HasPendingChanges);
+        Assert.Contains("ALTER \"OLD_NAME\" TYPE BIGINT", vm.PendingChanges[^1].Sql);
+    }
+
+    [Fact]
+    public void DomainCombo_Change_AutoEnqueues_NoExplicitCall()
+    {
+        var (vm, row) = BuildVmWithSingleField();
+
+        row.DomainName = "T_KWOTA"; // the Domain ComboBox path
+
+        Assert.True(vm.HasPendingChanges);
+        Assert.Contains("TYPE T_KWOTA", vm.PendingChanges[^1].Sql);
+    }
+
+    [Fact]
+    public void Edit_ThenRevert_ClearsPending()
+    {
+        var (vm, row) = BuildVmWithSingleField();
+        row.NotNull = true;
+        Assert.True(vm.HasPendingChanges);
+
+        row.NotNull = false; // back to original
+        Assert.False(vm.HasPendingChanges);
+        Assert.Equal(PendingChangeKind.None, row.PendingKind);
+    }
+
+    [Fact]
+    public void SuccessiveEdits_SameRow_DoNotDuplicate()
+    {
+        var (vm, row) = BuildVmWithSingleField();
+        row.NotNull = true;          // → one SET NOT NULL
+        row.DefaultValue = "0";       // → re-queue: SET NOT NULL + SET DEFAULT (not 3)
+
+        Assert.Equal(2, vm.PendingChanges.Count);
+        Assert.Single(vm.PendingChanges, c => c.Sql.Contains("SET NOT NULL"));
+        Assert.Single(vm.PendingChanges, c => c.Sql.Contains("SET DEFAULT 0"));
+    }
 }

@@ -165,6 +165,8 @@ public partial class TableDetailTabViewModel : ViewModelBase
     {
         foreach (var row in EditableFields) row.Detach();
         EditableFields.Clear();
+        // Row VMs are discarded → their per-row inline-edit tracking is stale.
+        _inlineRowEdits.Clear();
         foreach (var f in Fields) EditableFields.Add(new FieldRowViewModel(f, this));
     }
 
@@ -241,83 +243,110 @@ public partial class TableDetailTabViewModel : ViewModelBase
     /// view's RowEditEnding handler. Idempotent — re-editing a row simply
     /// queues another batch of ALTERs.
     /// </summary>
+    // Inline edits tracked per row so a repeated EnqueueRowEdits call for the SAME row
+    // REPLACES its prior statements instead of duplicating them. Reference-keyed.
+    private readonly Dictionary<FieldRowViewModel, List<PendingDdlChange>> _inlineRowEdits = new();
+    // Re-entrancy guard: the dependency-blocked revert below writes editable
+    // properties, which would re-trigger OnInlineFieldEdited → EnqueueRowEdits.
+    private bool _enqueuingRowEdits;
+
+    /// <summary>
+    /// Called by <see cref="FieldRowViewModel"/> whenever an editable cell changes.
+    /// This is the path that catches the Type and Domain ComboBoxes: they live in
+    /// always-visible (IsReadOnly) template columns — the gotcha #56 focus-race
+    /// workaround — so the DataGrid's RowEditEnding never fires for a type/domain
+    /// change, and without this hook EnqueueRowEdits would be missed and Compile
+    /// would stay greyed after a primary design action.
+    /// </summary>
+    internal void OnInlineFieldEdited(FieldRowViewModel row) => EnqueueRowEdits(row);
+
     public void EnqueueRowEdits(FieldRowViewModel row)
     {
-        if (row is null) return;
-        var original = row.Original;
-        var canRename = CanRenameField(original.Name);
+        if (row is null || _enqueuingRowEdits) return;
+        // Added/Dropped rows carry their own ADD/DROP statement; inline cell edits on
+        // them don't generate ALTERs here.
+        if (row.PendingKind is PendingChangeKind.Added or PendingChangeKind.Dropped) return;
 
-        // Type clause — set ONLY when the user genuinely changed the type or
-        // domain. This pre-filter is necessary because the two representations
-        // don't compare cleanly against original.Type:
-        //   - Domain columns: original.Type is the RESOLVED type (e.g.
-        //     "NUMERIC(15,2)") while DomainName is "T_KWOTA". Passing the
-        //     domain name unconditionally would always read as a change.
-        //   - Basic-type columns: the Type ComboBox offers base types, but
-        //     original.Type is the full string. We compare base-to-base.
-        // When nothing changed we pass null so BuildAlterStatements emits no
-        // type ALTER (the spec's "no-op when no change" rule).
-        string? typeClause = null;
-        var domainChanged = !string.Equals(
-            row.DomainName ?? string.Empty, original.Domain ?? string.Empty,
-            System.StringComparison.OrdinalIgnoreCase);
-        // Full-type comparison via EffectiveTypeText (base + Size/Scale through the
-        // shared DdlGenerator.FormatTypeOrDomain pipeline). This catches size/length
-        // and precision/scale edits that the old base-only comparison missed
-        // (VARCHAR(50)→VARCHAR(100), NUMERIC(15,2)→NUMERIC(18,4)).
-        var typeChanged = !string.Equals(
-            row.EffectiveTypeText, original.Type,
-            System.StringComparison.OrdinalIgnoreCase);
-        if (domainChanged && !string.IsNullOrWhiteSpace(row.DomainName))
+        _enqueuingRowEdits = true;
+        try
         {
-            typeClause = row.DomainName;
-        }
-        else if (typeChanged
-                 && string.IsNullOrWhiteSpace(row.DomainName)
-                 && !string.IsNullOrWhiteSpace(row.EffectiveTypeText))
-        {
-            typeClause = row.EffectiveTypeText;
-        }
-
-        var target = new AlterFieldTarget
-        {
-            Name = row.Name,
-            TypeClause = typeClause,
-            NotNull = row.NotNull,
-            DefaultValue = row.DefaultValue,
-            Description = row.Description,
-        };
-
-        var statements = DdlGenerator.BuildAlterStatements(TableName, original, target, canRename);
-        foreach (var s in statements) PendingChanges.Add(s);
-        // Mark the row Modified so it keeps its pending tint after the inline
-        // edit commits (a pending-Added row stays Added).
-        if (statements.Count > 0 && row.PendingKind != PendingChangeKind.Added)
-        {
-            row.PendingKind = PendingChangeKind.Modified;
-        }
-
-        // UX: when the user attempted a rename / type-change but the field has
-        // incoming dependencies, BuildAlterStatements silently skipped them.
-        // Revert the displayed values + surface the standard "rename blocked"
-        // hint so the user knows why their edit didn't take.
-        if (!canRename)
-        {
-            bool attemptedRename = !string.Equals(row.Name, original.Name, System.StringComparison.Ordinal);
-            // typeClause is non-null only on a genuine type/domain change (see
-            // the pre-filter above), so its presence IS the "attempted" signal.
-            bool attemptedTypeChange = typeClause is not null;
-            if (attemptedRename) row.Name = original.Name;
-            if (attemptedTypeChange)
+            // Idempotent per row: drop edits previously queued for THIS row before
+            // recomputing, so repeated calls (the per-property auto-enqueue +
+            // RowEditEnding, successive edits, or an edit-then-revert) reflect the
+            // row's CURRENT total diff instead of accumulating duplicates.
+            if (_inlineRowEdits.TryGetValue(row, out var prior))
             {
-                row.RevertTypeToOriginal();
+                foreach (var p in prior) PendingChanges.Remove(p);
+                _inlineRowEdits.Remove(row);
             }
-            if (attemptedRename || attemptedTypeChange)
+
+            var original = row.Original;
+            var canRename = CanRenameField(original.Name);
+
+            // Type clause — set ONLY when the user genuinely changed the type or
+            // domain. Domain columns: original.Type is the RESOLVED type while
+            // DomainName is the domain. Basic-type columns: compare full type via
+            // EffectiveTypeText (catches Size/Scale edits). null ⇒ no type ALTER.
+            string? typeClause = null;
+            var domainChanged = !string.Equals(
+                row.DomainName ?? string.Empty, original.Domain ?? string.Empty,
+                System.StringComparison.OrdinalIgnoreCase);
+            var typeChanged = !string.Equals(
+                row.EffectiveTypeText, original.Type,
+                System.StringComparison.OrdinalIgnoreCase);
+            if (domainChanged && !string.IsNullOrWhiteSpace(row.DomainName))
             {
-                ErrorMessage = string.Format(
-                    System.Globalization.CultureInfo.CurrentCulture,
-                    UiStrings.FieldEditRenameBlockedFormat, original.Name);
+                typeClause = row.DomainName;
             }
+            else if (typeChanged
+                     && string.IsNullOrWhiteSpace(row.DomainName)
+                     && !string.IsNullOrWhiteSpace(row.EffectiveTypeText))
+            {
+                typeClause = row.EffectiveTypeText;
+            }
+
+            var target = new AlterFieldTarget
+            {
+                Name = row.Name,
+                TypeClause = typeClause,
+                NotNull = row.NotNull,
+                DefaultValue = row.DefaultValue,
+                Description = row.Description,
+            };
+
+            var statements = DdlGenerator.BuildAlterStatements(TableName, original, target, canRename);
+            if (statements.Count > 0)
+            {
+                foreach (var s in statements) PendingChanges.Add(s);
+                _inlineRowEdits[row] = new List<PendingDdlChange>(statements);
+                row.PendingKind = PendingChangeKind.Modified;
+            }
+            else
+            {
+                // No diff (clean, or the user reverted to the original) — clear the tint.
+                row.PendingKind = PendingChangeKind.None;
+            }
+
+            // UX: when the user attempted a rename / type-change but the field has
+            // incoming dependencies, BuildAlterStatements silently skipped them.
+            // Revert the displayed values + surface the standard "rename blocked" hint.
+            if (!canRename)
+            {
+                bool attemptedRename = !string.Equals(row.Name, original.Name, System.StringComparison.Ordinal);
+                bool attemptedTypeChange = typeClause is not null;
+                if (attemptedRename) row.Name = original.Name;
+                if (attemptedTypeChange) row.RevertTypeToOriginal();
+                if (attemptedRename || attemptedTypeChange)
+                {
+                    ErrorMessage = string.Format(
+                        System.Globalization.CultureInfo.CurrentCulture,
+                        UiStrings.FieldEditRenameBlockedFormat, original.Name);
+                }
+            }
+        }
+        finally
+        {
+            _enqueuingRowEdits = false;
         }
     }
     public ObservableCollection<IndexInfo> Indexes { get; }

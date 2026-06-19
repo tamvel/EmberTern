@@ -84,6 +84,24 @@ public partial class FieldRowViewModel : ObservableObject
     private void OnAvailableDomainsChanged(object? sender, NotifyCollectionChangedEventArgs e)
         => OnPropertyChanged(nameof(SelectedDomainSpec));
 
+    // Editable cell properties — any change re-queues this row's inline edit on the
+    // owner. Crucially this covers the Type / Domain ComboBoxes (always-visible cells
+    // in IsReadOnly template columns), which never fire the DataGrid's RowEditEnding,
+    // so without this hook a type/domain change wouldn't enqueue a pending change and
+    // Compile would stay disabled.
+    private static readonly HashSet<string> InlineEditableProps = new(StringComparer.Ordinal)
+    {
+        nameof(Name), nameof(NotNull), nameof(DefaultValue), nameof(TypeText),
+        nameof(DomainName), nameof(Size), nameof(Scale), nameof(Description),
+    };
+
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (_owner is not null && e.PropertyName is { } p && InlineEditableProps.Contains(p))
+            _owner.OnInlineFieldEdited(this);
+    }
+
     // Strips the size/precision suffix from a type string: "VARCHAR(50)" →
     // "VARCHAR", "NUMERIC(15,2)" → "NUMERIC", "DOUBLE PRECISION" → unchanged.
     private static string StripSize(string? type)
