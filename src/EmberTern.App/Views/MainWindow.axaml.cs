@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -46,21 +47,11 @@ public partial class MainWindow : Window
     private DropPosition _currentDropPosition;
     private const double DragThreshold = 8.0;
 
-    // Type-ahead (IBExpert-style incremental search). Typed letters accumulate into ONE
-    // growing buffer while the tree has focus; each keystroke jumps to the first node
-    // (tree order, full metadata via the VM's name cache) whose name starts with the
-    // whole buffer. The buffer self-clears after ~1 s idle so a later keystroke starts
-    // fresh. Resolution is async (may load a never-expanded category) — the generation
-    // counter discards a stale result if a newer keystroke superseded it.
-    private string _typeAheadBuffer = string.Empty;
-    // The node the search is anchored on while a buffer is growing — the PREVIOUS match,
-    // not tree.SelectedItem. Selection is applied asynchronously (Dispatcher.Post), so a fast
-    // refine (K→KO→KON) must anchor on this field, immune to the selection round-trip race.
-    // A fresh buffer re-reads tree.SelectedItem instead (honours a manual click between searches).
-    private object? _typeAheadAnchor;
-    private DispatcherTimer? _typeAheadResetTimer;
-    private int _typeAheadGeneration;
-    private const int TypeAheadResetMs = 1000;
+    // Type-to-filter: when the tree has focus and the user starts typing, focus jumps to
+    // the sidebar filter box and the typed character goes there (subsequent typing is
+    // handled natively by the now-focused TextBox). Ctrl+F focuses the filter; Escape in
+    // the filter clears it and returns focus to the tree. Cached once the template applies.
+    private TextBox? _sidebarFilterBox;
 
     // Built lazily when the VM attaches (OnDataContextChanged), from the VM's store
     // directory + protector — so the View's workspace section writes into the SAME
@@ -174,13 +165,23 @@ public partial class MainWindow : Window
             sidebar.PointerMoved += OnSidebarPointerMoved;
             sidebar.PointerReleased += OnSidebarPointerReleased;
             sidebar.PointerCaptureLost += OnSidebarPointerCaptureLost;
-            // IBExpert-style type-ahead: typed letters jump to the next matching node.
-            // Tunnel both so we get them before the TreeView consumes them for its own
-            // built-in (single-char) navigation; TextInput carries the printable char,
-            // KeyDown handles Escape (cancel the buffer).
-            sidebar.AddHandler(TextInputEvent, OnSidebarTypeAhead, RoutingStrategies.Tunnel);
-            sidebar.AddHandler(KeyDownEvent, OnSidebarTypeAheadKey, RoutingStrategies.Tunnel);
+            // Type-to-filter: while the tree (or a tree item) is focused, this tunnel handler
+            // sees printable input — when the filter box is focused the event no longer routes
+            // through the tree, so the redirect only fires from the tree. Redirects the char to
+            // the filter box and hands off focus; subsequent keys go to the box natively.
+            sidebar.AddHandler(TextInputEvent, OnSidebarTreeTextInput, RoutingStrategies.Tunnel);
         }
+
+        _sidebarFilterBox = this.FindControl<TextBox>("SidebarFilterBox");
+        if (_sidebarFilterBox is not null)
+        {
+            // Escape in the filter clears it and returns focus to the tree.
+            _sidebarFilterBox.KeyDown += OnFilterBoxKeyDown;
+        }
+
+        // Ctrl+F focuses the sidebar filter from anywhere (tunnel so it wins before any
+        // editor's own Ctrl+F). Per the user's explicit request the sidebar filter owns Ctrl+F.
+        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
 
         _lastNormalBounds = new WindowBounds
         {
@@ -467,100 +468,59 @@ public partial class MainWindow : Window
         }
     }
 
-    // ---- Sidebar type-ahead (IBExpert-style) ----------------------------------
+    // ---- Sidebar type-to-filter --------------------------------------------------
 
-    private void OnSidebarTypeAheadKey(object? sender, KeyEventArgs e)
+    // Tree (or a tree item) is focused and the user typed a printable char → redirect it
+    // into the filter box and move focus there. Subsequent keystrokes land in the now-focused
+    // TextBox natively (this tunnel handler only sees input while the tree itself is focused).
+    private void OnSidebarTreeTextInput(object? sender, TextInputEventArgs e)
     {
-        // Escape cancels the in-progress buffer (and lets the keypress fall through).
-        if (e.Key == Key.Escape)
-        {
-            ResetTypeAhead();
-        }
-    }
-
-    private async void OnSidebarTypeAhead(object? sender, TextInputEventArgs e)
-    {
-        if (sender is not TreeView tree || _currentVm is null) return;
+        var box = _sidebarFilterBox;
+        if (box is null) return;
         var text = e.Text;
-        if (string.IsNullOrEmpty(text)) return;
-        // Ignore control chars / whitespace — only build the buffer from real letters,
-        // digits, underscore, '$' (all legal in Firebird identifiers).
-        var ch = text[0];
-        if (char.IsControl(ch) || char.IsWhiteSpace(ch)) return;
+        if (string.IsNullOrEmpty(text) || char.IsControl(text[0])) return;
 
-        // One growing buffer (incremental search). Consume the key so the tree's own
-        // single-char navigation doesn't fight us. Capture fresh-vs-grow BEFORE appending:
-        // a fresh buffer (was empty) anchors on the user's real selection; a growing buffer
-        // (refine) anchors on the previous match (_typeAheadAnchor) so it's immune to the
-        // async selection round-trip.
-        var fresh = _typeAheadBuffer.Length == 0;
-        _typeAheadBuffer += text;
-        RestartTypeAheadReset();
+        box.Focus();
+        var current = box.Text ?? string.Empty;
+        var caret = Math.Clamp(box.CaretIndex, 0, current.Length);
+        box.Text = current.Insert(caret, text);
+        box.CaretIndex = caret + text.Length;
         e.Handled = true;
+    }
 
-        var anchor = fresh ? tree.SelectedItem : _typeAheadAnchor;
+    // Escape in the filter box clears the filter and returns focus to the tree.
+    private void OnFilterBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || _currentVm is null) return;
+        _currentVm.Metadata.FilterText = string.Empty;
+        e.Handled = true;
+        FocusSidebarTree();
+    }
 
-        var generation = ++_typeAheadGeneration;
-        var buffer = _typeAheadBuffer;
-
-        // Resolve against the FULL metadata (name cache), searching FORWARD from the anchor
-        // (inclusive) with wrap — finds objects in categories that were never expanded,
-        // loading the owning category on a hit. May await a DB round-trip on first use; the
-        // generation guard drops the result if the user has typed again in the meantime.
-        var result = await _currentVm.Metadata.ResolveTypeAheadAsync(buffer, anchor);
-        if (generation != _typeAheadGeneration || result is null) return;
-
-        // Remember the match so the next refine keystroke anchors here (race-safe).
-        _typeAheadAnchor = result.Node;
-
-        // Expand ONLY the path to the match (folder / connection / category), then select
-        // + scroll. Selection + BringIntoView are posted so they run after the expansion's
-        // layout pass has realized the container.
-        foreach (var ancestor in result.ExpandPath)
+    // Ctrl+F → focus + select the sidebar filter.
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
         {
-            SetNodeExpanded(ancestor, true);
+            if (_sidebarFilterBox is not null)
+            {
+                _sidebarFilterBox.Focus();
+                _sidebarFilterBox.SelectAll();
+                e.Handled = true;
+            }
         }
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            tree.SelectedItem = result.Node;
-            var container = FindTreeViewItemFor(tree, result.Node);
-            container?.BringIntoView();
-            container?.Focus();
-        }, DispatcherPriority.Background);
     }
 
-    private void RestartTypeAheadReset()
+    private void FocusSidebarTree()
     {
-        _typeAheadResetTimer ??= CreateTypeAheadResetTimer();
-        _typeAheadResetTimer.Stop();
-        _typeAheadResetTimer.Start();
-    }
-
-    private DispatcherTimer CreateTypeAheadResetTimer()
-    {
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(TypeAheadResetMs) };
-        timer.Tick += (_, _) => ResetTypeAhead();
-        return timer;
-    }
-
-    // Clear the in-progress type-ahead buffer + anchor and stop the idle timer. Called on
-    // Escape, on idle timeout, and on a tree click (so each click starts a fresh search).
-    private void ResetTypeAhead()
-    {
-        _typeAheadBuffer = string.Empty;
-        _typeAheadAnchor = null;
-        _typeAheadResetTimer?.Stop();
-    }
-
-    private static void SetNodeExpanded(object node, bool value)
-    {
-        switch (node)
-        {
-            case FolderNodeViewModel f: f.IsExpanded = value; break;
-            case ConnectionNodeViewModel c: c.IsExpanded = value; break;
-            case MetadataNodeViewModel m: m.IsExpanded = value; break;
-        }
+        var tree = this.FindControl<TreeView>("SidebarTree");
+        if (tree is null) return;
+        // Focus a real TreeViewItem — the TreeView container itself doesn't accept keyboard
+        // focus (it delegates to items). Prefer the selected row, else the first realized row.
+        var target = tree.SelectedItem is not null ? FindTreeViewItemFor(tree, tree.SelectedItem) : null;
+        target ??= tree.GetVisualDescendants().OfType<TreeViewItem>().FirstOrDefault();
+        if (target is not null) target.Focus();
+        else tree.Focus();
     }
 
     // ---- Sidebar drag & drop --------------------------------------------------
@@ -570,12 +530,6 @@ public partial class MainWindow : Window
         if (sender is not TreeView tree) return;
         var point = e.GetCurrentPoint(tree);
         if (!point.Properties.IsLeftButtonPressed) return;
-
-        // A click repositions the user → start a FRESH type-ahead from the clicked node.
-        // The buffer otherwise only clears on the 1 s idle timer / Escape, so clicking a
-        // node within ~1 s of typing would keep appending to the stale buffer (every
-        // keystroke appends regardless of a match), search garbage, and "do nothing".
-        ResetTypeAhead();
 
         // Find the closest row VM under the pointer. We only initiate drags for
         // Folder / Connection rows — clicking a category or a metadata leaf does

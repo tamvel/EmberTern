@@ -8,7 +8,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -280,26 +279,23 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
-    // DIAGNOSTIC (type-ahead "nothing happens after clicking a leaf"): build the REAL
-    // MainWindow, manually load a Tables category with one leaf, realize + FOCUS the leaf
-    // TreeViewItem, then inject a printable keystroke. The production OnSidebarTypeAhead
-    // sets e.Handled=true when it runs, so a bubble observer (handledEventsToo) on the tree
-    // reveals whether the handler fired at all. Bisects "event never reaches handler"
-    // (focus/routing) vs "handler runs but resolves to nothing" (anchor/index) — gotcha #39.
+    // Type-to-filter (replaces type-ahead): build the REAL MainWindow, focus the tree, and
+    // verify (a) typing redirects the char into the SidebarFilterBox + moves focus there,
+    // (b) Ctrl+F focuses the filter, (c) Escape clears the filter and returns focus to the
+    // tree. Production wiring under test (gotcha #39).
     [Fact]
-    public async System.Threading.Tasks.Task TypeAhead_FiresWhenLeafTreeViewItemFocused()
+    public async System.Threading.Tasks.Task TypeToFilter_TreeTyping_RedirectsToFilterBox()
     {
         var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
         {
-            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-probe-ta-" + Guid.NewGuid().ToString("N"));
+            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-probe-ttf-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDir);
             var store = new ConnectionProfileStore(tempDir);
             using var service = new FirebirdConnectionService();
-            var profile = new ConnectionProfile { Name = "ProbeTA", Host = "h", Port = 3050 };
-            store.Upsert(profile);
+            store.Upsert(new ConnectionProfile { Name = "ProbeTTF", Host = "h", Port = 3050 });
 
             var vm = new MainWindowViewModel(store, service);
             vm.ReloadConnections();
@@ -308,93 +304,36 @@ public sealed class ConnectionExpandBindingProbe
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            var node = vm.Metadata.RootNodes.OfType<ConnectionNodeViewModel>()
-                .Single(n => n.Profile.Id == profile.Id);
+            var tree = window.GetVisualDescendants().OfType<TreeView>().Single(t => t.Name == "SidebarTree");
+            var filter = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SidebarFilterBox");
+            var nodeItem = window.GetVisualDescendants().OfType<TreeViewItem>()
+                .First(t => t.DataContext is ConnectionNodeViewModel);
 
-            // Build categories (LoadGroupAsync bails — no DB — but the 13 group nodes exist).
-            node.IsConnected = true;
-            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            object? Focused() => TopLevel.GetTopLevel(window)?.FocusManager?.GetFocusedElement();
 
-            // Manually load Tables with several leaves and expand the path so they realize.
-            // Prime the session name cache with the same names so the type-ahead index has
-            // real object leaves to find (no live DB).
-            var names = new[] { "AKTYWA", "BUDYNKI", "KONTRAHENCI", "ZAMOWIENIA" };
-            var tables = node.Children.Single(g => g.IsGroup && g.Kind == MetadataObjectKind.Table);
-            tables.Children.Clear();
-            foreach (var n in names)
-            {
-                tables.Children.Add(MetadataNodeViewModel.CreateLeaf(vm.Metadata,
-                    new MetadataObject(n, MetadataObjectKind.Table)));
-            }
-            tables.MarkLoaded();
-            vm.Metadata.PrimeNameCacheForTest(tables, names);
-            node.IsExpanded = true;
-            tables.IsExpanded = true;
-            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
-
-            var tree = window.GetVisualDescendants().OfType<TreeView>()
-                .Single(t => t.Name == "SidebarTree");
-
-            TreeViewItem? LeafItem(string label) => window.GetVisualDescendants().OfType<TreeViewItem>()
-                .FirstOrDefault(t => t.DataContext is MetadataNodeViewModel m && !m.IsGroup && m.GroupLabel == label);
-
-            // Focus a leaf that does NOT match the keystroke ("AKTYWA"), so a working
-            // type-ahead must MOVE selection forward to the next match ("KONTRAHENCI").
-            var anchorItem = LeafItem("AKTYWA");
-            log.AppendLine($"anchor leaf realized = {anchorItem is not null}");
-            Assert.True(anchorItem is not null, "anchor leaf TreeViewItem must realize.\n" + log);
-
-            anchorItem!.Focus();
+            // (a) Focus a tree item, type 'k' → goes to the filter, focus moves there.
+            nodeItem.Focus();
             Dispatcher.UIThread.RunJobs();
-            var focused = TopLevel.GetTopLevel(window)?.FocusManager?.GetFocusedElement();
-            log.AppendLine($"focused after leaf.Focus() = {focused?.GetType().Name} " +
-                           $"(isAnchorLeaf={ReferenceEquals(focused, anchorItem)})");
-
-            // Observe whether the production tunnel handler ran (it sets e.Handled=true).
-            bool? handledByProduction = null;
-            tree.AddHandler(InputElement.TextInputEvent,
-                (object? _, TextInputEventArgs ev) => handledByProduction = ev.Handled,
-                RoutingStrategies.Bubble, handledEventsToo: true);
-
-            var before = tree.SelectedItem;
             window.KeyTextInput("k");
-            for (var i = 0; i < 8; i++) Dispatcher.UIThread.RunJobs();
-
-            var selected = tree.SelectedItem as MetadataNodeViewModel;
-            log.AppendLine($"TextInput observed-handled = {handledByProduction?.ToString() ?? "NO TextInput event at all"}");
-            log.AppendLine($"SelectedItem after 'k' = {selected?.GroupLabel ?? "(null)"} (was {(before as MetadataNodeViewModel)?.GroupLabel ?? "(null)"})");
-
-            // (a) Event layer: typing while a leaf is focused MUST reach the handler.
-            Assert.True(handledByProduction == true,
-                "OnSidebarTypeAhead must fire (e.Handled=true) when a leaf TreeViewItem is focused.\n" + log);
-            // (b) Resolution + apply: a FRESH 'k' anchored on AKTYWA selects KONTRAHENCI.
-            Assert.True(selected is not null && selected.GroupLabel == "KONTRAHENCI",
-                "Fresh keystroke must move selection to the forward match.\n" + log);
-
-            // (c) REGRESSION (the actual user bug): a click must reset the in-progress
-            // buffer so a stale search string can't make the next keystroke "do nothing".
-            // Poison the buffer with a non-matching keystroke (buffer becomes "kz" → no
-            // match → selection unchanged), then CLICK a leaf, then type a matching 'k'.
-            // Without the click-reset the buffer would be "kzk" → no match → nothing.
-            window.KeyTextInput("z");
-            for (var i = 0; i < 4; i++) Dispatcher.UIThread.RunJobs();
-            log.AppendLine($"after poison 'z': SelectedItem = {(tree.SelectedItem as MetadataNodeViewModel)?.GroupLabel ?? "(null)"}");
-
-            var budynki = LeafItem("BUDYNKI")!;
-            var clickPt = budynki.TranslatePoint(new Point(budynki.Bounds.Width / 2, budynki.Bounds.Height / 2), window);
-            log.AppendLine($"click point resolved = {clickPt is not null}");
-            Assert.True(clickPt is not null, "BUDYNKI leaf must resolve a click point.\n" + log);
-            window.MouseDown(clickPt!.Value, MouseButton.Left);
-            window.MouseUp(clickPt.Value, MouseButton.Left);
             for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"after tree-typing: FilterText='{vm.Metadata.FilterText}' boxText='{filter.Text}' focusIsBox={ReferenceEquals(Focused(), filter)}");
+            Assert.True(vm.Metadata.FilterText == "k", "typing in the tree must fill the filter.\n" + log);
+            Assert.True(ReferenceEquals(Focused(), filter), "focus must move to the filter box.\n" + log);
 
-            window.KeyTextInput("k");
-            for (var i = 0; i < 8; i++) Dispatcher.UIThread.RunJobs();
-            var afterClick = tree.SelectedItem as MetadataNodeViewModel;
-            log.AppendLine($"after click+reset+'k': SelectedItem = {afterClick?.GroupLabel ?? "(null)"}");
+            // (b) Ctrl+F from elsewhere focuses the filter.
+            nodeItem.Focus();
+            Dispatcher.UIThread.RunJobs();
+            window.KeyPress(Key.F, RawInputModifiers.Control, PhysicalKey.F, null);
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"after Ctrl+F: focusIsBox={ReferenceEquals(Focused(), filter)}");
+            Assert.True(ReferenceEquals(Focused(), filter), "Ctrl+F must focus the filter box.\n" + log);
 
-            Assert.True(afterClick is not null && afterClick.GroupLabel == "KONTRAHENCI",
-                "A click must reset the stale buffer so the next keystroke searches fresh.\n" + log);
+            // (c) Escape in the filter clears it and returns focus to the tree.
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"after Escape: FilterText='{vm.Metadata.FilterText}' focusIsBox={ReferenceEquals(Focused(), filter)}");
+            Assert.Equal(string.Empty, vm.Metadata.FilterText);
+            Assert.False(ReferenceEquals(Focused(), filter), "Escape must move focus off the filter box.\n" + log);
 
             window.Close();
             try { Directory.Delete(tempDir, recursive: true); } catch { }

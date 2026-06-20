@@ -237,7 +237,8 @@
 
           <!-- Filter -->
           <Border DockPanel.Dock="Top" Margin="8,6,8,4">
-            <TextBox Text="{Binding FilterText, Mode=TwoWay}"
+            <TextBox x:Name="SidebarFilterBox"
+                     Text="{Binding FilterText, Mode=TwoWay}"
                      PlaceholderText="{Binding FilterPlaceholder}"
                      FontSize="12"
                      Padding="6,4" />
