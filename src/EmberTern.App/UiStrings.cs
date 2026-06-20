@@ -93,6 +93,8 @@ internal static class UiStrings
     public const string UnsavedNewProcedureFormat = "New procedure (not yet created) — {0}";
     public const string UnsavedModifiedViewFormat = "View {0} — uncompiled changes";
     public const string UnsavedModifiedProcedureFormat = "Procedure {0} — uncompiled changes";
+    public const string UnsavedNewTriggerFormat = "New trigger (not yet created) — {0}";
+    public const string UnsavedModifiedTriggerFormat = "Trigger {0} — uncompiled changes";
     public const string UnsavedPendingStructureFormat = "Table {0} — uncompiled structural changes";
     public const string UnsavedTransactionDataFormat = "Data transaction — {0} pending statement(s)";
     public const string UnsavedTransactionMetadataFormat = "Metadata transaction — {0} pending statement(s)";
@@ -543,6 +545,28 @@ internal static class UiStrings
     public const string ProcedureExecuteDialogColumnNull = "NULL";
     public const string ProcedureExecuteDialogRun = "Execute";
     public const string ProcedureExecuteDialogCancel = "Cancel";
+
+    // ─── Trigger Detail ─────────────────────────────────────────────────────
+    public const string TriggerNameHeader = "Trigger name";
+    public const string TriggerTableHeader = "Table";
+    public const string TriggerTimingHeader = "Timing";
+    public const string TriggerEventsHeader = "Events";
+    public const string TriggerEventInsert = "INSERT";
+    public const string TriggerEventUpdate = "UPDATE";
+    public const string TriggerEventDelete = "DELETE";
+    public const string TriggerPositionHeader = "Position";
+    public const string TriggerActive = "Active";
+    public const string TriggerDetailLoadingHint = "Loading trigger…";
+    public const string TriggerCompileTooltip = "Compile trigger (CREATE OR ALTER TRIGGER)";
+    public const string TriggerCompileFailedFormat = "Compile failed: {0}";
+    public const string TriggerModeToggleTooltip = "Toggle Source / Easy mode";
+    public const string TriggerParseFailedNotice =
+        "Couldn't parse the source into structured form — Easy mode is showing the last loaded state. Edit in Source mode, or fix the header.";
+    public const string TriggerTableRequiredNotice = "Select the table the trigger fires for before compiling.";
+    public const string TriggerEventRequiredNotice = "Select at least one event (INSERT / UPDATE / DELETE) before compiling.";
+    public const string ToolbarNewTriggerTooltip = "New Trigger";
+    public const string NewTriggerTabDefaultTitle = "New Trigger";
+    public const string NewTriggerExecutedFormat = "Trigger \"{0}\" created.";
 
     public const string FieldEditCompileIcon = "⚡";
     public const string FieldEditCompileTooltip = "Compile pending changes (apply DDL + auto-commit)";

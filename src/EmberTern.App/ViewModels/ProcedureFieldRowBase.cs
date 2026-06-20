@@ -22,14 +22,14 @@ namespace EmberTern.App.ViewModels;
 /// </summary>
 public abstract partial class ProcedureFieldRowBase : ObservableObject
 {
-    private readonly ProcedureDetailTabViewModel? _owner;
+    private readonly IFieldRowOwner? _owner;
     private bool _suppressCompose;
     // Guards the "mirror the domain's resolved type into the Type/Size/Scale cells for
     // display" writes so the BaseType setter doesn't treat them as the user picking a
     // plain base type (which would clear the domain).
     private bool _syncingType;
 
-    protected ProcedureFieldRowBase(ProcedureDetailTabViewModel? owner)
+    protected ProcedureFieldRowBase(IFieldRowOwner? owner)
     {
         _owner = owner;
         if (_owner is not null)

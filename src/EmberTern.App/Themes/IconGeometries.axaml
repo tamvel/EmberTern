@@ -61,6 +61,10 @@
        the SAME bottom-right "+" overlay as Icon.TablePlus / Icon.ViewPlus, so
        "New Procedure" reads as a create action consistent with the others. -->
   <StreamGeometry x:Key="Icon.ProcedurePlus">M5 3 H12 A2 2 0 0 1 14 5 V12 A2 2 0 0 1 12 14 H5 A2 2 0 0 1 3 12 V5 A2 2 0 0 1 5 3 Z M6 6.5 l2 2 -2 2 M9.5 10.5 h3 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
+  <!-- New Trigger: a lightning bolt (top-left) + the SAME bottom-right "+" overlay,
+       so "New Trigger" reads as a create action consistent with the others (the bolt
+       matches the metadata-tree Trigger glyph Icon.Trigger). -->
+  <StreamGeometry x:Key="Icon.TriggerPlus">M9 2 L4 11 H8 L7 16 L13 7 H9 Z M18.5 15 V22 M15 18.5 H22</StreamGeometry>
   <!-- Pencil-ruler (Lucide pencil-ruler): design / edit table structure (the inline
        field-edit toggle). Relative "m…" sub-paths re-anchored to absolute M + l. -->
   <StreamGeometry x:Key="Icon.PencilRuler">M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13 M8 6 l2-2 M18 16 l2-2 M17 11 l4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17 M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z M15 5 l4 4</StreamGeometry>

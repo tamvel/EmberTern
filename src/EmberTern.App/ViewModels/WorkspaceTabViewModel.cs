@@ -12,6 +12,7 @@ public enum WorkspaceTabKind
     NewTable,
     ViewDetail,
     ProcedureDetail,
+    TriggerDetail,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -110,6 +111,22 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ProcedureDetail = detail,
         };
 
+    public static WorkspaceTabViewModel CreateTriggerDetail(MainWindowViewModel owner, MetadataObject obj, TriggerDetailTabViewModel detail, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.TriggerDetail,
+            BaseTitle = obj.Name,
+            IsClosable = true,
+            ObjectKind = obj.Kind,
+            ObjectName = obj.Name,
+            DdlText = detail.DdlText,
+            ConnectionProfileId = connectionProfileId,
+            Icon = MetadataNodeViewModel.IconFor(obj.Kind),
+            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
+            TriggerDetail = detail,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -125,6 +142,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public NewTableTabViewModel? NewTable { get; private init; }
     public ViewDetailTabViewModel? ViewDetail { get; private init; }
     public ProcedureDetailTabViewModel? ProcedureDetail { get; private init; }
+    public TriggerDetailTabViewModel? TriggerDetail { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]
@@ -149,6 +167,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.TableDetail => TableDetail?.GetUnsavedWork(),
         WorkspaceTabKind.ViewDetail => ViewDetail?.GetUnsavedWork(),
         WorkspaceTabKind.ProcedureDetail => ProcedureDetail?.GetUnsavedWork(),
+        WorkspaceTabKind.TriggerDetail => TriggerDetail?.GetUnsavedWork(),
         _ => null,
     };
 

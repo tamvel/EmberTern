@@ -407,6 +407,84 @@ public sealed class FirebirdDdlReader
 
     // -- Triggers -------------------------------------------------------------
 
+    /// <summary>
+    /// Fetches a trigger's source rebuilt as an editable <c>CREATE OR ALTER TRIGGER</c>
+    /// statement — the working surface for the Trigger Detail Editor (Source mode).
+    /// Reuses the same reconstruction as the read-only <see cref="FetchDdlAsync"/> DDL
+    /// path (a trigger always rebuilds as CREATE OR ALTER, so source and DDL match).
+    /// Same lane/lock + tx-attach pattern as every other read here.
+    /// </summary>
+    public async Task<string> FetchTriggerSourceAsync(MetadataObject obj, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        var connection = LaneConnection();
+        var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
+        var tx = _transactionService?.ActiveTransaction;
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await BuildTriggerDdlAsync(connection, tx, obj.Name, fallback, cancellationToken).ConfigureAwait(false);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read source for TRIGGER {obj.Name}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Fetches a trigger's BODY alone — the DECLARE…BEGIN…END text after <c>AS</c>,
+    /// with any leading <c>AS</c> keyword stripped (some databases store
+    /// <c>RDB$TRIGGER_SOURCE</c> beginning with <c>AS</c>, others don't). This is what
+    /// Trigger Detail Easy mode edits, alongside the catalog-derived header — so the
+    /// body splits into the structured Variables model with no header parsing.
+    /// </summary>
+    public async Task<string> FetchTriggerBodyAsync(MetadataObject obj, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        var connection = LaneConnection();
+        var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
+        var tx = _transactionService?.ActiveTransaction;
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var source = await ReadBlobAsync(connection, tx,
+                "SELECT RDB$TRIGGER_SOURCE FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = @name",
+                obj.Name, fallback, cancellationToken).ConfigureAwait(false);
+            return StripLeadingAs(source).Trim();
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read body for TRIGGER {obj.Name}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    // Some Firebird databases store RDB$TRIGGER_SOURCE beginning with the AS keyword
+    // (the body after the header), others store just the DECLARE…BEGIN…END. Strip a
+    // single leading AS word so BuildTriggerDdlAsync (which re-adds AS) doesn't emit a
+    // double AS, and so the Easy-mode body splitter sees only DECLARE…BEGIN…END.
+    internal static string StripLeadingAs(string? source)
+    {
+        var s = (source ?? string.Empty).TrimStart();
+        if (s.Length >= 2 && (s[0] is 'A' or 'a') && (s[1] is 'S' or 's')
+            && (s.Length == 2 || char.IsWhiteSpace(s[2])))
+        {
+            return s.Substring(2);
+        }
+        return s;
+    }
+
     private static async Task<string> BuildTriggerDdlAsync(FbConnection connection, FbTransaction? tx, string name, Encoding fallback, CancellationToken ct)
     {
         string? relation = null;
@@ -463,7 +541,8 @@ public sealed class FirebirdDdlReader
 
         sb.AppendLine();
         sb.AppendLine("AS");
-        sb.AppendLine(string.IsNullOrWhiteSpace(source) ? "BEGIN\n  /* trigger body unavailable */\nEND" : source.Trim());
+        var body = StripLeadingAs(source).Trim();
+        sb.AppendLine(string.IsNullOrWhiteSpace(body) ? "BEGIN\n  /* trigger body unavailable */\nEND" : body);
         return sb.ToString();
     }
 

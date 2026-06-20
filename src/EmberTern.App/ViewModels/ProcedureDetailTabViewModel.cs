@@ -32,7 +32,7 @@ public sealed record ProcedureExecOutcome(QueryResult? Result, string? Error);
 /// runs in the working (metadata) tx. Execute runs the procedure on the Data lane
 /// with bound parameters.
 /// </summary>
-public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
+public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, IFieldRowOwner
 {
     private const int InputParamType = 0;
     private const int OutputParamType = 1;

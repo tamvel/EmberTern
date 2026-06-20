@@ -190,6 +190,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveViewDetail))]
     [NotifyPropertyChangedFor(nameof(IsProcedureDetailTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveProcedureDetail))]
+    [NotifyPropertyChangedFor(nameof(IsTriggerDetailTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveTriggerDetail))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
@@ -236,6 +238,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsProcedureDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ProcedureDetail };
     public ProcedureDetailTabViewModel? ActiveProcedureDetail
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ProcedureDetail } t ? t.ProcedureDetail : null;
+    /// <summary>True when the active workspace tab is a Trigger Detail tab.</summary>
+    public bool IsTriggerDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TriggerDetail };
+    public TriggerDetailTabViewModel? ActiveTriggerDetail
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TriggerDetail } t ? t.TriggerDetail : null;
     // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
     // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
     // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
@@ -280,10 +286,12 @@ public partial class MainWindowViewModel : ViewModelBase
     // so Commit/Rollback must be reachable from a View Detail tab too.
     // ProcedureDetail joins this set: Compile opens the working (metadata)
     // transaction, so Commit/Rollback must be reachable from a Procedure Detail tab.
-    public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive;
-    // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail);
+    // ProcedureDetail + TriggerDetail join this set: Compile opens the working
+    // (metadata) transaction, so Commit/Rollback must be reachable from those tabs too.
+    public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive;
+    // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail, TriggerDetail);
     // the anchored Query tab is never closable so the button hides when it's active.
-    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail };
+    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail };
 
     // ─── Unified editor toolbar — fixed 5-section model ───────────────────
     //
@@ -294,12 +302,12 @@ public partial class MainWindowViewModel : ViewModelBase
     // commands below; a future Trigger/Function/Package editor plugs a new case into
     // ActiveCollection() and gets the toolbar for free — no new layout pattern.
 
-    // Section 1 — a mode toggle exists for Table (Grid-Edit), View + Procedure (Easy).
-    public bool ShowModeSection => ShowFieldEditTools || IsViewDetailTabActive || IsProcedureDetailTabActive;
+    // Section 1 — a mode toggle exists for Table (Grid-Edit), View + Procedure + Trigger (Easy).
+    public bool ShowModeSection => ShowFieldEditTools || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive;
     // Section 2 — every editor has a primary action (Execute / Compile / Commit).
     public bool ShowMainSection => SelectedWorkspaceTab is not null;
-    // Section 4 — helpers exist for SQL editor, View, Procedure, and the Dane sub-tab.
-    public bool ShowHelperSection => IsQueryTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsDataTabActive;
+    // Section 4 — helpers exist for SQL editor, View, Procedure, Trigger, and the Dane sub-tab.
+    public bool ShowHelperSection => IsQueryTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsDataTabActive;
 
     // A separator shows only between two non-empty adjacent sections.
     private bool HasFrom2 => ShowMainSection || ShowCollectionTools || ShowHelperSection || IsClosableTabActive;
@@ -330,6 +338,9 @@ public partial class MainWindowViewModel : ViewModelBase
                 return (v.AddColumnCommand, v.DeleteColumnCommand, v.MoveColumnUpCommand, v.MoveColumnDownCommand, true);
             case WorkspaceTabKind.ProcedureDetail when SelectedWorkspaceTab.ProcedureDetail is { EasyMode: true } p:
                 return (p.AddCollectionItemCommand, p.RemoveCollectionItemCommand, p.MoveCollectionItemUpCommand, p.MoveCollectionItemDownCommand, true);
+            case WorkspaceTabKind.TriggerDetail when SelectedWorkspaceTab.TriggerDetail is { EasyMode: true } tr:
+                // Trigger Easy mode has a single editable collection — Variables.
+                return (tr.AddVariableCommand, tr.DeleteVariableCommand, tr.MoveVariableUpCommand, tr.MoveVariableDownCommand, true);
             default:
                 return null;
         }
@@ -1207,6 +1218,7 @@ public partial class MainWindowViewModel : ViewModelBase
             QueryPanelVisible = IsQueryPanelVisible,
             ProcedureEasyMode = ProcedureEasyModePreference,
             ViewEasyMode = ViewEasyModePreference,
+            TriggerEasyMode = TriggerEasyModePreference,
             BottomPanelTabIndex = SelectedBottomTabIndex,
             // ResultsMaximized is a layout flag owned by the View code-behind; it sets
             // it on the captured state in OnWindowClosing, like WindowBounds.
@@ -1224,6 +1236,7 @@ public partial class MainWindowViewModel : ViewModelBase
         IsQueryPanelVisible = state.QueryPanelVisible;
         ProcedureEasyModePreference = state.ProcedureEasyMode;
         ViewEasyModePreference = state.ViewEasyMode;
+        TriggerEasyModePreference = state.TriggerEasyMode;
         SelectedBottomTabIndex = state.BottomPanelTabIndex;
 
         // Workspace tabs stay empty at startup — there's no active connection yet.
@@ -1322,6 +1335,24 @@ public partial class MainWindowViewModel : ViewModelBase
                     EasyMode = pd?.EasyMode,
                     ActiveSubTabIndex = pd?.ActiveSubTabIndex,
                     ActiveInnerSubTabIndex = pd?.ActiveEasyCollectionIndex,
+                });
+            }
+            else if (tab.Kind == WorkspaceTabKind.TriggerDetail)
+            {
+                // Skip transient New Trigger tabs (IsNew) — the trigger doesn't exist
+                // yet. Persist real triggers as TriggerDetail so restore re-opens the
+                // full surface (not DDL-only).
+                if (tab.TriggerDetail is { IsNew: true }) continue;
+                var trd = tab.TriggerDetail;
+                ws.Tabs.Add(new WorkspaceTab
+                {
+                    Kind = CoreTabKind.TriggerDetail,
+                    ObjectName = tab.ObjectName,
+                    ObjectKind = tab.ObjectKind,
+                    ConnectionProfileId = tab.ConnectionProfileId,
+                    DdlText = trd is { } ? trd.DdlText : tab.DdlText,
+                    EasyMode = trd?.EasyMode,
+                    ActiveSubTabIndex = trd?.ActiveSubTabIndex,
                 });
             }
             else
@@ -1430,6 +1461,19 @@ public partial class MainWindowViewModel : ViewModelBase
                 if (tab.ActiveSubTabIndex is { } pSub) detail.ActiveSubTabIndex = pSub;
                 if (tab.ActiveInnerSubTabIndex is { } pInner) detail.ActiveEasyCollectionIndex = pInner;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateProcedureDetail(this, obj, detail, tab.ConnectionProfileId));
+            }
+            else if (tab.Kind == CoreTabKind.TriggerDetail
+                  && tab.ObjectKind is { } trigKind
+                  && !string.IsNullOrEmpty(tab.ObjectName))
+            {
+                // Native TriggerDetail restore (no DDL-only fallback). Lazy-loads on
+                // first activation via SelectTab. Cached DDL seeds the DDL tab.
+                var obj = new MetadataObject(tab.ObjectName, trigKind);
+                var detail = CreateTriggerDetail(obj);
+                detail.DdlText = tab.DdlText ?? string.Empty;
+                if (tab.EasyMode is { } trEasy && detail.CanUseEasyMode) detail.EasyMode = trEasy;
+                if (tab.ActiveSubTabIndex is { } trSub) detail.ActiveSubTabIndex = trSub;
+                WorkspaceTabs.Add(WorkspaceTabViewModel.CreateTriggerDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
 
@@ -1976,6 +2020,58 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public bool CanCreateTrigger => _service.IsConnected;
+
+    // New Trigger: opens a Trigger Detail tab in IsNew mode, starting in Easy mode with
+    // empty metadata. The user picks the table + events (the name auto-derives) and an
+    // empty body, then presses Compile; on success OnTriggerCreated refreshes the tree,
+    // closes this tab and reopens the real trigger.
+    [RelayCommand(CanExecute = nameof(CanCreateTrigger))]
+    private void NewTrigger()
+    {
+        var detail = new TriggerDetailTabViewModel(UiStrings.NewTriggerTabDefaultTitle, _tableDetailReader, _ddlReader, _ddlExecutor)
+        {
+            IsNew = true,
+        };
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        _ = LoadTriggerListsAsync(detail);
+        // Sensible defaults: BEFORE INSERT, an empty body. The name auto-derives once
+        // the user picks a table.
+        detail.FiresInsert = true;
+        detail.ExecutableBody = "BEGIN\nEND";
+        detail.EasyMode = true;
+        detail.TriggerCreated += name => OnTriggerCreated(detail, name);
+        // Seeding marked the VM dirty; a brand-new untouched tab must not prompt on close.
+        detail.ClearDirty();
+
+        var obj = new MetadataObject(UiStrings.NewTriggerTabDefaultTitle, MetadataObjectKind.Trigger);
+        var tab = WorkspaceTabViewModel.CreateTriggerDetail(this, obj, detail, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+    }
+
+    private async void OnTriggerCreated(TriggerDetailTabViewModel detail, string? triggerName)
+    {
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewTriggerExecutedFormat, triggerName ?? string.Empty));
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+
+        WorkspaceTabViewModel? newTab = null;
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.TriggerDetail && ReferenceEquals(t.TriggerDetail, detail))
+            {
+                newTab = t;
+                break;
+            }
+        }
+        if (newTab is not null) CloseTab(newTab);
+
+        if (!string.IsNullOrEmpty(triggerName))
+        {
+            OnOpenDdlRequested(new MetadataObject(triggerName, MetadataObjectKind.Trigger));
+        }
+    }
+
     // Persist a freshly-added connection into a folder. Called by the view after
     // the dialog returns with a profile; isolated here so tests can drive the
     // folder-placement logic without standing up the dialog.
@@ -2182,6 +2278,12 @@ public partial class MainWindowViewModel : ViewModelBase
     internal static bool OpensAsProcedureDetail(MetadataObjectKind kind)
         => kind is MetadataObjectKind.Procedure;
 
+    // Triggers open in the dedicated Trigger Detail surface (editable CREATE OR ALTER
+    // TRIGGER source + Compile / Description / Dependencies / DDL, with Easy mode =
+    // metadata header + Variables grid over a body editor), not a plain DDL tab.
+    internal static bool OpensAsTriggerDetail(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.Trigger;
+
     // Single construction point for ViewDetail VMs — mirrors CreateTableDetail.
     // A view is read-only data (no inline editing) but its SQL source IS editable,
     // so the DDL executor is wired for Compile while no data editor is.
@@ -2258,6 +2360,51 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    // Single construction point for TriggerDetail VMs — mirrors CreateProcedureDetail.
+    // The trigger source IS editable (Compile), so the DDL executor is wired. The Easy
+    // mode Variables grid needs the domain list and the Table picker needs the table
+    // list — both loaded best-effort.
+    internal bool TriggerEasyModePreference { get; set; }
+
+    internal TriggerDetailTabViewModel CreateTriggerDetail(MetadataObject obj)
+    {
+        var detail = new TriggerDetailTabViewModel(
+            obj.Name,
+            _tableDetailReader,
+            _ddlReader,
+            _ddlExecutor);
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        _ = LoadTriggerListsAsync(detail);
+        if (detail.CanUseEasyMode) detail.EasyMode = TriggerEasyModePreference;
+        detail.PropertyChanged += OnTriggerDetailPropertyChanged;
+        return detail;
+    }
+
+    private async Task LoadTriggerListsAsync(TriggerDetailTabViewModel detail)
+    {
+        try
+        {
+            var domains = await _metadataReader.ListDomainsAsync().ConfigureAwait(true);
+            detail.SetAvailableDomains(domains);
+        }
+        catch (MetadataReadException) { /* best effort — combo just has "(none)" */ }
+        try
+        {
+            var tables = await _metadataReader.ListAsync(MetadataObjectKind.Table).ConfigureAwait(true);
+            detail.SetAvailableTables(tables.Select(t => t.Name));
+        }
+        catch (MetadataReadException) { /* best effort — empty picker */ }
+    }
+
+    private void OnTriggerDetailPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TriggerDetailTabViewModel.EasyMode)
+            && sender is TriggerDetailTabViewModel { CanUseEasyMode: true } d)
+        {
+            TriggerEasyModePreference = d.EasyMode;
+        }
+    }
+
     // Runs an Execute Procedure statement on the Data lane with bound parameters
     // (no literal embedding). Wraps the result/error so the procedure tab can show
     // it in its own Result region. EXECUTE PROCEDURE/SELECT are Data-lane per the
@@ -2312,7 +2459,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // TableDetail tabs key on (Kind, Name).
         foreach (var tab in WorkspaceTabs)
         {
-            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail
+            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail
                 && tab.ObjectKind == obj.Kind
                 && string.Equals(tab.ObjectName, obj.Name, StringComparison.Ordinal))
             {
@@ -2359,6 +2506,21 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 var detail = CreateProcedureDetail(obj);
                 var newTab = WorkspaceTabViewModel.CreateProcedureDetail(this, obj, detail, _service.ActiveProfile?.Id);
+                WorkspaceTabs.Add(newTab);
+                SelectTab(newTab);
+                await detail.EnsureLoadedAsync().ConfigureAwait(true);
+                if (!string.IsNullOrEmpty(detail.ErrorMessage))
+                {
+                    AddMessage(MessageSeverity.Error, detail.ErrorMessage);
+                    SelectedBottomTabIndex = 1;
+                }
+                return;
+            }
+
+            if (OpensAsTriggerDetail(obj.Kind))
+            {
+                var detail = CreateTriggerDetail(obj);
+                var newTab = WorkspaceTabViewModel.CreateTriggerDetail(this, obj, detail, _service.ActiveProfile?.Id);
                 WorkspaceTabs.Add(newTab);
                 SelectTab(newTab);
                 await detail.EnsureLoadedAsync().ConfigureAwait(true);
@@ -2419,6 +2581,11 @@ public partial class MainWindowViewModel : ViewModelBase
             && _service.IsConnected)
         {
             _ = procedureDetail.EnsureLoadedAsync();
+        }
+        else if (tab is { Kind: WorkspaceTabKind.TriggerDetail, TriggerDetail: { } triggerDetail }
+            && _service.IsConnected)
+        {
+            _ = triggerDetail.EnsureLoadedAsync();
         }
     }
 
@@ -2857,6 +3024,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             WorkspaceTabKind.ViewDetail => newValue.ViewDetail,
             WorkspaceTabKind.ProcedureDetail => newValue.ProcedureDetail,
+            WorkspaceTabKind.TriggerDetail => newValue.TriggerDetail,
             WorkspaceTabKind.NewTable => newValue.NewTable,
             _ => null,
         };
@@ -3235,6 +3403,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // New Procedure shares the same connection-state gate.
         OnPropertyChanged(nameof(CanCreateProcedure));
         NewProcedureCommand.NotifyCanExecuteChanged();
+        // New Trigger shares the same connection-state gate.
+        OnPropertyChanged(nameof(CanCreateTrigger));
+        NewTriggerCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

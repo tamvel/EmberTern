@@ -683,6 +683,69 @@ public static class DdlGenerator
         return sb.ToString();
     }
 
+    // ─── Trigger generation ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reassembles a full <c>CREATE OR ALTER TRIGGER</c> from the Trigger Detail
+    /// Easy-mode parts (header metadata + body) — the deterministic inverse of
+    /// <see cref="Sql.TriggerSignatureParser"/>. The events are emitted in a fixed
+    /// INSERT/UPDATE/DELETE order joined by <c>OR</c>; <c>ACTIVE</c>/<c>INACTIVE</c>
+    /// and <c>POSITION</c> are always written (clearer than relying on defaults).
+    /// The body is emitted verbatim, so Easy → Source keeps it byte-for-byte. Names
+    /// are quoted only when needed (<see cref="QuoteLight"/>), matching the fetched
+    /// source form.
+    /// </summary>
+    public static string BuildCreateOrAlterTrigger(
+        string name, string table, bool isBefore,
+        bool insert, bool update, bool delete,
+        int position, bool active, string body)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Trigger name is required.", nameof(name));
+        if (string.IsNullOrWhiteSpace(table))
+            throw new ArgumentException("Trigger table is required.", nameof(table));
+        if (!(insert || update || delete))
+            throw new ArgumentException("At least one trigger event (INSERT/UPDATE/DELETE) is required.", nameof(insert));
+
+        var events = new List<string>();
+        if (insert) events.Add("INSERT");
+        if (update) events.Add("UPDATE");
+        if (delete) events.Add("DELETE");
+
+        var sb = new StringBuilder();
+        sb.Append("CREATE OR ALTER TRIGGER ").Append(QuoteLight(name.Trim()))
+          .Append(" FOR ").Append(QuoteLight(table.Trim())).AppendLine();
+        sb.Append(active ? "ACTIVE" : "INACTIVE").Append(' ')
+          .Append(isBefore ? "BEFORE" : "AFTER").Append(' ')
+          .Append(string.Join(" OR ", events))
+          .Append(" POSITION ").Append(position.ToString(CultureInfo.InvariantCulture)).AppendLine();
+        sb.AppendLine("AS");
+        sb.Append(string.IsNullOrWhiteSpace(body) ? "BEGIN\nEND" : body.Trim());
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Builds the auto-derived trigger name <c>{TABLE}_{timing}{events}_{position}</c>
+    /// — timing B(efore)/A(fter) + event letters I/U/D in that fixed order, e.g.
+    /// <c>ORDERS_BIUD_50</c> for a BEFORE INSERT+UPDATE+DELETE trigger at position 50.
+    /// Pure + testable. The VM only calls this while the user hasn't overridden the
+    /// name (and only for a new trigger); an empty table yields a leading underscore.
+    /// </summary>
+    public static string BuildTriggerName(string table, bool isBefore, bool insert, bool update, bool delete, int position)
+    {
+        var code = new StringBuilder();
+        code.Append(isBefore ? 'B' : 'A');
+        if (insert) code.Append('I');
+        if (update) code.Append('U');
+        if (delete) code.Append('D');
+        return string.Format(CultureInfo.InvariantCulture, "{0}_{1}_{2}", (table ?? string.Empty).Trim(), code.ToString(), position);
+    }
+
+    /// <summary>Like <see cref="BuildCommentProcedure"/> but for triggers —
+    /// Firebird's <c>COMMENT ON TRIGGER</c> form.</summary>
+    public static string BuildCommentTrigger(string triggerName, string? comment)
+        => BuildRelationComment("TRIGGER", triggerName, comment);
+
     private static void AppendProcedureParamLines(StringBuilder sb, IReadOnlyList<Sql.ProcedureParameter> ps, bool includeDefault)
     {
         for (int k = 0; k < ps.Count; k++)

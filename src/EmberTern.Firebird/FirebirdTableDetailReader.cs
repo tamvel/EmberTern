@@ -510,6 +510,195 @@ public sealed class FirebirdTableDetailReader
         "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 5 " +
         "ORDER BY 2, 1";
 
+    // ─── Triggers (Trigger Detail) ──────────────────────────────────────────
+    //
+    // Trigger metadata is in RDB$TRIGGERS (relation + bit-encoded RDB$TRIGGER_TYPE +
+    // sequence + inactive); dependency rows carry RDB$*_TYPE = 2 (Trigger). Same
+    // metadata-lane access pattern (MetaConnection/MetaLock/MetaTx) as the rest.
+
+    /// <summary>Reads a relation trigger's structured header (table, timing, events,
+    /// position, active) by decoding RDB$TRIGGER_TYPE. A DB-level / DDL trigger
+    /// (type ≥ 8192) decodes to an empty event set — out of scope for the editor.</summary>
+    public async Task<TriggerHeaderInfo> GetTriggerHeaderAsync(string triggerName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(triggerName)) return new TriggerHeaderInfo();
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();   // capture once — see gotcha #98
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText =
+                "SELECT TRIM(RDB$RELATION_NAME), RDB$TRIGGER_TYPE, RDB$TRIGGER_SEQUENCE, RDB$TRIGGER_INACTIVE " +
+                "FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = @name";
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = MetaTx;
+            cmd.Parameters.AddWithValue("@name", triggerName);
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return new TriggerHeaderInfo();
+            }
+            var table = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim();
+            // RDB$TRIGGER_TYPE is BIGINT (DB-level triggers carry huge values) — read
+            // wide so an int overflow can't throw on a DDL trigger.
+            long type = reader.IsDBNull(1) ? 0 : Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
+            int sequence = reader.IsDBNull(2) ? 0 : Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture);
+            int inactive = reader.IsDBNull(3) ? 0 : Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture);
+
+            var (isBefore, ins, upd, del) = DecodeTriggerHeader(type);
+            return new TriggerHeaderInfo
+            {
+                Table = table,
+                IsBefore = isBefore,
+                FiresInsert = ins,
+                FiresUpdate = upd,
+                FiresDelete = del,
+                Position = sequence,
+                Active = inactive != 1,
+            };
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read trigger header for {triggerName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    /// <summary>Decodes RDB$TRIGGER_TYPE into (timing, events). Bit 0 is the timing
+    /// (odd = BEFORE, even = AFTER for relation triggers); events reuse
+    /// <see cref="DecodeTriggerOps"/>. DB-level / DDL triggers (type ≥ 8192, or ≤ 0)
+    /// yield no events — they aren't relation triggers.</summary>
+    internal static (bool IsBefore, bool Insert, bool Update, bool Delete) DecodeTriggerHeader(long triggerType)
+    {
+        if (triggerType <= 0 || triggerType >= 8192) return (true, false, false, false);
+        bool isBefore = (triggerType & 1) == 1;
+        var (ins, upd, del) = DecodeTriggerOps((int)triggerType);
+        return (isBefore, ins, upd, del);
+    }
+
+    public async Task<string> GetTriggerDescriptionAsync(string triggerName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(triggerName)) return string.Empty;
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();   // capture once — see gotcha #98
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText =
+                "SELECT RDB$DESCRIPTION FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = @name";
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = MetaTx;
+            cmd.Parameters.AddWithValue("@name", triggerName);
+
+            string? description = null;
+            await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false) && !reader.IsDBNull(0))
+                {
+                    description = reader.GetString(0);
+                }
+            }
+            return NormalizeDescription(description);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read description for trigger {triggerName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    // Trigger dependencies use RDB$*_TYPE = 2 (Trigger). "Depends on" = what this
+    // trigger references (it is the DEPENDENT — tables/columns/generators/…);
+    // "depended on by" = what references this trigger (typically nothing). One @name
+    // reference per query, so no distinct-name binding needed (cf. gotcha #47).
+    internal const string TriggerDependsOnSql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDED_ON_NAME), TRIM(d.RDB$FIELD_NAME), " +
+        "    CAST(d.RDB$DEPENDED_ON_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDENT_NAME) = @name AND d.RDB$DEPENDENT_TYPE = 2 " +
+        "ORDER BY 3, 1";
+
+    internal const string TriggerDependedOnBySql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDENT_NAME), " +
+        "    CAST(d.RDB$DEPENDENT_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 2 " +
+        "ORDER BY 2, 1";
+
+    public async Task<(IReadOnlyList<DependencyInfo> DependsOn, IReadOnlyList<DependencyInfo> DependedOnBy)> GetTriggerDependenciesAsync(
+        string triggerName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(triggerName))
+        {
+            return (Array.Empty<DependencyInfo>(), Array.Empty<DependencyInfo>());
+        }
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();   // capture once — see gotcha #98
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var dependsOn = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = TriggerDependsOnSql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", triggerName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependsOn.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        FieldName = reader.IsDBNull(1) ? null : reader.GetString(1).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2)),
+                    });
+                }
+            }
+
+            var dependedOnBy = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = TriggerDependedOnBySql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", triggerName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependedOnBy.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(1) ? (int?)null : reader.GetInt32(1)),
+                    });
+                }
+            }
+
+            return (dependsOn, dependedOnBy);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read dependencies for trigger {triggerName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
     public async Task<(IReadOnlyList<DependencyInfo> DependsOn, IReadOnlyList<DependencyInfo> DependedOnBy)> GetDependenciesAsync(
         string tableName,
         CancellationToken cancellationToken = default)

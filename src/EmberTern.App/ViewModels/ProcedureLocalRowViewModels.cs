@@ -14,7 +14,7 @@ namespace EmberTern.App.ViewModels;
 public sealed class ProcedureVariableRowViewModel : ProcedureFieldRowBase
 {
     public ProcedureVariableRowViewModel() : base(null) { }
-    public ProcedureVariableRowViewModel(ProcedureDetailTabViewModel? owner) : base(owner) { }
+    public ProcedureVariableRowViewModel(IFieldRowOwner? owner) : base(owner) { }
 
     public ProcedureVariable ToVariable() => new()
     {
@@ -24,7 +24,7 @@ public sealed class ProcedureVariableRowViewModel : ProcedureFieldRowBase
         Default = string.IsNullOrWhiteSpace(DefaultValue) ? null : DefaultValue.Trim(),
     };
 
-    public static ProcedureVariableRowViewModel From(ProcedureVariable v, ProcedureDetailTabViewModel? owner = null)
+    public static ProcedureVariableRowViewModel From(ProcedureVariable v, IFieldRowOwner? owner = null)
     {
         var row = new ProcedureVariableRowViewModel(owner)
         {

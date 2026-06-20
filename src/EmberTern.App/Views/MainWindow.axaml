@@ -188,6 +188,12 @@
             <controls:SvgIcon Data="{StaticResource Icon.ProcedurePlus}"
                               Foreground="{DynamicResource IconColor_Procedure}" />
           </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewTriggerTooltip}"
+                  Command="{Binding NewTriggerCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.TriggerPlus}"
+                              Foreground="{DynamicResource IconColor_Trigger}" />
+          </Button>
         </StackPanel>
 
         <!-- Drag spacer (column 2 = *) -->
@@ -619,6 +625,12 @@
                             IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
               </ToggleButton>
+              <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TriggerModeToggleTooltip}"
+                            IsChecked="{Binding ActiveTriggerDetail.EasyMode, Mode=TwoWay}"
+                            IsEnabled="{Binding ActiveTriggerDetail.CanUseEasyMode}"
+                            IsVisible="{Binding IsTriggerDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
+              </ToggleButton>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep1Visible}" />
 
@@ -659,6 +671,10 @@
               </Button>
               <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCompileTooltip}"
                       Command="{Binding ActiveProcedureDetail.CompileCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+              </Button>
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.TriggerCompileTooltip}"
+                      Command="{Binding ActiveTriggerDetail.CompileCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
               <!-- Single unified Commit / Rollback pair (auto-routed to the open lane(s)). -->
@@ -756,6 +772,19 @@
                       Command="{Binding ActiveProcedureDetail.UncommentBodyCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
+              <!-- Trigger: format / comment / uncomment -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+                      Command="{Binding ActiveTriggerDetail.FormatSqlCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
+                      Command="{Binding ActiveTriggerDetail.CommentBodyCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
+                      Command="{Binding ActiveTriggerDetail.UncommentBodyCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep4Visible}" />
 
@@ -803,6 +832,9 @@
               <views:ProcedureDetailTabView x:Name="ProcedureDetailView"
                                             DataContext="{Binding ActiveProcedureDetail}"
                                             IsVisible="{Binding DataContext.IsProcedureDetailTabActive, ElementName=RootWindow}" />
+              <views:TriggerDetailTabView x:Name="TriggerDetailView"
+                                          DataContext="{Binding ActiveTriggerDetail}"
+                                          IsVisible="{Binding DataContext.IsTriggerDetailTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query
