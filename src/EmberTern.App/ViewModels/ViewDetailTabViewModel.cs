@@ -23,7 +23,7 @@ namespace EmberTern.App.ViewModels;
 /// (same <see cref="FirebirdTableDetailReader"/> read methods, same
 /// <see cref="TableDetailTabViewModel.BuildDependencyTree"/>), not via inheritance.
 /// </summary>
-public partial class ViewDetailTabViewModel : ViewModelBase
+public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
 {
     // Mirrors TableDetail's data-preview knobs — a view's Data tab uses the
     // exact same paged SELECT * infrastructure.
@@ -66,9 +66,57 @@ public partial class ViewDetailTabViewModel : ViewModelBase
         Columns = new ObservableCollection<ViewColumnRowViewModel>();
         DependsOnTree = new ObservableCollection<DependencyGroupNode>();
         DependedOnByTree = new ObservableCollection<DependencyGroupNode>();
+        Columns.CollectionChanged += OnColumnsChanged;
+        // Ctor assignments (EditableViewName) must not flip dirty — release the
+        // suppression only once the object is fully constructed.
+        _suppressDirty = false;
     }
 
     public string ViewName { get; }
+
+    // ─── Dirty tracking (drives IUnsavedWorkSource + future auto-draft) ─────
+    //
+    // Explicit flag rather than a baseline string-compare: the editable source has
+    // two representations (Source text vs. the Easy structured model) and a pure
+    // toggle between them must NOT read as an edit. Programmatic writes (load,
+    // refresh, mode toggle) are wrapped in _suppressDirty; genuine user edits flip
+    // it via MarkDirty. Cleared on load / after a successful compile.
+    private bool _isDirty;
+    // Starts suppressed so ctor field assignments don't mark dirty; reset at ctor end.
+    private bool _suppressDirty = true;
+
+    public bool IsDirty => _isDirty;
+    internal void ClearDirty() => _isDirty = false;
+    private void MarkDirty() { if (!_suppressDirty) _isDirty = true; }
+
+    private void OnColumnsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        MarkDirty();
+        if (e.NewItems is not null)
+        {
+            foreach (ViewColumnRowViewModel c in e.NewItems) c.PropertyChanged += OnColumnPropertyChanged;
+        }
+    }
+
+    private void OnColumnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => MarkDirty();
+
+    partial void OnEditableViewNameChanged(string value) => MarkDirty();
+    partial void OnSourceTextChanged(string value) => MarkDirty();
+    partial void OnEditableBodyChanged(string value) => MarkDirty();
+
+    // Unsaved-work for the WorkGuard. An untouched tab (just opened, or a fresh New
+    // View before any edit) is clean → null. The New View flow clears dirty after
+    // seeding the template so an untouched new tab doesn't prompt.
+    public UnsavedWorkItem? GetUnsavedWork()
+    {
+        if (!IsDirty) return null;
+        var name = string.IsNullOrWhiteSpace(EditableViewName) ? ViewName : EditableViewName.Trim();
+        return IsNew
+            ? new UnsavedWorkItem(UnsavedWorkKind.NewObject,
+                string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.UnsavedNewViewFormat, name))
+            : new UnsavedWorkItem(UnsavedWorkKind.ModifiedSource,
+                string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.UnsavedModifiedViewFormat, name));
+    }
 
     /// <summary>
     /// True for a not-yet-created view (the New View flow). The non-SQL tabs
@@ -108,19 +156,30 @@ public partial class ViewDetailTabViewModel : ViewModelBase
 
     partial void OnEasyModeChanged(bool value)
     {
-        if (value)
+        // A pure Source⇄Easy toggle is not an edit — suppress the dirty flips its
+        // re-population of SourceText / the structured model would otherwise cause.
+        var prev = _suppressDirty;
+        _suppressDirty = true;
+        try
         {
-            // Nothing loaded yet (mode preference applied before lazy load) — don't
-            // parse an empty source or show a spurious notice; LoadAsync re-syncs.
-            if (string.IsNullOrWhiteSpace(SourceText)) { ErrorMessage = null; return; }
-            // Source → Easy: parse the current source into the structured model so
-            // source edits carry over. On failure keep the last-good model + note it.
-            ErrorMessage = SyncEasyModelFromSource(SourceText) ? null : UiStrings.ViewParseFailedNotice;
+            if (value)
+            {
+                // Nothing loaded yet (mode preference applied before lazy load) — don't
+                // parse an empty source or show a spurious notice; LoadAsync re-syncs.
+                if (string.IsNullOrWhiteSpace(SourceText)) { ErrorMessage = null; return; }
+                // Source → Easy: parse the current source into the structured model so
+                // source edits carry over. On failure keep the last-good model + note it.
+                ErrorMessage = SyncEasyModelFromSource(SourceText) ? null : UiStrings.ViewParseFailedNotice;
+            }
+            else
+            {
+                // Easy → Source: regenerate the full statement from the structured model.
+                SourceText = BuildFullSource();
+            }
         }
-        else
+        finally
         {
-            // Easy → Source: regenerate the full statement from the structured model.
-            SourceText = BuildFullSource();
+            _suppressDirty = prev;
         }
     }
 
@@ -593,6 +652,8 @@ public partial class ViewDetailTabViewModel : ViewModelBase
         IsLoading = true;
         ErrorMessage = null;
         DataError = string.Empty;
+        // Programmatic population — not user edits. Cleared to a clean state in finally.
+        _suppressDirty = true;
         try
         {
             await SafeLoadAsync(async () =>
@@ -637,6 +698,8 @@ public partial class ViewDetailTabViewModel : ViewModelBase
         finally
         {
             IsLoading = false;
+            _suppressDirty = false;
+            ClearDirty();
         }
     }
 

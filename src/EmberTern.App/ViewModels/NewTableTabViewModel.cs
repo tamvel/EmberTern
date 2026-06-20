@@ -256,7 +256,7 @@ public partial class NewTableFieldRowViewModel : ObservableObject
 /// table progressively, switch to other tabs, and come back. Compile fires
 /// the DDL through <c>FirebirdDdlExecutor</c> via the owner.
 /// </summary>
-public partial class NewTableTabViewModel : ViewModelBase
+public partial class NewTableTabViewModel : ViewModelBase, IUnsavedWorkSource
 {
     public NewTableTabViewModel() : this(null)
     {
@@ -313,6 +313,14 @@ public partial class NewTableTabViewModel : ViewModelBase
     /// </summary>
     public bool HasContent
         => !string.IsNullOrWhiteSpace(TableName) || Fields.Count != 1;
+
+    // Unsaved-work for the WorkGuard: a new table the user has started filling in
+    // and not yet created in the database.
+    public UnsavedWorkItem? GetUnsavedWork()
+        => HasContent
+            ? new UnsavedWorkItem(UnsavedWorkKind.NewObject,
+                string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.UnsavedNewTableFormat, DisplayTitle))
+            : null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DdlPreview))]

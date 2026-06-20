@@ -13,7 +13,7 @@ using EmberTern.Firebird;
 
 namespace EmberTern.App.ViewModels;
 
-public partial class TableDetailTabViewModel : ViewModelBase
+public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
 {
     // Data preview is capped — we never want to pull a whole table into the
     // grid from a metadata-browsing tab. 200 is the default page size for
@@ -1576,6 +1576,16 @@ public partial class TableDetailTabViewModel : ViewModelBase
 
     public bool HasPendingChanges => PendingChanges.Count > 0;
     public bool CanCompile => _ddlExecutor is not null && HasPendingChanges;
+
+    // Unsaved-work for the WorkGuard: queued-but-not-compiled structural changes.
+    // Pending DATA edits are transaction work (data lane) — surfaced by the
+    // transaction guard at disconnect/exit, not here, so closing a single table
+    // tab doesn't read as "lose your data edits" (the tx keeps them).
+    public UnsavedWorkItem? GetUnsavedWork()
+        => HasPendingChanges
+            ? new UnsavedWorkItem(UnsavedWorkKind.PendingStructure,
+                string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.UnsavedPendingStructureFormat, TableName))
+            : null;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DropFieldCommand))]

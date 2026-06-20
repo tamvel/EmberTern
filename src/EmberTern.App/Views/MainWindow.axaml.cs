@@ -232,9 +232,27 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    // Set once the data-loss guard has cleared the close, so the re-entrant Close()
+    // skips the guard and goes straight to the persist path.
+    private bool _forceClose;
+
+    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         if (_currentVm is null) return;
+
+        // First pass: cancel the close, run the WorkGuard (prompts on active
+        // transactions / unsaved work), and only re-close if the user allows it.
+        // Setting e.Cancel before the first await keeps the window open.
+        if (!_forceClose)
+        {
+            e.Cancel = true;
+            bool canClose = await _currentVm.TryCloseApplicationAsync();
+            if (!canClose) return;
+            _forceClose = true;
+            Close();
+            return;
+        }
+
         // Flush every still-attached grid's layout while ActualWidth is still valid
         // (before the visual tree is torn down on close).
         GridLayoutBehavior.FlushAll();
@@ -346,6 +364,7 @@ public partial class MainWindow : Window
             _currentVm.PropertyChanged -= OnVmPropertyChanged;
             _currentVm.EditRequested -= OnEditConnectionRequested;
             _currentVm.ConfirmationRequested -= OnConfirmationRequested;
+            _currentVm.ChoiceRequested -= OnChoiceRequested;
             _currentVm.ClipboardWriteRequested -= OnClipboardWriteRequested;
             _currentVm.AddConnectionRequested -= OnAddConnectionRequested;
             _currentVm.SelectedQueryTextProvider = null;
@@ -359,6 +378,7 @@ public partial class MainWindow : Window
             _currentVm.PropertyChanged += OnVmPropertyChanged;
             _currentVm.EditRequested += OnEditConnectionRequested;
             _currentVm.ConfirmationRequested += OnConfirmationRequested;
+            _currentVm.ChoiceRequested += OnChoiceRequested;
             _currentVm.ClipboardWriteRequested += OnClipboardWriteRequested;
             _currentVm.AddConnectionRequested += OnAddConnectionRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
@@ -650,6 +670,12 @@ public partial class MainWindow : Window
     {
         var dialog = new ConfirmDialog { DataContext = new ConfirmDialogViewModel(request) };
         return await dialog.ShowDialog<bool>(this);
+    }
+
+    private async System.Threading.Tasks.Task<string?> OnChoiceRequested(ChoiceRequest request)
+    {
+        var dialog = new ChoiceDialog { DataContext = new ChoiceDialogViewModel(request) };
+        return await dialog.ShowDialog<string?>(this);
     }
 
     private async void OnEditConnectionRequested(EmberTern.Core.Connections.ConnectionProfile profile)

@@ -139,6 +139,19 @@ public partial class WorkspaceTabViewModel : ViewModelBase
 
     public string DisplayTitle => ShowActiveTransactionMarker ? BaseTitle + " ●" : BaseTitle;
 
+    // Unsaved work this tab holds (uncompiled new object / modified source /
+    // queued structural changes), or null when clean. Delegates to whichever
+    // child detail VM backs the tab. The WorkGuard on MainWindowViewModel
+    // aggregates this across tabs for tab-close / disconnect / exit decisions.
+    public UnsavedWorkItem? UnsavedWork => Kind switch
+    {
+        WorkspaceTabKind.NewTable => NewTable?.GetUnsavedWork(),
+        WorkspaceTabKind.TableDetail => TableDetail?.GetUnsavedWork(),
+        WorkspaceTabKind.ViewDetail => ViewDetail?.GetUnsavedWork(),
+        WorkspaceTabKind.ProcedureDetail => ProcedureDetail?.GetUnsavedWork(),
+        _ => null,
+    };
+
     [RelayCommand]
     private void Activate() => _owner.SelectTab(this);
 

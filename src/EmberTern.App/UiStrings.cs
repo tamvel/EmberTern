@@ -79,10 +79,49 @@ internal static class UiStrings
     // Execution-lane feedback: which profile the auto-router chose for a statement.
     // {0} = lane (Data/Metadata), {1} = profile label (e.g. "Read Committed").
     public const string ExecutedViaProfileFormat = "Executed via {0} profile ({1}).";
+    // Legacy binary disconnect-confirm strings — superseded by the DisconnectChoice*
+    // set below (Commit / Roll back / Cancel). Kept only to avoid churn; not referenced.
     public const string DisconnectConfirmTitle = "Active transaction";
     public const string DisconnectConfirmMessage = "Disconnecting will roll back the active transaction.\n\nDisconnect anyway?";
     public const string DisconnectConfirmYes = "Disconnect";
     public const string DisconnectConfirmNo = "Cancel";
+
+    // ─── Data-loss WorkGuard ───────────────────────────────────────────────
+    // Unsaved-work summary lines (one per affected tab / transaction lane).
+    public const string UnsavedNewTableFormat = "New table (not yet created) — {0}";
+    public const string UnsavedNewViewFormat = "New view (not yet created) — {0}";
+    public const string UnsavedNewProcedureFormat = "New procedure (not yet created) — {0}";
+    public const string UnsavedModifiedViewFormat = "View {0} — uncompiled changes";
+    public const string UnsavedModifiedProcedureFormat = "Procedure {0} — uncompiled changes";
+    public const string UnsavedPendingStructureFormat = "Table {0} — uncompiled structural changes";
+    public const string UnsavedTransactionDataFormat = "Data transaction — {0} pending statement(s)";
+    public const string UnsavedTransactionMetadataFormat = "Metadata transaction — {0} pending statement(s)";
+
+    // Tab close (binary Discard / Cancel). {0} = the tab's unsaved-work label.
+    public const string CloseTabUnsavedConfirmTitle = "Unsaved changes";
+    public const string CloseTabUnsavedConfirmFormat = "{0}\n\nClosing this tab discards these changes.";
+    public const string CloseTabUnsavedConfirmYes = "Discard and close";
+
+    // Disconnect with an active transaction (3-way choice; default Roll back).
+    public const string DisconnectChoiceTitle = "Active transaction";
+    public const string DisconnectChoiceHeaderFormat = "Connection \"{0}\" has an active transaction:";
+    public const string DisconnectChoiceQuestion = "What should happen before disconnecting?";
+    public const string DisconnectChoiceCommit = "Commit and disconnect";
+    public const string DisconnectChoiceRollback = "Roll back and disconnect";
+    public const string DisconnectChoiceCancel = "Cancel";
+    public const string DisconnectUnsavedDiscardNoteFormat = "Uncompiled changes in {0} tab(s) will be discarded.";
+
+    // Disconnect with uncompiled tab work but no transaction (binary).
+    public const string DisconnectUnsavedTitle = "Unsaved changes";
+    public const string DisconnectUnsavedIntro = "Disconnecting will discard uncompiled changes in:";
+    public const string DisconnectUnsavedYes = "Discard and disconnect";
+
+    // App close with unsaved work / active transactions (2-way; default Cancel).
+    public const string ExitUnsavedTitle = "Unsaved work";
+    public const string ExitUnsavedIntro = "Exiting now will lose the following:";
+    public const string ExitUnsavedTransactionNote = "Active transactions will be rolled back.";
+    public const string ExitUnsavedDiscard = "Discard and exit";
+    public const string ExitUnsavedCancel = "Cancel";
 
     public const string BottomTabMessages = "Messages";
     public const string BottomTabResults = "Results";

@@ -32,7 +32,7 @@ public sealed record ProcedureExecOutcome(QueryResult? Result, string? Error);
 /// runs in the working (metadata) tx. Execute runs the procedure on the Data lane
 /// with bound parameters.
 /// </summary>
-public partial class ProcedureDetailTabViewModel : ViewModelBase
+public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
 {
     private const int InputParamType = 0;
     private const int OutputParamType = 1;
@@ -109,6 +109,58 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase
             MoveSubprogramUpCommand.NotifyCanExecuteChanged();
             MoveSubprogramDownCommand.NotifyCanExecuteChanged();
         };
+
+        // Dirty tracking: any add/remove/reorder OR row-internal edit in the Easy-mode
+        // collections flips the dirty flag (suppressed during programmatic load / mode
+        // toggle). See the ViewDetail dirty-tracking note for why an explicit flag.
+        TrackDirty(InputParams);
+        TrackDirty(OutputParams);
+        TrackDirty(Variables);
+        TrackDirty(Cursors);
+        TrackDirty(Subprograms);
+        // Release the ctor-time suppression now that all fields are assigned.
+        _suppressDirty = false;
+    }
+
+    // ─── Dirty tracking (drives IUnsavedWorkSource + future auto-draft) ─────
+    private bool _isDirty;
+    private bool _suppressDirty = true;
+
+    public bool IsDirty => _isDirty;
+    internal void ClearDirty() => _isDirty = false;
+    private void MarkDirty() { if (!_suppressDirty) _isDirty = true; }
+
+    private void TrackDirty(System.Collections.Specialized.INotifyCollectionChanged collection)
+    {
+        collection.CollectionChanged += (_, e) =>
+        {
+            MarkDirty();
+            if (e.NewItems is not null)
+            {
+                foreach (System.ComponentModel.INotifyPropertyChanged row in e.NewItems)
+                {
+                    row.PropertyChanged += (_, _) => MarkDirty();
+                }
+            }
+        };
+    }
+
+    partial void OnSourceTextChanged(string value) => MarkDirty();
+    partial void OnEditableProcedureNameChanged(string value) => MarkDirty();
+    partial void OnExecutableBodyChanged(string value) => MarkDirty();
+
+    // Unsaved-work for the WorkGuard. Untouched tab (just opened / fresh New
+    // Procedure before any edit) → null. New Procedure clears dirty after seeding
+    // the template so an untouched new tab doesn't prompt.
+    public UnsavedWorkItem? GetUnsavedWork()
+    {
+        if (!IsDirty) return null;
+        var name = string.IsNullOrWhiteSpace(EditableProcedureName) ? ProcedureName : EditableProcedureName.Trim();
+        return IsNew
+            ? new UnsavedWorkItem(UnsavedWorkKind.NewObject,
+                string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.UnsavedNewProcedureFormat, name))
+            : new UnsavedWorkItem(UnsavedWorkKind.ModifiedSource,
+                string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.UnsavedModifiedProcedureFormat, name));
     }
 
     /// <summary>Domains available on the active connection — populated best-effort by
@@ -159,33 +211,44 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase
 
     partial void OnEasyModeChanged(bool value)
     {
-        if (value)
+        // A pure Source⇄Easy toggle is not an edit — suppress the dirty flips that
+        // re-populating the params/model/source would otherwise cause.
+        var prev = _suppressDirty;
+        _suppressDirty = true;
+        try
         {
-            // Nothing loaded yet (e.g. the mode preference is applied at tab
-            // creation, before lazy load) — don't parse an empty source / show a
-            // spurious notice; LoadAsync will populate the model.
-            if (string.IsNullOrWhiteSpace(SourceText)) { ErrorMessage = null; return; }
-            // Source → Easy: parse the current source into the structured model
-            // (params + variables + cursors + subprograms + executable body) so source
-            // edits carry over. On failure keep the last-good model + note it.
-            var sig = ProcedureSignatureParser.Parse(SourceText);
-            if (sig.Success)
+            if (value)
             {
-                if (!string.IsNullOrWhiteSpace(sig.Name)) EditableProcedureName = sig.Name!;
-                ReplaceParams(InputParams, sig.Inputs, isOutput: false);
-                ReplaceParams(OutputParams, sig.Outputs, isOutput: true);
-                SyncEasyModelFromBody(sig.Body);
-                ErrorMessage = null;
+                // Nothing loaded yet (e.g. the mode preference is applied at tab
+                // creation, before lazy load) — don't parse an empty source / show a
+                // spurious notice; LoadAsync will populate the model.
+                if (string.IsNullOrWhiteSpace(SourceText)) { ErrorMessage = null; return; }
+                // Source → Easy: parse the current source into the structured model
+                // (params + variables + cursors + subprograms + executable body) so source
+                // edits carry over. On failure keep the last-good model + note it.
+                var sig = ProcedureSignatureParser.Parse(SourceText);
+                if (sig.Success)
+                {
+                    if (!string.IsNullOrWhiteSpace(sig.Name)) EditableProcedureName = sig.Name!;
+                    ReplaceParams(InputParams, sig.Inputs, isOutput: false);
+                    ReplaceParams(OutputParams, sig.Outputs, isOutput: true);
+                    SyncEasyModelFromBody(sig.Body);
+                    ErrorMessage = null;
+                }
+                else
+                {
+                    ErrorMessage = UiStrings.ProcedureParseFailedNotice;
+                }
             }
             else
             {
-                ErrorMessage = UiStrings.ProcedureParseFailedNotice;
+                // Easy → Source: regenerate the full text from the structured model.
+                SourceText = BuildFullSource();
             }
         }
-        else
+        finally
         {
-            // Easy → Source: regenerate the full text from the structured model.
-            SourceText = BuildFullSource();
+            _suppressDirty = prev;
         }
     }
 
@@ -891,6 +954,8 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase
 
         IsLoading = true;
         ErrorMessage = null;
+        // Programmatic population — not user edits. Reset to a clean state in finally.
+        _suppressDirty = true;
         try
         {
             await SafeLoadAsync(async () =>
@@ -946,6 +1011,8 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase
         finally
         {
             IsLoading = false;
+            _suppressDirty = false;
+            ClearDirty();
         }
     }
 

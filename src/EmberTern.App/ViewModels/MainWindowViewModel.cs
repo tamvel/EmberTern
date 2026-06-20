@@ -1514,31 +1514,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public async Task DisconnectAsync()
     {
-        // Either lane (data or metadata) may hold an open working transaction; both are
-        // rolled back on disconnect. Confirm if either is active.
-        if (_transactionService.IsActive || _metadataTransactionService.IsActive)
-        {
-            var confirmed = await RequestConfirmAsync(new ConfirmRequest
-            {
-                Title = UiStrings.DisconnectConfirmTitle,
-                Message = UiStrings.DisconnectConfirmMessage,
-                ConfirmLabel = UiStrings.DisconnectConfirmYes,
-                CancelLabel = UiStrings.DisconnectConfirmNo,
-                IsDestructive = true,
-            }).ConfigureAwait(true);
-            if (!confirmed)
-            {
-                return;
-            }
-            if (_metadataTransactionService.IsActive)
-            {
-                await _metadataTransactionService.RollbackAsync().ConfigureAwait(true);
-            }
-            if (_transactionService.IsActive)
-            {
-                await _transactionService.RollbackAsync().ConfigureAwait(true);
-            }
-        }
+        // WorkGuard: active transaction → Commit / Roll back / Cancel (default Roll
+        // back); uncompiled tab work with no tx → discard confirm. The guard settles
+        // the chosen transaction lanes before we return true.
+        if (!await ConfirmDisconnectAsync().ConfigureAwait(true)) return;
 
         ClearError();
         await _service.DisconnectAsync().ConfigureAwait(true);
@@ -1610,6 +1589,150 @@ public partial class MainWindowViewModel : ViewModelBase
     public event Func<ConfirmRequest, Task<bool>>? ConfirmationRequested;
     private Task<bool> RequestConfirmAsync(ConfirmRequest request)
         => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
+
+    // Multi-outcome (N-button) sibling of ConfirmationRequested — Commit / Roll back /
+    // Cancel (disconnect) and Cancel / Discard-and-exit (app close). Returns the chosen
+    // ChoiceOption.Id or null when dismissed; with no handler (tests) → null = cancel,
+    // which is the safe default (the guard branches that use it only fire with a live
+    // transaction, which tests never have).
+    public event Func<ChoiceRequest, Task<string?>>? ChoiceRequested;
+    private Task<string?> RequestChoiceAsync(ChoiceRequest request)
+        => ChoiceRequested?.Invoke(request) ?? Task.FromResult<string?>(null);
+
+    // ─── Data-loss WorkGuard ───────────────────────────────────────────────
+    //
+    // One aggregation feeding three entry points: tab close (RequestCloseTabAsync),
+    // disconnect (ConfirmDisconnectAsync), and app close (TryCloseApplicationAsync).
+    // Unsaved CODE work (uncompiled new objects / modified source / queued structural
+    // changes) lives only in the open tabs; transactions live on the server and can't
+    // survive a restart, so they always need a conscious Commit/Roll-back decision.
+
+    // Unsaved-work descriptors across the currently-open tabs (the active connection's).
+    // Other connections' tabs are stashed serialized and hold no live uncompiled source.
+    internal IReadOnlyList<UnsavedWorkItem> CollectUnsavedWork()
+    {
+        var items = new List<UnsavedWorkItem>();
+        foreach (var tab in WorkspaceTabs)
+        {
+            if (tab.UnsavedWork is { } item) items.Add(item);
+        }
+        return items;
+    }
+
+    private bool AnyTransactionActive
+        => _transactionService.IsActive || _metadataTransactionService.IsActive;
+
+    private void AppendActiveTransactionLines(System.Text.StringBuilder sb)
+    {
+        if (_transactionService.IsActive)
+        {
+            sb.AppendLine("  • " + string.Format(CultureInfo.CurrentCulture,
+                UiStrings.UnsavedTransactionDataFormat, _transactionService.StatementCount));
+        }
+        if (_metadataTransactionService.IsActive && _service.MetadataIsIndependent)
+        {
+            sb.AppendLine("  • " + string.Format(CultureInfo.CurrentCulture,
+                UiStrings.UnsavedTransactionMetadataFormat, _metadataTransactionService.StatementCount));
+        }
+    }
+
+    /// <summary>
+    /// App-close guard. Returns true if the app may close. Active transactions can't be
+    /// saved across a restart, so they require a conscious decision now (rolled back on
+    /// exit); uncompiled tab work is listed and lost on Discard (Increment 2 / auto-draft
+    /// will make it survive, at which point only transactions block exit). Default/Esc =
+    /// Cancel = stay open.
+    /// </summary>
+    public async Task<bool> TryCloseApplicationAsync()
+    {
+        var txActive = AnyTransactionActive;
+        var unsaved = CollectUnsavedWork();
+        if (!txActive && unsaved.Count == 0) return true;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(UiStrings.ExitUnsavedIntro);
+        AppendActiveTransactionLines(sb);
+        foreach (var it in unsaved) sb.AppendLine("  • " + it.Label);
+        if (txActive)
+        {
+            sb.AppendLine();
+            sb.Append(UiStrings.ExitUnsavedTransactionNote);
+        }
+
+        var id = await RequestChoiceAsync(new ChoiceRequest
+        {
+            Title = UiStrings.ExitUnsavedTitle,
+            Message = sb.ToString().TrimEnd(),
+            Options = new[]
+            {
+                new ChoiceOption { Id = "cancel", Label = UiStrings.ExitUnsavedCancel, IsDefault = true, IsCancel = true },
+                new ChoiceOption { Id = "discard", Label = UiStrings.ExitUnsavedDiscard, IsDestructive = true },
+            },
+        }).ConfigureAwait(true);
+
+        if (id != "discard") return false;
+        if (txActive) await RollbackAllAsync().ConfigureAwait(true);
+        return true;
+    }
+
+    // Disconnect guard. Returns true if the disconnect may proceed (after settling
+    // transactions per the user's pick), false if cancelled.
+    private async Task<bool> ConfirmDisconnectAsync()
+    {
+        var unsaved = CollectUnsavedWork();
+
+        if (AnyTransactionActive)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(string.Format(CultureInfo.CurrentCulture,
+                UiStrings.DisconnectChoiceHeaderFormat, _service.ActiveProfile?.Name ?? string.Empty));
+            AppendActiveTransactionLines(sb);
+            if (unsaved.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine(string.Format(CultureInfo.CurrentCulture,
+                    UiStrings.DisconnectUnsavedDiscardNoteFormat, unsaved.Count));
+            }
+            sb.AppendLine();
+            sb.Append(UiStrings.DisconnectChoiceQuestion);
+
+            var id = await RequestChoiceAsync(new ChoiceRequest
+            {
+                Title = UiStrings.DisconnectChoiceTitle,
+                Message = sb.ToString(),
+                Options = new[]
+                {
+                    new ChoiceOption { Id = "commit", Label = UiStrings.DisconnectChoiceCommit },
+                    new ChoiceOption { Id = "rollback", Label = UiStrings.DisconnectChoiceRollback, IsDefault = true },
+                    new ChoiceOption { Id = "cancel", Label = UiStrings.DisconnectChoiceCancel, IsCancel = true },
+                },
+            }).ConfigureAwait(true);
+
+            if (id is null or "cancel") return false;
+            if (id == "commit") await CommitAllAsync().ConfigureAwait(true);
+            else await RollbackAllAsync().ConfigureAwait(true);
+            return true;
+        }
+
+        // No transaction, but uncompiled tab work would be lost (Increment 1 — no
+        // drafts yet). Binary discard confirm.
+        if (unsaved.Count > 0)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(UiStrings.DisconnectUnsavedIntro);
+            foreach (var it in unsaved) sb.AppendLine("  • " + it.Label);
+            return await RequestConfirmAsync(new ConfirmRequest
+            {
+                Title = UiStrings.DisconnectUnsavedTitle,
+                Message = sb.ToString().TrimEnd(),
+                ConfirmLabel = UiStrings.DisconnectUnsavedYes,
+                CancelLabel = UiStrings.DialogCancel,
+                IsDestructive = true,
+            }).ConfigureAwait(true);
+        }
+
+        return true;
+    }
 
     public event Func<string, Task>? ClipboardWriteRequested;
 
@@ -1730,6 +1853,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // already set, so the toggle parses it into the editable name + column list +
         // body. The user can flip to Source at any time.
         detail.EasyMode = true;
+        // Seeding the template marked the VM dirty; a brand-new untouched tab must not
+        // prompt on close — clear it so only real edits flip it back.
+        detail.ClearDirty();
 
         var obj = new MetadataObject(UiStrings.NewViewTabDefaultTitle, MetadataObjectKind.View);
         var tab = WorkspaceTabViewModel.CreateViewDetail(this, obj, detail, _service.ActiveProfile?.Id);
@@ -1785,6 +1911,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // into the editable name + Input/Output params + Variables/Cursors/Subprograms +
         // body. The user can flip to Source at any time.
         detail.EasyMode = true;
+        // Seeding the template marked the VM dirty; a brand-new untouched tab must not
+        // prompt on close — clear it so only real edits flip it back.
+        detail.ClearDirty();
 
         var obj = new MetadataObject(UiStrings.NewProcedureTabDefaultTitle, MetadataObjectKind.Procedure);
         var tab = WorkspaceTabViewModel.CreateProcedureDetail(this, obj, detail, _service.ActiveProfile?.Id);
@@ -2527,21 +2656,22 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// User-initiated tab close. Confirms before discarding a New Table tab
-    /// that has unsaved form content (DDL / TableDetail tabs are reopenable
-    /// from the tree, so they close silently). Programmatic closes
-    /// (post-compile, delete-table cleanup) call <see cref="CloseTab"/>
-    /// directly and never prompt.
+    /// User-initiated tab close. Confirms (Discard / Cancel) before discarding ANY
+    /// tab that reports unsaved work — a New Table form, an uncompiled new view /
+    /// procedure, a modified-but-not-compiled source, or a table designer with
+    /// queued structural changes. Clean tabs (and DDL / read-only tabs, reopenable
+    /// from the tree) close silently. Programmatic closes (post-compile,
+    /// delete-table cleanup) call <see cref="CloseTab"/> directly and never prompt.
     /// </summary>
     public async Task RequestCloseTabAsync(WorkspaceTabViewModel tab)
     {
-        if (tab.Kind == WorkspaceTabKind.NewTable && tab.NewTable is { HasContent: true } form)
+        if (tab.UnsavedWork is { } work)
         {
             var confirmed = await RequestConfirmAsync(new ConfirmRequest
             {
-                Title = UiStrings.NewTableCloseConfirmTitle,
-                Message = string.Format(CultureInfo.CurrentCulture, UiStrings.NewTableCloseConfirmFormat, form.DisplayTitle),
-                ConfirmLabel = UiStrings.NewTableCloseConfirmYes,
+                Title = UiStrings.CloseTabUnsavedConfirmTitle,
+                Message = string.Format(CultureInfo.CurrentCulture, UiStrings.CloseTabUnsavedConfirmFormat, work.Label),
+                ConfirmLabel = UiStrings.CloseTabUnsavedConfirmYes,
                 CancelLabel = UiStrings.DialogCancel,
                 IsDestructive = true,
             }).ConfigureAwait(true);
