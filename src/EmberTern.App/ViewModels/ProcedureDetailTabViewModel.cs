@@ -202,6 +202,21 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
         foreach (var d in domains) AvailableDomains.Add(d);
     }
 
+    /// <summary>Tables for the merged Domain/Column picker's "Table column" tab (TYPE OF
+    /// COLUMN). Populated best-effort by the owner; columns load lazily via
+    /// <see cref="ColumnsLoader"/>.</summary>
+    public ObservableCollection<string> AvailableTables { get; } = new();
+
+    public void SetAvailableTables(IEnumerable<string> tables)
+    {
+        AvailableTables.Clear();
+        foreach (var t in tables) AvailableTables.Add(t);
+    }
+
+    /// <summary>Lazy column loader for the picker's "Table column" tab — wired by the owner
+    /// to its catalog reader. Null in unit tests → that tab stays empty.</summary>
+    public IColumnsLoader? ColumnsLoader { get; set; }
+
     public string ProcedureName { get; }
 
     /// <summary>True for a not-yet-created procedure (New Procedure flow). Can be

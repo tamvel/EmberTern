@@ -15,4 +15,12 @@ public interface IFieldRowOwner
 {
     ObservableCollection<DomainSpec> AvailableDomains { get; }
     IReadOnlyList<string> BasicTypes { get; }
+
+    /// <summary>Live table list for the "Table column" tab of the merged Domain/Column
+    /// picker (TYPE OF COLUMN). Empty when the schema isn't loaded yet.</summary>
+    ObservableCollection<string> AvailableTables { get; }
+
+    /// <summary>Lazily loads a table's columns for the "Table column" tab. Null when the
+    /// owner can't load columns (e.g. unit tests) — the column pane stays empty.</summary>
+    IColumnsLoader? ColumnsLoader { get; }
 }

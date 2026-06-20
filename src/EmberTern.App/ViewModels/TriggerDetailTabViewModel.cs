@@ -155,6 +155,10 @@ public partial class TriggerDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
         foreach (var t in tables) AvailableTables.Add(t);
     }
 
+    /// <summary>Lazy column loader for the merged Domain/Column picker's "Table column"
+    /// tab (TYPE OF COLUMN) — wired by the owner to its catalog reader.</summary>
+    public IColumnsLoader? ColumnsLoader { get; set; }
+
     [ObservableProperty]
     private string _tableName = string.Empty;
 

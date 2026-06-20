@@ -37,6 +37,7 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
             _owner.AvailableDomains.CollectionChanged += (_, _) =>
             {
                 OnPropertyChanged(nameof(SelectedDomainSpec));
+                OnPropertyChanged(nameof(SelectedTypeSource));
                 // Domains load asynchronously after the rows are built — once the list
                 // arrives, resolve a domain-typed row's Type cell so it isn't blank.
                 if (!string.IsNullOrEmpty(DomainName)) SyncTypeDisplayFromDomain(DomainName!);
@@ -72,6 +73,8 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedDomainSpec))]
+    [NotifyPropertyChangedFor(nameof(SelectedTypeSource))]
+    [NotifyPropertyChangedFor(nameof(TypeSourceDisplay))]
     [NotifyPropertyChangedFor(nameof(HasDomain))]
     [NotifyPropertyChangedFor(nameof(IsTypeEnabled))]
     [NotifyPropertyChangedFor(nameof(IsTypeOfEnabled))]
@@ -82,6 +85,8 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
     private string? _domainName;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedTypeSource))]
+    [NotifyPropertyChangedFor(nameof(TypeSourceDisplay))]
     [NotifyPropertyChangedFor(nameof(HasTypeOf))]
     [NotifyPropertyChangedFor(nameof(IsTypeEnabled))]
     [NotifyPropertyChangedFor(nameof(IsSizeEnabled))]
@@ -309,6 +314,77 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
     public ObservableCollection<DomainSpec> AvailableDomains => _owner?.AvailableDomains ?? FallbackDomains;
     public IReadOnlyList<string> BasicTypes => _owner?.BasicTypes ?? FallbackBasicTypes;
 
+    // ─── Merged Domain/Column picker (Faza 4) ─────────────────────────────
+    // One "Domain / Column" cell replaces the separate Domain + TYPE OF columns.
+    // Its two tabs commit either a DomainSpec (→ DomainName) or a ColumnRef (→ TypeOf,
+    // which ComposeType emits as TYPE OF COLUMN). Domain and TYPE OF are mutually
+    // exclusive — picking one clears the other (handled by the existing change hooks).
+
+    /// <summary>Bound to the merged picker's SelectedItem (TwoWay). Reads/writes whichever
+    /// of <see cref="DomainName"/> / <see cref="TypeOf"/> is active. The getter returns a
+    /// non-null value whenever either is set so the picker's ✕ clear stays visible; a
+    /// string fallback covers a TYPE OF form that isn't a column ref (never written back —
+    /// the control only commits a DomainSpec/ColumnRef on pick, or null on clear).</summary>
+    public object? SelectedTypeSource
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(DomainName)) return SelectedDomainSpec ?? (object?)DomainName;
+            if (!string.IsNullOrWhiteSpace(TypeOf)) return ParseColumnRef(TypeOf) ?? (object)TypeOf;
+            return null;
+        }
+        set
+        {
+            switch (value)
+            {
+                case DomainSpec d:
+                    DomainName = d.Name;          // OnDomainNameChanged clears TypeOf
+                    break;
+                case ColumnRef c:
+                    TypeOf = c.TypeOfClause;       // OnTypeOfChanged clears DomainName/BaseType
+                    break;
+                case null:
+                    // ✕ clear → drop both type sources.
+                    if (!string.IsNullOrEmpty(DomainName)) DomainName = null;
+                    if (!string.IsNullOrWhiteSpace(TypeOf)) TypeOf = string.Empty;
+                    break;
+            }
+        }
+    }
+
+    /// <summary>Closed-box text for the merged picker: the domain name, the column
+    /// reference (TABLE.COLUMN, "COLUMN " prefix stripped), or empty.</summary>
+    public string TypeSourceDisplay
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(DomainName)) return DomainName!;
+            if (!string.IsNullOrWhiteSpace(TypeOf)) return StripColumnPrefix(TypeOf);
+            return string.Empty;
+        }
+    }
+
+    /// <summary>Live table list + lazy column loader for the picker's "Table column" tab,
+    /// forwarded from the owning editor (so columns are loaded on demand, never eagerly).</summary>
+    public ObservableCollection<string> AvailableTables => _owner?.AvailableTables ?? FallbackTables;
+    public IColumnsLoader? ColumnsLoader => _owner?.ColumnsLoader;
+
+    private static string StripColumnPrefix(string typeOf)
+    {
+        var t = typeOf.Trim();
+        return t.StartsWith("COLUMN ", StringComparison.OrdinalIgnoreCase) ? t.Substring(7).Trim() : t;
+    }
+
+    // "COLUMN TABLE.COLUMN" → ColumnRef(TABLE, COLUMN); a plain "TABLE.COLUMN" also parses.
+    // Returns null for a TYPE OF <domain> form (no '.') — the getter falls back to a string.
+    private static ColumnRef? ParseColumnRef(string typeOf)
+    {
+        var t = StripColumnPrefix(typeOf);
+        var dot = t.IndexOf('.');
+        if (dot <= 0 || dot >= t.Length - 1) return null;
+        return new ColumnRef(t.Substring(0, dot).Trim(), t.Substring(dot + 1).Trim());
+    }
+
     public DomainSpec? SelectedDomainSpec
     {
         get
@@ -363,6 +439,7 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
     protected string EffectiveDefault => string.IsNullOrWhiteSpace(DefaultValue) ? string.Empty : DefaultValue.Trim();
 
     private static readonly ObservableCollection<DomainSpec> FallbackDomains = new();
+    private static readonly ObservableCollection<string> FallbackTables = new();
     private static readonly IReadOnlyList<string> FallbackBasicTypes = new[]
     {
         "SMALLINT", "INTEGER", "BIGINT", "FLOAT", "DOUBLE PRECISION",

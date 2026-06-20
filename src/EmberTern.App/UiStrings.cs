@@ -523,6 +523,12 @@ internal static class UiStrings
     public const string SubprogramKindProcedure = "Procedure";
     public const string SubprogramKindFunction = "Function";
 
+    // Merged Domain/Column picker (Faza 4) — one cell replacing the separate Domain +
+    // TYPE OF columns. Tab 1 = the domain list; tab 2 = a table→column picker (TYPE OF COLUMN).
+    public const string FieldTypeSourceHeader = "Domain / Column";
+    public const string FieldTypeSourceDomainTab = "Domain";
+    public const string FieldTypeSourceColumnTab = "Column";
+
     // Variable / parameter grid column headers not already present.
     public const string ProcedureFieldTypeOf = "TYPE OF";
     public const string ProcedureFieldSubType = "Sub Type";

@@ -15,14 +15,15 @@ namespace EmberTern.App.Views;
 /// <summary>
 /// Builds the full field-definition DataGrid columns shared by every editable
 /// field/parameter/variable grid (Procedure params + Variables, Trigger Variables).
-/// One definition of the 12-column model (Name / Type / TYPE OF / Domain /
-/// Size / Scale / Sub Type / Charset / Not Null / Collate / Default / Description) so
-/// there's no second type system and the grids stay identical across object editors.
+/// One definition of the field model (Name / Type / Domain-or-Column / Size / Scale /
+/// Sub Type / Charset / Not Null / Collate / Default / Description) so there's no second
+/// type system and the grids stay identical across object editors.
 ///
-/// Type is a plain <see cref="ComboBox"/> (small closed dictionary). Domain is a
-/// <see cref="SearchableComboBox"/> (large dictionary — filter, chevron, ✕ clear).
-/// The type-construction cells (Type / TYPE OF / Size / Scale / Sub Type / Charset)
-/// disable when a domain or TYPE OF governs the type (#4).
+/// Type is a plain <see cref="ComboBox"/> (small closed dictionary). The merged
+/// "Domain / Column" cell is a two-tab <see cref="SearchableComboBox"/> (domain list +
+/// table-column picker for TYPE OF COLUMN) replacing the separate Domain + TYPE OF
+/// columns. The type-construction cells (Type / Size / Scale / Sub Type / Charset)
+/// disable when a domain or TYPE OF COLUMN governs the type (#4).
 /// </summary>
 internal static class FieldGridColumns
 {
@@ -31,8 +32,7 @@ internal static class FieldGridColumns
         grid.Columns.Clear();
         grid.Columns.Add(TextCol(UiStrings.TableDetailColumnName, nameof(ProcedureFieldRowBase.Name), 130));
         grid.Columns.Add(TypeComboCol(UiStrings.TableDetailColumnType, 110));
-        grid.Columns.Add(TextEditCol(UiStrings.ProcedureFieldTypeOf, nameof(ProcedureFieldRowBase.TypeOf), 110, nameof(ProcedureFieldRowBase.IsTypeOfEnabled)));
-        grid.Columns.Add(DomainPickerCol(UiStrings.TableDetailColumnDomain, nameof(ProcedureFieldRowBase.AvailableDomains), nameof(ProcedureFieldRowBase.SelectedDomainSpec), 130));
+        grid.Columns.Add(DomainOrColumnCol(UiStrings.FieldTypeSourceHeader, 150));
         grid.Columns.Add(TextEditCol(UiStrings.TableDetailColumnSize, nameof(ProcedureFieldRowBase.Size), 60, nameof(ProcedureFieldRowBase.IsSizeEnabled)));
         grid.Columns.Add(TextEditCol(UiStrings.TableDetailColumnScale, nameof(ProcedureFieldRowBase.Scale), 60, nameof(ProcedureFieldRowBase.IsScaleEnabled)));
         grid.Columns.Add(TextEditCol(UiStrings.ProcedureFieldSubType, nameof(ProcedureFieldRowBase.SubType), 80, nameof(ProcedureFieldRowBase.IsSubTypeEnabled)));
@@ -101,10 +101,14 @@ internal static class FieldGridColumns
             }),
         };
 
-    // Domain: large dictionary → SearchableComboBox (filter + chevron + ✕ clear,
-    // top-level popup). Bound to SelectedDomainSpec (commit-only → no null-guard needed);
-    // empty = empty field (no "(none)" sentinel). Shared DomainRowTemplate for the list.
-    private static DataGridTemplateColumn DomainPickerCol(string header, string itemsPath, string selectedPath, int min)
+    // Merged "Domain / Column" picker (Faza 4): one SearchableComboBox with two tabs —
+    // the rich Domain list and a two-pane table→column picker (TYPE OF COLUMN). Replaces
+    // the separate Domain + TYPE OF columns. The picker itself is in the visual tree, so it
+    // binds SelectedItem/SelectionBoxText to the row; but a SearchableComboBoxSection is a
+    // plain AvaloniaObject and the TableColumnPicker is parented only into the top-level
+    // popup — neither is in the visual tree — so their data is set imperatively from the
+    // row VM on DataContextChanged (and re-set on DataGrid row recycling), not via bindings.
+    private static DataGridTemplateColumn DomainOrColumnCol(string header, int min)
         => new()
         {
             Header = header,
@@ -112,19 +116,47 @@ internal static class FieldGridColumns
             IsReadOnly = true,
             CellTemplate = new FuncDataTemplate<ProcedureFieldRowBase>((_, _) =>
             {
+                var domainSection = new SearchableComboBoxSection
+                {
+                    Header = UiStrings.FieldTypeSourceDomainTab,
+                    DisplayMemberPath = nameof(DomainSpec.Name),
+                    ItemTemplate = PickerTemplate("DomainRowTemplate"),
+                    HeaderTemplate = PickerTemplate("DomainHeaderTemplate"),
+                };
+                var tablePicker = new TableColumnPicker();
+                var columnSection = new SearchableComboBoxSection
+                {
+                    Header = UiStrings.FieldTypeSourceColumnTab,
+                    Content = tablePicker,
+                };
+
                 var picker = new SearchableComboBox
                 {
                     BorderThickness = new Thickness(0),
                     Background = Brushes.Transparent,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     VerticalAlignment = VerticalAlignment.Center,
-                    DisplayMemberPath = nameof(DomainSpec.Name),
                     Watermark = string.Empty,
-                    ItemTemplate = PickerTemplate("DomainRowTemplate"),
-                    HeaderTemplate = PickerTemplate("DomainHeaderTemplate"),
                 };
-                picker.Bind(SearchableComboBox.ItemsSourceProperty, new Binding(itemsPath));
-                picker.Bind(SearchableComboBox.SelectedItemProperty, new Binding(selectedPath) { Mode = BindingMode.TwoWay });
+                picker.Sections.Add(domainSection);
+                picker.Sections.Add(columnSection);
+
+                picker.Bind(SearchableComboBox.SelectedItemProperty,
+                    new Binding(nameof(ProcedureFieldRowBase.SelectedTypeSource)) { Mode = BindingMode.TwoWay });
+                picker.Bind(SearchableComboBox.SelectionBoxTextProperty,
+                    new Binding(nameof(ProcedureFieldRowBase.TypeSourceDisplay)));
+
+                void Populate()
+                {
+                    if (picker.DataContext is ProcedureFieldRowBase row)
+                    {
+                        domainSection.ItemsSource = row.AvailableDomains;
+                        tablePicker.Tables = row.AvailableTables;
+                        tablePicker.ColumnsLoader = row.ColumnsLoader;
+                    }
+                }
+                picker.DataContextChanged += (_, _) => Populate();
+                Populate();
                 return picker;
             }),
         };

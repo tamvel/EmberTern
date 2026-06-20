@@ -1984,6 +1984,8 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.RunExecuteRequested = RunProcedureExecuteAsync;
+        detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
+        _ = LoadProcedureListsAsync(detail);
         detail.ProcedureCreated += name => OnProcedureCreated(detail, name);
         // Start in Easy mode (approved target design): the template SourceText is parsed
         // into the editable name + Input/Output params + Variables/Cursors/Subprograms +
@@ -2038,6 +2040,7 @@ public partial class MainWindowViewModel : ViewModelBase
             IsNew = true,
         };
         detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadTriggerListsAsync(detail);
         // Sensible defaults: BEFORE INSERT, an empty body. The name auto-derives once
         // the user picks a table.
@@ -2337,22 +2340,30 @@ public partial class MainWindowViewModel : ViewModelBase
             _ddlExecutor);
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.RunExecuteRequested = RunProcedureExecuteAsync;
-        // Best-effort domain list for the Variables grid's Domain combo (Easy mode).
-        _ = LoadProcedureDomainsAsync(detail);
+        // Lazy column loader for the Variables grid's merged Domain/Column picker.
+        detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
+        // Best-effort domain + table lists for the Variables grid (Easy mode).
+        _ = LoadProcedureListsAsync(detail);
         // Restore the remembered mode (existing procedures only — New stays Source).
         if (detail.CanUseEasyMode) detail.EasyMode = ProcedureEasyModePreference;
         detail.PropertyChanged += OnProcedureDetailPropertyChanged;
         return detail;
     }
 
-    private async Task LoadProcedureDomainsAsync(ProcedureDetailTabViewModel detail)
+    private async Task LoadProcedureListsAsync(ProcedureDetailTabViewModel detail)
     {
         try
         {
             var domains = await _metadataReader.ListDomainsAsync().ConfigureAwait(true);
             detail.SetAvailableDomains(domains);
         }
-        catch (MetadataReadException) { /* best effort — combo just has "(none)" */ }
+        catch (MetadataReadException) { /* best effort — Domain tab just stays empty */ }
+        try
+        {
+            var tables = await _metadataReader.ListAsync(MetadataObjectKind.Table).ConfigureAwait(true);
+            detail.SetAvailableTables(tables.Select(t => t.Name));
+        }
+        catch (MetadataReadException) { /* best effort — Table column tab stays empty */ }
     }
 
     private void OnProcedureDetailPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -2378,6 +2389,8 @@ public partial class MainWindowViewModel : ViewModelBase
             _ddlReader,
             _ddlExecutor);
         detail.OpenObjectRequested += OnOpenDdlRequested;
+        // Lazy column loader for the Variables grid's merged Domain/Column picker.
+        detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadTriggerListsAsync(detail);
         if (detail.CanUseEasyMode) detail.EasyMode = TriggerEasyModePreference;
         detail.PropertyChanged += OnTriggerDetailPropertyChanged;
