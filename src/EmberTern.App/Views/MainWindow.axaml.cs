@@ -53,6 +53,11 @@ public partial class MainWindow : Window
     // fresh. Resolution is async (may load a never-expanded category) — the generation
     // counter discards a stale result if a newer keystroke superseded it.
     private string _typeAheadBuffer = string.Empty;
+    // The node the search is anchored on while a buffer is growing — the PREVIOUS match,
+    // not tree.SelectedItem. Selection is applied asynchronously (Dispatcher.Post), so a fast
+    // refine (K→KO→KON) must anchor on this field, immune to the selection round-trip race.
+    // A fresh buffer re-reads tree.SelectedItem instead (honours a manual click between searches).
+    private object? _typeAheadAnchor;
     private DispatcherTimer? _typeAheadResetTimer;
     private int _typeAheadGeneration;
     private const int TypeAheadResetMs = 1000;
@@ -470,6 +475,7 @@ public partial class MainWindow : Window
         if (e.Key == Key.Escape)
         {
             _typeAheadBuffer = string.Empty;
+            _typeAheadAnchor = null;
             _typeAheadResetTimer?.Stop();
         }
     }
@@ -485,20 +491,29 @@ public partial class MainWindow : Window
         if (char.IsControl(ch) || char.IsWhiteSpace(ch)) return;
 
         // One growing buffer (incremental search). Consume the key so the tree's own
-        // single-char navigation doesn't fight us.
+        // single-char navigation doesn't fight us. Capture fresh-vs-grow BEFORE appending:
+        // a fresh buffer (was empty) anchors on the user's real selection; a growing buffer
+        // (refine) anchors on the previous match (_typeAheadAnchor) so it's immune to the
+        // async selection round-trip.
+        var fresh = _typeAheadBuffer.Length == 0;
         _typeAheadBuffer += text;
         RestartTypeAheadReset();
         e.Handled = true;
 
+        var anchor = fresh ? tree.SelectedItem : _typeAheadAnchor;
+
         var generation = ++_typeAheadGeneration;
         var buffer = _typeAheadBuffer;
 
-        // Resolve against the FULL metadata (name cache) — finds objects in categories
-        // that were never expanded, loading the owning category on a hit. May await a DB
-        // round-trip on first use; the generation guard drops the result if the user has
-        // typed again in the meantime.
-        var result = await _currentVm.Metadata.ResolveTypeAheadAsync(buffer);
+        // Resolve against the FULL metadata (name cache), searching FORWARD from the anchor
+        // (inclusive) with wrap — finds objects in categories that were never expanded,
+        // loading the owning category on a hit. May await a DB round-trip on first use; the
+        // generation guard drops the result if the user has typed again in the meantime.
+        var result = await _currentVm.Metadata.ResolveTypeAheadAsync(buffer, anchor);
         if (generation != _typeAheadGeneration || result is null) return;
+
+        // Remember the match so the next refine keystroke anchors here (race-safe).
+        _typeAheadAnchor = result.Node;
 
         // Expand ONLY the path to the match (folder / connection / category), then select
         // + scroll. Selection + BringIntoView are posted so they run after the expansion's
@@ -531,6 +546,7 @@ public partial class MainWindow : Window
         {
             _typeAheadResetTimer!.Stop();
             _typeAheadBuffer = string.Empty;
+            _typeAheadAnchor = null;
         };
         return timer;
     }

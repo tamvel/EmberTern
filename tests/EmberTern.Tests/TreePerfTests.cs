@@ -66,6 +66,136 @@ public class TreePerfTests
         Assert.Equal(-1, MetadataExplorerViewModel.FindFirstMatch(Sample(), "ZZ"));
     }
 
+    // ─── Type-ahead: FindFromAnchor (pure, anchored + wrap) ───────────────
+    // Sample order: ARTYKULY(0) DOSTAWCY(1) KONTRAHENCI(2) KRAJE(3) KONTAKT(4) ZAMOWIENIA(5)
+
+    [Fact]
+    public void FindFromAnchor_AnchorMatches_StaysOnAnchor()
+    {
+        // THE behavior change: anchored on KONTRAHENCI, typing "K" checks the anchor FIRST
+        // and stays — it does NOT advance to the next K-item (KRAJE/KONTAKT).
+        Assert.Equal(2, MetadataExplorerViewModel.FindFromAnchor(Sample(), "K", anchorIndex: 2));
+        Assert.Equal(2, MetadataExplorerViewModel.FindFromAnchor(Sample(), "KONTR", anchorIndex: 2));
+    }
+
+    [Fact]
+    public void FindFromAnchor_IncrementalBuffer_StaysPinnedWhileMatching()
+    {
+        // Growing the buffer keeps the anchor selected as long as it still matches.
+        foreach (var b in new[] { "K", "KO", "KON", "KONT", "KONTR" })
+        {
+            Assert.Equal(2, MetadataExplorerViewModel.FindFromAnchor(Sample(), b, anchorIndex: 2));
+        }
+    }
+
+    [Fact]
+    public void FindFromAnchor_AnchorStopsMatching_AdvancesForward()
+    {
+        // KONTRAHENCI no longer matches "Z" → search forward from the anchor: ZAMOWIENIA(5).
+        Assert.Equal(5, MetadataExplorerViewModel.FindFromAnchor(Sample(), "Z", anchorIndex: 2));
+    }
+
+    [Fact]
+    public void FindFromAnchor_WrapsToTop()
+    {
+        // Anchored at KONTRAHENCI(2), "A" matches nothing at 2..5 → wraps to ARTYKULY(0).
+        Assert.Equal(0, MetadataExplorerViewModel.FindFromAnchor(Sample(), "A", anchorIndex: 2));
+    }
+
+    [Fact]
+    public void FindFromAnchor_AnchorAtLastIndex_WrapsAround()
+    {
+        // Anchored at the LAST node, a forward search must wrap to the top.
+        Assert.Equal(0, MetadataExplorerViewModel.FindFromAnchor(Sample(), "A", anchorIndex: 5));
+    }
+
+    [Fact]
+    public void FindFromAnchor_NegativeAnchor_SearchesFromTop()
+    {
+        // No selection → from-top (identical to FindFirstMatch): first K = KONTRAHENCI(2).
+        Assert.Equal(2, MetadataExplorerViewModel.FindFromAnchor(Sample(), "K", anchorIndex: -1));
+    }
+
+    [Fact]
+    public void FindFromAnchor_NoMatch_ReturnsMinusOne()
+    {
+        Assert.Equal(-1, MetadataExplorerViewModel.FindFromAnchor(Sample(), "QQ", anchorIndex: 2));
+    }
+
+    [Fact]
+    public void FindFromAnchor_EmptyBufferOrList_ReturnsMinusOne()
+    {
+        Assert.Equal(-1, MetadataExplorerViewModel.FindFromAnchor(Sample(), "", anchorIndex: 2));
+        Assert.Equal(-1, MetadataExplorerViewModel.FindFromAnchor(
+            Array.Empty<MetadataExplorerViewModel.TypeAheadEntry>(), "A", anchorIndex: 0));
+    }
+
+    // ─── Type-ahead: FindAnchorIndex (selected node → index position) ──────
+
+    private static MetadataExplorerViewModel.TypeAheadEntry Structural(string text, object node)
+        => new(text, Array.Empty<object>(), node, null, null);
+
+    private static MetadataExplorerViewModel.TypeAheadEntry LeafEntry(string name, MetadataNodeViewModel group)
+        => new(name, Array.Empty<object>(), null, group, name);
+
+    [Fact]
+    public void FindAnchorIndex_Null_ReturnsMinusOne()
+    {
+        Assert.Equal(-1, MetadataExplorerViewModel.FindAnchorIndex(Sample(), null));
+    }
+
+    [Fact]
+    public void FindAnchorIndex_StructuralNode_MatchesByReference()
+    {
+        var conn = new ConnectionNodeViewModel(new ConnectionProfile { Name = "ERP", Host = "x", Port = 3050 });
+        var other = new ConnectionNodeViewModel(new ConnectionProfile { Name = "Other", Host = "x", Port = 3050 });
+        var index = new[] { Structural("Other", other), Structural("ERP", conn) };
+
+        Assert.Equal(1, MetadataExplorerViewModel.FindAnchorIndex(index, conn));
+        Assert.Equal(-1, MetadataExplorerViewModel.FindAnchorIndex(index,
+            new ConnectionNodeViewModel(new ConnectionProfile { Name = "Stray", Host = "x", Port = 3050 })));
+    }
+
+    [Fact]
+    public void FindAnchorIndex_Leaf_MatchesByGroupAndName()
+    {
+        using var h = new Harness();
+        var group = LoadedGroup(h.Main.Metadata, "KONTRAHENCI", "ARTYKULY");
+        var index = new[] { LeafEntry("KONTRAHENCI", group), LeafEntry("ARTYKULY", group) };
+        var selectedLeaf = group.Children.Single(c => c.GroupLabel == "ARTYKULY");
+
+        Assert.Equal(1, MetadataExplorerViewModel.FindAnchorIndex(index, selectedLeaf));
+    }
+
+    [Fact]
+    public void FindAnchorIndex_DuplicateLeafNameAcrossGroups_DisambiguatesByGroup()
+    {
+        using var h = new Harness();
+        var g1 = LoadedGroup(h.Main.Metadata, "X", "Y");
+        var g2 = LoadedGroup(h.Main.Metadata, "X", "Z");
+        var index = new[]
+        {
+            LeafEntry("X", g1), LeafEntry("Y", g1),
+            LeafEntry("X", g2), LeafEntry("Z", g2),
+        };
+        var selectedInG2 = g2.Children.Single(c => c.GroupLabel == "X");
+
+        // Same name "X" appears in both groups; the match must be g2's entry (index 2).
+        Assert.Equal(2, MetadataExplorerViewModel.FindAnchorIndex(index, selectedInG2));
+    }
+
+    [Fact]
+    public void FindAnchorIndex_LeafNotInAnyGroup_ReturnsMinusOne()
+    {
+        using var h = new Harness();
+        var group = LoadedGroup(h.Main.Metadata, "KONTRAHENCI");
+        var index = new[] { LeafEntry("KONTRAHENCI", group) };
+        var stray = MetadataNodeViewModel.CreateLeaf(h.Main.Metadata,
+            new MetadataObject("KONTRAHENCI", MetadataObjectKind.Table)); // same name, different VM
+
+        Assert.Equal(-1, MetadataExplorerViewModel.FindAnchorIndex(index, stray));
+    }
+
     // ─── Pure match counting (filter) ─────────────────────────────────────
 
     [Fact]

@@ -455,12 +455,14 @@ public partial class MetadataExplorerViewModel : ViewModelBase
 
     /// <summary>
     /// Builds the full searchable index in tree order (ensuring the name cache first),
-    /// finds the first entry whose text starts with <paramref name="buffer"/>, and
-    /// resolves it to a selectable VM — loading the owning category on demand for an
-    /// object in a never-expanded category. Returns the node to select plus the ancestor
-    /// path the View must expand, or null when nothing matches.
+    /// finds the match by searching FORWARD from the current selection (<paramref name="anchor"/>),
+    /// inclusive, wrapping to the top, and resolves it to a selectable VM — loading the
+    /// owning category on demand for an object in a never-expanded category. Returns the
+    /// node to select plus the ancestor path the View must expand, or null when nothing
+    /// matches. Anchoring is what stops a keystroke from jumping the user into a different
+    /// category: the search begins where they are, not at the top of the tree.
     /// </summary>
-    internal async Task<TypeAheadResult?> ResolveTypeAheadAsync(string buffer)
+    internal async Task<TypeAheadResult?> ResolveTypeAheadAsync(string buffer, object? anchor)
     {
         if (string.IsNullOrEmpty(buffer))
         {
@@ -468,7 +470,8 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         }
 
         var index = await BuildFullTypeAheadIndexAsync().ConfigureAwait(true);
-        var hit = FindFirstMatch(index, buffer);
+        var anchorIndex = FindAnchorIndex(index, anchor);
+        var hit = FindFromAnchor(index, buffer, anchorIndex);
         if (hit < 0)
         {
             return null;
@@ -557,8 +560,8 @@ public partial class MetadataExplorerViewModel : ViewModelBase
 
     /// <summary>
     /// Index of the FIRST entry (tree order) whose text starts with <paramref name="buffer"/>,
-    /// case-insensitive, or -1. Incremental search starts from the top every keystroke so a
-    /// growing buffer keeps converging on the same item — no per-char cycling. Pure / unit-tested.
+    /// case-insensitive, or -1. Searches from the top — the no-anchor fallback (equivalent to
+    /// <see cref="FindFromAnchor"/> with anchorIndex &lt; 0). Pure / unit-tested.
     /// </summary>
     internal static int FindFirstMatch(IReadOnlyList<TypeAheadEntry> index, string buffer)
     {
@@ -569,6 +572,70 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         for (var i = 0; i < index.Count; i++)
         {
             if (index[i].Text.StartsWith(buffer, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Index of the first entry whose text starts with <paramref name="buffer"/>, searching
+    /// FORWARD from <paramref name="anchorIndex"/> (inclusive) and wrapping to the top, or -1.
+    /// anchorIndex &lt; 0 (nothing selected) starts from the top. Inclusive-from-anchor is the
+    /// core of the contextual search: a growing incremental buffer stays pinned on the current
+    /// match while it still matches, and only advances (forward + wrap) once it stops — so the
+    /// first keystroke checks the current selection FIRST and never jumps the user into another
+    /// category unless there is genuinely no later match. Pure / unit-tested.
+    /// </summary>
+    internal static int FindFromAnchor(IReadOnlyList<TypeAheadEntry> index, string buffer, int anchorIndex)
+    {
+        if (index.Count == 0 || string.IsNullOrEmpty(buffer))
+        {
+            return -1;
+        }
+        var start = anchorIndex < 0 ? 0 : anchorIndex;
+        for (var offset = 0; offset < index.Count; offset++)
+        {
+            var i = (start + offset) % index.Count;
+            if (index[i].Text.StartsWith(buffer, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Position of the currently-selected tree node in the flat index, or -1 when it isn't
+    /// present (nothing selected, a placeholder, or a stale leaf whose group was reloaded —
+    /// all fall back to a from-top search). Structural nodes (folder / connection / category)
+    /// match by reference on <c>DirectNode</c>; an object leaf matches by (owning group,
+    /// name), with <c>Group.Children.Contains</c> disambiguating objects that share a name
+    /// across categories. Pure / unit-tested.
+    /// </summary>
+    internal static int FindAnchorIndex(IReadOnlyList<TypeAheadEntry> index, object? selected)
+    {
+        if (selected is null)
+        {
+            return -1;
+        }
+        var leaf = selected as MetadataNodeViewModel;
+        var selectedIsLeaf = leaf is { IsGroup: false, IsPlaceholder: false };
+        for (var i = 0; i < index.Count; i++)
+        {
+            var e = index[i];
+            if (e.DirectNode is not null)
+            {
+                if (ReferenceEquals(e.DirectNode, selected))
+                {
+                    return i;
+                }
+            }
+            else if (selectedIsLeaf
+                     && e.Group is not null
+                     && string.Equals(e.LeafName, leaf!.GroupLabel, StringComparison.OrdinalIgnoreCase)
+                     && e.Group.Children.Contains(leaf))
             {
                 return i;
             }
