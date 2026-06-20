@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,60 +11,12 @@ using Xunit;
 namespace EmberTern.Tests;
 
 /// <summary>
-/// Object Explorer performance sprint — lazy COUNT-only load, IBExpert-style filter
-/// (per-category match counts, hide zeros, no auto-expand), and incremental type-ahead
-/// over the full metadata (session name cache).
+/// Object Explorer performance sprint — lazy COUNT-only load and the IBExpert-style filter
+/// (per-category match counts, hide zeros, no auto-expand) backed by the session name cache.
+/// (Type-ahead was replaced by type-to-filter, which is View-side code-behind.)
 /// </summary>
 public class TreePerfTests
 {
-    // ─── Type-ahead: FindFirstMatch (pure, incremental-from-start) ────────
-
-    private static MetadataExplorerViewModel.TypeAheadEntry T(string text)
-        => new(text, Array.Empty<object>(), null, null, null);
-
-    private static IReadOnlyList<MetadataExplorerViewModel.TypeAheadEntry> Sample()
-        => new[] { "ARTYKULY", "DOSTAWCY", "KONTRAHENCI", "KRAJE", "KONTAKT", "ZAMOWIENIA" }
-            .Select(T).ToArray();
-
-    [Fact]
-    public void FindFirstMatch_EmptyBufferOrList_ReturnsMinusOne()
-    {
-        Assert.Equal(-1, MetadataExplorerViewModel.FindFirstMatch(Sample(), ""));
-        Assert.Equal(-1, MetadataExplorerViewModel.FindFirstMatch(
-            Array.Empty<MetadataExplorerViewModel.TypeAheadEntry>(), "A"));
-    }
-
-    [Fact]
-    public void FindFirstMatch_FindsFirstInTreeOrder()
-    {
-        // "K" → first K-item in order = KONTRAHENCI (index 2), not KONTAKT/KRAJE.
-        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "K"));
-    }
-
-    [Fact]
-    public void FindFirstMatch_IncrementalBufferConvergesToOneItem()
-    {
-        // The whole point of #2: a growing buffer keeps refining toward KONTRAHENCI
-        // (never an independent per-char jump). "KONTR" skips KONTAKT.
-        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "K"));
-        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "KO"));
-        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "KON"));
-        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "KONT"));
-        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "KONTR")); // KONTAKT no longer matches
-    }
-
-    [Fact]
-    public void FindFirstMatch_IsCaseInsensitive()
-    {
-        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "kontr"));
-    }
-
-    [Fact]
-    public void FindFirstMatch_NoMatch_ReturnsMinusOne()
-    {
-        Assert.Equal(-1, MetadataExplorerViewModel.FindFirstMatch(Sample(), "ZZ"));
-    }
-
     // ─── Pure match counting (filter) ─────────────────────────────────────
 
     [Fact]
@@ -76,42 +27,6 @@ public class TreePerfTests
         Assert.Equal(2, MetadataExplorerViewModel.CountMatches(names, "WIDOK"));
         Assert.Equal(0, MetadataExplorerViewModel.CountMatches(names, "zzz"));
         Assert.Equal(0, MetadataExplorerViewModel.CountMatches(Array.Empty<string>(), "x"));
-    }
-
-    // ─── NodeSearchText ───────────────────────────────────────────────────
-
-    [Fact]
-    public void NodeSearchText_PerKind()
-    {
-        using var h = new Harness();
-        var meta = h.Main.Metadata;
-
-        var conn = new ConnectionNodeViewModel(new ConnectionProfile { Name = "ERP", Host = "x", Port = 3050 });
-        Assert.Equal("ERP", MetadataExplorerViewModel.NodeSearchText(conn));
-
-        var leaf = MetadataNodeViewModel.CreateLeaf(meta, new MetadataObject("KONTRAHENCI", MetadataObjectKind.Table));
-        Assert.Equal("KONTRAHENCI", MetadataExplorerViewModel.NodeSearchText(leaf));
-
-        var group = MetadataNodeViewModel.CreateGroup(meta, MetadataObjectKind.Table);
-        Assert.Equal("Tables", MetadataExplorerViewModel.NodeSearchText(group));
-
-        var placeholder = MetadataNodeViewModel.CreatePlaceholder(meta);
-        Assert.Equal(string.Empty, MetadataExplorerViewModel.NodeSearchText(placeholder));
-    }
-
-    [Fact]
-    public async Task BuildFullTypeAheadIndex_IncludesConnectionRows()
-    {
-        using var h = new Harness();
-        h.Store.Upsert(new ConnectionProfile { Name = "Alpha", Host = "x", Port = 3050 });
-        h.Store.Upsert(new ConnectionProfile { Name = "Beta", Host = "x", Port = 3050 });
-        h.Main.ReloadConnections();
-
-        var index = await h.Main.Metadata.BuildFullTypeAheadIndexAsync();
-        // Disconnected → no categories/leaves, only the two connection rows.
-        Assert.Contains(index, e => e.Text == "Alpha");
-        Assert.Contains(index, e => e.Text == "Beta");
-        Assert.Equal(2, index.Count);
     }
 
     // ─── IBExpert-style filter: ApplyFilterToGroup ────────────────────────

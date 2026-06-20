@@ -7,6 +7,7 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -270,6 +271,69 @@ public sealed class ConnectionExpandBindingProbe
             log.AppendLine($"[parse-fail] ErrorMessage = {detail.ErrorMessage}");
             Assert.False(string.IsNullOrEmpty(detail.ErrorMessage), "[parse-fail] notice expected\n" + log);
             Assert.True(HammerEnabled(), "[parse-fail] hammer must stay enabled\n" + log);
+
+            window.Close();
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Type-to-filter (replaces type-ahead): build the REAL MainWindow, focus the tree, and
+    // verify (a) typing redirects the char into the SidebarFilterBox + moves focus there,
+    // (b) Ctrl+F focuses the filter, (c) Escape clears the filter and returns focus to the
+    // tree. Production wiring under test (gotcha #39).
+    [Fact]
+    public async System.Threading.Tasks.Task TypeToFilter_TreeTyping_RedirectsToFilterBox()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-probe-ttf-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var store = new ConnectionProfileStore(tempDir);
+            using var service = new FirebirdConnectionService();
+            store.Upsert(new ConnectionProfile { Name = "ProbeTTF", Host = "h", Port = 3050 });
+
+            var vm = new MainWindowViewModel(store, service);
+            vm.ReloadConnections();
+
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var tree = window.GetVisualDescendants().OfType<TreeView>().Single(t => t.Name == "SidebarTree");
+            var filter = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SidebarFilterBox");
+            var nodeItem = window.GetVisualDescendants().OfType<TreeViewItem>()
+                .First(t => t.DataContext is ConnectionNodeViewModel);
+
+            object? Focused() => TopLevel.GetTopLevel(window)?.FocusManager?.GetFocusedElement();
+
+            // (a) Focus a tree item, type 'k' → goes to the filter, focus moves there.
+            nodeItem.Focus();
+            Dispatcher.UIThread.RunJobs();
+            window.KeyTextInput("k");
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"after tree-typing: FilterText='{vm.Metadata.FilterText}' boxText='{filter.Text}' focusIsBox={ReferenceEquals(Focused(), filter)}");
+            Assert.True(vm.Metadata.FilterText == "k", "typing in the tree must fill the filter.\n" + log);
+            Assert.True(ReferenceEquals(Focused(), filter), "focus must move to the filter box.\n" + log);
+
+            // (b) Ctrl+F from elsewhere focuses the filter.
+            nodeItem.Focus();
+            Dispatcher.UIThread.RunJobs();
+            window.KeyPress(Key.F, RawInputModifiers.Control, PhysicalKey.F, null);
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"after Ctrl+F: focusIsBox={ReferenceEquals(Focused(), filter)}");
+            Assert.True(ReferenceEquals(Focused(), filter), "Ctrl+F must focus the filter box.\n" + log);
+
+            // (c) Escape in the filter clears it and returns focus to the tree.
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"after Escape: FilterText='{vm.Metadata.FilterText}' focusIsBox={ReferenceEquals(Focused(), filter)}");
+            Assert.Equal(string.Empty, vm.Metadata.FilterText);
+            Assert.False(ReferenceEquals(Focused(), filter), "Escape must move focus off the filter box.\n" + log);
 
             window.Close();
             try { Directory.Delete(tempDir, recursive: true); } catch { }
