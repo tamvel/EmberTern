@@ -93,12 +93,10 @@ public class NewTableTabVmTests
             new DomainSpec("T_ID", "INTEGER"),
             new DomainSpec("T_KWOTA", "NUMERIC(15,2)"),
         });
-        // A leading "(none)" sentinel is prepended so a row's domain can be
-        // cleared back to a basic type (#5), hence 3 entries for 2 real domains.
-        Assert.Equal(3, vm.AvailableDomains.Count);
-        Assert.Equal(UiStrings.DomainNoneOption, vm.AvailableDomains[0].Name);
-        Assert.Equal("T_ID", vm.AvailableDomains[1].Name);
-        Assert.Equal("T_KWOTA", vm.AvailableDomains[2].Name);
+        // No "(none)" sentinel — the SearchableComboBox clears via its ✕ button.
+        Assert.Equal(2, vm.AvailableDomains.Count);
+        Assert.Equal("T_ID", vm.AvailableDomains[0].Name);
+        Assert.Equal("T_KWOTA", vm.AvailableDomains[1].Name);
     }
 
     // #2 — Move Up / Down actually reorder the Fields collection (regression for
@@ -145,29 +143,30 @@ public class NewTableTabVmTests
         Assert.True(row.IsTypeEnabled);
     }
 
-    // #5 — picking the "(none)" sentinel clears the row's domain.
+    // #5 — clearing the domain (✕ → SelectedDomainSpec = null) drops the domain.
+    // The SearchableComboBox commits only on an explicit pick/clear, so null is
+    // intentional (no load-time clobber to guard against).
     [Fact]
-    public void Row_SelectingNoneSentinel_ClearsDomain()
-    {
-        var vm = new NewTableTabViewModel();
-        vm.SetAvailableDomains(new[] { new DomainSpec("T_KWOTA", "NUMERIC(15,2)") });
-        var row = new NewTableFieldRowViewModel(vm) { DomainName = "T_KWOTA" };
-
-        var sentinel = vm.AvailableDomains[0]; // the "(none)" entry
-        row.SelectedDomainSpec = sentinel;
-
-        Assert.Null(row.DomainName);
-    }
-
-    // #5 — a null write (load-time clobber) must NOT clear the domain.
-    [Fact]
-    public void Row_NullDomainWriteback_IsIgnored()
+    public void Row_ClearDomain_DropsDomain()
     {
         var vm = new NewTableTabViewModel();
         vm.SetAvailableDomains(new[] { new DomainSpec("T_KWOTA", "NUMERIC(15,2)") });
         var row = new NewTableFieldRowViewModel(vm) { DomainName = "T_KWOTA" };
 
         row.SelectedDomainSpec = null;
+
+        Assert.Null(row.DomainName);
+    }
+
+    // Picking a domain sets it.
+    [Fact]
+    public void Row_SelectingDomain_SetsDomain()
+    {
+        var vm = new NewTableTabViewModel();
+        vm.SetAvailableDomains(new[] { new DomainSpec("T_KWOTA", "NUMERIC(15,2)") });
+        var row = new NewTableFieldRowViewModel(vm);
+
+        row.SelectedDomainSpec = vm.AvailableDomains[0];
 
         Assert.Equal("T_KWOTA", row.DomainName);
     }

@@ -103,9 +103,10 @@
                     <!-- When a domain is picked it governs the type, so show the
                          domain's resolved type (read-only) instead of the combo (#3). -->
                     <Panel>
-                      <controls:SearchablePicker ItemsSource="{Binding BasicTypes}"
+                      <ComboBox ItemsSource="{Binding BasicTypes}"
                                 SelectedItem="{Binding SelectedTypeItem, Mode=TwoWay}"
                                 IsEnabled="{Binding IsTypeEnabled}"
+                                IsTextSearchEnabled="True"
                                 BorderThickness="0"
                                 Background="Transparent"
                                 HorizontalAlignment="Stretch"
@@ -127,20 +128,16 @@
                                       IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
-                    <controls:SearchablePicker ItemsSource="{Binding AvailableDomains}"
+                    <controls:SearchableComboBox ItemsSource="{Binding AvailableDomains}"
                               SelectedItem="{Binding SelectedDomainSpec, Mode=TwoWay}"
                               IsEnabled="{Binding IsDomainEnabled}"
-                              ValueMemberBinding="{ReflectionBinding Name}"
+                              DisplayMemberPath="Name"
+                              ItemTemplate="{StaticResource DomainRowTemplate}"
+                              Watermark=""
                               BorderThickness="0"
                               Background="Transparent"
                               HorizontalAlignment="Stretch"
-                              VerticalAlignment="Center">
-                      <controls:SearchablePicker.ItemTemplate>
-                        <DataTemplate x:DataType="m:DomainSpec">
-                          <TextBlock Text="{Binding Name}" />
-                        </DataTemplate>
-                      </controls:SearchablePicker.ItemTemplate>
-                    </controls:SearchablePicker>
+                              VerticalAlignment="Center" />
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>

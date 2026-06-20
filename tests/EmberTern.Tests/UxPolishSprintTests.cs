@@ -76,15 +76,15 @@ public class UxPolishSprintTests
     }
 
     [Fact]
-    public void FieldRow_DomainSpec_NullWriteback_DoesNotClearDomain()
+    public void FieldRow_DomainSpec_ClearDropsDomain()
     {
         var f = new FieldInfo { Name = "KWOTA", Type = "NUMERIC(15,2)", Size = 15, Scale = 2, Domain = "T_KWOTA" };
         var row = new FieldRowViewModel(f);
-        // ComboBox can't resolve T_KWOTA (no AvailableDomains wired) → would set
-        // SelectedDomainSpec to null. The guard must keep DomainName intact.
+        // The SearchableComboBox commits only on an explicit pick/clear, so a null
+        // write = the user cleared (✕) → drop the domain (and mark the row modified).
         row.SelectedDomainSpec = null;
-        Assert.Equal("T_KWOTA", row.DomainName);
-        Assert.False(row.IsModified);
+        Assert.Null(row.DomainName);
+        Assert.True(row.IsModified);
     }
 
     // ─── #4 trigger Insert/Update decode ──────────────────────────────────

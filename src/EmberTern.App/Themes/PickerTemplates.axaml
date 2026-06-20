@@ -1,0 +1,13 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:metadata="using:EmberTern.Core.Metadata">
+
+  <!-- Shared dropdown-row template for the Domain SearchableComboBox, referenced by
+       every Domain picker (Procedure/Trigger via FieldGridColumns, New Table, Table
+       Detail) so the list looks identical everywhere. Faza 1: name only. Faza 2 will
+       enrich this single definition to Name | Type | Size | Scale | Not Null. -->
+  <DataTemplate x:Key="DomainRowTemplate" x:DataType="metadata:DomainSpec">
+    <TextBlock Text="{Binding Name}" Margin="8,3" FontSize="11" />
+  </DataTemplate>
+
+</ResourceDictionary>

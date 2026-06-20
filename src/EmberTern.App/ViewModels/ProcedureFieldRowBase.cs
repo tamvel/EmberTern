@@ -294,25 +294,15 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
     {
         get
         {
-            if (string.IsNullOrEmpty(DomainName)) return FindNoneSentinel();
+            // Empty = no domain → empty field (SearchableComboBox shows the watermark).
+            if (string.IsNullOrEmpty(DomainName)) return null;
             foreach (var d in AvailableDomains)
                 if (string.Equals(d.Name, DomainName, StringComparison.OrdinalIgnoreCase)) return d;
             return null;
         }
-        set
-        {
-            if (value is null) return; // load-time clobber — ignore
-            DomainName = string.Equals(value.Name, UiStrings.DomainNoneOption, StringComparison.Ordinal)
-                ? null
-                : value.Name;
-        }
-    }
-
-    private DomainSpec? FindNoneSentinel()
-    {
-        foreach (var d in AvailableDomains)
-            if (string.Equals(d.Name, UiStrings.DomainNoneOption, StringComparison.Ordinal)) return d;
-        return null;
+        // SearchableComboBox commits only on an explicit pick/clear, so null = the user
+        // cleared (✕) → drop the domain; non-null = picked a domain.
+        set => DomainName = value?.Name;
     }
 
     // ─── Parse helpers ─────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Input;
@@ -18,9 +19,10 @@ namespace EmberTern.App.Views;
 /// Size / Scale / Sub Type / Charset / Not Null / Collate / Default / Description) so
 /// there's no second type system and the grids stay identical across object editors.
 ///
-/// Type and Domain are <see cref="SearchablePicker"/> (filtering AutoCompleteBox) — the
-/// app-wide standard for picking objects (#1). The type-construction cells (Type / TYPE OF /
-/// Size / Scale / Sub Type / Charset) disable when a domain or TYPE OF governs the type (#4).
+/// Type is a plain <see cref="ComboBox"/> (small closed dictionary). Domain is a
+/// <see cref="SearchableComboBox"/> (large dictionary — filter, chevron, ✕ clear).
+/// The type-construction cells (Type / TYPE OF / Size / Scale / Sub Type / Charset)
+/// disable when a domain or TYPE OF governs the type (#4).
 /// </summary>
 internal static class FieldGridColumns
 {
@@ -28,11 +30,9 @@ internal static class FieldGridColumns
     {
         grid.Columns.Clear();
         grid.Columns.Add(TextCol(UiStrings.TableDetailColumnName, nameof(ProcedureFieldRowBase.Name), 130));
-        grid.Columns.Add(PickerCol(UiStrings.TableDetailColumnType, nameof(ProcedureFieldRowBase.BasicTypes), nameof(ProcedureFieldRowBase.SelectedTypeItem), 110,
-            enabledPath: nameof(ProcedureFieldRowBase.IsTypeEnabled), valueMember: null));
+        grid.Columns.Add(TypeComboCol(UiStrings.TableDetailColumnType, 110));
         grid.Columns.Add(TextEditCol(UiStrings.ProcedureFieldTypeOf, nameof(ProcedureFieldRowBase.TypeOf), 110, nameof(ProcedureFieldRowBase.IsTypeOfEnabled)));
-        grid.Columns.Add(PickerCol(UiStrings.TableDetailColumnDomain, nameof(ProcedureFieldRowBase.AvailableDomains), nameof(ProcedureFieldRowBase.SelectedDomainSpec), 130,
-            enabledPath: null, valueMember: nameof(DomainSpec.Name)));
+        grid.Columns.Add(DomainPickerCol(UiStrings.TableDetailColumnDomain, nameof(ProcedureFieldRowBase.AvailableDomains), nameof(ProcedureFieldRowBase.SelectedDomainSpec), 130));
         grid.Columns.Add(TextEditCol(UiStrings.TableDetailColumnSize, nameof(ProcedureFieldRowBase.Size), 60, nameof(ProcedureFieldRowBase.IsSizeEnabled)));
         grid.Columns.Add(TextEditCol(UiStrings.TableDetailColumnScale, nameof(ProcedureFieldRowBase.Scale), 60, nameof(ProcedureFieldRowBase.IsScaleEnabled)));
         grid.Columns.Add(TextEditCol(UiStrings.ProcedureFieldSubType, nameof(ProcedureFieldRowBase.SubType), 80, nameof(ProcedureFieldRowBase.IsSubTypeEnabled)));
@@ -75,12 +75,10 @@ internal static class FieldGridColumns
             }),
         };
 
-    // Always-visible filtering picker in the cell (IsReadOnly column) — same always-visible
-    // pattern as the table field grids (gotcha #56), but a SearchablePicker (AutoCompleteBox)
-    // so the user can type-to-filter a large domain/type list (#1). valueMember = the text
-    // member used for filtering/display on object items (Domain → Name); null for string
-    // items (Type). enabledPath = optional per-row IsEnabled gate (#4).
-    private static DataGridTemplateColumn PickerCol(string header, string itemsPath, string selectedPath, int min, string? enabledPath, string? valueMember)
+    // Type: small closed dictionary → plain ComboBox with type-ahead (no filtering).
+    // Always-visible in CellTemplate (gotcha #56), bound to the null-safe SelectedTypeItem
+    // wrapper, disabled when a domain/TYPE OF governs the type (#4).
+    private static DataGridTemplateColumn TypeComboCol(string header, int min)
         => new()
         {
             Header = header,
@@ -88,24 +86,54 @@ internal static class FieldGridColumns
             IsReadOnly = true,
             CellTemplate = new FuncDataTemplate<ProcedureFieldRowBase>((_, _) =>
             {
-                var picker = new SearchablePicker
+                var cb = new ComboBox
                 {
                     BorderThickness = new Thickness(0),
                     Background = Brushes.Transparent,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     VerticalAlignment = VerticalAlignment.Center,
+                    IsTextSearchEnabled = true,
                 };
-                picker.Bind(AutoCompleteBox.ItemsSourceProperty, new Binding(itemsPath));
-                picker.Bind(AutoCompleteBox.SelectedItemProperty, new Binding(selectedPath) { Mode = BindingMode.TwoWay });
-                if (valueMember is not null)
+                cb.Bind(ItemsControl.ItemsSourceProperty, new Binding(nameof(ProcedureFieldRowBase.BasicTypes)));
+                cb.Bind(SelectingItemsControl.SelectedItemProperty, new Binding(nameof(ProcedureFieldRowBase.SelectedTypeItem)) { Mode = BindingMode.TwoWay });
+                cb.Bind(InputElement.IsEnabledProperty, new Binding(nameof(ProcedureFieldRowBase.IsTypeEnabled)));
+                return cb;
+            }),
+        };
+
+    // Domain: large dictionary → SearchableComboBox (filter + chevron + ✕ clear,
+    // top-level popup). Bound to SelectedDomainSpec (commit-only → no null-guard needed);
+    // empty = empty field (no "(none)" sentinel). Shared DomainRowTemplate for the list.
+    private static DataGridTemplateColumn DomainPickerCol(string header, string itemsPath, string selectedPath, int min)
+        => new()
+        {
+            Header = header,
+            MinWidth = min,
+            IsReadOnly = true,
+            CellTemplate = new FuncDataTemplate<ProcedureFieldRowBase>((_, _) =>
+            {
+                var picker = new SearchableComboBox
                 {
-                    picker.ValueMemberBinding = new Binding(valueMember);
-                    picker.ItemTemplate = new FuncDataTemplate<DomainSpec>((_, _) =>
-                        new TextBlock { [!TextBlock.TextProperty] = new Binding(nameof(DomainSpec.Name)) });
-                }
-                if (enabledPath is not null)
-                    picker.Bind(InputElement.IsEnabledProperty, new Binding(enabledPath));
+                    BorderThickness = new Thickness(0),
+                    Background = Brushes.Transparent,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    DisplayMemberPath = nameof(DomainSpec.Name),
+                    Watermark = string.Empty,
+                    ItemTemplate = DomainRowTemplate(),
+                };
+                picker.Bind(SearchableComboBox.ItemsSourceProperty, new Binding(itemsPath));
+                picker.Bind(SearchableComboBox.SelectedItemProperty, new Binding(selectedPath) { Mode = BindingMode.TwoWay });
                 return picker;
             }),
         };
+
+    private static IDataTemplate? _domainRowTemplate;
+    private static IDataTemplate? DomainRowTemplate()
+    {
+        if (_domainRowTemplate is not null) return _domainRowTemplate;
+        if (Application.Current?.Resources.TryGetResource("DomainRowTemplate", null, out var t) == true)
+            _domainRowTemplate = t as IDataTemplate;
+        return _domainRowTemplate;
+    }
 }

@@ -9,6 +9,7 @@
         <ResourceInclude Source="avares://EmberTern/Themes/Colors.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/IconGeometries.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/SearchableComboBox.axaml" />
+        <ResourceInclude Source="avares://EmberTern/Themes/PickerTemplates.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>

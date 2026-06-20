@@ -379,4 +379,58 @@ public sealed class ConnectionExpandBindingProbe
 
         _out.WriteLine(log.ToString());
     }
+
+    // Proves the SearchableComboBox templates (ControlTheme loads, PART_Shell present)
+    // and open/select/clear/close don't throw headless. The visual filtering UX is
+    // verified manually on the live DB (popups live in a separate PopupRoot).
+    [Fact]
+    public async System.Threading.Tasks.Task SearchableComboBox_TemplatesAndOpensWithoutThrowing()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var domains = new[]
+            {
+                new DomainSpec("T_ID", "INTEGER"),
+                new DomainSpec("T_KOD", "VARCHAR(20)"),
+                new DomainSpec("T_KODPOCZ", "VARCHAR(6)"),
+            };
+            var cb = new global::EmberTern.App.Controls.SearchableComboBox
+            {
+                ItemsSource = domains,
+                DisplayMemberPath = nameof(DomainSpec.Name),
+                Watermark = string.Empty,
+                Width = 200,
+                Height = 24,
+            };
+            var window = new Window { Width = 400, Height = 300, Content = cb };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var shell = cb.GetVisualDescendants().OfType<Border>().FirstOrDefault(b => b.Name == "PART_Shell");
+            log.AppendLine($"[1] PART_Shell present = {shell is not null}");
+            Assert.True(shell is not null, "SearchableComboBox template did not apply.\n" + log);
+
+            cb.SelectedItem = domains[0];
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[2] SelectedItem = {(cb.SelectedItem as DomainSpec)?.Name}");
+            Assert.Same(domains[0], cb.SelectedItem);
+
+            cb.IsDropDownOpen = true;
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine("[3] opened without throwing");
+
+            cb.SelectedItem = null;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(cb.SelectedItem);
+
+            cb.IsDropDownOpen = false;
+            Dispatcher.UIThread.RunJobs();
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
 }

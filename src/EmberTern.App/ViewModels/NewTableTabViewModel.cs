@@ -193,42 +193,22 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     public ObservableCollection<DomainSpec> AvailableDomains
         => _owner?.AvailableDomains ?? FallbackDomains;
 
-    /// <summary>Wrapper so the Domain ComboBox can bind SelectedItem to a DomainSpec
-    /// while the underlying DomainName stays a plain string (matches the inline-edit
-    /// pattern in FieldRowViewModel).</summary>
+    /// <summary>Wrapper so the Domain <c>SearchableComboBox</c> can bind SelectedItem to
+    /// a DomainSpec while the underlying DomainName stays a plain string. Empty → null
+    /// (empty field, no "(none)" sentinel); the picker commits only on explicit pick/clear,
+    /// so null = the user cleared (✕).</summary>
     public DomainSpec? SelectedDomainSpec
     {
         get
         {
-            if (string.IsNullOrEmpty(DomainName))
-            {
-                // Show the "(none)" sentinel as selected when no domain is set.
-                return FindNoneSentinel();
-            }
+            if (string.IsNullOrEmpty(DomainName)) return null;
             foreach (var d in AvailableDomains)
             {
                 if (string.Equals(d.Name, DomainName, StringComparison.Ordinal)) return d;
             }
             return null;
         }
-        set
-        {
-            // null = load-time clobber (combo can't resolve while the list is
-            // still empty) — ignore it. The "(none)" sentinel = explicit clear.
-            if (value is null) return;
-            DomainName = string.Equals(value.Name, UiStrings.DomainNoneOption, StringComparison.Ordinal)
-                ? null
-                : value.Name;
-        }
-    }
-
-    private DomainSpec? FindNoneSentinel()
-    {
-        foreach (var d in AvailableDomains)
-        {
-            if (string.Equals(d.Name, UiStrings.DomainNoneOption, StringComparison.Ordinal)) return d;
-        }
-        return null;
+        set => DomainName = value?.Name;
     }
 
     public FieldDefinition ToFieldDefinition()
@@ -385,9 +365,7 @@ public partial class NewTableTabViewModel : ViewModelBase, IUnsavedWorkSource
     public void SetAvailableDomains(IEnumerable<DomainSpec> domains)
     {
         AvailableDomains.Clear();
-        // Leading "(none)" sentinel so the user can clear a row's domain back to
-        // a basic type (#5). Recognized by name in SelectedDomainSpec.
-        AvailableDomains.Add(new DomainSpec(UiStrings.DomainNoneOption, string.Empty));
+        // No "(none)" sentinel — the SearchableComboBox clears via its ✕ button.
         foreach (var d in domains) AvailableDomains.Add(d);
     }
 

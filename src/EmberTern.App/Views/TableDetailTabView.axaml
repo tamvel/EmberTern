@@ -252,9 +252,10 @@
                                     IsReadOnly="True">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate x:DataType="vm:FieldRowViewModel">
-                  <controls:SearchablePicker ItemsSource="{Binding BasicTypes}"
+                  <ComboBox ItemsSource="{Binding BasicTypes}"
                             SelectedItem="{Binding SelectedTypeItem, Mode=TwoWay}"
                             IsEnabled="{Binding IsTypeCellEditable}"
+                            IsTextSearchEnabled="True"
                             BorderThickness="0"
                             Background="Transparent"
                             HorizontalAlignment="Stretch"
@@ -300,20 +301,16 @@
                                     IsReadOnly="True">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate x:DataType="vm:FieldRowViewModel">
-                  <controls:SearchablePicker ItemsSource="{Binding AvailableDomains}"
+                  <controls:SearchableComboBox ItemsSource="{Binding AvailableDomains}"
                             SelectedItem="{Binding SelectedDomainSpec, Mode=TwoWay}"
                             IsEnabled="{Binding IsCellEditable}"
-                            ValueMemberBinding="{ReflectionBinding Name}"
+                            DisplayMemberPath="Name"
+                            ItemTemplate="{StaticResource DomainRowTemplate}"
+                            Watermark=""
                             BorderThickness="0"
                             Background="Transparent"
                             HorizontalAlignment="Stretch"
-                            VerticalAlignment="Center">
-                    <controls:SearchablePicker.ItemTemplate>
-                      <DataTemplate x:DataType="metadata:DomainSpec">
-                        <TextBlock Text="{Binding Name}" />
-                      </DataTemplate>
-                    </controls:SearchablePicker.ItemTemplate>
-                  </controls:SearchablePicker>
+                            VerticalAlignment="Center" />
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>

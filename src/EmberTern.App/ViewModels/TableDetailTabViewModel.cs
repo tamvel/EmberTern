@@ -1361,9 +1361,7 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
                 {
                     var domains = await _metadataReader.ListDomainsAsync(cancellationToken).ConfigureAwait(true);
                     AvailableDomains.Clear();
-                    // Leading "(none)" sentinel so the inline Domain combo can
-                    // clear a column back to a basic type (#5).
-                    AvailableDomains.Add(new DomainSpec(UiStrings.DomainNoneOption, string.Empty));
+                    // No "(none)" sentinel — the SearchableComboBox clears via its ✕ button.
                     foreach (var d in domains) AvailableDomains.Add(d);
                 });
         }

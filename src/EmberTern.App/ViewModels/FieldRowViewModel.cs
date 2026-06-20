@@ -212,26 +212,15 @@ public partial class FieldRowViewModel : ObservableObject
     public bool IsTypeCellEditable => IsCellEditable && !HasDomain;
 
     /// <summary>
-    /// DomainSpec wrapper for the Domain ComboBox's SelectedItem binding.
-    /// Avalonia 12 ComboBox has no SelectedValueBinding (WPF-only), so we expose
-    /// a get/set property that maps the DomainSpec round-trip onto DomainName.
+    /// DomainSpec wrapper for the Domain <c>SearchableComboBox</c>'s SelectedItem
+    /// binding. Empty DomainName → null (empty field, no "(none)" sentinel). The
+    /// picker commits only on an explicit pick/clear, so null = the user cleared (✕).
     /// </summary>
     public DomainSpec? SelectedDomainSpec
     {
         get
         {
-            if (string.IsNullOrEmpty(DomainName))
-            {
-                // Show the "(none)" sentinel as selected when the column has no
-                // domain, so the combo isn't blank and the user can see/keep the
-                // "no domain" state.
-                foreach (var d in AvailableDomains)
-                {
-                    if (string.Equals(d.Name, UiStrings.DomainNoneOption, System.StringComparison.Ordinal))
-                        return d;
-                }
-                return null;
-            }
+            if (string.IsNullOrEmpty(DomainName)) return null;
             foreach (var d in AvailableDomains)
             {
                 if (string.Equals(d.Name, DomainName, System.StringComparison.Ordinal))
@@ -239,22 +228,7 @@ public partial class FieldRowViewModel : ObservableObject
             }
             return null;
         }
-        set
-        {
-            // Ignore null writeback. The ComboBox sets SelectedItem to null
-            // whenever the getter can't resolve DomainName against
-            // AvailableDomains — which happens on load (domains arrive
-            // asynchronously after the rows are built) and for anonymous
-            // RDB$ backing-domains that never appear in the list. Honoring
-            // that null would clear DomainName and falsely mark the row
-            // modified.
-            if (value is null) return;
-            // The "(none)" sentinel is the explicit "clear domain" choice (#5):
-            // map it to a null DomainName so the column falls back to a basic type.
-            DomainName = string.Equals(value.Name, UiStrings.DomainNoneOption, System.StringComparison.Ordinal)
-                ? null
-                : value.Name;
-        }
+        set => DomainName = value?.Name;
     }
 
     [ObservableProperty]

@@ -139,7 +139,7 @@ public partial class TriggerDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
     public void SetAvailableDomains(IEnumerable<DomainSpec> domains)
     {
         AvailableDomains.Clear();
-        AvailableDomains.Add(new DomainSpec(UiStrings.DomainNoneOption, string.Empty));
+        // No "(none)" sentinel — the SearchableComboBox clears via its ✕ button.
         foreach (var d in domains) AvailableDomains.Add(d);
     }
 

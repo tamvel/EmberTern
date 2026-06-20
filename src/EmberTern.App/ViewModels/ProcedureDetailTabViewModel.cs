@@ -195,11 +195,10 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     };
 
     /// <summary>Owner injects the live domain list after the active-connection
-    /// metadata load. A leading "(none)" sentinel lets a row clear its domain.</summary>
+    /// metadata load. Cleared via the SearchableComboBox ✕ (no "(none)" sentinel).</summary>
     public void SetAvailableDomains(IEnumerable<DomainSpec> domains)
     {
         AvailableDomains.Clear();
-        AvailableDomains.Add(new DomainSpec(UiStrings.DomainNoneOption, string.Empty));
         foreach (var d in domains) AvailableDomains.Add(d);
     }
 
