@@ -300,6 +300,16 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     // (gotcha #23). After it completes, _nameCache is populated.
     internal Task EnsureNameCacheAsync() => _nameCacheTask ??= BuildNameCacheAsync();
 
+    // Test seam: prime the session name cache for one group without a live connection,
+    // so a headless probe can exercise the type-ahead resolution path (which reads the
+    // cache). Marks the cache "built" so EnsureNameCacheAsync won't try to refetch.
+    internal void PrimeNameCacheForTest(MetadataNodeViewModel group, IReadOnlyList<string> names)
+    {
+        _nameCache ??= new Dictionary<MetadataNodeViewModel, IReadOnlyList<string>>();
+        _nameCache[group] = names;
+        _nameCacheTask = Task.CompletedTask;
+    }
+
     private async Task BuildNameCacheAsync()
     {
         var cache = new Dictionary<MetadataNodeViewModel, IReadOnlyList<string>>();

@@ -474,9 +474,7 @@ public partial class MainWindow : Window
         // Escape cancels the in-progress buffer (and lets the keypress fall through).
         if (e.Key == Key.Escape)
         {
-            _typeAheadBuffer = string.Empty;
-            _typeAheadAnchor = null;
-            _typeAheadResetTimer?.Stop();
+            ResetTypeAhead();
         }
     }
 
@@ -542,13 +540,17 @@ public partial class MainWindow : Window
     private DispatcherTimer CreateTypeAheadResetTimer()
     {
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(TypeAheadResetMs) };
-        timer.Tick += (_, _) =>
-        {
-            _typeAheadResetTimer!.Stop();
-            _typeAheadBuffer = string.Empty;
-            _typeAheadAnchor = null;
-        };
+        timer.Tick += (_, _) => ResetTypeAhead();
         return timer;
+    }
+
+    // Clear the in-progress type-ahead buffer + anchor and stop the idle timer. Called on
+    // Escape, on idle timeout, and on a tree click (so each click starts a fresh search).
+    private void ResetTypeAhead()
+    {
+        _typeAheadBuffer = string.Empty;
+        _typeAheadAnchor = null;
+        _typeAheadResetTimer?.Stop();
     }
 
     private static void SetNodeExpanded(object node, bool value)
@@ -568,6 +570,12 @@ public partial class MainWindow : Window
         if (sender is not TreeView tree) return;
         var point = e.GetCurrentPoint(tree);
         if (!point.Properties.IsLeftButtonPressed) return;
+
+        // A click repositions the user → start a FRESH type-ahead from the clicked node.
+        // The buffer otherwise only clears on the 1 s idle timer / Escape, so clicking a
+        // node within ~1 s of typing would keep appending to the stale buffer (every
+        // keystroke appends regardless of a match), search garbage, and "do nothing".
+        ResetTypeAhead();
 
         // Find the closest row VM under the pointer. We only initiate drags for
         // Folder / Connection rows — clicking a category or a metadata leaf does
