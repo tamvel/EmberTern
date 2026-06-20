@@ -46,12 +46,16 @@ public partial class MainWindow : Window
     private DropPosition _currentDropPosition;
     private const double DragThreshold = 8.0;
 
-    // Type-ahead (IBExpert-style). Accumulates typed letters into a transient buffer
-    // while the tree has focus; jumps to the next node whose name starts with it. The
-    // buffer self-clears after ~900 ms of no typing so a later keystroke starts fresh.
+    // Type-ahead (IBExpert-style incremental search). Typed letters accumulate into ONE
+    // growing buffer while the tree has focus; each keystroke jumps to the first node
+    // (tree order, full metadata via the VM's name cache) whose name starts with the
+    // whole buffer. The buffer self-clears after ~1 s idle so a later keystroke starts
+    // fresh. Resolution is async (may load a never-expanded category) — the generation
+    // counter discards a stale result if a newer keystroke superseded it.
     private string _typeAheadBuffer = string.Empty;
     private DispatcherTimer? _typeAheadResetTimer;
-    private const int TypeAheadResetMs = 900;
+    private int _typeAheadGeneration;
+    private const int TypeAheadResetMs = 1000;
 
     // Built lazily when the VM attaches (OnDataContextChanged), from the VM's store
     // directory + protector — so the View's workspace section writes into the SAME
@@ -470,7 +474,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnSidebarTypeAhead(object? sender, TextInputEventArgs e)
+    private async void OnSidebarTypeAhead(object? sender, TextInputEventArgs e)
     {
         if (sender is not TreeView tree || _currentVm is null) return;
         var text = e.Text;
@@ -480,42 +484,37 @@ public partial class MainWindow : Window
         var ch = text[0];
         if (char.IsControl(ch) || char.IsWhiteSpace(ch)) return;
 
-        // A fresh start (empty buffer, e.g. after the idle reset) searches exclusively
-        // from the current selection so pressing the same letter repeatedly cycles;
-        // extending the buffer searches inclusively so refining keeps the current match.
-        var fresh = _typeAheadBuffer.Length == 0;
+        // One growing buffer (incremental search). Consume the key so the tree's own
+        // single-char navigation doesn't fight us.
         _typeAheadBuffer += text;
         RestartTypeAheadReset();
+        e.Handled = true;
 
-        var index = _currentVm.Metadata.BuildTypeAheadIndex();
-        var current = IndexOfNode(index, tree.SelectedItem);
-        var matchIdx = MetadataExplorerViewModel.FindTypeAheadIndex(index, current, inclusive: !fresh, _typeAheadBuffer);
-        if (matchIdx < 0)
-        {
-            // No match for the extended buffer — consume the key (don't let the tree's
-            // own single-char nav fight us) but leave the buffer so the next letter refines.
-            e.Handled = true;
-            return;
-        }
+        var generation = ++_typeAheadGeneration;
+        var buffer = _typeAheadBuffer;
 
-        var entry = index[matchIdx];
-        // Open the path to the match (folder / connection / category), then select +
-        // scroll. Selection + BringIntoView are posted so they run after the expansion's
+        // Resolve against the FULL metadata (name cache) — finds objects in categories
+        // that were never expanded, loading the owning category on a hit. May await a DB
+        // round-trip on first use; the generation guard drops the result if the user has
+        // typed again in the meantime.
+        var result = await _currentVm.Metadata.ResolveTypeAheadAsync(buffer);
+        if (generation != _typeAheadGeneration || result is null) return;
+
+        // Expand ONLY the path to the match (folder / connection / category), then select
+        // + scroll. Selection + BringIntoView are posted so they run after the expansion's
         // layout pass has realized the container.
-        foreach (var ancestor in entry.Ancestors)
+        foreach (var ancestor in result.ExpandPath)
         {
             SetNodeExpanded(ancestor, true);
         }
 
         Dispatcher.UIThread.Post(() =>
         {
-            tree.SelectedItem = entry.Node;
-            var container = FindTreeViewItemFor(tree, entry.Node);
+            tree.SelectedItem = result.Node;
+            var container = FindTreeViewItemFor(tree, result.Node);
             container?.BringIntoView();
             container?.Focus();
         }, DispatcherPriority.Background);
-
-        e.Handled = true;
     }
 
     private void RestartTypeAheadReset()
@@ -534,16 +533,6 @@ public partial class MainWindow : Window
             _typeAheadBuffer = string.Empty;
         };
         return timer;
-    }
-
-    private static int IndexOfNode(System.Collections.Generic.IReadOnlyList<MetadataExplorerViewModel.TypeAheadEntry> index, object? node)
-    {
-        if (node is null) return -1;
-        for (var i = 0; i < index.Count; i++)
-        {
-            if (ReferenceEquals(index[i].Node, node)) return i;
-        }
-        return -1;
     }
 
     private static void SetNodeExpanded(object node, bool value)

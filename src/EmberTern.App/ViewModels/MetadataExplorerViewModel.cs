@@ -121,7 +121,10 @@ public partial class MetadataExplorerViewModel : ViewModelBase
             }
         }
 
-        ApplyFilter();
+        // Schema may have changed — drop the cached object-name index so the next
+        // filter / type-ahead refetches.
+        InvalidateNameCache();
+        await ApplyFilterAsync().ConfigureAwait(true);
         Diagnostics.RefreshTrace.Log("RefreshTree", "end");
     }
 
@@ -186,7 +189,17 @@ public partial class MetadataExplorerViewModel : ViewModelBase
             group.MarkLoaded();
             sw.Stop();
             Diagnostics.PerfTrace.LogGroupLoad(group.Kind.ToString(), objects.Count, sw.ElapsedMilliseconds);
-            ApplyFilter();
+
+            // Filter ONLY the group we just loaded — never the whole tree. The old global
+            // ApplyFilter() here was the cause of the "expanding one category expands the
+            // others" bug (#4): loading a category re-ran the global filter, which
+            // re-expanded every other loaded matching group. A single group's filtering
+            // touches no siblings and changes no other branch's expand state.
+            var filter = (FilterText ?? string.Empty).Trim();
+            if (filter.Length > 0)
+            {
+                ApplyFilterToGroup(group, hasFilter: true, filter);
+            }
         }
         catch (MetadataReadException ex)
         {
@@ -251,7 +264,7 @@ public partial class MetadataExplorerViewModel : ViewModelBase
                 _filterDebounce.Tick += (_, _) =>
                 {
                     _filterDebounce!.Stop();
-                    ApplyFilter();
+                    _ = ApplyFilterAsync();
                 };
             }
 
@@ -261,126 +274,279 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         catch
         {
             // No usable dispatcher (unit tests / headless) — apply immediately.
-            ApplyFilter();
+            _ = ApplyFilterAsync();
         }
     }
 
-    // Internal so tests can drive filtering deterministically (bypassing the debounce
-    // timer, which never ticks without a dispatcher loop).
-    internal void ApplyFilter()
+    // ─── Session name cache (shared by filter + type-ahead) ───────────────
+    // Lazy load gives the tree its fast connect, but it also means NOTHING is loaded to
+    // search when the user filters or types. So the first filter / type-ahead builds a
+    // flat name index per category — object NAMES only (strings, not VMs): cheap memory,
+    // no layout cost, one round-trip per category, cached for the session. This is what
+    // lets the filter show "Views (1)" for an un-expanded category and lets type-ahead
+    // find an object in a category that was never expanded. Invalidated on
+    // disconnect / reload / refresh (schema may have changed). Keyed by the group VM,
+    // which is rebuilt on every ReloadConnections — hence the aggressive invalidation.
+    private Dictionary<MetadataNodeViewModel, IReadOnlyList<string>>? _nameCache;
+    private Task? _nameCacheTask;
+
+    internal void InvalidateNameCache()
     {
+        _nameCache = null;
+        _nameCacheTask = null;
+    }
+
+    // Idempotent: the first caller starts the build, later callers join the same Task
+    // (gotcha #23). After it completes, _nameCache is populated.
+    internal Task EnsureNameCacheAsync() => _nameCacheTask ??= BuildNameCacheAsync();
+
+    private async Task BuildNameCacheAsync()
+    {
+        var cache = new Dictionary<MetadataNodeViewModel, IReadOnlyList<string>>();
+        foreach (var connection in Connections)
+        {
+            if (!connection.IsConnected)
+            {
+                continue;
+            }
+            foreach (var group in connection.Children)
+            {
+                if (!group.IsGroup)
+                {
+                    continue;
+                }
+                try
+                {
+                    var objects = await _reader.ListAsync(group.Kind).ConfigureAwait(true);
+                    var names = new List<string>(objects.Count);
+                    foreach (var o in objects)
+                    {
+                        names.Add(o.Name);
+                    }
+                    cache[group] = names;
+                }
+                catch (MetadataReadException) { cache[group] = Array.Empty<string>(); }
+                catch (InvalidOperationException) { cache[group] = Array.Empty<string>(); }
+            }
+        }
+        _nameCache = cache;
+    }
+
+    // ─── Filter ───────────────────────────────────────────────────────────
+    // IBExpert-style: while a filter is active, each category shows its MATCH count
+    // ("Views (1)") and categories with zero matches HIDE — so the user sees where the
+    // hits are without expanding anything. Match counts for un-expanded categories come
+    // from the name cache (no list load); loaded categories also hide their non-matching
+    // leaves in place. Crucially we NEVER auto-expand: opening a category is the user's
+    // explicit action (see #4). Cleared filter restores every category + leaf to visible
+    // and the total-count label.
+    private int _filterGeneration;
+
+    internal async Task ApplyFilterAsync()
+    {
+        var generation = ++_filterGeneration;
         var filter = (FilterText ?? string.Empty).Trim();
         var hasFilter = filter.Length > 0;
+
+        if (hasFilter)
+        {
+            // Need the name cache to count matches in un-expanded categories.
+            await EnsureNameCacheAsync().ConfigureAwait(true);
+            if (generation != _filterGeneration)
+            {
+                return; // superseded by a newer keystroke
+            }
+        }
 
         foreach (var connection in Connections)
         {
             foreach (var group in connection.Children)
             {
-                ApplyFilterToGroup(group, hasFilter, filter);
+                if (group.IsGroup)
+                {
+                    ApplyFilterToGroup(group, hasFilter, filter);
+                }
             }
         }
     }
 
-    // Internal so tests can assert the "local filter, no auto-expand of unloaded groups"
-    // contract directly without wiring a whole connection tree.
-    internal static void ApplyFilterToGroup(MetadataNodeViewModel group, bool hasFilter, string filter)
+    // Internal so tests can drive the loaded-group path directly. For an un-expanded
+    // group the match count comes from the name cache (when built); the group's leaves
+    // are NOT loaded by filtering.
+    internal void ApplyFilterToGroup(MetadataNodeViewModel group, bool hasFilter, string filter)
     {
-        var anyVisibleChild = false;
-        foreach (var leaf in group.Children)
+        if (!hasFilter)
         {
-            if (leaf.IsPlaceholder)
+            group.FilterMatchCount = null;
+            group.IsVisible = true;
+            foreach (var leaf in group.Children)
             {
-                // Placeholder only exists so the chevron renders. Hide it when filtering.
-                leaf.IsVisible = !hasFilter;
-                continue;
+                leaf.IsVisible = true;
             }
-            var match = !hasFilter || leaf.GroupLabel.Contains(filter, StringComparison.OrdinalIgnoreCase);
-            leaf.IsVisible = match;
-            if (match)
-            {
-                anyVisibleChild = true;
-            }
+            return;
         }
 
-        if (hasFilter)
+        int matches;
+        if (group.IsLoaded)
         {
-            // Hide groups with no matches; auto-expand groups with matches so user sees results.
-            // If group hasn't been loaded yet, leave visible so the user can expand to load+filter.
-            group.IsVisible = !group.IsLoaded || anyVisibleChild;
-            if (group.IsLoaded && anyVisibleChild)
+            // Loaded: filter leaves in place (hide non-matches) and count visible ones.
+            matches = 0;
+            foreach (var leaf in group.Children)
             {
-                group.IsExpanded = true;
+                if (leaf.IsPlaceholder)
+                {
+                    leaf.IsVisible = false;
+                    continue;
+                }
+                var m = leaf.GroupLabel.Contains(filter, StringComparison.OrdinalIgnoreCase);
+                leaf.IsVisible = m;
+                if (m)
+                {
+                    matches++;
+                }
             }
         }
         else
         {
-            group.IsVisible = true;
+            // Un-expanded: count from the name cache without loading the leaf list.
+            matches = _nameCache is not null && _nameCache.TryGetValue(group, out var names)
+                ? CountMatches(names, filter)
+                : 0;
         }
+
+        group.FilterMatchCount = matches;
+        group.IsVisible = matches > 0;
+        // NO auto-expand: the user opens the category they want; opening one branch
+        // must never change another branch's expand state (#4).
     }
 
-    // ─── Type-ahead (IBExpert-style) ──────────────────────────────────────
-    // A second, filter-independent search. With a node selected and focus on the tree,
-    // the user types letters into a transient buffer (the filter box stays empty); we
-    // jump to the next node whose name starts with the buffer, searching forward from
-    // the current selection and wrapping. On a hit the View expands the path to the
-    // match and selects it. Scope is every LOADED node (descend into loaded containers
-    // even when collapsed, so a leaf in a collapsed-but-loaded category is reachable and
-    // its path gets expanded). Unloaded categories have no real leaves to find — the
-    // user expands them (or uses the filter box, which loads-on-expand) first.
+    // Pure substring match count (case-insensitive), matching the leaf-filter predicate.
+    internal static int CountMatches(IEnumerable<string> names, string filter)
+    {
+        var count = 0;
+        foreach (var name in names)
+        {
+            if (name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            {
+                count++;
+            }
+        }
+        return count;
+    }
 
-    internal sealed record TypeAheadEntry(object Node, IReadOnlyList<object> Ancestors, string Text);
+    // ─── Type-ahead (IBExpert-style incremental search) ───────────────────
+    // Filter-independent. With focus on the tree, typed letters accumulate into ONE
+    // growing buffer (K → KO → KON → KONT → KONTR); each keystroke jumps to the FIRST
+    // node, in tree order, whose name starts with the whole buffer — so KONTR lands on
+    // KONTRAHENCI regardless of where you started, and refining never makes independent
+    // per-char jumps. The search domain is the FULL metadata (every object name via the
+    // name cache, plus connection / category labels), so a match in a never-expanded
+    // category is found, its path expanded, and it gets selected + scrolled into view —
+    // without expanding the rest of the tree. The View owns the buffer + idle reset.
+
+    // Structural node (connection/folder/category): DirectNode set, Group/LeafName null.
+    // Object leaf: DirectNode null, Group = owning category VM, LeafName = object name
+    // (the leaf VM may not exist yet — it's realized by loading Group on a hit).
+    internal sealed record TypeAheadEntry(
+        string Text, IReadOnlyList<object> Ancestors, object? DirectNode,
+        MetadataNodeViewModel? Group, string? LeafName);
+
+    internal sealed record TypeAheadResult(object Node, IReadOnlyList<object> ExpandPath);
 
     /// <summary>
-    /// Pre-order flatten of the navigable tree (folders → connections → categories →
-    /// leaves) in visual order, skipping placeholders. Each entry carries its expandable
-    /// ancestor chain so the View can open the path to a match. Built fresh per keystroke
-    /// — cheap relative to a key press, and always reflects the current load/expand state.
+    /// Builds the full searchable index in tree order (ensuring the name cache first),
+    /// finds the first entry whose text starts with <paramref name="buffer"/>, and
+    /// resolves it to a selectable VM — loading the owning category on demand for an
+    /// object in a never-expanded category. Returns the node to select plus the ancestor
+    /// path the View must expand, or null when nothing matches.
     /// </summary>
-    internal List<TypeAheadEntry> BuildTypeAheadIndex()
+    internal async Task<TypeAheadResult?> ResolveTypeAheadAsync(string buffer)
     {
+        if (string.IsNullOrEmpty(buffer))
+        {
+            return null;
+        }
+
+        var index = await BuildFullTypeAheadIndexAsync().ConfigureAwait(true);
+        var hit = FindFirstMatch(index, buffer);
+        if (hit < 0)
+        {
+            return null;
+        }
+
+        var entry = index[hit];
+        if (entry.DirectNode is not null)
+        {
+            return new TypeAheadResult(entry.DirectNode, entry.Ancestors);
+        }
+
+        // Object in a (possibly un-expanded) category: load it, then find the leaf VM.
+        var group = entry.Group!;
+        if (!group.IsLoaded)
+        {
+            await LoadGroupAsync(group).ConfigureAwait(true);
+        }
+        var leaf = group.Children.FirstOrDefault(
+            c => !c.IsPlaceholder && string.Equals(c.GroupLabel, entry.LeafName, StringComparison.OrdinalIgnoreCase));
+        return leaf is null ? null : new TypeAheadResult(leaf, entry.Ancestors);
+    }
+
+    internal async Task<List<TypeAheadEntry>> BuildFullTypeAheadIndexAsync()
+    {
+        await EnsureNameCacheAsync().ConfigureAwait(true);
         var list = new List<TypeAheadEntry>();
-        var ancestors = new List<object>();
         foreach (var root in RootNodes)
         {
-            WalkTypeAhead(root, ancestors, list);
+            AddTypeAheadNode(root, new List<object>(), list);
         }
         return list;
     }
 
-    private static void WalkTypeAhead(object node, List<object> ancestors, List<TypeAheadEntry> acc)
+    private void AddTypeAheadNode(object node, List<object> ancestors, List<TypeAheadEntry> acc)
     {
-        var text = NodeSearchText(node);
-        if (text.Length > 0)
+        switch (node)
         {
-            acc.Add(new TypeAheadEntry(node, ancestors.ToArray(), text));
-        }
+            case FolderNodeViewModel folder:
+                acc.Add(new TypeAheadEntry(NodeSearchText(folder), ancestors.ToArray(), folder, null, null));
+                ancestors.Add(folder);
+                foreach (var c in folder.Connections)
+                {
+                    AddTypeAheadNode(c, ancestors, acc);
+                }
+                ancestors.RemoveAt(ancestors.Count - 1);
+                break;
 
-        var children = ChildrenOf(node);
-        if (children is null)
-        {
-            return;
-        }
+            case ConnectionNodeViewModel connection:
+                acc.Add(new TypeAheadEntry(NodeSearchText(connection), ancestors.ToArray(), connection, null, null));
+                ancestors.Add(connection);
+                foreach (var group in connection.Children)
+                {
+                    if (group.IsGroup)
+                    {
+                        AddTypeAheadNode(group, ancestors, acc);
+                    }
+                }
+                ancestors.RemoveAt(ancestors.Count - 1);
+                break;
 
-        ancestors.Add(node);
-        foreach (var child in children)
-        {
-            WalkTypeAhead(child, ancestors, acc);
+            case MetadataNodeViewModel { IsGroup: true } group:
+                acc.Add(new TypeAheadEntry(NodeSearchText(group), ancestors.ToArray(), group, null, null));
+                // Objects from the name cache (covers never-expanded categories). The
+                // group is the ancestor to expand on a hit.
+                if (_nameCache is not null && _nameCache.TryGetValue(group, out var names))
+                {
+                    var groupAncestors = ancestors.Append(group).ToArray();
+                    foreach (var name in names)
+                    {
+                        acc.Add(new TypeAheadEntry(name, groupAncestors, null, group, name));
+                    }
+                }
+                break;
         }
-        ancestors.RemoveAt(ancestors.Count - 1);
     }
 
-    private static IEnumerable<object>? ChildrenOf(object node) => node switch
-    {
-        FolderNodeViewModel f => f.Connections,
-        ConnectionNodeViewModel c => c.Children,
-        // Only descend into a loaded group (its children are real leaves, not the
-        // "Loading…" placeholder). Skip the placeholder either way.
-        MetadataNodeViewModel { IsGroup: true } m => m.Children.Where(x => !x.IsPlaceholder),
-        _ => null,
-    };
-
-    // Text matched against the type-ahead buffer. Connection matches by profile name
-    // (not the "(host:port)" suffix); group by its raw label; leaf by its object name.
+    // Display text for a structural node. Connection matches by profile name (not the
+    // "(host:port)" suffix), folder by its name, category by its raw label.
     internal static string NodeSearchText(object node) => node switch
     {
         ConnectionNodeViewModel c => c.Profile.Name,
@@ -390,27 +556,18 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     };
 
     /// <summary>
-    /// Index of the next entry whose text starts with <paramref name="buffer"/>, scanning
-    /// forward from <paramref name="currentIndex"/> and wrapping. <paramref name="inclusive"/>
-    /// controls whether the current selection itself can match: a fresh single letter
-    /// searches exclusively (so repeating it cycles through items starting with that
-    /// letter), while refining an existing buffer searches inclusively (the current match
-    /// usually still satisfies the longer prefix and stays put). Returns -1 on no match.
-    /// Pure — unit-tested without any UI.
+    /// Index of the FIRST entry (tree order) whose text starts with <paramref name="buffer"/>,
+    /// case-insensitive, or -1. Incremental search starts from the top every keystroke so a
+    /// growing buffer keeps converging on the same item — no per-char cycling. Pure / unit-tested.
     /// </summary>
-    internal static int FindTypeAheadIndex(
-        IReadOnlyList<TypeAheadEntry> index, int currentIndex, bool inclusive, string buffer)
+    internal static int FindFirstMatch(IReadOnlyList<TypeAheadEntry> index, string buffer)
     {
         if (index.Count == 0 || string.IsNullOrEmpty(buffer))
         {
             return -1;
         }
-
-        var n = index.Count;
-        var begin = currentIndex < 0 ? 0 : currentIndex + (inclusive ? 0 : 1);
-        for (var step = 0; step < n; step++)
+        for (var i = 0; i < index.Count; i++)
         {
-            var i = ((begin + step) % n + n) % n;
             if (index[i].Text.StartsWith(buffer, StringComparison.OrdinalIgnoreCase))
             {
                 return i;

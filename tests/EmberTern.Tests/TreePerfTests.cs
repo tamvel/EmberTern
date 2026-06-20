@@ -12,74 +12,73 @@ using Xunit;
 namespace EmberTern.Tests;
 
 /// <summary>
-/// Object Explorer performance sprint — Etap 1: lazy COUNT-only load, local filter
-/// (no whole-tree auto-expand), and IBExpert-style type-ahead navigation.
+/// Object Explorer performance sprint — lazy COUNT-only load, IBExpert-style filter
+/// (per-category match counts, hide zeros, no auto-expand), and incremental type-ahead
+/// over the full metadata (session name cache).
 /// </summary>
 public class TreePerfTests
 {
-    // ─── Type-ahead: FindTypeAheadIndex (pure) ────────────────────────────
+    // ─── Type-ahead: FindFirstMatch (pure, incremental-from-start) ────────
 
-    private static MetadataExplorerViewModel.TypeAheadEntry E(string text)
-        => new(text, Array.Empty<object>(), text);
+    private static MetadataExplorerViewModel.TypeAheadEntry T(string text)
+        => new(text, Array.Empty<object>(), null, null, null);
 
     private static IReadOnlyList<MetadataExplorerViewModel.TypeAheadEntry> Sample()
-        => new[] { "ARTYKULY", "DOSTAWCY", "KONTRAHENCI", "KRAJE", "ZAMOWIENIA" }
-            .Select(E).ToArray();
+        => new[] { "ARTYKULY", "DOSTAWCY", "KONTRAHENCI", "KRAJE", "KONTAKT", "ZAMOWIENIA" }
+            .Select(T).ToArray();
 
     [Fact]
-    public void FindTypeAhead_EmptyBufferOrList_ReturnsMinusOne()
+    public void FindFirstMatch_EmptyBufferOrList_ReturnsMinusOne()
     {
-        Assert.Equal(-1, MetadataExplorerViewModel.FindTypeAheadIndex(Sample(), 0, inclusive: false, ""));
-        Assert.Equal(-1, MetadataExplorerViewModel.FindTypeAheadIndex(
-            Array.Empty<MetadataExplorerViewModel.TypeAheadEntry>(), -1, inclusive: false, "A"));
+        Assert.Equal(-1, MetadataExplorerViewModel.FindFirstMatch(Sample(), ""));
+        Assert.Equal(-1, MetadataExplorerViewModel.FindFirstMatch(
+            Array.Empty<MetadataExplorerViewModel.TypeAheadEntry>(), "A"));
     }
 
     [Fact]
-    public void FindTypeAhead_FreshLetter_SearchesForwardExclusive()
+    public void FindFirstMatch_FindsFirstInTreeOrder()
     {
-        // On ARTYKULY (0), a fresh "K" must advance to the next K-item (KONTRAHENCI=2).
-        var i = MetadataExplorerViewModel.FindTypeAheadIndex(Sample(), 0, inclusive: false, "K");
-        Assert.Equal(2, i);
+        // "K" → first K-item in order = KONTRAHENCI (index 2), not KONTAKT/KRAJE.
+        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "K"));
     }
 
     [Fact]
-    public void FindTypeAhead_RefiningBuffer_KeepsCurrentMatch()
+    public void FindFirstMatch_IncrementalBufferConvergesToOneItem()
     {
-        // On KONTRAHENCI (2), refining to "KO" stays put (inclusive).
-        var i = MetadataExplorerViewModel.FindTypeAheadIndex(Sample(), 2, inclusive: true, "KO");
-        Assert.Equal(2, i);
+        // The whole point of #2: a growing buffer keeps refining toward KONTRAHENCI
+        // (never an independent per-char jump). "KONTR" skips KONTAKT.
+        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "K"));
+        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "KO"));
+        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "KON"));
+        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "KONT"));
+        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "KONTR")); // KONTAKT no longer matches
     }
 
     [Fact]
-    public void FindTypeAhead_SameLetterAgain_CyclesToNextMatch()
+    public void FindFirstMatch_IsCaseInsensitive()
     {
-        // On KONTRAHENCI (2), a fresh "K" again cycles to the next K-item (KRAJE=3).
-        var i = MetadataExplorerViewModel.FindTypeAheadIndex(Sample(), 2, inclusive: false, "K");
-        Assert.Equal(3, i);
+        Assert.Equal(2, MetadataExplorerViewModel.FindFirstMatch(Sample(), "kontr"));
     }
 
     [Fact]
-    public void FindTypeAhead_WrapsAround()
+    public void FindFirstMatch_NoMatch_ReturnsMinusOne()
     {
-        // On KRAJE (3), "A" finds nothing forward (ZAMOWIENIA) → wraps to ARTYKULY (0).
-        var i = MetadataExplorerViewModel.FindTypeAheadIndex(Sample(), 3, inclusive: false, "A");
-        Assert.Equal(0, i);
+        Assert.Equal(-1, MetadataExplorerViewModel.FindFirstMatch(Sample(), "ZZ"));
     }
+
+    // ─── Pure match counting (filter) ─────────────────────────────────────
 
     [Fact]
-    public void FindTypeAhead_IsCaseInsensitive()
+    public void CountMatches_CountsCaseInsensitiveSubstrings()
     {
-        var i = MetadataExplorerViewModel.FindTypeAheadIndex(Sample(), -1, inclusive: false, "kon");
-        Assert.Equal(2, i);
+        var names = new[] { "WIDOK_A", "WIDOK_B", "ARTYKULY", "OWIDIUSZ" };
+        Assert.Equal(3, MetadataExplorerViewModel.CountMatches(names, "wid")); // WIDOK_A, WIDOK_B, OWIDIUSZ
+        Assert.Equal(2, MetadataExplorerViewModel.CountMatches(names, "WIDOK"));
+        Assert.Equal(0, MetadataExplorerViewModel.CountMatches(names, "zzz"));
+        Assert.Equal(0, MetadataExplorerViewModel.CountMatches(Array.Empty<string>(), "x"));
     }
 
-    [Fact]
-    public void FindTypeAhead_NoMatch_ReturnsMinusOne()
-    {
-        Assert.Equal(-1, MetadataExplorerViewModel.FindTypeAheadIndex(Sample(), 0, inclusive: false, "ZZ"));
-    }
-
-    // ─── Type-ahead: NodeSearchText + BuildTypeAheadIndex ─────────────────
+    // ─── NodeSearchText ───────────────────────────────────────────────────
 
     [Fact]
     public void NodeSearchText_PerKind()
@@ -101,21 +100,21 @@ public class TreePerfTests
     }
 
     [Fact]
-    public void BuildTypeAheadIndex_IncludesConnectionRows()
+    public async Task BuildFullTypeAheadIndex_IncludesConnectionRows()
     {
         using var h = new Harness();
         h.Store.Upsert(new ConnectionProfile { Name = "Alpha", Host = "x", Port = 3050 });
         h.Store.Upsert(new ConnectionProfile { Name = "Beta", Host = "x", Port = 3050 });
         h.Main.ReloadConnections();
 
-        var index = h.Main.Metadata.BuildTypeAheadIndex();
+        var index = await h.Main.Metadata.BuildFullTypeAheadIndexAsync();
+        // Disconnected → no categories/leaves, only the two connection rows.
         Assert.Contains(index, e => e.Text == "Alpha");
         Assert.Contains(index, e => e.Text == "Beta");
-        // Disconnected → no category/leaf rows, only the two connection nodes.
         Assert.Equal(2, index.Count);
     }
 
-    // ─── Local filter: ApplyFilterToGroup (no whole-tree expand) ──────────
+    // ─── IBExpert-style filter: ApplyFilterToGroup ────────────────────────
 
     private static MetadataNodeViewModel LoadedGroup(MetadataExplorerViewModel meta, params string[] leaves)
     {
@@ -130,15 +129,17 @@ public class TreePerfTests
     }
 
     [Fact]
-    public void ApplyFilterToGroup_LoadedGroup_HidesNonMatchesAndExpandsOnMatch()
+    public void ApplyFilterToGroup_LoadedGroup_ShowsMatchCount_HidesNonMatches_NoAutoExpand()
     {
         using var h = new Harness();
-        var group = LoadedGroup(h.Main.Metadata, "KONTRAHENCI", "ARTYKULY");
+        var group = LoadedGroup(h.Main.Metadata, "KONTRAHENCI", "KONTAKT", "ARTYKULY");
 
-        MetadataExplorerViewModel.ApplyFilterToGroup(group, hasFilter: true, "KON");
+        h.Main.Metadata.ApplyFilterToGroup(group, hasFilter: true, "KON");
 
         Assert.True(group.IsVisible);
-        Assert.True(group.IsExpanded); // a LOADED group with matches auto-expands to reveal them
+        Assert.Equal(2, group.FilterMatchCount);                 // KONTRAHENCI + KONTAKT
+        Assert.Equal("Tables (2)", group.DisplayLabel);          // label shows MATCH count
+        Assert.False(group.IsExpanded);                          // #4: filter never auto-expands
         Assert.True(group.Children.Single(c => c.GroupLabel == "KONTRAHENCI").IsVisible);
         Assert.False(group.Children.Single(c => c.GroupLabel == "ARTYKULY").IsVisible);
     }
@@ -149,24 +150,40 @@ public class TreePerfTests
         using var h = new Harness();
         var group = LoadedGroup(h.Main.Metadata, "KONTRAHENCI", "ARTYKULY");
 
-        MetadataExplorerViewModel.ApplyFilterToGroup(group, hasFilter: true, "ZZZ");
+        h.Main.Metadata.ApplyFilterToGroup(group, hasFilter: true, "ZZZ");
 
         Assert.False(group.IsVisible);
+        Assert.Equal(0, group.FilterMatchCount);
     }
 
     [Fact]
-    public void ApplyFilterToGroup_UnloadedGroup_StaysVisibleAndNeverAutoExpands()
+    public void ApplyFilterToGroup_ClearFilter_RestoresVisibilityAndLabel()
     {
-        // The "no whole-tree auto-expand" guarantee: an un-expanded (count-only) category
-        // is never force-loaded/expanded by filtering — it stays visible so the user can
-        // open it to load+filter, but IsExpanded MUST remain false.
         using var h = new Harness();
-        var group = MetadataNodeViewModel.CreateGroup(h.Main.Metadata, MetadataObjectKind.Table); // placeholder only, not loaded
+        var group = LoadedGroup(h.Main.Metadata, "KONTRAHENCI", "ARTYKULY");
+        group.Count = 2;
+
+        h.Main.Metadata.ApplyFilterToGroup(group, hasFilter: true, "KON");
+        h.Main.Metadata.ApplyFilterToGroup(group, hasFilter: false, "");
+
+        Assert.Null(group.FilterMatchCount);
+        Assert.True(group.IsVisible);
+        Assert.Equal("Tables (2)", group.DisplayLabel);          // back to TOTAL count
+        Assert.All(group.Children, c => Assert.True(c.IsVisible));
+    }
+
+    [Fact]
+    public void ApplyFilterToGroup_UnloadedGroup_NeverAutoExpands()
+    {
+        // The "no whole-tree auto-expand" guarantee: a count-only category is never
+        // force-expanded by filtering. (Without a name cache its match count is 0 → it
+        // hides; the real per-category count comes from the cache in ApplyFilterAsync.)
+        using var h = new Harness();
+        var group = MetadataNodeViewModel.CreateGroup(h.Main.Metadata, MetadataObjectKind.Table);
         Assert.False(group.IsLoaded);
 
-        MetadataExplorerViewModel.ApplyFilterToGroup(group, hasFilter: true, "KON");
+        h.Main.Metadata.ApplyFilterToGroup(group, hasFilter: true, "KON");
 
-        Assert.True(group.IsVisible);
         Assert.False(group.IsExpanded);
     }
 
@@ -180,9 +197,15 @@ public class TreePerfTests
 
         await h.Main.Metadata.LoadCountAsync(group);
 
-        // No connection → no fetch, count stays unset, group stays unloaded & expandable.
         Assert.Null(group.Count);
         Assert.False(group.IsLoaded);
+    }
+
+    [Fact]
+    public void InvalidateNameCache_DoesNotThrow()
+    {
+        using var h = new Harness();
+        h.Main.Metadata.InvalidateNameCache(); // idempotent, safe before any build
     }
 
     private sealed class Harness : IDisposable

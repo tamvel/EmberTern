@@ -238,6 +238,10 @@ public partial class ConnectionNodeViewModel : ViewModelBase
             return;
         }
 
+        // The session object-name cache (filter + type-ahead) is tied to the connected
+        // schema — drop it on any connect/disconnect so the next search rebuilds it.
+        _owner?.Metadata?.InvalidateNameCache();
+
         if (nowConnected)
         {
             // Transitioning to connected: seed a placeholder so the chevron renders

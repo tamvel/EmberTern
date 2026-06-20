@@ -679,6 +679,9 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         Metadata.Connections.Clear();
         Metadata.RootNodes.Clear();
+        // The name cache (filter + type-ahead) keys on the group VMs we're about to
+        // discard — drop it so the next search rebuilds against the new tree.
+        Metadata.InvalidateNameCache();
 
         var profiles = _store.LoadAll();
         var nodesById = new Dictionary<string, ConnectionNodeViewModel>(StringComparer.Ordinal);
