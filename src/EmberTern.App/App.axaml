@@ -8,6 +8,7 @@
       <ResourceDictionary.MergedDictionaries>
         <ResourceInclude Source="avares://EmberTern/Themes/Colors.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/IconGeometries.axaml" />
+        <ResourceInclude Source="avares://EmberTern/Themes/SearchableComboBox.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>

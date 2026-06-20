@@ -1,0 +1,53 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:EmberTern.App.Controls">
+
+  <!-- General searchable/filtering selector (domains, tables, views, …). Closed:
+       display text + ✕ clear + chevron. Open: top-level popup (never clipped) with
+       a filter box + rich list, built in code-behind. -->
+  <ControlTheme x:Key="{x:Type controls:SearchableComboBox}" TargetType="controls:SearchableComboBox">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="PART_Shell"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="3">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <TextBlock x:Name="PART_Display" Grid.Column="0"
+                       VerticalAlignment="Center" Margin="6,0"
+                       FontSize="11" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource ForegroundBrush}" />
+            <Button x:Name="PART_Clear" Grid.Column="1" Classes="icon"
+                    Width="18" Height="18" Padding="0" IsVisible="False"
+                    VerticalAlignment="Center">
+              <controls:SvgIcon Data="{DynamicResource Icon.X}" Width="11" Height="11"
+                                Foreground="{DynamicResource SubtleForegroundBrush}" />
+            </Button>
+            <ToggleButton x:Name="PART_Toggle" Grid.Column="2"
+                          Width="22" Height="22" Padding="0"
+                          Background="Transparent" BorderThickness="0"
+                          VerticalAlignment="Center">
+              <controls:SvgIcon Data="{DynamicResource Icon.ChevronDown}" Width="12" Height="12"
+                                Foreground="{DynamicResource SubtleForegroundBrush}" />
+            </ToggleButton>
+
+            <Popup x:Name="PART_Popup"
+                   Placement="BottomEdgeAlignedLeft"
+                   IsLightDismissEnabled="True">
+              <Border Background="{DynamicResource ElevatedPanelBrush}"
+                      BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                      CornerRadius="3" MinWidth="260">
+                <ContentControl x:Name="PART_PopupHost" />
+              </Border>
+            </Popup>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+</ResourceDictionary>
