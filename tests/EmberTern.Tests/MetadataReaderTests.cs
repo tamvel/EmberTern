@@ -37,6 +37,10 @@ public class MetadataReaderTests
         Assert.Contains("RDB$FIELD_SCALE", sql);
         Assert.Contains("RDB$FIELD_PRECISION", sql);
         Assert.Contains("RDB$FIELD_SUB_TYPE", sql);
+        // Faza 2: Not Null + charset for the rich domain list.
+        Assert.Contains("RDB$NULL_FLAG", sql);
+        Assert.Contains("RDB$CHARACTER_SETS", sql);
+        Assert.Contains("RDB$CHARACTER_SET_NAME", sql);
     }
 
     [Fact]

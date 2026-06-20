@@ -69,14 +69,17 @@ public sealed class SearchableComboBox : TemplatedControl
         set => SetValue(ItemTemplateProperty, value);
     }
 
-    public static readonly StyledProperty<object?> HeaderContentProperty =
-        AvaloniaProperty.Register<SearchableComboBox, object?>(nameof(HeaderContent));
+    public static readonly StyledProperty<IDataTemplate?> HeaderTemplateProperty =
+        AvaloniaProperty.Register<SearchableComboBox, IDataTemplate?>(nameof(HeaderTemplate));
 
-    /// <summary>Optional column-header row above the list (single-list mode).</summary>
-    public object? HeaderContent
+    /// <summary>Optional column-header row above the list (single-list mode). A
+    /// template so each popup builds its own header instance (a shared Control can't
+    /// be parented into multiple popups). Align columns with the rows via
+    /// <c>Grid.SharedSizeGroup</c> (the popup root is a shared-size scope).</summary>
+    public IDataTemplate? HeaderTemplate
     {
-        get => GetValue(HeaderContentProperty);
-        set => SetValue(HeaderContentProperty, value);
+        get => GetValue(HeaderTemplateProperty);
+        set => SetValue(HeaderTemplateProperty, value);
     }
 
     public static readonly StyledProperty<string?> DisplayMemberPathProperty =
@@ -159,7 +162,7 @@ public sealed class SearchableComboBox : TemplatedControl
     {
         ItemsSourceProperty.Changed.AddClassHandler<SearchableComboBox>((c, _) => c._contentDirty = true);
         ItemTemplateProperty.Changed.AddClassHandler<SearchableComboBox>((c, _) => c._contentDirty = true);
-        HeaderContentProperty.Changed.AddClassHandler<SearchableComboBox>((c, _) => c._contentDirty = true);
+        HeaderTemplateProperty.Changed.AddClassHandler<SearchableComboBox>((c, _) => c._contentDirty = true);
         SelectedItemProperty.Changed.AddClassHandler<SearchableComboBox>((c, _) => c.UpdateDisplay());
         SelectionBoxTextProperty.Changed.AddClassHandler<SearchableComboBox>((c, _) => c.UpdateDisplay());
         WatermarkProperty.Changed.AddClassHandler<SearchableComboBox>((c, _) => c.UpdateDisplay());
@@ -255,7 +258,7 @@ public sealed class SearchableComboBox : TemplatedControl
         Control body;
         if (Sections.Count == 0)
         {
-            body = BuildSectionBody(null, ItemsSource, ItemTemplate, HeaderContent, DisplayMemberPath);
+            body = BuildSectionBody(null, ItemsSource, ItemTemplate, HeaderTemplate, DisplayMemberPath);
         }
         else
         {
@@ -265,7 +268,7 @@ public sealed class SearchableComboBox : TemplatedControl
                 tabs.Items.Add(new TabItem
                 {
                     Header = s.Header,
-                    Content = BuildSectionBody(s, s.ItemsSource, s.ItemTemplate, s.HeaderContent, s.DisplayMemberPath),
+                    Content = BuildSectionBody(s, s.ItemsSource, s.ItemTemplate, s.HeaderTemplate, s.DisplayMemberPath),
                 });
             }
             tabs.SelectionChanged += (_, _) => ApplyFilter(_filterBox?.Text ?? string.Empty);
@@ -278,11 +281,14 @@ public sealed class SearchableComboBox : TemplatedControl
         _contentDirty = false;
     }
 
-    private Control BuildSectionBody(SearchableComboBoxSection? section, IEnumerable? source, IDataTemplate? template, object? header, string? path)
+    private Control BuildSectionBody(SearchableComboBoxSection? section, IEnumerable? source, IDataTemplate? template, IDataTemplate? headerTemplate, string? path)
     {
         var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
-        if (header is not null)
-            grid.Children.Add(new ContentControl { Content = header, [Grid.RowProperty] = 0 });
+        if (headerTemplate?.Build(null) is { } header)
+        {
+            header[Grid.RowProperty] = 0;
+            grid.Children.Add(header);
+        }
 
         var list = new ListBox
         {

@@ -268,8 +268,11 @@ public sealed class FirebirdMetadataReader
                 var fieldScale = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3);
                 var fieldPrecision = reader.IsDBNull(4) ? (int?)null : reader.GetInt32(4);
                 var subType = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
+                var notNull = !reader.IsDBNull(6) && reader.GetInt32(6) == 1;
+                var charset = reader.IsDBNull(7) ? null : reader.GetString(7).Trim();
+                if (string.IsNullOrEmpty(charset)) charset = null;
                 var type = FirebirdTableDetailReader.FormatFieldType(fieldType, fieldLength, fieldScale, fieldPrecision, subType);
-                domains.Add(new DomainSpec(name, type));
+                domains.Add(new DomainSpec(name, type, notNull, charset));
             }
             return domains;
         }
@@ -284,13 +287,15 @@ public sealed class FirebirdMetadataReader
     }
 
     internal const string DomainsSql =
-        "SELECT TRIM(RDB$FIELD_NAME), " +
-        "       RDB$FIELD_TYPE, RDB$FIELD_LENGTH, " +
-        "       RDB$FIELD_SCALE, RDB$FIELD_PRECISION, " +
-        "       RDB$FIELD_SUB_TYPE " +
-        "FROM RDB$FIELDS " +
-        "WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 " +
-        "ORDER BY RDB$FIELD_NAME";
+        "SELECT TRIM(f.RDB$FIELD_NAME), " +
+        "       f.RDB$FIELD_TYPE, f.RDB$FIELD_LENGTH, " +
+        "       f.RDB$FIELD_SCALE, f.RDB$FIELD_PRECISION, " +
+        "       f.RDB$FIELD_SUB_TYPE, f.RDB$NULL_FLAG, " +
+        "       cs.RDB$CHARACTER_SET_NAME " +
+        "FROM RDB$FIELDS f " +
+        "LEFT JOIN RDB$CHARACTER_SETS cs ON cs.RDB$CHARACTER_SET_ID = f.RDB$CHARACTER_SET_ID " +
+        "WHERE COALESCE(f.RDB$SYSTEM_FLAG, 0) = 0 " +
+        "ORDER BY f.RDB$FIELD_NAME";
 
     // Joins RDB$RELATION_FIELDS to RDB$FIELDS so the autocomplete dropdown can
     // render "COLUMN : TYPE". Same mapping logic as the TableDetail Fields tab.

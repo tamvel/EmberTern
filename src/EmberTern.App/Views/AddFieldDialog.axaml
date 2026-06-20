@@ -68,6 +68,7 @@
                     SelectedItem="{Binding SelectedDomain, Mode=TwoWay}"
                     DisplayMemberPath="Name"
                     ItemTemplate="{StaticResource DomainRowTemplate}"
+                    HeaderTemplate="{StaticResource DomainHeaderTemplate}"
                     Watermark=""
                     HorizontalAlignment="Stretch" />
           <TextBlock Text="{x:Static app:UiStrings.AddFieldDomainHint}"

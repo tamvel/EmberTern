@@ -306,6 +306,7 @@
                             IsEnabled="{Binding IsCellEditable}"
                             DisplayMemberPath="Name"
                             ItemTemplate="{StaticResource DomainRowTemplate}"
+                            HeaderTemplate="{StaticResource DomainHeaderTemplate}"
                             Watermark=""
                             BorderThickness="0"
                             Background="Transparent"

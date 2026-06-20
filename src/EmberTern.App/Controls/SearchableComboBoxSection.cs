@@ -42,15 +42,15 @@ public sealed class SearchableComboBoxSection : AvaloniaObject
         set => SetValue(ItemTemplateProperty, value);
     }
 
-    public static readonly StyledProperty<object?> HeaderContentProperty =
-        AvaloniaProperty.Register<SearchableComboBoxSection, object?>(nameof(HeaderContent));
+    public static readonly StyledProperty<IDataTemplate?> HeaderTemplateProperty =
+        AvaloniaProperty.Register<SearchableComboBoxSection, IDataTemplate?>(nameof(HeaderTemplate));
 
     /// <summary>Optional column-header row shown above the list (aligns with the
-    /// item rows via <c>Grid.IsSharedSizeScope</c>).</summary>
-    public object? HeaderContent
+    /// item rows via <c>Grid.SharedSizeGroup</c>; built per popup).</summary>
+    public IDataTemplate? HeaderTemplate
     {
-        get => GetValue(HeaderContentProperty);
-        set => SetValue(HeaderContentProperty, value);
+        get => GetValue(HeaderTemplateProperty);
+        set => SetValue(HeaderTemplateProperty, value);
     }
 
     public static readonly StyledProperty<string?> DisplayMemberPathProperty =

@@ -41,7 +41,7 @@
                    IsLightDismissEnabled="True">
               <Border Background="{DynamicResource ElevatedPanelBrush}"
                       BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                      CornerRadius="3" MinWidth="260">
+                      CornerRadius="3" MinWidth="480">
                 <ContentControl x:Name="PART_PopupHost" />
               </Border>
             </Popup>

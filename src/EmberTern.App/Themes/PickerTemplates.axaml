@@ -1,13 +1,52 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:app="using:EmberTern.App"
+                    xmlns:conv="using:EmberTern.App.Converters"
                     xmlns:metadata="using:EmberTern.Core.Metadata">
 
-  <!-- Shared dropdown-row template for the Domain SearchableComboBox, referenced by
+  <!-- Shared rich dropdown-row template for the Domain SearchableComboBox, referenced by
        every Domain picker (Procedure/Trigger via FieldGridColumns, New Table, Table
-       Detail) so the list looks identical everywhere. Faza 1: name only. Faza 2 will
-       enrich this single definition to Name | Type | Size | Scale | Not Null. -->
+       Detail, AddFieldDialog) so the list looks identical everywhere. Fixed column widths
+       (header + rows) so they line up without SharedSizeGroup jiggle under virtualization. -->
   <DataTemplate x:Key="DomainRowTemplate" x:DataType="metadata:DomainSpec">
-    <TextBlock Text="{Binding Name}" Margin="8,3" FontSize="11" />
+    <Grid Margin="8,2" HorizontalAlignment="Stretch"
+          ColumnDefinitions="*,110,55,55,60,90">
+      <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11"
+                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
+      <TextBlock Grid.Column="1" Text="{Binding BaseType}" FontSize="11"
+                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
+      <TextBlock Grid.Column="2" Text="{Binding Size}" FontSize="11" TextAlignment="Right"
+                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+      <TextBlock Grid.Column="3" Text="{Binding Scale}" FontSize="11" TextAlignment="Right"
+                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+      <TextBlock Grid.Column="4" Text="{Binding NotNull, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
+                 FontSize="11" TextAlignment="Center" VerticalAlignment="Center" />
+      <TextBlock Grid.Column="5" Text="{Binding Charset}" FontSize="11"
+                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+    </Grid>
+  </DataTemplate>
+
+  <!-- Column-header row above the domain list (same fixed widths as DomainRowTemplate). -->
+  <DataTemplate x:Key="DomainHeaderTemplate">
+    <Border Background="{DynamicResource ElevatedPanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid Margin="8,3" HorizontalAlignment="Stretch"
+            ColumnDefinitions="*,110,55,55,60,90">
+        <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.TableDetailColumnName}"
+                   FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,0,8,0" />
+        <TextBlock Grid.Column="1" Text="{x:Static app:UiStrings.TableDetailColumnType}"
+                   FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
+        <TextBlock Grid.Column="2" Text="{x:Static app:UiStrings.TableDetailColumnSize}"
+                   FontSize="10" FontWeight="SemiBold" TextAlignment="Right" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,0,8,0" />
+        <TextBlock Grid.Column="3" Text="{x:Static app:UiStrings.TableDetailColumnScale}"
+                   FontSize="10" FontWeight="SemiBold" TextAlignment="Right" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,0,8,0" />
+        <TextBlock Grid.Column="4" Text="{x:Static app:UiStrings.TableDetailColumnNotNull}"
+                   FontSize="10" FontWeight="SemiBold" TextAlignment="Center" Foreground="{DynamicResource SubtleForegroundBrush}" />
+        <TextBlock Grid.Column="5" Text="{x:Static app:UiStrings.ProcedureFieldCharset}"
+                   FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
+      </Grid>
+    </Border>
   </DataTemplate>
 
 </ResourceDictionary>

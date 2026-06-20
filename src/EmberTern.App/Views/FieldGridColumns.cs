@@ -120,7 +120,8 @@ internal static class FieldGridColumns
                     VerticalAlignment = VerticalAlignment.Center,
                     DisplayMemberPath = nameof(DomainSpec.Name),
                     Watermark = string.Empty,
-                    ItemTemplate = DomainRowTemplate(),
+                    ItemTemplate = PickerTemplate("DomainRowTemplate"),
+                    HeaderTemplate = PickerTemplate("DomainHeaderTemplate"),
                 };
                 picker.Bind(SearchableComboBox.ItemsSourceProperty, new Binding(itemsPath));
                 picker.Bind(SearchableComboBox.SelectedItemProperty, new Binding(selectedPath) { Mode = BindingMode.TwoWay });
@@ -128,12 +129,6 @@ internal static class FieldGridColumns
             }),
         };
 
-    private static IDataTemplate? _domainRowTemplate;
-    private static IDataTemplate? DomainRowTemplate()
-    {
-        if (_domainRowTemplate is not null) return _domainRowTemplate;
-        if (Application.Current?.Resources.TryGetResource("DomainRowTemplate", null, out var t) == true)
-            _domainRowTemplate = t as IDataTemplate;
-        return _domainRowTemplate;
-    }
+    private static IDataTemplate? PickerTemplate(string key)
+        => Application.Current?.Resources.TryGetResource(key, null, out var t) == true ? t as IDataTemplate : null;
 }
