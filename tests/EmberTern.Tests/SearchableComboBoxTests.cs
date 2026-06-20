@@ -1,5 +1,6 @@
 using System.Linq;
 using EmberTern.App.Controls;
+using EmberTern.App.ViewModels;
 using EmberTern.Core.Metadata;
 using Xunit;
 
@@ -60,5 +61,13 @@ public class SearchableComboBoxTests
         var src = new[] { "INTEGER", "VARCHAR", "BIGINT" };
         var r = SearchableComboBox.FilterItems(src, null, "int").Cast<string>().ToList();
         Assert.Equal(new[] { "INTEGER", "BIGINT" }, r);
+    }
+
+    [Fact]
+    public void ColumnRef_FormatsQualifiedAndTypeOfClause()
+    {
+        var c = new ColumnRef("ADRES", "MIASTO", "VARCHAR(50)");
+        Assert.Equal("ADRES.MIASTO", c.Qualified);
+        Assert.Equal("COLUMN ADRES.MIASTO", c.TypeOfClause);
     }
 }

@@ -53,6 +53,19 @@ public sealed class SearchableComboBoxSection : AvaloniaObject
         set => SetValue(HeaderTemplateProperty, value);
     }
 
+    public static readonly StyledProperty<Avalonia.Controls.Control?> ContentProperty =
+        AvaloniaProperty.Register<SearchableComboBoxSection, Avalonia.Controls.Control?>(nameof(Content));
+
+    /// <summary>Custom tab content (e.g. a two-pane table→column picker). When set, the
+    /// host renders this instead of the built-in filter+list, hides the shared filter
+    /// box for this tab, and wires the content's commit (see
+    /// <see cref="ISearchableComboBoxContent"/>). <see cref="ItemsSource"/> is ignored.</summary>
+    public Avalonia.Controls.Control? Content
+    {
+        get => GetValue(ContentProperty);
+        set => SetValue(ContentProperty, value);
+    }
+
     public static readonly StyledProperty<string?> DisplayMemberPathProperty =
         AvaloniaProperty.Register<SearchableComboBoxSection, string?>(nameof(DisplayMemberPath));
 

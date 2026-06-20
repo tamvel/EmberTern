@@ -152,6 +152,7 @@ public sealed class SearchableComboBox : TemplatedControl
     private Popup? _popup;
     private ContentControl? _popupHost;
     private TextBox? _filterBox;
+    private TabControl? _tabs;
     private readonly List<ListEntry> _lists = new();
     private bool _contentDirty = true;
     private bool _syncingToggle;
@@ -224,6 +225,7 @@ public sealed class SearchableComboBox : TemplatedControl
             EnsurePopupContent();
             if (_filterBox is not null) _filterBox.Text = string.Empty;
             ApplyFilter(string.Empty);
+            UpdateFilterVisibility();
             _popup.IsOpen = true;
             Dispatcher.UIThread.Post(() =>
             {
@@ -241,6 +243,7 @@ public sealed class SearchableComboBox : TemplatedControl
     {
         if (!_contentDirty || _popupHost is null) return;
         _lists.Clear();
+        _tabs = null;
 
         var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
         Grid.SetIsSharedSizeScope(root, true);
@@ -265,13 +268,22 @@ public sealed class SearchableComboBox : TemplatedControl
             var tabs = new TabControl { Padding = new Thickness(0) };
             foreach (var s in Sections)
             {
-                tabs.Items.Add(new TabItem
+                Control tabContent;
+                if (s.Content is { } custom)
                 {
-                    Header = s.Header,
-                    Content = BuildSectionBody(s, s.ItemsSource, s.ItemTemplate, s.HeaderTemplate, s.DisplayMemberPath),
-                });
+                    // Custom tab (e.g. two-pane Table-column picker) — self-filters and
+                    // commits via ISearchableComboBoxContent; the shared filter box hides.
+                    if (custom is ISearchableComboBoxContent c) c.CommitRequested = Commit;
+                    tabContent = custom;
+                }
+                else
+                {
+                    tabContent = BuildSectionBody(s, s.ItemsSource, s.ItemTemplate, s.HeaderTemplate, s.DisplayMemberPath);
+                }
+                tabs.Items.Add(new TabItem { Header = s.Header, Content = tabContent, Tag = s });
             }
-            tabs.SelectionChanged += (_, _) => ApplyFilter(_filterBox?.Text ?? string.Empty);
+            tabs.SelectionChanged += (_, _) => UpdateFilterVisibility();
+            _tabs = tabs;
             body = tabs;
         }
         body[Grid.RowProperty] = 1;
@@ -279,6 +291,17 @@ public sealed class SearchableComboBox : TemplatedControl
 
         _popupHost.Content = root;
         _contentDirty = false;
+    }
+
+    // The shared filter box only applies to built-in list tabs; a custom-content tab
+    // (Table column) self-filters, so hide the shared box when it's active.
+    private void UpdateFilterVisibility()
+    {
+        if (_filterBox is null) return;
+        var activeSection = (_tabs?.SelectedItem as TabItem)?.Tag as SearchableComboBoxSection;
+        var custom = activeSection?.Content is not null;
+        _filterBox.IsVisible = !custom;
+        if (!custom) ApplyFilter(_filterBox.Text ?? string.Empty);
     }
 
     private Control BuildSectionBody(SearchableComboBoxSection? section, IEnumerable? source, IDataTemplate? template, IDataTemplate? headerTemplate, string? path)
