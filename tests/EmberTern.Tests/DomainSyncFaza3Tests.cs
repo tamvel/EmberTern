@@ -1,6 +1,8 @@
 using System.Linq;
+using System.Threading.Tasks;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Metadata;
+using EmberTern.Firebird;
 using Xunit;
 
 namespace EmberTern.Tests;
@@ -83,6 +85,24 @@ public class DomainSyncFaza3Tests
         row.Type = "SMALLINT";
         Assert.Null(row.Size);
         Assert.Null(row.Scale);
+    }
+
+    // Parity for the "Add Field" dialog path (not just inline grid edit): a field added
+    // with a domain shows the domain's resolved Type/Size in the new grid row.
+    [Fact]
+    public async Task TableDetail_AddFieldWithDomain_FillsResolvedTypeInGrid()
+    {
+        using var service = new FirebirdConnectionService();
+        var executor = new FirebirdDdlExecutor(service, null);
+        var vm = new TableDetailTabViewModel("T", null, null, null, executor, null);
+        vm.AvailableDomains.Add(new DomainSpec("T_ADRES", "VARCHAR(50)"));
+
+        await vm.ExecuteAddFieldAsync(new FieldDefinition { Name = "ADRES", Domain = "T_ADRES" });
+
+        var row = vm.EditableFields.Last();
+        Assert.Equal("T_ADRES", row.DomainName);
+        Assert.Equal("VARCHAR", row.SelectedTypeItem);
+        Assert.Equal(50, row.Size);
     }
 
     [Fact]

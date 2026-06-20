@@ -2490,18 +2490,37 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
     // Builds a display-only FieldInfo from a dialog FieldDefinition so a
     // pending-Added column can be wrapped in a FieldRowViewModel and shown in
     // the Pola grid before Compile. Position is appended past the current rows.
-    private FieldInfo BuildDisplayFieldInfo(FieldDefinition def) => new()
+    private FieldInfo BuildDisplayFieldInfo(FieldDefinition def)
     {
-        Position = EditableFields.Count,
-        Name = def.Name,
-        Type = DdlGenerator.FormatTypeOrDomain(def),
-        NotNull = def.NotNull,
-        DefaultValue = string.IsNullOrWhiteSpace(def.DefaultValue) ? null : def.DefaultValue,
-        Description = string.IsNullOrWhiteSpace(def.Description) ? null : def.Description,
-        Domain = string.IsNullOrWhiteSpace(def.Domain) ? null : def.Domain,
-        ComputedSource = string.IsNullOrWhiteSpace(def.ComputedExpression) ? null : def.ComputedExpression,
-        IsPrimaryKey = def.PrimaryKey,
-    };
+        // FormatTypeOrDomain returns the DOMAIN NAME when a domain is used — which the
+        // grid's Type/Size/Scale cells can't render (not a base type). Show the domain's
+        // RESOLVED type instead (display parity with the inline domain mirror, #3); the
+        // Domain column still drives the generated DDL.
+        var displayType = DdlGenerator.FormatTypeOrDomain(def);
+        if (!string.IsNullOrWhiteSpace(def.Domain))
+        {
+            foreach (var d in AvailableDomains)
+            {
+                if (string.Equals(d.Name, def.Domain, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    displayType = d.Type;
+                    break;
+                }
+            }
+        }
+        return new FieldInfo
+        {
+            Position = EditableFields.Count,
+            Name = def.Name,
+            Type = displayType,
+            NotNull = def.NotNull,
+            DefaultValue = string.IsNullOrWhiteSpace(def.DefaultValue) ? null : def.DefaultValue,
+            Description = string.IsNullOrWhiteSpace(def.Description) ? null : def.Description,
+            Domain = string.IsNullOrWhiteSpace(def.Domain) ? null : def.Domain,
+            ComputedSource = string.IsNullOrWhiteSpace(def.ComputedExpression) ? null : def.ComputedExpression,
+            IsPrimaryKey = def.PrimaryKey,
+        };
+    }
 
     // Removes the queued ADD-FIELD change for a column being un-added (matches on
     // the quoted field name the BuildAddField statement emits).
