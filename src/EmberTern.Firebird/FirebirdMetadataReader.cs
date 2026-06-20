@@ -100,6 +100,89 @@ public sealed class FirebirdMetadataReader
         => kind == MetadataObjectKind.SystemTable;
 
     /// <summary>
+    /// Returns the number of objects of <paramref name="kind"/> WITHOUT fetching the
+    /// list — a single <c>SELECT COUNT(*)</c>. Used to show the category label
+    /// (e.g. <c>Tables (2356)</c>) right after connect while the full leaf list is
+    /// deferred to first expansion. Same lane / lock / implicit-tx pattern as
+    /// <see cref="ListAsync"/>; a failure (unsupported category on this FB version,
+    /// missing privileges) surfaces as <see cref="MetadataReadException"/> so the
+    /// caller can leave the count blank and keep the category expandable to retry.
+    /// </summary>
+    public async Task<int> CountAsync(
+        MetadataObjectKind kind,
+        CancellationToken cancellationToken = default)
+    {
+        var sql = CountSqlFor(kind);
+        var connection = LaneConnection();
+        // Capture the lock once — see ListAsync for why re-evaluating LaneLock() at
+        // Release can leak a semaphore.
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = _transactionService?.ActiveTransaction;
+
+            var scalar = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            // FB COUNT(*) is BIGINT in dialect 3 → comes back as long; ToInt32 is safe
+            // for any realistic catalog size.
+            return scalar is null or DBNull ? 0 : Convert.ToInt32(scalar);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not count {kind.ToString().ToLowerInvariant()}s: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    // COUNT(*) mirror of SqlFor — same table + same SYSTEM_FLAG predicate, no ORDER BY,
+    // no TRIM. The only place a server COUNT could diverge from the displayed list is
+    // Domain: RDB$FIELDS holds one anonymous RDB$xxx backing-domain per inline column
+    // type, which ListAsync strips client-side via IsSystemName. So the Domain count
+    // MUST exclude RDB$-prefixed rows server-side, or it would report thousands more
+    // than the user-domain list shows. For every other kind the COALESCE(SYSTEM_FLAG)=0
+    // predicate already matches the displayed set (user objects are never RDB$/MON$/SEC$
+    // named), and LoadGroupAsync overwrites Count with the real list size on expand
+    // anyway, so any hair-thin edge (null/empty names) self-corrects.
+    // Internal so tests can assert the shape without a live connection.
+    internal static string CountSqlFor(MetadataObjectKind kind) => kind switch
+    {
+        MetadataObjectKind.Table =>
+            "SELECT COUNT(*) FROM RDB$RELATIONS WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 AND RDB$VIEW_BLR IS NULL",
+        MetadataObjectKind.View =>
+            "SELECT COUNT(*) FROM RDB$RELATIONS WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 AND RDB$VIEW_BLR IS NOT NULL",
+        MetadataObjectKind.Procedure =>
+            "SELECT COUNT(*) FROM RDB$PROCEDURES WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0",
+        MetadataObjectKind.Trigger =>
+            "SELECT COUNT(*) FROM RDB$TRIGGERS WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0",
+        MetadataObjectKind.Function =>
+            "SELECT COUNT(*) FROM RDB$FUNCTIONS WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0",
+        MetadataObjectKind.Generator =>
+            "SELECT COUNT(*) FROM RDB$GENERATORS WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0",
+        MetadataObjectKind.Domain =>
+            "SELECT COUNT(*) FROM RDB$FIELDS WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 " +
+            "AND RDB$FIELD_NAME NOT STARTING WITH 'RDB$'",
+        MetadataObjectKind.Package =>
+            "SELECT COUNT(*) FROM RDB$PACKAGES WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0",
+        MetadataObjectKind.Exception =>
+            "SELECT COUNT(*) FROM RDB$EXCEPTIONS WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0",
+        MetadataObjectKind.Role =>
+            "SELECT COUNT(*) FROM RDB$ROLES WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0",
+        MetadataObjectKind.User =>
+            "SELECT COUNT(*) FROM SEC$USERS",
+        MetadataObjectKind.Index =>
+            "SELECT COUNT(*) FROM RDB$INDICES WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0",
+        MetadataObjectKind.SystemTable =>
+            "SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG = 1 AND RDB$VIEW_BLR IS NULL",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    /// <summary>
     /// Returns the columns of a table or view (ordered by RDB$FIELD_POSITION),
     /// each with name + formatted SQL type, for SQL editor autocomplete after
     /// <c>ALIAS.</c>. Short-lived ReadCommitted transaction — independent from
