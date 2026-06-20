@@ -42,6 +42,10 @@ public sealed class FieldDefinition
     /// instead. Domain and BasicType are mutually exclusive: Domain wins.</summary>
     public string? Domain { get; init; }
 
+    /// <summary>TYPE OF source (e.g. <c>COLUMN TABLE.COL</c>) — emits
+    /// <c>TYPE OF COLUMN TABLE.COL</c>. Mutually exclusive with Domain/BasicType.</summary>
+    public string? TypeOf { get; init; }
+
     /// <summary>Base SQL type (SMALLINT / INTEGER / VARCHAR / NUMERIC / …).
     /// Required when <see cref="Domain"/> is empty.</summary>
     public string? BasicType { get; init; }

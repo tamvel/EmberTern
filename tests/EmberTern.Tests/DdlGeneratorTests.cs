@@ -425,4 +425,28 @@ END";
         var sql = "CREATE VIEW V AS SELECT 1 AS X FROM RDB$DATABASE; ALTER TABLE T ADD A INTEGER";
         Assert.Equal(2, FirebirdDdlExecutor.SplitStatements(sql).Count);
     }
+
+    // ─── TYPE OF COLUMN (Faza 4) ──────────────────────────────────────────
+
+    [Fact]
+    public void FormatTypeOrDomain_TypeOf_EmitsTypeOfClause()
+    {
+        var def = new FieldDefinition { TypeOf = "COLUMN ADRES.MIASTO" };
+        Assert.Equal("TYPE OF COLUMN ADRES.MIASTO", DdlGenerator.FormatTypeOrDomain(def));
+    }
+
+    [Fact]
+    public void FormatTypeOrDomain_DomainWinsOverTypeOf()
+    {
+        var r = DdlGenerator.FormatTypeOrDomain(new FieldDefinition { Domain = "T_X", TypeOf = "COLUMN A.B" });
+        Assert.DoesNotContain("TYPE OF", r);
+        Assert.Contains("T_X", r);
+    }
+
+    [Fact]
+    public void FormatTypeOrDomain_NoDomainNoTypeOf_UsesBasicType()
+    {
+        var def = new FieldDefinition { BasicType = "VARCHAR", Size = 30 };
+        Assert.Equal("VARCHAR(30)", DdlGenerator.FormatTypeOrDomain(def));
+    }
 }

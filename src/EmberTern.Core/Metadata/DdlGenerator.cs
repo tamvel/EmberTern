@@ -251,6 +251,12 @@ public static class DdlGenerator
             return Quote(def.Domain!.Trim());
         }
 
+        if (!string.IsNullOrWhiteSpace(def.TypeOf))
+        {
+            // "COLUMN TABLE.COL" → "TYPE OF COLUMN TABLE.COL".
+            return "TYPE OF " + def.TypeOf!.Trim();
+        }
+
         var type = (def.BasicType ?? string.Empty).Trim().ToUpperInvariant();
         if (string.IsNullOrEmpty(type)) type = "INTEGER";
 
