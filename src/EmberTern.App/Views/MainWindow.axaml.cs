@@ -10,6 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
@@ -44,6 +45,17 @@ public partial class MainWindow : Window
     private object? _currentDropTarget;   // VM whose IsDropTarget is currently set
     private DropPosition _currentDropPosition;
     private const double DragThreshold = 8.0;
+
+    // Type-ahead (IBExpert-style incremental search). Typed letters accumulate into ONE
+    // growing buffer while the tree has focus; each keystroke jumps to the first node
+    // (tree order, full metadata via the VM's name cache) whose name starts with the
+    // whole buffer. The buffer self-clears after ~1 s idle so a later keystroke starts
+    // fresh. Resolution is async (may load a never-expanded category) — the generation
+    // counter discards a stale result if a newer keystroke superseded it.
+    private string _typeAheadBuffer = string.Empty;
+    private DispatcherTimer? _typeAheadResetTimer;
+    private int _typeAheadGeneration;
+    private const int TypeAheadResetMs = 1000;
 
     // Built lazily when the VM attaches (OnDataContextChanged), from the VM's store
     // directory + protector — so the View's workspace section writes into the SAME
@@ -157,6 +169,12 @@ public partial class MainWindow : Window
             sidebar.PointerMoved += OnSidebarPointerMoved;
             sidebar.PointerReleased += OnSidebarPointerReleased;
             sidebar.PointerCaptureLost += OnSidebarPointerCaptureLost;
+            // IBExpert-style type-ahead: typed letters jump to the next matching node.
+            // Tunnel both so we get them before the TreeView consumes them for its own
+            // built-in (single-char) navigation; TextInput carries the printable char,
+            // KeyDown handles Escape (cancel the buffer).
+            sidebar.AddHandler(TextInputEvent, OnSidebarTypeAhead, RoutingStrategies.Tunnel);
+            sidebar.AddHandler(KeyDownEvent, OnSidebarTypeAheadKey, RoutingStrategies.Tunnel);
         }
 
         _lastNormalBounds = new WindowBounds
@@ -441,6 +459,89 @@ public partial class MainWindow : Window
         if (sender is TreeView tree && tree.SelectedItem is ConnectionNodeViewModel cn)
         {
             _currentVm.Metadata.SelectedConnection = cn;
+        }
+    }
+
+    // ---- Sidebar type-ahead (IBExpert-style) ----------------------------------
+
+    private void OnSidebarTypeAheadKey(object? sender, KeyEventArgs e)
+    {
+        // Escape cancels the in-progress buffer (and lets the keypress fall through).
+        if (e.Key == Key.Escape)
+        {
+            _typeAheadBuffer = string.Empty;
+            _typeAheadResetTimer?.Stop();
+        }
+    }
+
+    private async void OnSidebarTypeAhead(object? sender, TextInputEventArgs e)
+    {
+        if (sender is not TreeView tree || _currentVm is null) return;
+        var text = e.Text;
+        if (string.IsNullOrEmpty(text)) return;
+        // Ignore control chars / whitespace — only build the buffer from real letters,
+        // digits, underscore, '$' (all legal in Firebird identifiers).
+        var ch = text[0];
+        if (char.IsControl(ch) || char.IsWhiteSpace(ch)) return;
+
+        // One growing buffer (incremental search). Consume the key so the tree's own
+        // single-char navigation doesn't fight us.
+        _typeAheadBuffer += text;
+        RestartTypeAheadReset();
+        e.Handled = true;
+
+        var generation = ++_typeAheadGeneration;
+        var buffer = _typeAheadBuffer;
+
+        // Resolve against the FULL metadata (name cache) — finds objects in categories
+        // that were never expanded, loading the owning category on a hit. May await a DB
+        // round-trip on first use; the generation guard drops the result if the user has
+        // typed again in the meantime.
+        var result = await _currentVm.Metadata.ResolveTypeAheadAsync(buffer);
+        if (generation != _typeAheadGeneration || result is null) return;
+
+        // Expand ONLY the path to the match (folder / connection / category), then select
+        // + scroll. Selection + BringIntoView are posted so they run after the expansion's
+        // layout pass has realized the container.
+        foreach (var ancestor in result.ExpandPath)
+        {
+            SetNodeExpanded(ancestor, true);
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            tree.SelectedItem = result.Node;
+            var container = FindTreeViewItemFor(tree, result.Node);
+            container?.BringIntoView();
+            container?.Focus();
+        }, DispatcherPriority.Background);
+    }
+
+    private void RestartTypeAheadReset()
+    {
+        _typeAheadResetTimer ??= CreateTypeAheadResetTimer();
+        _typeAheadResetTimer.Stop();
+        _typeAheadResetTimer.Start();
+    }
+
+    private DispatcherTimer CreateTypeAheadResetTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(TypeAheadResetMs) };
+        timer.Tick += (_, _) =>
+        {
+            _typeAheadResetTimer!.Stop();
+            _typeAheadBuffer = string.Empty;
+        };
+        return timer;
+    }
+
+    private static void SetNodeExpanded(object node, bool value)
+    {
+        switch (node)
+        {
+            case FolderNodeViewModel f: f.IsExpanded = value; break;
+            case ConnectionNodeViewModel c: c.IsExpanded = value; break;
+            case MetadataNodeViewModel m: m.IsExpanded = value; break;
         }
     }
 

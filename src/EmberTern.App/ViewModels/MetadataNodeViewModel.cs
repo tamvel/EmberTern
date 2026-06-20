@@ -82,6 +82,14 @@ public partial class MetadataNodeViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(HasCount))]
     private int? _count;
 
+    // Number of leaves matching the active filter. Non-null only while a filter is
+    // applied; drives the label to show the MATCH count (e.g. "Views (1)") instead of
+    // the total, so the user sees where matches are without expanding. Cleared (null)
+    // when the filter is empty, restoring the total-count label.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayLabel))]
+    private int? _filterMatchCount;
+
     [ObservableProperty]
     private bool _isLoading;
 
@@ -95,8 +103,11 @@ public partial class MetadataNodeViewModel : ViewModelBase
 
     public bool HasCount => IsGroup && Count is not null;
     public bool IsActionable => !IsGroup && !IsPlaceholder;
-    public string DisplayLabel => IsGroup && Count is { } c
-        ? $"{GroupLabel} ({c})"
+    // While filtering, show the match count ("Views (1)"); otherwise the total ("Views (215)").
+    public string DisplayLabel => !IsGroup
+        ? GroupLabel
+        : FilterMatchCount is { } fc ? $"{GroupLabel} ({fc})"
+        : Count is { } c ? $"{GroupLabel} ({c})"
         : GroupLabel;
 
     public string ContextOpenDdlLabel => UiStrings.MetadataContextOpenDdl;

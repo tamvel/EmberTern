@@ -150,4 +150,78 @@ public class MetadataReaderTests
         await Assert.ThrowsAsync<System.InvalidOperationException>(
             () => reader.ListAsync(MetadataObjectKind.Table));
     }
+
+    // ─── COUNT-only (lazy-load) ───────────────────────────────────────────
+
+    [Fact]
+    public void CountSqlFor_AllKinds_AreCountStarWithoutOrderBy()
+    {
+        foreach (MetadataObjectKind kind in System.Enum.GetValues<MetadataObjectKind>())
+        {
+            var sql = FirebirdMetadataReader.CountSqlFor(kind);
+            Assert.Contains("COUNT(*)", sql);
+            // A bare COUNT(*) has no ORDER BY — sorting the rows we never fetch is waste.
+            Assert.DoesNotContain("ORDER BY", sql);
+        }
+    }
+
+    [Theory]
+    [InlineData(MetadataObjectKind.Table, "RDB$RELATIONS")]
+    [InlineData(MetadataObjectKind.View, "RDB$RELATIONS")]
+    [InlineData(MetadataObjectKind.Procedure, "RDB$PROCEDURES")]
+    [InlineData(MetadataObjectKind.Trigger, "RDB$TRIGGERS")]
+    [InlineData(MetadataObjectKind.Function, "RDB$FUNCTIONS")]
+    [InlineData(MetadataObjectKind.Generator, "RDB$GENERATORS")]
+    [InlineData(MetadataObjectKind.Domain, "RDB$FIELDS")]
+    [InlineData(MetadataObjectKind.Package, "RDB$PACKAGES")]
+    [InlineData(MetadataObjectKind.Exception, "RDB$EXCEPTIONS")]
+    [InlineData(MetadataObjectKind.Role, "RDB$ROLES")]
+    [InlineData(MetadataObjectKind.User, "SEC$USERS")]
+    [InlineData(MetadataObjectKind.Index, "RDB$INDICES")]
+    [InlineData(MetadataObjectKind.SystemTable, "RDB$RELATIONS")]
+    public void CountSqlFor_UsesCorrectCatalogTable(MetadataObjectKind kind, string expectedTable)
+    {
+        Assert.Contains(expectedTable, FirebirdMetadataReader.CountSqlFor(kind));
+    }
+
+    [Fact]
+    public void CountSqlFor_Domain_ExcludesAnonymousBackingDomains()
+    {
+        // RDB$FIELDS holds one anonymous RDB$xxx domain per inline column type; the
+        // count must strip them server-side or it reports thousands more than the
+        // displayed user-domain list (which IsSystemName strips client-side).
+        var sql = FirebirdMetadataReader.CountSqlFor(MetadataObjectKind.Domain);
+        Assert.Contains("NOT STARTING WITH 'RDB$'", sql);
+    }
+
+    [Fact]
+    public void CountSqlFor_SystemTable_InvertsSystemFlag()
+    {
+        var sql = FirebirdMetadataReader.CountSqlFor(MetadataObjectKind.SystemTable);
+        Assert.Contains("RDB$SYSTEM_FLAG = 1", sql);
+        Assert.Contains("RDB$VIEW_BLR IS NULL", sql);
+    }
+
+    [Theory]
+    [InlineData(MetadataObjectKind.Table)]
+    [InlineData(MetadataObjectKind.View)]
+    [InlineData(MetadataObjectKind.Procedure)]
+    [InlineData(MetadataObjectKind.Domain)]
+    [InlineData(MetadataObjectKind.Index)]
+    public void CountSqlFor_FiltersSystemFlag(MetadataObjectKind kind)
+    {
+        var sql = FirebirdMetadataReader.CountSqlFor(kind);
+        Assert.Contains("RDB$SYSTEM_FLAG", sql);
+        Assert.Contains("COALESCE", sql);
+    }
+
+    [Fact]
+    public async Task CountAsync_WithoutConnection_Throws()
+    {
+        using var service = new FirebirdConnectionService();
+        var reader = new FirebirdMetadataReader(service);
+
+        await Assert.ThrowsAsync<System.InvalidOperationException>(
+            () => reader.CountAsync(MetadataObjectKind.Table));
+    }
 }

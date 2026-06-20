@@ -117,16 +117,21 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         }
         _categoriesBuilt = true;
 
-        // Eager-load each category sequentially so counts (Tables (2158), ...) show
-        // right after connect — matches IBExpert UX. Cannot Task.WhenAll because the
-        // FirebirdClient FbConnection only services one command at a time; concurrent
-        // commands throw. Each LoadGroupAsync opens its own short-lived ReadCommitted tx.
-        // Categories stay collapsed (IsExpanded defaults to false); only the root
-        // connection node is auto-expanded.
+        // Lazy load: fetch ONLY the per-category COUNT on connect (a single
+        // SELECT COUNT(*) each) so the user sees the full breakdown immediately
+        // (Tables (2356), Views (215), …) — but DON'T pull the potentially
+        // thousands-strong leaf lists. The full list for a category loads on its
+        // first expansion (MetadataNodeViewModel.OnIsExpandedChanged → LoadGroupAsync).
+        // This replaces the old eager full-load, which created ~5–15k leaf VMs on
+        // connect for a large ERP schema and froze the UI for ~1s. Sequential because
+        // the FbConnection services one command at a time (Task.WhenAll throws).
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         foreach (var cat in categories)
         {
-            await metadata.LoadGroupAsync(cat).ConfigureAwait(true);
+            await metadata.LoadCountAsync(cat).ConfigureAwait(true);
         }
+        sw.Stop();
+        Diagnostics.PerfTrace.LogCategoryLoad(Profile.Name, categories.Count, sw.ElapsedMilliseconds);
 
         // Re-assert expanded after the categories exist. OnIsConnectedChanged already
         // set IsExpanded=true synchronously; this is a plain idempotent confirmation
@@ -232,6 +237,10 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         {
             return;
         }
+
+        // The session object-name cache (filter + type-ahead) is tied to the connected
+        // schema — drop it on any connect/disconnect so the next search rebuilds it.
+        _owner?.Metadata?.InvalidateNameCache();
 
         if (nowConnected)
         {
