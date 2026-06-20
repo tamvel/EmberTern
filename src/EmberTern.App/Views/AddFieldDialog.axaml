@@ -63,35 +63,13 @@
                IsEnabled="{Binding IsDomainTabEnabled}">
         <StackPanel Margin="8" Spacing="6">
           <TextBlock Text="{x:Static app:UiStrings.AddFieldDomainLabel}" Classes="field-label" />
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-          <controls:SearchablePicker Grid.Column="0"
+          <controls:SearchableComboBox
                     ItemsSource="{Binding Domains}"
                     SelectedItem="{Binding SelectedDomain, Mode=TwoWay}"
-                    ValueMemberBinding="{ReflectionBinding Name}"
-                    HorizontalAlignment="Stretch">
-            <controls:SearchablePicker.ItemTemplate>
-              <DataTemplate x:DataType="m:DomainSpec">
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Grid.Column="0"
-                             Text="{Binding Name}"
-                             FontSize="12"
-                             VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="1"
-                             Text="{Binding Type}"
-                             FontSize="11"
-                             Foreground="{DynamicResource SubtleForegroundBrush}"
-                             VerticalAlignment="Center"
-                             Margin="12,0,0,0" />
-                </Grid>
-              </DataTemplate>
-            </controls:SearchablePicker.ItemTemplate>
-          </controls:SearchablePicker>
-          <Button Grid.Column="1"
-                  Classes="flat"
-                  Content="{x:Static app:UiStrings.AddFieldClearDomain}"
-                  Command="{Binding ClearDomainCommand}"
-                  VerticalAlignment="Stretch" />
-          </Grid>
+                    DisplayMemberPath="Name"
+                    ItemTemplate="{StaticResource DomainRowTemplate}"
+                    Watermark=""
+                    HorizontalAlignment="Stretch" />
           <TextBlock Text="{x:Static app:UiStrings.AddFieldDomainHint}"
                      Classes="subtle"
                      FontSize="11"
@@ -205,8 +183,9 @@
           <RadioButton GroupName="Autoinc"
                        Content="{x:Static app:UiStrings.AddFieldAutoincExisting}"
                        IsChecked="{Binding IsAutoincExisting, Mode=TwoWay}" />
-          <controls:SearchablePicker ItemsSource="{Binding Generators}"
+          <controls:SearchableComboBox ItemsSource="{Binding Generators}"
                     SelectedItem="{Binding SelectedGenerator, Mode=TwoWay}"
+                    Watermark=""
                     HorizontalAlignment="Stretch"
                     Margin="22,2,0,2"
                     IsVisible="{Binding ShowExistingGeneratorPicker}" />

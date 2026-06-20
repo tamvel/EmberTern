@@ -98,8 +98,9 @@
           </Border>
           <StackPanel Grid.Row="1" Margin="8,6,8,4" Spacing="4">
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedTableLabel}" Classes="field-label" />
-            <controls:SearchablePicker ItemsSource="{Binding AvailableTables}"
+            <controls:SearchableComboBox ItemsSource="{Binding AvailableTables}"
                       SelectedItem="{Binding SelectedReferencedTable, Mode=TwoWay}"
+                      Watermark=""
                       HorizontalAlignment="Stretch" />
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedFieldsHint}"
                        FontSize="10"
