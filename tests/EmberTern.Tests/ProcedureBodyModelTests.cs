@@ -133,6 +133,19 @@ public class ProcedureBodyModelTests
                     < body.IndexOf("BEGIN", System.StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Build_NoBlankLineBetweenDeclareAndBegin()
+    {
+        var model = new ProcedureBodyModel { ExecutableBody = "BEGIN\nEND" };
+        model.Variables.Add(new ProcedureVariable { Name = "ID_NAGL", TypeText = "T_ID" });
+
+        var body = DdlGenerator.BuildProcedureBody(model);
+
+        // DECLARE flows directly into BEGIN — no blank separator line.
+        Assert.Contains("DECLARE VARIABLE ID_NAGL T_ID;\nBEGIN", body);
+        Assert.DoesNotContain("\n\nBEGIN", body);
+    }
+
     // ─── Round-trip: model is preserved across Build → Split ───────────────
 
     [Fact]

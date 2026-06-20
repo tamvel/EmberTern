@@ -676,8 +676,8 @@ public static class DdlGenerator
             sb.Append(decl).Append('\n');
         }
 
-        if (sb.Length > 0) sb.Append('\n');
-
+        // No blank separator line between the DECLARE section and BEGIN — the
+        // declarations flow directly into BEGIN (IBExpert style).
         var execBody = (model.ExecutableBody ?? string.Empty).Trim();
         sb.Append(execBody.Length == 0 ? "BEGIN\nEND" : execBody);
         return sb.ToString();

@@ -66,14 +66,47 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
 
     // ─── Structured type editors (compose into TypeText) ──────────────────
 
-    [ObservableProperty] private string? _baseType = "INTEGER";
-    [ObservableProperty] private string? _domainName;
-    [ObservableProperty] private string _typeOf = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedTypeItem))]
+    private string? _baseType = "INTEGER";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedDomainSpec))]
+    [NotifyPropertyChangedFor(nameof(HasDomain))]
+    [NotifyPropertyChangedFor(nameof(IsTypeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsTypeOfEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsSizeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsScaleEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsSubTypeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsCharsetEnabled))]
+    private string? _domainName;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTypeOf))]
+    [NotifyPropertyChangedFor(nameof(IsTypeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsSizeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsScaleEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsSubTypeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsCharsetEnabled))]
+    private string _typeOf = string.Empty;
+
     [ObservableProperty] private int? _size;
     [ObservableProperty] private int? _scale;
     [ObservableProperty] private string _subType = string.Empty;
     [ObservableProperty] private string _charset = string.Empty;
     [ObservableProperty] private string _collate = string.Empty;
+
+    // ─── Per-cell enable gates (#4) ───────────────────────────────────────
+    // A domain (or TYPE OF) governs the type, so the type-construction cells
+    // are disabled — kept visible (no empty columns), matching the table editor.
+    public bool HasDomain => !string.IsNullOrWhiteSpace(DomainName);
+    public bool HasTypeOf => !string.IsNullOrWhiteSpace(TypeOf);
+    public bool IsTypeEnabled => !HasDomain && !HasTypeOf;
+    public bool IsTypeOfEnabled => !HasDomain;
+    public bool IsSizeEnabled => !HasDomain && !HasTypeOf;
+    public bool IsScaleEnabled => !HasDomain && !HasTypeOf;
+    public bool IsSubTypeEnabled => !HasDomain && !HasTypeOf;
+    public bool IsCharsetEnabled => !HasDomain && !HasTypeOf;
 
     [ObservableProperty] private bool _notNull;
     [ObservableProperty] private string _defaultValue = string.Empty;
@@ -227,6 +260,28 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
         finally
         {
             _suppressCompose = false;
+        }
+    }
+
+    // ─── Type combo wrapper (null-safe for the filtering picker) ──────────
+    // The Type picker's items (BasicTypes) carry base type names only. Binding
+    // SelectedItem straight to BaseType lets a partial-typed filter (no exact
+    // match yet) write null back and clear the type. This wrapper ignores null,
+    // so typing-to-filter never corrupts the value.
+    public string? SelectedTypeItem
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(BaseType)) return null;
+            foreach (var t in BasicTypes)
+                if (string.Equals(t, BaseType, StringComparison.OrdinalIgnoreCase)) return t;
+            return null;
+        }
+        set
+        {
+            if (string.IsNullOrEmpty(value)) return; // filter-in-progress clobber — ignore
+            if (string.Equals(value, BaseType, StringComparison.OrdinalIgnoreCase)) return;
+            BaseType = value;
         }
     }
 

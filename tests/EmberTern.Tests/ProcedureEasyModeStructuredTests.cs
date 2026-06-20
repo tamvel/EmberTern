@@ -242,4 +242,54 @@ public class ProcedureEasyModeStructuredTests
         vm2.EasyMode = true;
         return vm2;
     }
+
+    // ─── #4 Type/Domain disable gates (visible-but-disabled) ──────────────
+
+    [Fact]
+    public void FieldRow_PlainType_AllTypeCellsEnabled()
+    {
+        var r = new ProcedureVariableRowViewModel { BaseType = "INTEGER" };
+        Assert.True(r.IsTypeEnabled);
+        Assert.True(r.IsTypeOfEnabled);
+        Assert.True(r.IsSizeEnabled);
+        Assert.True(r.IsScaleEnabled);
+        Assert.True(r.IsSubTypeEnabled);
+        Assert.True(r.IsCharsetEnabled);
+    }
+
+    [Fact]
+    public void FieldRow_DomainSelected_DisablesTypeConstructionCells()
+    {
+        var r = new ProcedureVariableRowViewModel { DomainName = "T_ID" };
+        Assert.True(r.HasDomain);
+        Assert.False(r.IsTypeEnabled);
+        Assert.False(r.IsTypeOfEnabled);   // domain ↔ TYPE OF mutually exclusive
+        Assert.False(r.IsSizeEnabled);
+        Assert.False(r.IsScaleEnabled);
+        Assert.False(r.IsSubTypeEnabled);
+        Assert.False(r.IsCharsetEnabled);
+    }
+
+    [Fact]
+    public void FieldRow_TypeOfSelected_DisablesTypeCells()
+    {
+        var r = new ProcedureVariableRowViewModel { TypeOf = "COLUMN T.C" };
+        Assert.True(r.HasTypeOf);
+        Assert.False(r.IsTypeEnabled);
+        Assert.False(r.IsSizeEnabled);
+    }
+
+    [Fact]
+    public void FieldRow_SelectedTypeItem_IgnoresNullSet()
+    {
+        var r = new ProcedureVariableRowViewModel { BaseType = "INTEGER" };
+        Assert.Equal("INTEGER", r.SelectedTypeItem);
+
+        // A filter-in-progress write of null (no exact match yet) must NOT clear the type.
+        r.SelectedTypeItem = null;
+        Assert.Equal("INTEGER", r.BaseType);
+
+        r.SelectedTypeItem = "VARCHAR";
+        Assert.Equal("VARCHAR", r.BaseType);
+    }
 }
