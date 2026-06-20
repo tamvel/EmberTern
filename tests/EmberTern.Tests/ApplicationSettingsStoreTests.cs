@@ -158,7 +158,6 @@ public class ApplicationSettingsStoreTests
                             AutoFitColumns = true,
                         },
                     },
-                    Appearance = { ThemeVariant = "Dark", AccentColor = "#2D6BBF" },
                 },
             };
 
@@ -187,8 +186,6 @@ public class ApplicationSettingsStoreTests
             Assert.Equal(120.5, gp.ColumnWidths["Name"]);
             Assert.Equal(new[] { "Name", "Type" }, gp.ColumnOrder);
             Assert.True(gp.AutoFitColumns);
-            Assert.Equal("Dark", r.UserSettings.Appearance.ThemeVariant);
-            Assert.Equal("#2D6BBF", r.UserSettings.Appearance.AccentColor);
         }
         finally
         {

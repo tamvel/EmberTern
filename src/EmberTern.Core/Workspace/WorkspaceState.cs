@@ -23,6 +23,24 @@ public sealed class WorkspaceTab
     public MetadataObjectKind? ObjectKind { get; set; }
     public string? ConnectionProfileId { get; set; }
     public string? DdlText { get; set; }
+
+    // ── Per-tab UI state (hybrid model) ──────────────────────────────────────
+    // Nullable so a legacy tab (without these fields) falls back to the global
+    // default applied at tab creation. On restore the per-tab value wins; a
+    // freshly opened object uses the global preference instead. All four are
+    // unset for Query/Ddl tabs.
+
+    // View + Procedure editor: Source (false) / Easy (true) mode.
+    public bool? EasyMode { get; set; }
+    // Active main sub-tab index — View (Editor/Fields/Dependencies/…),
+    // Procedure (Editor/Description/…/Result), Table (Pola/Ograniczenia/…).
+    public int? ActiveSubTabIndex { get; set; }
+    // Active inner sub-tab index — Procedure's Easy collection tab
+    // (Input/Output/Variables/Cursors/Subprograms) or Table's Constraints
+    // sub-tab (PK/FK/Check/Unique). Unused by View.
+    public int? ActiveInnerSubTabIndex { get; set; }
+    // Table editor: whether the Pola grid is in edit mode.
+    public bool? GridEditMode { get; set; }
 }
 
 // A named SQL snippet attached to a single connection. The active saved query's
@@ -86,7 +104,21 @@ public sealed class WorkspaceState
     public double ResultsPanelHeight { get; set; } = 280;
 
     // Last-used Procedure Detail editor mode (false = Source, true = Easy). Global
-    // (not per-connection) — a UI preference like QueryPanelVisible. Restored for
-    // newly opened procedures and across app restarts. New procedures stay Source.
+    // (not per-connection) — a UI preference like QueryPanelVisible. Hybrid model:
+    // seeds the mode for newly opened procedures; a tab restored from the workspace
+    // uses its own WorkspaceTab.EasyMode instead. New procedures stay Source.
     public bool ProcedureEasyMode { get; set; }
+
+    // Last-used View Detail editor mode (false = Source, true = Easy). Same hybrid
+    // role as ProcedureEasyMode — seeds newly opened views; restored tabs use their
+    // own per-tab value.
+    public bool ViewEasyMode { get; set; }
+
+    // Whether the SQL editor's results panel is maximized (editor row collapsed).
+    // Global layout preference, restored like ResultsPanelHeight.
+    public bool ResultsMaximized { get; set; }
+
+    // Selected bottom-panel tab in the SQL editor (0 = Results, 1 = Messages,
+    // 2 = Output). Global UI preference; the last-viewed tab at close.
+    public int BottomPanelTabIndex { get; set; }
 }

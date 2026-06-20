@@ -1203,6 +1203,10 @@ public partial class MainWindowViewModel : ViewModelBase
             LastActiveConnectionId = _service.ActiveProfile?.Id,
             QueryPanelVisible = IsQueryPanelVisible,
             ProcedureEasyMode = ProcedureEasyModePreference,
+            ViewEasyMode = ViewEasyModePreference,
+            BottomPanelTabIndex = SelectedBottomTabIndex,
+            // ResultsMaximized is a layout flag owned by the View code-behind; it sets
+            // it on the captured state in OnWindowClosing, like WindowBounds.
         };
     }
 
@@ -1216,6 +1220,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
         IsQueryPanelVisible = state.QueryPanelVisible;
         ProcedureEasyModePreference = state.ProcedureEasyMode;
+        ViewEasyModePreference = state.ViewEasyMode;
+        SelectedBottomTabIndex = state.BottomPanelTabIndex;
 
         // Workspace tabs stay empty at startup — there's no active connection yet.
         // The user's first Connect call will pull the matching entry out of the dict
@@ -1265,14 +1271,17 @@ public partial class MainWindowViewModel : ViewModelBase
                 // instead of degrading to DDL-only. Fields/Indexes aren't serialized —
                 // they're re-fetched from the live DB after Connect. Cached DDL is
                 // kept so the DDL sub-tab paints immediately even before fetch finishes.
-                var ddl = tab.TableDetail is { } td ? td.DdlText : tab.DdlText;
+                var td = tab.TableDetail;
                 ws.Tabs.Add(new WorkspaceTab
                 {
                     Kind = CoreTabKind.TableDetail,
                     ObjectName = tab.ObjectName,
                     ObjectKind = tab.ObjectKind,
                     ConnectionProfileId = tab.ConnectionProfileId,
-                    DdlText = ddl,
+                    DdlText = td is { } ? td.DdlText : tab.DdlText,
+                    ActiveSubTabIndex = td?.ActiveSubTabIndex,
+                    ActiveInnerSubTabIndex = td?.ConstraintsActiveSubTabIndex,
+                    GridEditMode = td?.IsFieldEditMode,
                 });
             }
             else if (tab.Kind == WorkspaceTabKind.ViewDetail)
@@ -1281,14 +1290,16 @@ public partial class MainWindowViewModel : ViewModelBase
                 // so restoring it would just fail to load. Persist real views as
                 // ViewDetail so restore re-opens the full 6-tab surface (not DDL-only).
                 if (tab.ViewDetail is { IsNew: true }) continue;
-                var ddl = tab.ViewDetail is { } vd ? vd.DdlText : tab.DdlText;
+                var vd = tab.ViewDetail;
                 ws.Tabs.Add(new WorkspaceTab
                 {
                     Kind = CoreTabKind.ViewDetail,
                     ObjectName = tab.ObjectName,
                     ObjectKind = tab.ObjectKind,
                     ConnectionProfileId = tab.ConnectionProfileId,
-                    DdlText = ddl,
+                    DdlText = vd is { } ? vd.DdlText : tab.DdlText,
+                    EasyMode = vd?.EasyMode,
+                    ActiveSubTabIndex = vd?.ActiveSubTabIndex,
                 });
             }
             else if (tab.Kind == WorkspaceTabKind.ProcedureDetail)
@@ -1297,14 +1308,17 @@ public partial class MainWindowViewModel : ViewModelBase
                 // exist yet. Persist real procedures as ProcedureDetail so restore
                 // re-opens the full surface (not DDL-only).
                 if (tab.ProcedureDetail is { IsNew: true }) continue;
-                var ddl = tab.ProcedureDetail is { } pd ? pd.DdlText : tab.DdlText;
+                var pd = tab.ProcedureDetail;
                 ws.Tabs.Add(new WorkspaceTab
                 {
                     Kind = CoreTabKind.ProcedureDetail,
                     ObjectName = tab.ObjectName,
                     ObjectKind = tab.ObjectKind,
                     ConnectionProfileId = tab.ConnectionProfileId,
-                    DdlText = ddl,
+                    DdlText = pd is { } ? pd.DdlText : tab.DdlText,
+                    EasyMode = pd?.EasyMode,
+                    ActiveSubTabIndex = pd?.ActiveSubTabIndex,
+                    ActiveInnerSubTabIndex = pd?.ActiveEasyCollectionIndex,
                 });
             }
             else
@@ -1375,6 +1389,10 @@ public partial class MainWindowViewModel : ViewModelBase
                 // read-only (no data editor / DDL executor) exactly as they opened.
                 var detail = CreateTableDetail(obj);
                 detail.DdlText = tab.DdlText ?? string.Empty;
+                // Per-tab UI state wins over defaults on a restored tab (hybrid model).
+                if (tab.ActiveSubTabIndex is { } tdSub) detail.ActiveSubTabIndex = tdSub;
+                if (tab.ActiveInnerSubTabIndex is { } tdInner) detail.ConstraintsActiveSubTabIndex = tdInner;
+                if (tab.GridEditMode is { } tdEdit) detail.IsFieldEditMode = tdEdit;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateTableDetail(this, obj, detail, tab.ConnectionProfileId));
             }
             else if (tab.Kind == CoreTabKind.ViewDetail
@@ -1387,6 +1405,10 @@ public partial class MainWindowViewModel : ViewModelBase
                 var obj = new MetadataObject(tab.ObjectName, viewKind);
                 var detail = CreateViewDetail(obj);
                 detail.DdlText = tab.DdlText ?? string.Empty;
+                // Per-tab UI state wins over the global default (hybrid model). EasyMode
+                // is guarded: OnEasyModeChanged no-ops on empty source, LoadAsync re-syncs.
+                if (tab.EasyMode is { } vEasy && detail.CanUseEasyMode) detail.EasyMode = vEasy;
+                if (tab.ActiveSubTabIndex is { } vSub) detail.ActiveSubTabIndex = vSub;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateViewDetail(this, obj, detail, tab.ConnectionProfileId));
             }
             else if (tab.Kind == CoreTabKind.ProcedureDetail
@@ -1399,6 +1421,11 @@ public partial class MainWindowViewModel : ViewModelBase
                 var obj = new MetadataObject(tab.ObjectName, procKind);
                 var detail = CreateProcedureDetail(obj);
                 detail.DdlText = tab.DdlText ?? string.Empty;
+                // Per-tab UI state wins over the global default (hybrid model). EasyMode
+                // is guarded: OnEasyModeChanged no-ops on empty source, LoadAsync re-syncs.
+                if (tab.EasyMode is { } pEasy && detail.CanUseEasyMode) detail.EasyMode = pEasy;
+                if (tab.ActiveSubTabIndex is { } pSub) detail.ActiveSubTabIndex = pSub;
+                if (tab.ActiveInnerSubTabIndex is { } pInner) detail.ActiveEasyCollectionIndex = pInner;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateProcedureDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
@@ -2155,6 +2182,11 @@ public partial class MainWindowViewModel : ViewModelBase
     // Single construction point for ViewDetail VMs — mirrors CreateTableDetail.
     // A view is read-only data (no inline editing) but its SQL source IS editable,
     // so the DDL executor is wired for Compile while no data editor is.
+    // Last-used View Detail editor mode (false = Source, true = Easy), mirrored to
+    // WorkspaceState.ViewEasyMode. Hybrid model: applied to each newly opened existing
+    // view; a workspace-restored tab overrides it with its own per-tab value.
+    internal bool ViewEasyModePreference { get; set; }
+
     internal ViewDetailTabViewModel CreateViewDetail(MetadataObject obj)
     {
         var detail = new ViewDetailTabViewModel(
@@ -2163,7 +2195,19 @@ public partial class MainWindowViewModel : ViewModelBase
             _ddlReader,
             _ddlExecutor);
         detail.OpenObjectRequested += OnOpenDdlRequested;
+        // Restore the remembered mode (existing views only — New View sets Easy after).
+        if (detail.CanUseEasyMode) detail.EasyMode = ViewEasyModePreference;
+        detail.PropertyChanged += OnViewDetailPropertyChanged;
         return detail;
+    }
+
+    private void OnViewDetailPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ViewDetailTabViewModel.EasyMode)
+            && sender is ViewDetailTabViewModel { CanUseEasyMode: true } d)
+        {
+            ViewEasyModePreference = d.EasyMode;
+        }
     }
 
     // Single construction point for ProcedureDetail VMs — mirrors CreateViewDetail.

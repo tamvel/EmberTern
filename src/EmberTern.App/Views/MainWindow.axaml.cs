@@ -282,6 +282,7 @@ public partial class MainWindow : Window
             _resultsHeight = _resultsRow.Height.Value;
         }
         state.ResultsPanelHeight = _resultsHeight;
+        state.ResultsMaximized = _resultsMaximized;
         try
         {
             _workspaceStore?.Save(state);
@@ -950,6 +951,12 @@ public partial class MainWindow : Window
         {
             SetSidebarWidth(_expandedSidebarWidth);
         }
+
+        // Restore the results-maximized flag. The actual row sizing is applied by
+        // ApplyResultsRowForActiveTab when the Query tab becomes active; here we just
+        // set the flag + sync the VM's display flag (drives the maximize/restore icon).
+        _resultsMaximized = s?.ResultsMaximized == true;
+        _currentVm?.SetResultsMaximized(_resultsMaximized);
     }
 
     private void SetSidebarWidth(double width)

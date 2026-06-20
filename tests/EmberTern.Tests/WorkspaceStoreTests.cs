@@ -183,6 +183,10 @@ public class WorkspaceStoreTests
                 SidebarWidth = 340,
                 SidebarCollapsed = true,
                 ResultsPanelHeight = 410,
+                ResultsMaximized = true,
+                BottomPanelTabIndex = 1,
+                ViewEasyMode = true,
+                ProcedureEasyMode = true,
             });
 
             var reloaded = store.Load();
@@ -191,6 +195,10 @@ public class WorkspaceStoreTests
             Assert.Equal(340, reloaded!.SidebarWidth);
             Assert.True(reloaded.SidebarCollapsed);
             Assert.Equal(410, reloaded.ResultsPanelHeight);
+            Assert.True(reloaded.ResultsMaximized);
+            Assert.Equal(1, reloaded.BottomPanelTabIndex);
+            Assert.True(reloaded.ViewEasyMode);
+            Assert.True(reloaded.ProcedureEasyMode);
         }
         finally
         {
@@ -206,6 +214,61 @@ public class WorkspaceStoreTests
         Assert.Equal(280, s.SidebarWidth);
         Assert.False(s.SidebarCollapsed);
         Assert.Equal(280, s.ResultsPanelHeight);
+        Assert.False(s.ResultsMaximized);
+        Assert.Equal(0, s.BottomPanelTabIndex);
+        Assert.False(s.ViewEasyMode);
+        Assert.False(s.ProcedureEasyMode);
+    }
+
+    [Fact]
+    public void Save_Then_Load_RoundtripsPerTabUiState()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new WorkspaceStore(dir);
+            store.Save(new WorkspaceState
+            {
+                Workspaces =
+                {
+                    ["pid"] = new ConnectionWorkspace
+                    {
+                        Tabs =
+                        {
+                            new WorkspaceTab
+                            {
+                                Kind = WorkspaceTabKind.ViewDetail,
+                                ObjectName = "V_ORDERS",
+                                ObjectKind = MetadataObjectKind.View,
+                                EasyMode = true,
+                                ActiveSubTabIndex = 2,
+                            },
+                            new WorkspaceTab
+                            {
+                                Kind = WorkspaceTabKind.TableDetail,
+                                ObjectName = "ORDERS",
+                                ObjectKind = MetadataObjectKind.Table,
+                                ActiveSubTabIndex = 1,
+                                ActiveInnerSubTabIndex = 3,
+                                GridEditMode = true,
+                            },
+                        },
+                    },
+                },
+            });
+
+            var ws = store.Load()!.Workspaces["pid"];
+            Assert.True(ws.Tabs[0].EasyMode);
+            Assert.Equal(2, ws.Tabs[0].ActiveSubTabIndex);
+            Assert.Null(ws.Tabs[0].GridEditMode);
+            Assert.Equal(1, ws.Tabs[1].ActiveSubTabIndex);
+            Assert.Equal(3, ws.Tabs[1].ActiveInnerSubTabIndex);
+            Assert.True(ws.Tabs[1].GridEditMode);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]
