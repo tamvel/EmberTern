@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:app="using:EmberTern.App"
              xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:controls="using:EmberTern.App.Controls"
              xmlns:m="using:EmberTern.Core.Metadata"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -102,10 +103,9 @@
                     <!-- When a domain is picked it governs the type, so show the
                          domain's resolved type (read-only) instead of the combo (#3). -->
                     <Panel>
-                      <ComboBox ItemsSource="{Binding BasicTypes}"
-                                SelectedItem="{Binding Type, Mode=TwoWay}"
+                      <controls:SearchablePicker ItemsSource="{Binding BasicTypes}"
+                                SelectedItem="{Binding SelectedTypeItem, Mode=TwoWay}"
                                 IsEnabled="{Binding IsTypeEnabled}"
-                                IsTextSearchEnabled="True"
                                 BorderThickness="0"
                                 Background="Transparent"
                                 HorizontalAlignment="Stretch"
@@ -127,21 +127,20 @@
                                       IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
-                    <ComboBox ItemsSource="{Binding AvailableDomains}"
+                    <controls:SearchablePicker ItemsSource="{Binding AvailableDomains}"
                               SelectedItem="{Binding SelectedDomainSpec, Mode=TwoWay}"
                               IsEnabled="{Binding IsDomainEnabled}"
-                              IsTextSearchEnabled="True"
-                              TextSearch.TextBinding="{ReflectionBinding Name}"
+                              ValueMemberBinding="{ReflectionBinding Name}"
                               BorderThickness="0"
                               Background="Transparent"
                               HorizontalAlignment="Stretch"
                               VerticalAlignment="Center">
-                      <ComboBox.ItemTemplate>
-                        <DataTemplate>
+                      <controls:SearchablePicker.ItemTemplate>
+                        <DataTemplate x:DataType="m:DomainSpec">
                           <TextBlock Text="{Binding Name}" />
                         </DataTemplate>
-                      </ComboBox.ItemTemplate>
-                    </ComboBox>
+                      </controls:SearchablePicker.ItemTemplate>
+                    </controls:SearchablePicker>
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>

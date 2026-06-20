@@ -57,8 +57,18 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsSizeEnabled))]
     [NotifyPropertyChangedFor(nameof(IsPrecisionScaleEnabled))]
     [NotifyPropertyChangedFor(nameof(SelectedDomainSpec))]
+    [NotifyPropertyChangedFor(nameof(SelectedTypeItem))]
     [NotifyPropertyChangedFor(nameof(EffectiveTypeDisplay))]
     private string _type = "INTEGER";
+
+    /// <summary>Null-safe Type wrapper for the filtering picker — a partial-typed
+    /// filter (no exact match yet) writes null to SelectedItem; ignore it so the
+    /// type isn't cleared mid-filter. <see cref="Type"/> is already a base-type name.</summary>
+    public string? SelectedTypeItem
+    {
+        get => Type;
+        set { if (!string.IsNullOrEmpty(value)) Type = value; }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedDomainSpec))]
