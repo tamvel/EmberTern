@@ -23,6 +23,10 @@ internal sealed class SqlCompletionController
     private readonly Func<string, int, string?>? _dotTableResolver;
     private readonly Func<string, IReadOnlyList<ColumnSpec>?>? _cachedColumnsProvider;
     private readonly Func<string, Task<IReadOnlyList<ColumnSpec>>>? _ensureColumnsAsync;
+    // Trigger context: the table NEW./OLD. resolve to (the trigger's relation). Null
+    // for non-trigger editors, where NEW/OLD have no meaning. Read live so it tracks
+    // the table the user picks in Easy mode.
+    private readonly Func<string?>? _contextTableProvider;
     private CompletionWindow? _window;
 
     public SqlCompletionController(
@@ -30,13 +34,15 @@ internal sealed class SqlCompletionController
         Func<IReadOnlyList<MetadataObject>> objectsProvider,
         Func<string, int, string?>? dotTableResolver = null,
         Func<string, IReadOnlyList<ColumnSpec>?>? cachedColumnsProvider = null,
-        Func<string, Task<IReadOnlyList<ColumnSpec>>>? ensureColumnsAsync = null)
+        Func<string, Task<IReadOnlyList<ColumnSpec>>>? ensureColumnsAsync = null,
+        Func<string?>? contextTableProvider = null)
     {
         _editor = editor;
         _objectsProvider = objectsProvider;
         _dotTableResolver = dotTableResolver;
         _cachedColumnsProvider = cachedColumnsProvider;
         _ensureColumnsAsync = ensureColumnsAsync;
+        _contextTableProvider = contextTableProvider;
 
         _editor.TextArea.TextEntered += OnTextEntered;
         _editor.TextArea.KeyDown += OnKeyDown;
@@ -114,7 +120,7 @@ internal sealed class SqlCompletionController
 
     private bool TryShowDotCompletion(bool force)
     {
-        if (_dotTableResolver is null) return false;
+        if (_dotTableResolver is null && _contextTableProvider is null) return false;
 
         var text = _editor.Text ?? string.Empty;
         var caret = _editor.CaretOffset;
@@ -122,7 +128,7 @@ internal sealed class SqlCompletionController
         var dot = SqlCompletionContext.GetDotContext(text, caret);
         if (dot is null) return false;
 
-        var table = _dotTableResolver(text, caret);
+        var table = ResolveTableForDot(dot.Value, text, caret);
         if (table is null)
         {
             // Unknown qualifier — silently bail. Falling back to plain word
@@ -149,6 +155,21 @@ internal sealed class SqlCompletionController
         }
 
         return false;
+    }
+
+    // Resolves the qualifier before the dot to a table name. In a trigger body the
+    // pseudo-records NEW and OLD resolve to the trigger's relation (context provider);
+    // everything else goes through the alias/FROM resolver.
+    private string? ResolveTableForDot(DotContext dot, string text, int caret)
+    {
+        if (_contextTableProvider is not null
+            && (string.Equals(dot.Qualifier, "NEW", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(dot.Qualifier, "OLD", StringComparison.OrdinalIgnoreCase)))
+        {
+            var t = _contextTableProvider();
+            if (!string.IsNullOrEmpty(t)) return t;
+        }
+        return _dotTableResolver?.Invoke(text, caret);
     }
 
     private async Task LoadAndShowAsync(DotContext dot, string table)

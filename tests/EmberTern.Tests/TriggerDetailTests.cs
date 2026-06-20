@@ -100,11 +100,11 @@ public class TriggerDetailTests
         vm.FiresInsert = true;
         vm.Position = 100;
         vm.TableName = "CUSTOMERS";
-        Assert.Equal("CUSTOMERS_AI_100", vm.EditableTriggerName);
+        Assert.Equal("CUSTOMERS_AI100", vm.EditableTriggerName);
 
         vm.FiresUpdate = true;
         vm.FiresDelete = true;
-        Assert.Equal("CUSTOMERS_AIUD_100", vm.EditableTriggerName);
+        Assert.Equal("CUSTOMERS_AIUD100", vm.EditableTriggerName);
     }
 
     [Fact]
@@ -115,6 +115,14 @@ public class TriggerDetailTests
         vm.EditableTriggerName = "MY_CUSTOM_NAME"; // user override
         vm.FiresUpdate = true;          // metadata change after override
         Assert.Equal("MY_CUSTOM_NAME", vm.EditableTriggerName);
+    }
+
+    [Fact]
+    public void EditableTriggerName_UppercasesUserInput()
+    {
+        var vm = new TriggerDetailTabViewModel("X") { IsNew = true };
+        vm.EditableTriggerName = "stanmag_bu99";
+        Assert.Equal("STANMAG_BU99", vm.EditableTriggerName);
     }
 
     [Fact]

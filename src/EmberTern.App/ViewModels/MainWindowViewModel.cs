@@ -286,9 +286,13 @@ public partial class MainWindowViewModel : ViewModelBase
     // so Commit/Rollback must be reachable from a View Detail tab too.
     // ProcedureDetail joins this set: Compile opens the working (metadata)
     // transaction, so Commit/Rollback must be reachable from a Procedure Detail tab.
-    // ProcedureDetail + TriggerDetail join this set: Compile opens the working
-    // (metadata) transaction, so Commit/Rollback must be reachable from those tabs too.
-    public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive;
+    // ProcedureDetail joins this set: Compile opens the working (metadata) transaction,
+    // so Commit/Rollback must be reachable from those tabs too.
+    // TriggerDetail is DELIBERATELY EXCLUDED: a trigger is never run manually and its
+    // Compile auto-commits in an autonomous DDL tx (Phase A) — there's no working
+    // transaction to Commit/Rollback from a trigger tab, so those buttons would be
+    // misleading. The trigger toolbar is Compile + Format/Comment only.
+    public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive;
     // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail, TriggerDetail);
     // the anchored Query tab is never closable so the button hides when it's active.
     public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail };

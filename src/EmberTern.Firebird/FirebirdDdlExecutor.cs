@@ -15,10 +15,11 @@ namespace EmberTern.Firebird;
 /// without an explicit transaction when none is — Firebird auto-commits each
 /// DDL command in that case via the managed driver's implicit per-command tx.
 ///
-/// Multi-statement payloads are split on top-level semicolons. None of the
-/// statements we emit contain literal strings, so a naive split is safe; the
-/// FB engine does not accept multiple statements in a single <c>FbCommand</c>,
-/// hence the per-statement loop.
+/// Multi-statement payloads are split into individual statements (the FB engine
+/// does not accept multiple statements in a single <c>FbCommand</c>). The splitter
+/// is PSQL-aware: a CREATE/ALTER/RECREATE of a PROCEDURE/TRIGGER/FUNCTION/PACKAGE is
+/// kept whole including its DECLARE-section and body semicolons (see
+/// <see cref="SplitStatements"/>); plain DDL/DML splits on top-level semicolons.
 /// </summary>
 public sealed class FirebirdDdlExecutor
 {
@@ -121,116 +122,220 @@ public sealed class FirebirdDdlExecutor
     }
 
     /// <summary>
-    /// Splits a multi-statement DDL string on TOP-LEVEL semicolons.
-    /// "Top-level" means outside a <c>BEGIN … END</c> / <c>CASE … END</c> block —
-    /// PSQL bodies (CREATE TRIGGER / PROCEDURE / FUNCTION) have their own internal
-    /// semicolons (e.g. statements inside BEGIN/END) that must NOT terminate the
-    /// outer CREATE statement. The scanner tracks a single block-nesting counter
-    /// (case-insensitive, word-boundary match) where BOTH <c>BEGIN</c> and
-    /// <c>CASE</c> open and <c>END</c> closes — counting CASE is essential because a
-    /// <c>CASE … END</c> expression in a body (e.g. inside a WHERE clause) ends with
-    /// <c>END</c> too; without it that END would wrongly close the enclosing BEGIN
-    /// and split the procedure mid-body at the next <c>;</c> (yielding a truncated
-    /// statement → "Unexpected end of command"). String literals (<c>'…'</c>),
-    /// quoted identifiers (<c>"…"</c>), and comments (<c>-- …</c>, <c>/* … */</c>)
-    /// are copied verbatim and never inspected, so their semicolons / BEGIN / END /
-    /// CASE words don't affect splitting or nesting.
+    /// Splits a multi-statement DDL string into individual statements for the
+    /// one-statement-per-<c>FbCommand</c> loop. Two statement shapes:
+    /// <list type="bullet">
+    /// <item><b>Plain</b> DDL/DML (CREATE TABLE, ALTER TABLE, CREATE GENERATOR,
+    /// CREATE VIEW … AS SELECT, COMMENT, …) terminates at the next TOP-LEVEL
+    /// <c>;</c> (outside a BEGIN/CASE block; string/comment-aware).</item>
+    /// <item><b>PSQL definitions</b> — <c>CREATE [OR ALTER] | ALTER | RECREATE</c>
+    /// of a <c>PROCEDURE | TRIGGER | FUNCTION | PACKAGE</c> — are ONE statement
+    /// whose body semicolons never split it. The body runs from the header <c>AS</c>
+    /// through the <c>END</c> that closes the outermost <c>BEGIN</c>. Critically the
+    /// <c>DECLARE</c> section (<c>DECLARE VARIABLE …;</c>) sits BEFORE that BEGIN, so
+    /// its semicolons are at block-depth 0 — a plain top-level split would cut the
+    /// statement there (→ "Unexpected end of command"). A leading PSQL header is
+    /// therefore scanned as a unit (gotcha #140).</item>
+    /// </list>
+    /// CASE counts as a nested block opener inside the body so a <c>CASE … END</c>
+    /// doesn't close the enclosing BEGIN early (gotchas #117/#128/#129). A FB3+
+    /// subprogram (<c>DECLARE PROCEDURE/FUNCTION … BEGIN … END</c>) in the DECLARE
+    /// section opens/closes its own BEGIN; the body terminator is detected by peeking
+    /// the token after a depth-0 END (BEGIN/DECLARE → a subprogram closed, keep
+    /// going; anything else → the main body closed). String literals, quoted
+    /// identifiers, and comments are skipped verbatim throughout.
     /// </summary>
     internal static IReadOnlyList<string> SplitStatements(string sql)
     {
         var result = new List<string>();
         if (string.IsNullOrWhiteSpace(sql)) return result;
 
-        var current = new System.Text.StringBuilder();
-        var blockDepth = 0;
-        int i = 0;
-        while (i < sql.Length)
+        int i = 0, n = sql.Length;
+        while (i < n)
+        {
+            i = SkipTriviaAndComments(sql, i);
+            if (i >= n) break;
+            int start = i;
+            i = IsPsqlDefinitionStart(sql, i)
+                ? ScanPsqlStatement(sql, i)
+                : ScanPlainStatement(sql, i);
+            AddStatement(sql.Substring(start, i - start), result);
+        }
+        return result;
+    }
+
+    // Plain statement: terminates at the next top-level ';' (block-depth 0). BEGIN/
+    // CASE/END awareness is retained defensively so any begin/end content that isn't a
+    // PSQL CREATE still isn't split mid-block. Returns the index just past the ';'.
+    private static int ScanPlainStatement(string sql, int start)
+    {
+        int i = start, n = sql.Length, depth = 0;
+        while (i < n)
         {
             char c = sql[i];
-
-            // Opaque runs — copy whole, never inspect for ';' / BEGIN / END / CASE.
-            if (c == '\'') { i = CopyString(sql, i, current); continue; }
-            if (c == '"') { i = CopyQuotedIdent(sql, i, current); continue; }
-            if (c == '-' && i + 1 < sql.Length && sql[i + 1] == '-') { i = CopyLineComment(sql, i, current); continue; }
-            if (c == '/' && i + 1 < sql.Length && sql[i + 1] == '*') { i = CopyBlockComment(sql, i, current); continue; }
-
-            if (c == ';' && blockDepth == 0)
+            if (c == '\'') { i = SkipString(sql, i); continue; }
+            if (c == '"') { i = SkipQuotedIdent(sql, i); continue; }
+            if (c == '-' && i + 1 < n && sql[i + 1] == '-') { i = SkipLineComment(sql, i); continue; }
+            if (c == '/' && i + 1 < n && sql[i + 1] == '*') { i = SkipBlockComment(sql, i); continue; }
+            if (c == ';' && depth == 0) return i + 1;
+            if (IsWordBoundary(sql, i - 1))
             {
-                AppendIfNonEmpty(current, result);
-                current.Clear();
+                if ((Matches(sql, i, "BEGIN") && IsWordEndAt(sql, i + 5)) || (Matches(sql, i, "CASE") && IsWordEndAt(sql, i + 4))) depth++;
+                else if (Matches(sql, i, "END") && IsWordEndAt(sql, i + 3)) { if (depth > 0) depth--; }
+            }
+            i++;
+        }
+        return i;
+    }
+
+    // PSQL definition (CREATE/ALTER/RECREATE PROCEDURE|TRIGGER|FUNCTION|PACKAGE): one
+    // statement, body semicolons included. Phase 1 (before AS): skip balanced parens
+    // (so an AS inside CAST(x AS y) / a param list isn't the body separator) and treat
+    // a top-level ';' as a no-body terminator (UDR / EXTERNAL declarations). Phase 2
+    // (after AS): track BEGIN/CASE/END depth — ';' is body-internal — and end at the
+    // END closing the outermost BEGIN (peeking past a subprogram's END).
+    private static int ScanPsqlStatement(string sql, int start)
+    {
+        int i = start, n = sql.Length;
+        bool pastAs = false, bodyOpened = false;
+        int depth = 0;
+        while (i < n)
+        {
+            char c = sql[i];
+            if (c == '\'') { i = SkipString(sql, i); continue; }
+            if (c == '"') { i = SkipQuotedIdent(sql, i); continue; }
+            if (c == '-' && i + 1 < n && sql[i + 1] == '-') { i = SkipLineComment(sql, i); continue; }
+            if (c == '/' && i + 1 < n && sql[i + 1] == '*') { i = SkipBlockComment(sql, i); continue; }
+
+            if (!pastAs)
+            {
+                if (c == '(') { i = SkipParens(sql, i); continue; }
+                if (KeywordAt(sql, i, "AS")) { pastAs = true; i += 2; continue; }
+                if (c == ';') return i + 1; // header with no PSQL body (UDR / EXTERNAL)
                 i++;
                 continue;
             }
 
-            // Word-boundary BEGIN/CASE (open) / END (close). Match only when bounded
-            // by non-identifier characters so the words inside a larger identifier
-            // are ignored. BEGIN…END and CASE…END both terminate with END, so
-            // counting CASE as an opener keeps the nesting balanced.
             if (IsWordBoundary(sql, i - 1))
             {
-                if ((Matches(sql, i, "BEGIN") && IsWordEndAt(sql, i + 5))
-                    || (Matches(sql, i, "CASE") && IsWordEndAt(sql, i + 4)))
+                if (Matches(sql, i, "BEGIN") && IsWordEndAt(sql, i + 5)) { depth++; bodyOpened = true; i += 5; continue; }
+                if (Matches(sql, i, "CASE") && IsWordEndAt(sql, i + 4)) { if (depth > 0) depth++; i += 4; continue; }
+                if (Matches(sql, i, "END") && IsWordEndAt(sql, i + 3))
                 {
-                    blockDepth++;
-                }
-                else if (Matches(sql, i, "END") && IsWordEndAt(sql, i + 3))
-                {
-                    if (blockDepth > 0) blockDepth--;
+                    i += 3;
+                    if (depth > 0)
+                    {
+                        depth--;
+                        if (depth == 0 && bodyOpened)
+                        {
+                            int j = SkipTriviaAndComments(sql, i);
+                            // A subprogram's END (more DECLAREs / the main BEGIN follow) → keep scanning.
+                            if (j < n && (KeywordAt(sql, j, "BEGIN") || KeywordAt(sql, j, "DECLARE"))) continue;
+                            return j < n && sql[j] == ';' ? j + 1 : i; // main body closed
+                        }
+                    }
+                    continue;
                 }
             }
-
-            current.Append(c);
             i++;
         }
-        AppendIfNonEmpty(current, result);
-        return result;
+        return i;
     }
 
-    // Copies an opaque run starting at <paramref name="i"/> into <paramref name="sink"/>
-    // and returns the index just past it. Each handles its own terminator.
-    private static int CopyString(string s, int i, System.Text.StringBuilder sink)
+    // CREATE [OR ALTER] | ALTER | RECREATE  +  PROCEDURE | TRIGGER | FUNCTION | PACKAGE.
+    // (ALTER TABLE / CREATE VIEW … AS SELECT / CREATE GENERATOR etc. are NOT PSQL.)
+    private static bool IsPsqlDefinitionStart(string sql, int i)
     {
-        int start = i++;
-        while (i < s.Length)
+        int j = i;
+        if (KeywordAt(sql, j, "CREATE"))
+        {
+            j = SkipWordAndTrivia(sql, j, "CREATE");
+            if (KeywordAt(sql, j, "OR"))
+            {
+                j = SkipWordAndTrivia(sql, j, "OR");
+                if (!KeywordAt(sql, j, "ALTER")) return false;
+                j = SkipWordAndTrivia(sql, j, "ALTER");
+            }
+        }
+        else if (KeywordAt(sql, j, "RECREATE")) { j = SkipWordAndTrivia(sql, j, "RECREATE"); }
+        else if (KeywordAt(sql, j, "ALTER")) { j = SkipWordAndTrivia(sql, j, "ALTER"); }
+        else return false;
+
+        return KeywordAt(sql, j, "PROCEDURE") || KeywordAt(sql, j, "TRIGGER")
+            || KeywordAt(sql, j, "FUNCTION") || KeywordAt(sql, j, "PACKAGE");
+    }
+
+    private static int SkipWordAndTrivia(string s, int i, string word) => SkipTriviaAndComments(s, i + word.Length);
+
+    // ── opaque-run / trivia skippers (return the index just past the run) ──
+    private static int SkipString(string s, int i)
+    {
+        int n = s.Length; i++;
+        while (i < n)
         {
             if (s[i] == '\'')
             {
-                if (i + 1 < s.Length && s[i + 1] == '\'') { i += 2; continue; } // '' escape
-                i++;
-                break;
+                if (i + 1 < n && s[i + 1] == '\'') { i += 2; continue; } // '' escape
+                return i + 1;
             }
             i++;
         }
-        sink.Append(s, start, i - start);
         return i;
     }
 
-    private static int CopyQuotedIdent(string s, int i, System.Text.StringBuilder sink)
+    private static int SkipQuotedIdent(string s, int i)
     {
-        int start = i++;
-        while (i < s.Length && s[i] != '"') i++;
-        if (i < s.Length) i++;
-        sink.Append(s, start, i - start);
-        return i;
+        int n = s.Length; i++;
+        while (i < n && s[i] != '"') i++;
+        return i < n ? i + 1 : i;
     }
 
-    private static int CopyLineComment(string s, int i, System.Text.StringBuilder sink)
+    private static int SkipLineComment(string s, int i)
     {
-        int start = i;
         while (i < s.Length && s[i] != '\n') i++;
-        sink.Append(s, start, i - start);
         return i;
     }
 
-    private static int CopyBlockComment(string s, int i, System.Text.StringBuilder sink)
+    private static int SkipBlockComment(string s, int i)
     {
-        int start = i;
-        i += 2;
-        while (i + 1 < s.Length && !(s[i] == '*' && s[i + 1] == '/')) i++;
-        i = i + 1 < s.Length ? i + 2 : s.Length;
-        sink.Append(s, start, i - start);
+        int n = s.Length; i += 2;
+        while (i + 1 < n && !(s[i] == '*' && s[i + 1] == '/')) i++;
+        return i + 1 < n ? i + 2 : n;
+    }
+
+    private static int SkipParens(string s, int i)
+    {
+        int n = s.Length, depth = 0;
+        while (i < n)
+        {
+            char c = s[i];
+            if (c == '\'') { i = SkipString(s, i); continue; }
+            if (c == '"') { i = SkipQuotedIdent(s, i); continue; }
+            if (c == '-' && i + 1 < n && s[i + 1] == '-') { i = SkipLineComment(s, i); continue; }
+            if (c == '/' && i + 1 < n && s[i + 1] == '*') { i = SkipBlockComment(s, i); continue; }
+            if (c == '(') { depth++; i++; continue; }
+            if (c == ')') { depth--; i++; if (depth == 0) return i; continue; }
+            i++;
+        }
         return i;
     }
+
+    private static int SkipTriviaAndComments(string s, int i)
+    {
+        int n = s.Length;
+        while (i < n)
+        {
+            char c = s[i];
+            if (char.IsWhiteSpace(c)) { i++; continue; }
+            if (c == '-' && i + 1 < n && s[i + 1] == '-') { i = SkipLineComment(s, i); continue; }
+            if (c == '/' && i + 1 < n && s[i + 1] == '*') { i = SkipBlockComment(s, i); continue; }
+            break;
+        }
+        return i;
+    }
+
+    private static bool KeywordAt(string s, int i, string keyword)
+        => IsWordBoundary(s, i - 1) && Matches(s, i, keyword) && IsWordEndAt(s, i + keyword.Length);
 
     private static bool IsWordBoundary(string s, int index)
     {
@@ -252,9 +357,11 @@ public sealed class FirebirdDdlExecutor
         return true;
     }
 
-    private static void AppendIfNonEmpty(System.Text.StringBuilder builder, List<string> sink)
+    // Adds a scanned statement, stripping a single trailing terminator ';' + whitespace.
+    private static void AddStatement(string raw, List<string> sink)
     {
-        var trimmed = builder.ToString().Trim();
+        var trimmed = raw.Trim();
+        if (trimmed.EndsWith(";", StringComparison.Ordinal)) trimmed = trimmed.Substring(0, trimmed.Length - 1).Trim();
         if (trimmed.Length > 0) sink.Add(trimmed);
     }
 }

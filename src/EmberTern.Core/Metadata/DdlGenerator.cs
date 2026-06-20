@@ -725,11 +725,12 @@ public static class DdlGenerator
     }
 
     /// <summary>
-    /// Builds the auto-derived trigger name <c>{TABLE}_{timing}{events}_{position}</c>
-    /// — timing B(efore)/A(fter) + event letters I/U/D in that fixed order, e.g.
-    /// <c>ORDERS_BIUD_50</c> for a BEFORE INSERT+UPDATE+DELETE trigger at position 50.
-    /// Pure + testable. The VM only calls this while the user hasn't overridden the
-    /// name (and only for a new trigger); an empty table yields a leading underscore.
+    /// Builds the auto-derived trigger name <c>{TABLE}_{timing}{events}{position}</c>
+    /// — timing B(efore)/A(fter) + event letters I/U/D in that fixed order + the
+    /// position glued on (no separator before it), e.g. <c>ORDERS_BIUD50</c> for a
+    /// BEFORE INSERT+UPDATE+DELETE trigger at position 50, <c>STANMAG_BU99</c> for a
+    /// BEFORE UPDATE trigger at 99. Pure + testable. The VM calls this only while the
+    /// user hasn't overridden the name (and only for a new trigger).
     /// </summary>
     public static string BuildTriggerName(string table, bool isBefore, bool insert, bool update, bool delete, int position)
     {
@@ -738,7 +739,7 @@ public static class DdlGenerator
         if (insert) code.Append('I');
         if (update) code.Append('U');
         if (delete) code.Append('D');
-        return string.Format(CultureInfo.InvariantCulture, "{0}_{1}_{2}", (table ?? string.Empty).Trim(), code.ToString(), position);
+        return string.Format(CultureInfo.InvariantCulture, "{0}_{1}{2}", (table ?? string.Empty).Trim(), code.ToString(), position);
     }
 
     /// <summary>Like <see cref="BuildCommentProcedure"/> but for triggers —

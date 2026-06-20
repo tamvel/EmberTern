@@ -146,8 +146,25 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     }
 
     partial void OnSourceTextChanged(string value) => MarkDirty();
-    partial void OnEditableProcedureNameChanged(string value) => MarkDirty();
     partial void OnExecutableBodyChanged(string value) => MarkDirty();
+
+    private bool _settingNameUpper;
+    partial void OnEditableProcedureNameChanged(string value)
+    {
+        // UPPERCASE user-entered names consistently (gotcha #141). Programmatic sets
+        // (ctor / load / parse, under _suppressDirty) don't need coercing.
+        if (!_settingNameUpper && !_suppressDirty)
+        {
+            var upper = (value ?? string.Empty).ToUpperInvariant();
+            if (!string.Equals(value, upper, StringComparison.Ordinal))
+            {
+                _settingNameUpper = true;
+                try { EditableProcedureName = upper; } finally { _settingNameUpper = false; }
+                return;
+            }
+        }
+        MarkDirty();
+    }
 
     // Unsaved-work for the WorkGuard. Untouched tab (just opened / fresh New
     // Procedure before any edit) → null. New Procedure clears dirty after seeding

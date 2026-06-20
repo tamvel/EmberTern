@@ -9,11 +9,12 @@ public class TriggerDdlGeneratorTests
     // ─── BuildTriggerName (auto-name mapping per spec) ────────────────────
 
     [Theory]
-    [InlineData("CUSTOMERS", true, true, false, false, 10, "CUSTOMERS_BI_10")]
-    [InlineData("CUSTOMERS", false, false, true, false, 100, "CUSTOMERS_AU_100")]
-    [InlineData("ORDERS", true, true, true, true, 50, "ORDERS_BIUD_50")]
-    [InlineData("CUSTOMERS", false, true, true, true, 100, "CUSTOMERS_AIUD_100")]
-    [InlineData("T", true, false, true, true, 0, "T_BUD_0")]
+    [InlineData("CUSTOMERS", true, true, false, false, 10, "CUSTOMERS_BI10")]
+    [InlineData("CUSTOMERS", false, false, true, false, 100, "CUSTOMERS_AU100")]
+    [InlineData("ORDERS", true, true, true, true, 50, "ORDERS_BIUD50")]
+    [InlineData("CUSTOMERS", false, true, true, true, 100, "CUSTOMERS_AIUD100")]
+    [InlineData("STANMAG", true, false, true, false, 99, "STANMAG_BU99")]
+    [InlineData("T", true, false, true, true, 0, "T_BUD0")]
     public void BuildTriggerName_Maps(string table, bool isBefore, bool ins, bool upd, bool del, int pos, string expected)
     {
         Assert.Equal(expected, DdlGenerator.BuildTriggerName(table, isBefore, ins, upd, del, pos));

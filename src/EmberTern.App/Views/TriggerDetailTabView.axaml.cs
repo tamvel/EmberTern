@@ -66,8 +66,10 @@ public partial class TriggerDetailTabView : UserControl
         if (_completionAttached) return;
         if (this.FindAncestorOfType<Window>()?.DataContext is MainWindowViewModel mainVm)
         {
-            if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm);
-            if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm);
+            // NEW. / OLD. in the trigger body complete the trigger's table columns.
+            Func<string?> triggerTable = () => _currentVm?.TableName;
+            if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm, triggerTable);
+            if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm, triggerTable);
             _completionAttached = true;
         }
     }

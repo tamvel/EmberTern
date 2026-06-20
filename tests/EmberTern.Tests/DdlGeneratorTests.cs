@@ -336,4 +336,93 @@ begin
 end";
         Assert.Single(FirebirdDdlExecutor.SplitStatements(sql));
     }
+
+    [Fact]
+    public void SplitStatements_TriggerWithDeclareSection_StaysOneStatement()
+    {
+        // Regression for the blocker: the DECLARE VARIABLE ';' sits BEFORE the BEGIN
+        // (block-depth 0). A plain top-level split cut the trigger there → the engine
+        // got a truncated "… AS DECLARE VARIABLE ID_NAGL T_ID" → "Unexpected end of
+        // command". The PSQL-aware scanner must keep the whole trigger as one statement.
+        var sql = @"CREATE OR ALTER TRIGGER XXX_NAGL_BIU_99 FOR NAGL
+ACTIVE BEFORE INSERT OR UPDATE POSITION 99
+AS
+
+DECLARE VARIABLE ID_NAGL T_ID;
+
+begin
+  id_nagl = new.id_nagl;
+end";
+        var split = FirebirdDdlExecutor.SplitStatements(sql);
+        Assert.Single(split);
+        Assert.Contains("DECLARE VARIABLE ID_NAGL T_ID;", split[0]);
+        Assert.EndsWith("end", split[0]);
+    }
+
+    [Fact]
+    public void SplitStatements_ProcedureWithDeclareSection_StaysOneStatement()
+    {
+        // Same defect class for procedures with a DECLARE section before BEGIN.
+        var sql = @"CREATE OR ALTER PROCEDURE P RETURNS (R INTEGER) AS
+DECLARE VARIABLE T INTEGER;
+DECLARE VARIABLE S VARCHAR(10);
+BEGIN
+  T = 1;
+  R = T;
+  SUSPEND;
+END";
+        Assert.Single(FirebirdDdlExecutor.SplitStatements(sql));
+    }
+
+    [Fact]
+    public void SplitStatements_TriggerInBatch_WithGeneratorAndAlter_SplitsThree()
+    {
+        // A trigger with a DECLARE section is one unit even amid plain statements.
+        var sql = @"CREATE GENERATOR GEN_X;
+CREATE OR ALTER TRIGGER T FOR NAGL ACTIVE BEFORE INSERT POSITION 0
+AS
+DECLARE VARIABLE V INTEGER;
+BEGIN
+  V = GEN_ID(GEN_X, 1);
+  NEW.ID = V;
+END;
+ALTER TABLE NAGL ADD X INTEGER";
+        var split = FirebirdDdlExecutor.SplitStatements(sql);
+        Assert.Equal(3, split.Count);
+        Assert.StartsWith("CREATE GENERATOR", split[0]);
+        Assert.StartsWith("CREATE OR ALTER TRIGGER", split[1]);
+        Assert.Contains("DECLARE VARIABLE V INTEGER;", split[1]);
+        Assert.StartsWith("ALTER TABLE", split[2]);
+    }
+
+    [Fact]
+    public void SplitStatements_ProcedureWithSubprogram_StaysOneStatement()
+    {
+        // A FB3 subprogram's BEGIN…END in the DECLARE section closes to depth 0 mid-body;
+        // the scanner peeks past it (next token is the main BEGIN) and keeps scanning.
+        var sql = @"CREATE OR ALTER PROCEDURE P AS
+DECLARE PROCEDURE SUB (A INTEGER) AS BEGIN A = A + 1; END
+DECLARE VARIABLE V INTEGER;
+BEGIN
+  V = 1;
+  SUSPEND;
+END";
+        Assert.Single(FirebirdDdlExecutor.SplitStatements(sql));
+    }
+
+    [Fact]
+    public void SplitStatements_AlterTable_IsNotTreatedAsPsql()
+    {
+        // ALTER TABLE must split on ';' (not be swallowed as a PSQL body).
+        var sql = "ALTER TABLE T ADD A INTEGER; ALTER TABLE T ADD B INTEGER";
+        Assert.Equal(2, FirebirdDdlExecutor.SplitStatements(sql).Count);
+    }
+
+    [Fact]
+    public void SplitStatements_CreateViewAsSelect_SplitsNormally()
+    {
+        // CREATE VIEW … AS SELECT is NOT a PSQL body — it must terminate at its ';'.
+        var sql = "CREATE VIEW V AS SELECT 1 AS X FROM RDB$DATABASE; ALTER TABLE T ADD A INTEGER";
+        Assert.Equal(2, FirebirdDdlExecutor.SplitStatements(sql).Count);
+    }
 }

@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:app="using:EmberTern.App"
         xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:controls="using:EmberTern.App.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
@@ -97,9 +98,8 @@
           </Border>
           <StackPanel Grid.Row="1" Margin="8,6,8,4" Spacing="4">
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedTableLabel}" Classes="field-label" />
-            <ComboBox ItemsSource="{Binding AvailableTables}"
+            <controls:SearchablePicker ItemsSource="{Binding AvailableTables}"
                       SelectedItem="{Binding SelectedReferencedTable, Mode=TwoWay}"
-                      IsTextSearchEnabled="True"
                       HorizontalAlignment="Stretch" />
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedFieldsHint}"
                        FontSize="10"

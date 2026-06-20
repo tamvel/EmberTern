@@ -222,11 +222,26 @@ public partial class TriggerDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
     private string _editableTriggerName = string.Empty;
 
     private bool _autoWritingName;
+    private bool _settingNameUpper;
     private string _lastAutoName = string.Empty;
     private bool _userOverrodeName;
 
     partial void OnEditableTriggerNameChanged(string value)
     {
+        // UPPERCASE user-entered names (Firebird folds unquoted identifiers; EmberTern
+        // keeps object names uppercase consistently — gotcha #141). Programmatic sets
+        // (ctor / load, under _suppressDirty) and the already-uppercase auto-name don't
+        // need coercing, so this only fires on a genuine user edit.
+        if (!_settingNameUpper && !_suppressDirty)
+        {
+            var upper = (value ?? string.Empty).ToUpperInvariant();
+            if (!string.Equals(value, upper, StringComparison.Ordinal))
+            {
+                _settingNameUpper = true;
+                try { EditableTriggerName = upper; } finally { _settingNameUpper = false; }
+                return; // re-runs this handler with the uppercased value
+            }
+        }
         MarkDirty();
         // During ctor / programmatic load (_suppressDirty) and during our own
         // auto-write, a value change is not a user override.

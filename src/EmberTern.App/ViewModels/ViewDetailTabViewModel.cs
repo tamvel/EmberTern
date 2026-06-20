@@ -100,7 +100,24 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
 
     private void OnColumnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => MarkDirty();
 
-    partial void OnEditableViewNameChanged(string value) => MarkDirty();
+    private bool _settingNameUpper;
+    partial void OnEditableViewNameChanged(string value)
+    {
+        // UPPERCASE user-entered names consistently (gotcha #141). Programmatic sets
+        // (ctor / load / parse, under _suppressDirty) don't need coercing.
+        if (!_settingNameUpper && !_suppressDirty)
+        {
+            var upper = (value ?? string.Empty).ToUpperInvariant();
+            if (!string.Equals(value, upper, System.StringComparison.Ordinal))
+            {
+                _settingNameUpper = true;
+                try { EditableViewName = upper; } finally { _settingNameUpper = false; }
+                return;
+            }
+        }
+        MarkDirty();
+    }
+
     partial void OnSourceTextChanged(string value) => MarkDirty();
     partial void OnEditableBodyChanged(string value) => MarkDirty();
 

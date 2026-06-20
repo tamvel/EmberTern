@@ -17,14 +17,18 @@ namespace EmberTern.App.Completion;
 /// </summary>
 internal static class SqlEditorBehavior
 {
-    public static SqlCompletionController Attach(TextEditor editor, MainWindowViewModel vm)
+    /// <param name="contextTableProvider">For a trigger body editor: returns the
+    /// trigger's table so <c>NEW.</c> / <c>OLD.</c> complete that table's columns.
+    /// Null for ordinary editors (NEW/OLD have no meaning there).</param>
+    public static SqlCompletionController Attach(TextEditor editor, MainWindowViewModel vm, Func<string?>? contextTableProvider = null)
     {
         var completion = new SqlCompletionController(
             editor,
             vm.EnumerateLoadedObjects,
             dotTableResolver: vm.ResolveDotTable,
             cachedColumnsProvider: vm.TryGetCachedColumns,
-            ensureColumnsAsync: t => vm.EnsureColumnsAsync(t));
+            ensureColumnsAsync: t => vm.EnsureColumnsAsync(t),
+            contextTableProvider: contextTableProvider);
 
         // Select-an-identifier → box all its occurrences in this editor.
         OccurrenceHighlighter.Attach(editor);

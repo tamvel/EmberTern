@@ -3,6 +3,7 @@
         xmlns:app="using:EmberTern.App"
         xmlns:vm="using:EmberTern.App.ViewModels"
         xmlns:m="using:EmberTern.Core.Metadata"
+        xmlns:controls="using:EmberTern.App.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
@@ -63,13 +64,12 @@
         <StackPanel Margin="8" Spacing="6">
           <TextBlock Text="{x:Static app:UiStrings.AddFieldDomainLabel}" Classes="field-label" />
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-          <ComboBox Grid.Column="0"
+          <controls:SearchablePicker Grid.Column="0"
                     ItemsSource="{Binding Domains}"
                     SelectedItem="{Binding SelectedDomain, Mode=TwoWay}"
-                    IsTextSearchEnabled="True"
-                    TextSearch.TextBinding="{ReflectionBinding Name}"
+                    ValueMemberBinding="{ReflectionBinding Name}"
                     HorizontalAlignment="Stretch">
-            <ComboBox.ItemTemplate>
+            <controls:SearchablePicker.ItemTemplate>
               <DataTemplate x:DataType="m:DomainSpec">
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Grid.Column="0"
@@ -84,8 +84,8 @@
                              Margin="12,0,0,0" />
                 </Grid>
               </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
+            </controls:SearchablePicker.ItemTemplate>
+          </controls:SearchablePicker>
           <Button Grid.Column="1"
                   Classes="flat"
                   Content="{x:Static app:UiStrings.AddFieldClearDomain}"
@@ -205,9 +205,8 @@
           <RadioButton GroupName="Autoinc"
                        Content="{x:Static app:UiStrings.AddFieldAutoincExisting}"
                        IsChecked="{Binding IsAutoincExisting, Mode=TwoWay}" />
-          <ComboBox ItemsSource="{Binding Generators}"
+          <controls:SearchablePicker ItemsSource="{Binding Generators}"
                     SelectedItem="{Binding SelectedGenerator, Mode=TwoWay}"
-                    IsTextSearchEnabled="True"
                     HorizontalAlignment="Stretch"
                     Margin="22,2,0,2"
                     IsVisible="{Binding ShowExistingGeneratorPicker}" />
