@@ -70,6 +70,14 @@ public partial class NewTableFieldRowViewModel : ObservableObject
         set { if (!string.IsNullOrEmpty(value)) Type = value; }
     }
 
+    // Bug fix: changing to a type without Size/Scale (e.g. VARCHAR → SMALLINT) clears
+    // the now-irrelevant cells so a stale value can't linger in the grid.
+    partial void OnTypeChanged(string value)
+    {
+        if (!FieldTypeRules.UsesSize(value) && Size is not null) Size = null;
+        if (!FieldTypeRules.UsesScale(value) && Scale is not null) Scale = null;
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedDomainSpec))]
     [NotifyPropertyChangedFor(nameof(HasDomain))]

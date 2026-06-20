@@ -118,6 +118,10 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
         // the user did NOT pick a plain type, so don't clear the domain.
         if (_suppressCompose || _syncingType) return;
         if (!string.IsNullOrWhiteSpace(value)) { _domainName = null; _typeOf = string.Empty; OnPropertyChanged(nameof(SelectedDomainSpec)); OnPropertyChanged(nameof(TypeOf)); }
+        // Drop args that don't apply to the new base type (e.g. VARCHAR→SMALLINT clears Size).
+        if (!FieldTypeRules.UsesSize(value) && Size is not null) Size = null;
+        if (!FieldTypeRules.UsesScale(value) && Scale is not null) Scale = null;
+        if (!FieldTypeRules.UsesSubType(value) && !string.IsNullOrEmpty(SubType)) SubType = string.Empty;
         Recompose();
     }
 
@@ -153,25 +157,40 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
 
     private void Recompose() => TypeText = ComposeType();
 
-    // Fills the Type / Size / Scale cells from the selected domain's resolved type
-    // (e.g. domain T_KODPOCZ → VARCHAR(6)) for display, WITHOUT clearing DomainName.
+    // Fills the Type / Size / Scale / Sub Type / Charset / Not Null cells from the
+    // selected domain's definition (e.g. domain T_KODPOCZ → VARCHAR(6)) for display,
+    // WITHOUT clearing DomainName. ComposeType still returns the domain NAME (domain
+    // wins), so this is informational only and never corrupts the generated DDL.
     private void SyncTypeDisplayFromDomain(string domain)
     {
-        string? resolved = null;
-        foreach (var d in AvailableDomains)
+        DomainSpec? d = null;
+        foreach (var x in AvailableDomains)
         {
-            if (string.Equals(d.Name, domain, StringComparison.OrdinalIgnoreCase)) { resolved = d.Type; break; }
+            if (string.Equals(x.Name, domain, StringComparison.OrdinalIgnoreCase)) { d = x; break; }
         }
-        if (string.IsNullOrWhiteSpace(resolved)) return; // domain list not loaded yet
-        var (b, a1, a2) = SplitBaseAndArgs(resolved!.Trim());
+        if (d is null) return; // domain list not loaded yet
         _syncingType = true;
         try
         {
-            BaseType = string.IsNullOrEmpty(b) ? null : b.ToUpperInvariant();
-            Size = a1;
-            Scale = a2;
+            BaseType = string.IsNullOrEmpty(d.BaseType) ? null : d.BaseType.ToUpperInvariant();
+            Size = d.Size;
+            Scale = d.Scale;
+            SubType = ExtractSubType(d.Type);
+            Charset = d.Charset ?? string.Empty;
+            NotNull = d.NotNull;
         }
         finally { _syncingType = false; }
+    }
+
+    // "BLOB SUB_TYPE 1" → "1"; otherwise empty.
+    private static string ExtractSubType(string type)
+    {
+        var ix = type.IndexOf("SUB_TYPE", StringComparison.OrdinalIgnoreCase);
+        if (ix < 0) return string.Empty;
+        var rest = type[(ix + 8)..].Trim();
+        int i = 0;
+        while (i < rest.Length && (char.IsLetterOrDigit(rest[i]) || rest[i] == '_')) i++;
+        return rest[..i];
     }
 
     /// <summary>Builds the full Firebird type spec from the structured fields.</summary>

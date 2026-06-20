@@ -84,6 +84,34 @@ public partial class FieldRowViewModel : ObservableObject
     private void OnAvailableDomainsChanged(object? sender, NotifyCollectionChangedEventArgs e)
         => OnPropertyChanged(nameof(SelectedDomainSpec));
 
+    // Bug fix: dropping a size-bearing type (VARCHAR) for one without (SMALLINT) must
+    // clear the now-irrelevant Size/Scale cells (they'd otherwise linger in the grid).
+    partial void OnTypeTextChanged(string value)
+    {
+        var b = StripSize(value);
+        if (!FieldTypeRules.UsesSize(b) && Size is not null) Size = null;
+        if (!FieldTypeRules.UsesScale(b) && Scale is not null) Scale = null;
+    }
+
+    // Display-only: when the user picks a domain, mirror its resolved type into the
+    // (disabled) Type/Size/Scale cells so they show the effective type instead of the
+    // old one. DDL-safe: EnqueueRowEdits uses DomainName for the ALTER when a domain is
+    // set (typeClause = DomainName), so TypeText/Size/Scale never drive the generated DDL.
+    partial void OnDomainNameChanged(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return;
+        foreach (var d in AvailableDomains)
+        {
+            if (string.Equals(d.Name, value, System.StringComparison.OrdinalIgnoreCase))
+            {
+                TypeText = d.Type;  // full resolved type → SelectedTypeItem shows the base
+                Size = d.Size;
+                Scale = d.Scale;
+                return;
+            }
+        }
+    }
+
     // Editable cell properties — any change re-queues this row's inline edit on the
     // owner. Crucially this covers the Type / Domain ComboBoxes (always-visible cells
     // in IsReadOnly template columns), which never fire the DataGrid's RowEditEnding,
