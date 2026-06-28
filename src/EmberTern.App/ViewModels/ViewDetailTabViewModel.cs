@@ -86,8 +86,18 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
     private bool _suppressDirty = true;
 
     public bool IsDirty => _isDirty;
-    internal void ClearDirty() => _isDirty = false;
-    private void MarkDirty() { if (!_suppressDirty) _isDirty = true; }
+    internal void ClearDirty() => SetDirty(false);
+    private void MarkDirty() { if (!_suppressDirty) SetDirty(true); }
+
+    // Centralized so a dirty transition keeps the Revert button's enabled state (and any
+    // IsDirty binding) in sync — Revert is only available when there are edits to undo.
+    private void SetDirty(bool value)
+    {
+        if (_isDirty == value) return;
+        _isDirty = value;
+        OnPropertyChanged(nameof(IsDirty));
+        RevertChangesCommand.NotifyCanExecuteChanged();
+    }
 
     private void OnColumnsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
@@ -643,6 +653,39 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         // but guard against a stray comma/semicolon.
         name = name.TrimEnd(',', ';');
         return name.Length == 0 ? null : name.ToUpperInvariant();
+    }
+
+    // ─── Revert (discard uncompiled edits, reload from DB) ────────────────
+    //
+    // The source-editor analog of the Table designer's "discard pending changes":
+    // reload the view from the database, throwing away uncompiled edits. Confirms
+    // first (the edits can't be recovered) so an accidental click never loses work.
+    // Existing views only — a not-yet-created view has no DB state to revert to, so
+    // the button is disabled in the New View flow (use Close to abandon it).
+
+    /// <summary>Confirmation gate for the destructive Revert — the owner wires this to
+    /// the shared ConfirmDialog. With no handler (tests) it proceeds (Task.FromResult(true)).</summary>
+    public event Func<ConfirmRequest, Task<bool>>? ConfirmationRequested;
+    private Task<bool> RequestConfirmAsync(ConfirmRequest request)
+        => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
+
+    public bool CanRevertChanges => IsDirty && !IsNew;
+
+    [RelayCommand(CanExecute = nameof(CanRevertChanges))]
+    private async Task RevertChanges()
+    {
+        if (!CanRevertChanges) return;
+        var name = string.IsNullOrWhiteSpace(EditableViewName) ? ViewName : EditableViewName.Trim();
+        var confirmed = await RequestConfirmAsync(new ConfirmRequest
+        {
+            Title = UiStrings.RevertChangesConfirmTitle,
+            Message = string.Format(CultureInfo.CurrentCulture, UiStrings.RevertChangesConfirmFormat, name),
+            ConfirmLabel = UiStrings.RevertChangesConfirmYes,
+            CancelLabel = UiStrings.DialogCancel,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
+        if (!confirmed) return;
+        await RefreshAsync().ConfigureAwait(true);
     }
 
     // ─── Load / refresh ───────────────────────────────────────────────────

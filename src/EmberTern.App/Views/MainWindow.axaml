@@ -669,13 +669,25 @@
                       Command="{Binding ActiveViewDetail.CompileCommand}" IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+                      Command="{Binding ActiveViewDetail.RevertChangesCommand}" IsVisible="{Binding IsViewDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
+              </Button>
               <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCompileTooltip}"
                       Command="{Binding ActiveProcedureDetail.CompileCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+                      Command="{Binding ActiveProcedureDetail.RevertChangesCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
+              </Button>
               <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.TriggerCompileTooltip}"
                       Command="{Binding ActiveTriggerDetail.CompileCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+                      Command="{Binding ActiveTriggerDetail.RevertChangesCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
               <!-- Single unified Commit / Rollback pair (auto-routed to the open lane(s)). -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"

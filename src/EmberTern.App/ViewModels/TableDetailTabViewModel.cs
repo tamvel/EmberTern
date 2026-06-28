@@ -2887,11 +2887,22 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
     /// Discards every queued structural change and reprojects the grids back to
     /// the live-catalog (DB-truth) state — pending-Added rows vanish, dropped
     /// rows un-strike, modified rows reset — WITHOUT a database round-trip.
+    /// Confirms first so an accidental click never throws away uncompiled work.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanDiscardPending))]
-    private void DiscardPendingChanges()
+    private async Task DiscardPendingChanges()
     {
         if (PendingChanges.Count == 0) return;
+        var confirmed = await RequestConfirmAsync(new ConfirmRequest
+        {
+            Title = UiStrings.FieldEditDiscardConfirmTitle,
+            Message = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDiscardConfirmFormat, TableName),
+            ConfirmLabel = UiStrings.FieldEditDiscardConfirmYes,
+            CancelLabel = UiStrings.DialogCancel,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
+        if (!confirmed) return;
+
         ErrorMessage = null;
         PendingChanges.Clear();
 

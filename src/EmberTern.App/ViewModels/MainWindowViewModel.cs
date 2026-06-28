@@ -2307,6 +2307,7 @@ public partial class MainWindowViewModel : ViewModelBase
             _ddlReader,
             _ddlExecutor);
         detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
         // Restore the remembered mode (existing views only — New View sets Easy after).
         if (detail.CanUseEasyMode) detail.EasyMode = ViewEasyModePreference;
         detail.PropertyChanged += OnViewDetailPropertyChanged;
@@ -2339,6 +2340,7 @@ public partial class MainWindowViewModel : ViewModelBase
             _ddlReader,
             _ddlExecutor);
         detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
         detail.RunExecuteRequested = RunProcedureExecuteAsync;
         // Lazy column loader for the Variables grid's merged Domain/Column picker.
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
@@ -2389,6 +2391,7 @@ public partial class MainWindowViewModel : ViewModelBase
             _ddlReader,
             _ddlExecutor);
         detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
         // Lazy column loader for the Variables grid's merged Domain/Column picker.
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadTriggerListsAsync(detail);

@@ -159,19 +159,20 @@ public class TableDesignerBufferedTests
     }
 
     [Fact]
-    public void Discard_RevertsWorkingModelToCatalog()
+    public async Task Discard_RevertsWorkingModelToCatalog()
     {
         using var h = new Harness();
         var baseFieldCount = h.Vm.EditableFields.Count;
 
         // Queue a spread of structural edits across the grids.
-        h.Vm.ExecuteAddFieldAsync(new FieldDefinition { Name = "ADDED", BasicType = "INTEGER" });
-        h.Vm.ExecuteDropFieldAsync("NAZWA");
-        h.Vm.ExecuteAddUniqueAsync(new ConstraintFieldSpec("UNQ_T", new[] { "ID" }));
-        h.Vm.ExecuteAddIndexAsync(new IndexSpec("IX_T", new[] { "ID" }, false, false, null));
+        await h.Vm.ExecuteAddFieldAsync(new FieldDefinition { Name = "ADDED", BasicType = "INTEGER" });
+        await h.Vm.ExecuteDropFieldAsync("NAZWA");
+        await h.Vm.ExecuteAddUniqueAsync(new ConstraintFieldSpec("UNQ_T", new[] { "ID" }));
+        await h.Vm.ExecuteAddIndexAsync(new IndexSpec("IX_T", new[] { "ID" }, false, false, null));
         Assert.NotEmpty(h.Vm.PendingChanges);
 
-        h.Vm.DiscardPendingChangesCommand.Execute(null);
+        // No ConfirmationRequested handler → the discard proceeds (default-true).
+        await h.Vm.DiscardPendingChangesCommand.ExecuteAsync(null);
 
         Assert.Empty(h.Vm.PendingChanges);
         // Fields back to the catalog set: the added row is gone, the dropped row

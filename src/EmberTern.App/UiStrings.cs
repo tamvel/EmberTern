@@ -577,6 +577,21 @@ internal static class UiStrings
     public const string FieldEditCompileIcon = "⚡";
     public const string FieldEditCompileTooltip = "Compile pending changes (apply DDL + auto-commit)";
     public const string FieldEditDiscardTooltip = "Discard pending changes";
+    // Confirmation before discarding the table designer's buffered structural changes —
+    // an accidental click must not silently throw away uncompiled work.
+    public const string FieldEditDiscardConfirmTitle = "Discard changes";
+    public const string FieldEditDiscardConfirmFormat = "Discard all pending structural changes to \"{0}\"? Uncompiled changes will be lost.";
+    public const string FieldEditDiscardConfirmYes = "Discard";
+
+    // ─── Revert (View / Procedure / Trigger source editors) ─────────────────
+    // The source-editor analog of the table designer's "discard pending changes":
+    // reload the object from the database, throwing away uncompiled edits. The
+    // confirmation guards against an accidental click losing work. Every object
+    // editor must expose this button — see the editor contract in CLAUDE.md.
+    public const string RevertChangesTooltip = "Revert changes (reload from database)";
+    public const string RevertChangesConfirmTitle = "Revert changes";
+    public const string RevertChangesConfirmFormat = "Discard your unsaved changes to \"{0}\" and reload it from the database? Uncompiled changes will be lost.";
+    public const string RevertChangesConfirmYes = "Revert";
     public const string FieldEditAddIcon = "+";
     public const string FieldEditAddTooltip = "Add field";
     public const string FieldEditDropIcon = "−";
