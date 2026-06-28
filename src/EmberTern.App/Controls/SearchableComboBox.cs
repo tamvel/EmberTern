@@ -282,10 +282,17 @@ public sealed class SearchableComboBox : TemplatedControl
                 }
                 tabs.Items.Add(new TabItem { Header = s.Header, Content = tabContent, Tag = s });
             }
-            // Defer: re-applying the filter changes a ListBox.ItemsSource, which is illegal
-            // synchronously inside the TabControl's selection-model update ("Cannot change
-            // source while update is in progress" → unhandled → silent app crash).
-            tabs.SelectionChanged += (_, _) => Dispatcher.UIThread.Post(UpdateFilterVisibility);
+            // SelectionChanged BUBBLES — react ONLY to the TabControl's own tab switch, not to
+            // an inner ListBox's selection bubbling up (that re-applied the filter → reset the
+            // ListBox source → re-fired its SelectionChanged → ∞ loop / flicker). And defer the
+            // tab-switch re-filter: changing a ListBox.ItemsSource synchronously inside the
+            // TabControl's selection-model update throws ("Cannot change source while update is
+            // in progress" → unhandled → silent crash).
+            tabs.SelectionChanged += (_, e) =>
+            {
+                if (ReferenceEquals(e.Source, tabs))
+                    Dispatcher.UIThread.Post(UpdateFilterVisibility);
+            };
             _tabs = tabs;
             body = tabs;
         }
