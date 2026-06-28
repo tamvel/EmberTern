@@ -7,10 +7,10 @@ using Xunit;
 
 namespace EmberTern.Tests;
 
-// Faza 3: after picking a domain the field's Type/Size/Scale (+ SubType/Charset/NotNull
+// After picking a domain the field's Type/Size/Scale (+ SubType/Charset/NotNull
 // for Procedure/Trigger) show the domain's resolved definition, and changing to a type
 // without Size/Scale clears the stale cells. The DDL still uses the domain name when set.
-public class DomainSyncFaza3Tests
+public class DomainTypeSyncTests
 {
     // ─── Procedure/Trigger (ProcedureFieldRowBase) ────────────────────────
 

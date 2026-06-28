@@ -6,11 +6,11 @@ using Xunit;
 
 namespace EmberTern.Tests;
 
-// Faza 4 / Krok 1: the Procedure/Trigger field grids merge the separate Domain + TYPE OF
+// The Procedure/Trigger field grids merge the separate Domain + TYPE OF
 // columns into one "Domain / Column" picker. The row VM exposes a unified SelectedTypeSource
 // (DomainSpec → DomainName | ColumnRef → TYPE OF COLUMN | null → clear) plus a TypeSourceDisplay
 // for the closed-box text, and forwards AvailableTables/ColumnsLoader from the owner.
-public class Faza4MergedTypeSourceTests
+public class MergedTypeSourceTests
 {
     private static ProcedureDetailTabViewModel OwnerWithDomains(params DomainSpec[] domains)
     {
