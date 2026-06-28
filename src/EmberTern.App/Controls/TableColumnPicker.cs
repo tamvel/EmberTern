@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Metadata;
@@ -75,8 +76,15 @@ public sealed class TableColumnPicker : UserControl, ISearchableComboBoxContent
         root.Children.Add(splitter);
         root.Children.Add(right);
         Content = root;
+    }
 
-        TablesProperty.Changed.AddClassHandler<TableColumnPicker>((c, _) => c.RefreshTables());
+    // Per-instance reaction to Tables changing — NOT AddClassHandler in the ctor (that
+    // registers a NEW global class handler for every cell the DataGrid realizes → leak +
+    // O(n²) refilters).
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == TablesProperty) RefreshTables();
     }
 
     private static Control Pane(string header, TextBox filter, ListBox list)
@@ -117,17 +125,26 @@ public sealed class TableColumnPicker : UserControl, ISearchableComboBoxContent
     private void RefreshTables()
         => _tableList.ItemsSource = SearchableComboBox.FilterItems(Tables, null, _tableFilter.Text);
 
-    private async void OnTableSelected(object? sender, SelectionChangedEventArgs e)
+    private void OnTableSelected(object? sender, SelectionChangedEventArgs e)
     {
         _selectedTable = _tableList.SelectedItem as string;
+        // Defer: RefreshColumns changes _columnList.ItemsSource, which is illegal synchronously
+        // inside the table list's selection-model update ("Cannot change source while update is
+        // in progress" → unhandled → silent app crash). Same hazard as the tab-change path.
+        var table = _selectedTable;
+        Dispatcher.UIThread.Post(() => LoadColumnsForAsync(table));
+    }
+
+    private async void LoadColumnsForAsync(string? table)
+    {
         _columns = new List<ColumnSpec>();
         RefreshColumns();
-        if (_selectedTable is null || ColumnsLoader is null) return;
+        if (table is null || ColumnsLoader is null) return;
         try
         {
-            var cols = await ColumnsLoader.LoadColumnsAsync(_selectedTable).ConfigureAwait(true);
+            var cols = await ColumnsLoader.LoadColumnsAsync(table).ConfigureAwait(true);
             // Ignore a stale load if the user moved to a different table while awaiting.
-            if (!string.Equals(_selectedTable, _tableList.SelectedItem as string, StringComparison.Ordinal)) return;
+            if (!string.Equals(table, _selectedTable, StringComparison.Ordinal)) return;
             _columns = cols.ToList();
             RefreshColumns();
         }

@@ -282,7 +282,10 @@ public sealed class SearchableComboBox : TemplatedControl
                 }
                 tabs.Items.Add(new TabItem { Header = s.Header, Content = tabContent, Tag = s });
             }
-            tabs.SelectionChanged += (_, _) => UpdateFilterVisibility();
+            // Defer: re-applying the filter changes a ListBox.ItemsSource, which is illegal
+            // synchronously inside the TabControl's selection-model update ("Cannot change
+            // source while update is in progress" → unhandled → silent app crash).
+            tabs.SelectionChanged += (_, _) => Dispatcher.UIThread.Post(UpdateFilterVisibility);
             _tabs = tabs;
             body = tabs;
         }
