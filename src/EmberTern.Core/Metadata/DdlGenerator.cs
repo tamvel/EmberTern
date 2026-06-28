@@ -554,6 +554,11 @@ public static class DdlGenerator
     public static string BuildCommentProcedure(string procedureName, string? comment)
         => BuildRelationComment("PROCEDURE", procedureName, comment);
 
+    /// <summary>Like <see cref="BuildCommentProcedure"/> but for functions —
+    /// Firebird's <c>COMMENT ON FUNCTION</c> form (FB3+).</summary>
+    public static string BuildCommentFunction(string functionName, string? comment)
+        => BuildRelationComment("FUNCTION", functionName, comment);
+
     /// <summary>
     /// Reassembles a <c>CREATE [OR ALTER] VIEW</c> from the View Detail Easy-mode
     /// parts — the inverse of <see cref="Sql.ViewSignatureParser"/>. The verb is
@@ -636,6 +641,45 @@ public static class DdlGenerator
             AppendProcedureParamLines(sb, outputs, includeDefault: false);
             sb.AppendLine(")");
         }
+
+        sb.AppendLine("AS");
+        sb.Append(string.IsNullOrWhiteSpace(body) ? "BEGIN\nEND" : body.Trim());
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Reassembles a full <c>CREATE OR ALTER FUNCTION</c> from the editable parts
+    /// (Function Detail Easy mode). Deterministic — the inverse of
+    /// <see cref="Sql.FunctionSignatureParser"/>. A function returns a single value, so
+    /// the result is one <c>RETURNS &lt;type&gt;</c> line (not a param block); the type
+    /// text and the body are emitted verbatim. Argument lines reuse the procedure-param
+    /// emitter. <paramref name="deterministic"/> appends the <c>DETERMINISTIC</c> keyword.
+    /// </summary>
+    public static string BuildCreateOrAlterFunction(
+        string name,
+        IReadOnlyList<Sql.ProcedureParameter> arguments,
+        string returnType,
+        bool deterministic,
+        string body)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Function name is required.", nameof(name));
+        if (string.IsNullOrWhiteSpace(returnType))
+            throw new ArgumentException("Function return type is required.", nameof(returnType));
+
+        var sb = new StringBuilder();
+        sb.Append("CREATE OR ALTER FUNCTION ").Append(QuoteLight(name.Trim())).AppendLine();
+
+        if (arguments is { Count: > 0 })
+        {
+            sb.AppendLine("(");
+            AppendProcedureParamLines(sb, arguments, includeDefault: true);
+            sb.AppendLine(")");
+        }
+
+        sb.Append("RETURNS ").Append(returnType.Trim());
+        if (deterministic) sb.Append(" DETERMINISTIC");
+        sb.AppendLine();
 
         sb.AppendLine("AS");
         sb.Append(string.IsNullOrWhiteSpace(body) ? "BEGIN\nEND" : body.Trim());
