@@ -1990,7 +1990,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.RunExecuteRequested = RunProcedureExecuteAsync;
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadProcedureListsAsync(detail);
-        detail.ProcedureCreated += name => OnProcedureCreated(detail, name);
+        detail.ObjectCreated += name => OnProcedureCreated(detail, name);
         // Start in Easy mode (approved target design): the template SourceText is parsed
         // into the editable name + Input/Output params + Variables/Cursors/Subprograms +
         // body. The user can flip to Source at any time.
@@ -2051,7 +2051,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.FiresInsert = true;
         detail.ExecutableBody = "BEGIN\nEND";
         detail.EasyMode = true;
-        detail.TriggerCreated += name => OnTriggerCreated(detail, name);
+        detail.ObjectCreated += name => OnTriggerCreated(detail, name);
         // Seeding marked the VM dirty; a brand-new untouched tab must not prompt on close.
         detail.ClearDirty();
 

@@ -1,0 +1,578 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Globalization;
+using System.Threading;
+using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using EmberTern.Core.Metadata;
+using EmberTern.Firebird;
+
+namespace EmberTern.App.ViewModels;
+
+/// <summary>
+/// Shared skeleton for the PSQL-routine source editors — Procedure, Trigger, and
+/// Function. They are siblings (not a deep hierarchy): this base carries the large,
+/// genuinely-identical surface that each was otherwise duplicating —
+/// <list type="bullet">
+///   <item>Source ⇄ Easy mode toggle (skeleton; parse/regenerate are object-specific hooks)</item>
+///   <item>dirty tracking + WorkGuard (<see cref="IUnsavedWorkSource"/>)</item>
+///   <item>Format / Comment / Uncomment on the active editor</item>
+///   <item>the editable Variables grid (+ generic row helpers shared by subclass collections)</item>
+///   <item>Dependencies trees, editable Description (COMMENT ON …)</item>
+///   <item>Compile + Revert + the load/refresh lifecycle</item>
+///   <item><see cref="IFieldRowOwner"/> (domain / type / table-column pickers for the field rows)</item>
+/// </list>
+/// Each object editor supplies only its essence through the abstract hooks
+/// (<see cref="BuildFullSource"/>, <see cref="TryApplySource"/>, <see cref="LoadCoreAsync"/>,
+/// <see cref="CommentSql"/>, <see cref="TryParseName"/>, the message strings) plus its own
+/// param/header collections. View Detail is deliberately NOT on this base — a view has no
+/// PSQL body / variables / params, so it is a different family.
+/// </summary>
+public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, IFieldRowOwner
+{
+    protected readonly FirebirdTableDetailReader? Reader;
+    protected readonly FirebirdDdlReader? DdlReader;
+    protected readonly FirebirdDdlExecutor? DdlExecutor;
+    private Task? _loadTask;
+
+    protected SourceObjectDetailTabViewModel(
+        FirebirdTableDetailReader? reader,
+        FirebirdDdlReader? ddlReader,
+        FirebirdDdlExecutor? ddlExecutor)
+    {
+        Reader = reader;
+        DdlReader = ddlReader;
+        DdlExecutor = ddlExecutor;
+
+        AvailableDomains = new ObservableCollection<DomainSpec>();
+        AvailableTables = new ObservableCollection<string>();
+        Variables = new ObservableCollection<ProcedureVariableRowViewModel>();
+        DependsOnTree = new ObservableCollection<DependencyGroupNode>();
+        DependedOnByTree = new ObservableCollection<DependencyGroupNode>();
+
+        Variables.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(VariablesTabHeader));
+            DeleteVariableCommand.NotifyCanExecuteChanged();
+            MoveVariableUpCommand.NotifyCanExecuteChanged();
+            MoveVariableDownCommand.NotifyCanExecuteChanged();
+        };
+        TrackDirty(Variables);
+
+        // Subclasses release the ctor-time suppression at the END of their own ctor,
+        // once their fields/collections are assigned — do NOT release it here.
+    }
+
+    // ─── Dirty tracking (drives IUnsavedWorkSource + Revert) ──────────────
+    private bool _isDirty;
+
+    /// <summary>True while a structured/Easy-mode load or a pure Source⇄Easy toggle is
+    /// in flight — suppresses the dirty flips those programmatic mutations cause. Left
+    /// true through the base ctor; each subclass ctor clears it last.</summary>
+    protected bool _suppressDirty = true;
+
+    public bool IsDirty => _isDirty;
+    internal void ClearDirty() => SetDirty(false);
+    protected void MarkDirty() { if (!_suppressDirty) SetDirty(true); }
+
+    // Centralized so a dirty transition keeps the Revert button's enabled state (and any
+    // IsDirty binding) in sync — Revert is only available when there are edits to undo.
+    private void SetDirty(bool value)
+    {
+        if (_isDirty == value) return;
+        _isDirty = value;
+        OnPropertyChanged(nameof(IsDirty));
+        RevertChangesCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Marks the editor dirty on any add/remove/reorder of the collection AND on
+    /// any row-internal edit (subscribes each added row's PropertyChanged). Suppressed
+    /// during programmatic load / mode toggle.</summary>
+    protected void TrackDirty(INotifyCollectionChanged collection)
+    {
+        collection.CollectionChanged += (_, e) =>
+        {
+            MarkDirty();
+            if (e.NewItems is not null)
+            {
+                foreach (INotifyPropertyChanged row in e.NewItems)
+                {
+                    row.PropertyChanged += (_, _) => MarkDirty();
+                }
+            }
+        };
+    }
+
+    // ─── IUnsavedWorkSource ───────────────────────────────────────────────
+    public UnsavedWorkItem? GetUnsavedWork()
+    {
+        if (!IsDirty) return null;
+        return IsNew
+            ? new UnsavedWorkItem(UnsavedWorkKind.NewObject,
+                string.Format(CultureInfo.CurrentCulture, UnsavedNewFormat, ObjectDisplayName))
+            : new UnsavedWorkItem(UnsavedWorkKind.ModifiedSource,
+                string.Format(CultureInfo.CurrentCulture, UnsavedModifiedFormat, ObjectDisplayName));
+    }
+
+    // ─── Object identity / mode ───────────────────────────────────────────
+
+    /// <summary>True for a not-yet-created object (New … flow). Authored in Easy mode
+    /// with an editable name field; subclasses seed an initial template + ClearDirty.</summary>
+    public bool IsNew { get; init; }
+
+    public bool CanUseEasyMode => true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSourceMode))]
+    private bool _easyMode;
+
+    public bool IsSourceMode => !EasyMode;
+
+    partial void OnEasyModeChanged(bool value)
+    {
+        // A pure Source⇄Easy toggle is not an edit — suppress the dirty flips the
+        // re-population would otherwise cause.
+        var prev = _suppressDirty;
+        _suppressDirty = true;
+        try
+        {
+            if (value)
+            {
+                // Nothing loaded yet (e.g. the mode preference is applied at tab
+                // creation, before lazy load) — don't parse an empty source / show a
+                // spurious notice; LoadAsync will populate the model.
+                if (string.IsNullOrWhiteSpace(SourceText)) { ErrorMessage = null; return; }
+                // Source → Easy: parse the current source into the structured model so
+                // source edits carry over. On failure keep the last-good model + note it.
+                ErrorMessage = TryApplySource(SourceText) ? null : ParseFailedNotice;
+            }
+            else
+            {
+                // Easy → Source: regenerate the full text from the structured model.
+                SourceText = BuildFullSource();
+            }
+        }
+        finally
+        {
+            _suppressDirty = prev;
+        }
+    }
+
+    // ─── Editor text ──────────────────────────────────────────────────────
+
+    /// <summary>Full editable CREATE OR ALTER … source — Source mode.</summary>
+    [ObservableProperty]
+    private string _sourceText = string.Empty;
+
+    partial void OnSourceTextChanged(string value) => MarkDirty();
+
+    /// <summary>The executable BEGIN…END block only — the Easy-mode body editor. The
+    /// DECLARE section comes from the structured Variables/… model, never typed here.</summary>
+    [ObservableProperty]
+    private string _executableBody = string.Empty;
+
+    partial void OnExecutableBodyChanged(string value) => MarkDirty();
+
+    /// <summary>Read-only reconstructed DDL — the DDL tab.</summary>
+    [ObservableProperty]
+    private string _ddlText = string.Empty;
+
+    // In Easy mode the active editor is the executable-body editor; in Source mode it's
+    // the full-source editor.
+    private string ActiveEditorText
+    {
+        get => EasyMode ? ExecutableBody : SourceText;
+        set { if (EasyMode) ExecutableBody = value; else SourceText = value; }
+    }
+
+    // ─── IFieldRowOwner (Variables grid Type / Domain combos) ─────────────
+
+    /// <summary>Domains available on the active connection — populated best-effort by the
+    /// owner so the field grids' Domain picker has something to offer.</summary>
+    public ObservableCollection<DomainSpec> AvailableDomains { get; }
+
+    /// <summary>Basic SQL types for the type combos (reused list — no second type system).</summary>
+    public IReadOnlyList<string> BasicTypes { get; } = new[]
+    {
+        "SMALLINT", "INTEGER", "BIGINT", "FLOAT", "DOUBLE PRECISION",
+        "NUMERIC", "DECIMAL", "CHAR", "VARCHAR",
+        "DATE", "TIME", "TIMESTAMP", "BLOB",
+    };
+
+    /// <summary>Tables for the merged Domain/Column picker's "Table column" tab
+    /// (TYPE OF COLUMN). Populated best-effort by the owner; columns load lazily.</summary>
+    public ObservableCollection<string> AvailableTables { get; }
+
+    /// <summary>Lazy column loader for the picker's "Table column" tab — wired by the
+    /// owner to its catalog reader. Null in unit tests → that tab stays empty.</summary>
+    public IColumnsLoader? ColumnsLoader { get; set; }
+
+    public void SetAvailableDomains(IEnumerable<DomainSpec> domains)
+    {
+        AvailableDomains.Clear();
+        // No "(none)" sentinel — the SearchableComboBox clears via its ✕ button.
+        foreach (var d in domains) AvailableDomains.Add(d);
+    }
+
+    public void SetAvailableTables(IEnumerable<string> tables)
+    {
+        AvailableTables.Clear();
+        foreach (var t in tables) AvailableTables.Add(t);
+    }
+
+    // ─── Variables (editable grid — shared by all routine editors) ────────
+
+    public ObservableCollection<ProcedureVariableRowViewModel> Variables { get; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DeleteVariableCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveVariableUpCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveVariableDownCommand))]
+    private ProcedureVariableRowViewModel? _selectedVariable;
+
+    public string VariablesTabHeader =>
+        string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureDetailLocalsVariablesFormat, Variables.Count);
+
+    [RelayCommand]
+    private void AddVariable()
+    {
+        var row = new ProcedureVariableRowViewModel(this);
+        Variables.Add(row);
+        SelectedVariable = row;
+    }
+
+    public bool CanDeleteVariable => SelectedVariable is not null;
+    [RelayCommand(CanExecute = nameof(CanDeleteVariable))]
+    private void DeleteVariable() => SelectedVariable = DeleteRow(Variables, SelectedVariable);
+
+    public bool CanMoveVariableUp => CanUp(Variables, SelectedVariable);
+    public bool CanMoveVariableDown => CanDown(Variables, SelectedVariable);
+    [RelayCommand(CanExecute = nameof(CanMoveVariableUp))]
+    private void MoveVariableUp() => SelectedVariable = MoveRow(Variables, SelectedVariable, -1);
+    [RelayCommand(CanExecute = nameof(CanMoveVariableDown))]
+    private void MoveVariableDown() => SelectedVariable = MoveRow(Variables, SelectedVariable, +1);
+
+    // ─── Generic row helpers (shared by Variables + subclass collections) ──
+
+    protected static T? DeleteRow<T>(ObservableCollection<T> coll, T? sel) where T : class
+    {
+        if (sel is null) return null;
+        var idx = coll.IndexOf(sel);
+        if (idx < 0) return sel;
+        coll.RemoveAt(idx);
+        return coll.Count > 0 ? coll[Math.Min(idx, coll.Count - 1)] : null;
+    }
+
+    protected static bool CanUp<T>(ObservableCollection<T> coll, T? sel) where T : class
+        => sel is not null && coll.IndexOf(sel) > 0;
+
+    protected static bool CanDown<T>(ObservableCollection<T> coll, T? sel) where T : class
+        => sel is not null && coll.IndexOf(sel) is var ix && ix >= 0 && ix < coll.Count - 1;
+
+    // RemoveAt + Insert (not Move) — Avalonia DataGrid doesn't reliably re-render a
+    // NotifyCollectionChangedAction.Move (same gotcha as the New Table grid).
+    protected static T? MoveRow<T>(ObservableCollection<T> coll, T? sel, int delta) where T : class
+    {
+        if (sel is null) return sel;
+        var idx = coll.IndexOf(sel);
+        var t = idx + delta;
+        if (idx < 0 || t < 0 || t >= coll.Count) return sel;
+        coll.RemoveAt(idx);
+        coll.Insert(t, sel);
+        return sel;
+    }
+
+    // ─── Description (editable COMMENT ON …) ──────────────────────────────
+
+    [ObservableProperty]
+    private string _description = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDescription))]
+    [NotifyPropertyChangedFor(nameof(ShowDescriptionEmpty))]
+    private bool _descriptionLoaded;
+
+    public bool HasDescription => DescriptionLoaded && !string.IsNullOrEmpty(Description);
+    public bool ShowDescriptionEmpty => DescriptionLoaded && string.IsNullOrEmpty(Description);
+
+    [ObservableProperty]
+    private string _editableDescription = string.Empty;
+
+    partial void OnDescriptionChanged(string value) => EditableDescription = value ?? string.Empty;
+
+    public bool CanEditDescription => DdlExecutor is not null;
+
+    [RelayCommand(CanExecute = nameof(CanEditDescription))]
+    private Task SaveDescription() => SaveDescriptionCoreAsync();
+
+    [RelayCommand(CanExecute = nameof(CanEditDescription))]
+    private Task ClearDescription()
+    {
+        EditableDescription = string.Empty;
+        return SaveDescriptionCoreAsync();
+    }
+
+    private async Task SaveDescriptionCoreAsync()
+    {
+        if (DdlExecutor is null) return;
+        ErrorMessage = null;
+        var comment = string.IsNullOrWhiteSpace(EditableDescription) ? null : EditableDescription;
+        var sql = CommentSql(comment);
+        try
+        {
+            await DdlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ex.Message);
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ex.Message);
+            return;
+        }
+        await RefreshAsync().ConfigureAwait(true);
+    }
+
+    // ─── Format / Comment / Uncomment (act on the active editor) ──────────
+
+    /// <summary>Set by the view — returns the ACTIVE editor's selection (source or body,
+    /// by mode), or null when nothing is selected.</summary>
+    public Func<string?>? SelectedTextProvider { get; set; }
+
+    /// <summary>Set by the view — replaces the active editor's selection (or whole
+    /// document when no selection) with the given text.</summary>
+    public Action<string>? ReplaceSelectedOrAllText { get; set; }
+
+    /// <summary>Raised by the Comment Body / Uncomment Body commands; the view
+    /// wraps/unwraps the outer BEGIN…END body in the active editor.</summary>
+    public event Action? CommentRequested;
+    public event Action? UncommentRequested;
+
+    [RelayCommand]
+    private void FormatSql()
+    {
+        var selected = SelectedTextProvider?.Invoke();
+        var hasSelection = !string.IsNullOrEmpty(selected);
+        var source = hasSelection ? selected! : ActiveEditorText;
+        if (string.IsNullOrEmpty(source)) return;
+
+        var formatted = EmberTern.Core.Sql.SqlFormatter.Format(source);
+        if (string.Equals(formatted, source, StringComparison.Ordinal)) return;
+
+        if (ReplaceSelectedOrAllText is { } replace) replace(formatted);
+        else if (!hasSelection) ActiveEditorText = formatted;
+    }
+
+    [RelayCommand]
+    private void CommentBody() => CommentRequested?.Invoke();
+
+    [RelayCommand]
+    private void UncommentBody() => UncommentRequested?.Invoke();
+
+    // ─── Dependencies ──────────────────────────────────────────────────────
+
+    public ObservableCollection<DependencyGroupNode> DependsOnTree { get; }
+    public ObservableCollection<DependencyGroupNode> DependedOnByTree { get; }
+
+    public event Action<MetadataObject>? OpenObjectRequested;
+
+    public void RequestOpen(DependencyLeafNode leaf)
+    {
+        if (leaf is null) return;
+        var dep = leaf.Dependency;
+        if (dep is null || string.IsNullOrEmpty(dep.ObjectName)) return;
+        var kind = TableDetailTabViewModel.MapObjectTypeToKind(dep.ObjectType);
+        if (kind is null) return;
+        OpenObjectRequested?.Invoke(new MetadataObject(dep.ObjectName, kind.Value));
+    }
+
+    // ─── Compile ────────────────────────────────────────────────────────────
+
+    /// <summary>Raised after a successful CREATE of a new object — carries the parsed
+    /// object name (or null). The owner refreshes the tree, closes the New tab and
+    /// reopens the real object.</summary>
+    public event Action<string?>? ObjectCreated;
+
+    public bool CanCompile => DdlExecutor is not null;
+
+    /// <summary>Reassembles the active mode's content (Easy → from the structured model;
+    /// Source → the raw text). Internal so tests can assert reassembly without a DB.</summary>
+    internal string BuildCompileSql() => EasyMode ? BuildFullSource() : SourceText;
+
+    [RelayCommand(CanExecute = nameof(CanCompile))]
+    private Task Compile() => ExecuteCompileAsync();
+
+    public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
+    {
+        if (DdlExecutor is null) return;
+
+        // Object-specific pre-flight validation (e.g. a trigger needs a table + an
+        // event in Easy mode) — a clear message instead of a server error.
+        if (ValidateBeforeCompile() is { } validationError)
+        {
+            ErrorMessage = validationError;
+            return;
+        }
+
+        var sql = BuildCompileSql();
+        if (string.IsNullOrWhiteSpace(sql)) return;
+
+        ErrorMessage = null;
+        try
+        {
+            await DdlExecutor.ExecuteAsync(sql, cancellationToken).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, CompileFailedFormat, ex.Message);
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, CompileFailedFormat, ex.Message);
+            return;
+        }
+
+        if (IsNew)
+        {
+            ObjectCreated?.Invoke(TryParseName(sql));
+            return;
+        }
+
+        await RefreshAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    // ─── Revert (discard uncompiled edits, reload from DB) ────────────────
+    //
+    // The source-editor analog of the Table designer's "discard pending changes":
+    // reload the object from the database, throwing away uncompiled edits. Confirms
+    // first (the edits can't be recovered) so an accidental click never loses work.
+    // Existing objects only — a not-yet-created object has no DB state to revert to, so
+    // the button is disabled in the New flow (use Close to abandon it).
+
+    /// <summary>Confirmation gate for the destructive Revert — the owner wires this to the
+    /// shared ConfirmDialog. With no handler (tests) it proceeds (Task.FromResult(true)).</summary>
+    public event Func<ConfirmRequest, Task<bool>>? ConfirmationRequested;
+    private Task<bool> RequestConfirmAsync(ConfirmRequest request)
+        => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
+
+    public bool CanRevertChanges => IsDirty && !IsNew;
+
+    [RelayCommand(CanExecute = nameof(CanRevertChanges))]
+    private async Task RevertChanges()
+    {
+        if (!CanRevertChanges) return;
+        var confirmed = await RequestConfirmAsync(new ConfirmRequest
+        {
+            Title = UiStrings.RevertChangesConfirmTitle,
+            Message = string.Format(CultureInfo.CurrentCulture, UiStrings.RevertChangesConfirmFormat, ObjectDisplayName),
+            ConfirmLabel = UiStrings.RevertChangesConfirmYes,
+            CancelLabel = UiStrings.DialogCancel,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
+        if (!confirmed) return;
+        await RefreshAsync().ConfigureAwait(true);
+    }
+
+    // ─── Misc bound state ──────────────────────────────────────────────────
+
+    [ObservableProperty]
+    private int _activeSubTabIndex;
+
+    [ObservableProperty]
+    private bool _isLoading;
+
+    [ObservableProperty]
+    private string? _errorMessage;
+
+    // ─── Load / refresh ───────────────────────────────────────────────────
+
+    public Task EnsureLoadedAsync(CancellationToken cancellationToken = default)
+        => _loadTask ??= LoadAsync(cancellationToken);
+
+    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        _loadTask = null;
+        await EnsureLoadedAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    public async Task LoadAsync(CancellationToken cancellationToken = default)
+    {
+        if (IsNew) return;
+        if (Reader is null || DdlReader is null) return;
+
+        IsLoading = true;
+        ErrorMessage = null;
+        // Programmatic population — not user edits. Reset to a clean state in finally.
+        _suppressDirty = true;
+        try
+        {
+            await LoadCoreAsync(cancellationToken).ConfigureAwait(true);
+        }
+        finally
+        {
+            IsLoading = false;
+            _suppressDirty = false;
+            ClearDirty();
+        }
+    }
+
+    /// <summary>Runs one load step, trapping a metadata read failure so the remaining
+    /// steps still run (first error wins for the tab-level <see cref="ErrorMessage"/>).</summary>
+    protected async Task SafeLoadAsync(Func<Task> step)
+    {
+        try
+        {
+            await step().ConfigureAwait(true);
+        }
+        catch (MetadataReadException ex)
+        {
+            if (string.IsNullOrEmpty(ErrorMessage)) ErrorMessage = ex.Message;
+        }
+    }
+
+    // ─── Object-specific hooks ────────────────────────────────────────────
+
+    /// <summary>Display name for Revert / unsaved-work messages — the editable name when
+    /// set, otherwise the canonical name.</summary>
+    protected abstract string ObjectDisplayName { get; }
+
+    /// <summary>Notice shown when Source → Easy parsing fails (kept the last-good model).</summary>
+    protected abstract string ParseFailedNotice { get; }
+
+    /// <summary>Format string ("… {0}") for a failed Compile.</summary>
+    protected abstract string CompileFailedFormat { get; }
+
+    /// <summary>Unsaved-work label formats ("… {0}") for a new / modified object.</summary>
+    protected abstract string UnsavedNewFormat { get; }
+    protected abstract string UnsavedModifiedFormat { get; }
+
+    /// <summary>Builds the COMMENT ON … statement for the editable Description tab.</summary>
+    protected abstract string CommentSql(string? comment);
+
+    /// <summary>Reassembles the full CREATE OR ALTER … text from the Easy-mode model.</summary>
+    internal abstract string BuildFullSource();
+
+    /// <summary>Parses the given source into the structured Easy-mode model (params /
+    /// header + variables + body). Returns false when the text isn't recognisable — the
+    /// caller keeps the last-good model and surfaces <see cref="ParseFailedNotice"/>.</summary>
+    protected abstract bool TryApplySource(string source);
+
+    /// <summary>Extracts the object name from a CREATE … statement (for the New flow's
+    /// reopen-by-name), or null when it can't be parsed.</summary>
+    protected abstract string? TryParseName(string? sql);
+
+    /// <summary>The per-object load steps (source, header/params, body, dependencies,
+    /// DDL, description). Wrapped by <see cref="LoadAsync"/> (suppression + dirty reset).</summary>
+    protected abstract Task LoadCoreAsync(CancellationToken cancellationToken);
+
+    /// <summary>Optional Easy-mode pre-compile validation — returns an error message to
+    /// block Compile, or null to proceed. Default: no extra validation.</summary>
+    protected virtual string? ValidateBeforeCompile() => null;
+}

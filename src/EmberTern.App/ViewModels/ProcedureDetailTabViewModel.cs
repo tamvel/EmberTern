@@ -19,20 +19,19 @@ namespace EmberTern.App.ViewModels;
 public sealed record ProcedureExecOutcome(QueryResult? Result, string? Error);
 
 /// <summary>
-/// Detail surface for a Firebird stored PROCEDURE (V1.1). Tabs: Editor (Source ⇄
-/// Easy modes) · Description · Dependencies · DDL · Result.
+/// Detail surface for a Firebird stored PROCEDURE. Tabs: Editor (Source ⇄ Easy modes)
+/// · Description · Dependencies · DDL · Result. Shares the routine-editor skeleton
+/// (dirty tracking, mode toggle, Format/Comment, Variables grid, Dependencies,
+/// Description, Compile, Revert, load lifecycle, field-row owner) with
+/// <see cref="SourceObjectDetailTabViewModel"/>; adds the procedure-specific Input/Output
+/// parameter grids, the Cursors/Subprograms editors, and Execute Procedure (Data lane).
 /// <list type="bullet">
 /// <item>Source mode = the full editable CREATE OR ALTER PROCEDURE text.</item>
-/// <item>Easy mode = metadata panels (Input/Output params editable; Variables/
-/// Cursors/Subprograms read-only) ABOVE a body-only editor.</item>
+/// <item>Easy mode = metadata panels (Input/Output params + Variables/Cursors/Subprograms)
+/// ABOVE a body-only editor.</item>
 /// </list>
-/// A canonical model {name, inputs, outputs, body} backs both: switching to Easy
-/// parses the source (bounded header parser; on failure keeps the model + notes it);
-/// switching to Source regenerates the text (deterministic). Compile reassembles +
-/// runs in the working (metadata) tx. Execute runs the procedure on the Data lane
-/// with bound parameters.
 /// </summary>
-public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, IFieldRowOwner
+public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewModel
 {
     private const int InputParamType = 0;
     private const int OutputParamType = 1;
@@ -44,11 +43,6 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     public const string NewProcedureTemplate =
         "CREATE OR ALTER PROCEDURE NEW_PROCEDURE\nRETURNS (\n    RESULT INTEGER\n)\nAS\nBEGIN\n    RESULT = 0;\n    SUSPEND;\nEND";
 
-    private readonly FirebirdTableDetailReader? _reader;
-    private readonly FirebirdDdlReader? _ddlReader;
-    private readonly FirebirdDdlExecutor? _ddlExecutor;
-    private Task? _loadTask;
-
     public ProcedureDetailTabViewModel(string procedureName)
         : this(procedureName, null, null, null)
     {
@@ -59,20 +53,14 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
         FirebirdTableDetailReader? reader,
         FirebirdDdlReader? ddlReader,
         FirebirdDdlExecutor? ddlExecutor)
+        : base(reader, ddlReader, ddlExecutor)
     {
         ProcedureName = procedureName;
         EditableProcedureName = procedureName;
-        _reader = reader;
-        _ddlReader = ddlReader;
-        _ddlExecutor = ddlExecutor;
         InputParams = new ObservableCollection<ProcedureParamRowViewModel>();
         OutputParams = new ObservableCollection<ProcedureParamRowViewModel>();
-        Variables = new ObservableCollection<ProcedureVariableRowViewModel>();
         Cursors = new ObservableCollection<ProcedureCursorRowViewModel>();
         Subprograms = new ObservableCollection<ProcedureSubprogramRowViewModel>();
-        AvailableDomains = new ObservableCollection<DomainSpec>();
-        DependsOnTree = new ObservableCollection<DependencyGroupNode>();
-        DependedOnByTree = new ObservableCollection<DependencyGroupNode>();
 
         InputParams.CollectionChanged += (_, _) =>
         {
@@ -87,13 +75,6 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
             MoveOutputParamUpCommand.NotifyCanExecuteChanged();
             MoveOutputParamDownCommand.NotifyCanExecuteChanged();
             DeleteOutputParamCommand.NotifyCanExecuteChanged();
-        };
-        Variables.CollectionChanged += (_, _) =>
-        {
-            OnPropertyChanged(nameof(VariablesTabHeader));
-            DeleteVariableCommand.NotifyCanExecuteChanged();
-            MoveVariableUpCommand.NotifyCanExecuteChanged();
-            MoveVariableDownCommand.NotifyCanExecuteChanged();
         };
         Cursors.CollectionChanged += (_, _) =>
         {
@@ -112,51 +93,24 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
 
         // Dirty tracking: any add/remove/reorder OR row-internal edit in the Easy-mode
         // collections flips the dirty flag (suppressed during programmatic load / mode
-        // toggle). See the ViewDetail dirty-tracking note for why an explicit flag.
+        // toggle). Variables is tracked by the base.
         TrackDirty(InputParams);
         TrackDirty(OutputParams);
-        TrackDirty(Variables);
         TrackDirty(Cursors);
         TrackDirty(Subprograms);
         // Release the ctor-time suppression now that all fields are assigned.
         _suppressDirty = false;
     }
 
-    // ─── Dirty tracking (drives IUnsavedWorkSource + future auto-draft) ─────
-    private bool _isDirty;
-    private bool _suppressDirty = true;
+    // ─── Object identity ──────────────────────────────────────────────────
 
-    public bool IsDirty => _isDirty;
-    internal void ClearDirty() => SetDirty(false);
-    private void MarkDirty() { if (!_suppressDirty) SetDirty(true); }
+    public string ProcedureName { get; }
 
-    // Centralized so a dirty transition keeps the Revert button's enabled state (and any
-    // IsDirty binding) in sync — Revert is only available when there are edits to undo.
-    private void SetDirty(bool value)
-    {
-        if (_isDirty == value) return;
-        _isDirty = value;
-        OnPropertyChanged(nameof(IsDirty));
-        RevertChangesCommand.NotifyCanExecuteChanged();
-    }
-
-    private void TrackDirty(System.Collections.Specialized.INotifyCollectionChanged collection)
-    {
-        collection.CollectionChanged += (_, e) =>
-        {
-            MarkDirty();
-            if (e.NewItems is not null)
-            {
-                foreach (System.ComponentModel.INotifyPropertyChanged row in e.NewItems)
-                {
-                    row.PropertyChanged += (_, _) => MarkDirty();
-                }
-            }
-        };
-    }
-
-    partial void OnSourceTextChanged(string value) => MarkDirty();
-    partial void OnExecutableBodyChanged(string value) => MarkDirty();
+    /// <summary>Object name used by Easy mode (the CREATE OR ALTER PROCEDURE header isn't
+    /// shown there). Seeded from <see cref="ProcedureName"/> / the parsed source; editable
+    /// in the New Procedure flow, read-only display for an existing procedure.</summary>
+    [ObservableProperty]
+    private string _editableProcedureName = string.Empty;
 
     private bool _settingNameUpper;
     partial void OnEditableProcedureNameChanged(string value)
@@ -175,175 +129,6 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
         }
         MarkDirty();
     }
-
-    // Unsaved-work for the WorkGuard. Untouched tab (just opened / fresh New
-    // Procedure before any edit) → null. New Procedure clears dirty after seeding
-    // the template so an untouched new tab doesn't prompt.
-    public UnsavedWorkItem? GetUnsavedWork()
-    {
-        if (!IsDirty) return null;
-        var name = string.IsNullOrWhiteSpace(EditableProcedureName) ? ProcedureName : EditableProcedureName.Trim();
-        return IsNew
-            ? new UnsavedWorkItem(UnsavedWorkKind.NewObject,
-                string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.UnsavedNewProcedureFormat, name))
-            : new UnsavedWorkItem(UnsavedWorkKind.ModifiedSource,
-                string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.UnsavedModifiedProcedureFormat, name));
-    }
-
-    /// <summary>Domains available on the active connection — populated best-effort by
-    /// the owner so the Variables grid's Domain combo has something to offer. Shared
-    /// with each variable row (mirrors the New Table grid).</summary>
-    public ObservableCollection<DomainSpec> AvailableDomains { get; }
-
-    /// <summary>Basic SQL types for the Variables grid (reused list — no second
-    /// type system).</summary>
-    public IReadOnlyList<string> BasicTypes { get; } = new[]
-    {
-        "SMALLINT", "INTEGER", "BIGINT", "FLOAT", "DOUBLE PRECISION",
-        "NUMERIC", "DECIMAL", "CHAR", "VARCHAR",
-        "DATE", "TIME", "TIMESTAMP", "BLOB",
-    };
-
-    /// <summary>Owner injects the live domain list after the active-connection
-    /// metadata load. Cleared via the SearchableComboBox ✕ (no "(none)" sentinel).</summary>
-    public void SetAvailableDomains(IEnumerable<DomainSpec> domains)
-    {
-        AvailableDomains.Clear();
-        foreach (var d in domains) AvailableDomains.Add(d);
-    }
-
-    /// <summary>Tables for the merged Domain/Column picker's "Table column" tab (TYPE OF
-    /// COLUMN). Populated best-effort by the owner; columns load lazily via
-    /// <see cref="ColumnsLoader"/>.</summary>
-    public ObservableCollection<string> AvailableTables { get; } = new();
-
-    public void SetAvailableTables(IEnumerable<string> tables)
-    {
-        AvailableTables.Clear();
-        foreach (var t in tables) AvailableTables.Add(t);
-    }
-
-    /// <summary>Lazy column loader for the picker's "Table column" tab — wired by the owner
-    /// to its catalog reader. Null in unit tests → that tab stays empty.</summary>
-    public IColumnsLoader? ColumnsLoader { get; set; }
-
-    public string ProcedureName { get; }
-
-    /// <summary>True for a not-yet-created procedure (New Procedure flow). Can be
-    /// authored in Easy mode too — the New Procedure flow starts there with an editable
-    /// name field that supplies the object name (Source mode keeps it in the header).</summary>
-    public bool IsNew { get; init; }
-
-    public bool CanUseEasyMode => true;
-
-    /// <summary>Object name used by Easy mode (the CREATE OR ALTER PROCEDURE header
-    /// isn't shown there). Seeded from <see cref="ProcedureName"/> / the parsed source;
-    /// editable in the New Procedure flow, read-only display for an existing procedure.</summary>
-    [ObservableProperty]
-    private string _editableProcedureName = string.Empty;
-
-    // ─── Mode ─────────────────────────────────────────────────────────────
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsSourceMode))]
-    private bool _easyMode;
-
-    public bool IsSourceMode => !EasyMode;
-
-    partial void OnEasyModeChanged(bool value)
-    {
-        // A pure Source⇄Easy toggle is not an edit — suppress the dirty flips that
-        // re-populating the params/model/source would otherwise cause.
-        var prev = _suppressDirty;
-        _suppressDirty = true;
-        try
-        {
-            if (value)
-            {
-                // Nothing loaded yet (e.g. the mode preference is applied at tab
-                // creation, before lazy load) — don't parse an empty source / show a
-                // spurious notice; LoadAsync will populate the model.
-                if (string.IsNullOrWhiteSpace(SourceText)) { ErrorMessage = null; return; }
-                // Source → Easy: parse the current source into the structured model
-                // (params + variables + cursors + subprograms + executable body) so source
-                // edits carry over. On failure keep the last-good model + note it.
-                var sig = ProcedureSignatureParser.Parse(SourceText);
-                if (sig.Success)
-                {
-                    if (!string.IsNullOrWhiteSpace(sig.Name)) EditableProcedureName = sig.Name!;
-                    ReplaceParams(InputParams, sig.Inputs, isOutput: false);
-                    ReplaceParams(OutputParams, sig.Outputs, isOutput: true);
-                    SyncEasyModelFromBody(sig.Body);
-                    ErrorMessage = null;
-                }
-                else
-                {
-                    ErrorMessage = UiStrings.ProcedureParseFailedNotice;
-                }
-            }
-            else
-            {
-                // Easy → Source: regenerate the full text from the structured model.
-                SourceText = BuildFullSource();
-            }
-        }
-        finally
-        {
-            _suppressDirty = prev;
-        }
-    }
-
-    /// <summary>Reassembles the full CREATE OR ALTER PROCEDURE text from the Easy-mode
-    /// structured model (params + regenerated DECLARE section + executable body).</summary>
-    internal string BuildFullSource()
-        => DdlGenerator.BuildCreateOrAlterProcedure(
-            string.IsNullOrWhiteSpace(EditableProcedureName) ? ProcedureName : EditableProcedureName.Trim(),
-            InputParams.Select(p => p.ToParameter()).ToList(),
-            OutputParams.Select(p => p.ToParameter()).ToList(),
-            DdlGenerator.BuildProcedureBody(BuildBodyModel()));
-
-    /// <summary>Collects the editable Variables / Cursors / Subprograms / executable
-    /// body into a Core <see cref="ProcedureBodyModel"/>.</summary>
-    internal ProcedureBodyModel BuildBodyModel()
-    {
-        var model = new ProcedureBodyModel { ExecutableBody = ExecutableBody };
-        foreach (var v in Variables) model.Variables.Add(v.ToVariable());
-        foreach (var c in Cursors) model.Cursors.Add(c.ToCursor());
-        foreach (var sp in Subprograms) model.Subprograms.Add(sp.ToSubprogram());
-        return model;
-    }
-
-    /// <summary>Splits a body (text after AS) into the editable Variables / Cursors /
-    /// Subprograms collections + the executable body editor content.</summary>
-    internal void SyncEasyModelFromBody(string? body)
-    {
-        var model = ProcedureBodySplitter.Split(body);
-        Variables.Clear();
-        foreach (var v in model.Variables) Variables.Add(ProcedureVariableRowViewModel.From(v, this));
-        Cursors.Clear();
-        foreach (var c in model.Cursors) Cursors.Add(ProcedureCursorRowViewModel.From(c));
-        Subprograms.Clear();
-        foreach (var sp in model.Subprograms) Subprograms.Add(ProcedureSubprogramRowViewModel.From(sp));
-        ExecutableBody = model.ExecutableBody;
-        SelectedCursor = Cursors.Count > 0 ? Cursors[0] : null;
-        SelectedSubprogram = Subprograms.Count > 0 ? Subprograms[0] : null;
-    }
-
-    // ─── Editor text ──────────────────────────────────────────────────────
-
-    /// <summary>Full editable CREATE OR ALTER PROCEDURE source — Source mode.</summary>
-    [ObservableProperty]
-    private string _sourceText = string.Empty;
-
-    /// <summary>The executable BEGIN…END block only — the Easy-mode body editor.
-    /// The DECLARE section comes from the structured Variables/Cursors/Subprograms
-    /// model, so this editor never holds declarations.</summary>
-    [ObservableProperty]
-    private string _executableBody = string.Empty;
-
-    /// <summary>Read-only reconstructed DDL — the DDL tab.</summary>
-    [ObservableProperty]
-    private string _ddlText = string.Empty;
 
     // ─── Parameters (editable) ────────────────────────────────────────────
 
@@ -444,67 +229,43 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
         foreach (var p in source) coll.Add(ProcedureParamRowViewModel.From(p, this, isOutput));
     }
 
-    // ─── Generic row helpers (shared by params + locals) ──────────────────
+    // ─── Easy-mode model (params + DECLARE section + body) ────────────────
 
-    private static T? DeleteRow<T>(ObservableCollection<T> coll, T? sel) where T : class
+    /// <summary>Reassembles the full CREATE OR ALTER PROCEDURE text from the Easy-mode
+    /// structured model (params + regenerated DECLARE section + executable body).</summary>
+    internal override string BuildFullSource()
+        => DdlGenerator.BuildCreateOrAlterProcedure(
+            string.IsNullOrWhiteSpace(EditableProcedureName) ? ProcedureName : EditableProcedureName.Trim(),
+            InputParams.Select(p => p.ToParameter()).ToList(),
+            OutputParams.Select(p => p.ToParameter()).ToList(),
+            DdlGenerator.BuildProcedureBody(BuildBodyModel()));
+
+    /// <summary>Collects the editable Variables / Cursors / Subprograms / executable body
+    /// into a Core <see cref="ProcedureBodyModel"/>.</summary>
+    internal ProcedureBodyModel BuildBodyModel()
     {
-        if (sel is null) return null;
-        var idx = coll.IndexOf(sel);
-        if (idx < 0) return sel;
-        coll.RemoveAt(idx);
-        return coll.Count > 0 ? coll[Math.Min(idx, coll.Count - 1)] : null;
+        var model = new ProcedureBodyModel { ExecutableBody = ExecutableBody };
+        foreach (var v in Variables) model.Variables.Add(v.ToVariable());
+        foreach (var c in Cursors) model.Cursors.Add(c.ToCursor());
+        foreach (var sp in Subprograms) model.Subprograms.Add(sp.ToSubprogram());
+        return model;
     }
 
-    private static bool CanUp<T>(ObservableCollection<T> coll, T? sel) where T : class
-        => sel is not null && coll.IndexOf(sel) > 0;
-
-    private static bool CanDown<T>(ObservableCollection<T> coll, T? sel) where T : class
-        => sel is not null && coll.IndexOf(sel) is var ix && ix >= 0 && ix < coll.Count - 1;
-
-    // RemoveAt + Insert (not Move) — Avalonia DataGrid doesn't reliably re-render a
-    // NotifyCollectionChangedAction.Move (same gotcha as the New Table grid).
-    private static T? MoveRow<T>(ObservableCollection<T> coll, T? sel, int delta) where T : class
+    /// <summary>Splits a body (text after AS) into the editable Variables / Cursors /
+    /// Subprograms collections + the executable body editor content.</summary>
+    internal void SyncEasyModelFromBody(string? body)
     {
-        if (sel is null) return sel;
-        var idx = coll.IndexOf(sel);
-        var t = idx + delta;
-        if (idx < 0 || t < 0 || t >= coll.Count) return sel;
-        coll.RemoveAt(idx);
-        coll.Insert(t, sel);
-        return sel;
+        var model = ProcedureBodySplitter.Split(body);
+        Variables.Clear();
+        foreach (var v in model.Variables) Variables.Add(ProcedureVariableRowViewModel.From(v, this));
+        Cursors.Clear();
+        foreach (var c in model.Cursors) Cursors.Add(ProcedureCursorRowViewModel.From(c));
+        Subprograms.Clear();
+        foreach (var sp in model.Subprograms) Subprograms.Add(ProcedureSubprogramRowViewModel.From(sp));
+        ExecutableBody = model.ExecutableBody;
+        SelectedCursor = Cursors.Count > 0 ? Cursors[0] : null;
+        SelectedSubprogram = Subprograms.Count > 0 ? Subprograms[0] : null;
     }
-
-    // ─── Editable locals — Variables (grid) ───────────────────────────────
-
-    public ObservableCollection<ProcedureVariableRowViewModel> Variables { get; }
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(DeleteVariableCommand))]
-    [NotifyCanExecuteChangedFor(nameof(MoveVariableUpCommand))]
-    [NotifyCanExecuteChangedFor(nameof(MoveVariableDownCommand))]
-    private ProcedureVariableRowViewModel? _selectedVariable;
-
-    public string VariablesTabHeader =>
-        string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureDetailLocalsVariablesFormat, Variables.Count);
-
-    [RelayCommand]
-    private void AddVariable()
-    {
-        var row = new ProcedureVariableRowViewModel(this);
-        Variables.Add(row);
-        SelectedVariable = row;
-    }
-
-    public bool CanDeleteVariable => SelectedVariable is not null;
-    [RelayCommand(CanExecute = nameof(CanDeleteVariable))]
-    private void DeleteVariable() => SelectedVariable = DeleteRow(Variables, SelectedVariable);
-
-    public bool CanMoveVariableUp => CanUp(Variables, SelectedVariable);
-    public bool CanMoveVariableDown => CanDown(Variables, SelectedVariable);
-    [RelayCommand(CanExecute = nameof(CanMoveVariableUp))]
-    private void MoveVariableUp() => SelectedVariable = MoveRow(Variables, SelectedVariable, -1);
-    [RelayCommand(CanExecute = nameof(CanMoveVariableDown))]
-    private void MoveVariableDown() => SelectedVariable = MoveRow(Variables, SelectedVariable, +1);
 
     // ─── Editable locals — Cursors (list + split editor) ──────────────────
 
@@ -586,9 +347,7 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     // The toolbar binds ONE set of Add/Remove/Move buttons; this routes them to the
     // active Easy sub-tab's collection (0=Input 1=Output 2=Variables 3=Cursors
     // 4=Subprograms). ActiveEasyCollectionIndex is bound to the Easy sub-tab
-    // TabControl's SelectedIndex. This is the contract future Trigger/Function/Package
-    // editors reuse — they expose the same four commands routing to their own active
-    // collection, and the main toolbar gains no new pattern.
+    // TabControl's SelectedIndex.
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddCollectionItemCommand))]
@@ -625,214 +384,14 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     [RelayCommand(CanExecute = nameof(CanMoveCollectionItemDown))]
     private void MoveCollectionItemDown() => EasyCommands().Down.Execute(null);
 
-    // ─── Description (editable COMMENT ON PROCEDURE) ──────────────────────
-
-    [ObservableProperty]
-    private string _description = string.Empty;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasDescription))]
-    [NotifyPropertyChangedFor(nameof(ShowDescriptionEmpty))]
-    private bool _descriptionLoaded;
-
-    public bool HasDescription => DescriptionLoaded && !string.IsNullOrEmpty(Description);
-    public bool ShowDescriptionEmpty => DescriptionLoaded && string.IsNullOrEmpty(Description);
-
-    [ObservableProperty]
-    private string _editableDescription = string.Empty;
-
-    partial void OnDescriptionChanged(string value) => EditableDescription = value ?? string.Empty;
-
-    public bool CanEditDescription => _ddlExecutor is not null;
-
-    [RelayCommand(CanExecute = nameof(CanEditDescription))]
-    private Task SaveDescription() => SaveDescriptionCoreAsync();
-
-    [RelayCommand(CanExecute = nameof(CanEditDescription))]
-    private Task ClearDescription()
-    {
-        EditableDescription = string.Empty;
-        return SaveDescriptionCoreAsync();
-    }
-
-    private async Task SaveDescriptionCoreAsync()
-    {
-        if (_ddlExecutor is null) return;
-        ErrorMessage = null;
-        var comment = string.IsNullOrWhiteSpace(EditableDescription) ? null : EditableDescription;
-        var sql = DdlGenerator.BuildCommentProcedure(ProcedureName, comment);
-        try
-        {
-            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
-        }
-        catch (DdlExecutionException ex)
-        {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ex.Message);
-            return;
-        }
-        catch (InvalidOperationException ex)
-        {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ex.Message);
-            return;
-        }
-        await RefreshAsync().ConfigureAwait(true);
-    }
-
-    // ─── Format / Comment / Uncomment (act on the active editor) ──────────
-
-    /// <summary>Set by the view — returns the ACTIVE editor's selection (source or
-    /// body, by mode), or null when nothing is selected.</summary>
-    public Func<string?>? SelectedTextProvider { get; set; }
-
-    /// <summary>Set by the view — replaces the active editor's selection (or whole
-    /// document when no selection) with the given text.</summary>
-    public Action<string>? ReplaceSelectedOrAllText { get; set; }
-
-    /// <summary>Raised by the Comment Body / Uncomment Body commands; the view
-    /// wraps/unwraps the outer BEGIN…END body in the active editor.</summary>
-    public event Action? CommentRequested;
-    public event Action? UncommentRequested;
-
-    [RelayCommand]
-    private void FormatSql()
-    {
-        var selected = SelectedTextProvider?.Invoke();
-        var hasSelection = !string.IsNullOrEmpty(selected);
-        var source = hasSelection ? selected! : ActiveEditorText;
-        if (string.IsNullOrEmpty(source)) return;
-
-        var formatted = SqlFormatter.Format(source);
-        if (string.Equals(formatted, source, StringComparison.Ordinal)) return;
-
-        if (ReplaceSelectedOrAllText is { } replace) replace(formatted);
-        else if (!hasSelection) ActiveEditorText = formatted;
-    }
-
-    [RelayCommand]
-    private void CommentBody() => CommentRequested?.Invoke();
-
-    [RelayCommand]
-    private void UncommentBody() => UncommentRequested?.Invoke();
-
-    // In Easy mode the active editor is the executable-body editor (declarations
-    // come from the structured grids, never typed into the editor); in Source mode
-    // it's the full-source editor.
-    private string ActiveEditorText
-    {
-        get => EasyMode ? ExecutableBody : SourceText;
-        set { if (EasyMode) ExecutableBody = value; else SourceText = value; }
-    }
-
-    // ─── Dependencies ──────────────────────────────────────────────────────
-
-    public ObservableCollection<DependencyGroupNode> DependsOnTree { get; }
-    public ObservableCollection<DependencyGroupNode> DependedOnByTree { get; }
-
-    public event Action<MetadataObject>? OpenObjectRequested;
-
-    public void RequestOpen(DependencyLeafNode leaf)
-    {
-        if (leaf is null) return;
-        var dep = leaf.Dependency;
-        if (dep is null || string.IsNullOrEmpty(dep.ObjectName)) return;
-        var kind = TableDetailTabViewModel.MapObjectTypeToKind(dep.ObjectType);
-        if (kind is null) return;
-        OpenObjectRequested?.Invoke(new MetadataObject(dep.ObjectName, kind.Value));
-    }
-
-    // ─── Compile ────────────────────────────────────────────────────────────
-
-    public event Action<string?>? ProcedureCreated;
-
-    public bool CanCompile => _ddlExecutor is not null;
-
-    /// <summary>Reassembles the active mode's content into a CREATE OR ALTER
-    /// PROCEDURE and returns it (Easy → from the structured model; Source → the
-    /// raw text). Internal so tests can assert the reassembly without a DB.</summary>
-    internal string BuildCompileSql() => EasyMode ? BuildFullSource() : SourceText;
-
-    [RelayCommand(CanExecute = nameof(CanCompile))]
-    private Task Compile() => ExecuteCompileAsync();
-
-    public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
-    {
-        if (_ddlExecutor is null) return;
-        var sql = BuildCompileSql();
-        if (string.IsNullOrWhiteSpace(sql)) return;
-
-        ErrorMessage = null;
-        try
-        {
-            await _ddlExecutor.ExecuteAsync(sql, cancellationToken).ConfigureAwait(true);
-        }
-        catch (DdlExecutionException ex)
-        {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureCompileFailedFormat, ex.Message);
-            return;
-        }
-        catch (InvalidOperationException ex)
-        {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureCompileFailedFormat, ex.Message);
-            return;
-        }
-
-        if (IsNew)
-        {
-            ProcedureCreated?.Invoke(TryParseProcedureName(sql));
-            return;
-        }
-
-        await RefreshAsync(cancellationToken).ConfigureAwait(true);
-    }
-
-    internal static string? TryParseProcedureName(string? sql)
-    {
-        var sig = ProcedureSignatureParser.Parse(sql);
-        return sig.Success ? sig.Name : null;
-    }
-
-    // ─── Revert (discard uncompiled edits, reload from DB) ────────────────
-    //
-    // The source-editor analog of the Table designer's "discard pending changes":
-    // reload the procedure from the database, throwing away uncompiled edits. Confirms
-    // first (the edits can't be recovered) so an accidental click never loses work.
-    // Existing procedures only — a not-yet-created procedure has no DB state to revert
-    // to, so the button is disabled in the New Procedure flow (use Close to abandon it).
-
-    /// <summary>Confirmation gate for the destructive Revert — the owner wires this to
-    /// the shared ConfirmDialog. With no handler (tests) it proceeds (Task.FromResult(true)).</summary>
-    public event Func<ConfirmRequest, Task<bool>>? ConfirmationRequested;
-    private Task<bool> RequestConfirmAsync(ConfirmRequest request)
-        => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
-
-    public bool CanRevertChanges => IsDirty && !IsNew;
-
-    [RelayCommand(CanExecute = nameof(CanRevertChanges))]
-    private async Task RevertChanges()
-    {
-        if (!CanRevertChanges) return;
-        var name = string.IsNullOrWhiteSpace(EditableProcedureName) ? ProcedureName : EditableProcedureName.Trim();
-        var confirmed = await RequestConfirmAsync(new ConfirmRequest
-        {
-            Title = UiStrings.RevertChangesConfirmTitle,
-            Message = string.Format(CultureInfo.CurrentCulture, UiStrings.RevertChangesConfirmFormat, name),
-            ConfirmLabel = UiStrings.RevertChangesConfirmYes,
-            CancelLabel = UiStrings.DialogCancel,
-            IsDestructive = true,
-        }).ConfigureAwait(true);
-        if (!confirmed) return;
-        await RefreshAsync().ConfigureAwait(true);
-    }
-
     // ─── Execute Procedure (Data lane, parameterized) ────────────────────
 
-    /// <summary>Set by the view — opens the parameter dialog for the given input
-    /// params and returns ordered values (null entry = SQL NULL), or null when the
-    /// user cancels.</summary>
+    /// <summary>Set by the view — opens the parameter dialog for the given input params
+    /// and returns ordered values (null entry = SQL NULL), or null when the user cancels.</summary>
     public Func<IReadOnlyList<ProcedureParamRowViewModel>, Task<IReadOnlyList<object?>?>>? ExecuteParamsRequested { get; set; }
 
-    /// <summary>Set by the owner — runs the built statement on the Data lane with
-    /// bound parameters and returns the outcome.</summary>
+    /// <summary>Set by the owner — runs the built statement on the Data lane with bound
+    /// parameters and returns the outcome.</summary>
     public Func<string, IReadOnlyList<QueryParameter>, Task<ProcedureExecOutcome>>? RunExecuteRequested { get; set; }
 
     [ObservableProperty]
@@ -853,8 +412,8 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     public bool HasExecResult => ExecResult is { HasResultSet: true } && string.IsNullOrEmpty(ExecError);
     public bool ShowExecError => !string.IsNullOrEmpty(ExecError);
 
-    // Persistent execution info (status / time / rows / affected / error) shown in
-    // the bottom panel — feedback even for procedures that return no result set.
+    // Persistent execution info (status / time / rows / affected / error) shown in the
+    // bottom panel — feedback even for procedures that return no result set.
     [ObservableProperty]
     private string _execInfo = string.Empty;
 
@@ -972,9 +531,9 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
         return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoCompletedFormat, ms);
     }
 
-    /// <summary>Builds the EXECUTE statement + bound parameters from ordered input
-    /// values. Selectable (SELECT * FROM) when the procedure has outputs and its
-    /// body contains a SUSPEND; otherwise EXECUTE PROCEDURE. Internal + pure for tests.</summary>
+    /// <summary>Builds the EXECUTE statement + bound parameters from ordered input values.
+    /// Selectable (SELECT * FROM) when the procedure has outputs and its body contains a
+    /// SUSPEND; otherwise EXECUTE PROCEDURE. Internal + pure for tests.</summary>
     internal (string Sql, IReadOnlyList<QueryParameter> Parameters) BuildExecuteStatement(IReadOnlyList<object?> values)
     {
         var names = new List<string>();
@@ -999,106 +558,88 @@ public partial class ProcedureDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     private static string QuoteName(string name)
         => "\"" + (name ?? string.Empty).Replace("\"", "\"\"") + "\"";
 
-    // ─── Misc bound state ──────────────────────────────────────────────────
+    // ─── Object-specific hooks (SourceObjectDetailTabViewModel) ───────────
 
-    [ObservableProperty]
-    private int _activeSubTabIndex;
+    protected override string ObjectDisplayName =>
+        string.IsNullOrWhiteSpace(EditableProcedureName) ? ProcedureName : EditableProcedureName.Trim();
 
-    [ObservableProperty]
-    private bool _isLoading;
+    protected override string ParseFailedNotice => UiStrings.ProcedureParseFailedNotice;
+    protected override string CompileFailedFormat => UiStrings.ProcedureCompileFailedFormat;
+    protected override string UnsavedNewFormat => UiStrings.UnsavedNewProcedureFormat;
+    protected override string UnsavedModifiedFormat => UiStrings.UnsavedModifiedProcedureFormat;
 
-    [ObservableProperty]
-    private string? _errorMessage;
+    protected override string CommentSql(string? comment)
+        => DdlGenerator.BuildCommentProcedure(ProcedureName, comment);
 
-    // ─── Load / refresh ───────────────────────────────────────────────────
-
-    public Task EnsureLoadedAsync(CancellationToken cancellationToken = default)
-        => _loadTask ??= LoadAsync(cancellationToken);
-
-    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    protected override bool TryApplySource(string source)
     {
-        _loadTask = null;
-        await EnsureLoadedAsync(cancellationToken).ConfigureAwait(true);
+        var sig = ProcedureSignatureParser.Parse(source);
+        if (!sig.Success) return false;
+        if (!string.IsNullOrWhiteSpace(sig.Name)) EditableProcedureName = sig.Name!;
+        ReplaceParams(InputParams, sig.Inputs, isOutput: false);
+        ReplaceParams(OutputParams, sig.Outputs, isOutput: true);
+        SyncEasyModelFromBody(sig.Body);
+        return true;
     }
 
-    public async Task LoadAsync(CancellationToken cancellationToken = default)
+    protected override string? TryParseName(string? sql) => TryParseProcedureName(sql);
+
+    internal static string? TryParseProcedureName(string? sql)
     {
-        if (IsNew) return;
-        if (_reader is null || _ddlReader is null) return;
-
-        IsLoading = true;
-        ErrorMessage = null;
-        // Programmatic population — not user edits. Reset to a clean state in finally.
-        _suppressDirty = true;
-        try
-        {
-            await SafeLoadAsync(async () =>
-            {
-                SourceText = await _ddlReader.FetchProcedureSourceAsync(
-                    new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken).ConfigureAwait(true);
-            });
-
-            await SafeLoadAsync(async () =>
-            {
-                var body = await _ddlReader.FetchProcedureBodyAsync(
-                    new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken).ConfigureAwait(true);
-                // Split the body into the editable structured model (Variables /
-                // Cursors / Subprograms + executable body).
-                SyncEasyModelFromBody(body);
-            });
-
-            await SafeLoadAsync(async () =>
-            {
-                var inputs = await _reader.GetProcedureParametersAsync(ProcedureName, InputParamType, cancellationToken).ConfigureAwait(true);
-                InputParams.Clear();
-                foreach (var p in inputs) InputParams.Add(ProcedureParamRowViewModel.From(p, this, isOutput: false));
-            });
-
-            await SafeLoadAsync(async () =>
-            {
-                var outputs = await _reader.GetProcedureParametersAsync(ProcedureName, OutputParamType, cancellationToken).ConfigureAwait(true);
-                OutputParams.Clear();
-                foreach (var p in outputs) OutputParams.Add(ProcedureParamRowViewModel.From(p, this, isOutput: true));
-            });
-
-            await SafeLoadAsync(async () =>
-            {
-                var (dependsOn, dependedOnBy) = await _reader.GetProcedureDependenciesAsync(ProcedureName, cancellationToken).ConfigureAwait(true);
-                DependsOnTree.Clear();
-                foreach (var g in TableDetailTabViewModel.BuildDependencyTree(dependsOn)) DependsOnTree.Add(g);
-                DependedOnByTree.Clear();
-                foreach (var g in TableDetailTabViewModel.BuildDependencyTree(dependedOnBy)) DependedOnByTree.Add(g);
-            });
-
-            await SafeLoadAsync(async () =>
-            {
-                DdlText = await _ddlReader.FetchDdlAsync(
-                    new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken).ConfigureAwait(true);
-            });
-
-            await SafeLoadAsync(async () =>
-            {
-                Description = await _reader.GetProcedureDescriptionAsync(ProcedureName, cancellationToken).ConfigureAwait(true);
-                DescriptionLoaded = true;
-            });
-        }
-        finally
-        {
-            IsLoading = false;
-            _suppressDirty = false;
-            ClearDirty();
-        }
+        var sig = ProcedureSignatureParser.Parse(sql);
+        return sig.Success ? sig.Name : null;
     }
 
-    private async Task SafeLoadAsync(Func<Task> step)
+    protected override async Task LoadCoreAsync(CancellationToken cancellationToken)
     {
-        try
+        await SafeLoadAsync(async () =>
         {
-            await step().ConfigureAwait(true);
-        }
-        catch (MetadataReadException ex)
+            SourceText = await DdlReader!.FetchProcedureSourceAsync(
+                new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken).ConfigureAwait(true);
+        });
+
+        await SafeLoadAsync(async () =>
         {
-            if (string.IsNullOrEmpty(ErrorMessage)) ErrorMessage = ex.Message;
-        }
+            var body = await DdlReader!.FetchProcedureBodyAsync(
+                new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken).ConfigureAwait(true);
+            // Split the body into the editable structured model (Variables / Cursors /
+            // Subprograms + executable body).
+            SyncEasyModelFromBody(body);
+        });
+
+        await SafeLoadAsync(async () =>
+        {
+            var inputs = await Reader!.GetProcedureParametersAsync(ProcedureName, InputParamType, cancellationToken).ConfigureAwait(true);
+            InputParams.Clear();
+            foreach (var p in inputs) InputParams.Add(ProcedureParamRowViewModel.From(p, this, isOutput: false));
+        });
+
+        await SafeLoadAsync(async () =>
+        {
+            var outputs = await Reader!.GetProcedureParametersAsync(ProcedureName, OutputParamType, cancellationToken).ConfigureAwait(true);
+            OutputParams.Clear();
+            foreach (var p in outputs) OutputParams.Add(ProcedureParamRowViewModel.From(p, this, isOutput: true));
+        });
+
+        await SafeLoadAsync(async () =>
+        {
+            var (dependsOn, dependedOnBy) = await Reader!.GetProcedureDependenciesAsync(ProcedureName, cancellationToken).ConfigureAwait(true);
+            DependsOnTree.Clear();
+            foreach (var g in TableDetailTabViewModel.BuildDependencyTree(dependsOn)) DependsOnTree.Add(g);
+            DependedOnByTree.Clear();
+            foreach (var g in TableDetailTabViewModel.BuildDependencyTree(dependedOnBy)) DependedOnByTree.Add(g);
+        });
+
+        await SafeLoadAsync(async () =>
+        {
+            DdlText = await DdlReader!.FetchDdlAsync(
+                new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken).ConfigureAwait(true);
+        });
+
+        await SafeLoadAsync(async () =>
+        {
+            Description = await Reader!.GetProcedureDescriptionAsync(ProcedureName, cancellationToken).ConfigureAwait(true);
+            DescriptionLoaded = true;
+        });
     }
 }
