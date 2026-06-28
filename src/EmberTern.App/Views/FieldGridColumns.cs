@@ -32,7 +32,7 @@ internal static class FieldGridColumns
         grid.Columns.Clear();
         grid.Columns.Add(TextCol(UiStrings.TableDetailColumnName, nameof(ProcedureFieldRowBase.Name), 130));
         grid.Columns.Add(TypeComboCol(UiStrings.TableDetailColumnType, 110));
-        grid.Columns.Add(DomainOrColumnCol(UiStrings.FieldTypeSourceHeader, 150));
+        grid.Columns.Add(MergedTypeSourceColumn.Build(UiStrings.FieldTypeSourceHeader, 150));
         grid.Columns.Add(TextEditCol(UiStrings.TableDetailColumnSize, nameof(ProcedureFieldRowBase.Size), 60, nameof(ProcedureFieldRowBase.IsSizeEnabled)));
         grid.Columns.Add(TextEditCol(UiStrings.TableDetailColumnScale, nameof(ProcedureFieldRowBase.Scale), 60, nameof(ProcedureFieldRowBase.IsScaleEnabled)));
         grid.Columns.Add(TextEditCol(UiStrings.ProcedureFieldSubType, nameof(ProcedureFieldRowBase.SubType), 80, nameof(ProcedureFieldRowBase.IsSubTypeEnabled)));
@@ -101,66 +101,4 @@ internal static class FieldGridColumns
             }),
         };
 
-    // Merged "Domain / Column" picker (Faza 4): one SearchableComboBox with two tabs —
-    // the rich Domain list and a two-pane table→column picker (TYPE OF COLUMN). Replaces
-    // the separate Domain + TYPE OF columns. The picker itself is in the visual tree, so it
-    // binds SelectedItem/SelectionBoxText to the row; but a SearchableComboBoxSection is a
-    // plain AvaloniaObject and the TableColumnPicker is parented only into the top-level
-    // popup — neither is in the visual tree — so their data is set imperatively from the
-    // row VM on DataContextChanged (and re-set on DataGrid row recycling), not via bindings.
-    private static DataGridTemplateColumn DomainOrColumnCol(string header, int min)
-        => new()
-        {
-            Header = header,
-            MinWidth = min,
-            IsReadOnly = true,
-            CellTemplate = new FuncDataTemplate<ProcedureFieldRowBase>((_, _) =>
-            {
-                var domainSection = new SearchableComboBoxSection
-                {
-                    Header = UiStrings.FieldTypeSourceDomainTab,
-                    DisplayMemberPath = nameof(DomainSpec.Name),
-                    ItemTemplate = PickerTemplate("DomainRowTemplate"),
-                    HeaderTemplate = PickerTemplate("DomainHeaderTemplate"),
-                };
-                var tablePicker = new TableColumnPicker();
-                var columnSection = new SearchableComboBoxSection
-                {
-                    Header = UiStrings.FieldTypeSourceColumnTab,
-                    Content = tablePicker,
-                };
-
-                var picker = new SearchableComboBox
-                {
-                    BorderThickness = new Thickness(0),
-                    Background = Brushes.Transparent,
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Watermark = string.Empty,
-                };
-                picker.Sections.Add(domainSection);
-                picker.Sections.Add(columnSection);
-
-                picker.Bind(SearchableComboBox.SelectedItemProperty,
-                    new Binding(nameof(ProcedureFieldRowBase.SelectedTypeSource)) { Mode = BindingMode.TwoWay });
-                picker.Bind(SearchableComboBox.SelectionBoxTextProperty,
-                    new Binding(nameof(ProcedureFieldRowBase.TypeSourceDisplay)));
-
-                void Populate()
-                {
-                    if (picker.DataContext is ProcedureFieldRowBase row)
-                    {
-                        domainSection.ItemsSource = row.AvailableDomains;
-                        tablePicker.Tables = row.AvailableTables;
-                        tablePicker.ColumnsLoader = row.ColumnsLoader;
-                    }
-                }
-                picker.DataContextChanged += (_, _) => Populate();
-                Populate();
-                return picker;
-            }),
-        };
-
-    private static IDataTemplate? PickerTemplate(string key)
-        => Application.Current?.Resources.TryGetResource(key, null, out var t) == true ? t as IDataTemplate : null;
 }

@@ -1845,6 +1845,8 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         var newTableVm = new NewTableTabViewModel(this);
         newTableVm.CompileRequested += OnNewTableCompileRequested;
+        // Merged Domena/Kolumna picker: lazy column loader for the Table-column tab.
+        newTableVm.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
 
         // Best-effort fetch of available domains so the in-cell Domain combo has
         // something to offer. Failure surfaces as an empty list — non-fatal.
@@ -1854,6 +1856,8 @@ public partial class MainWindowViewModel : ViewModelBase
             newTableVm.SetAvailableDomains(domains);
         }
         catch (MetadataReadException) { /* best effort */ }
+        // Best-effort table list for the Table-column (TYPE OF COLUMN) tab.
+        await LoadTableListAsync(newTableVm.SetAvailableTables).ConfigureAwait(true);
 
         var tab = WorkspaceTabViewModel.CreateNewTable(this, newTableVm, _service.ActiveProfile?.Id);
         WorkspaceTabs.Add(tab);
@@ -2469,7 +2473,25 @@ public partial class MainWindowViewModel : ViewModelBase
             _metadataReader);
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
+        // Merged Domena/Kolumna picker (Pola): lazy column loader + best-effort table list
+        // for the Table-column (TYPE OF COLUMN) tab. Domains load via the VM's own LoadAsync.
+        if (writable)
+        {
+            detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
+            _ = LoadTableListAsync(detail.SetAvailableTables);
+        }
         return detail;
+    }
+
+    // Best-effort table list for a merged Domena/Kolumna picker's Table-column tab.
+    private async Task LoadTableListAsync(Action<IEnumerable<string>> apply)
+    {
+        try
+        {
+            var tables = await _metadataReader.ListAsync(MetadataObjectKind.Table).ConfigureAwait(true);
+            apply(tables.Select(t => t.Name));
+        }
+        catch (MetadataReadException) { /* best effort — Table column tab stays empty */ }
     }
 
     private async void OnOpenDdlRequested(MetadataObject obj)

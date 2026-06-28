@@ -60,6 +60,19 @@ public partial class TableDetailTabView : UserControl
         _fieldsGrid = this.FindControl<DataGrid>("FieldsGrid");
         if (_fieldsGrid is not null)
         {
+            // Faza 4 / Krok 3: replace the XAML single-Domain column with the shared merged
+            // "Domena/Kolumna" picker (Domain + Table-column/TYPE OF COLUMN tabs). Built in
+            // code because the picker's sections aren't in the visual tree (can't bind per-row).
+            for (int i = 0; i < _fieldsGrid.Columns.Count; i++)
+            {
+                if (Equals(_fieldsGrid.Columns[i].Header, UiStrings.TableDetailColumnDomain))
+                {
+                    _fieldsGrid.Columns.RemoveAt(i);
+                    _fieldsGrid.Columns.Insert(i, MergedTypeSourceColumn.Build(UiStrings.FieldTypeSourceHeader, 150));
+                    break;
+                }
+            }
+
             // Inline structure-edit on the Pola grid: every row-commit (Tab/Enter
             // out of the editing element, or focus moves off the row) inspects
             // edited values vs. original and queues ALTER statements via the VM.

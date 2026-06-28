@@ -214,6 +214,20 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
     /// </summary>
     public ObservableCollection<DomainSpec> AvailableDomains { get; }
 
+    /// <summary>Live table list for the merged Domena/Kolumna picker's Table-column tab
+    /// (TYPE OF COLUMN). Populated best-effort by the owner after the schema loads.</summary>
+    public ObservableCollection<string> AvailableTables { get; } = new();
+
+    /// <summary>Lazy column loader for the Table-column tab (set by the owner).</summary>
+    public IColumnsLoader? ColumnsLoader { get; set; }
+
+    /// <summary>Owner injects the live table list for the Table-column picker tab.</summary>
+    public void SetAvailableTables(IEnumerable<string> tables)
+    {
+        AvailableTables.Clear();
+        foreach (var t in tables) AvailableTables.Add(t);
+    }
+
     /// <summary>Basic SQL types — used by the Type ComboBox in inline edit.</summary>
     public IReadOnlyList<string> BasicTypes { get; }
 

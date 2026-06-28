@@ -19,7 +19,7 @@ namespace EmberTern.App.ViewModels;
 /// itself. <see cref="IsModified"/> compares current vs. original so the row
 /// can be subtly tinted while changes are queued.
 /// </summary>
-public partial class FieldRowViewModel : ObservableObject
+public partial class FieldRowViewModel : ObservableObject, ITypeSourceRow
 {
     private readonly TableDetailTabViewModel? _owner;
 
@@ -100,6 +100,8 @@ public partial class FieldRowViewModel : ObservableObject
     partial void OnDomainNameChanged(string? value)
     {
         if (string.IsNullOrEmpty(value)) return;
+        // Domain and TYPE OF are mutually exclusive — picking a domain drops the column ref.
+        if (!string.IsNullOrWhiteSpace(TypeOf)) TypeOf = string.Empty;
         foreach (var d in AvailableDomains)
         {
             if (string.Equals(d.Name, value, System.StringComparison.OrdinalIgnoreCase))
@@ -120,7 +122,7 @@ public partial class FieldRowViewModel : ObservableObject
     private static readonly HashSet<string> InlineEditableProps = new(StringComparer.Ordinal)
     {
         nameof(Name), nameof(NotNull), nameof(DefaultValue), nameof(TypeText),
-        nameof(DomainName), nameof(Size), nameof(Scale), nameof(Description),
+        nameof(DomainName), nameof(TypeOf), nameof(Size), nameof(Scale), nameof(Description),
     };
 
     protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
@@ -224,20 +226,84 @@ public partial class FieldRowViewModel : ObservableObject
         }
     }
 
-    /// <summary>Domain name or null. Editable via Domain ComboBox.</summary>
+    /// <summary>Domain name or null. Editable via the merged Domena/Kolumna picker.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsModified))]
     [NotifyPropertyChangedFor(nameof(SelectedDomainSpec))]
+    [NotifyPropertyChangedFor(nameof(SelectedTypeSource))]
+    [NotifyPropertyChangedFor(nameof(TypeSourceDisplay))]
     [NotifyPropertyChangedFor(nameof(HasDomain))]
     [NotifyPropertyChangedFor(nameof(IsTypeCellEditable))]
     private string? _domainName;
+
+    /// <summary>TYPE OF source ("COLUMN TABLE.COL") or empty. Set via the merged picker's
+    /// Table-column tab. Mutually exclusive with Domain; emits TYPE OF COLUMN in the DDL.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsModified))]
+    [NotifyPropertyChangedFor(nameof(EffectiveTypeText))]
+    [NotifyPropertyChangedFor(nameof(SelectedTypeSource))]
+    [NotifyPropertyChangedFor(nameof(TypeSourceDisplay))]
+    [NotifyPropertyChangedFor(nameof(HasTypeOf))]
+    [NotifyPropertyChangedFor(nameof(IsTypeCellEditable))]
+    private string _typeOf = string.Empty;
+
+    partial void OnTypeOfChanged(string value)
+    {
+        // Domain and TYPE OF are mutually exclusive — picking a column drops the domain.
+        if (!string.IsNullOrWhiteSpace(value) && !string.IsNullOrEmpty(DomainName)) DomainName = null;
+    }
 
     /// <summary>True when this column is domain-governed — the Type combo is then
     /// disabled (the domain governs the type, #3/#4).</summary>
     public bool HasDomain => !string.IsNullOrEmpty(DomainName);
 
-    /// <summary>Type combo enabled only in edit mode AND when not domain-governed.</summary>
-    public bool IsTypeCellEditable => IsCellEditable && !HasDomain;
+    /// <summary>True when this column uses TYPE OF COLUMN — the type cells are disabled.</summary>
+    public bool HasTypeOf => !string.IsNullOrWhiteSpace(TypeOf);
+
+    /// <summary>Type combo enabled only in edit mode AND when neither domain- nor
+    /// TYPE OF COLUMN-governed.</summary>
+    public bool IsTypeCellEditable => IsCellEditable && !HasDomain && !HasTypeOf;
+
+    // ─── Merged Domena/Kolumna picker (Faza 4 / Krok 3) ───────────────────
+    // One cell drives DomainName XOR TypeOf via SelectedTypeSource (DomainSpec → domain,
+    // ColumnRef → TYPE OF COLUMN, null → clear). DDL-safe: BuildTypeDefinition includes
+    // TypeOf so EffectiveTypeText (and thus EnqueueRowEdits' typeClause) reflects it.
+
+    public object? SelectedTypeSource
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(DomainName)) return SelectedDomainSpec ?? (object?)DomainName;
+            if (!string.IsNullOrWhiteSpace(TypeOf)) return ColumnRef.Parse(TypeOf) ?? (object)TypeOf;
+            return null;
+        }
+        set
+        {
+            switch (value)
+            {
+                case DomainSpec d: DomainName = d.Name; break;          // OnDomainNameChanged clears TypeOf
+                case ColumnRef c: TypeOf = c.TypeOfClause; break;       // OnTypeOfChanged clears DomainName
+                case null:
+                    if (!string.IsNullOrEmpty(DomainName)) DomainName = null;
+                    if (!string.IsNullOrWhiteSpace(TypeOf)) TypeOf = string.Empty;
+                    break;
+            }
+        }
+    }
+
+    public string TypeSourceDisplay
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(DomainName)) return DomainName!;
+            if (!string.IsNullOrWhiteSpace(TypeOf)) return ColumnRef.StripColumnPrefix(TypeOf);
+            return string.Empty;
+        }
+    }
+
+    public ObservableCollection<string> AvailableTables => _owner?.AvailableTables ?? FallbackTables;
+    public IColumnsLoader? ColumnsLoader => _owner?.ColumnsLoader;
+    private static readonly ObservableCollection<string> FallbackTables = new();
 
     /// <summary>
     /// DomainSpec wrapper for the Domain <c>SearchableComboBox</c>'s SelectedItem
@@ -352,6 +418,9 @@ public partial class FieldRowViewModel : ObservableObject
     /// </summary>
     public FieldDefinition BuildTypeDefinition() => new()
     {
+        // TypeOf wins (FormatTypeOrDomain → TYPE OF COLUMN …) so EffectiveTypeText — and
+        // thus EnqueueRowEdits' typeClause + IsModified — reflect a chosen column source.
+        TypeOf = string.IsNullOrWhiteSpace(TypeOf) ? null : TypeOf.Trim(),
         BasicType = BaseType,
         Size = IsCharType ? Size : null,
         Precision = IsNumericType ? Size : null,

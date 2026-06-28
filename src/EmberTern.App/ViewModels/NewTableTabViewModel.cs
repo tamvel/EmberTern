@@ -15,7 +15,7 @@ namespace EmberTern.App.ViewModels;
 /// dialog form state but lives inside an editable DataGrid — every property
 /// is observable so the live DDL preview re-renders on each keystroke.
 /// </summary>
-public partial class NewTableFieldRowViewModel : ObservableObject
+public partial class NewTableFieldRowViewModel : ObservableObject, ITypeSourceRow
 {
     public NewTableFieldRowViewModel(NewTableTabViewModel? owner = null)
     {
@@ -80,6 +80,8 @@ public partial class NewTableFieldRowViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedDomainSpec))]
+    [NotifyPropertyChangedFor(nameof(SelectedTypeSource))]
+    [NotifyPropertyChangedFor(nameof(TypeSourceDisplay))]
     [NotifyPropertyChangedFor(nameof(HasDomain))]
     [NotifyPropertyChangedFor(nameof(DomainType))]
     [NotifyPropertyChangedFor(nameof(IsTypeEnabled))]
@@ -89,6 +91,14 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsComputedEnabled))]
     [NotifyPropertyChangedFor(nameof(EffectiveTypeDisplay))]
     private string? _domainName;
+
+    partial void OnDomainNameChanged(string? value)
+    {
+        // Domain is mutually exclusive with TYPE OF + Computed — picking it clears them.
+        if (string.IsNullOrEmpty(value)) return;
+        if (!string.IsNullOrWhiteSpace(TypeOf)) TypeOf = string.Empty;
+        if (!string.IsNullOrWhiteSpace(ComputedExpression)) ComputedExpression = string.Empty;
+    }
 
     [ObservableProperty] private string _defaultValue = string.Empty;
 
@@ -116,6 +126,7 @@ public partial class NewTableFieldRowViewModel : ObservableObject
         // Re-entrancy is safe — none of these write back to ComputedExpression.
         if (string.IsNullOrWhiteSpace(value)) return;
         DomainName = null;
+        TypeOf = string.Empty;
         Size = null;
         Scale = null;
         DefaultValue = string.Empty;
@@ -149,11 +160,11 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     // IsEnabled to one of these. Computed By wins over everything; Domain
     // governs the type-related cells; PK forces Not Null; Autoincrement owns
     // the value (no Default).
-    public bool IsSizeEnabled => !HasComputed && !HasDomain && Type is "CHAR" or "VARCHAR" or "NUMERIC" or "DECIMAL";
-    public bool IsPrecisionScaleEnabled => !HasComputed && !HasDomain && Type is "NUMERIC" or "DECIMAL";
+    public bool IsSizeEnabled => !HasComputed && !HasDomain && !HasTypeOf && Type is "CHAR" or "VARCHAR" or "NUMERIC" or "DECIMAL";
+    public bool IsPrecisionScaleEnabled => !HasComputed && !HasDomain && !HasTypeOf && Type is "NUMERIC" or "DECIMAL";
     public bool IsDefaultEnabled => !HasComputed && !AutoIncrement;
     public bool IsCheckEnabled => !HasComputed;
-    public bool IsCharsetEnabled => !HasComputed && !HasDomain;
+    public bool IsCharsetEnabled => !HasComputed && !HasDomain && !HasTypeOf;
     public bool IsPkEnabled => !HasComputed;
     public bool IsAiEnabled => !HasComputed;
 
@@ -166,14 +177,17 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     /// the Type cell shows the domain's type (read-only) instead of the combo (#3).</summary>
     public bool HasDomain => !string.IsNullOrEmpty(DomainName);
 
-    /// <summary>Type combo enabled only when neither computed nor domain-governed.</summary>
-    public bool IsTypeEnabled => !HasComputed && !HasDomain;
+    /// <summary>True when a TYPE OF COLUMN source is selected — governs the type too.</summary>
+    public bool HasTypeOf => !string.IsNullOrWhiteSpace(TypeOf);
+
+    /// <summary>Type combo enabled only when not computed / domain / TYPE OF-governed.</summary>
+    public bool IsTypeEnabled => !HasComputed && !HasDomain && !HasTypeOf;
 
     /// <summary>Domain combo enabled unless the field is computed (mutually exclusive).</summary>
     public bool IsDomainEnabled => !HasComputed;
 
-    /// <summary>Computed cell enabled unless a domain is selected (mutually exclusive).</summary>
-    public bool IsComputedEnabled => !HasDomain;
+    /// <summary>Computed cell enabled unless a domain / TYPE OF source is selected.</summary>
+    public bool IsComputedEnabled => !HasDomain && !HasTypeOf;
 
     /// <summary>Not Null cell enabled unless computed or PK forces it on.</summary>
     public bool IsNotNullEnabled => !HasComputed && !PrimaryKey;
@@ -194,8 +208,70 @@ public partial class NewTableFieldRowViewModel : ObservableObject
     }
 
     /// <summary>What the Type cell shows: the domain's type when a domain is
-    /// picked (#3), otherwise the chosen basic type.</summary>
-    public string EffectiveTypeDisplay => HasDomain ? (DomainType ?? string.Empty) : Type;
+    /// picked (#3), the column reference for TYPE OF COLUMN, otherwise the chosen basic type.</summary>
+    public string EffectiveTypeDisplay =>
+        HasDomain ? (DomainType ?? string.Empty)
+        : HasTypeOf ? ColumnRef.StripColumnPrefix(TypeOf)
+        : Type;
+
+    // ─── TYPE OF source + merged Domena/Kolumna picker (Faza 4 / Krok 3) ──
+
+    /// <summary>TYPE OF source ("COLUMN TABLE.COL") or empty — set via the merged picker's
+    /// Table-column tab. Mutually exclusive with Domain + Computed; emits TYPE OF COLUMN.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTypeOf))]
+    [NotifyPropertyChangedFor(nameof(IsTypeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsSizeEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsPrecisionScaleEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsCharsetEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsComputedEnabled))]
+    [NotifyPropertyChangedFor(nameof(EffectiveTypeDisplay))]
+    [NotifyPropertyChangedFor(nameof(SelectedTypeSource))]
+    [NotifyPropertyChangedFor(nameof(TypeSourceDisplay))]
+    private string _typeOf = string.Empty;
+
+    partial void OnTypeOfChanged(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        if (!string.IsNullOrEmpty(DomainName)) DomainName = null;
+        if (!string.IsNullOrWhiteSpace(ComputedExpression)) ComputedExpression = string.Empty;
+    }
+
+    public object? SelectedTypeSource
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(DomainName)) return SelectedDomainSpec ?? (object?)DomainName;
+            if (!string.IsNullOrWhiteSpace(TypeOf)) return ColumnRef.Parse(TypeOf) ?? (object)TypeOf;
+            return null;
+        }
+        set
+        {
+            switch (value)
+            {
+                case DomainSpec d: DomainName = d.Name; break;
+                case ColumnRef c: TypeOf = c.TypeOfClause; break;
+                case null:
+                    if (!string.IsNullOrEmpty(DomainName)) DomainName = null;
+                    if (!string.IsNullOrWhiteSpace(TypeOf)) TypeOf = string.Empty;
+                    break;
+            }
+        }
+    }
+
+    public string TypeSourceDisplay
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(DomainName)) return DomainName!;
+            if (!string.IsNullOrWhiteSpace(TypeOf)) return ColumnRef.StripColumnPrefix(TypeOf);
+            return string.Empty;
+        }
+    }
+
+    public ObservableCollection<string> AvailableTables => _owner?.AvailableTables ?? FallbackTables;
+    public IColumnsLoader? ColumnsLoader => _owner?.ColumnsLoader;
+    private static readonly ObservableCollection<string> FallbackTables = new();
 
     public IReadOnlyList<string> BasicTypes => _owner?.BasicTypes ?? FallbackBasicTypes;
     public ObservableCollection<DomainSpec> AvailableDomains
@@ -227,6 +303,7 @@ public partial class NewTableFieldRowViewModel : ObservableObject
             NotNull = NotNull,
             PrimaryKey = PrimaryKey,
             Domain = string.IsNullOrWhiteSpace(DomainName) ? null : DomainName,
+            TypeOf = string.IsNullOrWhiteSpace(TypeOf) ? null : TypeOf.Trim(),
             BasicType = Type,
             Size = IsSizeEnabled && Type is "CHAR" or "VARCHAR" ? Size : null,
             Precision = IsPrecisionScaleEnabled ? Size : null,
@@ -282,6 +359,20 @@ public partial class NewTableTabViewModel : ViewModelBase, IUnsavedWorkSource
 
     public ObservableCollection<NewTableFieldRowViewModel> Fields { get; }
     public ObservableCollection<DomainSpec> AvailableDomains { get; }
+
+    /// <summary>Live table list for the merged Domena/Kolumna picker's Table-column tab
+    /// (TYPE OF COLUMN). Set best-effort by the owner after the schema loads.</summary>
+    public ObservableCollection<string> AvailableTables { get; } = new();
+
+    /// <summary>Lazy column loader for the Table-column tab (set by the owner).</summary>
+    public IColumnsLoader? ColumnsLoader { get; set; }
+
+    /// <summary>Owner injects the live table list for the Table-column picker tab.</summary>
+    public void SetAvailableTables(IEnumerable<string> tables)
+    {
+        AvailableTables.Clear();
+        foreach (var t in tables) AvailableTables.Add(t);
+    }
 
     public IReadOnlyList<string> BasicTypes { get; } = new[]
     {

@@ -20,7 +20,7 @@ namespace EmberTern.App.ViewModels;
 /// structured field, at which point it is recomposed — so any Firebird type form (incl.
 /// ones the structured editors can't fully model) survives a load with no information loss.
 /// </summary>
-public abstract partial class ProcedureFieldRowBase : ObservableObject
+public abstract partial class ProcedureFieldRowBase : ObservableObject, ITypeSourceRow
 {
     private readonly IFieldRowOwner? _owner;
     private bool _suppressCompose;
@@ -330,7 +330,7 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
         get
         {
             if (!string.IsNullOrEmpty(DomainName)) return SelectedDomainSpec ?? (object?)DomainName;
-            if (!string.IsNullOrWhiteSpace(TypeOf)) return ParseColumnRef(TypeOf) ?? (object)TypeOf;
+            if (!string.IsNullOrWhiteSpace(TypeOf)) return ColumnRef.Parse(TypeOf) ?? (object)TypeOf;
             return null;
         }
         set
@@ -359,7 +359,7 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
         get
         {
             if (!string.IsNullOrEmpty(DomainName)) return DomainName!;
-            if (!string.IsNullOrWhiteSpace(TypeOf)) return StripColumnPrefix(TypeOf);
+            if (!string.IsNullOrWhiteSpace(TypeOf)) return ColumnRef.StripColumnPrefix(TypeOf);
             return string.Empty;
         }
     }
@@ -368,22 +368,6 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject
     /// forwarded from the owning editor (so columns are loaded on demand, never eagerly).</summary>
     public ObservableCollection<string> AvailableTables => _owner?.AvailableTables ?? FallbackTables;
     public IColumnsLoader? ColumnsLoader => _owner?.ColumnsLoader;
-
-    private static string StripColumnPrefix(string typeOf)
-    {
-        var t = typeOf.Trim();
-        return t.StartsWith("COLUMN ", StringComparison.OrdinalIgnoreCase) ? t.Substring(7).Trim() : t;
-    }
-
-    // "COLUMN TABLE.COLUMN" → ColumnRef(TABLE, COLUMN); a plain "TABLE.COLUMN" also parses.
-    // Returns null for a TYPE OF <domain> form (no '.') — the getter falls back to a string.
-    private static ColumnRef? ParseColumnRef(string typeOf)
-    {
-        var t = StripColumnPrefix(typeOf);
-        var dot = t.IndexOf('.');
-        if (dot <= 0 || dot >= t.Length - 1) return null;
-        return new ColumnRef(t.Substring(0, dot).Trim(), t.Substring(dot + 1).Trim());
-    }
 
     public DomainSpec? SelectedDomainSpec
     {

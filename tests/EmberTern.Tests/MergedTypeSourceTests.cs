@@ -126,4 +126,74 @@ public class MergedTypeSourceTests
         Assert.Same(owner.AvailableTables, row.AvailableTables);
         Assert.Same(owner.ColumnsLoader, row.ColumnsLoader);
     }
+
+    // ─── Krok 3: Table Detail (FieldRowViewModel) ─────────────────────────
+
+    [Fact]
+    public void TableDetail_PickColumn_SetsTypeOf_DisplayAndDdl()
+    {
+        var row = new FieldRowViewModel(new FieldInfo { Name = "F", Type = "INTEGER" });
+
+        row.SelectedTypeSource = new ColumnRef("ADRES", "MIASTO", "VARCHAR(50)");
+
+        Assert.Equal("COLUMN ADRES.MIASTO", row.TypeOf);
+        Assert.Null(row.DomainName);
+        Assert.IsType<ColumnRef>(row.SelectedTypeSource);
+        Assert.Equal("ADRES.MIASTO", row.TypeSourceDisplay);
+        Assert.False(row.IsTypeCellEditable);                       // TYPE OF governs the type
+        Assert.Equal("TYPE OF COLUMN ADRES.MIASTO", row.EffectiveTypeText);  // drives the ALTER
+    }
+
+    [Fact]
+    public void TableDetail_DomainAndColumn_MutuallyExclusive()
+    {
+        var row = new FieldRowViewModel(new FieldInfo { Name = "F", Type = "INTEGER" });
+
+        row.SelectedTypeSource = new ColumnRef("T", "C");
+        row.SelectedTypeSource = new DomainSpec("T_KOD", "VARCHAR(20)");
+        Assert.Equal("T_KOD", row.DomainName);
+        Assert.Equal(string.Empty, row.TypeOf);                     // column cleared
+
+        row.SelectedTypeSource = new ColumnRef("T", "C");
+        Assert.Equal("COLUMN T.C", row.TypeOf);
+        Assert.Null(row.DomainName);                                // domain cleared
+
+        row.SelectedTypeSource = null;
+        Assert.Null(row.DomainName);
+        Assert.Equal(string.Empty, row.TypeOf);                     // both cleared
+    }
+
+    // ─── Krok 3: New Table (NewTableFieldRowViewModel) ────────────────────
+
+    [Fact]
+    public void NewTable_PickColumn_EmitsTypeOfColumnDdl()
+    {
+        var row = new NewTableFieldRowViewModel { Name = "F" };
+
+        row.SelectedTypeSource = new ColumnRef("ADRES", "MIASTO");
+
+        Assert.Equal("COLUMN ADRES.MIASTO", row.TypeOf);
+        Assert.True(row.HasTypeOf);
+        Assert.Equal("ADRES.MIASTO", row.EffectiveTypeDisplay);
+        var def = row.ToFieldDefinition();
+        Assert.Equal("COLUMN ADRES.MIASTO", def.TypeOf);
+        Assert.Equal("TYPE OF COLUMN ADRES.MIASTO", DdlGenerator.FormatTypeOrDomain(def));
+    }
+
+    [Fact]
+    public void NewTable_Column_Domain_Computed_MutuallyExclusive()
+    {
+        var row = new NewTableFieldRowViewModel { Name = "F" };
+
+        row.SelectedTypeSource = new ColumnRef("T", "C");
+        row.ComputedExpression = "A + B";
+        Assert.Equal(string.Empty, row.TypeOf);                     // computed cleared the column
+
+        row.SelectedTypeSource = new ColumnRef("T", "C");
+        Assert.Equal(string.Empty, row.ComputedExpression);         // column cleared computed
+
+        row.SelectedTypeSource = new DomainSpec("T_KOD", "VARCHAR(20)");
+        Assert.Equal(string.Empty, row.TypeOf);                     // domain cleared the column
+        Assert.Equal("T_KOD", row.DomainName);
+    }
 }
