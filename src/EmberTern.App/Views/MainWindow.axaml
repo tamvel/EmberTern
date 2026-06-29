@@ -194,6 +194,12 @@
             <controls:SvgIcon Data="{StaticResource Icon.TriggerPlus}"
                               Foreground="{DynamicResource IconColor_Trigger}" />
           </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewFunctionTooltip}"
+                  Command="{Binding NewFunctionCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.FunctionPlus}"
+                              Foreground="{DynamicResource IconColor_Function}" />
+          </Button>
         </StackPanel>
 
         <!-- Drag spacer (column 2 = *) -->
@@ -631,6 +637,12 @@
                             IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
               </ToggleButton>
+              <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureModeToggleTooltip}"
+                            IsChecked="{Binding ActiveFunctionDetail.EasyMode, Mode=TwoWay}"
+                            IsEnabled="{Binding ActiveFunctionDetail.CanUseEasyMode}"
+                            IsVisible="{Binding IsFunctionDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
+              </ToggleButton>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep1Visible}" />
 
@@ -687,6 +699,14 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveTriggerDetail.RevertChangesCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
+              </Button>
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.FunctionCompileTooltip}"
+                      Command="{Binding ActiveFunctionDetail.CompileCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+                      Command="{Binding ActiveFunctionDetail.RevertChangesCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
               <!-- Single unified Commit / Rollback pair (auto-routed to the open lane(s)). -->
@@ -797,6 +817,23 @@
                       Command="{Binding ActiveTriggerDetail.UncommentBodyCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
+              <!-- Function: execute / format / comment / uncomment -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FunctionExecuteTooltip}"
+                      Command="{Binding ActiveFunctionDetail.ExecuteFunctionCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+                      Command="{Binding ActiveFunctionDetail.FormatSqlCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
+                      Command="{Binding ActiveFunctionDetail.CommentBodyCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
+                      Command="{Binding ActiveFunctionDetail.UncommentBodyCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep4Visible}" />
 
@@ -847,6 +884,9 @@
               <views:TriggerDetailTabView x:Name="TriggerDetailView"
                                           DataContext="{Binding ActiveTriggerDetail}"
                                           IsVisible="{Binding DataContext.IsTriggerDetailTabActive, ElementName=RootWindow}" />
+              <views:FunctionDetailTabView x:Name="FunctionDetailView"
+                                           DataContext="{Binding ActiveFunctionDetail}"
+                                           IsVisible="{Binding DataContext.IsFunctionDetailTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query

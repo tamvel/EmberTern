@@ -192,6 +192,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveProcedureDetail))]
     [NotifyPropertyChangedFor(nameof(IsTriggerDetailTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveTriggerDetail))]
+    [NotifyPropertyChangedFor(nameof(IsFunctionDetailTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveFunctionDetail))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
@@ -242,6 +244,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsTriggerDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TriggerDetail };
     public TriggerDetailTabViewModel? ActiveTriggerDetail
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TriggerDetail } t ? t.TriggerDetail : null;
+    /// <summary>True when the active workspace tab is a Function Detail tab.</summary>
+    public bool IsFunctionDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.FunctionDetail };
+    public FunctionDetailTabViewModel? ActiveFunctionDetail
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.FunctionDetail } t ? t.FunctionDetail : null;
     // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
     // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
     // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
@@ -292,10 +298,12 @@ public partial class MainWindowViewModel : ViewModelBase
     // Compile auto-commits in an autonomous DDL tx (Phase A) — there's no working
     // transaction to Commit/Rollback from a trigger tab, so those buttons would be
     // misleading. The trigger toolbar is Compile + Format/Comment only.
-    public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive;
-    // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail, TriggerDetail);
+    // FunctionDetail joins this set: Compile opens the working (metadata) transaction AND
+    // Execute opens a data working transaction, so Commit/Rollback must be reachable.
+    public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsFunctionDetailTabActive;
+    // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail, TriggerDetail, FunctionDetail);
     // the anchored Query tab is never closable so the button hides when it's active.
-    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail };
+    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail };
 
     // ─── Unified editor toolbar — fixed 5-section model ───────────────────
     //
@@ -306,12 +314,12 @@ public partial class MainWindowViewModel : ViewModelBase
     // commands below; a future Trigger/Function/Package editor plugs a new case into
     // ActiveCollection() and gets the toolbar for free — no new layout pattern.
 
-    // Section 1 — a mode toggle exists for Table (Grid-Edit), View + Procedure + Trigger (Easy).
-    public bool ShowModeSection => ShowFieldEditTools || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive;
+    // Section 1 — a mode toggle exists for Table (Grid-Edit), View + Procedure + Trigger + Function (Easy).
+    public bool ShowModeSection => ShowFieldEditTools || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive;
     // Section 2 — every editor has a primary action (Execute / Compile / Commit).
     public bool ShowMainSection => SelectedWorkspaceTab is not null;
-    // Section 4 — helpers exist for SQL editor, View, Procedure, Trigger, and the Dane sub-tab.
-    public bool ShowHelperSection => IsQueryTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsDataTabActive;
+    // Section 4 — helpers exist for SQL editor, View, Procedure, Trigger, Function, and the Dane sub-tab.
+    public bool ShowHelperSection => IsQueryTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive || IsDataTabActive;
 
     // A separator shows only between two non-empty adjacent sections.
     private bool HasFrom2 => ShowMainSection || ShowCollectionTools || ShowHelperSection || IsClosableTabActive;
@@ -345,6 +353,13 @@ public partial class MainWindowViewModel : ViewModelBase
             case WorkspaceTabKind.TriggerDetail when SelectedWorkspaceTab.TriggerDetail is { EasyMode: true } tr:
                 // Trigger Easy mode has a single editable collection — Variables.
                 return (tr.AddVariableCommand, tr.DeleteVariableCommand, tr.MoveVariableUpCommand, tr.MoveVariableDownCommand, true);
+            case WorkspaceTabKind.FunctionDetail when SelectedWorkspaceTab.FunctionDetail is { EasyMode: true } fn:
+                // The Result sub-tab is a single record — no Add/Remove/Move there, so the
+                // whole collection section is hidden; other sub-tabs route to the unified
+                // commands (Arguments / Variables / Cursors / Subprograms).
+                return fn.IsEasyCollectionEditable
+                    ? (fn.AddCollectionItemCommand, fn.RemoveCollectionItemCommand, fn.MoveCollectionItemUpCommand, fn.MoveCollectionItemDownCommand, true)
+                    : null;
             default:
                 return null;
         }
@@ -1223,6 +1238,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ProcedureEasyMode = ProcedureEasyModePreference,
             ViewEasyMode = ViewEasyModePreference,
             TriggerEasyMode = TriggerEasyModePreference,
+            FunctionEasyMode = FunctionEasyModePreference,
             BottomPanelTabIndex = SelectedBottomTabIndex,
             // ResultsMaximized is a layout flag owned by the View code-behind; it sets
             // it on the captured state in OnWindowClosing, like WindowBounds.
@@ -1241,6 +1257,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ProcedureEasyModePreference = state.ProcedureEasyMode;
         ViewEasyModePreference = state.ViewEasyMode;
         TriggerEasyModePreference = state.TriggerEasyMode;
+        FunctionEasyModePreference = state.FunctionEasyMode;
         SelectedBottomTabIndex = state.BottomPanelTabIndex;
 
         // Workspace tabs stay empty at startup — there's no active connection yet.
@@ -1357,6 +1374,25 @@ public partial class MainWindowViewModel : ViewModelBase
                     DdlText = trd is { } ? trd.DdlText : tab.DdlText,
                     EasyMode = trd?.EasyMode,
                     ActiveSubTabIndex = trd?.ActiveSubTabIndex,
+                });
+            }
+            else if (tab.Kind == WorkspaceTabKind.FunctionDetail)
+            {
+                // Skip transient New Function tabs (IsNew) — the function doesn't exist
+                // yet. Persist real functions as FunctionDetail so restore re-opens the
+                // full surface (not DDL-only).
+                if (tab.FunctionDetail is { IsNew: true }) continue;
+                var fnd = tab.FunctionDetail;
+                ws.Tabs.Add(new WorkspaceTab
+                {
+                    Kind = CoreTabKind.FunctionDetail,
+                    ObjectName = tab.ObjectName,
+                    ObjectKind = tab.ObjectKind,
+                    ConnectionProfileId = tab.ConnectionProfileId,
+                    DdlText = fnd is { } ? fnd.DdlText : tab.DdlText,
+                    EasyMode = fnd?.EasyMode,
+                    ActiveSubTabIndex = fnd?.ActiveSubTabIndex,
+                    ActiveInnerSubTabIndex = fnd?.ActiveEasyCollectionIndex,
                 });
             }
             else
@@ -1478,6 +1514,20 @@ public partial class MainWindowViewModel : ViewModelBase
                 if (tab.EasyMode is { } trEasy && detail.CanUseEasyMode) detail.EasyMode = trEasy;
                 if (tab.ActiveSubTabIndex is { } trSub) detail.ActiveSubTabIndex = trSub;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateTriggerDetail(this, obj, detail, tab.ConnectionProfileId));
+            }
+            else if (tab.Kind == CoreTabKind.FunctionDetail
+                  && tab.ObjectKind is { } funcKind
+                  && !string.IsNullOrEmpty(tab.ObjectName))
+            {
+                // Native FunctionDetail restore (no DDL-only fallback). Lazy-loads on
+                // first activation via SelectTab. Cached DDL seeds the DDL tab.
+                var obj = new MetadataObject(tab.ObjectName, funcKind);
+                var detail = CreateFunctionDetail(obj);
+                detail.DdlText = tab.DdlText ?? string.Empty;
+                if (tab.EasyMode is { } fnEasy && detail.CanUseEasyMode) detail.EasyMode = fnEasy;
+                if (tab.ActiveSubTabIndex is { } fnSub) detail.ActiveSubTabIndex = fnSub;
+                if (tab.ActiveInnerSubTabIndex is { } fnInner) detail.ActiveEasyCollectionIndex = fnInner;
+                WorkspaceTabs.Add(WorkspaceTabViewModel.CreateFunctionDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
 
@@ -2083,6 +2133,57 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public bool CanCreateFunction => _service.IsConnected;
+
+    // New Function: opens a Function Detail tab in IsNew mode, starting in Easy mode with
+    // the CREATE OR ALTER FUNCTION template parsed into the editable name + Arguments +
+    // Result + body. On Compile success OnFunctionCreated refreshes the tree, closes this
+    // tab and reopens the real function.
+    [RelayCommand(CanExecute = nameof(CanCreateFunction))]
+    private void NewFunction()
+    {
+        var detail = new FunctionDetailTabViewModel(UiStrings.NewFunctionTabDefaultTitle, _tableDetailReader, _ddlReader, _ddlExecutor)
+        {
+            IsNew = true,
+            SourceText = FunctionDetailTabViewModel.NewFunctionTemplate,
+        };
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.RunExecuteRequested = RunFunctionExecuteAsync;
+        detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
+        _ = LoadFunctionListsAsync(detail);
+        detail.ObjectCreated += name => OnFunctionCreated(detail, name);
+        detail.EasyMode = true;
+        // Seeding marked the VM dirty; a brand-new untouched tab must not prompt on close.
+        detail.ClearDirty();
+
+        var obj = new MetadataObject(UiStrings.NewFunctionTabDefaultTitle, MetadataObjectKind.Function);
+        var tab = WorkspaceTabViewModel.CreateFunctionDetail(this, obj, detail, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+    }
+
+    private async void OnFunctionCreated(FunctionDetailTabViewModel detail, string? functionName)
+    {
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewFunctionExecutedFormat, functionName ?? string.Empty));
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+
+        WorkspaceTabViewModel? newTab = null;
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.FunctionDetail && ReferenceEquals(t.FunctionDetail, detail))
+            {
+                newTab = t;
+                break;
+            }
+        }
+        if (newTab is not null) CloseTab(newTab);
+
+        if (!string.IsNullOrEmpty(functionName))
+        {
+            OnOpenDdlRequested(new MetadataObject(functionName, MetadataObjectKind.Function));
+        }
+    }
+
     // Persist a freshly-added connection into a folder. Called by the view after
     // the dialog returns with a profile; isolated here so tests can drive the
     // folder-placement logic without standing up the dialog.
@@ -2295,6 +2396,13 @@ public partial class MainWindowViewModel : ViewModelBase
     internal static bool OpensAsTriggerDetail(MetadataObjectKind kind)
         => kind is MetadataObjectKind.Trigger;
 
+    // Functions open in the dedicated Function Detail surface (editable CREATE OR ALTER
+    // FUNCTION source + Compile / Execute / Description / Dependencies / DDL, with Easy
+    // mode = Arguments + single Result + Variables/Cursors/Subprograms over a body
+    // editor), not a plain DDL tab. Separate predicate — it builds its own detail VM.
+    internal static bool OpensAsFunctionDetail(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.Function;
+
     // Single construction point for ViewDetail VMs — mirrors CreateTableDetail.
     // A view is read-only data (no inline editing) but its SQL source IS editable,
     // so the DDL executor is wired for Compile while no data editor is.
@@ -2429,6 +2537,53 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    // Single construction point for FunctionDetail VMs — mirrors CreateProcedureDetail.
+    // The function source IS editable (Compile) and the function IS executable (Data
+    // lane), so both the DDL executor and the Execute callback are wired.
+    internal bool FunctionEasyModePreference { get; set; }
+
+    internal FunctionDetailTabViewModel CreateFunctionDetail(MetadataObject obj)
+    {
+        var detail = new FunctionDetailTabViewModel(
+            obj.Name,
+            _tableDetailReader,
+            _ddlReader,
+            _ddlExecutor);
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.RunExecuteRequested = RunFunctionExecuteAsync;
+        detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
+        _ = LoadFunctionListsAsync(detail);
+        if (detail.CanUseEasyMode) detail.EasyMode = FunctionEasyModePreference;
+        detail.PropertyChanged += OnFunctionDetailPropertyChanged;
+        return detail;
+    }
+
+    private async Task LoadFunctionListsAsync(FunctionDetailTabViewModel detail)
+    {
+        try
+        {
+            var domains = await _metadataReader.ListDomainsAsync().ConfigureAwait(true);
+            detail.SetAvailableDomains(domains);
+        }
+        catch (MetadataReadException) { /* best effort — Domain tab just stays empty */ }
+        try
+        {
+            var tables = await _metadataReader.ListAsync(MetadataObjectKind.Table).ConfigureAwait(true);
+            detail.SetAvailableTables(tables.Select(t => t.Name));
+        }
+        catch (MetadataReadException) { /* best effort — Table column tab stays empty */ }
+    }
+
+    private void OnFunctionDetailPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(FunctionDetailTabViewModel.EasyMode)
+            && sender is FunctionDetailTabViewModel { CanUseEasyMode: true } d)
+        {
+            FunctionEasyModePreference = d.EasyMode;
+        }
+    }
+
     // Runs an Execute Procedure statement on the Data lane with bound parameters
     // (no literal embedding). Wraps the result/error so the procedure tab can show
     // it in its own Result region. EXECUTE PROCEDURE/SELECT are Data-lane per the
@@ -2439,6 +2594,26 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var result = await _executor.ExecuteAsync(sql, parameters).ConfigureAwait(true);
             AddMessage(MessageSeverity.Info, UiStrings.ProcedureExecutedViaDataProfile);
+            return new ProcedureExecOutcome(result, null);
+        }
+        catch (QueryExecutionException ex)
+        {
+            return new ProcedureExecOutcome(null, ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new ProcedureExecOutcome(null, ex.Message);
+        }
+    }
+
+    // Runs an Execute Function statement (SELECT fn(...) FROM RDB$DATABASE) on the Data
+    // lane with bound parameters. Same wrapping + lane as RunProcedureExecuteAsync.
+    private async Task<ProcedureExecOutcome> RunFunctionExecuteAsync(string sql, IReadOnlyList<QueryParameter> parameters)
+    {
+        try
+        {
+            var result = await _executor.ExecuteAsync(sql, parameters).ConfigureAwait(true);
+            AddMessage(MessageSeverity.Info, UiStrings.FunctionExecutedViaDataProfile);
             return new ProcedureExecOutcome(result, null);
         }
         catch (QueryExecutionException ex)
@@ -2501,7 +2676,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // TableDetail tabs key on (Kind, Name).
         foreach (var tab in WorkspaceTabs)
         {
-            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail
+            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail
                 && tab.ObjectKind == obj.Kind
                 && string.Equals(tab.ObjectName, obj.Name, StringComparison.Ordinal))
             {
@@ -2574,6 +2749,21 @@ public partial class MainWindowViewModel : ViewModelBase
                 return;
             }
 
+            if (OpensAsFunctionDetail(obj.Kind))
+            {
+                var detail = CreateFunctionDetail(obj);
+                var newTab = WorkspaceTabViewModel.CreateFunctionDetail(this, obj, detail, _service.ActiveProfile?.Id);
+                WorkspaceTabs.Add(newTab);
+                SelectTab(newTab);
+                await detail.EnsureLoadedAsync().ConfigureAwait(true);
+                if (!string.IsNullOrEmpty(detail.ErrorMessage))
+                {
+                    AddMessage(MessageSeverity.Error, detail.ErrorMessage);
+                    SelectedBottomTabIndex = 1;
+                }
+                return;
+            }
+
             var ddl = await _ddlReader.FetchDdlAsync(obj).ConfigureAwait(true);
             var ddlTab = WorkspaceTabViewModel.CreateDdl(this, obj, ddl, _service.ActiveProfile?.Id);
             WorkspaceTabs.Add(ddlTab);
@@ -2628,6 +2818,11 @@ public partial class MainWindowViewModel : ViewModelBase
             && _service.IsConnected)
         {
             _ = triggerDetail.EnsureLoadedAsync();
+        }
+        else if (tab is { Kind: WorkspaceTabKind.FunctionDetail, FunctionDetail: { } functionDetail }
+            && _service.IsConnected)
+        {
+            _ = functionDetail.EnsureLoadedAsync();
         }
     }
 
@@ -3067,6 +3262,7 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkspaceTabKind.ViewDetail => newValue.ViewDetail,
             WorkspaceTabKind.ProcedureDetail => newValue.ProcedureDetail,
             WorkspaceTabKind.TriggerDetail => newValue.TriggerDetail,
+            WorkspaceTabKind.FunctionDetail => newValue.FunctionDetail,
             WorkspaceTabKind.NewTable => newValue.NewTable,
             _ => null,
         };
@@ -3448,6 +3644,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // New Trigger shares the same connection-state gate.
         OnPropertyChanged(nameof(CanCreateTrigger));
         NewTriggerCommand.NotifyCanExecuteChanged();
+        // New Function shares the same connection-state gate.
+        OnPropertyChanged(nameof(CanCreateFunction));
+        NewFunctionCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

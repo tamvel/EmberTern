@@ -11,6 +11,7 @@ public enum WorkspaceTabKind
     ViewDetail,
     ProcedureDetail,
     TriggerDetail,
+    FunctionDetail,
 }
 
 // Stored verbatim as JSON. Properties are settable so System.Text.Json can
@@ -118,6 +119,10 @@ public sealed class WorkspaceState
     // Last-used Trigger Detail editor mode (false = Source, true = Easy). Same hybrid
     // role as ProcedureEasyMode/ViewEasyMode.
     public bool TriggerEasyMode { get; set; }
+
+    // Last-used Function Detail editor mode (false = Source, true = Easy). Same hybrid
+    // role as ProcedureEasyMode/ViewEasyMode/TriggerEasyMode.
+    public bool FunctionEasyMode { get; set; }
 
     // Whether the SQL editor's results panel is maximized (editor row collapsed).
     // Global layout preference, restored like ResultsPanelHeight.

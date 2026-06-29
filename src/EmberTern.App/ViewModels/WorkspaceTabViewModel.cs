@@ -13,6 +13,7 @@ public enum WorkspaceTabKind
     ViewDetail,
     ProcedureDetail,
     TriggerDetail,
+    FunctionDetail,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -127,6 +128,22 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             TriggerDetail = detail,
         };
 
+    public static WorkspaceTabViewModel CreateFunctionDetail(MainWindowViewModel owner, MetadataObject obj, FunctionDetailTabViewModel detail, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.FunctionDetail,
+            BaseTitle = obj.Name,
+            IsClosable = true,
+            ObjectKind = obj.Kind,
+            ObjectName = obj.Name,
+            DdlText = detail.DdlText,
+            ConnectionProfileId = connectionProfileId,
+            Icon = MetadataNodeViewModel.IconFor(obj.Kind),
+            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
+            FunctionDetail = detail,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -143,6 +160,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public ViewDetailTabViewModel? ViewDetail { get; private init; }
     public ProcedureDetailTabViewModel? ProcedureDetail { get; private init; }
     public TriggerDetailTabViewModel? TriggerDetail { get; private init; }
+    public FunctionDetailTabViewModel? FunctionDetail { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]
@@ -168,6 +186,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.ViewDetail => ViewDetail?.GetUnsavedWork(),
         WorkspaceTabKind.ProcedureDetail => ProcedureDetail?.GetUnsavedWork(),
         WorkspaceTabKind.TriggerDetail => TriggerDetail?.GetUnsavedWork(),
+        WorkspaceTabKind.FunctionDetail => FunctionDetail?.GetUnsavedWork(),
         _ => null,
     };
 
