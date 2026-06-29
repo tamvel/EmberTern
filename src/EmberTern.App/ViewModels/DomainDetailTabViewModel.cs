@@ -24,10 +24,13 @@ namespace EmberTern.App.ViewModels;
 /// Reuse happens at the reader / DDL-generator (<see cref="DdlGenerator"/>) /
 /// dependency-tree (<see cref="TableDetailTabViewModel.BuildDependencyTree"/>) level.
 ///
-/// Editable scope on an EXISTING domain is Default / Check / Description — Firebird's
-/// ALTER DOMAIN supports exactly those (plus type/rename/not-null, kept out of scope).
-/// CHARACTER SET and COLLATION can NEVER be ALTERed (FB3 + FB5: SQL error -104), so
-/// they — and the rest of the type definition — are read-only after creation.
+/// Editable scope on an EXISTING domain mirrors what Firebird's ALTER DOMAIN actually
+/// supports (re-verified on FB 5.0.3): type / length / precision / scale / sub-type
+/// (TYPE), character set for char types (TYPE … CHARACTER SET), NOT NULL (SET/DROP NOT
+/// NULL), DEFAULT, CHECK, name (rename via TO), and description. ONLY the collation is
+/// read-only after create — Firebird has no ALTER syntax for it (SQL error -104). The
+/// "Compile" button assembles the minimum-set of ALTER statements for what changed; a
+/// rename closes + reopens the tab under the new name.
 /// </summary>
 public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
 {
@@ -35,11 +38,12 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
     private readonly FirebirdDdlExecutor? _ddlExecutor;
     private Task? _loadTask;
 
-    // Baseline (last-loaded / last-saved) values, used by Save to emit the minimum
-    // set of ALTER DOMAIN / COMMENT statements for what actually changed.
-    private string? _baselineDefault;
-    private string? _baselineCheck;
-    private string _baselineDescription = string.Empty;
+    // Baseline (last-loaded / last-saved) snapshot, used by Compile to emit the
+    // minimum set of ALTER DOMAIN / COMMENT statements for what actually changed.
+    // Null until the first load (a unit-constructed VM with no reader) — in that
+    // case type/not-null/rename diffs are skipped (we can't know the prior shape),
+    // and default/check/description compare against empty.
+    private DomainInfo? _baselineInfo;
 
     public DomainDetailTabViewModel(string domainName)
         : this(domainName, null, null)
@@ -65,8 +69,8 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
     public string DomainName { get; }
 
     /// <summary>True for a not-yet-created domain (the New Domain flow). The Used By /
-    /// DDL tabs stay empty until the first successful Save, after which the owner
-    /// reopens the real domain. Save in this mode raises <see cref="DomainCreated"/>.</summary>
+    /// DDL tabs stay empty until the first successful Compile, after which the owner
+    /// reopens the real domain. Compile in this mode raises <see cref="DomainCreated"/>.</summary>
     public bool IsNew { get; init; }
 
     // Reuse the field editor's basic-type list + the charset catalog — no second
@@ -114,9 +118,11 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
         RefreshDdl();
     }
 
-    // Type-definition fields. Editable only when creating (IsDefinitionEditable);
-    // read-only on an existing domain (Firebird can't ALTER charset/collation, and
-    // the rest is out of EmberTern's edit scope).
+    // Type-definition fields. On an EXISTING domain these map to ALTER DOMAIN:
+    //   type/length/precision/scale/sub-type → TYPE … ; charset → TYPE … CHARACTER SET
+    //   (char types only); NOT NULL → SET/DROP NOT NULL. All editable (Firebird
+    //   supports them — verified on FB5). Collation is the ONE exception: no ALTER
+    //   syntax exists, so it's editable only while creating.
     [ObservableProperty] private string _dataType = "VARCHAR";
     [ObservableProperty] private decimal? _length;
     [ObservableProperty] private decimal? _precision;
@@ -126,7 +132,16 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
     [ObservableProperty] private string? _collation;
     [ObservableProperty] private bool _notNull;
 
-    partial void OnDataTypeChanged(string value) { MarkDirty(); RefreshDdl(); }
+    partial void OnDataTypeChanged(string value)
+    {
+        MarkDirty();
+        RefreshDdl();
+        // Charset/collation editability depends on whether the selected type is a
+        // character type.
+        OnPropertyChanged(nameof(IsCharTypeSelected));
+        OnPropertyChanged(nameof(IsCharsetEditable));
+        OnPropertyChanged(nameof(IsCollationEditable));
+    }
     partial void OnLengthChanged(decimal? value) { MarkDirty(); RefreshDdl(); }
     partial void OnPrecisionChanged(decimal? value) { MarkDirty(); RefreshDdl(); }
     partial void OnScaleChanged(decimal? value) { MarkDirty(); RefreshDdl(); }
@@ -157,7 +172,7 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
 
     /// <summary>Read-only reconstructed DDL (CREATE DOMAIN …) — the DDL tab. Built
     /// from the live form state via <see cref="DdlGenerator.BuildCreateDomain"/>, so
-    /// it mirrors exactly what Save (in the New flow) would execute.</summary>
+    /// it mirrors exactly what Compile (in the New flow) would execute.</summary>
     [ObservableProperty]
     private string _ddlText = string.Empty;
 
@@ -170,9 +185,29 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
     [ObservableProperty]
     private string? _errorMessage;
 
-    /// <summary>Type-definition fields (type/length/…/charset/collation/not-null)
-    /// are editable only for a NEW domain.</summary>
-    public bool IsDefinitionEditable => IsNew;
+    /// <summary>Type / length / precision / scale / sub-type / NOT NULL are editable on
+    /// BOTH new and existing domains (existing → ALTER DOMAIN TYPE / SET-DROP NOT NULL).</summary>
+    public bool IsTypeEditable => true;
+
+    /// <summary>True when the selected data type is a character type (CHAR / VARCHAR /
+    /// CSTRING) — gates the charset/collation fields.</summary>
+    public bool IsCharTypeSelected
+    {
+        get
+        {
+            var t = (DataType ?? string.Empty).Trim().ToUpperInvariant();
+            return t is "CHAR" or "VARCHAR" or "CSTRING";
+        }
+    }
+
+    /// <summary>Character set is editable for char types on both new and existing
+    /// domains (existing → ALTER DOMAIN TYPE … CHARACTER SET …, verified on FB5).</summary>
+    public bool IsCharsetEditable => IsCharTypeSelected;
+
+    /// <summary>Collation is settable only at CREATE (char types). Firebird has NO
+    /// ALTER syntax for a domain's collation (SQL error -104), so it's read-only on an
+    /// existing domain.</summary>
+    public bool IsCollationEditable => IsNew && IsCharTypeSelected;
 
     // ─── Unsaved-work (WorkGuard) ──────────────────────────────────────────
 
@@ -207,25 +242,31 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
     private Task<bool> RequestConfirmAsync(ConfirmRequest request)
         => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
 
-    // ─── Save ───────────────────────────────────────────────────────────────
+    // ─── Compile ──────────────────────────────────────────────────────────────
 
-    /// <summary>Raised after a successful Save in <see cref="IsNew"/> mode, with the
+    /// <summary>Raised after a successful Compile in <see cref="IsNew"/> mode, with the
     /// created domain's name. The owner refreshes the tree, closes the New tab, and
     /// reopens the real domain.</summary>
     public event Action<string?>? DomainCreated;
 
-    public bool CanSave => _ddlExecutor is not null;
+    /// <summary>Raised after an EXISTING domain is renamed (ALTER DOMAIN … TO …), with
+    /// the new name. The owner refreshes the tree, closes this tab, and reopens the
+    /// domain under its new name (the tab is keyed on the old name, now gone).</summary>
+    public event Action<string>? RenameReopenRequested;
 
-    [RelayCommand(CanExecute = nameof(CanSave))]
-    private Task Save() => ExecuteSaveAsync();
+    public bool CanCompile => _ddlExecutor is not null;
+
+    [RelayCommand(CanExecute = nameof(CanCompile))]
+    private Task Compile() => ExecuteCompileAsync();
 
     /// <summary>
     /// Builds the DDL for the current form vs. the loaded baseline and runs it.
     /// New domain → CREATE DOMAIN (+ COMMENT). Existing → the minimum set of
-    /// ALTER DOMAIN (default / check) + COMMENT statements (empty → no-op). Runs
-    /// through <see cref="FirebirdDdlExecutor"/> (autonomous, auto-committed).
+    /// ALTER DOMAIN statements (type / not-null / default / check / rename) + COMMENT
+    /// (empty → no-op). Runs through <see cref="FirebirdDdlExecutor"/> (autonomous,
+    /// auto-committed). A rename closes + reopens the tab under the new name.
     /// </summary>
-    public async Task ExecuteSaveAsync(CancellationToken cancellationToken = default)
+    public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {
         if (_ddlExecutor is null) return;
         ErrorMessage = null;
@@ -233,7 +274,7 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
         string sql;
         try
         {
-            sql = BuildSaveSql();
+            sql = BuildCompileSql();
         }
         catch (ArgumentException ex)
         {
@@ -248,12 +289,12 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.DomainSaveFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.DomainCompileFailedFormat, ex.Message);
             return;
         }
         catch (InvalidOperationException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.DomainSaveFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.DomainCompileFailedFormat, ex.Message);
             return;
         }
 
@@ -263,14 +304,23 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
             return;
         }
 
-        // Existing domain: re-read so values + DDL + baselines refresh and dirty clears.
+        // Existing domain. A rename (ALTER DOMAIN … TO …) changes the object's key, so
+        // the owner must reopen the tab under the new name; otherwise just re-read.
+        var newName = (EditableName ?? string.Empty).Trim();
+        if (newName.Length > 0 && !string.Equals(newName, DomainName, StringComparison.Ordinal))
+        {
+            RenameReopenRequested?.Invoke(newName);
+            return;
+        }
+
+        // Re-read so values + DDL + baseline refresh and dirty clears.
         await RefreshAsync(cancellationToken).ConfigureAwait(true);
     }
 
-    /// <summary>Builds the Save DDL. Pure + internal so tests can assert the shape
+    /// <summary>Builds the Compile DDL. Pure + internal so tests can assert the shape
     /// without a database. Returns an empty string when an existing domain has no
     /// changes (no-op).</summary>
-    internal string BuildSaveSql()
+    internal string BuildCompileSql()
     {
         var statements = new List<string>();
         if (IsNew)
@@ -284,12 +334,33 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
         }
         else
         {
-            var name = DomainName;
+            var name = DomainName; // all non-rename ALTERs reference the existing name
+
+            // Type / charset (TYPE …) and NOT NULL diffs need a loaded baseline — a
+            // unit-constructed VM (no reader) skips them rather than fabricate a change.
+            if (_baselineInfo is not null)
+            {
+                var current = BuildCurrentDomainInfo();
+                if (!string.Equals(
+                        DdlGenerator.ComposeDomainTypeWithCharset(current),
+                        DdlGenerator.ComposeDomainTypeWithCharset(_baselineInfo),
+                        StringComparison.Ordinal))
+                {
+                    statements.Add(DdlGenerator.BuildAlterDomainType(name, current));
+                }
+
+                if (NotNull != _baselineInfo.NotNull)
+                {
+                    statements.Add(NotNull
+                        ? DdlGenerator.BuildAlterDomainSetNotNull(name)
+                        : DdlGenerator.BuildAlterDomainDropNotNull(name));
+                }
+            }
 
             // Default: SET DEFAULT both adds and replaces; DROP DEFAULT only when we
             // had one and the user cleared it.
             var newDefault = (DefaultValue ?? string.Empty).Trim();
-            var oldDefault = (_baselineDefault ?? string.Empty).Trim();
+            var oldDefault = (_baselineInfo?.DefaultValue ?? string.Empty).Trim();
             if (!string.Equals(newDefault, oldDefault, StringComparison.Ordinal))
             {
                 statements.Add(newDefault.Length == 0
@@ -300,7 +371,7 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
             // Check: a domain has at most one CHECK. Change = DROP CONSTRAINT (if one
             // existed) then ADD CHECK (if a new one is supplied).
             var newCheck = (CheckConstraint ?? string.Empty).Trim();
-            var oldCheck = (_baselineCheck ?? string.Empty).Trim();
+            var oldCheck = (_baselineInfo?.CheckConstraint ?? string.Empty).Trim();
             if (!string.Equals(newCheck, oldCheck, StringComparison.Ordinal))
             {
                 if (oldCheck.Length > 0) statements.Add(DdlGenerator.BuildAlterDomainDropConstraint(name));
@@ -309,9 +380,20 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
 
             // Description.
             var desc = EditableDescription ?? string.Empty;
-            if (!string.Equals(desc, _baselineDescription, StringComparison.Ordinal))
+            if (!string.Equals(desc, _baselineInfo?.Description ?? string.Empty, StringComparison.Ordinal))
             {
                 statements.Add(DdlGenerator.BuildCommentDomain(name, string.IsNullOrWhiteSpace(desc) ? null : desc));
+            }
+
+            // Rename LAST — every statement above references the old name; the rename
+            // changes it (and triggers the tab reopen).
+            if (_baselineInfo is not null)
+            {
+                var newName = (EditableName ?? string.Empty).Trim();
+                if (newName.Length > 0 && !string.Equals(newName, DomainName, StringComparison.Ordinal))
+                {
+                    statements.Add(DdlGenerator.BuildAlterDomainRename(DomainName, newName));
+                }
             }
         }
 
@@ -319,10 +401,10 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
     }
 
     // Snapshots the live form into a DomainInfo — for the New-flow CREATE and the
-    // DDL preview. Single source so the DDL tab matches what Save executes.
+    // DDL preview. Single source so the DDL tab matches what Compile executes.
     private DomainInfo BuildCurrentDomainInfo() => new()
     {
-        Name = (IsNew ? EditableName : DomainName).Trim(),
+        Name = (string.IsNullOrWhiteSpace(EditableName) ? DomainName : EditableName).Trim(),
         DataType = DataType,
         Length = AsInt(Length),
         Precision = AsInt(Precision),
@@ -418,22 +500,7 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
             await SafeLoadAsync(async () =>
             {
                 var info = await _reader.GetDomainInfoAsync(DomainName, cancellationToken).ConfigureAwait(true);
-                EditableName = info.Name;
-                DataType = info.DataType;
-                Length = info.Length;
-                Precision = info.Precision;
-                Scale = info.Scale;
-                SubType = info.SubType;
-                CharacterSet = info.CharacterSet;
-                Collation = info.Collation;
-                NotNull = info.NotNull;
-                DefaultValue = info.DefaultValue;
-                CheckConstraint = info.CheckConstraint;
-                Description = info.Description;
-                _baselineDefault = info.DefaultValue;
-                _baselineCheck = info.CheckConstraint;
-                _baselineDescription = info.Description;
-                DdlText = DdlGenerator.BuildCreateDomain(info);
+                ApplyLoadedInfo(info);
             });
 
             await SafeLoadAsync(async () =>
@@ -461,5 +528,40 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
         {
             if (string.IsNullOrEmpty(ErrorMessage)) ErrorMessage = ex.Message;
         }
+    }
+
+    // Mirrors a loaded DomainInfo into the form fields, records it as the baseline
+    // (so Compile diffs against it), rebuilds the DDL preview, and refreshes the
+    // charset/collation editability gates. Callers must wrap in _suppressDirty.
+    private void ApplyLoadedInfo(DomainInfo info)
+    {
+        EditableName = info.Name;
+        DataType = info.DataType;
+        Length = info.Length;
+        Precision = info.Precision;
+        Scale = info.Scale;
+        SubType = info.SubType;
+        CharacterSet = info.CharacterSet;
+        Collation = info.Collation;
+        NotNull = info.NotNull;
+        DefaultValue = info.DefaultValue;
+        CheckConstraint = info.CheckConstraint;
+        Description = info.Description;
+        _baselineInfo = info;
+        DdlText = DdlGenerator.BuildCreateDomain(info);
+        OnPropertyChanged(nameof(IsCharTypeSelected));
+        OnPropertyChanged(nameof(IsCharsetEditable));
+        OnPropertyChanged(nameof(IsCollationEditable));
+    }
+
+    /// <summary>Test seam: seed a loaded baseline without a live database (LoadAsync
+    /// needs a real reader). Applies <paramref name="info"/> to the form + baseline as
+    /// a load would, so a subsequent field edit yields the right ALTER diff from
+    /// <see cref="BuildCompileSql"/>.</summary>
+    internal void SeedBaselineForTest(DomainInfo info)
+    {
+        _suppressDirty = true;
+        try { ApplyLoadedInfo(info); }
+        finally { _suppressDirty = false; ClearDirty(); }
     }
 }

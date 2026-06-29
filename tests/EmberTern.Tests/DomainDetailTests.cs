@@ -39,7 +39,7 @@ public class DomainDetailTests
         using var harness = new Harness();
         var vm = harness.Main.CreateDomainDetail(new MetadataObject("D_ADRES", MetadataObjectKind.Domain));
 
-        Assert.True(vm.CanSave);          // DDL executor wired
+        Assert.True(vm.CanCompile);          // DDL executor wired
         Assert.True(vm.CanDelete);        // existing domain
         Assert.Equal("D_ADRES", vm.DomainName);
         Assert.False(vm.IsNew);
@@ -249,7 +249,7 @@ public class DomainDetailTests
             DataType = "VARCHAR",
             Length = 50,
         };
-        Assert.Equal("CREATE DOMAIN \"D_NEW\" AS VARCHAR(50)", vm.BuildSaveSql());
+        Assert.Equal("CREATE DOMAIN \"D_NEW\" AS VARCHAR(50)", vm.BuildCompileSql());
     }
 
     [Fact]
@@ -262,7 +262,7 @@ public class DomainDetailTests
             DataType = "INTEGER",
             EditableDescription = "an id",
         };
-        var sql = vm.BuildSaveSql();
+        var sql = vm.BuildCompileSql();
         Assert.Contains("CREATE DOMAIN \"D_NEW\" AS INTEGER", sql);
         Assert.Contains("COMMENT ON DOMAIN \"D_NEW\" IS 'an id'", sql);
     }
@@ -271,38 +271,59 @@ public class DomainDetailTests
     public void BuildSaveSql_Existing_NoChange_IsEmpty()
     {
         var vm = new DomainDetailTabViewModel("D_X");
-        Assert.Equal(string.Empty, vm.BuildSaveSql());
+        Assert.Equal(string.Empty, vm.BuildCompileSql());
     }
 
     [Fact]
     public void BuildSaveSql_Existing_SetDefault()
     {
         var vm = new DomainDetailTabViewModel("D_X") { DefaultValue = "0" };
-        Assert.Equal("ALTER DOMAIN \"D_X\" SET DEFAULT 0", vm.BuildSaveSql());
+        Assert.Equal("ALTER DOMAIN \"D_X\" SET DEFAULT 0", vm.BuildCompileSql());
     }
 
     [Fact]
     public void BuildSaveSql_Existing_AddCheck()
     {
         var vm = new DomainDetailTabViewModel("D_X") { CheckConstraint = "VALUE > 0" };
-        Assert.Equal("ALTER DOMAIN \"D_X\" ADD CHECK (VALUE > 0)", vm.BuildSaveSql());
+        Assert.Equal("ALTER DOMAIN \"D_X\" ADD CHECK (VALUE > 0)", vm.BuildCompileSql());
     }
 
     [Fact]
     public void BuildSaveSql_Existing_DescriptionChange_EmitsComment()
     {
         var vm = new DomainDetailTabViewModel("D_X") { EditableDescription = "hi" };
-        Assert.Equal("COMMENT ON DOMAIN \"D_X\" IS 'hi'", vm.BuildSaveSql());
+        Assert.Equal("COMMENT ON DOMAIN \"D_X\" IS 'hi'", vm.BuildCompileSql());
     }
 
     [Fact]
-    public void Editability_NewVsExisting()
+    public void Editability_TypeAndNotNull_EditableOnExisting()
     {
-        var fresh = new DomainDetailTabViewModel("D") { IsNew = true };
-        Assert.True(fresh.IsDefinitionEditable);    // type fields editable when creating
-
+        // Type fields + NOT NULL map to ALTER DOMAIN TYPE / SET-DROP NOT NULL — editable
+        // on an existing domain (verified on FB5), not just when creating.
         var existing = new DomainDetailTabViewModel("D_X");
-        Assert.False(existing.IsDefinitionEditable); // read-only after create
+        Assert.True(existing.IsTypeEditable);
+    }
+
+    [Fact]
+    public void Editability_Charset_OnlyForCharTypes()
+    {
+        var charDomain = new DomainDetailTabViewModel("D_X") { DataType = "VARCHAR" };
+        Assert.True(charDomain.IsCharsetEditable);          // TYPE … CHARACTER SET works
+
+        var numericDomain = new DomainDetailTabViewModel("D_X") { DataType = "INTEGER" };
+        Assert.False(numericDomain.IsCharsetEditable);      // no charset for numerics
+    }
+
+    [Fact]
+    public void Editability_Collation_ReadOnlyOnExisting_EvenForCharType()
+    {
+        // Firebird has NO ALTER syntax for a domain's collation (-104), so collation is
+        // editable only while creating.
+        var existingChar = new DomainDetailTabViewModel("D_X") { DataType = "VARCHAR" };
+        Assert.False(existingChar.IsCollationEditable);
+
+        var freshChar = new DomainDetailTabViewModel("D") { IsNew = true, DataType = "VARCHAR" };
+        Assert.True(freshChar.IsCollationEditable);
     }
 
     // ─── Dirty tracking + gating ──────────────────────────────────────────
@@ -320,7 +341,7 @@ public class DomainDetailTests
     public void NoExecutor_CannotSaveOrDelete()
     {
         var vm = new DomainDetailTabViewModel("D_X");
-        Assert.False(vm.CanSave);
+        Assert.False(vm.CanCompile);
         Assert.False(vm.CanDelete);
     }
 
@@ -328,7 +349,7 @@ public class DomainDetailTests
     public async Task ExecuteSave_NoExecutor_IsNoOp()
     {
         var vm = new DomainDetailTabViewModel("D_X") { DefaultValue = "0" };
-        await vm.ExecuteSaveAsync();
+        await vm.ExecuteCompileAsync();
         Assert.Null(vm.ErrorMessage);
     }
 
@@ -490,6 +511,138 @@ public class DomainDetailTests
         Assert.Equal(1, info.SubType);
         Assert.Null(info.Length);
         Assert.Null(info.Precision);
+    }
+
+    // ─── Unlocked ALTER DOMAIN — DDL generator (verified on FB 5.0.3) ─────────
+
+    [Fact]
+    public void BuildAlterDomainType_EmitsTypeClause()
+        => Assert.Equal("ALTER DOMAIN \"D_X\" TYPE VARCHAR(100)",
+            DdlGenerator.BuildAlterDomainType("D_X", new DomainInfo { Name = "D_X", DataType = "VARCHAR", Length = 100 }));
+
+    [Fact]
+    public void BuildAlterDomainType_CharType_IncludesCharacterSet()
+        => Assert.Equal("ALTER DOMAIN \"D_X\" TYPE VARCHAR(60) CHARACTER SET UTF8",
+            DdlGenerator.BuildAlterDomainType("D_X",
+                new DomainInfo { Name = "D_X", DataType = "VARCHAR", Length = 60, CharacterSet = "UTF8" }));
+
+    [Fact]
+    public void BuildAlterDomainType_NeverEmitsCollate()
+        => Assert.DoesNotContain("COLLATE", DdlGenerator.BuildAlterDomainType("D_X",
+            new DomainInfo { Name = "D_X", DataType = "VARCHAR", Length = 60, CharacterSet = "UTF8", Collation = "UNICODE" }));
+
+    [Fact]
+    public void BuildAlterDomainType_Numeric()
+        => Assert.Equal("ALTER DOMAIN \"D_X\" TYPE NUMERIC(18,4)",
+            DdlGenerator.BuildAlterDomainType("D_X", new DomainInfo { Name = "D_X", DataType = "NUMERIC", Precision = 18, Scale = 4 }));
+
+    [Fact]
+    public void BuildAlterDomainSetNotNull_Emits()
+        => Assert.Equal("ALTER DOMAIN \"D_X\" SET NOT NULL", DdlGenerator.BuildAlterDomainSetNotNull("D_X"));
+
+    [Fact]
+    public void BuildAlterDomainDropNotNull_Emits()
+        => Assert.Equal("ALTER DOMAIN \"D_X\" DROP NOT NULL", DdlGenerator.BuildAlterDomainDropNotNull("D_X"));
+
+    [Fact]
+    public void BuildAlterDomainRename_Emits()
+        => Assert.Equal("ALTER DOMAIN \"D_X\" TO \"D_Y\"", DdlGenerator.BuildAlterDomainRename("D_X", "D_Y"));
+
+    [Fact]
+    public void BuildAlterDomainType_EmptyName_Throws()
+        => Assert.Throws<ArgumentException>(() => DdlGenerator.BuildAlterDomainType("", new DomainInfo { Name = "D" }));
+
+    [Fact]
+    public void BuildAlterDomainRename_EmptyTarget_Throws()
+        => Assert.Throws<ArgumentException>(() => DdlGenerator.BuildAlterDomainRename("D_X", ""));
+
+    // ─── Unlocked ALTER DOMAIN — VM Compile SQL (against a seeded baseline) ───
+
+    [Fact]
+    public void BuildCompileSql_Existing_LengthIncrease_EmitsAlterType()
+    {
+        // The headline case: VARCHAR(50) → VARCHAR(100).
+        var vm = new DomainDetailTabViewModel("D_NAME");
+        vm.SeedBaselineForTest(new DomainInfo { Name = "D_NAME", DataType = "VARCHAR", Length = 50, CharacterSet = "WIN1250" });
+        vm.Length = 100;
+        Assert.Equal("ALTER DOMAIN \"D_NAME\" TYPE VARCHAR(100) CHARACTER SET WIN1250", vm.BuildCompileSql());
+    }
+
+    [Fact]
+    public void BuildCompileSql_Existing_TypeChange_EmitsAlterType()
+    {
+        var vm = new DomainDetailTabViewModel("D_QTY");
+        vm.SeedBaselineForTest(new DomainInfo { Name = "D_QTY", DataType = "INTEGER" });
+        vm.DataType = "BIGINT";
+        Assert.Equal("ALTER DOMAIN \"D_QTY\" TYPE BIGINT", vm.BuildCompileSql());
+    }
+
+    [Fact]
+    public void BuildCompileSql_Existing_CharsetChange_EmitsAlterTypeWithCharset()
+    {
+        var vm = new DomainDetailTabViewModel("D_NAME");
+        vm.SeedBaselineForTest(new DomainInfo { Name = "D_NAME", DataType = "VARCHAR", Length = 60, CharacterSet = "WIN1250" });
+        vm.CharacterSet = "UTF8";
+        Assert.Equal("ALTER DOMAIN \"D_NAME\" TYPE VARCHAR(60) CHARACTER SET UTF8", vm.BuildCompileSql());
+    }
+
+    [Fact]
+    public void BuildCompileSql_Existing_SetNotNull()
+    {
+        var vm = new DomainDetailTabViewModel("D_CODE");
+        vm.SeedBaselineForTest(new DomainInfo { Name = "D_CODE", DataType = "CHAR", Length = 8, NotNull = false });
+        vm.NotNull = true;
+        Assert.Equal("ALTER DOMAIN \"D_CODE\" SET NOT NULL", vm.BuildCompileSql());
+    }
+
+    [Fact]
+    public void BuildCompileSql_Existing_DropNotNull()
+    {
+        var vm = new DomainDetailTabViewModel("D_NAME");
+        vm.SeedBaselineForTest(new DomainInfo { Name = "D_NAME", DataType = "VARCHAR", Length = 60, NotNull = true });
+        vm.NotNull = false;
+        Assert.Equal("ALTER DOMAIN \"D_NAME\" DROP NOT NULL", vm.BuildCompileSql());
+    }
+
+    [Fact]
+    public void BuildCompileSql_Existing_Rename_EmittedLast()
+    {
+        var vm = new DomainDetailTabViewModel("D_BIRTHDATE");
+        vm.SeedBaselineForTest(new DomainInfo { Name = "D_BIRTHDATE", DataType = "DATE" });
+        vm.EditableName = "D_BORNON";
+        var sql = vm.BuildCompileSql();
+        Assert.Equal("ALTER DOMAIN \"D_BIRTHDATE\" TO \"D_BORNON\"", sql);
+    }
+
+    [Fact]
+    public void BuildCompileSql_Existing_TypeChangeAndRename_RenameComesLast()
+    {
+        var vm = new DomainDetailTabViewModel("D_NAME");
+        vm.SeedBaselineForTest(new DomainInfo { Name = "D_NAME", DataType = "VARCHAR", Length = 60, CharacterSet = "WIN1250" });
+        vm.Length = 120;
+        vm.EditableName = "D_FULLNAME";
+        var sql = vm.BuildCompileSql();
+        // The TYPE change references the OLD name; the rename is the final statement.
+        Assert.Contains("ALTER DOMAIN \"D_NAME\" TYPE VARCHAR(120) CHARACTER SET WIN1250", sql);
+        Assert.EndsWith("ALTER DOMAIN \"D_NAME\" TO \"D_FULLNAME\"", sql);
+    }
+
+    [Fact]
+    public void BuildCompileSql_Existing_SeededNoChange_IsEmpty()
+    {
+        var vm = new DomainDetailTabViewModel("D_NAME");
+        vm.SeedBaselineForTest(new DomainInfo { Name = "D_NAME", DataType = "VARCHAR", Length = 60, NotNull = true, DefaultValue = "'x'" });
+        Assert.Equal(string.Empty, vm.BuildCompileSql());
+    }
+
+    [Fact]
+    public void EditingType_MarksDirty()
+    {
+        var vm = new DomainDetailTabViewModel("D_NAME");
+        vm.SeedBaselineForTest(new DomainInfo { Name = "D_NAME", DataType = "VARCHAR", Length = 60 });
+        Assert.False(vm.IsDirty);
+        vm.Length = 100;
+        Assert.True(vm.IsDirty);
     }
 
     private sealed class Harness : IDisposable

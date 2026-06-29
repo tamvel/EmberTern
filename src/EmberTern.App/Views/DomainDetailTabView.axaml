@@ -18,12 +18,12 @@
                 SelectedIndex="{Binding ActiveSubTabIndex, Mode=TwoWay}"
                 Padding="0">
 
-      <!-- Domain — the definition form. Name + the type fields (type / length /
-           precision / scale / sub-type / charset / collation / not null) are
-           read-only on an existing domain (editable only in the New flow, since
-           Firebird can't ALTER charset/collation and the rest is out of scope).
-           Default / Check are editable on both. Save / Revert / Delete live in the
-           main app toolbar. -->
+      <!-- Domain — the definition form. On an existing domain Firebird's ALTER DOMAIN
+           lets us change the type/length/precision/scale/sub-type (TYPE), the charset
+           for char types (TYPE … CHARACTER SET), NOT NULL, Default, Check, and the name
+           (rename). ONLY the collation is read-only after create (no ALTER syntax —
+           editable only in the New flow). Compile / Revert / Delete live in the main
+           app toolbar; Compile assembles the minimum-set of ALTER statements. -->
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DomainDetailTabDomain}">
         <ScrollViewer>
           <Grid ColumnDefinitions="Auto,*" Margin="12" VerticalAlignment="Top"
@@ -33,37 +33,37 @@
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainNameHeader}" />
             <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
                      Text="{Binding EditableName, Mode=TwoWay}"
-                     IsReadOnly="{Binding !IsNew}" FontSize="12" HorizontalAlignment="Left" Width="280" />
+                     FontSize="12" HorizontalAlignment="Left" Width="280" />
 
             <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainDataTypeHeader}" />
             <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                       ItemsSource="{x:Static vm:DomainDetailTabViewModel.AvailableDataTypes}"
                       SelectedItem="{Binding DataType, Mode=TwoWay}"
-                      IsEnabled="{Binding IsDefinitionEditable}" FontSize="12" />
+                      IsEnabled="{Binding IsTypeEditable}" FontSize="12" />
 
             <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainLengthHeader}" />
             <NumericUpDown Grid.Row="2" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
-                           Value="{Binding Length, Mode=TwoWay}" IsEnabled="{Binding IsDefinitionEditable}"
+                           Value="{Binding Length, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
                            Minimum="0" Maximum="32767" Increment="1" FormatString="0" FontSize="12" />
 
             <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainPrecisionHeader}" />
             <NumericUpDown Grid.Row="3" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
-                           Value="{Binding Precision, Mode=TwoWay}" IsEnabled="{Binding IsDefinitionEditable}"
+                           Value="{Binding Precision, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
                            Minimum="0" Maximum="38" Increment="1" FormatString="0" FontSize="12" />
 
             <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainScaleHeader}" />
             <NumericUpDown Grid.Row="4" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
-                           Value="{Binding Scale, Mode=TwoWay}" IsEnabled="{Binding IsDefinitionEditable}"
+                           Value="{Binding Scale, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
                            Minimum="0" Maximum="38" Increment="1" FormatString="0" FontSize="12" />
 
             <TextBlock Grid.Row="5" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainSubTypeHeader}" />
             <NumericUpDown Grid.Row="5" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
-                           Value="{Binding SubType, Mode=TwoWay}" IsEnabled="{Binding IsDefinitionEditable}"
+                           Value="{Binding SubType, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
                            Minimum="0" Maximum="32767" Increment="1" FormatString="0" FontSize="12" />
 
             <TextBlock Grid.Row="6" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
@@ -71,17 +71,16 @@
             <ComboBox Grid.Row="6" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                       ItemsSource="{x:Static vm:DomainDetailTabViewModel.AvailableCharsets}"
                       SelectedItem="{Binding CharacterSet, Mode=TwoWay}"
-                      IsEnabled="{Binding IsDefinitionEditable}" FontSize="12" />
+                      IsEnabled="{Binding IsCharsetEditable}" FontSize="12" />
 
             <TextBlock Grid.Row="7" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainCollationHeader}" />
             <TextBox Grid.Row="7" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                      Text="{Binding Collation, Mode=TwoWay}"
-                     IsReadOnly="{Binding !IsDefinitionEditable}" FontSize="12" />
+                     IsReadOnly="{Binding !IsCollationEditable}" FontSize="12" />
 
             <CheckBox Grid.Row="8" Grid.Column="1" Margin="0,0,0,8"
                       IsChecked="{Binding NotNull, Mode=TwoWay}"
-                      IsEnabled="{Binding IsDefinitionEditable}"
                       Content="{x:Static app:UiStrings.DomainNotNullHeader}" />
 
             <!-- Default + Check are editable on both new and existing domains -->

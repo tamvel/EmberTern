@@ -63,8 +63,8 @@ public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     public string GeneratorName { get; }
 
     /// <summary>True for a not-yet-created generator (the New Generator flow). The
-    /// Dependencies / DDL tabs stay empty until the first successful Save, after
-    /// which the owner reopens the real generator. Save in this mode raises
+    /// Dependencies / DDL tabs stay empty until the first successful Compile, after
+    /// which the owner reopens the real generator. Compile in this mode raises
     /// <see cref="GeneratorCreated"/>.</summary>
     public bool IsNew { get; init; }
 
@@ -186,17 +186,17 @@ public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     private Task<bool> RequestConfirmAsync(ConfirmRequest request)
         => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
 
-    // ─── Save ───────────────────────────────────────────────────────────────
+    // ─── Compile ──────────────────────────────────────────────────────────────
 
-    /// <summary>Raised after a successful Save in <see cref="IsNew"/> mode, with
+    /// <summary>Raised after a successful Compile in <see cref="IsNew"/> mode, with
     /// the created generator's name. The owner refreshes the metadata tree, closes
     /// the New tab, and reopens the real generator.</summary>
     public event Action<string?>? GeneratorCreated;
 
-    public bool CanSave => _ddlExecutor is not null;
+    public bool CanCompile => _ddlExecutor is not null;
 
-    [RelayCommand(CanExecute = nameof(CanSave))]
-    private Task Save() => ExecuteSaveAsync();
+    [RelayCommand(CanExecute = nameof(CanCompile))]
+    private Task Compile() => ExecuteCompileAsync();
 
     /// <summary>
     /// Builds the DDL for the current form state vs. the loaded baseline and runs
@@ -204,7 +204,7 @@ public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     /// of ALTER SEQUENCE / COMMENT statements for what changed (empty → no-op).
     /// Runs through <see cref="FirebirdDdlExecutor"/> (autonomous, auto-committed).
     /// </summary>
-    public async Task ExecuteSaveAsync(CancellationToken cancellationToken = default)
+    public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {
         if (_ddlExecutor is null) return;
         ErrorMessage = null;
@@ -212,7 +212,7 @@ public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
         string sql;
         try
         {
-            sql = BuildSaveSql();
+            sql = BuildCompileSql();
         }
         catch (ArgumentException ex)
         {
@@ -227,12 +227,12 @@ public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.GeneratorSaveFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.GeneratorCompileFailedFormat, ex.Message);
             return;
         }
         catch (InvalidOperationException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.GeneratorSaveFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.GeneratorCompileFailedFormat, ex.Message);
             return;
         }
 
@@ -246,10 +246,10 @@ public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
         await RefreshAsync(cancellationToken).ConfigureAwait(true);
     }
 
-    /// <summary>Builds the Save DDL. Pure + internal so tests can assert the shape
+    /// <summary>Builds the Compile DDL. Pure + internal so tests can assert the shape
     /// without a database. Returns an empty string when an existing generator has
     /// no changes (no-op).</summary>
-    internal string BuildSaveSql()
+    internal string BuildCompileSql()
     {
         var statements = new List<string>();
         if (IsNew)

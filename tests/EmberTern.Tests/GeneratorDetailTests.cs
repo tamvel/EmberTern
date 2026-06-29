@@ -38,7 +38,7 @@ public class GeneratorDetailTests
         using var harness = new Harness();
         var vm = harness.Main.CreateGeneratorDetail(new MetadataObject("GEN_X", MetadataObjectKind.Generator));
 
-        Assert.True(vm.CanSave);          // DDL executor wired
+        Assert.True(vm.CanCompile);          // DDL executor wired
         Assert.True(vm.CanDelete);        // existing generator
         Assert.Equal("GEN_X", vm.GeneratorName);
         Assert.False(vm.IsNew);
@@ -191,7 +191,7 @@ public class GeneratorDetailTests
             Increment = 1,
             CurrentValue = 0,
         };
-        Assert.Equal("CREATE SEQUENCE \"GEN_NEW\" START WITH 0;\nSET GENERATOR \"GEN_NEW\" TO 0", vm.BuildSaveSql());
+        Assert.Equal("CREATE SEQUENCE \"GEN_NEW\" START WITH 0;\nSET GENERATOR \"GEN_NEW\" TO 0", vm.BuildCompileSql());
     }
 
     [Fact]
@@ -206,7 +206,7 @@ public class GeneratorDetailTests
             CurrentValue = 0,
             EditableDescription = "counter",
         };
-        var sql = vm.BuildSaveSql();
+        var sql = vm.BuildCompileSql();
         Assert.Contains("CREATE SEQUENCE \"GEN_NEW\" START WITH 0", sql);
         Assert.Contains("SET GENERATOR \"GEN_NEW\" TO 0", sql);
         Assert.Contains("COMMENT ON SEQUENCE \"GEN_NEW\" IS 'counter'", sql);
@@ -227,7 +227,7 @@ public class GeneratorDetailTests
             Increment = 1,
             CurrentValue = 0,
         };
-        var sql = vm.BuildSaveSql();
+        var sql = vm.BuildCompileSql();
         Assert.Equal("CREATE SEQUENCE \"GEN_NEW\" START WITH 10000;\nSET GENERATOR \"GEN_NEW\" TO 10000", sql);
         Assert.DoesNotContain("RESTART", sql);
     }
@@ -243,7 +243,7 @@ public class GeneratorDetailTests
             Increment = 5,
             CurrentValue = 0,
         };
-        Assert.Equal("CREATE SEQUENCE \"GEN_NEW\" START WITH 100 INCREMENT BY 5;\nSET GENERATOR \"GEN_NEW\" TO 100", vm.BuildSaveSql());
+        Assert.Equal("CREATE SEQUENCE \"GEN_NEW\" START WITH 100 INCREMENT BY 5;\nSET GENERATOR \"GEN_NEW\" TO 100", vm.BuildCompileSql());
     }
 
     [Fact]
@@ -255,7 +255,7 @@ public class GeneratorDetailTests
     {
         // Fresh existing VM: properties equal their (default) baselines → no statements.
         var vm = new GeneratorDetailTabViewModel("GEN_X");
-        Assert.Equal(string.Empty, vm.BuildSaveSql());
+        Assert.Equal(string.Empty, vm.BuildCompileSql());
     }
 
     [Fact]
@@ -264,8 +264,8 @@ public class GeneratorDetailTests
         // Existing generator's Current Value edit → version-independent SET GENERATOR
         // (NOT RESTART WITH, which is off-by-one on FB5).
         var vm = new GeneratorDetailTabViewModel("GEN_X") { CurrentValue = 9999 };
-        Assert.Equal("SET GENERATOR \"GEN_X\" TO 9999", vm.BuildSaveSql());
-        Assert.DoesNotContain("RESTART", vm.BuildSaveSql());
+        Assert.Equal("SET GENERATOR \"GEN_X\" TO 9999", vm.BuildCompileSql());
+        Assert.DoesNotContain("RESTART", vm.BuildCompileSql());
     }
 
     [Theory]
@@ -315,7 +315,7 @@ public class GeneratorDetailTests
     public void NoExecutor_CannotSaveOrDelete()
     {
         var vm = new GeneratorDetailTabViewModel("GEN_X");
-        Assert.False(vm.CanSave);
+        Assert.False(vm.CanCompile);
         Assert.False(vm.CanDelete);
     }
 
@@ -323,7 +323,7 @@ public class GeneratorDetailTests
     public async Task ExecuteSave_NoExecutor_IsNoOp()
     {
         var vm = new GeneratorDetailTabViewModel("GEN_X") { CurrentValue = 5 };
-        await vm.ExecuteSaveAsync();
+        await vm.ExecuteCompileAsync();
         Assert.Null(vm.ErrorMessage);
     }
 

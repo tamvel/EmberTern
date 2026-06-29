@@ -486,8 +486,8 @@ internal static class UiStrings
     public const string GeneratorLoadingHint = "Loading generator…";
     public const string GeneratorRefreshCurrentValueTooltip = "Refresh current value (re-read from database)";
     public const string ToolbarNewGeneratorTooltip = "New Generator";
-    public const string GeneratorSaveTooltip = "Save generator";
-    public const string GeneratorSaveFailedFormat = "Save failed: {0}";
+    public const string GeneratorCompileTooltip = "Compile generator (CREATE / ALTER SEQUENCE)";
+    public const string GeneratorCompileFailedFormat = "Compile failed: {0}";
     public const string GeneratorDeleteTooltip = "Delete generator";
     public const string GeneratorDeleteConfirmTitle = "Delete generator";
     public const string GeneratorDeleteConfirmFormat = "Drop generator \"{0}\"? This cannot be undone.";
@@ -513,8 +513,9 @@ internal static class UiStrings
     public const string DomainNotNullHeader = "Not null";
     public const string DomainLoadingHint = "Loading domain…";
     public const string ToolbarNewDomainTooltip = "New Domain";
-    public const string DomainSaveTooltip = "Save domain";
-    public const string DomainSaveFailedFormat = "Save failed: {0}";
+    public const string DomainCompileTooltip = "Compile domain (CREATE / ALTER DOMAIN)";
+    public const string DomainCompileFailedFormat = "Compile failed: {0}";
+    public const string DomainRenamedFormat = "Domain renamed to \"{0}\".";
     public const string DomainDeleteTooltip = "Delete domain";
     public const string DomainDeleteConfirmTitle = "Delete domain";
     public const string DomainDeleteConfirmFormat = "Drop domain \"{0}\"? This cannot be undone.";

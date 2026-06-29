@@ -721,11 +721,11 @@
                       Command="{Binding ActiveFunctionDetail.RevertChangesCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <!-- Generator: Save / Revert / Delete (Save auto-commits via the autonomous
-                   DDL path, so no Commit/Rollback pair is shown for a generator tab). -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.GeneratorSaveTooltip}"
-                      Command="{Binding ActiveGeneratorDetail.SaveCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Save}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+              <!-- Generator: Compile / Revert / Delete (Compile auto-commits via the
+                   autonomous DDL path, so no Commit/Rollback pair is shown for a generator tab). -->
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.GeneratorCompileTooltip}"
+                      Command="{Binding ActiveGeneratorDetail.CompileCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveGeneratorDetail.RevertChangesCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
@@ -735,11 +735,11 @@
                       Command="{Binding ActiveGeneratorDetail.DeleteCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
-              <!-- Domain: Save / Revert / Delete (Save auto-commits via the autonomous
-                   DDL path, so no Commit/Rollback pair is shown for a domain tab). -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.DomainSaveTooltip}"
-                      Command="{Binding ActiveDomainDetail.SaveCommand}" IsVisible="{Binding IsDomainDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Save}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+              <!-- Domain: Compile / Revert / Delete (Compile auto-commits via the
+                   autonomous DDL path, so no Commit/Rollback pair is shown for a domain tab). -->
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.DomainCompileTooltip}"
+                      Command="{Binding ActiveDomainDetail.CompileCommand}" IsVisible="{Binding IsDomainDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveDomainDetail.RevertChangesCommand}" IsVisible="{Binding IsDomainDetailTabActive}">

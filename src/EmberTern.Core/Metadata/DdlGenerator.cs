@@ -1198,12 +1198,20 @@ public static class DdlGenerator
 
     // ─── Domains ────────────────────────────────────────────────────────────
     //
-    // Firebird ALTER DOMAIN (verified on FB3 + FB5):
-    //   SUPPORTED     — SET/DROP DEFAULT, ADD CHECK, DROP CONSTRAINT (the single
-    //                   check), SET/DROP NOT NULL (FB3+), TYPE <t>, TO <name>.
-    //   NOT SUPPORTED — changing CHARACTER SET or COLLATION (no syntax → -104).
-    // EmberTern edits only DEFAULT / CHECK / description on an existing domain;
-    // everything else is set at CREATE time and read-only afterward.
+    // Firebird ALTER DOMAIN (re-verified against the lab DB on FB 5.0.3, 2026-06-29):
+    //   SUPPORTED     — SET/DROP DEFAULT; ADD CHECK / DROP CONSTRAINT (the single
+    //                   check); SET/DROP NOT NULL (FB3+); TYPE <t>; TYPE <t> CHARACTER
+    //                   SET <cs> (char types — the charset CAN be changed this way);
+    //                   TO <name> (rename). Firebird rejects data-unsafe TYPE changes
+    //                   (narrowing a length, a type used by an index/constraint)
+    //                   server-side, so EmberTern lets those surface as errors.
+    //   NOT SUPPORTED — COLLATE in ANY ALTER form (only at CREATE) → -104; a bare
+    //                   SET CHARACTER SET (only the TYPE … CHARACTER SET form works).
+    // EmberTern therefore edits type / length / precision / scale / sub-type / charset
+    // (char) / NOT NULL / DEFAULT / CHECK / name / description on an existing domain;
+    // ONLY the collation is read-only after create (no ALTER syntax exists for it).
+    // NOTE: this corrects the earlier (overly-restrictive) gotcha #148, which assumed
+    // charset could never be ALTERed — the TYPE … CHARACTER SET form does change it.
 
     /// <summary>Composes the SQL type for a domain from its structured parts —
     /// <c>VARCHAR(50)</c>, <c>NUMERIC(15,2)</c>, <c>BLOB SUB_TYPE 1</c>, or a bare
@@ -1233,6 +1241,22 @@ public static class DdlGenerator
     {
         var t = (dataType ?? string.Empty).Trim().ToUpperInvariant();
         return t is "CHAR" or "VARCHAR" or "CSTRING";
+    }
+
+    /// <summary>Composes the domain's SQL type plus its <c>CHARACTER SET</c> clause
+    /// (char types only, skipping <c>NONE</c>) — the form used both after <c>AS</c> in
+    /// CREATE and after <c>TYPE</c> in <c>ALTER DOMAIN … TYPE … CHARACTER SET …</c>.
+    /// Never appends COLLATE (Firebird rejects it in ALTER).</summary>
+    public static string ComposeDomainTypeWithCharset(DomainInfo d)
+    {
+        var type = ComposeDomainType(d);
+        if (IsCharType(d.DataType)
+            && !string.IsNullOrWhiteSpace(d.CharacterSet)
+            && !string.Equals(d.CharacterSet!.Trim(), "NONE", StringComparison.OrdinalIgnoreCase))
+        {
+            type += " CHARACTER SET " + d.CharacterSet.Trim();
+        }
+        return type;
     }
 
     /// <summary>
@@ -1315,6 +1339,48 @@ public static class DdlGenerator
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Domain name is required.", nameof(name));
         return $"ALTER DOMAIN {Quote(name.Trim())} DROP CONSTRAINT";
+    }
+
+    /// <summary><c>ALTER DOMAIN "N" TYPE &lt;type&gt;[ CHARACTER SET cs]</c>. Verified on
+    /// FB 5.0.3: TYPE changes the domain's data type / length / precision / scale and —
+    /// for char types — the <c>CHARACTER SET</c>. Firebird rejects data-unsafe changes
+    /// (narrowing a length, a type used by an index/constraint) server-side. COLLATE is
+    /// never emitted — Firebird rejects it in ALTER (only valid at CREATE).</summary>
+    public static string BuildAlterDomainType(string name, DomainInfo target)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Domain name is required.", nameof(name));
+        if (target is null) throw new ArgumentNullException(nameof(target));
+        return $"ALTER DOMAIN {Quote(name.Trim())} TYPE {ComposeDomainTypeWithCharset(target)}";
+    }
+
+    /// <summary><c>ALTER DOMAIN "N" SET NOT NULL</c> (FB3+). Firebird rejects this if a
+    /// column using the domain already holds NULLs.</summary>
+    public static string BuildAlterDomainSetNotNull(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Domain name is required.", nameof(name));
+        return $"ALTER DOMAIN {Quote(name.Trim())} SET NOT NULL";
+    }
+
+    /// <summary><c>ALTER DOMAIN "N" DROP NOT NULL</c> (FB3+).</summary>
+    public static string BuildAlterDomainDropNotNull(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Domain name is required.", nameof(name));
+        return $"ALTER DOMAIN {Quote(name.Trim())} DROP NOT NULL";
+    }
+
+    /// <summary><c>ALTER DOMAIN "OLD" TO "NEW"</c> — renames the domain. The caller must
+    /// emit this LAST (after any other ALTERs, which reference the old name) and then
+    /// reopen the editor under the new name.</summary>
+    public static string BuildAlterDomainRename(string oldName, string newName)
+    {
+        if (string.IsNullOrWhiteSpace(oldName))
+            throw new ArgumentException("Domain name is required.", nameof(oldName));
+        if (string.IsNullOrWhiteSpace(newName))
+            throw new ArgumentException("New domain name is required.", nameof(newName));
+        return $"ALTER DOMAIN {Quote(oldName.Trim())} TO {Quote(newName.Trim())}";
     }
 
     /// <summary><c>COMMENT ON DOMAIN "N" IS …</c>. Pass null/whitespace to clear

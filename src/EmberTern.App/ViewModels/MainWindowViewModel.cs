@@ -2678,7 +2678,30 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.DeleteRequested += OnDomainDeleteRequested;
+        detail.RenameReopenRequested += newName => OnDomainRenamed(detail, newName);
         return detail;
+    }
+
+    // ALTER DOMAIN … TO … renames the object, so the tab (keyed on the old name) must
+    // close and reopen under the new name — same shape as the New-domain reopen.
+    private async void OnDomainRenamed(DomainDetailTabViewModel detail, string newName)
+    {
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.DomainRenamedFormat, newName));
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.DomainDetail && ReferenceEquals(t.DomainDetail, detail))
+            {
+                CloseTab(t);
+                break;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(newName))
+        {
+            OnOpenDdlRequested(new MetadataObject(newName, MetadataObjectKind.Domain));
+        }
     }
 
     private async Task OnDomainDeleteRequested(DomainDetailTabViewModel detail)
