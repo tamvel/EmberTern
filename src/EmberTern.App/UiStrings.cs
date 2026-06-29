@@ -95,6 +95,8 @@ internal static class UiStrings
     public const string UnsavedModifiedProcedureFormat = "Procedure {0} — uncompiled changes";
     public const string UnsavedNewTriggerFormat = "New trigger (not yet created) — {0}";
     public const string UnsavedModifiedTriggerFormat = "Trigger {0} — uncompiled changes";
+    public const string UnsavedNewFunctionFormat = "New function (not yet created) — {0}";
+    public const string UnsavedModifiedFunctionFormat = "Function {0} — uncompiled changes";
     public const string UnsavedPendingStructureFormat = "Table {0} — uncompiled structural changes";
     public const string UnsavedTransactionDataFormat = "Data transaction — {0} pending statement(s)";
     public const string UnsavedTransactionMetadataFormat = "Metadata transaction — {0} pending statement(s)";
@@ -516,6 +518,31 @@ internal static class UiStrings
     public const string ProcedureSnippetSubprogram = "DECLARE PROCEDURE NEW_PROCEDURE\nAS\nBEGIN\n    /* body */\nEND";
     public const string ProcedureSnippetFunction = "DECLARE FUNCTION NEW_FUNCTION\nRETURNS INTEGER\nAS\nBEGIN\n    /* body */\n    RETURN 0;\nEND";
     public const string ProcedureLocalsSourceEmptyHint = "Select an item to edit its source.";
+
+    // ─── Function Detail ────────────────────────────────────────────────────
+    // Reuses the Procedure strings for the shared surface (mode toggle, Variables/
+    // Cursors/Subprograms headers, Comment/Uncomment, exec-info, snippets, Dependencies
+    // / DDL tab labels). Only the function-specific differences live here.
+    public const string FunctionDetailArgumentsFormat = "Arguments ({0})";
+    public const string FunctionDetailTabResult = "Result";            // Easy-mode return-type metadata
+    public const string FunctionDetailExecuteResultTab = "Execute Result"; // runtime execution output
+    public const string FunctionDetailReturnTypeLabel = "Return type";
+    public const string FunctionDetailDeterministicLabel = "Deterministic";
+    public const string FunctionDetailLoadingHint = "Loading function…";
+    public const string FunctionCompileTooltip = "Compile function (CREATE OR ALTER FUNCTION)";
+    public const string FunctionCompileFailedFormat = "Compile failed: {0}";
+    public const string FunctionExecuteTooltip = "Execute function";
+    public const string FunctionExecutedViaDataProfile = "Executed function via Data profile.";
+    public const string FunctionResultRequiredNotice = "A function must declare a return type (Result).";
+    public const string FunctionParseFailedNotice =
+        "Couldn't parse the source into structured form — Easy mode is showing the last loaded state. Edit in Source mode, or fix the header.";
+    public const string ToolbarNewFunctionTooltip = "New Function";
+    public const string NewFunctionTabDefaultTitle = "New Function";
+    public const string NewFunctionExecutedFormat = "Function \"{0}\" created.";
+    public const string FunctionArgumentAddTooltip = "Add argument";
+    public const string FunctionArgumentDeleteTooltip = "Delete argument";
+    public const string FunctionArgumentMoveUpTooltip = "Move argument up";
+    public const string FunctionArgumentMoveDownTooltip = "Move argument down";
 
     // New-subprogram kind prompt (Procedure / Function).
     public const string SubprogramKindDialogTitle = "New Subprogram";

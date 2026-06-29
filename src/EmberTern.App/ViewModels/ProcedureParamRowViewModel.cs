@@ -15,7 +15,7 @@ namespace EmberTern.App.ViewModels;
 public sealed class ProcedureParamRowViewModel : ProcedureFieldRowBase
 {
     public ProcedureParamRowViewModel() : base(null) { }
-    public ProcedureParamRowViewModel(ProcedureDetailTabViewModel? owner) : base(owner) { }
+    public ProcedureParamRowViewModel(IFieldRowOwner? owner) : base(owner) { }
 
     /// <summary>True for an output parameter — the grid hides the Default column and
     /// reassembly omits any default.</summary>
@@ -29,7 +29,7 @@ public sealed class ProcedureParamRowViewModel : ProcedureFieldRowBase
         DefaultValue = IsOutput || string.IsNullOrWhiteSpace(DefaultValue) ? null : DefaultValue.Trim(),
     };
 
-    public static ProcedureParamRowViewModel From(ProcedureParameter p, ProcedureDetailTabViewModel? owner = null, bool isOutput = false)
+    public static ProcedureParamRowViewModel From(ProcedureParameter p, IFieldRowOwner? owner = null, bool isOutput = false)
     {
         var row = new ProcedureParamRowViewModel(owner)
         {
@@ -42,7 +42,7 @@ public sealed class ProcedureParamRowViewModel : ProcedureFieldRowBase
         return row;
     }
 
-    public static ProcedureParamRowViewModel From(ProcedureParameterInfo p, ProcedureDetailTabViewModel? owner = null, bool isOutput = false)
+    public static ProcedureParamRowViewModel From(ProcedureParameterInfo p, IFieldRowOwner? owner = null, bool isOutput = false)
     {
         var row = new ProcedureParamRowViewModel(owner)
         {
