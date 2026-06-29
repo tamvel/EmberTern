@@ -196,6 +196,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveFunctionDetail))]
     [NotifyPropertyChangedFor(nameof(IsGeneratorDetailTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveGeneratorDetail))]
+    [NotifyPropertyChangedFor(nameof(IsDomainDetailTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveDomainDetail))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
@@ -254,6 +256,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsGeneratorDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GeneratorDetail };
     public GeneratorDetailTabViewModel? ActiveGeneratorDetail
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GeneratorDetail } t ? t.GeneratorDetail : null;
+    /// <summary>True when the active workspace tab is a Domain Detail tab.</summary>
+    public bool IsDomainDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.DomainDetail };
+    public DomainDetailTabViewModel? ActiveDomainDetail
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.DomainDetail } t ? t.DomainDetail : null;
     // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
     // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
     // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
@@ -309,7 +315,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsFunctionDetailTabActive;
     // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail, TriggerDetail, FunctionDetail);
     // the anchored Query tab is never closable so the button hides when it's active.
-    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail };
+    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail };
 
     // ─── Unified editor toolbar — fixed 5-section model ───────────────────
     //
@@ -1418,6 +1424,23 @@ public partial class MainWindowViewModel : ViewModelBase
                     ActiveSubTabIndex = gd?.ActiveSubTabIndex,
                 });
             }
+            else if (tab.Kind == WorkspaceTabKind.DomainDetail)
+            {
+                // Skip transient New Domain tabs (IsNew) — the domain doesn't exist
+                // yet. Persist real domains as DomainDetail so restore re-opens the
+                // full surface (not DDL-only).
+                if (tab.DomainDetail is { IsNew: true }) continue;
+                var dd = tab.DomainDetail;
+                ws.Tabs.Add(new WorkspaceTab
+                {
+                    Kind = CoreTabKind.DomainDetail,
+                    ObjectName = tab.ObjectName,
+                    ObjectKind = tab.ObjectKind,
+                    ConnectionProfileId = tab.ConnectionProfileId,
+                    DdlText = dd is { } ? dd.DdlText : tab.DdlText,
+                    ActiveSubTabIndex = dd?.ActiveSubTabIndex,
+                });
+            }
             else
             {
                 ws.Tabs.Add(new WorkspaceTab
@@ -1563,6 +1586,18 @@ public partial class MainWindowViewModel : ViewModelBase
                 detail.DdlText = tab.DdlText ?? string.Empty;
                 if (tab.ActiveSubTabIndex is { } gnSub) detail.ActiveSubTabIndex = gnSub;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateGeneratorDetail(this, obj, detail, tab.ConnectionProfileId));
+            }
+            else if (tab.Kind == CoreTabKind.DomainDetail
+                  && tab.ObjectKind is { } domKind
+                  && !string.IsNullOrEmpty(tab.ObjectName))
+            {
+                // Native DomainDetail restore (no DDL-only fallback). Lazy-loads on
+                // first activation via SelectTab. Cached DDL seeds the DDL tab.
+                var obj = new MetadataObject(tab.ObjectName, domKind);
+                var detail = CreateDomainDetail(obj);
+                detail.DdlText = tab.DdlText ?? string.Empty;
+                if (tab.ActiveSubTabIndex is { } dmSub) detail.ActiveSubTabIndex = dmSub;
+                WorkspaceTabs.Add(WorkspaceTabViewModel.CreateDomainDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
 
@@ -2107,6 +2142,56 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public bool CanCreateDomain => _service.IsConnected;
+
+    // New Domain: opens a Domain Detail tab in IsNew mode with an editable name +
+    // default type (VARCHAR). On Save success OnDomainCreated refreshes the tree,
+    // closes this tab and reopens the real domain.
+    [RelayCommand(CanExecute = nameof(CanCreateDomain))]
+    private void NewDomain()
+    {
+        var detail = new DomainDetailTabViewModel(UiStrings.NewDomainTabDefaultTitle, _tableDetailReader, _ddlExecutor)
+        {
+            IsNew = true,
+            EditableName = string.Empty,
+            DataType = "VARCHAR",
+            Length = 50,
+        };
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.DomainCreated += name => OnDomainCreated(detail, name);
+        // Seeding the defaults marked the VM dirty; a brand-new untouched tab must
+        // not prompt on close — clear it so only real edits flip it back.
+        detail.ClearDirty();
+
+        var obj = new MetadataObject(UiStrings.NewDomainTabDefaultTitle, MetadataObjectKind.Domain);
+        var tab = WorkspaceTabViewModel.CreateDomainDetail(this, obj, detail, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+    }
+
+    private async void OnDomainCreated(DomainDetailTabViewModel detail, string? domainName)
+    {
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewDomainExecutedFormat, domainName ?? string.Empty));
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+
+        WorkspaceTabViewModel? newTab = null;
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.DomainDetail && ReferenceEquals(t.DomainDetail, detail))
+            {
+                newTab = t;
+                break;
+            }
+        }
+        if (newTab is not null) CloseTab(newTab);
+
+        if (!string.IsNullOrEmpty(domainName))
+        {
+            OnOpenDdlRequested(new MetadataObject(domainName, MetadataObjectKind.Domain));
+        }
+    }
+
     public bool CanCreateProcedure => _service.IsConnected;
 
     // New Procedure: opens a Procedure Detail tab in IsNew mode with the Editor
@@ -2496,6 +2581,12 @@ public partial class MainWindowViewModel : ViewModelBase
     internal static bool OpensAsGeneratorDetail(MetadataObjectKind kind)
         => kind is MetadataObjectKind.Generator;
 
+    // Domains open in the dedicated Domain Detail surface (the definition form +
+    // Description + Used By + DDL), not a plain DDL tab. Separate predicate — it
+    // builds its own (form-based, no PSQL body) detail VM.
+    internal static bool OpensAsDomainDetail(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.Domain;
+
     // Single construction point for ViewDetail VMs — mirrors CreateTableDetail.
     // A view is read-only data (no inline editing) but its SQL source IS editable,
     // so the DDL executor is wired for Compile while no data editor is.
@@ -2567,6 +2658,52 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var t in WorkspaceTabs)
         {
             if (t.Kind == WorkspaceTabKind.GeneratorDetail && ReferenceEquals(t.GeneratorDetail, detail))
+            {
+                CloseTab(t);
+                break;
+            }
+        }
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+    }
+
+    // Single construction point for DomainDetail VMs — mirrors CreateGeneratorDetail.
+    // The domain form persists via Save (DDL executor wired); there is no Easy mode,
+    // no data editor.
+    internal DomainDetailTabViewModel CreateDomainDetail(MetadataObject obj)
+    {
+        var detail = new DomainDetailTabViewModel(
+            obj.Name,
+            _tableDetailReader,
+            _ddlExecutor);
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.DeleteRequested += OnDomainDeleteRequested;
+        return detail;
+    }
+
+    private async Task OnDomainDeleteRequested(DomainDetailTabViewModel detail)
+    {
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(DdlGenerator.BuildDropDomain(detail.DomainName)).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+
+        // Close the tab for this domain, then refresh the tree so it disappears.
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.DomainDetail && ReferenceEquals(t.DomainDetail, detail))
             {
                 CloseTab(t);
                 break;
@@ -2816,7 +2953,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // TableDetail tabs key on (Kind, Name).
         foreach (var tab in WorkspaceTabs)
         {
-            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail
+            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail
                 && tab.ObjectKind == obj.Kind
                 && string.Equals(tab.ObjectName, obj.Name, StringComparison.Ordinal))
             {
@@ -2919,6 +3056,21 @@ public partial class MainWindowViewModel : ViewModelBase
                 return;
             }
 
+            if (OpensAsDomainDetail(obj.Kind))
+            {
+                var detail = CreateDomainDetail(obj);
+                var newTab = WorkspaceTabViewModel.CreateDomainDetail(this, obj, detail, _service.ActiveProfile?.Id);
+                WorkspaceTabs.Add(newTab);
+                SelectTab(newTab);
+                await detail.EnsureLoadedAsync().ConfigureAwait(true);
+                if (!string.IsNullOrEmpty(detail.ErrorMessage))
+                {
+                    AddMessage(MessageSeverity.Error, detail.ErrorMessage);
+                    SelectedBottomTabIndex = 1;
+                }
+                return;
+            }
+
             var ddl = await _ddlReader.FetchDdlAsync(obj).ConfigureAwait(true);
             var ddlTab = WorkspaceTabViewModel.CreateDdl(this, obj, ddl, _service.ActiveProfile?.Id);
             WorkspaceTabs.Add(ddlTab);
@@ -2983,6 +3135,11 @@ public partial class MainWindowViewModel : ViewModelBase
             && _service.IsConnected)
         {
             _ = generatorDetail.EnsureLoadedAsync();
+        }
+        else if (tab is { Kind: WorkspaceTabKind.DomainDetail, DomainDetail: { } domainDetail }
+            && _service.IsConnected)
+        {
+            _ = domainDetail.EnsureLoadedAsync();
         }
     }
 
@@ -3810,6 +3967,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // New Generator shares the same connection-state gate.
         OnPropertyChanged(nameof(CanCreateGenerator));
         NewGeneratorCommand.NotifyCanExecuteChanged();
+        // New Domain shares the same connection-state gate.
+        OnPropertyChanged(nameof(CanCreateDomain));
+        NewDomainCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

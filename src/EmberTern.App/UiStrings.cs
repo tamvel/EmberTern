@@ -99,6 +99,8 @@ internal static class UiStrings
     public const string UnsavedModifiedFunctionFormat = "Function {0} — uncompiled changes";
     public const string UnsavedNewGeneratorFormat = "New generator (not yet created) — {0}";
     public const string UnsavedModifiedGeneratorFormat = "Generator {0} — unsaved changes";
+    public const string UnsavedNewDomainFormat = "New domain (not yet created) — {0}";
+    public const string UnsavedModifiedDomainFormat = "Domain {0} — unsaved changes";
     public const string UnsavedPendingStructureFormat = "Table {0} — uncompiled structural changes";
     public const string UnsavedTransactionDataFormat = "Data transaction — {0} pending statement(s)";
     public const string UnsavedTransactionMetadataFormat = "Metadata transaction — {0} pending statement(s)";
@@ -492,6 +494,33 @@ internal static class UiStrings
     public const string GeneratorDeleteConfirmYes = "Delete";
     public const string NewGeneratorTabDefaultTitle = "New Generator";
     public const string NewGeneratorExecutedFormat = "Generator \"{0}\" created.";
+
+    // ─── Domain Detail ───────────────────────────────────────────────────────
+    public const string DomainDetailTabDomain = "Domain";
+    public const string DomainDetailTabDescription = "Description";
+    public const string DomainDetailTabUsedBy = "Used By";
+    public const string DomainDetailTabDdl = "DDL";
+    public const string DomainNameHeader = "Name";
+    public const string DomainDataTypeHeader = "Data type";
+    public const string DomainLengthHeader = "Length";
+    public const string DomainPrecisionHeader = "Precision";
+    public const string DomainScaleHeader = "Scale";
+    public const string DomainSubTypeHeader = "Sub type";
+    public const string DomainCharacterSetHeader = "Character set";
+    public const string DomainCollationHeader = "Collation";
+    public const string DomainDefaultHeader = "Default value";
+    public const string DomainCheckHeader = "Check constraint";
+    public const string DomainNotNullHeader = "Not null";
+    public const string DomainLoadingHint = "Loading domain…";
+    public const string ToolbarNewDomainTooltip = "New Domain";
+    public const string DomainSaveTooltip = "Save domain";
+    public const string DomainSaveFailedFormat = "Save failed: {0}";
+    public const string DomainDeleteTooltip = "Delete domain";
+    public const string DomainDeleteConfirmTitle = "Delete domain";
+    public const string DomainDeleteConfirmFormat = "Drop domain \"{0}\"? This cannot be undone.";
+    public const string DomainDeleteConfirmYes = "Delete";
+    public const string NewDomainTabDefaultTitle = "New Domain";
+    public const string NewDomainExecutedFormat = "Domain \"{0}\" created.";
 
     // ─── Procedure Detail (Procedure Detail V1) ─────────────────────────────
     public const string ProcedureNameHeader = "Procedure name";

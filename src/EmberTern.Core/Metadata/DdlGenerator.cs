@@ -1196,6 +1196,142 @@ public static class DdlGenerator
     public static string BuildCommentSequence(string name, string? comment)
         => BuildRelationComment("SEQUENCE", name, comment);
 
+    // ─── Domains ────────────────────────────────────────────────────────────
+    //
+    // Firebird ALTER DOMAIN (verified on FB3 + FB5):
+    //   SUPPORTED     — SET/DROP DEFAULT, ADD CHECK, DROP CONSTRAINT (the single
+    //                   check), SET/DROP NOT NULL (FB3+), TYPE <t>, TO <name>.
+    //   NOT SUPPORTED — changing CHARACTER SET or COLLATION (no syntax → -104).
+    // EmberTern edits only DEFAULT / CHECK / description on an existing domain;
+    // everything else is set at CREATE time and read-only afterward.
+
+    /// <summary>Composes the SQL type for a domain from its structured parts —
+    /// <c>VARCHAR(50)</c>, <c>NUMERIC(15,2)</c>, <c>BLOB SUB_TYPE 1</c>, or a bare
+    /// type name. Mirrors <see cref="FormatTypeOrDomain"/>'s formatting but keyed
+    /// off a <see cref="DomainInfo"/> (and handles any BLOB sub-type, not just 0/1).</summary>
+    internal static string ComposeDomainType(DomainInfo d)
+    {
+        var t = (d.DataType ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.IsNullOrEmpty(t)) t = "INTEGER";
+        return t switch
+        {
+            "CHAR" or "VARCHAR" or "CSTRING"
+                => d.Length is { } l ? $"{t}({l.ToString(CultureInfo.InvariantCulture)})" : t,
+            "NUMERIC" or "DECIMAL"
+                => d.Precision is { } p
+                    ? (d.Scale is { } s
+                        ? $"{t}({p.ToString(CultureInfo.InvariantCulture)},{s.ToString(CultureInfo.InvariantCulture)})"
+                        : $"{t}({p.ToString(CultureInfo.InvariantCulture)})")
+                    : t,
+            "BLOB"
+                => d.SubType is { } st ? $"BLOB SUB_TYPE {st.ToString(CultureInfo.InvariantCulture)}" : "BLOB",
+            _ => t,
+        };
+    }
+
+    private static bool IsCharType(string? dataType)
+    {
+        var t = (dataType ?? string.Empty).Trim().ToUpperInvariant();
+        return t is "CHAR" or "VARCHAR" or "CSTRING";
+    }
+
+    /// <summary>
+    /// Renders a complete, readable <c>CREATE DOMAIN</c> from a <see cref="DomainInfo"/>.
+    /// Clause order is the FB-verified one: <c>AS &lt;type&gt; [CHARACTER SET]</c> on
+    /// the head line, then <c>DEFAULT</c> / <c>NOT NULL</c> / <c>CHECK</c> / <c>COLLATE</c>
+    /// each on its own indented line. CHARACTER SET / COLLATE are emitted only for char
+    /// types. This is the single source of the domain DDL — used both for the DDL tab
+    /// (display) and for the New-domain Save (execution); internal newlines are
+    /// whitespace to the executor so the same string serves both.
+    /// </summary>
+    public static string BuildCreateDomain(DomainInfo domain)
+    {
+        if (domain is null) throw new ArgumentNullException(nameof(domain));
+        if (string.IsNullOrWhiteSpace(domain.Name))
+            throw new ArgumentException("Domain name is required.", nameof(domain));
+
+        var sb = new StringBuilder();
+        sb.Append("CREATE DOMAIN ").Append(Quote(domain.Name.Trim())).Append(" AS ").Append(ComposeDomainType(domain));
+
+        var isChar = IsCharType(domain.DataType);
+        if (isChar && !string.IsNullOrWhiteSpace(domain.CharacterSet)
+            && !string.Equals(domain.CharacterSet!.Trim(), "NONE", StringComparison.OrdinalIgnoreCase))
+        {
+            sb.Append(" CHARACTER SET ").Append(domain.CharacterSet.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(domain.DefaultValue))
+            sb.Append("\n    DEFAULT ").Append(domain.DefaultValue.Trim());
+        if (domain.NotNull)
+            sb.Append("\n    NOT NULL");
+        if (!string.IsNullOrWhiteSpace(domain.CheckConstraint))
+            sb.Append("\n    ").Append(NormalizeCheckClause(domain.CheckConstraint.Trim()));
+        if (isChar && !string.IsNullOrWhiteSpace(domain.Collation)
+            && !string.Equals(domain.Collation!.Trim(), "NONE", StringComparison.OrdinalIgnoreCase))
+        {
+            sb.Append("\n    COLLATE ").Append(domain.Collation.Trim());
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary><c>ALTER DOMAIN "N" SET DEFAULT &lt;value&gt;</c>. SET DEFAULT both
+    /// adds and replaces a default, so the caller uses it for either.</summary>
+    public static string BuildAlterDomainSetDefault(string name, string value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Domain name is required.", nameof(name));
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("Default value is required.", nameof(value));
+        return $"ALTER DOMAIN {Quote(name.Trim())} SET DEFAULT {value.Trim()}";
+    }
+
+    /// <summary><c>ALTER DOMAIN "N" DROP DEFAULT</c>. Errors if the domain has no
+    /// default, so the caller only emits it when a default was present.</summary>
+    public static string BuildAlterDomainDropDefault(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Domain name is required.", nameof(name));
+        return $"ALTER DOMAIN {Quote(name.Trim())} DROP DEFAULT";
+    }
+
+    /// <summary><c>ALTER DOMAIN "N" ADD CHECK (…)</c>. Accepts a bare condition or a
+    /// full <c>CHECK (…)</c> clause (normalized). A domain has at most one check, so
+    /// changing it is DROP CONSTRAINT then ADD CHECK.</summary>
+    public static string BuildAlterDomainAddCheck(string name, string check)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Domain name is required.", nameof(name));
+        if (string.IsNullOrWhiteSpace(check))
+            throw new ArgumentException("Check condition is required.", nameof(check));
+        return $"ALTER DOMAIN {Quote(name.Trim())} ADD {NormalizeCheckClause(check.Trim())}";
+    }
+
+    /// <summary><c>ALTER DOMAIN "N" DROP CONSTRAINT</c> — drops the domain's single
+    /// (unnamed) CHECK constraint. Errors if there is none, so the caller only emits
+    /// it when a check was present.</summary>
+    public static string BuildAlterDomainDropConstraint(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Domain name is required.", nameof(name));
+        return $"ALTER DOMAIN {Quote(name.Trim())} DROP CONSTRAINT";
+    }
+
+    /// <summary><c>COMMENT ON DOMAIN "N" IS …</c>. Pass null/whitespace to clear
+    /// (<c>IS NULL</c>).</summary>
+    public static string BuildCommentDomain(string name, string? comment)
+        => BuildRelationComment("DOMAIN", name, comment);
+
+    /// <summary><c>DROP DOMAIN "N"</c>. Caller confirms the destructive intent;
+    /// EmberTern never auto-drops dependents — a Firebird dependency rejection
+    /// surfaces to the user.</summary>
+    public static string BuildDropDomain(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Domain name is required.", nameof(name));
+        return $"DROP DOMAIN {Quote(name.Trim())}";
+    }
+
     private static void ValidateConstraintBasics(string tableName, string constraintName, IReadOnlyList<string> fields)
     {
         if (string.IsNullOrWhiteSpace(tableName))

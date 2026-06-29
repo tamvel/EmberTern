@@ -953,6 +953,200 @@ public sealed class FirebirdTableDetailReader
         "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 14 " +
         "ORDER BY 2, 1";
 
+    // ─── Domains (Domain Detail) ────────────────────────────────────────────
+    //
+    // A domain lives in RDB$FIELDS (the same catalog table that backs every column
+    // type). Its full definition — type, length, precision/scale, sub-type, charset,
+    // collation, default, CHECK, NOT NULL, description — is read in one row.
+
+    /// <summary>Reads a single user domain → <see cref="DomainInfo"/>. The CHECK,
+    /// DEFAULT and DESCRIPTION text blobs are decoded via the driver (GetString),
+    /// consistent with the other description/source reads in this reader.</summary>
+    public async Task<DomainInfo> GetDomainInfoAsync(
+        string domainName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(domainName)) return new DomainInfo();
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();   // capture once — see gotcha #98
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = DomainInfoSql;
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = MetaTx;
+            cmd.Parameters.AddWithValue("@name", domainName);
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return new DomainInfo { Name = domainName };
+            }
+
+            var fieldType = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+            var byteLength = reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2);
+            var charLength = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3);
+            var scale = reader.IsDBNull(4) ? (int?)null : reader.GetInt32(4);
+            var precision = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
+            var subType = reader.IsDBNull(6) ? (int?)null : reader.GetInt32(6);
+            var notNull = !reader.IsDBNull(7) && reader.GetInt32(7) == 1;
+            var defaultSource = reader.IsDBNull(8) ? null : reader.GetString(8);
+            var checkSource = reader.IsDBNull(9) ? null : reader.GetString(9);
+            var charset = reader.IsDBNull(10) ? null : reader.GetString(10).Trim();
+            var collation = reader.IsDBNull(11) ? null : reader.GetString(11).Trim();
+            var description = reader.IsDBNull(12) ? null : reader.GetString(12);
+
+            return BuildDomainInfo(domainName.Trim(), fieldType, charLength, byteLength, scale, precision,
+                subType, charset, collation, defaultSource, checkSource, notNull, description);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read domain {domainName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    /// <summary>"Used By" for a domain: table/view columns that declare the domain
+    /// (RDB$RELATION_FIELDS — the primary case, NOT recorded in RDB$DEPENDENCIES, cf.
+    /// gotcha #46) PLUS any PSQL objects referencing it via RDB$DEPENDENCIES type 9.
+    /// Returned as one flat list the VM groups with BuildDependencyTree (single tree).</summary>
+    public async Task<IReadOnlyList<DependencyInfo>> GetDomainUsageAsync(
+        string domainName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(domainName)) return Array.Empty<DependencyInfo>();
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();   // capture once — see gotcha #98
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var usage = new List<DependencyInfo>();
+
+            // Table / view columns built on the domain.
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = DomainUsageColumnsSql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", domainName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    usage.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        FieldName = reader.IsDBNull(1) ? null : reader.GetString(1).Trim(),
+                        ObjectType = (!reader.IsDBNull(2) && reader.GetInt32(2) == 1) ? "View" : "Table",
+                    });
+                }
+            }
+
+            // PSQL objects (procedures/triggers/computed fields/…) referencing the domain.
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = DomainUsageDependenciesSql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", domainName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    usage.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(1) ? (int?)null : reader.GetInt32(1)),
+                    });
+                }
+            }
+
+            return usage;
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read usage for domain {domainName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    internal const string DomainInfoSql =
+        "SELECT TRIM(f.RDB$FIELD_NAME), " +
+        "       f.RDB$FIELD_TYPE, f.RDB$FIELD_LENGTH, f.RDB$CHARACTER_LENGTH, " +
+        "       f.RDB$FIELD_SCALE, f.RDB$FIELD_PRECISION, f.RDB$FIELD_SUB_TYPE, " +
+        "       f.RDB$NULL_FLAG, f.RDB$DEFAULT_SOURCE, f.RDB$VALIDATION_SOURCE, " +
+        "       cs.RDB$CHARACTER_SET_NAME, co.RDB$COLLATION_NAME, f.RDB$DESCRIPTION " +
+        "FROM RDB$FIELDS f " +
+        "LEFT JOIN RDB$CHARACTER_SETS cs ON cs.RDB$CHARACTER_SET_ID = f.RDB$CHARACTER_SET_ID " +
+        "LEFT JOIN RDB$COLLATIONS co ON co.RDB$COLLATION_ID = f.RDB$COLLATION_ID " +
+        "    AND co.RDB$CHARACTER_SET_ID = f.RDB$CHARACTER_SET_ID " +
+        "WHERE f.RDB$FIELD_NAME = @name";
+
+    // Table + view columns whose type IS this domain (RDB$FIELD_SOURCE = domain).
+    // VIEW_BLR distinguishes view (1) from table (0).
+    internal const string DomainUsageColumnsSql =
+        "SELECT TRIM(rf.RDB$RELATION_NAME), TRIM(rf.RDB$FIELD_NAME), " +
+        "    CASE WHEN r.RDB$VIEW_BLR IS NULL THEN 0 ELSE 1 END " +
+        "FROM RDB$RELATION_FIELDS rf " +
+        "JOIN RDB$RELATIONS r ON r.RDB$RELATION_NAME = rf.RDB$RELATION_NAME " +
+        "WHERE rf.RDB$FIELD_SOURCE = @name " +
+        "ORDER BY rf.RDB$RELATION_NAME, rf.RDB$FIELD_NAME";
+
+    // PSQL references to the domain (type 9 = field/domain in RDB$DEPENDENCIES).
+    internal const string DomainUsageDependenciesSql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDENT_NAME), " +
+        "    CAST(d.RDB$DEPENDENT_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 9 " +
+        "ORDER BY 2, 1";
+
+    // Internal so tests can verify the catalog → DomainInfo mapping without a live DB.
+    internal static DomainInfo BuildDomainInfo(
+        string name, int fieldType, int? charLength, int? byteLength, int? scale, int? precision,
+        int? subType, string? charset, string? collation, string? defaultSource, string? checkSource,
+        bool notNull, string? description)
+    {
+        var formatted = FormatFieldType(fieldType, charLength ?? byteLength, scale, precision, subType);
+        var baseType = StripTypeArgs(formatted);
+
+        var isNumeric = (fieldType == 7 || fieldType == 8 || fieldType == 16) && scale is { } s && s < 0;
+        var isChar = fieldType is 14 or 37 or 40;
+        var isBlob = fieldType == 261;
+
+        return new DomainInfo
+        {
+            Name = name,
+            DataType = baseType,
+            Length = isChar ? (charLength ?? byteLength) : null,
+            Precision = isNumeric ? precision : null,
+            Scale = isNumeric && scale is { } sv ? Math.Abs(sv) : null,
+            SubType = isBlob ? subType : null,
+            CharacterSet = string.IsNullOrEmpty(charset) ? null : charset,
+            Collation = string.IsNullOrEmpty(collation) ? null : collation,
+            DefaultValue = StripDefaultPrefix(defaultSource),
+            CheckConstraint = string.IsNullOrWhiteSpace(checkSource) ? null : checkSource.Trim(),
+            NotNull = notNull,
+            Description = NormalizeDescription(description),
+        };
+    }
+
+    // Strips the "(size[,scale])" / " SUB_TYPE n" suffix off a formatted type to
+    // recover the bare type name (e.g. "VARCHAR(80)" → "VARCHAR").
+    private static string StripTypeArgs(string formatted)
+    {
+        var paren = formatted.IndexOf('(');
+        if (paren >= 0) return formatted[..paren].Trim();
+        var sub = formatted.IndexOf(" SUB_TYPE", StringComparison.OrdinalIgnoreCase);
+        return (sub >= 0 ? formatted[..sub] : formatted).Trim();
+    }
+
     // ─── Triggers (Trigger Detail) ──────────────────────────────────────────
     //
     // Trigger metadata is in RDB$TRIGGERS (relation + bit-encoded RDB$TRIGGER_TYPE +

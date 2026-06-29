@@ -13,6 +13,7 @@ public enum WorkspaceTabKind
     TriggerDetail,
     FunctionDetail,
     GeneratorDetail,
+    DomainDetail,
 }
 
 // Stored verbatim as JSON. Properties are settable so System.Text.Json can
