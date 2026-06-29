@@ -16,6 +16,7 @@ public enum WorkspaceTabKind
     FunctionDetail,
     GeneratorDetail,
     DomainDetail,
+    PackageDetail,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -177,6 +178,21 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             DomainDetail = detail,
         };
 
+    public static WorkspaceTabViewModel CreatePackageDetail(MainWindowViewModel owner, MetadataObject obj, PackageDetailTabViewModel detail, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.PackageDetail,
+            BaseTitle = obj.Name,
+            IsClosable = true,
+            ObjectName = obj.Name,
+            ObjectKind = obj.Kind,
+            ConnectionProfileId = connectionProfileId,
+            Icon = MetadataNodeViewModel.IconFor(obj.Kind),
+            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
+            PackageDetail = detail,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -196,6 +212,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public FunctionDetailTabViewModel? FunctionDetail { get; private init; }
     public GeneratorDetailTabViewModel? GeneratorDetail { get; private init; }
     public DomainDetailTabViewModel? DomainDetail { get; private init; }
+    public PackageDetailTabViewModel? PackageDetail { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]
@@ -224,6 +241,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.FunctionDetail => FunctionDetail?.GetUnsavedWork(),
         WorkspaceTabKind.GeneratorDetail => GeneratorDetail?.GetUnsavedWork(),
         WorkspaceTabKind.DomainDetail => DomainDetail?.GetUnsavedWork(),
+        WorkspaceTabKind.PackageDetail => PackageDetail?.GetUnsavedWork(),
         _ => null,
     };
 

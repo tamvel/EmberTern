@@ -212,6 +212,12 @@
             <controls:SvgIcon Data="{StaticResource Icon.DomainPlus}"
                               Foreground="{DynamicResource IconColor_Domain}" />
           </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewPackageTooltip}"
+                  Command="{Binding NewPackageCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.PackagePlus}"
+                              Foreground="{DynamicResource IconColor_Package}" />
+          </Button>
         </StackPanel>
 
         <!-- Drag spacer (column 2 = *) -->
@@ -749,6 +755,20 @@
                       Command="{Binding ActiveDomainDetail.DeleteCommand}" IsVisible="{Binding IsDomainDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
+              <!-- Package: Compile (header then body) / Revert / Delete. Compile
+                   auto-commits via the autonomous DDL path, so no Commit/Rollback pair. -->
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.PackageCompileTooltip}"
+                      Command="{Binding ActivePackageDetail.CompileCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+                      Command="{Binding ActivePackageDetail.RevertChangesCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.PackageDeleteConfirmYes}"
+                      Command="{Binding ActivePackageDetail.DeleteCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
               <!-- Single unified Commit / Rollback pair (auto-routed to the open lane(s)). -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
                       Command="{Binding CommitAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
@@ -874,6 +894,19 @@
                       Command="{Binding ActiveFunctionDetail.UncommentBodyCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
+              <!-- Package: format / comment / uncomment (act on the active Package/Body editor) -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+                      Command="{Binding ActivePackageDetail.FormatSqlCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
+                      Command="{Binding ActivePackageDetail.CommentBodyCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
+                      Command="{Binding ActivePackageDetail.UncommentBodyCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep4Visible}" />
 
@@ -933,6 +966,9 @@
               <views:DomainDetailTabView x:Name="DomainDetailView"
                                          DataContext="{Binding ActiveDomainDetail}"
                                          IsVisible="{Binding DataContext.IsDomainDetailTabActive, ElementName=RootWindow}" />
+              <views:PackageDetailTabView x:Name="PackageDetailView"
+                                          DataContext="{Binding ActivePackageDetail}"
+                                          IsVisible="{Binding DataContext.IsPackageDetailTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query

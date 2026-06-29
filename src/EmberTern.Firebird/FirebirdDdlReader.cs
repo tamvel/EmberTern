@@ -71,7 +71,7 @@ public sealed class FirebirdDdlReader
                 // DDL reconstruction for these is non-trivial / partially unavailable from the catalog;
                 // V1.x ships a placeholder rather than throwing so the user can still browse.
                 MetadataObjectKind.Domain => BuildPlaceholderDdl("DOMAIN", obj.Name),
-                MetadataObjectKind.Package => BuildPlaceholderDdl("PACKAGE", obj.Name),
+                MetadataObjectKind.Package => await BuildPackageDdlAsync(connection, tx, obj.Name, fallback, cancellationToken).ConfigureAwait(false),
                 MetadataObjectKind.User => BuildPlaceholderDdl("USER", obj.Name),
                 MetadataObjectKind.Index => BuildPlaceholderDdl("INDEX", obj.Name),
                 _ => throw new ArgumentOutOfRangeException(nameof(obj), obj.Kind, null),
@@ -354,6 +354,89 @@ public sealed class FirebirdDdlReader
         {
             commandLock.Release();
         }
+    }
+
+    // -- Packages -------------------------------------------------------------
+    //
+    // A package has TWO source artifacts. RDB$PACKAGES.RDB$PACKAGE_HEADER_SOURCE holds
+    // the header (declarations) and RDB$PACKAGE_BODY_SOURCE the body (implementation),
+    // each the text after AS (like RDB$PROCEDURE_SOURCE — gotcha #114). StripLeadingAs
+    // (gotcha #139) makes reconstruction robust regardless of whether the stored BLOB
+    // includes a leading AS. The Package Detail editor fetches each separately and
+    // compiles them as one logical object (header first, then body).
+
+    /// <summary>Fetches a package's HEADER rebuilt as an editable
+    /// <c>CREATE OR ALTER PACKAGE name AS …</c> statement — the Package tab.</summary>
+    public async Task<string> FetchPackageHeaderSourceAsync(MetadataObject obj, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        var connection = LaneConnection();
+        var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
+        var tx = _transactionService?.ActiveTransaction;
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var header = await ReadBlobAsync(connection, tx,
+                "SELECT RDB$PACKAGE_HEADER_SOURCE FROM RDB$PACKAGES WHERE RDB$PACKAGE_NAME = @name",
+                obj.Name, fallback, cancellationToken).ConfigureAwait(false);
+            return DdlGenerator.BuildCreateOrAlterPackageHeader(obj.Name, StripLeadingAs(header).Trim());
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read header for PACKAGE {obj.Name}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    /// <summary>Fetches a package's BODY rebuilt as an editable
+    /// <c>RECREATE PACKAGE BODY name AS …</c> statement — the Body tab. Returns an
+    /// empty string when the package has no body yet (the editor stays empty; Compile
+    /// skips the body step).</summary>
+    public async Task<string> FetchPackageBodySourceAsync(MetadataObject obj, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        var connection = LaneConnection();
+        var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
+        var tx = _transactionService?.ActiveTransaction;
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var body = await ReadBlobAsync(connection, tx,
+                "SELECT RDB$PACKAGE_BODY_SOURCE FROM RDB$PACKAGES WHERE RDB$PACKAGE_NAME = @name",
+                obj.Name, fallback, cancellationToken).ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(body)
+                ? string.Empty
+                : DdlGenerator.BuildRecreatePackageBody(obj.Name, StripLeadingAs(body).Trim());
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read body for PACKAGE {obj.Name}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    private static async Task<string> BuildPackageDdlAsync(FbConnection connection, FbTransaction? tx, string name, Encoding fallback, CancellationToken ct)
+    {
+        var header = await ReadBlobAsync(connection, tx,
+            "SELECT RDB$PACKAGE_HEADER_SOURCE FROM RDB$PACKAGES WHERE RDB$PACKAGE_NAME = @name",
+            name, fallback, ct).ConfigureAwait(false);
+        var body = await ReadBlobAsync(connection, tx,
+            "SELECT RDB$PACKAGE_BODY_SOURCE FROM RDB$PACKAGES WHERE RDB$PACKAGE_NAME = @name",
+            name, fallback, ct).ConfigureAwait(false);
+
+        var headerText = StripLeadingAs(header).Trim();
+        var bodyText = string.IsNullOrWhiteSpace(body) ? null : StripLeadingAs(body).Trim();
+        return DdlGenerator.BuildPackageDdl(name, headerText, bodyText);
     }
 
     private static async Task<string> BuildProcedureDdlAsync(FbConnection connection, FbTransaction? tx, string name, int serverMajor, Encoding fallback, CancellationToken ct)

@@ -904,6 +904,22 @@ public static class SqlFormatter
                 if (i == before) i++;
                 return;
             }
+            // Packaged subprogram DEFINITION — a bare FUNCTION/PROCEDURE WITH a body
+            // (FUNCTION name(...) [RETURNS …] AS [DECLARE …;]* BEGIN … END), as found in a
+            // PACKAGE BODY. Emit the header up to the body BEGIN, then recurse for the
+            // BEGIN…END block, so the enclosing package-body BEGIN loop stops only at the
+            // package's OWN END — never at a subprogram's END (which previously truncated
+            // the body and dropped the trailing ENDs → invalid PSQL). A header-only forward
+            // declaration (FUNCTION/PROCEDURE … ; — no AS/body, as in a PACKAGE header)
+            // falls through to the statement path below. (gotcha #152)
+            if ((up == "FUNCTION" || up == "PROCEDURE") && IsSubprogramDefinition(sig, i))
+            {
+                AddPsqlEmit(lines, indent, CollectUntilWordExclusive(sig, ref i, "BEGIN"));
+                int before = i;
+                EmitPsqlUnit(sig, blank, ref i, indent, lines); // the subprogram's BEGIN…END
+                if (i == before) i++;
+                return;
+            }
         }
 
         AddPsqlEmit(lines, indent, CollectPsqlStatement(sig, ref i));
@@ -956,6 +972,32 @@ public static class SqlFormatter
             list.Add(t); i++;
         }
         return list;
+    }
+
+    // True when a leading FUNCTION/PROCEDURE token begins a packaged subprogram
+    // DEFINITION (it has an AS … BEGIN … END body), vs a package-header forward
+    // declaration (FUNCTION/PROCEDURE name(...) [RETURNS …] ; — no AS, no body).
+    // Scans at paren depth 0 from just after the keyword: a top-level AS ⇒ definition
+    // (keyed on AS, NOT BEGIN, because a body may have a DECLARE section whose ';'
+    // precedes BEGIN at depth 0); a top-level ';' before any AS ⇒ forward declaration.
+    private static bool IsSubprogramDefinition(List<Token> sig, int i)
+    {
+        if (i + 1 >= sig.Count || sig[i + 1].Kind != TokenKind.Word) return false; // need a name
+        int depth = 0;
+        for (int k = i + 1; k < sig.Count; k++)
+        {
+            var t = sig[k];
+            if (t.Kind == TokenKind.Punctuation && t.Text == "(") { depth++; continue; }
+            if (t.Kind == TokenKind.Punctuation && t.Text == ")") { if (depth > 0) depth--; continue; }
+            if (depth != 0) continue;
+            if (t.Kind == TokenKind.Punctuation && t.Text == ";") return false; // forward declaration
+            if (t.Kind == TokenKind.Word)
+            {
+                if (t.Text.Equals("AS", StringComparison.OrdinalIgnoreCase)) return true; // has a body
+                if (t.Text.Equals("END", StringComparison.OrdinalIgnoreCase)) return false;
+            }
+        }
+        return false;
     }
 
     // Collects one statement up to and INCLUDING its terminating top-level ';'. A

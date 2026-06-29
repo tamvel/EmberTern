@@ -510,6 +510,188 @@ public sealed class FirebirdTableDetailReader
         "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 5 " +
         "ORDER BY 2, 1";
 
+    // ─── Package metadata (Package Detail) ──────────────────────────────────
+    //
+    // A package lives in RDB$PACKAGES (header + body source); its members are the
+    // RDB$FUNCTIONS / RDB$PROCEDURES rows whose RDB$PACKAGE_NAME = the package — so the
+    // Members tab is built straight from the catalog, no source parsing. Its dependency
+    // rows carry RDB$*_TYPE = 18 (Package). Same metadata-lane access pattern
+    // (MetaConnection/MetaLock/MetaTx) as the procedure / function readers. FB3+ only
+    // (packages don't exist on FB 2.5).
+
+    /// <summary>Lists a package's member routines from the catalog (functions then
+    /// procedures, each alphabetical). No source parsing — the catalog records each
+    /// packaged routine via RDB$PACKAGE_NAME.</summary>
+    public async Task<IReadOnlyList<PackageMember>> GetPackageMembersAsync(
+        string packageName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(packageName)) return Array.Empty<PackageMember>();
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();   // capture once — see gotcha #98
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var members = new List<PackageMember>();
+            await ReadMembersAsync(connection, PackageFunctionsSql, packageName, PackageMemberKind.Function, members, cancellationToken).ConfigureAwait(false);
+            await ReadMembersAsync(connection, PackageProceduresSql, packageName, PackageMemberKind.Procedure, members, cancellationToken).ConfigureAwait(false);
+            return members;
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read members for package {packageName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    private async Task ReadMembersAsync(
+        FbConnection connection, string sql, string packageName, PackageMemberKind kind,
+        List<PackageMember> sink, CancellationToken ct)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.CommandTimeout = 0;
+        cmd.Transaction = MetaTx;
+        cmd.Parameters.AddWithValue("@name", packageName);
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            if (reader.IsDBNull(0)) continue;
+            var name = reader.GetString(0).Trim();
+            if (name.Length > 0) sink.Add(new PackageMember(name, kind));
+        }
+    }
+
+    public async Task<string> GetPackageDescriptionAsync(
+        string packageName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(packageName)) return string.Empty;
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();   // capture once — see gotcha #98
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText =
+                "SELECT RDB$DESCRIPTION FROM RDB$PACKAGES WHERE RDB$PACKAGE_NAME = @name";
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = MetaTx;
+            cmd.Parameters.AddWithValue("@name", packageName);
+
+            string? description = null;
+            await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)
+                    && !reader.IsDBNull(0))
+                {
+                    description = reader.GetString(0);
+                }
+            }
+            return NormalizeDescription(description);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read description for package {packageName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    public async Task<(IReadOnlyList<DependencyInfo> DependsOn, IReadOnlyList<DependencyInfo> DependedOnBy)> GetPackageDependenciesAsync(
+        string packageName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(packageName))
+        {
+            return (Array.Empty<DependencyInfo>(), Array.Empty<DependencyInfo>());
+        }
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();   // capture once — see gotcha #98
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var dependsOn = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = PackageDependsOnSql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", packageName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependsOn.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        FieldName = reader.IsDBNull(1) ? null : reader.GetString(1).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2)),
+                    });
+                }
+            }
+
+            var dependedOnBy = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = PackageDependedOnBySql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", packageName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependedOnBy.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(1) ? (int?)null : reader.GetInt32(1)),
+                    });
+                }
+            }
+
+            return (dependsOn, dependedOnBy);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read dependencies for package {packageName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    internal const string PackageFunctionsSql =
+        "SELECT TRIM(RDB$FUNCTION_NAME) FROM RDB$FUNCTIONS " +
+        "WHERE RDB$PACKAGE_NAME = @name ORDER BY RDB$FUNCTION_NAME";
+
+    internal const string PackageProceduresSql =
+        "SELECT TRIM(RDB$PROCEDURE_NAME) FROM RDB$PROCEDURES " +
+        "WHERE RDB$PACKAGE_NAME = @name ORDER BY RDB$PROCEDURE_NAME";
+
+    // Package dependencies use RDB$*_TYPE = 18 (Package). Same shape as the procedure
+    // dependency queries (one @name reference each, no distinct-name binding needed).
+    internal const string PackageDependsOnSql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDED_ON_NAME), TRIM(d.RDB$FIELD_NAME), " +
+        "    CAST(d.RDB$DEPENDED_ON_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDENT_NAME) = @name AND d.RDB$DEPENDENT_TYPE = 18 " +
+        "ORDER BY 3, 1";
+
+    internal const string PackageDependedOnBySql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDENT_NAME), " +
+        "    CAST(d.RDB$DEPENDENT_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 18 " +
+        "ORDER BY 2, 1";
+
     // ─── Function metadata (Function Detail) ────────────────────────────────
     //
     // A PSQL function lives in RDB$FUNCTIONS (standalone: RDB$PACKAGE_NAME IS NULL); its

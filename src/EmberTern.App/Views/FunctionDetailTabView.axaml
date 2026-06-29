@@ -199,7 +199,7 @@
         <Grid RowDefinitions="Auto,*" Background="{DynamicResource BackgroundBrush}">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4"
                       IsVisible="{Binding CanEditDescription}">
-            <TextBlock Text="{x:Static app:UiStrings.TableDescriptionEditLabel}"
+            <TextBlock Text="{x:Static app:UiStrings.FunctionDescriptionEditLabel}"
                        Classes="subtle" FontSize="11" VerticalAlignment="Center" />
             <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
                     Command="{Binding SaveDescriptionCommand}">

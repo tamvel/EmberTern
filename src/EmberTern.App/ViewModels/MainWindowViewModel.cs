@@ -198,6 +198,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveGeneratorDetail))]
     [NotifyPropertyChangedFor(nameof(IsDomainDetailTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveDomainDetail))]
+    [NotifyPropertyChangedFor(nameof(IsPackageDetailTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActivePackageDetail))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
@@ -260,6 +262,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsDomainDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.DomainDetail };
     public DomainDetailTabViewModel? ActiveDomainDetail
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.DomainDetail } t ? t.DomainDetail : null;
+    /// <summary>True when the active workspace tab is a Package Detail tab.</summary>
+    public bool IsPackageDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.PackageDetail };
+    public PackageDetailTabViewModel? ActivePackageDetail
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.PackageDetail } t ? t.PackageDetail : null;
     // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
     // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
     // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
@@ -315,7 +321,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsFunctionDetailTabActive;
     // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail, TriggerDetail, FunctionDetail);
     // the anchored Query tab is never closable so the button hides when it's active.
-    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail };
+    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail or WorkspaceTabKind.PackageDetail };
 
     // ─── Unified editor toolbar — fixed 5-section model ───────────────────
     //
@@ -330,8 +336,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool ShowModeSection => ShowFieldEditTools || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive;
     // Section 2 — every editor has a primary action (Execute / Compile / Commit).
     public bool ShowMainSection => SelectedWorkspaceTab is not null;
-    // Section 4 — helpers exist for SQL editor, View, Procedure, Trigger, Function, and the Dane sub-tab.
-    public bool ShowHelperSection => IsQueryTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive || IsDataTabActive;
+    // Section 4 — helpers exist for SQL editor, View, Procedure, Trigger, Function, Package, and the Dane sub-tab.
+    public bool ShowHelperSection => IsQueryTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive || IsPackageDetailTabActive || IsDataTabActive;
 
     // A separator shows only between two non-empty adjacent sections.
     private bool HasFrom2 => ShowMainSection || ShowCollectionTools || ShowHelperSection || IsClosableTabActive;
@@ -1441,6 +1447,23 @@ public partial class MainWindowViewModel : ViewModelBase
                     ActiveSubTabIndex = dd?.ActiveSubTabIndex,
                 });
             }
+            else if (tab.Kind == WorkspaceTabKind.PackageDetail)
+            {
+                // Skip transient New Package tabs (IsNew) — the package doesn't exist
+                // yet. Persist real packages as PackageDetail so restore re-opens the
+                // full surface (not DDL-only).
+                if (tab.PackageDetail is { IsNew: true }) continue;
+                var pd = tab.PackageDetail;
+                ws.Tabs.Add(new WorkspaceTab
+                {
+                    Kind = CoreTabKind.PackageDetail,
+                    ObjectName = tab.ObjectName,
+                    ObjectKind = tab.ObjectKind,
+                    ConnectionProfileId = tab.ConnectionProfileId,
+                    DdlText = pd is { } ? pd.DdlText : tab.DdlText,
+                    ActiveSubTabIndex = pd?.ActiveSubTabIndex,
+                });
+            }
             else
             {
                 ws.Tabs.Add(new WorkspaceTab
@@ -1598,6 +1621,18 @@ public partial class MainWindowViewModel : ViewModelBase
                 detail.DdlText = tab.DdlText ?? string.Empty;
                 if (tab.ActiveSubTabIndex is { } dmSub) detail.ActiveSubTabIndex = dmSub;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateDomainDetail(this, obj, detail, tab.ConnectionProfileId));
+            }
+            else if (tab.Kind == CoreTabKind.PackageDetail
+                  && tab.ObjectKind is { } pkgKind
+                  && !string.IsNullOrEmpty(tab.ObjectName))
+            {
+                // Native PackageDetail restore (no DDL-only fallback). Lazy-loads on
+                // first activation via SelectTab. Cached DDL seeds the DDL tab.
+                var obj = new MetadataObject(tab.ObjectName, pkgKind);
+                var detail = CreatePackageDetail(obj);
+                detail.DdlText = tab.DdlText ?? string.Empty;
+                if (tab.ActiveSubTabIndex is { } pkSub) detail.ActiveSubTabIndex = pkSub;
+                WorkspaceTabs.Add(WorkspaceTabViewModel.CreatePackageDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
 
@@ -2192,6 +2227,55 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public bool CanCreatePackage => _service.IsConnected;
+
+    // New Package: opens a Package Detail tab in IsNew mode seeded with header + body
+    // templates (the user edits the SQL directly — no designer). On Compile success
+    // OnPackageCreated refreshes the tree, closes this tab and reopens the real package.
+    [RelayCommand(CanExecute = nameof(CanCreatePackage))]
+    private void NewPackage()
+    {
+        var detail = new PackageDetailTabViewModel(UiStrings.NewPackageTabDefaultTitle, _tableDetailReader, _ddlReader, _ddlExecutor)
+        {
+            IsNew = true,
+            HeaderSource = PackageDetailTabViewModel.NewPackageHeaderTemplate,
+            BodySource = PackageDetailTabViewModel.NewPackageBodyTemplate,
+        };
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.PackageCreated += name => OnPackageCreated(detail, name);
+        // Seeding the templates marked the VM dirty; a brand-new untouched tab must
+        // not prompt on close — clear it so only real edits flip it back.
+        detail.ClearDirty();
+
+        var obj = new MetadataObject(UiStrings.NewPackageTabDefaultTitle, MetadataObjectKind.Package);
+        var tab = WorkspaceTabViewModel.CreatePackageDetail(this, obj, detail, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+    }
+
+    private async void OnPackageCreated(PackageDetailTabViewModel detail, string? packageName)
+    {
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewPackageExecutedFormat, packageName ?? string.Empty));
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+
+        WorkspaceTabViewModel? newTab = null;
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.PackageDetail && ReferenceEquals(t.PackageDetail, detail))
+            {
+                newTab = t;
+                break;
+            }
+        }
+        if (newTab is not null) CloseTab(newTab);
+
+        if (!string.IsNullOrEmpty(packageName))
+        {
+            OnOpenDdlRequested(new MetadataObject(packageName, MetadataObjectKind.Package));
+        }
+    }
+
     public bool CanCreateProcedure => _service.IsConnected;
 
     // New Procedure: opens a Procedure Detail tab in IsNew mode with the Editor
@@ -2587,6 +2671,12 @@ public partial class MainWindowViewModel : ViewModelBase
     internal static bool OpensAsDomainDetail(MetadataObjectKind kind)
         => kind is MetadataObjectKind.Domain;
 
+    // Packages open in the dedicated Package Detail surface (editable header + body
+    // source editors + Members + Description + Dependencies + DDL), not a plain DDL
+    // tab. Separate predicate — it builds its own (two-source, no Easy mode) detail VM.
+    internal static bool OpensAsPackageDetail(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.Package;
+
     // Single construction point for ViewDetail VMs — mirrors CreateTableDetail.
     // A view is read-only data (no inline editing) but its SQL source IS editable,
     // so the DDL executor is wired for Compile while no data editor is.
@@ -2727,6 +2817,55 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var t in WorkspaceTabs)
         {
             if (t.Kind == WorkspaceTabKind.DomainDetail && ReferenceEquals(t.DomainDetail, detail))
+            {
+                CloseTab(t);
+                break;
+            }
+        }
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+    }
+
+    // Single construction point for PackageDetail VMs — mirrors CreateViewDetail.
+    // A package's header + body source are editable (DDL executor wired for Compile);
+    // there is no Easy mode and no data editor. Autocomplete on the editors comes from
+    // SqlEditorBehavior (wired in the view against this MainWindowViewModel), so no
+    // per-VM domain/table list is needed.
+    internal PackageDetailTabViewModel CreatePackageDetail(MetadataObject obj)
+    {
+        var detail = new PackageDetailTabViewModel(
+            obj.Name,
+            _tableDetailReader,
+            _ddlReader,
+            _ddlExecutor);
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.DeleteRequested += OnPackageDeleteRequested;
+        return detail;
+    }
+
+    private async Task OnPackageDeleteRequested(PackageDetailTabViewModel detail)
+    {
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(DdlGenerator.BuildDropPackage(detail.PackageName)).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+
+        // Close the tab for this package, then refresh the tree so it disappears.
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.PackageDetail && ReferenceEquals(t.PackageDetail, detail))
             {
                 CloseTab(t);
                 break;
@@ -2976,7 +3115,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // TableDetail tabs key on (Kind, Name).
         foreach (var tab in WorkspaceTabs)
         {
-            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail
+            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail or WorkspaceTabKind.PackageDetail
                 && tab.ObjectKind == obj.Kind
                 && string.Equals(tab.ObjectName, obj.Name, StringComparison.Ordinal))
             {
@@ -3094,6 +3233,21 @@ public partial class MainWindowViewModel : ViewModelBase
                 return;
             }
 
+            if (OpensAsPackageDetail(obj.Kind))
+            {
+                var detail = CreatePackageDetail(obj);
+                var newTab = WorkspaceTabViewModel.CreatePackageDetail(this, obj, detail, _service.ActiveProfile?.Id);
+                WorkspaceTabs.Add(newTab);
+                SelectTab(newTab);
+                await detail.EnsureLoadedAsync().ConfigureAwait(true);
+                if (!string.IsNullOrEmpty(detail.ErrorMessage))
+                {
+                    AddMessage(MessageSeverity.Error, detail.ErrorMessage);
+                    SelectedBottomTabIndex = 1;
+                }
+                return;
+            }
+
             var ddl = await _ddlReader.FetchDdlAsync(obj).ConfigureAwait(true);
             var ddlTab = WorkspaceTabViewModel.CreateDdl(this, obj, ddl, _service.ActiveProfile?.Id);
             WorkspaceTabs.Add(ddlTab);
@@ -3163,6 +3317,11 @@ public partial class MainWindowViewModel : ViewModelBase
             && _service.IsConnected)
         {
             _ = domainDetail.EnsureLoadedAsync();
+        }
+        else if (tab is { Kind: WorkspaceTabKind.PackageDetail, PackageDetail: { } packageDetail }
+            && _service.IsConnected)
+        {
+            _ = packageDetail.EnsureLoadedAsync();
         }
     }
 
@@ -3993,6 +4152,8 @@ public partial class MainWindowViewModel : ViewModelBase
         // New Domain shares the same connection-state gate.
         OnPropertyChanged(nameof(CanCreateDomain));
         NewDomainCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanCreatePackage));
+        NewPackageCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

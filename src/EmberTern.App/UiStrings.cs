@@ -101,6 +101,8 @@ internal static class UiStrings
     public const string UnsavedModifiedGeneratorFormat = "Generator {0} — unsaved changes";
     public const string UnsavedNewDomainFormat = "New domain (not yet created) — {0}";
     public const string UnsavedModifiedDomainFormat = "Domain {0} — unsaved changes";
+    public const string UnsavedNewPackageFormat = "New package (not yet created) — {0}";
+    public const string UnsavedModifiedPackageFormat = "Package {0} — uncompiled changes";
     public const string UnsavedPendingStructureFormat = "Table {0} — uncompiled structural changes";
     public const string UnsavedTransactionDataFormat = "Data transaction — {0} pending statement(s)";
     public const string UnsavedTransactionMetadataFormat = "Metadata transaction — {0} pending statement(s)";
@@ -452,6 +454,28 @@ internal static class UiStrings
     public const string ViewCompileFailedFormat = "Compile failed: {0}";
     public const string NewViewTabDefaultTitle = "New View";
     public const string NewViewExecutedFormat = "View \"{0}\" created.";
+
+    // ─── Package Detail ─────────────────────────────────────────────────────
+    public const string PackageDetailTabPackage = "Package";
+    public const string PackageDetailTabBody = "Body";
+    public const string PackageDetailTabMembers = "Members";
+    public const string PackageDetailTabDependencies = "Dependencies";
+    public const string PackageDetailTabDescription = "Description";
+    public const string PackageDetailTabDdl = "DDL";
+    public const string PackageDetailDescriptionEmpty = "No description.";
+    public const string PackageDetailMembersEmpty = "This package has no members.";
+    public const string PackageDetailLoadingHint = "Loading package…";
+    public const string PackageDetailDependsOnHeader = "Depends on";
+    public const string PackageDetailDependedOnByHeader = "Used by";
+    public const string ToolbarNewPackageTooltip = "New Package";
+    public const string PackageCompileTooltip = "Compile package (header then body)";
+    public const string PackageCompileHeaderFailedFormat = "Header compile failed: {0}";
+    public const string PackageCompileBodyFailedFormat = "Body compile failed: {0}";
+    public const string NewPackageTabDefaultTitle = "New Package";
+    public const string NewPackageExecutedFormat = "Package \"{0}\" created.";
+    public const string PackageDeleteConfirmTitle = "Delete package";
+    public const string PackageDeleteConfirmFormat = "Are you sure you want to delete package {0}? This drops the header and its body.";
+    public const string PackageDeleteConfirmYes = "Delete";
 
     // View Detail Easy mode (mirrors the Procedure Detail Source/Easy toggle).
     // Unified toolbar Collection section (routes to the active editor's collection —
@@ -820,6 +844,14 @@ internal static class UiStrings
 
     // ─── Table description editing (Opis tab) ─────────────────────────────
     public const string TableDescriptionEditLabel = "Table description";
+    // Per-object description-tab mini-headers — each editor names its own object type
+    // (the shared TableDescriptionEditLabel said "Table description" everywhere, which
+    // was wrong for the View/Procedure/Function/Trigger/Package editors).
+    public const string ViewDescriptionEditLabel = "View description";
+    public const string ProcedureDescriptionEditLabel = "Procedure description";
+    public const string FunctionDescriptionEditLabel = "Function description";
+    public const string TriggerDescriptionEditLabel = "Trigger description";
+    public const string PackageDescriptionEditLabel = "Package description";
     public const string TableDescriptionSaveIcon = "💾";
     public const string TableDescriptionSave = "Save";
     public const string TableDescriptionClear = "Clear";

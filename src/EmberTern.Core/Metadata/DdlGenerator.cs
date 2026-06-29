@@ -559,6 +559,68 @@ public static class DdlGenerator
     public static string BuildCommentFunction(string functionName, string? comment)
         => BuildRelationComment("FUNCTION", functionName, comment);
 
+    /// <summary>Firebird's <c>COMMENT ON PACKAGE</c> form (FB3+).</summary>
+    public static string BuildCommentPackage(string packageName, string? comment)
+        => BuildRelationComment("PACKAGE", packageName, comment);
+
+    // ─── Package header / body reconstruction ──────────────────────────────
+    //
+    // A package has TWO source artifacts: the header (declarations) in
+    // RDB$PACKAGES.RDB$PACKAGE_HEADER_SOURCE and the body (implementation) in
+    // RDB$PACKAGE_BODY_SOURCE. Each stored BLOB is the text after AS (analogous
+    // to RDB$PROCEDURE_SOURCE — gotcha #114); the reader strips any leading AS
+    // (gotcha #139) before calling these so reconstruction is robust regardless
+    // of the stored prefix. Names quoted only when needed (QuoteLight), matching
+    // the fetched-source form of the other source editors.
+
+    /// <summary>Editable header statement for the Package tab —
+    /// <c>CREATE OR ALTER PACKAGE name AS &lt;headerSource&gt;</c> (recompilable in place).</summary>
+    public static string BuildCreateOrAlterPackageHeader(string name, string headerSource)
+        => BuildPackageStatement("CREATE OR ALTER PACKAGE ", name, headerSource);
+
+    /// <summary>Editable body statement for the Body tab —
+    /// <c>RECREATE PACKAGE BODY name AS &lt;bodySource&gt;</c> (Firebird has no
+    /// CREATE OR ALTER PACKAGE BODY; RECREATE is idempotent whether or not a body exists).</summary>
+    public static string BuildRecreatePackageBody(string name, string bodySource)
+        => BuildPackageStatement("RECREATE PACKAGE BODY ", name, bodySource);
+
+    private static string BuildPackageStatement(string verb, string name, string source)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Package name is required.", nameof(name));
+        // Uniform '\n' (not AppendLine's platform newline) so the reconstructed source
+        // doesn't mix \r\n wrapper lines with the \n-delimited body.
+        var sb = new StringBuilder();
+        sb.Append(verb).Append(QuoteLight(name.Trim())).Append('\n');
+        sb.Append("AS\n");
+        sb.Append(string.IsNullOrWhiteSpace(source) ? "BEGIN\nEND" : source.Trim());
+        return sb.ToString();
+    }
+
+    /// <summary>Read-only combined DDL for the DDL tab — <c>CREATE PACKAGE … AS …</c>
+    /// followed (when a body exists) by <c>RECREATE PACKAGE BODY … AS …</c>.</summary>
+    public static string BuildPackageDdl(string name, string headerSource, string? bodySource)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Package name is required.", nameof(name));
+        var sb = new StringBuilder();
+        sb.Append(BuildPackageStatement("CREATE PACKAGE ", name, headerSource));
+        if (!string.IsNullOrWhiteSpace(bodySource))
+        {
+            sb.Append("\n\n");
+            sb.Append(BuildPackageStatement("RECREATE PACKAGE BODY ", name, bodySource!));
+        }
+        return sb.ToString();
+    }
+
+    /// <summary><c>DROP PACKAGE name</c> — Firebird drops the header and its body together.</summary>
+    public static string BuildDropPackage(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Package name is required.", nameof(name));
+        return "DROP PACKAGE " + Quote(name.Trim());
+    }
+
     /// <summary>
     /// Reassembles a <c>CREATE [OR ALTER] VIEW</c> from the View Detail Easy-mode
     /// parts — the inverse of <see cref="Sql.ViewSignatureParser"/>. The verb is

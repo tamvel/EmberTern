@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using EmberTern.Core.Sql;
+using EmberTern.Firebird;
 using Xunit;
 
 namespace EmberTern.Tests;
@@ -207,5 +208,102 @@ public class PsqlFormatterTests
         Assert.Contains("from t", outp.Split('\n'));
         Assert.Contains("where x = 1", outp.Split('\n'));
         Assert.DoesNotContain("begin", outp);
+    }
+
+    // ─── PACKAGE BODY (packaged subprogram definitions) — gotcha #152 ──────
+    //
+    // A PACKAGE BODY's top-level items are FUNCTION/PROCEDURE definitions (name(...)
+    // [RETURNS …] AS [DECLARE …;]* BEGIN … END), NOT statements and NOT terminated by
+    // ';'. The formatter previously collected only to the first inner ';', then took a
+    // subprogram's END as the package-body END → it dropped the trailing ENDs → invalid
+    // PSQL. These pin that the structure is preserved (every BEGIN/END kept + balanced)
+    // and the result is idempotent.
+
+    private const string LabPackageBody =
+        "RECREATE PACKAGE BODY PKG_ORDERS\nAS\nBEGIN\n" +
+        "  FUNCTION ORDER_TOTAL(P_ORDER_ID INTEGER) RETURNS NUMERIC(15,2)\n  AS\n" +
+        "    DECLARE VARIABLE V_TOTAL NUMERIC(15,2);\n  BEGIN\n" +
+        "    SELECT COALESCE(SUM(LINE_TOTAL), 0) FROM ORDER_ITEMS WHERE ORDER_ID = :P_ORDER_ID INTO :V_TOTAL;\n" +
+        "    RETURN V_TOTAL;\n  END\n" +
+        "  PROCEDURE RECALC_ORDER(P_ORDER_ID INTEGER)\n  AS\n  BEGIN\n" +
+        "    UPDATE ORDERS SET TOTAL_AMOUNT = PKG_ORDERS.ORDER_TOTAL(:P_ORDER_ID) WHERE ORDER_ID = :P_ORDER_ID;\n  END\nEND";
+
+    private static int CountWord(string s, string word)
+    {
+        int n = 0, i = 0;
+        while (true)
+        {
+            i = s.IndexOf(word, i, StringComparison.OrdinalIgnoreCase);
+            if (i < 0) break;
+            bool leftOk = i == 0 || !(char.IsLetterOrDigit(s[i - 1]) || s[i - 1] == '_');
+            int end = i + word.Length;
+            bool rightOk = end >= s.Length || !(char.IsLetterOrDigit(s[end]) || s[end] == '_');
+            if (leftOk && rightOk) n++;
+            i = end;
+        }
+        return n;
+    }
+
+    [Fact]
+    public void PackageBody_PreservesAllBeginEnd_AndBalances()
+    {
+        var outp = SqlFormatter.Format(LabPackageBody);
+
+        // No END dropped: 3 BEGIN (package + 2 routines) and 3 END, balanced.
+        Assert.Equal(CountWord(LabPackageBody, "begin"), CountWord(outp, "begin"));
+        Assert.Equal(CountWord(LabPackageBody, "end"), CountWord(outp, "end"));
+        Assert.Equal(CountWord(outp, "begin"), CountWord(outp, "end"));
+        Assert.Equal(3, CountWord(outp, "end"));
+
+        // Both packaged routines survive.
+        Assert.Contains("order_total", outp, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("recalc_order", outp, StringComparison.OrdinalIgnoreCase);
+
+        // The formatted body is still ONE statement to the DDL splitter (compilable shape).
+        Assert.Single(FirebirdDdlExecutor.SplitStatements(outp));
+    }
+
+    [Fact]
+    public void PackageBody_IsIdempotent()
+    {
+        var once = SqlFormatter.Format(LabPackageBody);
+        var twice = SqlFormatter.Format(once);
+        Assert.Equal(once, twice);
+    }
+
+    [Fact]
+    public void PackageBody_SimpleFunction_BodyOnItsOwnLines_NotCollapsed()
+    {
+        var outp = SqlFormatter.Format(
+            "RECREATE PACKAGE BODY P\nAS\nBEGIN\n" +
+            "  FUNCTION ADD_NUMBERS(A INTEGER, B INTEGER) RETURNS INTEGER\n  AS\n  BEGIN\n    RETURN A + B;\n  END\nEND");
+        // 2 BEGIN / 2 END, balanced — the function END is NOT consumed as the package END.
+        Assert.Equal(2, CountWord(outp, "begin"));
+        Assert.Equal(2, CountWord(outp, "end"));
+        Assert.Single(FirebirdDdlExecutor.SplitStatements(outp));
+    }
+
+    [Fact]
+    public void PackageHeader_ForwardDecls_StayOneStatement()
+    {
+        var outp = SqlFormatter.Format(
+            "CREATE OR ALTER PACKAGE PKG_ORDERS\nAS\nBEGIN\n" +
+            "  FUNCTION  ORDER_TOTAL(P_ORDER_ID INTEGER) RETURNS NUMERIC(15,2);\n" +
+            "  PROCEDURE RECALC_ORDER(P_ORDER_ID INTEGER);\nEND");
+        // Header forward-decls have no body — one BEGIN / one END (the package's).
+        Assert.Equal(1, CountWord(outp, "begin"));
+        Assert.Equal(1, CountWord(outp, "end"));
+        Assert.Single(FirebirdDdlExecutor.SplitStatements(outp));
+    }
+
+    [Fact]
+    public void StandaloneProcedure_Unaffected_ByPackageBranch()
+    {
+        // A regular procedure body (no packaged subprograms) still formats with one
+        // balanced BEGIN/END — the new FUNCTION/PROCEDURE branch must not misfire.
+        var outp = SqlFormatter.Format(
+            "CREATE OR ALTER PROCEDURE SP_X(A INTEGER)\nAS\nBEGIN\n  IF (A > 0) THEN\n    A = 1;\nEND");
+        Assert.Equal(1, CountWord(outp, "begin"));
+        Assert.Equal(1, CountWord(outp, "end"));
     }
 }
