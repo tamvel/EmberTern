@@ -27,10 +27,12 @@ namespace EmberTern.App.Views;
 /// </summary>
 internal static class FieldGridColumns
 {
-    public static void Build(DataGrid grid, bool includeDefault)
+    public static void Build(DataGrid grid, bool includeDefault, bool includeName = true)
     {
         grid.Columns.Clear();
-        grid.Columns.Add(TextCol(UiStrings.TableDetailColumnName, nameof(ProcedureFieldRowBase.Name), 130));
+        // The function Result is a single, unnamed return value — its grid omits Name.
+        if (includeName)
+            grid.Columns.Add(TextCol(UiStrings.TableDetailColumnName, nameof(ProcedureFieldRowBase.Name), 130));
         grid.Columns.Add(TypeComboCol(UiStrings.TableDetailColumnType, 110));
         grid.Columns.Add(MergedTypeSourceColumn.Build(UiStrings.FieldTypeSourceHeader, 150));
         grid.Columns.Add(TextEditCol(UiStrings.TableDetailColumnSize, nameof(ProcedureFieldRowBase.Size), 60, nameof(ProcedureFieldRowBase.IsSizeEnabled)));
