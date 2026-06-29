@@ -548,6 +548,68 @@ public sealed class FirebirdDdlReader
 
     // -- Functions ------------------------------------------------------------
 
+    /// <summary>
+    /// Fetches a PSQL function's source rebuilt as an editable
+    /// <c>CREATE OR ALTER FUNCTION</c> statement — the working surface for the Function
+    /// Detail Editor (Source mode). Reuses the same reconstruction as the read-only
+    /// <see cref="FetchDdlAsync"/> DDL path. Same lane/lock + tx-attach pattern as the
+    /// procedure source fetcher.
+    /// </summary>
+    public async Task<string> FetchFunctionSourceAsync(MetadataObject obj, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        var connection = LaneConnection();
+        var serverMajor = ParseServerMajor(connection.ServerVersion);
+        var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
+        var tx = _transactionService?.ActiveTransaction;
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await BuildFunctionDdlAsync(connection, tx, obj.Name, serverMajor, fallback, cancellationToken).ConfigureAwait(false);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read source for FUNCTION {obj.Name}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Fetches a function's BODY alone — <c>RDB$FUNCTION_SOURCE</c> is exactly the text
+    /// after <c>AS</c> (DECLARE…BEGIN…END), with no header. This is what Function Detail
+    /// Easy mode edits, alongside catalog-derived arguments + return type.
+    /// </summary>
+    public async Task<string> FetchFunctionBodyAsync(MetadataObject obj, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        var connection = LaneConnection();
+        var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
+        var tx = _transactionService?.ActiveTransaction;
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var body = await ReadBlobAsync(connection, tx,
+                "SELECT RDB$FUNCTION_SOURCE FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name",
+                obj.Name, fallback, cancellationToken).ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(body) ? string.Empty : body.Trim();
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read body for FUNCTION {obj.Name}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
     private static async Task<string> BuildFunctionDdlAsync(FbConnection connection, FbTransaction? tx, string name, int serverMajor, Encoding fallback, CancellationToken ct)
     {
         if (serverMajor <= 2)
@@ -555,16 +617,98 @@ public sealed class FirebirdDdlReader
             return $"/* Function {name} is a UDF declaration (Firebird 2.5). Source DDL not stored in the catalog. */\n";
         }
 
+        // The return value is the RDB$FUNCTION_ARGUMENTS row at RDB$RETURN_ARGUMENT;
+        // the input arguments are every other row. RDB$DETERMINISTIC_FLAG gates the
+        // DETERMINISTIC keyword.
+        int returnArgPos = 0;
+        bool deterministic = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT RDB$RETURN_ARGUMENT, RDB$DETERMINISTIC_FLAG FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name";
+            cmd.CommandTimeout = 0;
+            cmd.Parameters.AddWithValue("@name", name);
+            await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            if (await r.ReadAsync(ct).ConfigureAwait(false))
+            {
+                returnArgPos = r.IsDBNull(0) ? 0 : Convert.ToInt32(r.GetValue(0), CultureInfo.InvariantCulture);
+                deterministic = !r.IsDBNull(1) && Convert.ToInt32(r.GetValue(1), CultureInfo.InvariantCulture) != 0;
+            }
+        }
+
+        var (inputs, returnType) = await ReadFunctionArgsAsync(connection, tx, name, returnArgPos, ct).ConfigureAwait(false);
+
         var source = await ReadBlobAsync(connection, tx,
             "SELECT RDB$FUNCTION_SOURCE FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name",
             name, fallback, ct).ConfigureAwait(false);
 
         var sb = new StringBuilder();
-        sb.Append("CREATE OR ALTER FUNCTION ").Append(Quote(name)).AppendLine();
-        sb.AppendLine("/* (params and return type omitted; reconstruct from RDB$FUNCTION_ARGUMENTS for richer DDL) */");
+        sb.Append("CREATE OR ALTER FUNCTION ").Append(Quote(name));
+        if (inputs.Count > 0)
+        {
+            sb.AppendLine().Append('(').Append(string.Join(",\n ", inputs)).Append(')');
+        }
+        sb.AppendLine();
+        sb.Append("RETURNS ").Append(string.IsNullOrWhiteSpace(returnType) ? "/* unknown */" : returnType);
+        if (deterministic) sb.Append(" DETERMINISTIC");
+        sb.AppendLine();
         sb.AppendLine("AS");
-        sb.AppendLine(string.IsNullOrWhiteSpace(source) ? "BEGIN\n  /* function body unavailable */\nEND" : source.Trim());
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            sb.AppendLine("BEGIN");
+            sb.AppendLine("  /* function body unavailable */");
+            sb.AppendLine("END");
+        }
+        else
+        {
+            sb.Append(source.Trim()).AppendLine();
+        }
         return sb.ToString();
+    }
+
+    // Reads a function's arguments, splitting off the return value (the row at
+    // returnArgPos). Each input is formatted "NAME TYPE [NOT NULL]"; the return is the
+    // formatted type alone. Mirrors ReadProcedureParamsAsync — the type resolves to the
+    // underlying field type (a domain argument shows its resolved type, same as procs).
+    private static async Task<(System.Collections.Generic.List<string> Inputs, string ReturnType)> ReadFunctionArgsAsync(
+        FbConnection connection, FbTransaction? tx, string funcName, int returnArgPos, CancellationToken ct)
+    {
+        var inputs = new System.Collections.Generic.List<string>();
+        var returnType = string.Empty;
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText =
+            "SELECT fa.RDB$ARGUMENT_POSITION, TRIM(fa.RDB$ARGUMENT_NAME), " +
+            "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
+            "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, f.RDB$CHARACTER_LENGTH, " +
+            "       fa.RDB$NULL_FLAG " +
+            "FROM RDB$FUNCTION_ARGUMENTS fa " +
+            "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = fa.RDB$FIELD_SOURCE " +
+            "WHERE fa.RDB$FUNCTION_NAME = @name " +
+            "ORDER BY fa.RDB$ARGUMENT_POSITION";
+        cmd.Parameters.AddWithValue("@name", funcName);
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            var pos = reader.IsDBNull(0) ? -1 : Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture);
+            var argName = reader.IsDBNull(1) ? string.Empty : reader.GetString(1).Trim();
+            var type = FormatType(
+                SafeShort(reader, 2), SafeShort(reader, 3), SafeShort(reader, 4),
+                SafeShort(reader, 5), SafeShort(reader, 6), SafeShort(reader, 7));
+            var nf = SafeShort(reader, 8);
+            if (pos == returnArgPos)
+            {
+                returnType = type;
+            }
+            else
+            {
+                var sb = new StringBuilder();
+                sb.Append(Quote(argName)).Append(' ').Append(type);
+                if (nf == 1) sb.Append(" NOT NULL");
+                inputs.Add(sb.ToString());
+            }
+        }
+        return (inputs, returnType);
     }
 
     // -- Generators / Sequences ----------------------------------------------

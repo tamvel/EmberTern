@@ -510,6 +510,240 @@ public sealed class FirebirdTableDetailReader
         "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 5 " +
         "ORDER BY 2, 1";
 
+    // ─── Function metadata (Function Detail) ────────────────────────────────
+    //
+    // A PSQL function lives in RDB$FUNCTIONS (standalone: RDB$PACKAGE_NAME IS NULL); its
+    // arguments are in RDB$FUNCTION_ARGUMENTS with the return value at RDB$RETURN_ARGUMENT,
+    // and its dependency rows carry RDB$*_TYPE = 15 (Function). Same metadata-lane access
+    // pattern (MetaConnection/MetaLock/MetaTx) as the procedure readers.
+
+    public async Task<string> GetFunctionDescriptionAsync(
+        string functionName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(functionName)) return string.Empty;
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText =
+                "SELECT RDB$DESCRIPTION FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name";
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = MetaTx;
+            cmd.Parameters.AddWithValue("@name", functionName);
+
+            string? description = null;
+            await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)
+                    && !reader.IsDBNull(0))
+                {
+                    description = reader.GetString(0);
+                }
+            }
+            return NormalizeDescription(description);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read description for function {functionName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    /// <summary>Reads a function's catalog signature — the input arguments (the return
+    /// value split off via RDB$RETURN_ARGUMENT), the formatted return type, and the
+    /// DETERMINISTIC flag. Two queries under one lock (the args + the RDB$FUNCTIONS row).</summary>
+    public async Task<FunctionSignatureInfo> GetFunctionSignatureAsync(
+        string functionName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(functionName)) return new FunctionSignatureInfo();
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            int returnArgPos = 0;
+            bool deterministic = false;
+            await using (var infoCmd = connection.CreateCommand())
+            {
+                infoCmd.CommandText = FunctionInfoSql;
+                infoCmd.CommandTimeout = 0;
+                infoCmd.Transaction = MetaTx;
+                infoCmd.Parameters.AddWithValue("@name", functionName);
+                await using var r = await infoCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (await r.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    returnArgPos = r.IsDBNull(0) ? 0 : r.GetInt32(0);
+                    deterministic = !r.IsDBNull(1) && r.GetInt32(1) != 0;
+                }
+            }
+
+            var arguments = new List<ProcedureParameterInfo>();
+            var returnType = string.Empty;
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = FunctionArgumentsSql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", functionName);
+                int displayPosition = 0;
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    var argPos = reader.IsDBNull(0) ? -1 : reader.GetInt32(0);
+                    var name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1).Trim();
+                    var fieldType = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
+                    var subType = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3);
+                    var fieldLength = reader.IsDBNull(4) ? (int?)null : reader.GetInt32(4);
+                    var fieldPrecision = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
+                    var fieldScale = reader.IsDBNull(6) ? (int?)null : reader.GetInt32(6);
+                    var nullFlag = reader.IsDBNull(7) ? (int?)null : reader.GetInt32(7);
+                    var defaultSource = reader.IsDBNull(8) ? null : reader.GetString(8).Trim();
+                    var description = reader.IsDBNull(9) ? null : reader.GetString(9).Trim();
+
+                    var type = FormatFieldType(fieldType, fieldLength, fieldScale, fieldPrecision, subType);
+                    if (argPos == returnArgPos)
+                    {
+                        returnType = type;
+                    }
+                    else
+                    {
+                        arguments.Add(new ProcedureParameterInfo
+                        {
+                            Position = ++displayPosition,
+                            Name = name,
+                            Type = type,
+                            NotNull = nullFlag == 1,
+                            DefaultValue = StripDefaultPrefix(defaultSource),
+                            Description = string.IsNullOrEmpty(description) ? null : description,
+                        });
+                    }
+                }
+            }
+
+            return new FunctionSignatureInfo
+            {
+                Arguments = arguments,
+                ReturnType = returnType,
+                Deterministic = deterministic,
+            };
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read signature for function {functionName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    public async Task<(IReadOnlyList<DependencyInfo> DependsOn, IReadOnlyList<DependencyInfo> DependedOnBy)> GetFunctionDependenciesAsync(
+        string functionName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(functionName))
+        {
+            return (Array.Empty<DependencyInfo>(), Array.Empty<DependencyInfo>());
+        }
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var dependsOn = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = FunctionDependsOnSql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", functionName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependsOn.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        FieldName = reader.IsDBNull(1) ? null : reader.GetString(1).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2)),
+                    });
+                }
+            }
+
+            var dependedOnBy = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = FunctionDependedOnBySql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", functionName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependedOnBy.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(1) ? (int?)null : reader.GetInt32(1)),
+                    });
+                }
+            }
+
+            return (dependsOn, dependedOnBy);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read dependencies for function {functionName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    internal const string FunctionInfoSql =
+        "SELECT RDB$RETURN_ARGUMENT, RDB$DETERMINISTIC_FLAG " +
+        "FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name";
+
+    // Columns: 0=position 1=name 2=type 3=subtype 4=length 5=precision 6=scale
+    // 7=null-flag 8=default 9=description. The return value (no name) is the row at
+    // RDB$RETURN_ARGUMENT; every other row is an input argument.
+    internal const string FunctionArgumentsSql =
+        "SELECT fa.RDB$ARGUMENT_POSITION, TRIM(fa.RDB$ARGUMENT_NAME), " +
+        "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
+        "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, " +
+        "       COALESCE(fa.RDB$NULL_FLAG, f.RDB$NULL_FLAG), " +
+        "       fa.RDB$DEFAULT_SOURCE, fa.RDB$DESCRIPTION " +
+        "FROM RDB$FUNCTION_ARGUMENTS fa " +
+        "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = fa.RDB$FIELD_SOURCE " +
+        "WHERE fa.RDB$FUNCTION_NAME = @name " +
+        "ORDER BY fa.RDB$ARGUMENT_POSITION";
+
+    // Function dependencies use RDB$*_TYPE = 15 (Function). "Depends on" = what this
+    // function references (it is the DEPENDENT); "depended on by" = what references this
+    // function (it is the DEPENDED_ON). One @name reference per query (cf. gotcha #47).
+    internal const string FunctionDependsOnSql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDED_ON_NAME), TRIM(d.RDB$FIELD_NAME), " +
+        "    CAST(d.RDB$DEPENDED_ON_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDENT_NAME) = @name AND d.RDB$DEPENDENT_TYPE = 15 " +
+        "ORDER BY 3, 1";
+
+    internal const string FunctionDependedOnBySql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDENT_NAME), " +
+        "    CAST(d.RDB$DEPENDENT_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 15 " +
+        "ORDER BY 2, 1";
+
     // ─── Triggers (Trigger Detail) ──────────────────────────────────────────
     //
     // Trigger metadata is in RDB$TRIGGERS (relation + bit-encoded RDB$TRIGGER_TYPE +

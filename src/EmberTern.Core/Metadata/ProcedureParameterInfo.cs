@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace EmberTern.Core.Metadata;
 
 /// <summary>
@@ -17,4 +19,19 @@ public sealed class ProcedureParameterInfo
     public bool NotNull { get; init; }
     public string? DefaultValue { get; init; }
     public string? Description { get; init; }
+}
+
+/// <summary>
+/// A function's catalog signature, sourced from <c>RDB$FUNCTIONS</c> +
+/// <c>RDB$FUNCTION_ARGUMENTS</c>. <see cref="Arguments"/> are the input arguments
+/// (the return value is split off via <c>RDB$RETURN_ARGUMENT</c>); <see cref="ReturnType"/>
+/// is the single formatted return type. Read-only metadata — the Function Detail
+/// Arguments/Result grids load from this and edit a separate row model.
+/// </summary>
+public sealed class FunctionSignatureInfo
+{
+    public IReadOnlyList<ProcedureParameterInfo> Arguments { get; init; } = System.Array.Empty<ProcedureParameterInfo>();
+    /// <summary>Formatted return type, e.g. <c>INTEGER</c> / <c>NUMERIC(15,2)</c>.</summary>
+    public string ReturnType { get; init; } = string.Empty;
+    public bool Deterministic { get; init; }
 }
