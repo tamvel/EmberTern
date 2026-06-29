@@ -68,6 +68,9 @@
   <!-- New Function: a rounded square with an ƒ glyph (top-left) + the SAME bottom-right
        "+" overlay, consistent with the other New-object create actions. -->
   <StreamGeometry x:Key="Icon.FunctionPlus">M5 3 H12 A2 2 0 0 1 14 5 V12 A2 2 0 0 1 12 14 H5 A2 2 0 0 1 3 12 V5 A2 2 0 0 1 5 3 Z M10 5.4 c-1.5 0 -2.1 0.9 -2.1 2.3 V11.4 M6.6 8.3 H10.4 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
+  <!-- New Generator: a small "#" (top-left, matching the metadata-tree Generator glyph
+       Icon.Generator) + the SAME bottom-right "+" overlay as the other New-object icons. -->
+  <StreamGeometry x:Key="Icon.GeneratorPlus">M2 6 H13 M2 10 H13 M7 2 L6 14 M11 2 L10 14 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
   <!-- Pencil-ruler (Lucide pencil-ruler): design / edit table structure (the inline
        field-edit toggle). Relative "m…" sub-paths re-anchored to absolute M + l. -->
   <StreamGeometry x:Key="Icon.PencilRuler">M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13 M8 6 l2-2 M18 16 l2-2 M17 11 l4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17 M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z M15 5 l4 4</StreamGeometry>

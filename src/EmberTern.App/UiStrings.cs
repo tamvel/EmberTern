@@ -97,6 +97,8 @@ internal static class UiStrings
     public const string UnsavedModifiedTriggerFormat = "Trigger {0} — uncompiled changes";
     public const string UnsavedNewFunctionFormat = "New function (not yet created) — {0}";
     public const string UnsavedModifiedFunctionFormat = "Function {0} — uncompiled changes";
+    public const string UnsavedNewGeneratorFormat = "New generator (not yet created) — {0}";
+    public const string UnsavedModifiedGeneratorFormat = "Generator {0} — unsaved changes";
     public const string UnsavedPendingStructureFormat = "Table {0} — uncompiled structural changes";
     public const string UnsavedTransactionDataFormat = "Data transaction — {0} pending statement(s)";
     public const string UnsavedTransactionMetadataFormat = "Metadata transaction — {0} pending statement(s)";
@@ -469,6 +471,27 @@ internal static class UiStrings
     public const string ViewColumnMoveDownTooltip = "Move column down";
     public const string ViewColumnName = "Name";
     public const string ViewBodyHeader = "SELECT body";
+
+    // ─── Generator Detail ──────────────────────────────────────────────────
+    public const string GeneratorDetailTabGenerator = "Generator";
+    public const string GeneratorDetailTabDependencies = "Dependencies";
+    public const string GeneratorDetailTabDdl = "DDL";
+    public const string GeneratorNameHeader = "Name";
+    public const string GeneratorCurrentValueHeader = "Current value";
+    public const string GeneratorInitialValueHeader = "Initial value";
+    public const string GeneratorIncrementHeader = "Increment";
+    public const string GeneratorDescriptionHeader = "Description";
+    public const string GeneratorLoadingHint = "Loading generator…";
+    public const string GeneratorRefreshCurrentValueTooltip = "Refresh current value (re-read from database)";
+    public const string ToolbarNewGeneratorTooltip = "New Generator";
+    public const string GeneratorSaveTooltip = "Save generator";
+    public const string GeneratorSaveFailedFormat = "Save failed: {0}";
+    public const string GeneratorDeleteTooltip = "Delete generator";
+    public const string GeneratorDeleteConfirmTitle = "Delete generator";
+    public const string GeneratorDeleteConfirmFormat = "Drop generator \"{0}\"? This cannot be undone.";
+    public const string GeneratorDeleteConfirmYes = "Delete";
+    public const string NewGeneratorTabDefaultTitle = "New Generator";
+    public const string NewGeneratorExecutedFormat = "Generator \"{0}\" created.";
 
     // ─── Procedure Detail (Procedure Detail V1) ─────────────────────────────
     public const string ProcedureNameHeader = "Procedure name";

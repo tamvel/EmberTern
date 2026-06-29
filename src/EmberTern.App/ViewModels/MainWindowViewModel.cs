@@ -194,6 +194,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveTriggerDetail))]
     [NotifyPropertyChangedFor(nameof(IsFunctionDetailTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveFunctionDetail))]
+    [NotifyPropertyChangedFor(nameof(IsGeneratorDetailTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveGeneratorDetail))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
@@ -248,6 +250,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsFunctionDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.FunctionDetail };
     public FunctionDetailTabViewModel? ActiveFunctionDetail
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.FunctionDetail } t ? t.FunctionDetail : null;
+    /// <summary>True when the active workspace tab is a Generator Detail tab.</summary>
+    public bool IsGeneratorDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GeneratorDetail };
+    public GeneratorDetailTabViewModel? ActiveGeneratorDetail
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GeneratorDetail } t ? t.GeneratorDetail : null;
     // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
     // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
     // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
@@ -303,7 +309,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsFunctionDetailTabActive;
     // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail, TriggerDetail, FunctionDetail);
     // the anchored Query tab is never closable so the button hides when it's active.
-    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail };
+    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail };
 
     // ─── Unified editor toolbar — fixed 5-section model ───────────────────
     //
@@ -1395,6 +1401,23 @@ public partial class MainWindowViewModel : ViewModelBase
                     ActiveInnerSubTabIndex = fnd?.ActiveEasyCollectionIndex,
                 });
             }
+            else if (tab.Kind == WorkspaceTabKind.GeneratorDetail)
+            {
+                // Skip transient New Generator tabs (IsNew) — the generator doesn't
+                // exist yet. Persist real generators as GeneratorDetail so restore
+                // re-opens the full surface (not DDL-only).
+                if (tab.GeneratorDetail is { IsNew: true }) continue;
+                var gd = tab.GeneratorDetail;
+                ws.Tabs.Add(new WorkspaceTab
+                {
+                    Kind = CoreTabKind.GeneratorDetail,
+                    ObjectName = tab.ObjectName,
+                    ObjectKind = tab.ObjectKind,
+                    ConnectionProfileId = tab.ConnectionProfileId,
+                    DdlText = gd is { } ? gd.DdlText : tab.DdlText,
+                    ActiveSubTabIndex = gd?.ActiveSubTabIndex,
+                });
+            }
             else
             {
                 ws.Tabs.Add(new WorkspaceTab
@@ -1528,6 +1551,18 @@ public partial class MainWindowViewModel : ViewModelBase
                 if (tab.ActiveSubTabIndex is { } fnSub) detail.ActiveSubTabIndex = fnSub;
                 if (tab.ActiveInnerSubTabIndex is { } fnInner) detail.ActiveEasyCollectionIndex = fnInner;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateFunctionDetail(this, obj, detail, tab.ConnectionProfileId));
+            }
+            else if (tab.Kind == CoreTabKind.GeneratorDetail
+                  && tab.ObjectKind is { } genKind
+                  && !string.IsNullOrEmpty(tab.ObjectName))
+            {
+                // Native GeneratorDetail restore (no DDL-only fallback). Lazy-loads on
+                // first activation via SelectTab. Cached DDL seeds the DDL tab.
+                var obj = new MetadataObject(tab.ObjectName, genKind);
+                var detail = CreateGeneratorDetail(obj);
+                detail.DdlText = tab.DdlText ?? string.Empty;
+                if (tab.ActiveSubTabIndex is { } gnSub) detail.ActiveSubTabIndex = gnSub;
+                WorkspaceTabs.Add(WorkspaceTabViewModel.CreateGeneratorDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
 
@@ -2020,6 +2055,58 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public bool CanCreateGenerator => _service.IsConnected;
+
+    // New Generator: opens a Generator Detail tab in IsNew mode with an editable
+    // name + default values (initial 0, increment 1). On Save success
+    // OnGeneratorCreated refreshes the tree, closes this tab and reopens the real
+    // generator.
+    [RelayCommand(CanExecute = nameof(CanCreateGenerator))]
+    private void NewGenerator()
+    {
+        var detail = new GeneratorDetailTabViewModel(UiStrings.NewGeneratorTabDefaultTitle, _tableDetailReader, _ddlReader, _ddlExecutor)
+        {
+            IsNew = true,
+            EditableName = string.Empty,
+            InitialValue = 0,
+            Increment = 1,
+            CurrentValue = 0,
+        };
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.GeneratorCreated += name => OnGeneratorCreated(detail, name);
+        // Seeding the defaults marked the VM dirty; a brand-new untouched tab must
+        // not prompt on close — clear it so only real edits flip it back.
+        detail.ClearDirty();
+
+        var obj = new MetadataObject(UiStrings.NewGeneratorTabDefaultTitle, MetadataObjectKind.Generator);
+        var tab = WorkspaceTabViewModel.CreateGeneratorDetail(this, obj, detail, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+    }
+
+    private async void OnGeneratorCreated(GeneratorDetailTabViewModel detail, string? generatorName)
+    {
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewGeneratorExecutedFormat, generatorName ?? string.Empty));
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+
+        WorkspaceTabViewModel? newTab = null;
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.GeneratorDetail && ReferenceEquals(t.GeneratorDetail, detail))
+            {
+                newTab = t;
+                break;
+            }
+        }
+        if (newTab is not null) CloseTab(newTab);
+
+        if (!string.IsNullOrEmpty(generatorName))
+        {
+            OnOpenDdlRequested(new MetadataObject(generatorName, MetadataObjectKind.Generator));
+        }
+    }
+
     public bool CanCreateProcedure => _service.IsConnected;
 
     // New Procedure: opens a Procedure Detail tab in IsNew mode with the Editor
@@ -2403,6 +2490,12 @@ public partial class MainWindowViewModel : ViewModelBase
     internal static bool OpensAsFunctionDetail(MetadataObjectKind kind)
         => kind is MetadataObjectKind.Function;
 
+    // Generators open in the dedicated Generator Detail surface (the editable
+    // Generator form + Dependencies + DDL), not a plain DDL tab. Separate
+    // predicate — it builds its own (form-based, no PSQL body) detail VM.
+    internal static bool OpensAsGeneratorDetail(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.Generator;
+
     // Single construction point for ViewDetail VMs — mirrors CreateTableDetail.
     // A view is read-only data (no inline editing) but its SQL source IS editable,
     // so the DDL executor is wired for Compile while no data editor is.
@@ -2433,6 +2526,53 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             ViewEasyModePreference = d.EasyMode;
         }
+    }
+
+    // Single construction point for GeneratorDetail VMs — mirrors CreateViewDetail.
+    // The generator form persists via Save (DDL executor wired); there is no Easy
+    // mode, no data editor.
+    internal GeneratorDetailTabViewModel CreateGeneratorDetail(MetadataObject obj)
+    {
+        var detail = new GeneratorDetailTabViewModel(
+            obj.Name,
+            _tableDetailReader,
+            _ddlReader,
+            _ddlExecutor);
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.DeleteRequested += OnGeneratorDeleteRequested;
+        return detail;
+    }
+
+    private async Task OnGeneratorDeleteRequested(GeneratorDetailTabViewModel detail)
+    {
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(DdlGenerator.BuildDropSequence(detail.GeneratorName)).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+
+        // Close the tab for this generator, then refresh the tree so it disappears.
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.GeneratorDetail && ReferenceEquals(t.GeneratorDetail, detail))
+            {
+                CloseTab(t);
+                break;
+            }
+        }
+        await Metadata.RefreshAsync().ConfigureAwait(true);
     }
 
     // Single construction point for ProcedureDetail VMs — mirrors CreateViewDetail.
@@ -2676,7 +2816,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // TableDetail tabs key on (Kind, Name).
         foreach (var tab in WorkspaceTabs)
         {
-            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail
+            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail
                 && tab.ObjectKind == obj.Kind
                 && string.Equals(tab.ObjectName, obj.Name, StringComparison.Ordinal))
             {
@@ -2764,6 +2904,21 @@ public partial class MainWindowViewModel : ViewModelBase
                 return;
             }
 
+            if (OpensAsGeneratorDetail(obj.Kind))
+            {
+                var detail = CreateGeneratorDetail(obj);
+                var newTab = WorkspaceTabViewModel.CreateGeneratorDetail(this, obj, detail, _service.ActiveProfile?.Id);
+                WorkspaceTabs.Add(newTab);
+                SelectTab(newTab);
+                await detail.EnsureLoadedAsync().ConfigureAwait(true);
+                if (!string.IsNullOrEmpty(detail.ErrorMessage))
+                {
+                    AddMessage(MessageSeverity.Error, detail.ErrorMessage);
+                    SelectedBottomTabIndex = 1;
+                }
+                return;
+            }
+
             var ddl = await _ddlReader.FetchDdlAsync(obj).ConfigureAwait(true);
             var ddlTab = WorkspaceTabViewModel.CreateDdl(this, obj, ddl, _service.ActiveProfile?.Id);
             WorkspaceTabs.Add(ddlTab);
@@ -2823,6 +2978,11 @@ public partial class MainWindowViewModel : ViewModelBase
             && _service.IsConnected)
         {
             _ = functionDetail.EnsureLoadedAsync();
+        }
+        else if (tab is { Kind: WorkspaceTabKind.GeneratorDetail, GeneratorDetail: { } generatorDetail }
+            && _service.IsConnected)
+        {
+            _ = generatorDetail.EnsureLoadedAsync();
         }
     }
 
@@ -3647,6 +3807,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // New Function shares the same connection-state gate.
         OnPropertyChanged(nameof(CanCreateFunction));
         NewFunctionCommand.NotifyCanExecuteChanged();
+        // New Generator shares the same connection-state gate.
+        OnPropertyChanged(nameof(CanCreateGenerator));
+        NewGeneratorCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

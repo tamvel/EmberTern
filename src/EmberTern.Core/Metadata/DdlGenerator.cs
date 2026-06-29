@@ -1096,6 +1096,106 @@ public static class DdlGenerator
         return $"SET STATISTICS INDEX {Quote(indexName.Trim())}";
     }
 
+    // ─── Sequence / generator generation (Generator Detail) ──────────────
+    //
+    // A Firebird generator is a SEQUENCE. CREATE / ALTER use the SQL-standard
+    // SEQUENCE syntax; the current value is reset with ALTER SEQUENCE … RESTART
+    // WITH (FB3+); the description goes through COMMENT ON SEQUENCE. Identifiers
+    // are always quoted (internal quotes doubled). No direct UPDATE on RDB$
+    // system tables — everything is DDL the engine validates.
+
+    /// <summary>
+    /// <c>CREATE SEQUENCE "NAME" [START WITH s] [INCREMENT BY i]</c>. The
+    /// <c>START WITH</c> clause is emitted for a non-zero start, or always when
+    /// <paramref name="forceStartWith"/> is true; <c>INCREMENT BY</c> only for a
+    /// non-default increment (FB4+). The Generator Detail New flow passes
+    /// <paramref name="forceStartWith"/>=true so <c>RDB$INITIAL_VALUE</c> is set to
+    /// the user's value even for 0 (a plain <c>CREATE SEQUENCE</c> leaves it at the
+    /// FB4+ default of 1, which would then mismatch the runtime counter).
+    /// </summary>
+    public static string BuildCreateSequence(string name, long startWith, long increment, bool forceStartWith = false)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Sequence name is required.", nameof(name));
+
+        var sb = new StringBuilder();
+        sb.Append("CREATE SEQUENCE ").Append(Quote(name.Trim()));
+        if (startWith != 0 || forceStartWith)
+            sb.Append(" START WITH ").Append(startWith.ToString(CultureInfo.InvariantCulture));
+        if (increment != 1)
+            sb.Append(" INCREMENT BY ").Append(increment.ToString(CultureInfo.InvariantCulture));
+        return sb.ToString();
+    }
+
+    /// <summary><c>DROP SEQUENCE "NAME"</c>. Caller confirms the destructive
+    /// intent; EmberTern never auto-drops dependents — a Firebird dependency
+    /// rejection surfaces to the user.</summary>
+    public static string BuildDropSequence(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Sequence name is required.", nameof(name));
+        return $"DROP SEQUENCE {Quote(name.Trim())}";
+    }
+
+    /// <summary>
+    /// <c>SET GENERATOR "NAME" TO v</c> — sets the generator's raw runtime
+    /// counter so that <c>GEN_ID(name, 0)</c> returns exactly <paramref name="value"/>
+    /// (the next <c>NEXT VALUE FOR</c> then yields <c>value + increment</c>).
+    /// This is the **version-independent** way to set the Current Value: verified
+    /// to behave identically on FB3 and FB5. Use this — NOT
+    /// <see cref="BuildAlterSequenceRestart"/> — for "set the current value to v",
+    /// because <c>RESTART WITH</c> changed semantics in FB4 (FB3: counter ← v; FB5:
+    /// counter ← v − increment, so the next value is v). See the Generator
+    /// semantics audit in CLAUDE.md.
+    /// </summary>
+    public static string BuildSetGenerator(string name, long value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Sequence name is required.", nameof(name));
+        return string.Format(CultureInfo.InvariantCulture,
+            "SET GENERATOR {0} TO {1}", Quote(name.Trim()), value);
+    }
+
+    /// <summary><c>ALTER SEQUENCE "NAME" RESTART WITH v</c> — the SQL-standard
+    /// reset. <b>Version-dependent</b>: on FB3 the counter becomes <c>v</c>
+    /// (<c>GEN_ID(,0)=v</c>); on FB4+ the counter becomes <c>v − increment</c> so
+    /// the NEXT value is <c>v</c>. Because of that split, EmberTern uses
+    /// <see cref="BuildSetGenerator"/> (not this) to set the Current Value to an
+    /// exact number. Kept for completeness + regression coverage of the shape.</summary>
+    public static string BuildAlterSequenceRestart(string name, long value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Sequence name is required.", nameof(name));
+        return string.Format(CultureInfo.InvariantCulture,
+            "ALTER SEQUENCE {0} RESTART WITH {1}", Quote(name.Trim()), value);
+    }
+
+    /// <summary><c>ALTER SEQUENCE "NAME" START WITH v</c> — sets the sequence's
+    /// INITIAL value used by a future bare RESTART (FB4+).</summary>
+    public static string BuildAlterSequenceStartWith(string name, long value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Sequence name is required.", nameof(name));
+        return string.Format(CultureInfo.InvariantCulture,
+            "ALTER SEQUENCE {0} START WITH {1}", Quote(name.Trim()), value);
+    }
+
+    /// <summary><c>ALTER SEQUENCE "NAME" INCREMENT BY i</c> — changes the step
+    /// (FB4+).</summary>
+    public static string BuildAlterSequenceIncrement(string name, long increment)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Sequence name is required.", nameof(name));
+        return string.Format(CultureInfo.InvariantCulture,
+            "ALTER SEQUENCE {0} INCREMENT BY {1}", Quote(name.Trim()), increment);
+    }
+
+    /// <summary>Like <see cref="BuildCommentTable"/> but for sequences/generators —
+    /// Firebird's <c>COMMENT ON SEQUENCE</c> form (the SQL-standard synonym for
+    /// GENERATOR). Pass null/whitespace to clear the comment (<c>IS NULL</c>).</summary>
+    public static string BuildCommentSequence(string name, string? comment)
+        => BuildRelationComment("SEQUENCE", name, comment);
+
     private static void ValidateConstraintBasics(string tableName, string constraintName, IReadOnlyList<string> fields)
     {
         if (string.IsNullOrWhiteSpace(tableName))

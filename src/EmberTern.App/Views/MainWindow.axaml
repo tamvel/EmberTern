@@ -200,6 +200,12 @@
             <controls:SvgIcon Data="{StaticResource Icon.FunctionPlus}"
                               Foreground="{DynamicResource IconColor_Function}" />
           </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewGeneratorTooltip}"
+                  Command="{Binding NewGeneratorCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.GeneratorPlus}"
+                              Foreground="{DynamicResource IconColor_Generator}" />
+          </Button>
         </StackPanel>
 
         <!-- Drag spacer (column 2 = *) -->
@@ -709,6 +715,20 @@
                       Command="{Binding ActiveFunctionDetail.RevertChangesCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
+              <!-- Generator: Save / Revert / Delete (Save auto-commits via the autonomous
+                   DDL path, so no Commit/Rollback pair is shown for a generator tab). -->
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.GeneratorSaveTooltip}"
+                      Command="{Binding ActiveGeneratorDetail.SaveCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Save}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+                      Command="{Binding ActiveGeneratorDetail.RevertChangesCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.GeneratorDeleteTooltip}"
+                      Command="{Binding ActiveGeneratorDetail.DeleteCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
               <!-- Single unified Commit / Rollback pair (auto-routed to the open lane(s)). -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
                       Command="{Binding CommitAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
@@ -887,6 +907,9 @@
               <views:FunctionDetailTabView x:Name="FunctionDetailView"
                                            DataContext="{Binding ActiveFunctionDetail}"
                                            IsVisible="{Binding DataContext.IsFunctionDetailTabActive, ElementName=RootWindow}" />
+              <views:GeneratorDetailTabView x:Name="GeneratorDetailView"
+                                            DataContext="{Binding ActiveGeneratorDetail}"
+                                            IsVisible="{Binding DataContext.IsGeneratorDetailTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query

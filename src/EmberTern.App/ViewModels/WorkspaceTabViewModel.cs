@@ -14,6 +14,7 @@ public enum WorkspaceTabKind
     ProcedureDetail,
     TriggerDetail,
     FunctionDetail,
+    GeneratorDetail,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -144,6 +145,22 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             FunctionDetail = detail,
         };
 
+    public static WorkspaceTabViewModel CreateGeneratorDetail(MainWindowViewModel owner, MetadataObject obj, GeneratorDetailTabViewModel detail, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.GeneratorDetail,
+            BaseTitle = obj.Name,
+            IsClosable = true,
+            ObjectKind = obj.Kind,
+            ObjectName = obj.Name,
+            DdlText = detail.DdlText,
+            ConnectionProfileId = connectionProfileId,
+            Icon = MetadataNodeViewModel.IconFor(obj.Kind),
+            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
+            GeneratorDetail = detail,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -161,6 +178,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public ProcedureDetailTabViewModel? ProcedureDetail { get; private init; }
     public TriggerDetailTabViewModel? TriggerDetail { get; private init; }
     public FunctionDetailTabViewModel? FunctionDetail { get; private init; }
+    public GeneratorDetailTabViewModel? GeneratorDetail { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]
@@ -187,6 +205,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.ProcedureDetail => ProcedureDetail?.GetUnsavedWork(),
         WorkspaceTabKind.TriggerDetail => TriggerDetail?.GetUnsavedWork(),
         WorkspaceTabKind.FunctionDetail => FunctionDetail?.GetUnsavedWork(),
+        WorkspaceTabKind.GeneratorDetail => GeneratorDetail?.GetUnsavedWork(),
         _ => null,
     };
 

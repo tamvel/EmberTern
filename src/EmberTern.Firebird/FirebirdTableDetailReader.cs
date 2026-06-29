@@ -744,6 +744,215 @@ public sealed class FirebirdTableDetailReader
         "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 15 " +
         "ORDER BY 2, 1";
 
+    // ─── Generators / sequences (Generator Detail) ─────────────────────────
+    //
+    // A generator lives in RDB$GENERATORS; dependency rows carry RDB$*_TYPE = 14
+    // (Generator). The current value is read with GEN_ID(name, 0) (no bump). The
+    // initial value + increment live in RDB$GENERATORS (FB3+) — on FB 2.5 those
+    // columns don't exist, so a server-version gate defaults them to 0 / 1 rather
+    // than issuing a doomed "column not found" query (which could mark an active
+    // working tx for rollback). Same metadata-lane access pattern as the rest.
+
+    /// <summary>Reads a generator's current value, initial value, increment, and
+    /// description. Current value is best-effort (GEN_ID may be blocked on
+    /// system-owned sequences); initial/increment are read from RDB$GENERATORS on
+    /// FB3+ and default to 0 / 1 on older servers.</summary>
+    public async Task<GeneratorInfo> GetGeneratorInfoAsync(
+        string generatorName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(generatorName)) return new GeneratorInfo();
+
+        var connection = MetaConnection();
+        var serverMajor = FirebirdDdlReader.ParseServerMajor(connection.ServerVersion);
+        // Capture the lock ONCE — see gotcha #98.
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            long initial = 0, increment = 1;
+            string description = string.Empty;
+
+            // FB3+ exposes RDB$INITIAL_VALUE / RDB$GENERATOR_INCREMENT; older catalogs
+            // only have the description column.
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = serverMajor >= 3
+                    ? "SELECT RDB$INITIAL_VALUE, RDB$GENERATOR_INCREMENT, RDB$DESCRIPTION " +
+                      "FROM RDB$GENERATORS WHERE RDB$GENERATOR_NAME = @name"
+                    : "SELECT RDB$DESCRIPTION FROM RDB$GENERATORS WHERE RDB$GENERATOR_NAME = @name";
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", generatorName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    if (serverMajor >= 3)
+                    {
+                        if (!reader.IsDBNull(0)) initial = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+                        if (!reader.IsDBNull(1)) increment = Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
+                        if (!reader.IsDBNull(2)) description = reader.GetString(2);
+                    }
+                    else if (!reader.IsDBNull(0))
+                    {
+                        description = reader.GetString(0);
+                    }
+                }
+            }
+
+            long current = 0;
+            // GEN_ID(name, 0) returns the current value without bumping it. Best-effort:
+            // some FB versions/permissions block GEN_ID on system sequences.
+            try
+            {
+                await using var cmd = connection.CreateCommand();
+                cmd.CommandText = $"SELECT GEN_ID({DdlGenerator.Quote(generatorName)}, 0) FROM RDB$DATABASE";
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (result is not null && result != DBNull.Value)
+                {
+                    current = Convert.ToInt64(result, CultureInfo.InvariantCulture);
+                }
+            }
+            catch (FbException)
+            {
+                // current value stays 0 — definition is still useful
+            }
+
+            return new GeneratorInfo
+            {
+                Name = generatorName,
+                CurrentValue = current,
+                InitialValue = initial,
+                Increment = increment,
+                Description = NormalizeDescription(description),
+            };
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read generator {generatorName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    /// <summary>Reads ONLY the generator's current value (GEN_ID(name, 0), no bump) —
+    /// the lightweight path behind the "Refresh Current Value" button, so a running
+    /// ERP's live counter can be re-checked without reloading the whole object. Returns
+    /// the raw counter (the VM normalizes a negative pre-first-use sentinel for display).</summary>
+    public async Task<long> GetGeneratorCurrentValueAsync(
+        string generatorName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(generatorName)) return 0;
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();   // capture once — see gotcha #98
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"SELECT GEN_ID({DdlGenerator.Quote(generatorName)}, 0) FROM RDB$DATABASE";
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = MetaTx;
+            var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            return result is not null && result != DBNull.Value
+                ? Convert.ToInt64(result, CultureInfo.InvariantCulture)
+                : 0;
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read current value for generator {generatorName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    public async Task<(IReadOnlyList<DependencyInfo> DependsOn, IReadOnlyList<DependencyInfo> DependedOnBy)> GetGeneratorDependenciesAsync(
+        string generatorName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(generatorName))
+        {
+            return (Array.Empty<DependencyInfo>(), Array.Empty<DependencyInfo>());
+        }
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var dependsOn = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = GeneratorDependsOnSql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", generatorName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependsOn.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        FieldName = reader.IsDBNull(1) ? null : reader.GetString(1).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2)),
+                    });
+                }
+            }
+
+            var dependedOnBy = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = GeneratorDependedOnBySql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", generatorName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependedOnBy.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(1) ? (int?)null : reader.GetInt32(1)),
+                    });
+                }
+            }
+
+            return (dependsOn, dependedOnBy);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read dependencies for generator {generatorName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    // Generator dependencies use RDB$*_TYPE = 14 (Generator). A generator references
+    // nothing, so "depends on" is normally empty; "depended on by" lists triggers /
+    // procedures that call GEN_ID / NEXT VALUE FOR on it. One @name per query (gotcha #47).
+    internal const string GeneratorDependsOnSql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDED_ON_NAME), TRIM(d.RDB$FIELD_NAME), " +
+        "    CAST(d.RDB$DEPENDED_ON_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDENT_NAME) = @name AND d.RDB$DEPENDENT_TYPE = 14 " +
+        "ORDER BY 3, 1";
+
+    internal const string GeneratorDependedOnBySql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDENT_NAME), " +
+        "    CAST(d.RDB$DEPENDENT_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 14 " +
+        "ORDER BY 2, 1";
+
     // ─── Triggers (Trigger Detail) ──────────────────────────────────────────
     //
     // Trigger metadata is in RDB$TRIGGERS (relation + bit-encoded RDB$TRIGGER_TYPE +
