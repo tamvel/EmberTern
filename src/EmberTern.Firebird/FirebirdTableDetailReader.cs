@@ -1319,6 +1319,140 @@ public sealed class FirebirdTableDetailReader
         };
     }
 
+    // ─── Exceptions (Exception Detail) ──────────────────────────────────────
+    //
+    // A Firebird custom EXCEPTION lives in RDB$EXCEPTIONS — name + RDB$MESSAGE
+    // (raised text) + RDB$DESCRIPTION (COMMENT ON EXCEPTION). No PSQL body, no
+    // parameters. Same metadata-lane / lock-once pattern as the other readers.
+
+    /// <summary>Reads a single exception → <see cref="ExceptionInfo"/> (message +
+    /// description). Both blobs are decoded via the driver, consistent with the
+    /// other description/message reads in this reader.</summary>
+    public async Task<ExceptionInfo> GetExceptionInfoAsync(
+        string exceptionName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(exceptionName)) return new ExceptionInfo();
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();   // capture once — see gotcha #98
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText =
+                "SELECT RDB$MESSAGE, RDB$DESCRIPTION FROM RDB$EXCEPTIONS WHERE RDB$EXCEPTION_NAME = @name";
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = MetaTx;
+            cmd.Parameters.AddWithValue("@name", exceptionName);
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return new ExceptionInfo { Name = exceptionName.Trim() };
+            }
+
+            var message = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+            var description = reader.IsDBNull(1) ? null : reader.GetString(1);
+            return new ExceptionInfo
+            {
+                Name = exceptionName.Trim(),
+                Message = (message ?? string.Empty).TrimEnd(),
+                Description = NormalizeDescription(description),
+            };
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read exception {exceptionName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    /// <summary>Dependencies for an exception (RDB$*_TYPE = 7). An exception
+    /// references nothing, so "depends on" is normally empty; "depended on by"
+    /// lists procedures / functions / triggers / packages that raise it.</summary>
+    public async Task<(IReadOnlyList<DependencyInfo> DependsOn, IReadOnlyList<DependencyInfo> DependedOnBy)> GetExceptionDependenciesAsync(
+        string exceptionName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(exceptionName))
+        {
+            return (Array.Empty<DependencyInfo>(), Array.Empty<DependencyInfo>());
+        }
+
+        var connection = MetaConnection();
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var dependsOn = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = ExceptionDependsOnSql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", exceptionName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependsOn.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        FieldName = reader.IsDBNull(1) ? null : reader.GetString(1).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2)),
+                    });
+                }
+            }
+
+            var dependedOnBy = new List<DependencyInfo>();
+            await using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = ExceptionDependedOnBySql;
+                cmd.CommandTimeout = 0;
+                cmd.Transaction = MetaTx;
+                cmd.Parameters.AddWithValue("@name", exceptionName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    dependedOnBy.Add(new DependencyInfo
+                    {
+                        ObjectName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim(),
+                        ObjectType = MapObjectType(reader.IsDBNull(1) ? (int?)null : reader.GetInt32(1)),
+                    });
+                }
+            }
+
+            return (dependsOn, dependedOnBy);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read dependencies for exception {exceptionName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    // Exception dependencies use RDB$*_TYPE = 7 (Exception). One @name per query
+    // (gotcha #47). Mirror of the generator dependency SQL (type 14).
+    internal const string ExceptionDependsOnSql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDED_ON_NAME), TRIM(d.RDB$FIELD_NAME), " +
+        "    CAST(d.RDB$DEPENDED_ON_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDENT_NAME) = @name AND d.RDB$DEPENDENT_TYPE = 7 " +
+        "ORDER BY 3, 1";
+
+    internal const string ExceptionDependedOnBySql =
+        "SELECT DISTINCT TRIM(d.RDB$DEPENDENT_NAME), " +
+        "    CAST(d.RDB$DEPENDENT_TYPE AS INTEGER) " +
+        "FROM RDB$DEPENDENCIES d " +
+        "WHERE TRIM(d.RDB$DEPENDED_ON_NAME) = @name AND d.RDB$DEPENDED_ON_TYPE = 7 " +
+        "ORDER BY 2, 1";
+
     // Strips the "(size[,scale])" / " SUB_TYPE n" suffix off a formatted type to
     // recover the bare type name (e.g. "VARCHAR(80)" → "VARCHAR").
     private static string StripTypeArgs(string formatted)

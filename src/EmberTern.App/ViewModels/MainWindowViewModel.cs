@@ -200,6 +200,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveDomainDetail))]
     [NotifyPropertyChangedFor(nameof(IsPackageDetailTabActive))]
     [NotifyPropertyChangedFor(nameof(ActivePackageDetail))]
+    [NotifyPropertyChangedFor(nameof(IsExceptionDetailTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveExceptionDetail))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
@@ -266,6 +268,11 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsPackageDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.PackageDetail };
     public PackageDetailTabViewModel? ActivePackageDetail
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.PackageDetail } t ? t.PackageDetail : null;
+
+    /// <summary>True when the active workspace tab is an Exception Detail tab.</summary>
+    public bool IsExceptionDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ExceptionDetail };
+    public ExceptionDetailTabViewModel? ActiveExceptionDetail
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ExceptionDetail } t ? t.ExceptionDetail : null;
     // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
     // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
     // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
@@ -321,7 +328,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsFunctionDetailTabActive;
     // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail, TriggerDetail, FunctionDetail);
     // the anchored Query tab is never closable so the button hides when it's active.
-    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail or WorkspaceTabKind.PackageDetail };
+    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail or WorkspaceTabKind.PackageDetail or WorkspaceTabKind.ExceptionDetail };
 
     // ─── Unified editor toolbar — fixed 5-section model ───────────────────
     //
@@ -1464,6 +1471,23 @@ public partial class MainWindowViewModel : ViewModelBase
                     ActiveSubTabIndex = pd?.ActiveSubTabIndex,
                 });
             }
+            else if (tab.Kind == WorkspaceTabKind.ExceptionDetail)
+            {
+                // Skip transient New Exception tabs (IsNew) — the exception doesn't
+                // exist yet. Persist real exceptions as ExceptionDetail so restore
+                // re-opens the full surface (not DDL-only).
+                if (tab.ExceptionDetail is { IsNew: true }) continue;
+                var ed = tab.ExceptionDetail;
+                ws.Tabs.Add(new WorkspaceTab
+                {
+                    Kind = CoreTabKind.ExceptionDetail,
+                    ObjectName = tab.ObjectName,
+                    ObjectKind = tab.ObjectKind,
+                    ConnectionProfileId = tab.ConnectionProfileId,
+                    DdlText = ed is { } ? ed.DdlText : tab.DdlText,
+                    ActiveSubTabIndex = ed?.ActiveSubTabIndex,
+                });
+            }
             else
             {
                 ws.Tabs.Add(new WorkspaceTab
@@ -1633,6 +1657,18 @@ public partial class MainWindowViewModel : ViewModelBase
                 detail.DdlText = tab.DdlText ?? string.Empty;
                 if (tab.ActiveSubTabIndex is { } pkSub) detail.ActiveSubTabIndex = pkSub;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreatePackageDetail(this, obj, detail, tab.ConnectionProfileId));
+            }
+            else if (tab.Kind == CoreTabKind.ExceptionDetail
+                  && tab.ObjectKind is { } excKind
+                  && !string.IsNullOrEmpty(tab.ObjectName))
+            {
+                // Native ExceptionDetail restore (no DDL-only fallback). Lazy-loads on
+                // first activation via SelectTab. Cached DDL seeds the DDL tab.
+                var obj = new MetadataObject(tab.ObjectName, excKind);
+                var detail = CreateExceptionDetail(obj);
+                detail.DdlText = tab.DdlText ?? string.Empty;
+                if (tab.ActiveSubTabIndex is { } exSub) detail.ActiveSubTabIndex = exSub;
+                WorkspaceTabs.Add(WorkspaceTabViewModel.CreateExceptionDetail(this, obj, detail, tab.ConnectionProfileId));
             }
         }
 
@@ -2276,6 +2312,53 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public bool CanCreateException => _service.IsConnected;
+
+    // New Exception: opens an Exception Detail tab in IsNew mode with an editable
+    // name + empty message. On Compile success OnExceptionCreated refreshes the tree,
+    // closes this tab and reopens the real exception.
+    [RelayCommand(CanExecute = nameof(CanCreateException))]
+    private void NewException()
+    {
+        var detail = new ExceptionDetailTabViewModel(UiStrings.NewExceptionTabDefaultTitle, _tableDetailReader, _ddlExecutor)
+        {
+            IsNew = true,
+            EditableName = string.Empty,
+        };
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.ExceptionCreated += name => OnExceptionCreated(detail, name);
+        // A brand-new untouched tab must not prompt on close.
+        detail.ClearDirty();
+
+        var obj = new MetadataObject(UiStrings.NewExceptionTabDefaultTitle, MetadataObjectKind.Exception);
+        var tab = WorkspaceTabViewModel.CreateExceptionDetail(this, obj, detail, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+    }
+
+    private async void OnExceptionCreated(ExceptionDetailTabViewModel detail, string? exceptionName)
+    {
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewExceptionExecutedFormat, exceptionName ?? string.Empty));
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+
+        WorkspaceTabViewModel? newTab = null;
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.ExceptionDetail && ReferenceEquals(t.ExceptionDetail, detail))
+            {
+                newTab = t;
+                break;
+            }
+        }
+        if (newTab is not null) CloseTab(newTab);
+
+        if (!string.IsNullOrEmpty(exceptionName))
+        {
+            OnOpenDdlRequested(new MetadataObject(exceptionName, MetadataObjectKind.Exception));
+        }
+    }
+
     public bool CanCreateProcedure => _service.IsConnected;
 
     // New Procedure: opens a Procedure Detail tab in IsNew mode with the Editor
@@ -2677,6 +2760,12 @@ public partial class MainWindowViewModel : ViewModelBase
     internal static bool OpensAsPackageDetail(MetadataObjectKind kind)
         => kind is MetadataObjectKind.Package;
 
+    // Exceptions open in the dedicated Exception Detail surface (the editable form
+    // [name + message] + Description + Dependencies + DDL), not a plain DDL tab.
+    // Separate predicate — it builds its own (form-based, no PSQL body) detail VM.
+    internal static bool OpensAsExceptionDetail(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.Exception;
+
     // Single construction point for ViewDetail VMs — mirrors CreateTableDetail.
     // A view is read-only data (no inline editing) but its SQL source IS editable,
     // so the DDL executor is wired for Compile while no data editor is.
@@ -2866,6 +2955,52 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var t in WorkspaceTabs)
         {
             if (t.Kind == WorkspaceTabKind.PackageDetail && ReferenceEquals(t.PackageDetail, detail))
+            {
+                CloseTab(t);
+                break;
+            }
+        }
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+    }
+
+    // Single construction point for ExceptionDetail VMs — mirrors CreateGeneratorDetail.
+    // The exception form persists via Compile (DDL executor wired); there is no Easy
+    // mode, no data editor.
+    internal ExceptionDetailTabViewModel CreateExceptionDetail(MetadataObject obj)
+    {
+        var detail = new ExceptionDetailTabViewModel(
+            obj.Name,
+            _tableDetailReader,
+            _ddlExecutor);
+        detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.DeleteRequested += OnExceptionDeleteRequested;
+        return detail;
+    }
+
+    private async Task OnExceptionDeleteRequested(ExceptionDetailTabViewModel detail)
+    {
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(DdlGenerator.BuildDropException(detail.ExceptionName)).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+
+        // Close the tab for this exception, then refresh the tree so it disappears.
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.ExceptionDetail && ReferenceEquals(t.ExceptionDetail, detail))
             {
                 CloseTab(t);
                 break;
@@ -3115,7 +3250,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // TableDetail tabs key on (Kind, Name).
         foreach (var tab in WorkspaceTabs)
         {
-            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail or WorkspaceTabKind.PackageDetail
+            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail or WorkspaceTabKind.PackageDetail or WorkspaceTabKind.ExceptionDetail
                 && tab.ObjectKind == obj.Kind
                 && string.Equals(tab.ObjectName, obj.Name, StringComparison.Ordinal))
             {
@@ -3248,6 +3383,21 @@ public partial class MainWindowViewModel : ViewModelBase
                 return;
             }
 
+            if (OpensAsExceptionDetail(obj.Kind))
+            {
+                var detail = CreateExceptionDetail(obj);
+                var newTab = WorkspaceTabViewModel.CreateExceptionDetail(this, obj, detail, _service.ActiveProfile?.Id);
+                WorkspaceTabs.Add(newTab);
+                SelectTab(newTab);
+                await detail.EnsureLoadedAsync().ConfigureAwait(true);
+                if (!string.IsNullOrEmpty(detail.ErrorMessage))
+                {
+                    AddMessage(MessageSeverity.Error, detail.ErrorMessage);
+                    SelectedBottomTabIndex = 1;
+                }
+                return;
+            }
+
             var ddl = await _ddlReader.FetchDdlAsync(obj).ConfigureAwait(true);
             var ddlTab = WorkspaceTabViewModel.CreateDdl(this, obj, ddl, _service.ActiveProfile?.Id);
             WorkspaceTabs.Add(ddlTab);
@@ -3322,6 +3472,11 @@ public partial class MainWindowViewModel : ViewModelBase
             && _service.IsConnected)
         {
             _ = packageDetail.EnsureLoadedAsync();
+        }
+        else if (tab is { Kind: WorkspaceTabKind.ExceptionDetail, ExceptionDetail: { } exceptionDetail }
+            && _service.IsConnected)
+        {
+            _ = exceptionDetail.EnsureLoadedAsync();
         }
     }
 
@@ -4154,6 +4309,8 @@ public partial class MainWindowViewModel : ViewModelBase
         NewDomainCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanCreatePackage));
         NewPackageCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanCreateException));
+        NewExceptionCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

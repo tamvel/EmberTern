@@ -103,6 +103,8 @@ internal static class UiStrings
     public const string UnsavedModifiedDomainFormat = "Domain {0} — unsaved changes";
     public const string UnsavedNewPackageFormat = "New package (not yet created) — {0}";
     public const string UnsavedModifiedPackageFormat = "Package {0} — uncompiled changes";
+    public const string UnsavedNewExceptionFormat = "New exception (not yet created) — {0}";
+    public const string UnsavedModifiedExceptionFormat = "Exception {0} — unsaved changes";
     public const string UnsavedPendingStructureFormat = "Table {0} — uncompiled structural changes";
     public const string UnsavedTransactionDataFormat = "Data transaction — {0} pending statement(s)";
     public const string UnsavedTransactionMetadataFormat = "Metadata transaction — {0} pending statement(s)";
@@ -518,6 +520,25 @@ internal static class UiStrings
     public const string GeneratorDeleteConfirmYes = "Delete";
     public const string NewGeneratorTabDefaultTitle = "New Generator";
     public const string NewGeneratorExecutedFormat = "Generator \"{0}\" created.";
+
+    // ─── Exception Detail ──────────────────────────────────────────────────
+    public const string ExceptionDetailTabException = "Exception";
+    public const string ExceptionDetailTabDescription = "Description";
+    public const string ExceptionDetailTabDependencies = "Dependencies";
+    public const string ExceptionDetailTabDdl = "DDL";
+    public const string ExceptionNameHeader = "Name";
+    public const string ExceptionMessageHeader = "Message";
+    public const string ExceptionDescriptionEditLabel = "Exception description";
+    public const string ExceptionLoadingHint = "Loading exception…";
+    public const string ToolbarNewExceptionTooltip = "New Exception";
+    public const string ExceptionCompileTooltip = "Compile exception (CREATE / ALTER EXCEPTION)";
+    public const string ExceptionCompileFailedFormat = "Compile failed: {0}";
+    public const string ExceptionDeleteTooltip = "Delete exception";
+    public const string ExceptionDeleteConfirmTitle = "Delete exception";
+    public const string ExceptionDeleteConfirmFormat = "Drop exception \"{0}\"? This cannot be undone.";
+    public const string ExceptionDeleteConfirmYes = "Delete";
+    public const string NewExceptionTabDefaultTitle = "New Exception";
+    public const string NewExceptionExecutedFormat = "Exception \"{0}\" created.";
 
     // ─── Domain Detail ───────────────────────────────────────────────────────
     public const string DomainDetailTabDomain = "Domain";

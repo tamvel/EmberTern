@@ -1460,6 +1460,53 @@ public static class DdlGenerator
         return $"DROP DOMAIN {Quote(name.Trim())}";
     }
 
+    // ─── Exceptions ───────────────────────────────────────────────────────────
+    //
+    // A Firebird custom EXCEPTION is just a name + a message (RDB$MESSAGE) — no
+    // PSQL body, no parameters. Syntax verified on FB 5.0.3 (lab DB, embedded):
+    //   CREATE EXCEPTION "N" 'message'   — create
+    //   ALTER  EXCEPTION "N" 'message'   — change the message text
+    //   DROP   EXCEPTION "N"             — remove
+    //   COMMENT ON EXCEPTION "N" IS …    — description (RDB$DESCRIPTION)
+    // The message literal has its single quotes doubled per SQL string rules.
+
+    /// <summary><c>CREATE EXCEPTION "N" 'message'</c>. The message is required by
+    /// Firebird (an empty string is allowed — it emits <c>''</c>).</summary>
+    public static string BuildCreateException(string name, string? message)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Exception name is required.", nameof(name));
+        return $"CREATE EXCEPTION {Quote(name.Trim())} {QuoteLiteral(message)}";
+    }
+
+    /// <summary><c>ALTER EXCEPTION "N" 'message'</c> — changes the raised message
+    /// text of an existing exception.</summary>
+    public static string BuildAlterException(string name, string? message)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Exception name is required.", nameof(name));
+        return $"ALTER EXCEPTION {Quote(name.Trim())} {QuoteLiteral(message)}";
+    }
+
+    /// <summary><c>DROP EXCEPTION "N"</c>. Caller confirms the destructive intent;
+    /// EmberTern never auto-drops dependents — a Firebird dependency rejection
+    /// surfaces to the user.</summary>
+    public static string BuildDropException(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Exception name is required.", nameof(name));
+        return $"DROP EXCEPTION {Quote(name.Trim())}";
+    }
+
+    /// <summary><c>COMMENT ON EXCEPTION "N" IS …</c>. Pass null/whitespace to clear
+    /// (<c>IS NULL</c>).</summary>
+    public static string BuildCommentException(string name, string? comment)
+        => BuildRelationComment("EXCEPTION", name, comment);
+
+    // A SQL string literal: 'text' with single quotes doubled. Null → ''.
+    private static string QuoteLiteral(string? text)
+        => "'" + (text ?? string.Empty).Replace("'", "''") + "'";
+
     private static void ValidateConstraintBasics(string tableName, string constraintName, IReadOnlyList<string> fields)
     {
         if (string.IsNullOrWhiteSpace(tableName))

@@ -17,6 +17,7 @@ public enum WorkspaceTabKind
     GeneratorDetail,
     DomainDetail,
     PackageDetail,
+    ExceptionDetail,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -193,6 +194,21 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             PackageDetail = detail,
         };
 
+    public static WorkspaceTabViewModel CreateExceptionDetail(MainWindowViewModel owner, MetadataObject obj, ExceptionDetailTabViewModel detail, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.ExceptionDetail,
+            BaseTitle = obj.Name,
+            IsClosable = true,
+            ObjectName = obj.Name,
+            ObjectKind = obj.Kind,
+            ConnectionProfileId = connectionProfileId,
+            Icon = MetadataNodeViewModel.IconFor(obj.Kind),
+            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
+            ExceptionDetail = detail,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -213,6 +229,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public GeneratorDetailTabViewModel? GeneratorDetail { get; private init; }
     public DomainDetailTabViewModel? DomainDetail { get; private init; }
     public PackageDetailTabViewModel? PackageDetail { get; private init; }
+    public ExceptionDetailTabViewModel? ExceptionDetail { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]
@@ -242,6 +259,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.GeneratorDetail => GeneratorDetail?.GetUnsavedWork(),
         WorkspaceTabKind.DomainDetail => DomainDetail?.GetUnsavedWork(),
         WorkspaceTabKind.PackageDetail => PackageDetail?.GetUnsavedWork(),
+        WorkspaceTabKind.ExceptionDetail => ExceptionDetail?.GetUnsavedWork(),
         _ => null,
     };
 

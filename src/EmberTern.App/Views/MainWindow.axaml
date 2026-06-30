@@ -218,6 +218,12 @@
             <controls:SvgIcon Data="{StaticResource Icon.PackagePlus}"
                               Foreground="{DynamicResource IconColor_Package}" />
           </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewExceptionTooltip}"
+                  Command="{Binding NewExceptionCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.ExceptionPlus}"
+                              Foreground="{DynamicResource IconColor_Exception}" />
+          </Button>
         </StackPanel>
 
         <!-- Drag spacer (column 2 = *) -->
@@ -769,6 +775,20 @@
                       Command="{Binding ActivePackageDetail.DeleteCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
+              <!-- Exception: Compile / Revert / Delete (Compile auto-commits via the
+                   autonomous DDL path, so no Commit/Rollback pair is shown for an exception tab). -->
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.ExceptionCompileTooltip}"
+                      Command="{Binding ActiveExceptionDetail.CompileCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+                      Command="{Binding ActiveExceptionDetail.RevertChangesCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ExceptionDeleteTooltip}"
+                      Command="{Binding ActiveExceptionDetail.DeleteCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
               <!-- Single unified Commit / Rollback pair (auto-routed to the open lane(s)). -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
                       Command="{Binding CommitAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
@@ -969,6 +989,9 @@
               <views:PackageDetailTabView x:Name="PackageDetailView"
                                           DataContext="{Binding ActivePackageDetail}"
                                           IsVisible="{Binding DataContext.IsPackageDetailTabActive, ElementName=RootWindow}" />
+              <views:ExceptionDetailTabView x:Name="ExceptionDetailView"
+                                            DataContext="{Binding ActiveExceptionDetail}"
+                                            IsVisible="{Binding DataContext.IsExceptionDetailTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query
