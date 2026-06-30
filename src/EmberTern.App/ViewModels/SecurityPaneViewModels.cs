@@ -392,9 +392,9 @@ public partial class MembershipRowViewModel : ViewModelBase
 /// metadata kind to list it and the privilege letters that apply.</summary>
 public sealed record PrivilegeCategory(string Label, MetadataObjectKind ListKind, PrivilegeObjectKind GrantKind, string Privileges);
 
-/// <summary>An entry in the bulk-operation privilege picker: a single privilege, or
-/// "All" (<see cref="Code"/> = '*').</summary>
-public sealed record BulkPrivilegeOption(string Label, char Code);
+/// <summary>The three bulk operations offered at every scope (row / column / all
+/// visible): plain GRANT, GRANT … WITH GRANT OPTION, and REVOKE.</summary>
+internal enum BulkAction { Grant, GrantWithOption, Revoke }
 
 public partial class SecurityPrivilegesPaneViewModel : ViewModelBase
 {
@@ -423,9 +423,6 @@ public partial class SecurityPrivilegesPaneViewModel : ViewModelBase
     public ObservableCollection<PrivilegeCategory> Categories { get; }
     public ObservableCollection<PrivilegeRowViewModel> Rows { get; } = new();
     public ObservableCollection<ColumnPrivilegeRowViewModel> Columns { get; } = new();
-    /// <summary>Bulk-operation privilege picker entries (All + the applicable
-    /// privileges for the current category).</summary>
-    public ObservableCollection<BulkPrivilegeOption> BulkPrivileges { get; } = new();
 
     [ObservableProperty]
     private GranteeOptionViewModel? _selectedGrantee;
@@ -435,9 +432,6 @@ public partial class SecurityPrivilegesPaneViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _filterText = string.Empty;
-
-    [ObservableProperty]
-    private BulkPrivilegeOption? _selectedBulkPrivilege;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasColumnTable))]
@@ -458,7 +452,6 @@ public partial class SecurityPrivilegesPaneViewModel : ViewModelBase
     partial void OnSelectedGranteeChanged(GranteeOptionViewModel? value) => _ = ReloadAsync();
     partial void OnSelectedCategoryChanged(PrivilegeCategory? value)
     {
-        RebuildBulkPrivileges();
         OnPropertyChanged(nameof(ShowColumnPanel));
         OnPropertyChanged(nameof(HasColumnTable));
         OnPropertyChanged(nameof(ShowColumnHint));
@@ -473,19 +466,8 @@ public partial class SecurityPrivilegesPaneViewModel : ViewModelBase
 
     public async Task LoadAsync(CancellationToken ct)
     {
-        RebuildBulkPrivileges();
         OnGranteesChanged();
         await ReloadAsync().ConfigureAwait(true);
-    }
-
-    private void RebuildBulkPrivileges()
-    {
-        BulkPrivileges.Clear();
-        BulkPrivileges.Add(new BulkPrivilegeOption(UiStrings.SecurityBulkAllPrivileges, '*'));
-        if (SelectedCategory is { } cat)
-            foreach (var c in cat.Privileges)
-                BulkPrivileges.Add(new BulkPrivilegeOption(SecurityCatalog.PrivilegeLabel(c), c));
-        SelectedBulkPrivilege = BulkPrivileges[0];
     }
 
     /// <summary>Re-syncs the selected grantee after the shared Grantees list is rebuilt.</summary>
@@ -559,72 +541,78 @@ public partial class SecurityPrivilegesPaneViewModel : ViewModelBase
             row.SetState(privilege, oldState);
     }
 
-    // Per-row bulk: grant/revoke every applicable privilege for one object.
-    internal async Task ApplyAllAsync(PrivilegeRowViewModel row, bool grant)
+    // ── Bulk operations: same three actions (Grant / GrantWithOption / Revoke) at
+    // three scopes (row / column / all visible). Every scope acts on the currently
+    // VISIBLE (filtered) rows and skips statements that would be a no-op (the cell is
+    // already in the target state), so a re-run is cheap. No-ops without a grantee.
+
+    // Builds the GRANT/REVOKE for one privilege of one object — or null when the
+    // current state already satisfies the action. Predicates mirror the single-cell
+    // tri-state: Grant only when none; GrantWithOption when below "with option"
+    // (upgrades plain → with option); Revoke when anything is granted.
+    private string? StatementFor(PrivilegeCategory category, string objectName, char privilege, GranteeOptionViewModel g, int state, BulkAction action) => action switch
+    {
+        BulkAction.Grant when state == 0 =>
+            SecurityDdlGenerator.BuildGrantPrivilege(category.GrantKind, objectName, privilege, g.Ref, null, false),
+        BulkAction.GrantWithOption when state < 2 =>
+            SecurityDdlGenerator.BuildGrantPrivilege(category.GrantKind, objectName, privilege, g.Ref, null, true),
+        BulkAction.Revoke when state > 0 =>
+            SecurityDdlGenerator.BuildRevokePrivilege(category.GrantKind, objectName, privilege, g.Ref, null),
+        _ => null,
+    };
+
+    // Row scope — one object, every applicable privilege. Invoked by the row VM's
+    // commands (hover trio + right-click menu).
+    internal async Task ApplyAllAsync(PrivilegeRowViewModel row, BulkAction action)
     {
         if (SelectedGrantee is not { } g || SelectedCategory is not { } category) return;
         var statements = new List<string>();
         foreach (var p in category.Privileges)
-        {
-            var state = row.GetState(p);
-            if (grant && state == 0)
-                statements.Add(SecurityDdlGenerator.BuildGrantPrivilege(category.GrantKind, row.ObjectName, p, g.Ref, null, false));
-            else if (!grant && state > 0)
-                statements.Add(SecurityDdlGenerator.BuildRevokePrivilege(category.GrantKind, row.ObjectName, p, g.Ref, null));
-        }
+            if (StatementFor(category, row.ObjectName, p, g, row.GetState(p), action) is { } s)
+                statements.Add(s);
         await RunBatchAndReloadAsync(statements).ConfigureAwait(true);
     }
 
-    // Per-column (a specific privilege) OR per-filter ("All") bulk over the currently
-    // VISIBLE rows. Skips rows that already match the target state, so a re-run is cheap.
-    // No-ops when there's no grantee or nothing to change.
-    [RelayCommand]
-    private Task BulkGrant() => BulkApplyAsync(true);
+    // All-visible scope — every visible object, every applicable privilege.
+    [RelayCommand] private Task BulkGrant() => BulkApplyAsync(BulkAction.Grant);
+    [RelayCommand] private Task BulkGrantWithOption() => BulkApplyAsync(BulkAction.GrantWithOption);
+    [RelayCommand] private Task BulkRevoke() => BulkApplyAsync(BulkAction.Revoke);
 
-    [RelayCommand]
-    private Task BulkRevoke() => BulkApplyAsync(false);
-
-    private async Task BulkApplyAsync(bool grant)
+    private async Task BulkApplyAsync(BulkAction action)
     {
         if (SelectedGrantee is not { } g || SelectedCategory is not { } category) return;
-        var code = SelectedBulkPrivilege?.Code ?? '*';
-        var privs = code == '*' ? category.Privileges : code.ToString();
+        // Confirm only the broadest destructive op (revoke everything from everyone visible).
+        if (action == BulkAction.Revoke && Rows.Count > 0 && !await ConfirmGlobalRevokeAsync(g).ConfigureAwait(true)) return;
         var statements = new List<string>();
         foreach (var row in Rows) // visible (filtered) set
-            foreach (var p in privs)
-            {
-                if (!category.Privileges.Contains(p)) continue;
-                var state = row.GetState(p);
-                if (grant && state == 0)
-                    statements.Add(SecurityDdlGenerator.BuildGrantPrivilege(category.GrantKind, row.ObjectName, p, g.Ref, null, false));
-                else if (!grant && state > 0)
-                    statements.Add(SecurityDdlGenerator.BuildRevokePrivilege(category.GrantKind, row.ObjectName, p, g.Ref, null));
-            }
+            foreach (var p in category.Privileges)
+                if (StatementFor(category, row.ObjectName, p, g, row.GetState(p), action) is { } s)
+                    statements.Add(s);
         await RunBatchAndReloadAsync(statements).ConfigureAwait(true);
     }
 
-    // Per-column header action: grant/revoke ONE privilege for every visible
-    // (filtered) row. Skips rows already in the target state.
-    [RelayCommand]
-    private Task GrantColumn(string? privilege) => ColumnBulkAsync(privilege, true);
+    private Task<bool> ConfirmGlobalRevokeAsync(GranteeOptionViewModel g) => _owner.ConfirmAsync(new ConfirmRequest
+    {
+        Title = UiStrings.SecurityRevokeAllConfirmTitle,
+        Message = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.SecurityRevokeAllConfirmFormat, g.Name, Rows.Count),
+        ConfirmLabel = UiStrings.SecurityRevokeAllConfirmYes,
+        IsDestructive = true,
+    });
 
-    [RelayCommand]
-    private Task RevokeColumn(string? privilege) => ColumnBulkAsync(privilege, false);
+    // Column scope — one privilege, every visible object.
+    [RelayCommand] private Task GrantColumn(string? privilege) => ColumnBulkAsync(privilege, BulkAction.Grant);
+    [RelayCommand] private Task GrantColumnWithOption(string? privilege) => ColumnBulkAsync(privilege, BulkAction.GrantWithOption);
+    [RelayCommand] private Task RevokeColumn(string? privilege) => ColumnBulkAsync(privilege, BulkAction.Revoke);
 
-    private async Task ColumnBulkAsync(string? privilege, bool grant)
+    private async Task ColumnBulkAsync(string? privilege, BulkAction action)
     {
         if (string.IsNullOrEmpty(privilege)) return;
         var c = privilege[0];
         if (SelectedGrantee is not { } g || SelectedCategory is not { } category || !category.Privileges.Contains(c)) return;
         var statements = new List<string>();
         foreach (var row in Rows) // visible (filtered) set
-        {
-            var state = row.GetState(c);
-            if (grant && state == 0)
-                statements.Add(SecurityDdlGenerator.BuildGrantPrivilege(category.GrantKind, row.ObjectName, c, g.Ref, null, false));
-            else if (!grant && state > 0)
-                statements.Add(SecurityDdlGenerator.BuildRevokePrivilege(category.GrantKind, row.ObjectName, c, g.Ref, null));
-        }
+            if (StatementFor(category, row.ObjectName, c, g, row.GetState(c), action) is { } s)
+                statements.Add(s);
         await RunBatchAndReloadAsync(statements).ConfigureAwait(true);
     }
 
@@ -728,10 +716,13 @@ public partial class PrivilegeRowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void GrantAll() => _ = _pane.ApplyAllAsync(this, true);
+    private void GrantAll() => _ = _pane.ApplyAllAsync(this, BulkAction.Grant);
 
     [RelayCommand]
-    private void RevokeAll() => _ = _pane.ApplyAllAsync(this, false);
+    private void GrantAllWithOption() => _ = _pane.ApplyAllAsync(this, BulkAction.GrantWithOption);
+
+    [RelayCommand]
+    private void RevokeAll() => _ = _pane.ApplyAllAsync(this, BulkAction.Revoke);
 
     internal int GetState(char privilege) => privilege switch
     {

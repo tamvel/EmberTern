@@ -292,32 +292,34 @@ public class SecurityManagerTests
         Assert.Equal(0, row.SelectState); // → none
     }
 
-    // ─── Bulk picker + column panel state ──────────────────────────────────
+    // ─── Bulk operations (row / column / all-visible) + column panel state ─────
 
     [Fact]
-    public void BulkPrivileges_AllPlusApplicable_PerCategory()
+    public void BulkCommands_ThreeActionsPerScope_NoOpWithoutGrantee()
     {
         var mgr = BuildManager(null);
         var p = mgr.Privileges;
-        // Tables: All + S/I/U/D/R = 6 options; first is "All".
-        Assert.Equal(6, p.BulkPrivileges.Count);
-        Assert.Equal('*', p.BulkPrivileges[0].Code);
-        Assert.Equal('*', p.SelectedBulkPrivilege!.Code);
-
-        p.SelectedCategory = p.Categories.First(c => c.ListKind == MetadataObjectKind.Procedure);
-        Assert.Equal(2, p.BulkPrivileges.Count); // All + Execute
-        Assert.Contains(p.BulkPrivileges, o => o.Code == 'X');
+        // No grantee/connection → every bulk command is a safe no-op (no exception,
+        // no error message). Covers all three actions at the all-visible + column scopes.
+        p.BulkGrantCommand.Execute(null);
+        p.BulkGrantWithOptionCommand.Execute(null);
+        p.BulkRevokeCommand.Execute(null);
+        p.GrantColumnCommand.Execute("S");
+        p.GrantColumnWithOptionCommand.Execute("S");
+        p.RevokeColumnCommand.Execute("S");
+        Assert.Null(mgr.ErrorMessage);
     }
 
     [Fact]
-    public void ColumnHeaderCommands_Exist_AndNoOpWithoutGrantee()
+    public void RowBulkCommands_ThreeActions_Exist_AndNoOpWithoutGrantee()
     {
         var mgr = BuildManager(null);
-        var p = mgr.Privileges;
-        // Per-column header grant/revoke commands (feature A). No grantee/connection →
-        // safe no-op (no exception).
-        p.GrantColumnCommand.Execute("S");
-        p.RevokeColumnCommand.Execute("S");
+        var cat = mgr.Privileges.Categories.First(c => c.ListKind == MetadataObjectKind.Table);
+        var row = new PrivilegeRowViewModel(mgr.Privileges, "T", cat, new Dictionary<char, int>());
+        // Row scope: grant all / grant all with option / revoke all. No grantee → no-op.
+        row.GrantAllCommand.Execute(null);
+        row.GrantAllWithOptionCommand.Execute(null);
+        row.RevokeAllCommand.Execute(null);
         Assert.Null(mgr.ErrorMessage);
     }
 

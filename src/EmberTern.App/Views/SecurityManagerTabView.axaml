@@ -53,6 +53,28 @@
     <Style Selector="Button.priv-cell:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
     </Style>
+    <!-- Bulk-action glyph button (✓ / ✓+ / ✕) used by the all-visible toolbar, each
+         column header, and the per-row hover trio. -->
+    <Style Selector="Button.bulk-glyph">
+      <Setter Property="Width" Value="20" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.bulk-glyph:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+      <Setter Property="CornerRadius" Value="3" />
+    </Style>
+    <!-- Per-row bulk trio lives in the Object cell, revealed only on row hover /
+         selection so the grid stays clean at rest (gotcha #35). -->
+    <Style Selector="StackPanel.row-bulk"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="DataGridRow:pointerover StackPanel.row-bulk"><Setter Property="IsVisible" Value="True" /></Style>
+    <Style Selector="DataGridRow:selected StackPanel.row-bulk"><Setter Property="IsVisible" Value="True" /></Style>
   </UserControl.Styles>
 
   <Grid RowDefinitions="*,Auto">
@@ -223,22 +245,31 @@
                      PlaceholderText="{x:Static app:UiStrings.SecurityFilterWatermark}" />
           </StackPanel>
 
-          <!-- Bulk toolbar (acts on the visible/filtered set) + tri-state legend -->
+          <!-- All-visible toolbar: grant / grant + option / revoke for every visible object + tri-state legend -->
           <DockPanel Grid.Row="1" Margin="0,0,0,6" LastChildFill="False">
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-              <TextBlock Text="{x:Static app:UiStrings.SecurityBulkLabel}" Classes="field-label" VerticalAlignment="Center" />
-              <ComboBox Width="150" ItemsSource="{Binding Privileges.BulkPrivileges}"
-                        SelectedItem="{Binding Privileges.SelectedBulkPrivilege, Mode=TwoWay}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:BulkPrivilegeOption">
-                    <TextBlock Text="{Binding Label}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <Button Classes="flat" Content="{x:Static app:UiStrings.SecurityBulkGrant}"
-                      Command="{Binding Privileges.BulkGrantCommand}" />
-              <Button Classes="flat" Content="{x:Static app:UiStrings.SecurityBulkRevoke}"
-                      Command="{Binding Privileges.BulkRevokeCommand}" />
+              <TextBlock Text="{x:Static app:UiStrings.SecurityBulkAllLabel}" Classes="field-label" VerticalAlignment="Center" />
+              <Button Classes="flat" Command="{Binding Privileges.BulkGrantCommand}"
+                      ToolTip.Tip="{x:Static app:UiStrings.SecurityBulkGrantAllTip}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="{x:Static app:UiStrings.SecurityGrantGlyph}" FontWeight="Bold" Foreground="{DynamicResource SuccessIconBrush}" />
+                  <TextBlock Text="{x:Static app:UiStrings.SecurityBulkGrantAll}" />
+                </StackPanel>
+              </Button>
+              <Button Classes="flat" Command="{Binding Privileges.BulkGrantWithOptionCommand}"
+                      ToolTip.Tip="{x:Static app:UiStrings.SecurityBulkGrantAllOptionTip}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="{x:Static app:UiStrings.SecurityGrantOptionGlyph}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                  <TextBlock Text="{x:Static app:UiStrings.SecurityBulkGrantAllOption}" />
+                </StackPanel>
+              </Button>
+              <Button Classes="flat" Command="{Binding Privileges.BulkRevokeCommand}"
+                      ToolTip.Tip="{x:Static app:UiStrings.SecurityBulkRevokeAllTip}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="{x:Static app:UiStrings.SecurityRevokeGlyph}" FontWeight="Bold" Foreground="{DynamicResource DangerIconBrush}" />
+                  <TextBlock Text="{x:Static app:UiStrings.SecurityBulkRevokeAll}" />
+                </StackPanel>
+              </Button>
             </StackPanel>
             <TextBlock DockPanel.Dock="Right" Text="{x:Static app:UiStrings.SecurityPrivilegeLegend}"
                        Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" VerticalAlignment="Center" />
@@ -254,6 +285,8 @@
               <ContextMenu>
                 <MenuItem Header="{x:Static app:UiStrings.SecurityRowGrantAll}"
                           Command="{Binding Privileges.SelectedRow.GrantAllCommand}" />
+                <MenuItem Header="{x:Static app:UiStrings.SecurityRowGrantAllOption}"
+                          Command="{Binding Privileges.SelectedRow.GrantAllWithOptionCommand}" />
                 <MenuItem Header="{x:Static app:UiStrings.SecurityRowRevokeAll}"
                           Command="{Binding Privileges.SelectedRow.RevokeAllCommand}" />
               </ContextMenu>
@@ -262,38 +295,58 @@
               <DataGridTemplateColumn Header="{x:Static app:UiStrings.SecurityColObject}" Width="*" MinWidth="220" MaxWidth="440">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:PrivilegeRowViewModel">
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                      <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
-                                        Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
-                        <controls:SvgIcon.Foreground>
-                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                            <Binding Path="IconResourceKey" />
-                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                          </MultiBinding>
-                        </controls:SvgIcon.Foreground>
-                      </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <DockPanel LastChildFill="True">
+                      <!-- Row-scope bulk trio: revealed on hover/selection (see Styles). -->
+                      <StackPanel DockPanel.Dock="Right" Classes="row-bulk" Orientation="Horizontal"
+                                  Spacing="1" VerticalAlignment="Center" Margin="6,0,0,0">
+                        <Button Classes="bulk-glyph" Command="{Binding GrantAllCommand}"
+                                ToolTip.Tip="{x:Static app:UiStrings.SecurityRowGrantTip}">
+                          <TextBlock Text="{x:Static app:UiStrings.SecurityGrantGlyph}" FontWeight="Bold" Foreground="{DynamicResource SuccessIconBrush}" />
+                        </Button>
+                        <Button Classes="bulk-glyph" Command="{Binding GrantAllWithOptionCommand}"
+                                ToolTip.Tip="{x:Static app:UiStrings.SecurityRowGrantOptionTip}">
+                          <TextBlock Text="{x:Static app:UiStrings.SecurityGrantOptionGlyph}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                        </Button>
+                        <Button Classes="bulk-glyph" Command="{Binding RevokeAllCommand}"
+                                ToolTip.Tip="{x:Static app:UiStrings.SecurityRowRevokeTip}">
+                          <TextBlock Text="{x:Static app:UiStrings.SecurityRevokeGlyph}" FontWeight="Bold" Foreground="{DynamicResource DangerIconBrush}" />
+                        </Button>
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+                                          Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
+                          <controls:SvgIcon.Foreground>
+                            <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                              <Binding Path="IconResourceKey" />
+                              <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                            </MultiBinding>
+                          </controls:SvgIcon.Foreground>
+                        </controls:SvgIcon>
+                        <TextBlock Text="{Binding ObjectName}" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </DockPanel>
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
 
               <DataGridTemplateColumn Width="100" MinWidth="90">
                 <DataGridTemplateColumn.Header>
-                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="{x:Static app:UiStrings.SecurityColSelect}" VerticalAlignment="Center" />
-                    <Button Classes="icon" Width="18" Height="18" Padding="0" VerticalAlignment="Center"
-                            ToolTip.Tip="{x:Static app:UiStrings.SecurityColMenuTooltip}">
-                      <Button.Flyout>
-                        <MenuFlyout>
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColGrantAllVisible}"
-                                    Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}" CommandParameter="S" />
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColRevokeAllVisible}"
-                                    Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}" CommandParameter="S" />
-                        </MenuFlyout>
-                      </Button.Flyout>
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="11" Height="11" />
-                    </Button>
+                  <StackPanel Spacing="2" HorizontalAlignment="Center">
+                    <TextBlock Text="{x:Static app:UiStrings.SecurityColSelect}" HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="1" HorizontalAlignment="Center">
+                      <Button Classes="bulk-glyph" CommandParameter="S" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantGlyph}" FontWeight="Bold" Foreground="{DynamicResource SuccessIconBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="S" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantOptionTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnWithOptionCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantOptionGlyph}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="S" ToolTip.Tip="{x:Static app:UiStrings.SecurityColRevokeTip}"
+                              Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityRevokeGlyph}" FontWeight="Bold" Foreground="{DynamicResource DangerIconBrush}" />
+                      </Button>
+                    </StackPanel>
                   </StackPanel>
                 </DataGridTemplateColumn.Header>
                 <DataGridTemplateColumn.CellTemplate>
@@ -317,20 +370,22 @@
 
               <DataGridTemplateColumn Width="96" MinWidth="88">
                 <DataGridTemplateColumn.Header>
-                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="{x:Static app:UiStrings.SecurityColInsert}" VerticalAlignment="Center" />
-                    <Button Classes="icon" Width="18" Height="18" Padding="0" VerticalAlignment="Center"
-                            ToolTip.Tip="{x:Static app:UiStrings.SecurityColMenuTooltip}">
-                      <Button.Flyout>
-                        <MenuFlyout>
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColGrantAllVisible}"
-                                    Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}" CommandParameter="I" />
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColRevokeAllVisible}"
-                                    Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}" CommandParameter="I" />
-                        </MenuFlyout>
-                      </Button.Flyout>
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="11" Height="11" />
-                    </Button>
+                  <StackPanel Spacing="2" HorizontalAlignment="Center">
+                    <TextBlock Text="{x:Static app:UiStrings.SecurityColInsert}" HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="1" HorizontalAlignment="Center">
+                      <Button Classes="bulk-glyph" CommandParameter="I" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantGlyph}" FontWeight="Bold" Foreground="{DynamicResource SuccessIconBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="I" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantOptionTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnWithOptionCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantOptionGlyph}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="I" ToolTip.Tip="{x:Static app:UiStrings.SecurityColRevokeTip}"
+                              Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityRevokeGlyph}" FontWeight="Bold" Foreground="{DynamicResource DangerIconBrush}" />
+                      </Button>
+                    </StackPanel>
                   </StackPanel>
                 </DataGridTemplateColumn.Header>
                 <DataGridTemplateColumn.CellTemplate>
@@ -354,20 +409,22 @@
 
               <DataGridTemplateColumn Width="98" MinWidth="90">
                 <DataGridTemplateColumn.Header>
-                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="{x:Static app:UiStrings.SecurityColUpdate}" VerticalAlignment="Center" />
-                    <Button Classes="icon" Width="18" Height="18" Padding="0" VerticalAlignment="Center"
-                            ToolTip.Tip="{x:Static app:UiStrings.SecurityColMenuTooltip}">
-                      <Button.Flyout>
-                        <MenuFlyout>
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColGrantAllVisible}"
-                                    Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}" CommandParameter="U" />
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColRevokeAllVisible}"
-                                    Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}" CommandParameter="U" />
-                        </MenuFlyout>
-                      </Button.Flyout>
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="11" Height="11" />
-                    </Button>
+                  <StackPanel Spacing="2" HorizontalAlignment="Center">
+                    <TextBlock Text="{x:Static app:UiStrings.SecurityColUpdate}" HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="1" HorizontalAlignment="Center">
+                      <Button Classes="bulk-glyph" CommandParameter="U" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantGlyph}" FontWeight="Bold" Foreground="{DynamicResource SuccessIconBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="U" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantOptionTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnWithOptionCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantOptionGlyph}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="U" ToolTip.Tip="{x:Static app:UiStrings.SecurityColRevokeTip}"
+                              Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityRevokeGlyph}" FontWeight="Bold" Foreground="{DynamicResource DangerIconBrush}" />
+                      </Button>
+                    </StackPanel>
                   </StackPanel>
                 </DataGridTemplateColumn.Header>
                 <DataGridTemplateColumn.CellTemplate>
@@ -391,20 +448,22 @@
 
               <DataGridTemplateColumn Width="96" MinWidth="88">
                 <DataGridTemplateColumn.Header>
-                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="{x:Static app:UiStrings.SecurityColDelete}" VerticalAlignment="Center" />
-                    <Button Classes="icon" Width="18" Height="18" Padding="0" VerticalAlignment="Center"
-                            ToolTip.Tip="{x:Static app:UiStrings.SecurityColMenuTooltip}">
-                      <Button.Flyout>
-                        <MenuFlyout>
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColGrantAllVisible}"
-                                    Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}" CommandParameter="D" />
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColRevokeAllVisible}"
-                                    Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}" CommandParameter="D" />
-                        </MenuFlyout>
-                      </Button.Flyout>
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="11" Height="11" />
-                    </Button>
+                  <StackPanel Spacing="2" HorizontalAlignment="Center">
+                    <TextBlock Text="{x:Static app:UiStrings.SecurityColDelete}" HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="1" HorizontalAlignment="Center">
+                      <Button Classes="bulk-glyph" CommandParameter="D" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantGlyph}" FontWeight="Bold" Foreground="{DynamicResource SuccessIconBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="D" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantOptionTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnWithOptionCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantOptionGlyph}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="D" ToolTip.Tip="{x:Static app:UiStrings.SecurityColRevokeTip}"
+                              Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityRevokeGlyph}" FontWeight="Bold" Foreground="{DynamicResource DangerIconBrush}" />
+                      </Button>
+                    </StackPanel>
                   </StackPanel>
                 </DataGridTemplateColumn.Header>
                 <DataGridTemplateColumn.CellTemplate>
@@ -428,20 +487,22 @@
 
               <DataGridTemplateColumn Width="122" MinWidth="112">
                 <DataGridTemplateColumn.Header>
-                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="{x:Static app:UiStrings.SecurityColReferences}" VerticalAlignment="Center" />
-                    <Button Classes="icon" Width="18" Height="18" Padding="0" VerticalAlignment="Center"
-                            ToolTip.Tip="{x:Static app:UiStrings.SecurityColMenuTooltip}">
-                      <Button.Flyout>
-                        <MenuFlyout>
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColGrantAllVisible}"
-                                    Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}" CommandParameter="R" />
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColRevokeAllVisible}"
-                                    Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}" CommandParameter="R" />
-                        </MenuFlyout>
-                      </Button.Flyout>
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="11" Height="11" />
-                    </Button>
+                  <StackPanel Spacing="2" HorizontalAlignment="Center">
+                    <TextBlock Text="{x:Static app:UiStrings.SecurityColReferences}" HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="1" HorizontalAlignment="Center">
+                      <Button Classes="bulk-glyph" CommandParameter="R" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantGlyph}" FontWeight="Bold" Foreground="{DynamicResource SuccessIconBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="R" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantOptionTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnWithOptionCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantOptionGlyph}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="R" ToolTip.Tip="{x:Static app:UiStrings.SecurityColRevokeTip}"
+                              Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityRevokeGlyph}" FontWeight="Bold" Foreground="{DynamicResource DangerIconBrush}" />
+                      </Button>
+                    </StackPanel>
                   </StackPanel>
                 </DataGridTemplateColumn.Header>
                 <DataGridTemplateColumn.CellTemplate>
@@ -465,20 +526,22 @@
 
               <DataGridTemplateColumn Width="102" MinWidth="94">
                 <DataGridTemplateColumn.Header>
-                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="{x:Static app:UiStrings.SecurityColExecute}" VerticalAlignment="Center" />
-                    <Button Classes="icon" Width="18" Height="18" Padding="0" VerticalAlignment="Center"
-                            ToolTip.Tip="{x:Static app:UiStrings.SecurityColMenuTooltip}">
-                      <Button.Flyout>
-                        <MenuFlyout>
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColGrantAllVisible}"
-                                    Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}" CommandParameter="X" />
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColRevokeAllVisible}"
-                                    Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}" CommandParameter="X" />
-                        </MenuFlyout>
-                      </Button.Flyout>
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="11" Height="11" />
-                    </Button>
+                  <StackPanel Spacing="2" HorizontalAlignment="Center">
+                    <TextBlock Text="{x:Static app:UiStrings.SecurityColExecute}" HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="1" HorizontalAlignment="Center">
+                      <Button Classes="bulk-glyph" CommandParameter="X" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantGlyph}" FontWeight="Bold" Foreground="{DynamicResource SuccessIconBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="X" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantOptionTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnWithOptionCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantOptionGlyph}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="X" ToolTip.Tip="{x:Static app:UiStrings.SecurityColRevokeTip}"
+                              Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityRevokeGlyph}" FontWeight="Bold" Foreground="{DynamicResource DangerIconBrush}" />
+                      </Button>
+                    </StackPanel>
                   </StackPanel>
                 </DataGridTemplateColumn.Header>
                 <DataGridTemplateColumn.CellTemplate>
@@ -502,20 +565,22 @@
 
               <DataGridTemplateColumn Width="92" MinWidth="84">
                 <DataGridTemplateColumn.Header>
-                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="{x:Static app:UiStrings.SecurityColUsage}" VerticalAlignment="Center" />
-                    <Button Classes="icon" Width="18" Height="18" Padding="0" VerticalAlignment="Center"
-                            ToolTip.Tip="{x:Static app:UiStrings.SecurityColMenuTooltip}">
-                      <Button.Flyout>
-                        <MenuFlyout>
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColGrantAllVisible}"
-                                    Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}" CommandParameter="G" />
-                          <MenuItem Header="{x:Static app:UiStrings.SecurityColRevokeAllVisible}"
-                                    Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}" CommandParameter="G" />
-                        </MenuFlyout>
-                      </Button.Flyout>
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="11" Height="11" />
-                    </Button>
+                  <StackPanel Spacing="2" HorizontalAlignment="Center">
+                    <TextBlock Text="{x:Static app:UiStrings.SecurityColUsage}" HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="1" HorizontalAlignment="Center">
+                      <Button Classes="bulk-glyph" CommandParameter="G" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantGlyph}" FontWeight="Bold" Foreground="{DynamicResource SuccessIconBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="G" ToolTip.Tip="{x:Static app:UiStrings.SecurityColGrantOptionTip}"
+                              Command="{Binding DataContext.Privileges.GrantColumnWithOptionCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityGrantOptionGlyph}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                      </Button>
+                      <Button Classes="bulk-glyph" CommandParameter="G" ToolTip.Tip="{x:Static app:UiStrings.SecurityColRevokeTip}"
+                              Command="{Binding DataContext.Privileges.RevokeColumnCommand, ElementName=RootControl}">
+                        <TextBlock Text="{x:Static app:UiStrings.SecurityRevokeGlyph}" FontWeight="Bold" Foreground="{DynamicResource DangerIconBrush}" />
+                      </Button>
+                    </StackPanel>
                   </StackPanel>
                 </DataGridTemplateColumn.Header>
                 <DataGridTemplateColumn.CellTemplate>

@@ -988,23 +988,40 @@ internal static class UiStrings
     public const string SecurityColReferences = "References";
     public const string SecurityColExecute = "Execute";
     public const string SecurityColUsage = "Usage";
-    // Per-column header dropdown (grant/revoke this privilege for all visible rows).
-    public const string SecurityColMenuTooltip = "Apply this privilege to all visible objects";
-    public const string SecurityColGrantAllVisible = "Grant to all visible";
-    public const string SecurityColRevokeAllVisible = "Revoke from all visible";
+    // Per-column header trio (grant / grant + option / revoke this privilege for all visible rows).
+    public const string SecurityColGrantTip = "Grant to all visible objects";
+    public const string SecurityColGrantOptionTip = "Grant to all visible objects with grant option";
+    public const string SecurityColRevokeTip = "Revoke from all visible objects";
     public const string SecurityColumnsHeader = "Columns";
     public const string SecurityColumnsForFormat = "Columns — {0}";
     public const string SecurityColColumn = "Column";
     public const string SecurityColumnHint = "Select a table above to manage its column privileges.";
 
-    // Privileges — bulk operations + tri-state legend
-    public const string SecurityBulkAllPrivileges = "All privileges";
-    public const string SecurityBulkLabel = "Bulk (visible)";
-    public const string SecurityBulkGrant = "Grant";
-    public const string SecurityBulkRevoke = "Revoke";
+    // Privileges — bulk operations (row / column / all visible) + tri-state legend.
+    // The same three glyphs appear at every scope: ✓ grant, ✓+ grant with grant option, ✕ revoke.
+    public const string SecurityGrantGlyph = "✓";
+    public const string SecurityGrantOptionGlyph = "✓+";
+    public const string SecurityRevokeGlyph = "✕";
     public const string SecurityPrivilegeLegend = "✓ granted     ✓+ with grant option     ·     click a cell to cycle";
+    // All-visible toolbar
+    public const string SecurityBulkAllLabel = "All visible:";
+    public const string SecurityBulkGrantAll = "Grant all";
+    public const string SecurityBulkGrantAllOption = "Grant all + option";
+    public const string SecurityBulkRevokeAll = "Revoke all";
+    public const string SecurityBulkGrantAllTip = "Grant all privileges to every visible object";
+    public const string SecurityBulkGrantAllOptionTip = "Grant all privileges (with grant option) to every visible object";
+    public const string SecurityBulkRevokeAllTip = "Revoke all privileges from every visible object";
+    // Row scope (hover trio + right-click menu)
     public const string SecurityRowGrantAll = "Grant all privileges";
+    public const string SecurityRowGrantAllOption = "Grant all privileges with grant option";
     public const string SecurityRowRevokeAll = "Revoke all privileges";
+    public const string SecurityRowGrantTip = "Grant all privileges to this object";
+    public const string SecurityRowGrantOptionTip = "Grant all privileges (with grant option) to this object";
+    public const string SecurityRowRevokeTip = "Revoke all privileges from this object";
+    // Confirmation for the broadest destructive op
+    public const string SecurityRevokeAllConfirmTitle = "Revoke all privileges";
+    public const string SecurityRevokeAllConfirmFormat = "Revoke all privileges from {0} on all {1} visible object(s)? You can re-grant them afterward.";
+    public const string SecurityRevokeAllConfirmYes = "Revoke all";
 
     // User dialog
     public const string SecurityUserDialogAddTitle = "Create user";
