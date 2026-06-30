@@ -292,6 +292,30 @@ COMMENT ON TABLE  CUSTOMERS              IS 'Customers master table (lab).';
 COMMENT ON TABLE  ORDERS                 IS 'Sales orders (lab).';
 COMMENT ON DOMAIN D_AMOUNT               IS 'Non-negative monetary amount, 2 decimals.';
 COMMENT ON PROCEDURE SP_CUSTOMER_ORDERS  IS 'Selectable: orders for a given customer with a friendly status label.';
+COMMENT ON ROLE   LAB_READER             IS 'Read-only access to the lab schema.';
+COMMENT ON ROLE   LAB_EDITOR             IS 'Read/write access to orders.';
+
+/* ---------- Privileges + role membership (Security Manager lab data) -------
+   Object, column, EXECUTE and USAGE grants to the lab roles, plus role-to-role
+   membership — gives the Security Manager's Privileges / Membership panes real
+   rows to display. All per-database (safe to seed; users are server-global and
+   cannot be created here).                                                    */
+
+GRANT SELECT ON CUSTOMERS TO LAB_READER;
+GRANT SELECT ON ORDERS    TO LAB_READER;
+GRANT SELECT ON PRODUCTS  TO LAB_READER;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ORDERS TO LAB_EDITOR;
+GRANT UPDATE (EMAIL) ON CUSTOMERS TO LAB_EDITOR;
+GRANT REFERENCES (CUSTOMER_ID) ON CUSTOMERS TO LAB_EDITOR;
+GRANT SELECT ON V_ORDER_DETAILS TO LAB_READER WITH GRANT OPTION;
+
+GRANT EXECUTE ON PROCEDURE SP_CUSTOMER_ORDERS TO LAB_READER;
+GRANT USAGE ON SEQUENCE GEN_ORDER_ID TO LAB_EDITOR;
+GRANT USAGE ON EXCEPTION E_ORDER_LOCKED TO LAB_READER;
+
+GRANT LAB_READER TO LAB_EDITOR;
+GRANT LAB_EDITOR TO LAB_ADMIN WITH ADMIN OPTION;
 
 /* ---------- Sample data --------------------------------------------
    Deterministic explicit ids so FKs and views show real rows.

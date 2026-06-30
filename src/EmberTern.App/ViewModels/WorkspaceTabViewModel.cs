@@ -1,3 +1,4 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.Core.Metadata;
@@ -18,6 +19,7 @@ public enum WorkspaceTabKind
     DomainDetail,
     PackageDetail,
     ExceptionDetail,
+    SecurityManager,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -209,6 +211,32 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ExceptionDetail = detail,
         };
 
+    // The Security Manager tab is keyed by the context object it was opened from
+    // (a user or role) — not a singleton; multiple contexts coexist. A context-less
+    // tab (toolbar New User/Role) carries an empty ObjectName for dedup.
+    public static WorkspaceTabViewModel CreateSecurityManager(
+        MainWindowViewModel owner, SecurityManagerTabViewModel manager, MetadataObject? context, string? connectionProfileId)
+    {
+        var iconKind = context?.Kind == MetadataObjectKind.User
+            ? MetadataObjectKind.User
+            : MetadataObjectKind.Role;
+        return new(owner)
+        {
+            Kind = WorkspaceTabKind.SecurityManager,
+            BaseTitle = context is null
+                ? UiStrings.SecurityManagerTabTitle
+                : string.Format(CultureInfo.CurrentCulture, UiStrings.SecurityManagerTabTitleFormat, context.Name),
+            IsClosable = true,
+            ObjectKind = context?.Kind,
+            ObjectName = context?.Name ?? string.Empty,
+            ConnectionProfileId = connectionProfileId,
+            Icon = MetadataNodeViewModel.IconFor(iconKind),
+            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(iconKind),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(iconKind),
+            SecurityManager = manager,
+        };
+    }
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -230,6 +258,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public DomainDetailTabViewModel? DomainDetail { get; private init; }
     public PackageDetailTabViewModel? PackageDetail { get; private init; }
     public ExceptionDetailTabViewModel? ExceptionDetail { get; private init; }
+    public SecurityManagerTabViewModel? SecurityManager { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]

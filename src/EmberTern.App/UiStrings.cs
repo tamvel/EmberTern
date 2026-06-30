@@ -913,4 +913,125 @@ internal static class UiStrings
     public const string AddFieldDescriptionLabel = "Column description";
     public const string AddFieldDialogOk = "OK";
     public const string AddFieldValidationNameRequired = "Field name is required.";
+
+    // ─── Security Manager ──────────────────────────────────────────────────
+    public const string SecurityManagerTabTitle = "Security Manager";
+    public const string SecurityManagerTabTitleFormat = "Security · {0}";
+    public const string SecurityTabUsers = "Users";
+    public const string SecurityTabRoles = "Roles";
+    public const string SecurityTabMembership = "Membership";
+    public const string SecurityTabPrivileges = "Privileges";
+    public const string SecurityGranteeUser = "User";
+    public const string SecurityGranteeRole = "Role";
+
+    // Common toolbar
+    public const string SecurityAdd = "Add";
+    public const string SecurityEdit = "Edit";
+    public const string SecurityDelete = "Delete";
+    public const string SecurityRefresh = "Refresh";
+    public const string SecurityDeleteConfirm = "Delete";
+
+    // Users pane
+    public const string SecurityUsersHeader = "Server users";
+    public const string SecurityUsersHint = "Users are global to the Firebird server (security database), not to this database.";
+    public const string SecurityColUserName = "User name";
+    public const string SecurityColFirstName = "First name";
+    public const string SecurityColMiddleName = "Middle name";
+    public const string SecurityColLastName = "Last name";
+    public const string SecurityColActive = "Active";
+    public const string SecurityColAdmin = "Admin";
+    public const string SecurityColDescription = "Description";
+    public const string SecurityColPlugin = "Plugin";
+    public const string SecurityAddUser = "Add user";
+    public const string SecurityEditUser = "Edit user";
+    public const string SecurityDeleteUser = "Delete user";
+    public const string SecurityDeleteUserTitle = "Delete user";
+    public const string SecurityDeleteUserMessage = "Drop server user '{0}'? This removes the login from the Firebird server.";
+
+    // Roles pane
+    public const string SecurityRolesHeader = "Roles";
+    public const string SecurityColRoleName = "Role name";
+    public const string SecurityColOwner = "Owner";
+    public const string SecurityAddRole = "Add role";
+    public const string SecurityDropRole = "Drop role";
+    public const string SecurityDropRoleTitle = "Drop role";
+    public const string SecurityDropRoleMessage = "Drop role '{0}'? Memberships and grants for this role are lost.";
+    public const string SecurityRoleDescriptionLabel = "Role description";
+    public const string SecuritySaveDescription = "Save description";
+
+    // Membership pane
+    public const string SecurityMembershipHeader = "Role membership";
+    public const string SecurityGranteeLabel = "Grantee";
+    public const string SecurityColMember = "Member";
+    public const string SecurityColAdminOption = "Admin option";
+    public const string SecurityMembershipHint = "Click a cell to cycle: not a member → member → member with admin option. Admin option lets the member grant the role onward.";
+    // Membership direction switch (feature A) + tri-state cell (feature B)
+    public const string SecurityDirectionLabel = "Show";
+    public const string SecurityDirectionMemberOf = "Member of";
+    public const string SecurityDirectionMembers = "Members";
+    public const string SecurityRolePickerLabel = "Role";
+    public const string SecurityColMembership = "Membership";
+    public const string SecurityColMemberName = "User / Role";
+    public const string SecurityMembershipLegend = "✓ member     ✓+ with admin option     ·     click a cell to cycle";
+
+    // Privileges pane
+    public const string SecurityPrivilegesHeader = "Object privileges";
+    public const string SecurityCategoryLabel = "Objects";
+    public const string SecurityFilterWatermark = "Filter objects…";
+    public const string SecurityWithGrantOption = "Grant with GRANT OPTION";
+    public const string SecurityColObject = "Object";
+    public const string SecurityColAll = "All";
+    public const string SecurityColSelect = "Select";
+    public const string SecurityColInsert = "Insert";
+    public const string SecurityColUpdate = "Update";
+    public const string SecurityColDelete = "Delete";
+    public const string SecurityColReferences = "References";
+    public const string SecurityColExecute = "Execute";
+    public const string SecurityColUsage = "Usage";
+    // Per-column header dropdown (grant/revoke this privilege for all visible rows).
+    public const string SecurityColMenuTooltip = "Apply this privilege to all visible objects";
+    public const string SecurityColGrantAllVisible = "Grant to all visible";
+    public const string SecurityColRevokeAllVisible = "Revoke from all visible";
+    public const string SecurityColumnsHeader = "Columns";
+    public const string SecurityColumnsForFormat = "Columns — {0}";
+    public const string SecurityColColumn = "Column";
+    public const string SecurityColumnHint = "Select a table above to manage its column privileges.";
+
+    // Privileges — bulk operations + tri-state legend
+    public const string SecurityBulkAllPrivileges = "All privileges";
+    public const string SecurityBulkLabel = "Bulk (visible)";
+    public const string SecurityBulkGrant = "Grant";
+    public const string SecurityBulkRevoke = "Revoke";
+    public const string SecurityPrivilegeLegend = "✓ granted     ✓+ with grant option     ·     click a cell to cycle";
+    public const string SecurityRowGrantAll = "Grant all privileges";
+    public const string SecurityRowRevokeAll = "Revoke all privileges";
+
+    // User dialog
+    public const string SecurityUserDialogAddTitle = "Create user";
+    public const string SecurityUserDialogEditTitle = "Edit user — {0}";
+    public const string SecurityUserNameLabel = "User name";
+    public const string SecurityPasswordLabel = "Password";
+    public const string SecurityConfirmPasswordLabel = "Confirm password";
+    public const string SecurityPasswordEditHint = "Leave blank to keep the current password.";
+    public const string SecurityActiveLabel = "Active";
+    public const string SecurityAdministratorLabel = "Administrator";
+    public const string SecurityDialogOk = "OK";
+    public const string SecurityDialogCancel = "Cancel";
+
+    // Role dialog
+    public const string SecurityRoleDialogTitle = "Create role";
+    public const string SecurityRoleNameLabel = "Role name";
+    public const string SecurityRoleNameWatermark = "Enter a new role name";
+
+    // Tree context menu
+    public const string MetadataContextNewUser = "Add user…";
+    public const string MetadataContextNewRole = "Add role…";
+    public const string MetadataContextOpenSecurity = "Open in Security Manager";
+    public const string MetadataContextDeleteUser = "Delete user";
+    public const string MetadataContextDropRole = "Drop role";
+
+    // Toolbar (New User / New Role buttons)
+    public const string ToolbarNewUserTooltip = "New user";
+    public const string ToolbarNewRoleTooltip = "New role";
+    public const string ToolbarSecurityManagerTooltip = "Security Manager (users, roles, privileges)";
 }

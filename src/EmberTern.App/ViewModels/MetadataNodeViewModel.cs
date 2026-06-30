@@ -119,6 +119,13 @@ public partial class MetadataNodeViewModel : ViewModelBase
     public bool IsTableGroup => IsGroup && Kind == MetadataObjectKind.Table;
     public bool IsTableLeaf => IsActionable && Kind == MetadataObjectKind.Table;
 
+    // Security context-menu gates. Users / Roles CATEGORY nodes show "Add user…" /
+    // "Add role…"; a user/role LEAF shows "Open in Security Manager" (same path as
+    // double-click). Delete is done inside the Security Manager (with confirmation).
+    public bool IsUserGroup => IsGroup && Kind == MetadataObjectKind.User;
+    public bool IsRoleGroup => IsGroup && Kind == MetadataObjectKind.Role;
+    public bool IsSecurityLeaf => IsActionable && Kind is MetadataObjectKind.User or MetadataObjectKind.Role;
+
     partial void OnIsExpandedChanged(bool value)
     {
         if (!value || !IsGroup)
@@ -173,6 +180,13 @@ public partial class MetadataNodeViewModel : ViewModelBase
 
     [RelayCommand]
     private void NewTable() => _owner.RequestNewTable();
+
+    // ─── Security context-menu actions ────────────────────────────────────
+    [RelayCommand]
+    private void NewUser() => _owner.RequestNewUser();
+
+    [RelayCommand]
+    private void NewRole() => _owner.RequestNewRole();
 
     [RelayCommand]
     private void DeleteTable()

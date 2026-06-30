@@ -16,6 +16,7 @@ public enum WorkspaceTabKind
     DomainDetail,
     PackageDetail,
     ExceptionDetail,
+    SecurityManager,
 }
 
 // Stored verbatim as JSON. Properties are settable so System.Text.Json can

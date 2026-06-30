@@ -12,6 +12,7 @@ using EmberTern.App.Security;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
+using EmberTern.Core.Security;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Workspace;
 using EmberTern.Firebird;
@@ -38,6 +39,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdQueryExecutor _metadataExecutor;  // metadata lane
     private readonly FirebirdMetadataReader _metadataReader;
     private readonly FirebirdDdlReader _ddlReader;
+    private readonly FirebirdSecurityReader _securityReader;
     private readonly FirebirdTableDetailReader _tableDetailReader;
     private readonly FirebirdDataEditor _dataEditor;
     private readonly FirebirdDdlExecutor _ddlExecutor;
@@ -112,6 +114,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // TableDetail reader splits per method: structure → metadata, data preview → data.
         _metadataReader = new FirebirdMetadataReader(_service, _metadataTransactionService);
         _ddlReader = new FirebirdDdlReader(_service, _metadataTransactionService);
+        _securityReader = new FirebirdSecurityReader(_service, _metadataTransactionService);
         _tableDetailReader = new FirebirdTableDetailReader(_service, _metadataTransactionService, _transactionService);
         _dataEditor = new FirebirdDataEditor(_service, _transactionService);
         // Krok 1: DDL/Compile executes on the MAIN (data) connection — the same
@@ -127,6 +130,8 @@ public partial class MainWindowViewModel : ViewModelBase
         Metadata.StatusReported += OnMetadataStatusReported;
         Metadata.NewTableRequested += OnNewTableRequestedFromTree;
         Metadata.DeleteTableRequested += OnDeleteTableRequested;
+        Metadata.NewUserRequested += OnNewUserRequestedFromTree;
+        Metadata.NewRoleRequested += OnNewRoleRequestedFromTree;
         Messages = new ObservableCollection<QueryMessageViewModel>();
         // Workspace tabs start empty — no Query tab until a connection becomes active.
         // Each ConnectionProfile owns its own Query+DDL tab list via _workspacesByConnection.
@@ -202,6 +207,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActivePackageDetail))]
     [NotifyPropertyChangedFor(nameof(IsExceptionDetailTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveExceptionDetail))]
+    [NotifyPropertyChangedFor(nameof(IsSecurityManagerTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveSecurityManager))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
@@ -273,6 +280,11 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsExceptionDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ExceptionDetail };
     public ExceptionDetailTabViewModel? ActiveExceptionDetail
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ExceptionDetail } t ? t.ExceptionDetail : null;
+
+    /// <summary>True when the active workspace tab is a Security Manager tab.</summary>
+    public bool IsSecurityManagerTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SecurityManager };
+    public SecurityManagerTabViewModel? ActiveSecurityManager
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SecurityManager } t ? t.SecurityManager : null;
     // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
     // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
     // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
@@ -1319,6 +1331,10 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         foreach (var tab in WorkspaceTabs)
         {
+            // The Security Manager is a live admin tool, reopened from the tree —
+            // not persisted (it has no object DDL to fall back to).
+            if (tab.Kind == WorkspaceTabKind.SecurityManager) continue;
+
             if (tab.Kind == WorkspaceTabKind.Query)
             {
                 ws.Tabs.Add(new WorkspaceTab
@@ -2766,6 +2782,12 @@ public partial class MainWindowViewModel : ViewModelBase
     internal static bool OpensAsExceptionDetail(MetadataObjectKind kind)
         => kind is MetadataObjectKind.Exception;
 
+    // Users and roles open in the unified Security Manager (Users / Roles /
+    // Membership / Privileges). Not a singleton — a tab is keyed by the context
+    // object (Kind, Name); the context only sets the initial sub-tab + selection.
+    internal static bool OpensAsSecurityManager(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.User or MetadataObjectKind.Role;
+
     // Single construction point for ViewDetail VMs — mirrors CreateTableDetail.
     // A view is read-only data (no inline editing) but its SQL source IS editable,
     // so the DDL executor is wired for Compile while no data editor is.
@@ -2976,6 +2998,104 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.DeleteRequested += OnExceptionDeleteRequested;
         return detail;
+    }
+
+    // ─── Security Manager ──────────────────────────────────────────────────
+
+    // View-fulfilled dialogs (MainWindow.axaml.cs owns the windows). Shared by the
+    // Security Manager's own Add buttons AND the tree's Add user/role actions, so
+    // dialog hosting lives in exactly one place.
+    public event Func<UserInfo?, Task<UserEditResult?>>? UserEditDialogRequested;
+    public event Func<Task<string?>>? NewRoleDialogRequested;
+
+    internal Task<UserEditResult?> RequestUserEditDialogAsync(UserInfo? existing)
+        => UserEditDialogRequested?.Invoke(existing) ?? Task.FromResult<UserEditResult?>(null);
+    internal Task<string?> RequestNewRoleDialogAsync()
+        => NewRoleDialogRequested?.Invoke() ?? Task.FromResult<string?>(null);
+
+    internal SecurityManagerTabViewModel CreateSecurityManager(MetadataObject? context)
+    {
+        var manager = new SecurityManagerTabViewModel(_securityReader, _metadataReader, _ddlExecutor, context);
+        manager.ConfirmationRequested += RequestConfirmAsync;
+        manager.UserEditRequested += RequestUserEditDialogAsync;
+        manager.NewRoleRequested += RequestNewRoleDialogAsync;
+        return manager;
+    }
+
+    public bool CanOpenSecurityManager => _service.IsConnected;
+
+    // Central Security Manager button (main toolbar): opens a context-less manager
+    // (Users tab). Re-opens/focuses the context-less tab if one is already open.
+    [RelayCommand(CanExecute = nameof(CanOpenSecurityManager))]
+    private async Task OpenSecurityManager() => await OpenSecurityManagerAsync(null).ConfigureAwait(true);
+
+    private async Task OpenSecurityManagerAsync(MetadataObject? context)
+    {
+        // Dedup by context identity (Kind, Name) — repeat opens of the same user/role
+        // focus the existing tab; different contexts coexist (not a singleton).
+        var ctxKind = context?.Kind;
+        var ctxName = context?.Name ?? string.Empty;
+        foreach (var tab in WorkspaceTabs)
+        {
+            if (tab.Kind == WorkspaceTabKind.SecurityManager
+                && tab.ObjectKind == ctxKind
+                && string.Equals(tab.ObjectName, ctxName, StringComparison.Ordinal))
+            {
+                SelectTab(tab);
+                return;
+            }
+        }
+
+        var manager = CreateSecurityManager(context);
+        var newTab = WorkspaceTabViewModel.CreateSecurityManager(this, manager, context, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(newTab);
+        SelectTab(newTab);
+        await manager.EnsureLoadedAsync().ConfigureAwait(true);
+        if (!string.IsNullOrEmpty(manager.ErrorMessage))
+        {
+            AddMessage(MessageSeverity.Error, manager.ErrorMessage);
+            SelectedBottomTabIndex = 1;
+        }
+    }
+
+    // Tree "Add user…": a standalone create-user form, then CREATE USER + tree
+    // refresh (no Security Manager tab opens — matches the spec).
+    private async void OnNewUserRequestedFromTree()
+    {
+        var result = await RequestUserEditDialogAsync(null).ConfigureAwait(true);
+        if (result is null) return;
+        var sql = SecurityDdlGenerator.BuildCreateUser(result.User, result.Password);
+        if (!string.IsNullOrWhiteSpace(result.User.Description))
+            sql += ";\n" + SecurityDdlGenerator.BuildCommentUser(result.User.UserName, result.User.Description);
+        await ExecuteSecurityDdlAndRefreshTreeAsync(sql).ConfigureAwait(true);
+    }
+
+    // Tree "Add role…": a small name dialog, then CREATE ROLE + tree refresh
+    // (IBExpert behaviour — nothing opens).
+    private async void OnNewRoleRequestedFromTree()
+    {
+        var name = await RequestNewRoleDialogAsync().ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(name)) return;
+        await ExecuteSecurityDdlAndRefreshTreeAsync(SecurityDdlGenerator.BuildCreateRole(name)).ConfigureAwait(true);
+    }
+
+    private async Task ExecuteSecurityDdlAndRefreshTreeAsync(string sql)
+    {
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+            await Metadata.RefreshAsync().ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+        }
+        catch (InvalidOperationException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+        }
     }
 
     private async Task OnExceptionDeleteRequested(ExceptionDetailTabViewModel detail)
@@ -3261,6 +3381,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
         try
         {
+            if (OpensAsSecurityManager(obj.Kind))
+            {
+                await OpenSecurityManagerAsync(obj).ConfigureAwait(true);
+                return;
+            }
+
             if (OpensAsTableDetail(obj.Kind))
             {
                 var detail = CreateTableDetail(obj);
@@ -4311,6 +4437,8 @@ public partial class MainWindowViewModel : ViewModelBase
         NewPackageCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanCreateException));
         NewExceptionCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanOpenSecurityManager));
+        OpenSecurityManagerCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

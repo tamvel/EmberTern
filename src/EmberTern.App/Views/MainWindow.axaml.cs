@@ -390,6 +390,8 @@ public partial class MainWindow : Window
             _currentVm.EditRequested -= OnEditConnectionRequested;
             _currentVm.ConfirmationRequested -= OnConfirmationRequested;
             _currentVm.ChoiceRequested -= OnChoiceRequested;
+            _currentVm.UserEditDialogRequested -= OnUserEditRequested;
+            _currentVm.NewRoleDialogRequested -= OnNewRoleRequested;
             _currentVm.ClipboardWriteRequested -= OnClipboardWriteRequested;
             _currentVm.AddConnectionRequested -= OnAddConnectionRequested;
             _currentVm.SelectedQueryTextProvider = null;
@@ -404,6 +406,8 @@ public partial class MainWindow : Window
             _currentVm.EditRequested += OnEditConnectionRequested;
             _currentVm.ConfirmationRequested += OnConfirmationRequested;
             _currentVm.ChoiceRequested += OnChoiceRequested;
+            _currentVm.UserEditDialogRequested += OnUserEditRequested;
+            _currentVm.NewRoleDialogRequested += OnNewRoleRequested;
             _currentVm.ClipboardWriteRequested += OnClipboardWriteRequested;
             _currentVm.AddConnectionRequested += OnAddConnectionRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
@@ -755,6 +759,18 @@ public partial class MainWindow : Window
     private async System.Threading.Tasks.Task<string?> OnChoiceRequested(ChoiceRequest request)
     {
         var dialog = new ChoiceDialog { DataContext = new ChoiceDialogViewModel(request) };
+        return await dialog.ShowDialog<string?>(this);
+    }
+
+    private async System.Threading.Tasks.Task<UserEditResult?> OnUserEditRequested(EmberTern.Core.Security.UserInfo? existing)
+    {
+        var dialog = new UserEditDialog { DataContext = new UserEditDialogViewModel(existing) };
+        return await dialog.ShowDialog<UserEditResult?>(this);
+    }
+
+    private async System.Threading.Tasks.Task<string?> OnNewRoleRequested()
+    {
+        var dialog = new NewRoleDialog { DataContext = new NewRoleDialogViewModel() };
         return await dialog.ShowDialog<string?>(this);
     }
 

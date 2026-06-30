@@ -878,7 +878,9 @@ public static class DdlGenerator
     // reassembled procedure reads like the catalog DDL (unquoted SHOUTY_CASE), not
     // "ALL" "QUOTED". Matches FirebirdDdlReader.Quote's lighter convention — distinct
     // from the always-quote Quote used elsewhere in this generator.
-    private static string QuoteLight(string name)
+    // Quote only when needed (lowercase / special / leading non-letter); SHOUTY_CASE
+    // names stay bare, matching the catalog. internal so SecurityDdlGenerator reuses it.
+    internal static string QuoteLight(string name)
     {
         if (string.IsNullOrEmpty(name)) return "\"\"";
         bool needs = !char.IsLetter(name[0]) || char.IsLower(name[0]);

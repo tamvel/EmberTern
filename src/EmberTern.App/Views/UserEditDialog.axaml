@@ -1,0 +1,86 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EmberTern.App"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        x:Class="EmberTern.App.Views.UserEditDialog"
+        x:DataType="vm:UserEditDialogViewModel"
+        Title="{Binding Title}"
+        Width="460"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <Grid RowDefinitions="Auto,Auto,Auto">
+
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="20,14">
+      <TextBlock Text="{Binding Title}" Classes="h1" />
+    </Border>
+
+    <StackPanel Grid.Row="1" Margin="20,16" Spacing="10">
+      <StackPanel Spacing="4">
+        <TextBlock Text="{x:Static app:UiStrings.SecurityUserNameLabel}" Classes="field-label" />
+        <TextBox Text="{Binding UserName}" IsEnabled="{Binding CanEditName}" />
+      </StackPanel>
+
+      <Grid ColumnDefinitions="*,*" >
+        <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,6,0">
+          <TextBlock Text="{x:Static app:UiStrings.SecurityPasswordLabel}" Classes="field-label" />
+          <TextBox Text="{Binding Password}" PasswordChar="●" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Spacing="4" Margin="6,0,0,0">
+          <TextBlock Text="{x:Static app:UiStrings.SecurityConfirmPasswordLabel}" Classes="field-label" />
+          <TextBox Text="{Binding ConfirmPassword}" PasswordChar="●" />
+        </StackPanel>
+      </Grid>
+      <TextBlock Text="{x:Static app:UiStrings.SecurityPasswordEditHint}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                 FontSize="11"
+                 IsVisible="{Binding !IsNew}" />
+
+      <Grid ColumnDefinitions="*,*,*">
+        <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,6,0">
+          <TextBlock Text="{x:Static app:UiStrings.SecurityColFirstName}" Classes="field-label" />
+          <TextBox Text="{Binding FirstName}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Spacing="4" Margin="3,0">
+          <TextBlock Text="{x:Static app:UiStrings.SecurityColMiddleName}" Classes="field-label" />
+          <TextBox Text="{Binding MiddleName}" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="4" Margin="6,0,0,0">
+          <TextBlock Text="{x:Static app:UiStrings.SecurityColLastName}" Classes="field-label" />
+          <TextBox Text="{Binding LastName}" />
+        </StackPanel>
+      </Grid>
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="{x:Static app:UiStrings.SecurityColDescription}" Classes="field-label" />
+        <TextBox Text="{Binding Description}" AcceptsReturn="True" TextWrapping="Wrap" Height="56" />
+      </StackPanel>
+
+      <StackPanel Orientation="Horizontal" Spacing="20">
+        <CheckBox IsChecked="{Binding Active}" Content="{x:Static app:UiStrings.SecurityActiveLabel}" />
+        <CheckBox IsChecked="{Binding Admin}" Content="{x:Static app:UiStrings.SecurityAdministratorLabel}" />
+      </StackPanel>
+    </StackPanel>
+
+    <Border Grid.Row="2"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="20,12">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Classes="flat" Content="{x:Static app:UiStrings.SecurityDialogCancel}"
+                Command="{Binding CancelCommand}" />
+        <Button Classes="primary" Content="{x:Static app:UiStrings.SecurityDialogOk}"
+                Command="{Binding AcceptCommand}" IsDefault="True" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>

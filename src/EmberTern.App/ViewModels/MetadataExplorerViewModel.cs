@@ -84,6 +84,9 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     // existing New Table / Delete flows — these are just the dispatch points.
     public event Action? NewTableRequested;
     public event Action<MetadataObject>? DeleteTableRequested;
+    // Security tree actions: Users / Roles category "Add" dispatch points.
+    public event Action? NewUserRequested;
+    public event Action? NewRoleRequested;
 
     [RelayCommand]
     public async Task RefreshAsync()
@@ -219,6 +222,8 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     internal void RequestCopyName(string name) => CopyNameRequested?.Invoke(name);
     internal void RequestNewTable() => NewTableRequested?.Invoke();
     internal void RequestDeleteTable(MetadataObject obj) => DeleteTableRequested?.Invoke(obj);
+    internal void RequestNewUser() => NewUserRequested?.Invoke();
+    internal void RequestNewRole() => NewRoleRequested?.Invoke();
 
     [RelayCommand(CanExecute = nameof(HasSelectedConnection))]
     private void EditSelected() => SelectedConnection?.EditCommand.Execute(null);

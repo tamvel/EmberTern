@@ -166,6 +166,16 @@
             <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}"
                               Foreground="{DynamicResource InfoIconBrush}" />
           </Button>
+          <!-- Security Manager — sits between the Connection/Database section and the
+               Create-Object section, separated on both sides (it's a tool, not a
+               "new object" creator). -->
+          <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarSecurityManagerTooltip}"
+                  Command="{Binding OpenSecurityManagerCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.Role}"
+                              Foreground="{DynamicResource IconColor_Role}" />
+          </Button>
           <!-- Table-creation section sits AFTER all connection-related buttons.
                Icon ▦＋ mirrors the metadata tree's Table glyph with a plus —
                visually rhymes with the sidebar where new tables will appear. -->
@@ -454,6 +464,17 @@
                                 Command="{Binding DeleteTableCommand}"
                                 IsVisible="{Binding IsTableLeaf}" />
                       <Separator IsVisible="{Binding IsTableLeaf}" />
+                      <!-- Users / Roles category → Add; user/role leaf → open manager. -->
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextNewUser}"
+                                Command="{Binding NewUserCommand}"
+                                IsVisible="{Binding IsUserGroup}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextNewRole}"
+                                Command="{Binding NewRoleCommand}"
+                                IsVisible="{Binding IsRoleGroup}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextOpenSecurity}"
+                                Command="{Binding OpenDdlCommand}"
+                                IsVisible="{Binding IsSecurityLeaf}" />
+                      <Separator IsVisible="{Binding IsSecurityLeaf}" />
                       <!-- Generic actions for every actionable leaf (incl. tables). -->
                       <MenuItem Header="{Binding ContextOpenDdlLabel}"
                                 Command="{Binding OpenDdlCommand}"
@@ -992,6 +1013,9 @@
               <views:ExceptionDetailTabView x:Name="ExceptionDetailView"
                                             DataContext="{Binding ActiveExceptionDetail}"
                                             IsVisible="{Binding DataContext.IsExceptionDetailTabActive, ElementName=RootWindow}" />
+              <views:SecurityManagerTabView x:Name="SecurityManagerView"
+                                            DataContext="{Binding ActiveSecurityManager}"
+                                            IsVisible="{Binding DataContext.IsSecurityManagerTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query
