@@ -194,6 +194,70 @@ public sealed class FirebirdTableDetailReader
         }
     }
 
+    /// <summary>
+    /// Reads a single index by name for the Index Detail surface — discovers the
+    /// owning table itself, and captures the description + system flag + full
+    /// constraint type (PK / FK / UNIQUE) the grid query (<see cref="GetIndexesAsync"/>)
+    /// doesn't. Same metadata-lane + capture-lock-once pattern as the other readers.
+    /// Returns null when no index of that name exists.
+    /// </summary>
+    public async Task<IndexDetailInfo?> GetIndexDetailAsync(
+        string indexName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(indexName)) return null;
+
+        var connection = MetaConnection();
+        // Capture the lock ONCE — see gotcha #98.
+        var commandLock = MetaLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = IndexDetailSql;
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = MetaTx;
+            cmd.Parameters.AddWithValue("@name", indexName);
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) return null;
+
+            var table = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim();
+            var uniqueFlag = reader.IsDBNull(1) ? (int?)null : reader.GetInt32(1);
+            var indexDirection = reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2);
+            var fields = reader.IsDBNull(3) ? string.Empty : reader.GetString(3).Trim();
+            var constraintType = reader.IsDBNull(4) ? null : reader.GetString(4).Trim();
+            var inactiveFlag = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
+            var statistics = NormalizeStatistics(reader.IsDBNull(6) ? (double?)null : reader.GetDouble(6));
+            var expression = reader.IsDBNull(7) ? null : reader.GetString(7).Trim();
+            var systemFlag = reader.IsDBNull(8) ? (int?)null : reader.GetInt32(8);
+            var description = reader.IsDBNull(9) ? string.Empty : reader.GetString(9).Trim();
+
+            return new IndexDetailInfo
+            {
+                Name = indexName.Trim(),
+                Table = table,
+                Fields = fields,
+                IsUnique = uniqueFlag == 1,
+                IsDescending = indexDirection == 1,
+                IsActive = inactiveFlag != 1,
+                Statistics = statistics,
+                Expression = string.IsNullOrEmpty(expression) ? null : expression,
+                ConstraintType = NormalizeConstraintIndexType(constraintType),
+                Description = description,
+                IsSystem = systemFlag is { } sf && sf != 0,
+            };
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not read index {indexName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
     public async Task<IReadOnlyList<ConstraintInfo>> GetConstraintsAsync(
         string tableName,
         CancellationToken cancellationToken = default)
@@ -2301,6 +2365,41 @@ public sealed class FirebirdTableDetailReader
         var trimmed = constraintType.Trim();
         if (string.Equals(trimmed, "PRIMARY KEY", StringComparison.OrdinalIgnoreCase)) return "PRIMARY KEY";
         if (string.Equals(trimmed, "FOREIGN KEY", StringComparison.OrdinalIgnoreCase)) return "FOREIGN KEY";
+        return string.Empty;
+    }
+
+    // Single-index detail query: like IndexesSql but keyed by index name (not table),
+    // and additionally returns the owning relation, the system flag, the description,
+    // and the FULL constraint type — its subquery is NOT narrowed to PK/FK, so a
+    // UNIQUE-constraint backing index is reported too (the Index Detail surface needs
+    // to know about all three to gate Active/Drop).
+    internal const string IndexDetailSql =
+        "SELECT i.RDB$RELATION_NAME, i.RDB$UNIQUE_FLAG, i.RDB$INDEX_TYPE, " +
+        "       (SELECT LIST(TRIM(s2.RDB$FIELD_NAME), ',') " +
+        "        FROM RDB$INDEX_SEGMENTS s2 " +
+        "        WHERE s2.RDB$INDEX_NAME = i.RDB$INDEX_NAME) AS FIELDS, " +
+        "       (SELECT rc.RDB$CONSTRAINT_TYPE " +
+        "        FROM RDB$RELATION_CONSTRAINTS rc " +
+        "        WHERE rc.RDB$INDEX_NAME = i.RDB$INDEX_NAME " +
+        "          AND rc.RDB$CONSTRAINT_TYPE IN ('PRIMARY KEY', 'FOREIGN KEY', 'UNIQUE') " +
+        "        ROWS 1) AS CONSTRAINT_TYPE, " +
+        "       i.RDB$INDEX_INACTIVE, " +
+        "       i.RDB$STATISTICS, " +
+        "       i.RDB$EXPRESSION_SOURCE, " +
+        "       i.RDB$SYSTEM_FLAG, " +
+        "       i.RDB$DESCRIPTION " +
+        "FROM RDB$INDICES i " +
+        "WHERE i.RDB$INDEX_NAME = @name";
+
+    // PK / FK / UNIQUE preserved verbatim (uppercased); anything else → empty
+    // (a plain user index has no backing constraint).
+    internal static string NormalizeConstraintIndexType(string? constraintType)
+    {
+        if (string.IsNullOrWhiteSpace(constraintType)) return string.Empty;
+        var trimmed = constraintType.Trim();
+        if (string.Equals(trimmed, "PRIMARY KEY", StringComparison.OrdinalIgnoreCase)) return "PRIMARY KEY";
+        if (string.Equals(trimmed, "FOREIGN KEY", StringComparison.OrdinalIgnoreCase)) return "FOREIGN KEY";
+        if (string.Equals(trimmed, "UNIQUE", StringComparison.OrdinalIgnoreCase)) return "UNIQUE";
         return string.Empty;
     }
 

@@ -16,6 +16,7 @@ public enum WorkspaceTabKind
     DomainDetail,
     PackageDetail,
     ExceptionDetail,
+    IndexDetail,
     SecurityManager,
 }
 

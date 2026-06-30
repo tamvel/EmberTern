@@ -810,6 +810,25 @@
                       Command="{Binding ActiveExceptionDetail.DeleteCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
+              <!-- Index: Compile / Revert / Recompute statistics / Delete. Compile auto-commits
+                   via the autonomous DDL path, so no Commit/Rollback pair. Delete greys out for
+                   constraint-backed indexes (CanDelete = !IsConstraintBacked). -->
+              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.IndexCompileTooltip}"
+                      Command="{Binding ActiveIndexDetail.CompileCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+                      Command="{Binding ActiveIndexDetail.RevertChangesCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.IndexRecomputeStatisticsTooltip}"
+                      Command="{Binding ActiveIndexDetail.RecomputeStatisticsCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.IndexDeleteTooltip}"
+                      Command="{Binding ActiveIndexDetail.DeleteCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
               <!-- Single unified Commit / Rollback pair (auto-routed to the open lane(s)). -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
                       Command="{Binding CommitAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
@@ -1013,6 +1032,9 @@
               <views:ExceptionDetailTabView x:Name="ExceptionDetailView"
                                             DataContext="{Binding ActiveExceptionDetail}"
                                             IsVisible="{Binding DataContext.IsExceptionDetailTabActive, ElementName=RootWindow}" />
+              <views:IndexDetailTabView x:Name="IndexDetailView"
+                                        DataContext="{Binding ActiveIndexDetail}"
+                                        IsVisible="{Binding DataContext.IsIndexDetailTabActive, ElementName=RootWindow}" />
               <views:SecurityManagerTabView x:Name="SecurityManagerView"
                                             DataContext="{Binding ActiveSecurityManager}"
                                             IsVisible="{Binding DataContext.IsSecurityManagerTabActive, ElementName=RootWindow}" />

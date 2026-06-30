@@ -207,6 +207,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActivePackageDetail))]
     [NotifyPropertyChangedFor(nameof(IsExceptionDetailTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveExceptionDetail))]
+    [NotifyPropertyChangedFor(nameof(IsIndexDetailTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveIndexDetail))]
     [NotifyPropertyChangedFor(nameof(IsSecurityManagerTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveSecurityManager))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
@@ -281,6 +283,11 @@ public partial class MainWindowViewModel : ViewModelBase
     public ExceptionDetailTabViewModel? ActiveExceptionDetail
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ExceptionDetail } t ? t.ExceptionDetail : null;
 
+    /// <summary>True when the active workspace tab is an Index Detail tab.</summary>
+    public bool IsIndexDetailTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.IndexDetail };
+    public IndexDetailTabViewModel? ActiveIndexDetail
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.IndexDetail } t ? t.IndexDetail : null;
+
     /// <summary>True when the active workspace tab is a Security Manager tab.</summary>
     public bool IsSecurityManagerTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SecurityManager };
     public SecurityManagerTabViewModel? ActiveSecurityManager
@@ -340,7 +347,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool ShowTransactionButtons => IsQueryTabActive || IsTableDetailTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsFunctionDetailTabActive;
     // Close-tab toolbar button targets *other* tabs (DDL, TableDetail, NewTable, ViewDetail, ProcedureDetail, TriggerDetail, FunctionDetail);
     // the anchored Query tab is never closable so the button hides when it's active.
-    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail or WorkspaceTabKind.PackageDetail or WorkspaceTabKind.ExceptionDetail };
+    public bool IsClosableTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.NewTable or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail or WorkspaceTabKind.PackageDetail or WorkspaceTabKind.ExceptionDetail or WorkspaceTabKind.IndexDetail };
 
     // ─── Unified editor toolbar — fixed 5-section model ───────────────────
     //
@@ -1453,6 +1460,19 @@ public partial class MainWindowViewModel : ViewModelBase
                     ActiveSubTabIndex = gd?.ActiveSubTabIndex,
                 });
             }
+            else if (tab.Kind == WorkspaceTabKind.IndexDetail)
+            {
+                var ix = tab.IndexDetail;
+                ws.Tabs.Add(new WorkspaceTab
+                {
+                    Kind = CoreTabKind.IndexDetail,
+                    ObjectName = tab.ObjectName,
+                    ObjectKind = tab.ObjectKind,
+                    ConnectionProfileId = tab.ConnectionProfileId,
+                    DdlText = ix is { } ? ix.DdlText : tab.DdlText,
+                    ActiveSubTabIndex = ix?.ActiveSubTabIndex,
+                });
+            }
             else if (tab.Kind == WorkspaceTabKind.DomainDetail)
             {
                 // Skip transient New Domain tabs (IsNew) — the domain doesn't exist
@@ -1649,6 +1669,18 @@ public partial class MainWindowViewModel : ViewModelBase
                 detail.DdlText = tab.DdlText ?? string.Empty;
                 if (tab.ActiveSubTabIndex is { } gnSub) detail.ActiveSubTabIndex = gnSub;
                 WorkspaceTabs.Add(WorkspaceTabViewModel.CreateGeneratorDetail(this, obj, detail, tab.ConnectionProfileId));
+            }
+            else if (tab.Kind == CoreTabKind.IndexDetail
+                  && tab.ObjectKind is { } ixKind
+                  && !string.IsNullOrEmpty(tab.ObjectName))
+            {
+                // Native IndexDetail restore (no DDL-only fallback). Lazy-loads on
+                // first activation via SelectTab. Cached DDL seeds the DDL tab.
+                var obj = new MetadataObject(tab.ObjectName, ixKind);
+                var detail = CreateIndexDetail(obj);
+                detail.DdlText = tab.DdlText ?? string.Empty;
+                if (tab.ActiveSubTabIndex is { } ixSub) detail.ActiveSubTabIndex = ixSub;
+                WorkspaceTabs.Add(WorkspaceTabViewModel.CreateIndexDetail(this, obj, detail, tab.ConnectionProfileId));
             }
             else if (tab.Kind == CoreTabKind.DomainDetail
                   && tab.ObjectKind is { } domKind
@@ -2782,6 +2814,13 @@ public partial class MainWindowViewModel : ViewModelBase
     internal static bool OpensAsExceptionDetail(MetadataObjectKind kind)
         => kind is MetadataObjectKind.Exception;
 
+    // Indexes open in the dedicated Index Detail surface (the read-mostly properties
+    // form + DDL), not a plain DDL tab. Separate predicate — it builds its own
+    // (form-based, no PSQL body) detail VM. Index CREATION stays in Table Detail →
+    // Indexes; there is no New-Index flow here.
+    internal static bool OpensAsIndexDetail(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.Index;
+
     // Users and roles open in the unified Security Manager (Users / Roles /
     // Membership / Privileges). Not a singleton — a tab is keyed by the context
     // object (Kind, Name); the context only sets the initial sub-tab + selection.
@@ -2859,6 +2898,48 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var t in WorkspaceTabs)
         {
             if (t.Kind == WorkspaceTabKind.GeneratorDetail && ReferenceEquals(t.GeneratorDetail, detail))
+            {
+                CloseTab(t);
+                break;
+            }
+        }
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+    }
+
+    // Single construction point for IndexDetail VMs — mirrors CreateGeneratorDetail.
+    // An index is read-mostly: Compile applies Active / Description; Delete drops it
+    // (non-constraint indexes only). No Easy mode, no data editor, no New flow.
+    internal IndexDetailTabViewModel CreateIndexDetail(MetadataObject obj)
+    {
+        var detail = new IndexDetailTabViewModel(obj.Name, _tableDetailReader, _ddlExecutor);
+        detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.DeleteRequested += OnIndexDeleteRequested;
+        return detail;
+    }
+
+    private async Task OnIndexDeleteRequested(IndexDetailTabViewModel detail)
+    {
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(DdlGenerator.BuildDropIndex(detail.IndexName)).ConfigureAwait(true);
+        }
+        catch (DdlExecutionException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+
+        // Close the tab for this index, then refresh the tree so it disappears.
+        foreach (var t in WorkspaceTabs)
+        {
+            if (t.Kind == WorkspaceTabKind.IndexDetail && ReferenceEquals(t.IndexDetail, detail))
             {
                 CloseTab(t);
                 break;
@@ -3370,7 +3451,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // TableDetail tabs key on (Kind, Name).
         foreach (var tab in WorkspaceTabs)
         {
-            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail or WorkspaceTabKind.PackageDetail or WorkspaceTabKind.ExceptionDetail
+            if (tab.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.DomainDetail or WorkspaceTabKind.PackageDetail or WorkspaceTabKind.ExceptionDetail or WorkspaceTabKind.IndexDetail
                 && tab.ObjectKind == obj.Kind
                 && string.Equals(tab.ObjectName, obj.Name, StringComparison.Ordinal))
             {
@@ -3524,6 +3605,21 @@ public partial class MainWindowViewModel : ViewModelBase
                 return;
             }
 
+            if (OpensAsIndexDetail(obj.Kind))
+            {
+                var detail = CreateIndexDetail(obj);
+                var newTab = WorkspaceTabViewModel.CreateIndexDetail(this, obj, detail, _service.ActiveProfile?.Id);
+                WorkspaceTabs.Add(newTab);
+                SelectTab(newTab);
+                await detail.EnsureLoadedAsync().ConfigureAwait(true);
+                if (!string.IsNullOrEmpty(detail.ErrorMessage))
+                {
+                    AddMessage(MessageSeverity.Error, detail.ErrorMessage);
+                    SelectedBottomTabIndex = 1;
+                }
+                return;
+            }
+
             var ddl = await _ddlReader.FetchDdlAsync(obj).ConfigureAwait(true);
             var ddlTab = WorkspaceTabViewModel.CreateDdl(this, obj, ddl, _service.ActiveProfile?.Id);
             WorkspaceTabs.Add(ddlTab);
@@ -3588,6 +3684,11 @@ public partial class MainWindowViewModel : ViewModelBase
             && _service.IsConnected)
         {
             _ = generatorDetail.EnsureLoadedAsync();
+        }
+        else if (tab is { Kind: WorkspaceTabKind.IndexDetail, IndexDetail: { } indexDetail }
+            && _service.IsConnected)
+        {
+            _ = indexDetail.EnsureLoadedAsync();
         }
         else if (tab is { Kind: WorkspaceTabKind.DomainDetail, DomainDetail: { } domainDetail }
             && _service.IsConnected)

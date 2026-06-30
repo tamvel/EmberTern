@@ -19,6 +19,7 @@ public enum WorkspaceTabKind
     DomainDetail,
     PackageDetail,
     ExceptionDetail,
+    IndexDetail,
     SecurityManager,
 }
 
@@ -211,6 +212,22 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ExceptionDetail = detail,
         };
 
+    public static WorkspaceTabViewModel CreateIndexDetail(MainWindowViewModel owner, MetadataObject obj, IndexDetailTabViewModel detail, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.IndexDetail,
+            BaseTitle = obj.Name,
+            IsClosable = true,
+            ObjectName = obj.Name,
+            ObjectKind = obj.Kind,
+            DdlText = detail.DdlText,
+            ConnectionProfileId = connectionProfileId,
+            Icon = MetadataNodeViewModel.IconFor(obj.Kind),
+            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
+            IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
+            IndexDetail = detail,
+        };
+
     // The Security Manager tab is keyed by the context object it was opened from
     // (a user or role) — not a singleton; multiple contexts coexist. A context-less
     // tab (toolbar New User/Role) carries an empty ObjectName for dedup.
@@ -258,6 +275,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public DomainDetailTabViewModel? DomainDetail { get; private init; }
     public PackageDetailTabViewModel? PackageDetail { get; private init; }
     public ExceptionDetailTabViewModel? ExceptionDetail { get; private init; }
+    public IndexDetailTabViewModel? IndexDetail { get; private init; }
     public SecurityManagerTabViewModel? SecurityManager { get; private init; }
 
     [ObservableProperty]
@@ -289,6 +307,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.DomainDetail => DomainDetail?.GetUnsavedWork(),
         WorkspaceTabKind.PackageDetail => PackageDetail?.GetUnsavedWork(),
         WorkspaceTabKind.ExceptionDetail => ExceptionDetail?.GetUnsavedWork(),
+        WorkspaceTabKind.IndexDetail => IndexDetail?.GetUnsavedWork(),
         _ => null,
     };
 

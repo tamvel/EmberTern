@@ -106,6 +106,21 @@ CREATE TABLE AUDIT_LOG (
   CONSTRAINT PK_AUDIT_LOG PRIMARY KEY (LOG_ID)
 );
 
+/* ---------- Standalone indexes --------------------------------------
+   Exercise the Index Detail surface: a plain index, a DESCENDING index,
+   a composite index, a standalone UNIQUE index, an expression index, and
+   one INACTIVE index. (PK / FK / UNIQUE *constraint* backing indexes are
+   created implicitly by the table constraints above.)                */
+
+CREATE INDEX IDX_ORDERS_DATE          ON ORDERS (ORDER_DATE);
+CREATE DESCENDING INDEX IDX_ORDERS_AMT ON ORDERS (TOTAL_AMOUNT);
+CREATE INDEX IDX_ITEMS_PROD_QTY       ON ORDER_ITEMS (PRODUCT_ID, QTY);
+CREATE UNIQUE INDEX IDX_CUST_EMAIL_U  ON CUSTOMERS (EMAIL);
+CREATE INDEX IDX_CUST_NAME_UPPER      ON CUSTOMERS COMPUTED BY (UPPER(NAME));
+CREATE INDEX IDX_ORDERS_STATUS        ON ORDERS (STATUS);
+ALTER INDEX IDX_ORDERS_STATUS INACTIVE;
+COMMENT ON INDEX IDX_ORDERS_DATE IS 'Lookup orders by date (lab).';
+
 /* ---------- Views ---------------------------------------------------
    Cover: simple, join, aggregate.                                    */
 

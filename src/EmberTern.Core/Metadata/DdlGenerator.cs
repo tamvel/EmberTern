@@ -1160,6 +1160,86 @@ public static class DdlGenerator
         return $"SET STATISTICS INDEX {Quote(indexName.Trim())}";
     }
 
+    /// <summary><c>ALTER INDEX "ix" ACTIVE</c> — re-enables a deactivated index.
+    /// Verified on FB 5.0.3. Firebird rejects this for PRIMARY/UNIQUE/FOREIGN KEY
+    /// backing indexes ("Cannot deactivate index used by a … constraint") — the VM
+    /// gates the action on <c>IsConstraintBacked</c> up-front.</summary>
+    public static string BuildAlterIndexActive(string indexName)
+    {
+        if (string.IsNullOrWhiteSpace(indexName))
+            throw new ArgumentException("Index name is required.", nameof(indexName));
+        return $"ALTER INDEX {Quote(indexName.Trim())} ACTIVE";
+    }
+
+    /// <summary><c>ALTER INDEX "ix" INACTIVE</c> — disables an index (queries stop
+    /// using it; it stops being maintained on writes). Same constraint-backed
+    /// limitation as <see cref="BuildAlterIndexActive"/>.</summary>
+    public static string BuildAlterIndexInactive(string indexName)
+    {
+        if (string.IsNullOrWhiteSpace(indexName))
+            throw new ArgumentException("Index name is required.", nameof(indexName));
+        return $"ALTER INDEX {Quote(indexName.Trim())} INACTIVE";
+    }
+
+    /// <summary>Firebird's <c>COMMENT ON INDEX "ix" IS …</c> (verified on FB 5.0.3 —
+    /// writes RDB$INDICES.RDB$DESCRIPTION). Pass null/whitespace to clear
+    /// (<c>IS NULL</c>).</summary>
+    public static string BuildCommentIndex(string indexName, string? comment)
+        => BuildRelationComment("INDEX", indexName, comment);
+
+    /// <summary>
+    /// Read-only reconstructed DDL for the Index Detail DDL tab:
+    /// <c>CREATE [UNIQUE] [DESCENDING] INDEX "ix" ON "T" ("A", "B")</c> or
+    /// <c>… ON "T" COMPUTED BY (expr)</c>, plus an <c>/* INACTIVE */</c> note and a
+    /// <c>COMMENT ON INDEX</c> line when present. Built from the loaded
+    /// <see cref="IndexDetailInfo"/> (no DB round-trip) — same approach as Domain
+    /// Detail's live DDL.
+    /// </summary>
+    public static string BuildIndexDdl(IndexDetailInfo info)
+    {
+        if (info is null) throw new ArgumentNullException(nameof(info));
+        if (string.IsNullOrWhiteSpace(info.Name))
+            throw new ArgumentException("Index name is required.", nameof(info));
+
+        var sb = new StringBuilder();
+        sb.Append("CREATE ");
+        if (info.IsUnique) sb.Append("UNIQUE ");
+        if (info.IsDescending) sb.Append("DESCENDING ");
+        sb.Append("INDEX ").Append(Quote(info.Name.Trim()))
+          .Append(" ON ").Append(Quote((info.Table ?? string.Empty).Trim())).Append(' ');
+
+        var expr = info.Expression?.Trim();
+        if (!string.IsNullOrEmpty(expr))
+        {
+            // RDB$EXPRESSION_SOURCE is already parenthesized (e.g. "(UPPER(NAME))").
+            // COMPUTED BY needs exactly one set of parens — emit the source as-is
+            // when it's already wrapped, else wrap it.
+            sb.Append("COMPUTED BY ");
+            if (expr.StartsWith("(", StringComparison.Ordinal) && expr.EndsWith(")", StringComparison.Ordinal))
+                sb.Append(expr);
+            else
+                sb.Append('(').Append(expr).Append(')');
+        }
+        else
+        {
+            sb.Append('(');
+            var fields = (info.Fields ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries);
+            var cleaned = new List<string>(fields.Length);
+            foreach (var f in fields) cleaned.Add(f.Trim());
+            AppendQuotedList(sb, cleaned);
+            sb.Append(')');
+        }
+        sb.Append(';');
+
+        if (!info.IsActive) sb.Append("\n/* INACTIVE */");
+
+        if (!string.IsNullOrWhiteSpace(info.Description))
+            sb.Append('\n').Append(BuildCommentIndex(info.Name, info.Description)).Append(';');
+
+        return sb.ToString();
+    }
+
     // ─── Sequence / generator generation (Generator Detail) ──────────────
     //
     // A Firebird generator is a SEQUENCE. CREATE / ALTER use the SQL-standard

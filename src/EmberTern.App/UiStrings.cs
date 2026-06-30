@@ -105,6 +105,7 @@ internal static class UiStrings
     public const string UnsavedModifiedPackageFormat = "Package {0} — uncompiled changes";
     public const string UnsavedNewExceptionFormat = "New exception (not yet created) — {0}";
     public const string UnsavedModifiedExceptionFormat = "Exception {0} — unsaved changes";
+    public const string UnsavedModifiedIndexFormat = "Index {0} — unsaved changes";
     public const string UnsavedPendingStructureFormat = "Table {0} — uncompiled structural changes";
     public const string UnsavedTransactionDataFormat = "Data transaction — {0} pending statement(s)";
     public const string UnsavedTransactionMetadataFormat = "Metadata transaction — {0} pending statement(s)";
@@ -539,6 +540,34 @@ internal static class UiStrings
     public const string ExceptionDeleteConfirmYes = "Delete";
     public const string NewExceptionTabDefaultTitle = "New Exception";
     public const string NewExceptionExecutedFormat = "Exception \"{0}\" created.";
+
+    // ─── Index Detail ──────────────────────────────────────────────────────
+    public const string IndexDetailTabIndex = "Index";
+    public const string IndexDetailTabDdl = "DDL";
+    public const string IndexNameHeader = "Name";
+    public const string IndexTableHeader = "Table";
+    public const string IndexConstraintTypeHeader = "Constraint type";
+    public const string IndexConstraintTypeNoneWatermark = "— (plain index)";
+    // Shown when the index backs a constraint, so it's immediately obvious WHY the
+    // Active toggle and Drop action are disabled. {0} = PRIMARY KEY / UNIQUE / FOREIGN KEY.
+    public const string IndexConstraintBackedNoteFormat =
+        "Backs a {0} constraint — Firebird manages it through the constraint, so it can't be deactivated or dropped directly. Use Table Detail → Constraints.";
+    public const string IndexFieldsHeader = "Fields";
+    public const string IndexUniqueHeader = "Unique";
+    public const string IndexSortDirectionHeader = "Sort direction";
+    public const string IndexStatisticsHeader = "Statistics";
+    public const string IndexStatisticsNoneWatermark = "(not computed)";
+    public const string IndexActiveHeader = "Active";
+    public const string IndexDescriptionHeader = "Description";
+    public const string IndexLoadingHint = "Loading index…";
+    public const string IndexNotFoundFormat = "Index \"{0}\" not found.";
+    public const string IndexCompileTooltip = "Compile index changes (ALTER INDEX / COMMENT ON INDEX)";
+    public const string IndexCompileFailedFormat = "Compile failed: {0}";
+    public const string IndexRecomputeStatisticsTooltip = "Recompute statistics (SET STATISTICS INDEX)";
+    public const string IndexDeleteTooltip = "Delete index";
+    public const string IndexDeleteConfirmTitle = "Delete index";
+    public const string IndexDeleteConfirmFormat = "Drop index \"{0}\"? This cannot be undone.";
+    public const string IndexDeleteConfirmYes = "Delete";
 
     // ─── Domain Detail ───────────────────────────────────────────────────────
     public const string DomainDetailTabDomain = "Domain";
