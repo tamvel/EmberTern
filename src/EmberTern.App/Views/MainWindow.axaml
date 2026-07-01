@@ -483,18 +483,23 @@
                                 Command="{Binding RecompileAllCommand}"
                                 IsVisible="{Binding IsRecompilableGroup}" />
                       <Separator IsVisible="{Binding IsTriggerGroup}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivateVisible}"
-                                Command="{Binding ActivateVisibleCommand}"
-                                IsVisible="{Binding IsTriggerGroup}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivateVisible}"
-                                Command="{Binding DeactivateVisibleCommand}"
-                                IsVisible="{Binding IsTriggerGroup}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivateAll}"
-                                Command="{Binding ActivateAllCommand}"
-                                IsVisible="{Binding IsTriggerGroup}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivateAll}"
-                                Command="{Binding DeactivateAllCommand}"
-                                IsVisible="{Binding IsTriggerGroup}" />
+                      <!-- Trigger-group bulk ops, grouped by action → scope. The "Selected"
+                           scope (between Visible and All) is intentionally left for a future
+                           multi-select feature; the submenu shape already accommodates it. -->
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
+                                IsVisible="{Binding IsTriggerGroup}">
+                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
+                                  Command="{Binding ActivateVisibleCommand}" />
+                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
+                                  Command="{Binding ActivateAllCommand}" />
+                      </MenuItem>
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
+                                IsVisible="{Binding IsTriggerGroup}">
+                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
+                                  Command="{Binding DeactivateVisibleCommand}" />
+                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
+                                  Command="{Binding DeactivateAllCommand}" />
+                      </MenuItem>
                       <MenuItem Header="{Binding ContextEditLabel}"
                                 Command="{Binding OpenDdlCommand}"
                                 IsVisible="{Binding CanEditLeaf}" />

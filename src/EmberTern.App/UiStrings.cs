@@ -49,10 +49,10 @@ internal static class UiStrings
     public const string MetadataContextExecuteProcedure = "Execute procedure";
     public const string MetadataContextActivate = "Activate";
     public const string MetadataContextDeactivate = "Deactivate";
-    public const string MetadataContextActivateVisible = "Activate visible";
-    public const string MetadataContextDeactivateVisible = "Deactivate visible";
-    public const string MetadataContextActivateAll = "Activate all";
-    public const string MetadataContextDeactivateAll = "Deactivate all";
+    // Trigger-group Activate/Deactivate submenus are scoped by these. Structured so a
+    // "Selected" scope drops in between Visible and All if multi-select ever lands.
+    public const string MetadataContextScopeVisible = "Visible";
+    public const string MetadataContextScopeAll = "All";
     public const string MetadataContextRecompileAllFormat = "Recompile all {0}s";
     public const string MetadataInactiveSuffix = " (inactive)";
     // Generic delete (all deletable kinds) — {0}=kind noun, {1}=object name.
