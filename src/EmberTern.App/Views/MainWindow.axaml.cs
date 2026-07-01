@@ -65,6 +65,7 @@ public partial class MainWindow : Window
     private WindowBounds _lastNormalBounds;
     private bool _vmRestored;
     private bool _boundsRestored;
+    private bool _scrollDiagHooked;
 
     // Resizable / collapsible layout (Part 2 + 3). Definitions are reached through
     // their parent grids (a ColumnDefinition isn't a Control). Width/height + the
@@ -212,6 +213,14 @@ public partial class MainWindow : Window
 
     private void OnWindowOpened(object? sender, EventArgs e)
     {
+        // Scroll-jump diagnostics (EMBERTERN_SCROLL_DIAG). The sidebar ScrollViewer is a
+        // template part of SidebarTree, present after the tree template applies — post at
+        // Background so layout has settled. Idempotent (guards on already-hooked).
+        if (EmberTern.App.Diagnostics.ScrollTrace.IsEnabled)
+        {
+            Dispatcher.UIThread.Post(HookSidebarScrollDiagnostics, DispatcherPriority.Background);
+        }
+
         if (_boundsRestored) return;
         _boundsRestored = true;
 
@@ -230,6 +239,25 @@ public partial class MainWindow : Window
                 WindowState = ws;
             }
         }
+    }
+
+    // Subscribes the sidebar ScrollViewer's ScrollChanged to ScrollTrace so a live repro
+    // logs offset/extent/viewport + deltas on every scroll change (EMBERTERN_SCROLL_DIAG).
+    // A changing extentH while offsetY moves = Avalonia VSP extent re-estimation.
+    private void HookSidebarScrollDiagnostics()
+    {
+        if (_scrollDiagHooked) return;
+        var tree = this.FindControl<TreeView>("SidebarTree");
+        var sv = tree?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+        if (sv is null) return;
+        _scrollDiagHooked = true;
+        sv.ScrollChanged += (s, e) =>
+        {
+            if (s is not ScrollViewer v) return;
+            EmberTern.App.Diagnostics.ScrollTrace.Scroll(
+                v.Offset.Y, v.Extent.Height, v.Viewport.Height, e.OffsetDelta.Y, e.ExtentDelta.Y);
+        };
+        EmberTern.App.Diagnostics.ScrollTrace.Rebuild("scroll diagnostics hooked");
     }
 
     private bool AreBoundsSane(WindowBounds b)
@@ -394,6 +422,7 @@ public partial class MainWindow : Window
             _currentVm.NewRoleDialogRequested -= OnNewRoleRequested;
             _currentVm.ClipboardWriteRequested -= OnClipboardWriteRequested;
             _currentVm.AddConnectionRequested -= OnAddConnectionRequested;
+            _currentVm.BatchResultsRequested -= OnBatchResultsRequested;
             _currentVm.SelectedQueryTextProvider = null;
             _currentVm.ReplaceSelectedOrAllText = null;
         }
@@ -410,6 +439,7 @@ public partial class MainWindow : Window
             _currentVm.NewRoleDialogRequested += OnNewRoleRequested;
             _currentVm.ClipboardWriteRequested += OnClipboardWriteRequested;
             _currentVm.AddConnectionRequested += OnAddConnectionRequested;
+            _currentVm.BatchResultsRequested += OnBatchResultsRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
 
@@ -760,6 +790,26 @@ public partial class MainWindow : Window
     {
         var dialog = new ChoiceDialog { DataContext = new ChoiceDialogViewModel(request) };
         return await dialog.ShowDialog<string?>(this);
+    }
+
+    private async System.Threading.Tasks.Task OnBatchResultsRequested(BatchResultsViewModel vm)
+    {
+        var dialog = new BatchResultsDialog { DataContext = vm };
+        // VM raises CopyRequested with TSV text; the dialog window owns the clipboard.
+        async void OnCopy(string text)
+        {
+            var cb = TopLevel.GetTopLevel(dialog)?.Clipboard;
+            if (cb is not null) await cb.SetTextAsync(text);
+        }
+        vm.CopyRequested += OnCopy;
+        try
+        {
+            await dialog.ShowDialog(this);
+        }
+        finally
+        {
+            vm.CopyRequested -= OnCopy;
+        }
     }
 
     private async System.Threading.Tasks.Task<UserEditResult?> OnUserEditRequested(EmberTern.Core.Security.UserInfo? existing)

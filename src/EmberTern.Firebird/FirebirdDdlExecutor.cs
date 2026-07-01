@@ -46,8 +46,9 @@ public sealed class FirebirdDdlExecutor
     /// </summary>
     public Task<IReadOnlyList<string?>> ExecuteAutonomousBatchAsync(
         IReadOnlyList<string> statements,
-        CancellationToken cancellationToken = default)
-        => _connectionService.ExecuteAdminBatchAsync(statements, cancellationToken);
+        CancellationToken cancellationToken = default,
+        IProgress<(int Index, string? Error)>? progress = null)
+        => _connectionService.ExecuteAdminBatchAsync(statements, cancellationToken, progress);
 
     /// <summary>
     /// Splits <paramref name="sql"/> on top-level semicolons, then runs the whole

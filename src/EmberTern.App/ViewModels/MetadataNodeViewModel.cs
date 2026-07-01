@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -69,7 +72,48 @@ public partial class MetadataNodeViewModel : ViewModelBase
     // SvgIcon; color still flows through IconResourceKey + IconBrushConverter. Holding a
     // key (not a Geometry) keeps the "VM holds no Avalonia types" rule. Empty for placeholders.
     public string IconGeometryKey { get; private init; } = string.Empty;
+
+    // Children is the DISPLAYED collection bound to the tree (and the placeholder before
+    // load). For a loaded GROUP it holds the current filter result. _allLeaves is the
+    // unfiltered master list; keeping the full set here lets the filter rebuild Children
+    // to matches only — so the VirtualizingStackPanel never holds hidden zero-height rows
+    // (the scroll-lag root cause: an IsVisible=false leaf still occupies a VSP slot the
+    // panel must realize/measure, corrupting the scroll extent on 1000+-row categories).
     public ObservableCollection<MetadataNodeViewModel> Children { get; }
+    private readonly List<MetadataNodeViewModel> _allLeaves = new();
+
+    // The full, unfiltered leaf set of a loaded group (empty for leaves/placeholders and
+    // unloaded groups). Consumers that need EVERY object regardless of the active filter
+    // (autocomplete, name resolution, bulk "all" operations) must read this, NOT Children.
+    public IReadOnlyList<MetadataNodeViewModel> AllLeaves => _allLeaves;
+
+    // Replace the group's full leaf set (called by LoadGroupAsync after a successful fetch).
+    // Resets Children to the full set; the caller re-applies the active filter afterwards.
+    internal void SetLeaves(IEnumerable<MetadataNodeViewModel> leaves)
+    {
+        _allLeaves.Clear();
+        _allLeaves.AddRange(leaves);
+        Children.Clear();
+        foreach (var leaf in _allLeaves)
+        {
+            Children.Add(leaf);
+        }
+    }
+
+    // Rebuild Children to only the leaves matching the predicate (or the full set when
+    // null). Rebuilds in place so the tree's VSP only ever sees rows that are actually
+    // shown — no zero-height hidden containers.
+    internal void ApplyLeafFilter(Func<MetadataNodeViewModel, bool>? match)
+    {
+        Children.Clear();
+        foreach (var leaf in _allLeaves)
+        {
+            if (match is null || match(leaf))
+            {
+                Children.Add(leaf);
+            }
+        }
+    }
 
     // GroupLabel is the raw label (e.g. "Tables" for groups, name for leaves).
     // DisplayLabel adds the "(n)" suffix when this is a group and a count is known.
@@ -103,9 +147,13 @@ public partial class MetadataNodeViewModel : ViewModelBase
 
     public bool HasCount => IsGroup && Count is not null;
     public bool IsActionable => !IsGroup && !IsPlaceholder;
-    // While filtering, show the match count ("Views (1)"); otherwise the total ("Views (215)").
+    // A deactivated trigger/index leaf (IsActive == false). Drives the dimmed styling
+    // + "(inactive)" label suffix. Null IsActive (every other kind) is never inactive.
+    public bool IsInactive => IsActionable && Object?.IsActive == false;
+    // Leaf: the object name (+ "(inactive)" when deactivated). Group: name + count —
+    // the MATCH count while filtering ("Views (1)"), otherwise the total ("Views (215)").
     public string DisplayLabel => !IsGroup
-        ? GroupLabel
+        ? IsInactive ? GroupLabel + UiStrings.MetadataInactiveSuffix : GroupLabel
         : FilterMatchCount is { } fc ? $"{GroupLabel} ({fc})"
         : Count is { } c ? $"{GroupLabel} ({c})"
         : GroupLabel;
@@ -125,6 +173,59 @@ public partial class MetadataNodeViewModel : ViewModelBase
     public bool IsUserGroup => IsGroup && Kind == MetadataObjectKind.User;
     public bool IsRoleGroup => IsGroup && Kind == MetadataObjectKind.Role;
     public bool IsSecurityLeaf => IsActionable && Kind is MetadataObjectKind.User or MetadataObjectKind.Role;
+
+    // ─── Generic context-menu gates + labels (drive the shared ContextMenu) ────
+    // A group whose kind supports "New X". Every kind except Index (created only inside
+    // Table Detail) and SystemTable (read-only).
+    public bool SupportsNew => IsGroup && Kind is not (MetadataObjectKind.Index or MetadataObjectKind.SystemTable);
+    public string ContextNewLabel => string.Format(UiStrings.MetadataContextNewFormat, KindNounTitle);
+
+    // Proc/func/trigger/package groups → "Recompile all". (Firebird has no inactive
+    // state for proc/func/pkg — recompile is their bulk maintenance op, not deactivate.)
+    public bool IsRecompilableGroup => IsGroup && Kind is MetadataObjectKind.Procedure
+        or MetadataObjectKind.Function or MetadataObjectKind.Trigger or MetadataObjectKind.Package;
+    public string ContextRecompileAllLabel => string.Format(UiStrings.MetadataContextRecompileAllFormat, KindNounTitle);
+
+    // Trigger group → bulk activate/deactivate (visible = current filter set, or all).
+    public bool IsTriggerGroup => IsGroup && Kind == MetadataObjectKind.Trigger;
+    // Procedure leaf → Execute.
+    public bool IsProcedureLeaf => IsActionable && Kind == MetadataObjectKind.Procedure;
+    // Trigger leaf → single activate/deactivate (show only the applicable one).
+    public bool IsTriggerLeaf => IsActionable && Kind == MetadataObjectKind.Trigger;
+    public bool ShowActivate => IsTriggerLeaf && Object?.IsActive == false;
+    public bool ShowDeactivate => IsTriggerLeaf && Object?.IsActive == true;
+
+    // Deletable schema leaf (Role/User delete via Security Manager; SystemTable read-only).
+    public bool CanDeleteLeaf => IsActionable && Kind is MetadataObjectKind.Table
+        or MetadataObjectKind.View or MetadataObjectKind.Procedure or MetadataObjectKind.Trigger
+        or MetadataObjectKind.Function or MetadataObjectKind.Package or MetadataObjectKind.Generator
+        or MetadataObjectKind.Domain or MetadataObjectKind.Exception or MetadataObjectKind.Index;
+
+    // Leaf "open/edit" label: Role/User → Security Manager; SystemTable → read-only Open; else Edit.
+    public bool CanEditLeaf => IsActionable;
+    public string ContextEditLabel => IsSecurityLeaf
+        ? UiStrings.MetadataContextOpenSecurity
+        : Kind == MetadataObjectKind.SystemTable ? UiStrings.MetadataContextOpen
+        : UiStrings.MetadataContextEdit;
+
+    // Title-cased singular noun for menu labels ("New View", "Recompile all functions").
+    private string KindNounTitle => Kind switch
+    {
+        MetadataObjectKind.Table => "Table",
+        MetadataObjectKind.View => "View",
+        MetadataObjectKind.Procedure => "Procedure",
+        MetadataObjectKind.Trigger => "Trigger",
+        MetadataObjectKind.Function => "Function",
+        MetadataObjectKind.Generator => "Generator",
+        MetadataObjectKind.Domain => "Domain",
+        MetadataObjectKind.Package => "Package",
+        MetadataObjectKind.Exception => "Exception",
+        MetadataObjectKind.Role => "Role",
+        MetadataObjectKind.User => "User",
+        MetadataObjectKind.Index => "Index",
+        MetadataObjectKind.SystemTable => "System table",
+        _ => Kind.ToString(),
+    };
 
     partial void OnIsExpandedChanged(bool value)
     {
@@ -173,27 +274,88 @@ public partial class MetadataNodeViewModel : ViewModelBase
         }
     }
 
-    // ─── Table context-menu actions ───────────────────────────────────────
-    // New Table on the category node; Open / Design / Delete on a table leaf.
-    // Open and Design both route through the existing OpenDdl path (which
-    // opens a TableDetail tab for tables) — no duplicate open logic.
+    // ─── Generic context-menu actions ─────────────────────────────────────
+    // Every action dispatches to the owner (MainWindowViewModel), which REUSES the
+    // existing New*/detail-editor/DROP flows — the tree is just the entry point.
+    // Open/Edit routes through the existing OpenDdlCommand (no duplicate open logic).
 
+    // "New X" on a category node — dispatched by Kind.
     [RelayCommand]
-    private void NewTable() => _owner.RequestNewTable();
-
-    // ─── Security context-menu actions ────────────────────────────────────
-    [RelayCommand]
-    private void NewUser() => _owner.RequestNewUser();
-
-    [RelayCommand]
-    private void NewRole() => _owner.RequestNewRole();
-
-    [RelayCommand]
-    private void DeleteTable()
+    private void New()
     {
-        if (!IsGroup && Object is { } obj && Kind == MetadataObjectKind.Table)
+        if (IsGroup)
         {
-            _owner.RequestDeleteTable(obj);
+            _owner.RequestNewObject(Kind);
+        }
+    }
+
+    // Generic leaf Delete (schema kinds) — owner confirms + DROPs.
+    [RelayCommand]
+    private void Delete()
+    {
+        if (CanDeleteLeaf && Object is { } obj)
+        {
+            _owner.RequestDeleteObject(obj);
+        }
+    }
+
+    // Procedure leaf → Execute.
+    [RelayCommand]
+    private void ExecuteProcedure()
+    {
+        if (IsProcedureLeaf && Object is { } obj)
+        {
+            _owner.RequestExecuteProcedure(obj);
+        }
+    }
+
+    // Trigger leaf → single activate / deactivate.
+    [RelayCommand]
+    private void Activate()
+    {
+        if (IsTriggerLeaf && Object is { } obj)
+        {
+            _owner.RequestSetObjectActive(obj, activate: true);
+        }
+    }
+
+    [RelayCommand]
+    private void Deactivate()
+    {
+        if (IsTriggerLeaf && Object is { } obj)
+        {
+            _owner.RequestSetObjectActive(obj, activate: false);
+        }
+    }
+
+    // Trigger group → bulk activate/deactivate over the VISIBLE (current filter) set or ALL.
+    [RelayCommand] private void ActivateVisible() => RequestTriggerBulk(activate: true, visibleOnly: true);
+    [RelayCommand] private void DeactivateVisible() => RequestTriggerBulk(activate: false, visibleOnly: true);
+    [RelayCommand] private void ActivateAll() => RequestTriggerBulk(activate: true, visibleOnly: false);
+    [RelayCommand] private void DeactivateAll() => RequestTriggerBulk(activate: false, visibleOnly: false);
+
+    private void RequestTriggerBulk(bool activate, bool visibleOnly)
+    {
+        if (!IsTriggerGroup)
+        {
+            return;
+        }
+        // "Visible" = the current filter result = the displayed Children. "All" is
+        // resolved owner-side from the reader (Children may not be loaded/expanded).
+        var names = visibleOnly
+            ? Children.Where(c => c.IsActionable && c.Object is not null)
+                      .Select(c => c.Object!.Name).ToList()
+            : new List<string>();
+        _owner.RequestBulkSetActive(new TriggerBulkRequest(Kind, activate, visibleOnly, names));
+    }
+
+    // Proc/func/trigger/package group → recompile every object of that kind.
+    [RelayCommand]
+    private void RecompileAll()
+    {
+        if (IsRecompilableGroup)
+        {
+            _owner.RequestRecompileGroup(Kind);
         }
     }
 

@@ -41,6 +41,59 @@ internal static class UiStrings
     public const string MetadataDeleteTableFailedFormat = "Could not delete table {0}: {1}";
     public const string MetadataNameCopiedFormat = "Copied “{0}” to clipboard.";
     public const string MetadataLoadingPlaceholder = "Loading…";
+    // Generic metadata-tree context menu (Metadata Tree & Context Menu sprint).
+    public const string MetadataContextNewFormat = "New {0}";
+    public const string MetadataContextEdit = "Edit";
+    public const string MetadataContextOpen = "Open";
+    public const string MetadataContextDelete = "Delete";
+    public const string MetadataContextExecuteProcedure = "Execute procedure";
+    public const string MetadataContextActivate = "Activate";
+    public const string MetadataContextDeactivate = "Deactivate";
+    public const string MetadataContextActivateVisible = "Activate visible";
+    public const string MetadataContextDeactivateVisible = "Deactivate visible";
+    public const string MetadataContextActivateAll = "Activate all";
+    public const string MetadataContextDeactivateAll = "Deactivate all";
+    public const string MetadataContextRecompileAllFormat = "Recompile all {0}s";
+    public const string MetadataInactiveSuffix = " (inactive)";
+    // Generic delete (all deletable kinds) — {0}=kind noun, {1}=object name.
+    public const string MetadataDeleteObjectConfirmTitle = "Delete object";
+    public const string MetadataDeleteObjectConfirmFormat = "Are you sure you want to delete {0} “{1}”? This cannot be undone.";
+    public const string MetadataDeleteObjectConfirmYes = "Delete";
+    public const string MetadataDeleteObjectExecutedFormat = "Deleted {0} “{1}”.";
+    public const string MetadataDeleteObjectFailedFormat = "Could not delete {0} “{1}”: {2}";
+    // Connection (database) node — database-wide operations.
+    public const string ConnectionContextRefresh = "Refresh metadata";
+    public const string ConnectionContextRecomputeStats = "Recompute statistics (all indexes)";
+    public const string ConnectionContextRecompile = "Recompile all objects";
+    // Bulk-operation execution + report.
+    public const string BatchNothingToDo = "Nothing to do — every object is already in the requested state.";
+    public const string BatchOpActivate = "Activate";
+    public const string BatchOpDeactivate = "Deactivate";
+    public const string BatchOpRecompile = "Recompile";
+    public const string BatchOpRecompileHeader = "Recompile header";
+    public const string BatchOpRecompileBody = "Recompile body";
+    public const string BatchOpRecomputeStatistics = "Recompute statistics";
+    public const string BatchTitleActivateTriggers = "Activate triggers";
+    public const string BatchTitleDeactivateTriggers = "Deactivate triggers";
+    public const string BatchTitleRecompileFormat = "Recompile {0}s";
+    public const string BatchTitleRecompileAll = "Recompile all objects";
+    public const string BatchTitleRecomputeStatistics = "Recompute index statistics";
+    public const string BatchResultsColumnObject = "Object";
+    public const string BatchResultsColumnOperation = "Operation";
+    public const string BatchResultsColumnResult = "Result";
+    public const string BatchResultsColumnError = "Error";
+    public const string BatchResultOk = "OK";
+    public const string BatchResultFailed = "Failed";
+    // Live footer: Processed / Total, Success, Failed, Duration (hh:mm:ss).
+    public const string BatchResultsLiveSummaryFormat = "Processed: {0} / {1}    Success: {2}    Failed: {3}    Duration: {4}";
+    public const string BatchResultsFilterLabel = "Show:";
+    public const string BatchResultsFilterAll = "All";
+    public const string BatchResultsFilterSuccess = "Success";
+    public const string BatchResultsFilterFailed = "Failed";
+    public const string BatchResultsCopyAll = "Copy All";
+    public const string BatchResultsCopyFailed = "Copy Failed";
+    public const string BatchResultsCancel = "Cancel";
+    public const string BatchResultsClose = "Close";
     public const string TabCloseTooltip = "Close tab";
 
     public const string ConnectionConnect = "Connect";

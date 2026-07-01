@@ -23,7 +23,16 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         _reader = reader;
         Connections = new ObservableCollection<ConnectionNodeViewModel>();
         RootNodes = new ObservableCollection<object>();
+        // Refresh is only meaningful while a database is connected. The event fires
+        // on the async-continuation thread (gotcha #11), so marshal the CanExecute
+        // re-evaluation onto the UI thread.
+        _connectionService.ActiveConnectionChanged += (_, _) =>
+            Dispatcher.UIThread.Post(RefreshCommand.NotifyCanExecuteChanged);
     }
+
+    // Refresh only makes sense with an active connection (matches the enable/disable
+    // behaviour of the other connection-dependent toolbar actions).
+    private bool CanRefresh => _connectionService.IsConnected;
 
     // Flat list of every loaded ConnectionNodeViewModel, regardless of whether
     // the node currently sits inside a folder or at the root. Populated by
@@ -80,15 +89,18 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     public event Action<MetadataObject>? OpenDdlRequested;
     public event Action<string>? CopyNameRequested;
     public event Action<string>? StatusReported;
-    // Table context-menu actions. The owner (MainWindowViewModel) reuses its
-    // existing New Table / Delete flows — these are just the dispatch points.
-    public event Action? NewTableRequested;
-    public event Action<MetadataObject>? DeleteTableRequested;
-    // Security tree actions: Users / Roles category "Add" dispatch points.
-    public event Action? NewUserRequested;
-    public event Action? NewRoleRequested;
+    // Tree object-lifecycle dispatch. The owner (MainWindowViewModel) REUSES its existing
+    // New*/detail-editor/DROP/Execute flows — these are just the tree's entry points.
+    public event Action<MetadataObjectKind>? NewObjectRequested;
+    public event Action<MetadataObject>? DeleteObjectRequested;
+    public event Action<MetadataObject>? ExecuteProcedureRequested;
+    public event Action<MetadataObjectKind>? RecompileGroupRequested;
+    // Single trigger activate/deactivate (bool = activate).
+    public event Action<MetadataObject, bool>? SetObjectActiveRequested;
+    // Bulk trigger activate/deactivate over the visible (filtered) set or all.
+    public event Action<TriggerBulkRequest>? BulkSetActiveRequested;
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRefresh))]
     public async Task RefreshAsync()
     {
         Diagnostics.RefreshTrace.Log("RefreshTree", "begin");
@@ -183,11 +195,10 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var objects = await _reader.ListAsync(group.Kind).ConfigureAwait(true);
-            group.Children.Clear();
-            foreach (var obj in objects)
-            {
-                group.Children.Add(MetadataNodeViewModel.CreateLeaf(this, obj));
-            }
+            Diagnostics.ScrollTrace.Rebuild($"LoadGroup {group.Kind} ({objects.Count} leaves — Children rebuilt)");
+            // SetLeaves loads the master list AND sets Children to the full set; the
+            // active filter (if any) is re-applied just below via ApplyFilterToGroup.
+            group.SetLeaves(objects.Select(obj => MetadataNodeViewModel.CreateLeaf(this, obj)));
             group.Count = objects.Count;
             group.MarkLoaded();
             sw.Stop();
@@ -220,10 +231,12 @@ public partial class MetadataExplorerViewModel : ViewModelBase
 
     internal void RequestOpenDdl(MetadataObject obj) => OpenDdlRequested?.Invoke(obj);
     internal void RequestCopyName(string name) => CopyNameRequested?.Invoke(name);
-    internal void RequestNewTable() => NewTableRequested?.Invoke();
-    internal void RequestDeleteTable(MetadataObject obj) => DeleteTableRequested?.Invoke(obj);
-    internal void RequestNewUser() => NewUserRequested?.Invoke();
-    internal void RequestNewRole() => NewRoleRequested?.Invoke();
+    internal void RequestNewObject(MetadataObjectKind kind) => NewObjectRequested?.Invoke(kind);
+    internal void RequestDeleteObject(MetadataObject obj) => DeleteObjectRequested?.Invoke(obj);
+    internal void RequestExecuteProcedure(MetadataObject obj) => ExecuteProcedureRequested?.Invoke(obj);
+    internal void RequestRecompileGroup(MetadataObjectKind kind) => RecompileGroupRequested?.Invoke(kind);
+    internal void RequestSetObjectActive(MetadataObject obj, bool activate) => SetObjectActiveRequested?.Invoke(obj, activate);
+    internal void RequestBulkSetActive(TriggerBulkRequest request) => BulkSetActiveRequested?.Invoke(request);
 
     [RelayCommand(CanExecute = nameof(HasSelectedConnection))]
     private void EditSelected() => SelectedConnection?.EditCommand.Execute(null);
@@ -349,6 +362,7 @@ public partial class MetadataExplorerViewModel : ViewModelBase
 
     internal async Task ApplyFilterAsync()
     {
+        Diagnostics.ScrollTrace.Rebuild("ApplyFilter (leaf collections rebuilt)");
         var generation = ++_filterGeneration;
         var filter = (FilterText ?? string.Empty).Trim();
         var hasFilter = filter.Length > 0;
@@ -384,9 +398,10 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         {
             group.FilterMatchCount = null;
             group.IsVisible = true;
-            foreach (var leaf in group.Children)
+            // Restore the full leaf set (only meaningful for a loaded group).
+            if (group.IsLoaded)
             {
-                leaf.IsVisible = true;
+                group.ApplyLeafFilter(null);
             }
             return;
         }
@@ -394,22 +409,13 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         int matches;
         if (group.IsLoaded)
         {
-            // Loaded: filter leaves in place (hide non-matches) and count visible ones.
-            matches = 0;
-            foreach (var leaf in group.Children)
-            {
-                if (leaf.IsPlaceholder)
-                {
-                    leaf.IsVisible = false;
-                    continue;
-                }
-                var m = leaf.GroupLabel.Contains(filter, StringComparison.OrdinalIgnoreCase);
-                leaf.IsVisible = m;
-                if (m)
-                {
-                    matches++;
-                }
-            }
+            // Loaded: rebuild Children to ONLY the matching leaves — do NOT hide
+            // non-matches in place. A hidden-but-present leaf still occupies a VSP slot
+            // the panel must realize/measure, corrupting the scroll extent on large
+            // categories (the scroll-lag root cause). Match count = displayed rows.
+            group.ApplyLeafFilter(leaf => !leaf.IsPlaceholder
+                && leaf.GroupLabel.Contains(filter, StringComparison.OrdinalIgnoreCase));
+            matches = group.Children.Count;
         }
         else
         {
@@ -439,3 +445,16 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         return count;
     }
 }
+
+/// <summary>
+/// A bulk activate/deactivate request raised from a trigger category node.
+/// <paramref name="VisibleOnly"/> = act on the current filter result (names carried in
+/// <paramref name="VisibleNames"/>); otherwise act on ALL objects of the kind (the owner
+/// resolves the full set from the reader). Only <see cref="MetadataObjectKind.Trigger"/>
+/// is used today, but the shape is kind-agnostic.
+/// </summary>
+public sealed record TriggerBulkRequest(
+    MetadataObjectKind Kind,
+    bool Activate,
+    bool VisibleOnly,
+    IReadOnlyList<string> VisibleNames);

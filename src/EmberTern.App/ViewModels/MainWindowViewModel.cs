@@ -128,10 +128,12 @@ public partial class MainWindowViewModel : ViewModelBase
         Metadata.OpenDdlRequested += OnOpenDdlRequested;
         Metadata.CopyNameRequested += OnCopyNameRequested;
         Metadata.StatusReported += OnMetadataStatusReported;
-        Metadata.NewTableRequested += OnNewTableRequestedFromTree;
-        Metadata.DeleteTableRequested += OnDeleteTableRequested;
-        Metadata.NewUserRequested += OnNewUserRequestedFromTree;
-        Metadata.NewRoleRequested += OnNewRoleRequestedFromTree;
+        Metadata.NewObjectRequested += OnNewObjectRequested;
+        Metadata.DeleteObjectRequested += OnDeleteObjectRequested;
+        Metadata.ExecuteProcedureRequested += OnExecuteProcedureRequested;
+        Metadata.RecompileGroupRequested += OnRecompileGroupRequested;
+        Metadata.SetObjectActiveRequested += OnSetObjectActiveRequested;
+        Metadata.BulkSetActiveRequested += OnBulkSetActiveRequested;
         Messages = new ObservableCollection<QueryMessageViewModel>();
         // Workspace tabs start empty — no Query tab until a connection becomes active.
         // Each ConnectionProfile owns its own Query+DDL tab list via _workspacesByConnection.
@@ -212,6 +214,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsSecurityManagerTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveSecurityManager))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
+    [NotifyPropertyChangedFor(nameof(ShowEditorToolbar))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowMetadataTransactionButtons))]
@@ -292,6 +295,25 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsSecurityManagerTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SecurityManager };
     public SecurityManagerTabViewModel? ActiveSecurityManager
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SecurityManager } t ? t.SecurityManager : null;
+
+    // Drives the whole editor-toolbar Border's IsVisible so an empty command strip never
+    // reserves space above the document tabs. True for every tab kind that exposes at
+    // least one toolbar command; false when there is no active tab or the active tab has
+    // no toolbar commands (currently only the Security Manager tab, which carries its own
+    // in-view toolbar). Re-fires from the _selectedWorkspaceTab notify chain.
+    public bool ShowEditorToolbar =>
+        IsQueryTabActive
+        || IsTableDetailTabActive
+        || IsNewTableTabActive
+        || IsViewDetailTabActive
+        || IsProcedureDetailTabActive
+        || IsTriggerDetailTabActive
+        || IsFunctionDetailTabActive
+        || IsGeneratorDetailTabActive
+        || IsDomainDetailTabActive
+        || IsPackageDetailTabActive
+        || IsExceptionDetailTabActive
+        || IsIndexDetailTabActive;
     // True when the Dane sub-tab is the active sub-tab inside an active TableDetail
     // tab. Drives the Refresh button visibility and joins IsQueryTabActive to
     // share Commit/Rollback. Updates flow from TableDetailTabViewModel.PropertyChanged
@@ -745,6 +767,7 @@ public partial class MainWindowViewModel : ViewModelBase
     };
     public void ReloadConnections()
     {
+        Diagnostics.ScrollTrace.Rebuild("ReloadConnections (RootNodes rebuilt)");
         // Detach old nodes before clearing so the service doesn't retain dead
         // subscribers via its ActiveConnectionChanged invocation list.
         foreach (var stale in Metadata.Connections)
@@ -2698,7 +2721,9 @@ public partial class MainWindowViewModel : ViewModelBase
             foreach (var group in node.Children)
             {
                 if (!group.IsGroup) continue;
-                foreach (var leaf in group.Children)
+                // AllLeaves (not Children) so a filtered tree doesn't shrink the
+                // autocomplete / name-resolution set.
+                foreach (var leaf in group.AllLeaves)
                 {
                     if (leaf.IsActionable && leaf.Object is { } obj)
                     {
@@ -3765,56 +3790,331 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectedBottomTabIndex = 1;
     }
 
-    // Tables-category context menu → New Table. Reuses the existing
-    // NewTableCommand so there's one New-Table flow (workspace tab + Compile).
-    private void OnNewTableRequestedFromTree()
+    // "New X" from a category node → the existing per-kind New command (one flow each).
+    // User / Role route to the Security Manager add dialogs.
+    private void OnNewObjectRequested(MetadataObjectKind kind)
     {
-        if (NewTableCommand.CanExecute(null)) NewTableCommand.Execute(null);
+        switch (kind)
+        {
+            case MetadataObjectKind.Table: Fire(NewTableCommand); break;
+            case MetadataObjectKind.View: Fire(NewViewCommand); break;
+            case MetadataObjectKind.Procedure: Fire(NewProcedureCommand); break;
+            case MetadataObjectKind.Trigger: Fire(NewTriggerCommand); break;
+            case MetadataObjectKind.Function: Fire(NewFunctionCommand); break;
+            case MetadataObjectKind.Package: Fire(NewPackageCommand); break;
+            case MetadataObjectKind.Generator: Fire(NewGeneratorCommand); break;
+            case MetadataObjectKind.Domain: Fire(NewDomainCommand); break;
+            case MetadataObjectKind.Exception: Fire(NewExceptionCommand); break;
+            case MetadataObjectKind.User: OnNewUserRequestedFromTree(); break;
+            case MetadataObjectKind.Role: OnNewRoleRequestedFromTree(); break;
+            // Index has no New (created inside Table Detail); SystemTable is read-only.
+        }
+
+        static void Fire(System.Windows.Input.ICommand cmd)
+        {
+            if (cmd.CanExecute(null)) cmd.Execute(null);
+        }
     }
 
-    // Table leaf context menu → Delete Table. Confirm → DROP TABLE → refresh
-    // tree + close any open tabs for that table. On error, surface the raw
-    // Firebird message (incl. dependency errors — we never auto-drop deps).
-    private async void OnDeleteTableRequested(MetadataObject obj)
+    // Generic leaf Delete → confirm → DROP → close open tabs → refresh tree.
+    // Reuses DdlGenerator.BuildDrop per kind + the autonomous DDL executor. On error
+    // (incl. dependency errors — we never auto-drop deps) the raw Firebird message shows.
+    private async void OnDeleteObjectRequested(MetadataObject obj)
     {
-        if (obj.Kind != MetadataObjectKind.Table) return;
-
+        var noun = KindNoun(obj.Kind);
         var confirmed = await RequestConfirmAsync(new ConfirmRequest
         {
-            Title = UiStrings.MetadataDeleteTableConfirmTitle,
-            Message = string.Format(CultureInfo.CurrentCulture, UiStrings.MetadataDeleteTableConfirmFormat, obj.Name),
-            ConfirmLabel = UiStrings.MetadataDeleteTableConfirmYes,
+            Title = UiStrings.MetadataDeleteObjectConfirmTitle,
+            Message = string.Format(CultureInfo.CurrentCulture, UiStrings.MetadataDeleteObjectConfirmFormat, noun, obj.Name),
+            ConfirmLabel = UiStrings.MetadataDeleteObjectConfirmYes,
             CancelLabel = UiStrings.DialogCancel,
             IsDestructive = true,
         }).ConfigureAwait(true);
         if (!confirmed) return;
 
-        var sql = DdlGenerator.BuildDropTable(obj.Name);
+        string sql;
+        try
+        {
+            sql = DdlGenerator.BuildDrop(obj.Kind, obj.Name);
+        }
+        catch (ArgumentException)
+        {
+            return; // kind has no tree-drop path
+        }
+
         try
         {
             await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
         }
-        catch (DdlExecutionException ex)
+        catch (Exception ex) when (ex is DdlExecutionException or InvalidOperationException)
         {
-            AddMessage(MessageSeverity.Error, string.Format(CultureInfo.CurrentCulture, UiStrings.MetadataDeleteTableFailedFormat, obj.Name, ex.Message));
-            SelectedBottomTabIndex = 1;
-            return;
-        }
-        catch (InvalidOperationException ex)
-        {
-            AddMessage(MessageSeverity.Error, string.Format(CultureInfo.CurrentCulture, UiStrings.MetadataDeleteTableFailedFormat, obj.Name, ex.Message));
+            AddMessage(MessageSeverity.Error, string.Format(CultureInfo.CurrentCulture, UiStrings.MetadataDeleteObjectFailedFormat, noun, obj.Name, ex.Message));
             SelectedBottomTabIndex = 1;
             return;
         }
 
-        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.MetadataDeleteTableExecutedFormat, obj.Name));
-
-        // Close any open Ddl / TableDetail tabs that target this table.
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.MetadataDeleteObjectExecutedFormat, noun, obj.Name));
         CloseTabsForObject(obj.Kind, obj.Name);
-
-        // Refresh the metadata tree so the table disappears from the navigator.
         await Metadata.RefreshAsync().ConfigureAwait(true);
     }
+
+    // Procedure leaf → open (or focus) its detail tab and fire its Execute command,
+    // which shows the parameter dialog. Reuses the existing OnOpenDdlRequested + the
+    // ProcedureDetailTabViewModel.ExecuteProcedureCommand — no parallel execute path.
+    private void OnExecuteProcedureRequested(MetadataObject obj)
+    {
+        if (obj.Kind != MetadataObjectKind.Procedure) return;
+        OnOpenDdlRequested(obj);
+        var cmd = ActiveProcedureDetail?.ExecuteProcedureCommand;
+        if (cmd is not null && cmd.CanExecute(null)) cmd.Execute(null);
+    }
+
+    // ─── Bulk operations (recompile / recompute stats / activate-deactivate) ──
+    // One dialog-request event + one execution pipeline reused by every bulk op. The
+    // dialog opens IMMEDIATELY with a live VM; rows + counters update as each object
+    // completes; Cancel stops the remainder.
+    public event Func<BatchResultsViewModel, Task>? BatchResultsRequested;
+
+    // Opens the batch-results dialog up front, then streams each statement's outcome into
+    // it (per-statement autonomous autocommit, continues past failures) so the user sees
+    // live progress. preResults seeds rows that failed BEFORE the batch (e.g. a source
+    // fetch failed during recompile). Cancel (or closing the dialog) stops the rest.
+    private async Task RunBatchWithReportAsync(
+        string title,
+        IReadOnlyList<(string Object, string Operation, string Sql)> steps,
+        bool refreshAfter,
+        IReadOnlyList<BatchOperationResult>? preResults = null)
+    {
+        var pre = preResults ?? (IReadOnlyList<BatchOperationResult>)Array.Empty<BatchOperationResult>();
+        if (steps.Count == 0 && pre.Count == 0)
+        {
+            AddMessage(MessageSeverity.Info, UiStrings.BatchNothingToDo);
+            return;
+        }
+
+        var vm = new BatchResultsViewModel(title);
+        vm.Begin(pre.Count + steps.Count);
+        foreach (var p in pre)
+        {
+            vm.AddResult(p);
+        }
+
+        // Progress is constructed on the UI thread → Report marshals back to it, so the
+        // live VM updates are UI-thread-safe while the executor runs on the thread pool.
+        var progress = new Progress<(int Index, string? Error)>(p =>
+            vm.AddResult(new BatchOperationResult(
+                steps[p.Index].Object, steps[p.Index].Operation, p.Error is null, p.Error)));
+
+        async Task RunAsync()
+        {
+            try
+            {
+                if (steps.Count > 0)
+                {
+                    await _ddlExecutor.ExecuteAutonomousBatchAsync(
+                        steps.Select(s => s.Sql).ToList(), vm.CancellationToken, progress).ConfigureAwait(true);
+                }
+            }
+            catch (OperationCanceledException) { /* user cancelled — already-run rows stand */ }
+            catch (InvalidOperationException ex)
+            {
+                AddMessage(MessageSeverity.Error, ex.Message);
+                SelectedBottomTabIndex = 1;
+            }
+            vm.Complete();
+            if (refreshAfter && !vm.CancellationToken.IsCancellationRequested)
+            {
+                await Metadata.RefreshAsync().ConfigureAwait(true);
+            }
+        }
+
+        var execTask = RunAsync();
+        if (BatchResultsRequested is { } show)
+        {
+            await show(vm).ConfigureAwait(true); // modal — runs while the batch streams in
+        }
+        vm.RequestCancel();                       // dialog closed → stop any remaining work
+        await execTask.ConfigureAwait(true);
+    }
+
+    // Single trigger activate/deactivate (from a trigger leaf).
+    private async void OnSetObjectActiveRequested(MetadataObject obj, bool activate)
+    {
+        if (obj.Kind != MetadataObjectKind.Trigger) return;
+        var sql = activate
+            ? DdlGenerator.BuildAlterTriggerActive(obj.Name)
+            : DdlGenerator.BuildAlterTriggerInactive(obj.Name);
+        try
+        {
+            await _ddlExecutor.ExecuteAsync(sql).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is DdlExecutionException or InvalidOperationException)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+        await Metadata.RefreshAsync().ConfigureAwait(true);
+    }
+
+    // Bulk trigger activate/deactivate over the visible (filtered) set or ALL. The reader
+    // gives authoritative state so we skip triggers already in the target state (avoids
+    // needless DDL commits — gotcha #109).
+    private async void OnBulkSetActiveRequested(TriggerBulkRequest req)
+    {
+        if (req.Kind != MetadataObjectKind.Trigger) return;
+
+        IReadOnlyList<MetadataObject> triggers;
+        try
+        {
+            triggers = await _metadataReader.ListAsync(MetadataObjectKind.Trigger).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+
+        IEnumerable<MetadataObject> scope = triggers;
+        if (req.VisibleOnly)
+        {
+            var set = new HashSet<string>(req.VisibleNames, StringComparer.OrdinalIgnoreCase);
+            scope = triggers.Where(t => set.Contains(t.Name));
+        }
+
+        var op = req.Activate ? UiStrings.BatchOpActivate : UiStrings.BatchOpDeactivate;
+        var steps = scope
+            .Where(t => t.IsActive != req.Activate) // skip already-in-state
+            .Select(t => (t.Name, op, req.Activate
+                ? DdlGenerator.BuildAlterTriggerActive(t.Name)
+                : DdlGenerator.BuildAlterTriggerInactive(t.Name)))
+            .ToList<(string, string, string)>();
+
+        var title = req.Activate ? UiStrings.BatchTitleActivateTriggers : UiStrings.BatchTitleDeactivateTriggers;
+        await RunBatchWithReportAsync(title, steps, refreshAfter: true).ConfigureAwait(true);
+    }
+
+    // Recompile every object of a kind (Procedure/Function/Trigger/Package) by re-running
+    // its stored CREATE OR ALTER / RECREATE source. Source-fetch failures become failed
+    // rows in the report (no SQL to run for them).
+    private async void OnRecompileGroupRequested(MetadataObjectKind kind)
+    {
+        var (steps, preFailures) = await BuildRecompileStepsAsync(kind).ConfigureAwait(true);
+        if (steps is null) return; // list failed — message already surfaced
+        var title = string.Format(CultureInfo.CurrentCulture, UiStrings.BatchTitleRecompileFormat, KindNoun(kind));
+        await RunBatchWithReportAsync(title, steps, refreshAfter: false, preFailures).ConfigureAwait(true);
+    }
+
+    // Shared source-fetch + step-build for recompile. Returns null steps when the object
+    // list couldn't be read. Package emits two steps (header + body).
+    private async Task<(List<(string, string, string)>? Steps, List<BatchOperationResult> PreFailures)>
+        BuildRecompileStepsAsync(MetadataObjectKind kind)
+    {
+        var preFailures = new List<BatchOperationResult>();
+        IReadOnlyList<MetadataObject> objs;
+        try
+        {
+            objs = await _metadataReader.ListAsync(kind).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return (null, preFailures);
+        }
+
+        var op = UiStrings.BatchOpRecompile;
+        var steps = new List<(string, string, string)>();
+        foreach (var o in objs)
+        {
+            try
+            {
+                switch (kind)
+                {
+                    case MetadataObjectKind.Procedure:
+                        steps.Add((o.Name, op, await _ddlReader.FetchProcedureSourceAsync(o).ConfigureAwait(true)));
+                        break;
+                    case MetadataObjectKind.Function:
+                        steps.Add((o.Name, op, await _ddlReader.FetchFunctionSourceAsync(o).ConfigureAwait(true)));
+                        break;
+                    case MetadataObjectKind.Trigger:
+                        steps.Add((o.Name, op, await _ddlReader.FetchTriggerSourceAsync(o).ConfigureAwait(true)));
+                        break;
+                    case MetadataObjectKind.Package:
+                        steps.Add((o.Name, UiStrings.BatchOpRecompileHeader, await _ddlReader.FetchPackageHeaderSourceAsync(o).ConfigureAwait(true)));
+                        steps.Add((o.Name, UiStrings.BatchOpRecompileBody, await _ddlReader.FetchPackageBodySourceAsync(o).ConfigureAwait(true)));
+                        break;
+                }
+            }
+            catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
+            {
+                preFailures.Add(new BatchOperationResult(o.Name, op, false, ex.Message));
+            }
+        }
+        return (steps, preFailures);
+    }
+
+    // ─── Connection-node (database-wide) bulk ops ─────────────────────────────
+    // Recompute selectivity statistics for every index (SET STATISTICS INDEX).
+    internal async Task RecomputeAllIndexStatisticsAsync()
+    {
+        IReadOnlyList<MetadataObject> indexes;
+        try
+        {
+            indexes = await _metadataReader.ListAsync(MetadataObjectKind.Index).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
+        {
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+        var op = UiStrings.BatchOpRecomputeStatistics;
+        var steps = indexes
+            .Select(ix => (ix.Name, op, DdlGenerator.BuildSetIndexStatistics(ix.Name)))
+            .ToList<(string, string, string)>();
+        await RunBatchWithReportAsync(UiStrings.BatchTitleRecomputeStatistics, steps, refreshAfter: false).ConfigureAwait(true);
+    }
+
+    // Recompile every procedure, function, trigger and package.
+    internal async Task RecompileAllObjectsAsync()
+    {
+        var allSteps = new List<(string, string, string)>();
+        var allPre = new List<BatchOperationResult>();
+        foreach (var kind in new[]
+        {
+            MetadataObjectKind.Procedure,
+            MetadataObjectKind.Function,
+            MetadataObjectKind.Trigger,
+            MetadataObjectKind.Package,
+        })
+        {
+            var (steps, pre) = await BuildRecompileStepsAsync(kind).ConfigureAwait(true);
+            if (steps is not null) allSteps.AddRange(steps);
+            allPre.AddRange(pre);
+        }
+        await RunBatchWithReportAsync(UiStrings.BatchTitleRecompileAll, allSteps, refreshAfter: false, allPre).ConfigureAwait(true);
+    }
+
+    // Singular lowercase noun for confirm/report messages.
+    private static string KindNoun(MetadataObjectKind kind) => kind switch
+    {
+        MetadataObjectKind.Table => "table",
+        MetadataObjectKind.View => "view",
+        MetadataObjectKind.Procedure => "procedure",
+        MetadataObjectKind.Trigger => "trigger",
+        MetadataObjectKind.Function => "function",
+        MetadataObjectKind.Generator => "generator",
+        MetadataObjectKind.Domain => "domain",
+        MetadataObjectKind.Package => "package",
+        MetadataObjectKind.Exception => "exception",
+        MetadataObjectKind.Role => "role",
+        MetadataObjectKind.User => "user",
+        MetadataObjectKind.Index => "index",
+        MetadataObjectKind.SystemTable => "system table",
+        _ => kind.ToString().ToLowerInvariant(),
+    };
 
     /// <summary>
     /// Closes every workspace tab (DDL or TableDetail) keyed on the given

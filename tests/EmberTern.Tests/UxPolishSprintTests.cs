@@ -233,27 +233,27 @@ public class UxPolishSprintTests
     }
 
     [Fact]
-    public void MetadataNode_DeleteTable_FiresDeleteTableRequested()
+    public void MetadataNode_Delete_FiresDeleteObjectRequested()
     {
         using var h = new Harness();
         MetadataObject? toDelete = null;
-        h.Main.Metadata.DeleteTableRequested += o => toDelete = o;
+        h.Main.Metadata.DeleteObjectRequested += o => toDelete = o;
         var leaf = MetadataNodeViewModel.CreateLeaf(h.Main.Metadata,
             new MetadataObject("MY_T", MetadataObjectKind.Table));
-        leaf.DeleteTableCommand.Execute(null);
+        leaf.DeleteCommand.Execute(null);
         Assert.NotNull(toDelete);
         Assert.Equal("MY_T", toDelete!.Name);
     }
 
     [Fact]
-    public void MetadataNode_NewTable_FiresNewTableRequested()
+    public void MetadataNode_New_FiresNewObjectRequestedWithKind()
     {
         using var h = new Harness();
-        bool fired = false;
-        h.Main.Metadata.NewTableRequested += () => fired = true;
-        var group = MetadataNodeViewModel.CreateGroup(h.Main.Metadata, MetadataObjectKind.Table);
-        group.NewTableCommand.Execute(null);
-        Assert.True(fired);
+        MetadataObjectKind? fired = null;
+        h.Main.Metadata.NewObjectRequested += k => fired = k;
+        var group = MetadataNodeViewModel.CreateGroup(h.Main.Metadata, MetadataObjectKind.View);
+        group.NewCommand.Execute(null);
+        Assert.Equal(MetadataObjectKind.View, fired);
     }
 
     private sealed class Harness : IDisposable

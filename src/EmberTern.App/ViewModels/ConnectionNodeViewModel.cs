@@ -57,6 +57,9 @@ public partial class ConnectionNodeViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
     [NotifyCanExecuteChangedFor(nameof(DisconnectCommand))]
     [NotifyCanExecuteChangedFor(nameof(ReconnectCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshMetadataCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RecomputeAllStatisticsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RecompileAllObjectsCommand))]
     private bool _isConnected;
 
     [ObservableProperty]
@@ -188,6 +191,16 @@ public partial class ConnectionNodeViewModel : ViewModelBase
 
     [RelayCommand]
     private void SortDescending() => _owner?.SortSiblingsOf(this, ascending: false);
+
+    // ─── Database-wide operations (only on the connection node) ────────────────
+    [RelayCommand(CanExecute = nameof(CanDisconnect))]
+    private Task RefreshMetadataAsync() => _owner?.Metadata.RefreshAsync() ?? Task.CompletedTask;
+
+    [RelayCommand(CanExecute = nameof(CanDisconnect))]
+    private Task RecomputeAllStatisticsAsync() => _owner?.RecomputeAllIndexStatisticsAsync() ?? Task.CompletedTask;
+
+    [RelayCommand(CanExecute = nameof(CanDisconnect))]
+    private Task RecompileAllObjectsAsync() => _owner?.RecompileAllObjectsAsync() ?? Task.CompletedTask;
 
     private bool CanConnect() => !IsConnected;
     private bool CanDisconnect() => IsConnected;

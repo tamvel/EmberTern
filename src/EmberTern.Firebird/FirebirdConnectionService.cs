@@ -211,7 +211,8 @@ public sealed class FirebirdConnectionService : IDisposable
     /// </summary>
     public async Task<IReadOnlyList<string?>> ExecuteAdminBatchAsync(
         IReadOnlyList<string> statements,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<(int Index, string? Error)>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(statements);
         if (statements.Count == 0)
@@ -230,6 +231,14 @@ public sealed class FirebirdConnectionService : IDisposable
 
         for (var i = 0; i < statements.Count; i++)
         {
+            // Cancellation stops BEFORE the next statement — already-run ones are committed
+            // (autonomous per-statement), the rest are simply not attempted. progress reports
+            // each result as it completes so the caller (batch-results dialog) updates live.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+
             FbTransaction? tx = null;
             try
             {
@@ -257,6 +266,8 @@ public sealed class FirebirdConnectionService : IDisposable
                     await tx.DisposeAsync().ConfigureAwait(false);
                 }
             }
+
+            progress?.Report((i, results[i]));
         }
 
         return results;

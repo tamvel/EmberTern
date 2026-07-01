@@ -34,17 +34,16 @@ public class TreePerfTests
     private static MetadataNodeViewModel LoadedGroup(MetadataExplorerViewModel meta, params string[] leaves)
     {
         var group = MetadataNodeViewModel.CreateGroup(meta, MetadataObjectKind.Table);
-        group.Children.Clear();
-        foreach (var name in leaves)
-        {
-            group.Children.Add(MetadataNodeViewModel.CreateLeaf(meta, new MetadataObject(name, MetadataObjectKind.Table)));
-        }
+        // SetLeaves populates the unfiltered master list AND Children (root-cause fix:
+        // the filter rebuilds Children to matches only, rather than hiding leaves in place).
+        group.SetLeaves(leaves.Select(name =>
+            MetadataNodeViewModel.CreateLeaf(meta, new MetadataObject(name, MetadataObjectKind.Table))));
         group.MarkLoaded();
         return group;
     }
 
     [Fact]
-    public void ApplyFilterToGroup_LoadedGroup_ShowsMatchCount_HidesNonMatches_NoAutoExpand()
+    public void ApplyFilterToGroup_LoadedGroup_ShowsOnlyMatches_NoAutoExpand()
     {
         using var h = new Harness();
         var group = LoadedGroup(h.Main.Metadata, "KONTRAHENCI", "KONTAKT", "ARTYKULY");
@@ -55,8 +54,12 @@ public class TreePerfTests
         Assert.Equal(2, group.FilterMatchCount);                 // KONTRAHENCI + KONTAKT
         Assert.Equal("Tables (2)", group.DisplayLabel);          // label shows MATCH count
         Assert.False(group.IsExpanded);                          // #4: filter never auto-expands
-        Assert.True(group.Children.Single(c => c.GroupLabel == "KONTRAHENCI").IsVisible);
-        Assert.False(group.Children.Single(c => c.GroupLabel == "ARTYKULY").IsVisible);
+        // Children holds ONLY the matches — non-matches are removed, not hidden in place.
+        Assert.Equal(2, group.Children.Count);
+        Assert.Contains(group.Children, c => c.GroupLabel == "KONTRAHENCI");
+        Assert.DoesNotContain(group.Children, c => c.GroupLabel == "ARTYKULY");
+        // The full set is preserved for autocomplete / bulk-"all" / clear.
+        Assert.Equal(3, group.AllLeaves.Count);
     }
 
     [Fact]
@@ -69,10 +72,11 @@ public class TreePerfTests
 
         Assert.False(group.IsVisible);
         Assert.Equal(0, group.FilterMatchCount);
+        Assert.Empty(group.Children);
     }
 
     [Fact]
-    public void ApplyFilterToGroup_ClearFilter_RestoresVisibilityAndLabel()
+    public void ApplyFilterToGroup_ClearFilter_RestoresFullSetAndLabel()
     {
         using var h = new Harness();
         var group = LoadedGroup(h.Main.Metadata, "KONTRAHENCI", "ARTYKULY");
@@ -84,7 +88,7 @@ public class TreePerfTests
         Assert.Null(group.FilterMatchCount);
         Assert.True(group.IsVisible);
         Assert.Equal("Tables (2)", group.DisplayLabel);          // back to TOTAL count
-        Assert.All(group.Children, c => Assert.True(c.IsVisible));
+        Assert.Equal(2, group.Children.Count);                   // full set restored
     }
 
     [Fact]

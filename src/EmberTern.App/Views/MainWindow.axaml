@@ -320,6 +320,11 @@
               <Style Selector="Border.row-target">
                 <Setter Property="Background" Value="Transparent" />
               </Style>
+              <!-- Inactive triggers/indexes render dimmed (+ a "(inactive)" suffix in the
+                   label) so a deactivated object is visually distinct in the tree. -->
+              <Style Selector="TextBlock.inactive">
+                <Setter Property="Opacity" Value="0.5" />
+              </Style>
               <Style Selector="Border.row-target.drop-target">
                 <Setter Property="Background" Value="{DynamicResource DropTargetBrush}" />
               </Style>
@@ -402,10 +407,21 @@
                       <MenuItem Header="Disconnect"
                                 Command="{Binding DisconnectCommand}"
                                 IsVisible="{Binding IsConnected}" />
+                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRefresh}"
+                                Command="{Binding RefreshMetadataCommand}"
+                                IsVisible="{Binding IsConnected}" />
                       <Separator />
                       <MenuItem Header="Edit" Command="{Binding EditCommand}" />
                       <MenuItem Header="Copy" Command="{Binding CopyCommand}" />
                       <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
+                      <!-- Database-wide maintenance (only when connected). -->
+                      <Separator IsVisible="{Binding IsConnected}" />
+                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecomputeStats}"
+                                Command="{Binding RecomputeAllStatisticsCommand}"
+                                IsVisible="{Binding IsConnected}" />
+                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecompile}"
+                                Command="{Binding RecompileAllObjectsCommand}"
+                                IsVisible="{Binding IsConnected}" />
                       <Separator />
                       <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSort}">
                         <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortAscending}"
@@ -447,38 +463,54 @@
                         DoubleTapped="OnMetadataNodeDoubleTapped">
                   <Border.ContextMenu>
                     <ContextMenu>
-                      <!-- Tables category → New Table. -->
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextNewTable}"
-                                Command="{Binding NewTableCommand}"
-                                IsVisible="{Binding IsTableGroup}" />
-                      <!-- Table leaf → Open / Design / Delete. Open + Design
-                           both route through OpenDdl (TableDetail tab). -->
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextOpenTable}"
+                      <!-- ── GROUP (category) items ────────────────────────────── -->
+                      <!-- New X (all kinds except Index / System Tables). -->
+                      <MenuItem Header="{Binding ContextNewLabel}"
+                                Command="{Binding NewCommand}"
+                                IsVisible="{Binding SupportsNew}" />
+                      <!-- Recompile all (Procedures / Functions / Triggers / Packages). -->
+                      <MenuItem Header="{Binding ContextRecompileAllLabel}"
+                                Command="{Binding RecompileAllCommand}"
+                                IsVisible="{Binding IsRecompilableGroup}" />
+                      <!-- Trigger category → bulk activate/deactivate over the visible
+                           (current filter) set, or all triggers in the database. -->
+                      <Separator IsVisible="{Binding IsTriggerGroup}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivateVisible}"
+                                Command="{Binding ActivateVisibleCommand}"
+                                IsVisible="{Binding IsTriggerGroup}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivateVisible}"
+                                Command="{Binding DeactivateVisibleCommand}"
+                                IsVisible="{Binding IsTriggerGroup}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivateAll}"
+                                Command="{Binding ActivateAllCommand}"
+                                IsVisible="{Binding IsTriggerGroup}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivateAll}"
+                                Command="{Binding DeactivateAllCommand}"
+                                IsVisible="{Binding IsTriggerGroup}" />
+
+                      <!-- ── LEAF (object) items ──────────────────────────────── -->
+                      <!-- Edit / Open (Role/User → Security Manager; System table → read-only Open). -->
+                      <MenuItem Header="{Binding ContextEditLabel}"
                                 Command="{Binding OpenDdlCommand}"
-                                IsVisible="{Binding IsTableLeaf}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDesignTable}"
-                                Command="{Binding OpenDdlCommand}"
-                                IsVisible="{Binding IsTableLeaf}" />
-                      <Separator IsVisible="{Binding IsTableLeaf}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeleteTable}"
-                                Command="{Binding DeleteTableCommand}"
-                                IsVisible="{Binding IsTableLeaf}" />
-                      <Separator IsVisible="{Binding IsTableLeaf}" />
-                      <!-- Users / Roles category → Add; user/role leaf → open manager. -->
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextNewUser}"
-                                Command="{Binding NewUserCommand}"
-                                IsVisible="{Binding IsUserGroup}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextNewRole}"
-                                Command="{Binding NewRoleCommand}"
-                                IsVisible="{Binding IsRoleGroup}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextOpenSecurity}"
-                                Command="{Binding OpenDdlCommand}"
-                                IsVisible="{Binding IsSecurityLeaf}" />
-                      <Separator IsVisible="{Binding IsSecurityLeaf}" />
-                      <!-- Generic actions for every actionable leaf (incl. tables). -->
-                      <MenuItem Header="{Binding ContextOpenDdlLabel}"
-                                Command="{Binding OpenDdlCommand}"
-                                IsVisible="{Binding IsActionable}" />
+                                IsVisible="{Binding CanEditLeaf}" />
+                      <!-- Procedure leaf → Execute. -->
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextExecuteProcedure}"
+                                Command="{Binding ExecuteProcedureCommand}"
+                                IsVisible="{Binding IsProcedureLeaf}" />
+                      <!-- Trigger leaf → activate/deactivate (only the applicable one). -->
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
+                                Command="{Binding ActivateCommand}"
+                                IsVisible="{Binding ShowActivate}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
+                                Command="{Binding DeactivateCommand}"
+                                IsVisible="{Binding ShowDeactivate}" />
+                      <!-- Delete (deletable schema leaves; Role/User via Security Manager). -->
+                      <Separator IsVisible="{Binding CanDeleteLeaf}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDelete}"
+                                Command="{Binding DeleteCommand}"
+                                IsVisible="{Binding CanDeleteLeaf}" />
+                      <!-- Copy name (every actionable leaf). -->
+                      <Separator IsVisible="{Binding IsActionable}" />
                       <MenuItem Header="{Binding ContextCopyNameLabel}"
                                 Command="{Binding CopyNameCommand}"
                                 IsVisible="{Binding IsActionable}" />
@@ -504,6 +536,7 @@
                     <TextBlock Text="{Binding DisplayLabel}"
                                VerticalAlignment="Center"
                                Classes.subtle="{Binding IsPlaceholder}"
+                               Classes.inactive="{Binding IsInactive}"
                                FontSize="11" />
                     <TextBlock Text="…"
                                Classes="subtle"
@@ -655,7 +688,8 @@
           <Border Grid.Row="1"
                   Background="{DynamicResource PanelBrush}"
                   BorderBrush="{DynamicResource BorderBrush}"
-                  BorderThickness="0,0,0,1">
+                  BorderThickness="0,0,0,1"
+                  IsVisible="{Binding ShowEditorToolbar}">
             <StackPanel Orientation="Horizontal" Spacing="6" Margin="10,4" VerticalAlignment="Center">
 
               <!-- ── SECTION 1 · Mode toggle (Table Grid-Edit / View+Procedure Easy) ── -->

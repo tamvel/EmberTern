@@ -80,7 +80,14 @@ public sealed class FirebirdMetadataReader
                 {
                     continue;
                 }
-                results.Add(new MetadataObject(name, kind));
+                // Triggers/indexes carry a second column: RDB$..._INACTIVE (1 = inactive,
+                // 0/null = active). Every other kind's SqlFor returns name only.
+                bool? isActive = null;
+                if (reader.FieldCount > 1 && !reader.IsDBNull(1))
+                {
+                    isActive = Convert.ToInt32(reader.GetValue(1)) != 1;
+                }
+                results.Add(new MetadataObject(name, kind) { IsActive = isActive });
             }
             return results;
         }
@@ -337,7 +344,9 @@ public sealed class FirebirdMetadataReader
             "WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 " +
             "ORDER BY RDB$PROCEDURE_NAME",
         MetadataObjectKind.Trigger =>
-            "SELECT TRIM(RDB$TRIGGER_NAME) FROM RDB$TRIGGERS " +
+            // Second column RDB$TRIGGER_INACTIVE drives the tree's active/inactive styling
+            // and lets bulk activate/deactivate skip objects already in the target state.
+            "SELECT TRIM(RDB$TRIGGER_NAME), RDB$TRIGGER_INACTIVE FROM RDB$TRIGGERS " +
             "WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 " +
             "ORDER BY RDB$TRIGGER_NAME",
         MetadataObjectKind.Function =>
@@ -374,7 +383,8 @@ public sealed class FirebirdMetadataReader
             "SELECT TRIM(SEC$USER_NAME) FROM SEC$USERS " +
             "ORDER BY SEC$USER_NAME",
         MetadataObjectKind.Index =>
-            "SELECT TRIM(RDB$INDEX_NAME) FROM RDB$INDICES " +
+            // Second column RDB$INDEX_INACTIVE drives active/inactive styling (same as triggers).
+            "SELECT TRIM(RDB$INDEX_NAME), RDB$INDEX_INACTIVE FROM RDB$INDICES " +
             "WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 " +
             "ORDER BY RDB$INDEX_NAME",
         MetadataObjectKind.SystemTable =>

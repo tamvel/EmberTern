@@ -82,6 +82,58 @@ public static class DdlGenerator
         return $"DROP TABLE {Quote(tableName.Trim())}";
     }
 
+    /// <summary><c>DROP VIEW …</c>. Caller confirms the destructive intent.</summary>
+    public static string BuildDropView(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("View name is required.", nameof(name));
+        return $"DROP VIEW {Quote(name.Trim())}";
+    }
+
+    /// <summary><c>DROP PROCEDURE …</c>.</summary>
+    public static string BuildDropProcedure(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Procedure name is required.", nameof(name));
+        return $"DROP PROCEDURE {Quote(name.Trim())}";
+    }
+
+    /// <summary><c>DROP TRIGGER …</c>.</summary>
+    public static string BuildDropTrigger(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Trigger name is required.", nameof(name));
+        return $"DROP TRIGGER {Quote(name.Trim())}";
+    }
+
+    /// <summary><c>DROP FUNCTION …</c>.</summary>
+    public static string BuildDropFunction(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Function name is required.", nameof(name));
+        return $"DROP FUNCTION {Quote(name.Trim())}";
+    }
+
+    /// <summary>
+    /// Dispatches to the right DROP builder for a schema object kind, so the tree's
+    /// single generic Delete path has one entry point. Security kinds (Role/User) go
+    /// through the Security Manager instead; SystemTable has no drop path.
+    /// </summary>
+    public static string BuildDrop(MetadataObjectKind kind, string name) => kind switch
+    {
+        MetadataObjectKind.Table => BuildDropTable(name),
+        MetadataObjectKind.View => BuildDropView(name),
+        MetadataObjectKind.Procedure => BuildDropProcedure(name),
+        MetadataObjectKind.Trigger => BuildDropTrigger(name),
+        MetadataObjectKind.Function => BuildDropFunction(name),
+        MetadataObjectKind.Package => BuildDropPackage(name),
+        MetadataObjectKind.Generator => BuildDropSequence(name),
+        MetadataObjectKind.Domain => BuildDropDomain(name),
+        MetadataObjectKind.Exception => BuildDropException(name),
+        MetadataObjectKind.Index => BuildDropIndex(name),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "No tree Delete path for this object kind."),
+    };
+
     /// <summary>
     /// <c>ALTER TABLE … DROP …</c>. Caller is responsible for confirming the
     /// destructive intent.
@@ -1179,6 +1231,24 @@ public static class DdlGenerator
         if (string.IsNullOrWhiteSpace(indexName))
             throw new ArgumentException("Index name is required.", nameof(indexName));
         return $"ALTER INDEX {Quote(indexName.Trim())} INACTIVE";
+    }
+
+    /// <summary><c>ALTER TRIGGER "t" ACTIVE</c> — re-enables a deactivated trigger.
+    /// Firebird triggers have a real inactive state (RDB$TRIGGER_INACTIVE), unlike
+    /// procedures/functions/packages.</summary>
+    public static string BuildAlterTriggerActive(string triggerName)
+    {
+        if (string.IsNullOrWhiteSpace(triggerName))
+            throw new ArgumentException("Trigger name is required.", nameof(triggerName));
+        return $"ALTER TRIGGER {Quote(triggerName.Trim())} ACTIVE";
+    }
+
+    /// <summary><c>ALTER TRIGGER "t" INACTIVE</c> — disables a trigger (it stops firing).</summary>
+    public static string BuildAlterTriggerInactive(string triggerName)
+    {
+        if (string.IsNullOrWhiteSpace(triggerName))
+            throw new ArgumentException("Trigger name is required.", nameof(triggerName));
+        return $"ALTER TRIGGER {Quote(triggerName.Trim())} INACTIVE";
     }
 
     /// <summary>Firebird's <c>COMMENT ON INDEX "ix" IS …</c> (verified on FB 5.0.3 —
