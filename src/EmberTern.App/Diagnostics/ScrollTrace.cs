@@ -23,12 +23,11 @@ namespace EmberTern.App.Diagnostics;
 /// </summary>
 internal static class ScrollTrace
 {
-    // Default-ON for the scroll-jump investigation. The previous env-GATED attempt captured
-    // NOTHING because EMBERTERN_SCROLL_DIAG was never set in the repro session — so the whole
-    // diagnostic silently no-op'd. Now it runs unless explicitly silenced with
-    // EMBERTERN_SCROLL_DIAG=0 (or =false). Revert to opt-in once the investigation closes.
+    // Opt-in: set EMBERTERN_SCROLL_DIAG to any value to log sidebar scroll telemetry. The
+    // scroll-jump investigation that needed this default-ON is closed (fixed by the flat
+    // single-VSP sidebar migration); it's back to zero-cost-unless-requested.
     private static readonly bool Enabled =
-        Environment.GetEnvironmentVariable("EMBERTERN_SCROLL_DIAG") is not "0" and not "false";
+        Environment.GetEnvironmentVariable("EMBERTERN_SCROLL_DIAG") is not null;
 
     public static bool IsEnabled => Enabled;
 

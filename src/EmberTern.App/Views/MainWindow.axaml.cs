@@ -37,9 +37,9 @@ public partial class MainWindow : Window
 
     private SvgIcon? _maxRestoreGlyph;
 
-    // Drag-and-drop state. The DragDrop API on TreeView in Avalonia 12 is unreliable
-    // (item containers are virtualized, drop events drop while the cursor is over
-    // children, etc.), so we drive everything from pointer events on the TreeView.
+    // Drag-and-drop state. The DragDrop API is unreliable for virtualized items in
+    // Avalonia 12 (containers recycle, drop events fire over children, etc.), so we drive
+    // everything from pointer events on the sidebar ListBox.
     private object? _dragSource;          // ConnectionNodeViewModel or FolderNodeViewModel candidate
     private Point _dragStart;             // pointer position at PointerPressed, in tree coords
     private bool _isDragging;             // crossed the 8px threshold
@@ -213,8 +213,8 @@ public partial class MainWindow : Window
 
     private void OnWindowOpened(object? sender, EventArgs e)
     {
-        // Scroll-jump diagnostics (EMBERTERN_SCROLL_DIAG). The sidebar ScrollViewer is a
-        // template part of SidebarTree, present after the tree template applies — post at
+        // Scroll diagnostics (opt-in via EMBERTERN_SCROLL_DIAG). The sidebar ScrollViewer is a
+        // template part of SidebarList, present after the template applies — post at
         // Background so layout has settled. Idempotent (guards on already-hooked).
         if (EmberTern.App.Diagnostics.ScrollTrace.IsEnabled)
         {
@@ -513,24 +513,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnSidebarTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (_currentVm is null)
-        {
-            return;
-        }
-
-        // Only update SelectedConnection when a connection root is picked; selecting a
-        // category/leaf leaves SelectedConnection at the last connection the user picked,
-        // which is what the toolbar's Edit/Copy/Delete commands want to act on.
-        if (sender is TreeView tree && tree.SelectedItem is ConnectionNodeViewModel cn)
-        {
-            _currentVm.Metadata.SelectedConnection = cn;
-        }
-    }
-
-    // Flat sidebar (Phase 2): selection sets the working connection when a connection row
-    // is picked — so the titlebar Edit/Copy/Delete/Connect commands act on it (as the tree did).
+    // Selection sets the working connection when a connection row is picked — so the titlebar
+    // Edit/Copy/Delete/Connect commands act on it. Picking a category/leaf leaves the last
+    // connection selected (what those commands want).
     private void OnSidebarListSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (_currentVm is null) return;
