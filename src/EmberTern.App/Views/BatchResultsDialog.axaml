@@ -26,12 +26,13 @@
       <TextBlock Text="{Binding Title}" Classes="h1" />
     </Border>
 
-    <!-- Toolbar: filter + clipboard export. -->
+    <!-- Toolbar: filter + clipboard export. Hidden while preparing (no results yet). -->
     <Border Grid.Row="1"
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
-            Padding="20,8">
+            Padding="20,8"
+            IsVisible="{Binding !IsPreparing}">
       <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
         <TextBlock Text="{x:Static app:UiStrings.BatchResultsFilterLabel}"
                    VerticalAlignment="Center" Foreground="{DynamicResource SubtleForegroundBrush}" />
@@ -48,7 +49,35 @@
       </StackPanel>
     </Border>
 
+    <!-- Preparing panel: shown immediately on open while the operation list is built,
+         then hidden when the VM calls Begin() and the results grid takes over. -->
+    <Border Grid.Row="2" Padding="40" IsVisible="{Binding IsPreparing}">
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                  Spacing="16" MaxWidth="420">
+        <TextBlock Text="{Binding PreparationStatus}"
+                   HorizontalAlignment="Center"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   FontSize="14"
+                   Foreground="{DynamicResource ForegroundBrush}"
+                   Classes.error="{Binding PreparationFailed}">
+          <TextBlock.Styles>
+            <Style Selector="TextBlock.error">
+              <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
+            </Style>
+          </TextBlock.Styles>
+        </TextBlock>
+        <ProgressBar Width="320"
+                     IsVisible="{Binding !PreparationFailed}"
+                     IsIndeterminate="{Binding PreparationIsIndeterminate}"
+                     Minimum="0"
+                     Maximum="{Binding PreparationTotal}"
+                     Value="{Binding PreparationValue}" />
+      </StackPanel>
+    </Border>
+
     <DataGrid Grid.Row="2"
+              IsVisible="{Binding !IsPreparing}"
               ItemsSource="{Binding VisibleRows}"
               IsReadOnly="True"
               CanUserSortColumns="True"
@@ -91,12 +120,13 @@
             BorderThickness="0,1,0,0"
             Padding="20,12">
       <Grid ColumnDefinitions="*,Auto,Auto">
-        <TextBlock Grid.Column="0" Text="{Binding StatusSummary}" FontSize="12" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="0" Text="{Binding StatusSummary}" FontSize="12"
+                   VerticalAlignment="Center" IsVisible="{Binding !IsPreparing}" />
         <Button Grid.Column="1"
                 Classes="flat"
                 Content="{x:Static app:UiStrings.BatchResultsCancel}"
                 Command="{Binding CancelCommand}"
-                IsVisible="{Binding IsRunning}"
+                IsVisible="{Binding CanCancel}"
                 Margin="0,0,8,0" />
         <Button Grid.Column="2"
                 Classes="primary"

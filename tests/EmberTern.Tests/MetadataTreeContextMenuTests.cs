@@ -163,6 +163,97 @@ public class MetadataTreeContextMenuTests
         Assert.True(vm.CancellationToken.IsCancellationRequested);
     }
 
+    // ─── Preparation phase (dialog opens up front, before execution) ──────────
+
+    [Fact]
+    public void BatchResults_StartsInPreparingState()
+    {
+        var vm = new BatchResultsViewModel("Recompile all objects");
+        Assert.True(vm.IsPreparing);
+        Assert.False(vm.IsRunning);
+        Assert.False(vm.PreparationFailed);
+        Assert.True(vm.CanCancel);                 // preparation is cancellable
+        Assert.Equal(UiStrings.BatchPreparing, vm.PreparationStatus);
+    }
+
+    [Fact]
+    public void BatchResults_ReportPreparation_Determinate_TracksProgress()
+    {
+        var vm = new BatchResultsViewModel("t");
+        vm.ReportPreparation(143, 1965, "Loading procedures 143 / 1965");
+        Assert.Equal(143, vm.PreparationValue);
+        Assert.Equal(1965, vm.PreparationTotal);
+        Assert.False(vm.PreparationIsIndeterminate);
+        Assert.Equal("Loading procedures 143 / 1965", vm.PreparationStatus);
+    }
+
+    [Fact]
+    public void BatchResults_ReportPreparation_String_IsIndeterminate()
+    {
+        var vm = new BatchResultsViewModel("t");
+        vm.ReportPreparation(1, 10, "x");          // determinate first
+        vm.ReportPreparation("Building operation list…");
+        Assert.True(vm.PreparationIsIndeterminate);
+        Assert.Equal("Building operation list…", vm.PreparationStatus);
+    }
+
+    [Fact]
+    public void BatchResults_Begin_ExitsPreparingIntoExecution()
+    {
+        var vm = new BatchResultsViewModel("t");
+        vm.ReportPreparation(5, 10, "half");
+        vm.Begin(total: 4);
+        Assert.False(vm.IsPreparing);
+        Assert.True(vm.IsRunning);
+        Assert.True(vm.CanCancel);
+        Assert.Equal(4, vm.Total);
+    }
+
+    [Fact]
+    public void BatchResults_FailPreparation_ShowsErrorAndDisablesCancel()
+    {
+        var vm = new BatchResultsViewModel("t");
+        vm.FailPreparation("Could not read the object list.");
+        Assert.True(vm.IsPreparing);               // panel stays visible …
+        Assert.True(vm.PreparationFailed);         // … showing the error
+        Assert.False(vm.PreparationIsIndeterminate);
+        Assert.False(vm.IsRunning);
+        Assert.False(vm.CanCancel);                // only Close remains
+        Assert.Equal("Could not read the object list.", vm.PreparationStatus);
+    }
+
+    [Fact]
+    public void BatchResults_Cancel_DuringPreparation_SignalsToken()
+    {
+        var vm = new BatchResultsViewModel("t");   // starts preparing, no Begin yet
+        Assert.True(vm.CanCancel);
+        Assert.False(vm.CancellationToken.IsCancellationRequested);
+        vm.CancelCommand.Execute(null);
+        Assert.True(vm.CancellationToken.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void BatchResults_Complete_EndsPreparingAndRunning()
+    {
+        var vm = new BatchResultsViewModel("t");
+        vm.Begin(2);
+        vm.Complete();
+        Assert.False(vm.IsPreparing);
+        Assert.False(vm.IsRunning);
+        Assert.False(vm.CanCancel);
+    }
+
+    [Fact]
+    public void BatchResults_CanCancel_RaisesChangeNotifications()
+    {
+        var vm = new BatchResultsViewModel("t");
+        var raised = 0;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.CanCancel)) raised++; };
+        vm.Begin(1);            // IsPreparing false + IsRunning true → CanCancel notified
+        vm.Complete();          // IsRunning false → CanCancel notified
+        Assert.True(raised >= 2);
+    }
+
     // ─── Node gates ───────────────────────────────────────────────────────
 
     [Theory]

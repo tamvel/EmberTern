@@ -12,10 +12,14 @@ using EmberTern.Core.Metadata;
 namespace EmberTern.App.ViewModels;
 
 /// <summary>
-/// Live view of a bulk operation for the batch-results dialog: opens immediately, appends
-/// a row per object as it completes, keeps live Processed / Total / Success / Failed /
-/// Duration counters, supports Cancel, All/Success/Failed filtering, and Copy All / Copy
-/// Failed. Reused by every bulk op (recompile / recompute statistics / activate-deactivate).
+/// Live view of a bulk operation for the batch-results dialog: opens IMMEDIATELY in a
+/// <see cref="IsPreparing"/> phase (so the user gets instant feedback while the object
+/// list + per-object SQL are still being built — see the Batch Operations UX polish
+/// sprint), then automatically switches to the execution view (<see cref="Begin"/>) and
+/// appends a row per object as it completes. Keeps live Processed / Total / Success /
+/// Failed / Duration counters, supports Cancel (during both preparation and execution),
+/// All/Success/Failed filtering, and Copy All / Copy Failed. Reused by every bulk op
+/// (recompile / recompute statistics / activate-deactivate).
 /// </summary>
 public partial class BatchResultsViewModel : ViewModelBase
 {
@@ -42,10 +46,36 @@ public partial class BatchResultsViewModel : ViewModelBase
     [ObservableProperty] private int _processed;
     [ObservableProperty] private int _successCount;
     [ObservableProperty] private int _failedCount;
+
+    [NotifyPropertyChangedFor(nameof(CanCancel))]
     [ObservableProperty] private bool _isRunning;
+
     [ObservableProperty] private string _durationText = "00:00:00";
     // 0 = All, 1 = Success, 2 = Failed (bound to the filter ComboBox SelectedIndex).
     [ObservableProperty] private int _selectedFilterIndex;
+
+    // ─── Preparation phase (dialog opens here, before any DDL executes) ──────
+    // The dialog is shown immediately in IsPreparing=true; the caller streams progress
+    // through ReportPreparation while the object list + per-object SQL are built, then
+    // calls Begin(total) to switch to the execution view.
+    [NotifyPropertyChangedFor(nameof(CanCancel))]
+    [ObservableProperty] private bool _isPreparing = true;
+
+    [ObservableProperty] private string _preparationStatus = UiStrings.BatchPreparing;
+    // Indeterminate until the total is known (list enumeration), determinate during the
+    // per-object build loop so the bar tracks "Loading procedures 143 / 1965".
+    [ObservableProperty] private bool _preparationIsIndeterminate = true;
+    [ObservableProperty] private int _preparationValue;
+    [ObservableProperty] private int _preparationTotal;
+
+    // Set when preparation itself failed (e.g. the object list couldn't be read) — the
+    // preparing panel stays visible showing the error, the progress bar is hidden, and
+    // Cancel disappears (only Close remains).
+    [NotifyPropertyChangedFor(nameof(CanCancel))]
+    [ObservableProperty] private bool _preparationFailed;
+
+    /// <summary>Cancel is offered while actively preparing OR executing (never after a prep error / completion).</summary>
+    public bool CanCancel => (IsPreparing && !PreparationFailed) || IsRunning;
 
     /// <summary>Live footer line: Processed / Total, Success, Failed, Duration.</summary>
     public string StatusSummary => string.Format(
@@ -63,8 +93,37 @@ public partial class BatchResultsViewModel : ViewModelBase
     // (the VM holds no Avalonia clipboard type).
     public event Action<string>? CopyRequested;
 
+    /// <summary>Indeterminate preparation step (e.g. "Loading procedures…", "Preparing SQL…").</summary>
+    public void ReportPreparation(string status)
+    {
+        PreparationStatus = status;
+        PreparationIsIndeterminate = true;
+    }
+
+    /// <summary>Measured preparation progress (e.g. "Loading procedures 143 / 1965").</summary>
+    public void ReportPreparation(int value, int total, string status)
+    {
+        PreparationTotal = total;
+        PreparationValue = value;
+        PreparationIsIndeterminate = total <= 0;
+        PreparationStatus = status;
+    }
+
+    /// <summary>
+    /// Preparation could not produce a plan (e.g. the object list query failed). Keeps
+    /// the dialog open showing the error; the user reads it and clicks Close.
+    /// </summary>
+    public void FailPreparation(string message)
+    {
+        PreparationStatus = message;
+        PreparationFailed = true;
+        PreparationIsIndeterminate = false;
+        IsRunning = false;
+    }
+
     public void Begin(int total)
     {
+        IsPreparing = false;
         Total = total;
         IsRunning = true;
         _stopwatch.Restart();
@@ -84,6 +143,7 @@ public partial class BatchResultsViewModel : ViewModelBase
 
     public void Complete()
     {
+        IsPreparing = false;
         IsRunning = false;
         _stopwatch.Stop();
         _timer?.Stop();

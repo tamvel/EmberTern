@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Diagnostics;
 using EmberTern.App.Security;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
@@ -3875,38 +3876,67 @@ public partial class MainWindowViewModel : ViewModelBase
     // completes; Cancel stops the remainder.
     public event Func<BatchResultsViewModel, Task>? BatchResultsRequested;
 
-    // Opens the batch-results dialog up front, then streams each statement's outcome into
-    // it (per-statement autonomous autocommit, continues past failures) so the user sees
-    // live progress. preResults seeds rows that failed BEFORE the batch (e.g. a source
-    // fetch failed during recompile). Cancel (or closing the dialog) stops the rest.
+    // A prepared bulk operation: the SQL steps to run + rows that already failed during
+    // preparation (e.g. a source fetch failed during recompile → no SQL to run for them).
+    private readonly record struct BatchPlan(
+        IReadOnlyList<(string Object, string Operation, string Sql)> Steps,
+        IReadOnlyList<BatchOperationResult> PreResults);
+
+    // Opens the batch-results dialog IMMEDIATELY (so feedback is instant even on large
+    // schemas), runs <paramref name="prepareAsync"/> INSIDE it — reporting live progress
+    // into the dialog's preparing view while the object list + per-object SQL are built —
+    // then switches to the execution view and streams each statement's outcome (autonomous
+    // per-statement autocommit, continues past failures). Cancel (or closing the dialog)
+    // stops both the preparation loop and the remaining execution. The preparing phase is
+    // what removes the pre-sprint 10–15s "app looks busy, nothing shown" gap: preparation
+    // (especially recompile's one-source-fetch-per-object loop) now happens with the dialog
+    // already on screen.
     private async Task RunBatchWithReportAsync(
         string title,
-        IReadOnlyList<(string Object, string Operation, string Sql)> steps,
-        bool refreshAfter,
-        IReadOnlyList<BatchOperationResult>? preResults = null)
+        Func<BatchResultsViewModel, CancellationToken, Task<BatchPlan>> prepareAsync,
+        bool refreshAfter)
     {
-        var pre = preResults ?? (IReadOnlyList<BatchOperationResult>)Array.Empty<BatchOperationResult>();
-        if (steps.Count == 0 && pre.Count == 0)
-        {
-            AddMessage(MessageSeverity.Info, UiStrings.BatchNothingToDo);
-            return;
-        }
-
-        var vm = new BatchResultsViewModel(title);
-        vm.Begin(pre.Count + steps.Count);
-        foreach (var p in pre)
-        {
-            vm.AddResult(p);
-        }
-
-        // Progress is constructed on the UI thread → Report marshals back to it, so the
-        // live VM updates are UI-thread-safe while the executor runs on the thread pool.
-        var progress = new Progress<(int Index, string? Error)>(p =>
-            vm.AddResult(new BatchOperationResult(
-                steps[p.Index].Object, steps[p.Index].Operation, p.Error is null, p.Error)));
+        var vm = new BatchResultsViewModel(title); // opens in IsPreparing=true
 
         async Task RunAsync()
         {
+            var prepSw = System.Diagnostics.Stopwatch.StartNew();
+            BatchPlan plan;
+            try
+            {
+                plan = await prepareAsync(vm, vm.CancellationToken).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                vm.Complete(); // cancelled before any step ran
+                return;
+            }
+            catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException or DdlExecutionException)
+            {
+                // Preparation couldn't even build the plan (e.g. the object list query
+                // failed). Surface it in the dialog AND the Messages log (unchanged).
+                vm.FailPreparation(ex.Message);
+                AddMessage(MessageSeverity.Error, ex.Message);
+                return;
+            }
+
+            var steps = plan.Steps;
+            var pre = plan.PreResults;
+            BatchTrace.LogPrepareDone(steps.Count, pre.Count, prepSw.ElapsedMilliseconds);
+
+            vm.Begin(pre.Count + steps.Count); // preparing → execution view
+            foreach (var p in pre)
+            {
+                vm.AddResult(p);
+            }
+
+            // Progress is constructed on the UI thread → Report marshals back to it, so the
+            // live VM updates are UI-thread-safe while the executor runs on the thread pool.
+            var progress = new Progress<(int Index, string? Error)>(p =>
+                vm.AddResult(new BatchOperationResult(
+                    steps[p.Index].Object, steps[p.Index].Operation, p.Error is null, p.Error)));
+
+            var execSw = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 if (steps.Count > 0)
@@ -3921,7 +3951,12 @@ public partial class MainWindowViewModel : ViewModelBase
                 AddMessage(MessageSeverity.Error, ex.Message);
                 SelectedBottomTabIndex = 1;
             }
+            BatchTrace.LogExecDone(steps.Count, execSw.ElapsedMilliseconds, vm.CancellationToken.IsCancellationRequested);
             vm.Complete();
+            if (steps.Count == 0 && pre.Count == 0)
+            {
+                AddMessage(MessageSeverity.Info, UiStrings.BatchNothingToDo);
+            }
             if (refreshAfter && !vm.CancellationToken.IsCancellationRequested)
             {
                 await Metadata.RefreshAsync().ConfigureAwait(true);
@@ -3931,7 +3966,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var execTask = RunAsync();
         if (BatchResultsRequested is { } show)
         {
-            await show(vm).ConfigureAwait(true); // modal — runs while the batch streams in
+            await show(vm).ConfigureAwait(true); // modal — runs while prep + batch stream in
         }
         vm.RequestCancel();                       // dialog closed → stop any remaining work
         await execTask.ConfigureAwait(true);
@@ -3959,23 +3994,23 @@ public partial class MainWindowViewModel : ViewModelBase
 
     // Bulk trigger activate/deactivate over the visible (filtered) set or ALL. The reader
     // gives authoritative state so we skip triggers already in the target state (avoids
-    // needless DDL commits — gotcha #109).
+    // needless DDL commits — gotcha #109). The dialog opens first; this enumerate+build
+    // runs inside its preparing view.
     private async void OnBulkSetActiveRequested(TriggerBulkRequest req)
     {
         if (req.Kind != MetadataObjectKind.Trigger) return;
+        var title = req.Activate ? UiStrings.BatchTitleActivateTriggers : UiStrings.BatchTitleDeactivateTriggers;
+        await RunBatchWithReportAsync(title, (vm, ct) => BuildTriggerBulkPlanAsync(req, vm, ct), refreshAfter: true).ConfigureAwait(true);
+    }
 
-        IReadOnlyList<MetadataObject> triggers;
-        try
-        {
-            triggers = await _metadataReader.ListAsync(MetadataObjectKind.Trigger).ConfigureAwait(true);
-        }
-        catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
-        {
-            AddMessage(MessageSeverity.Error, ex.Message);
-            SelectedBottomTabIndex = 1;
-            return;
-        }
+    private async Task<BatchPlan> BuildTriggerBulkPlanAsync(TriggerBulkRequest req, BatchResultsViewModel vm, CancellationToken ct)
+    {
+        vm.ReportPreparation(string.Format(CultureInfo.CurrentCulture, UiStrings.BatchPreparingListFormat, "triggers"));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var triggers = await _metadataReader.ListAsync(MetadataObjectKind.Trigger, ct).ConfigureAwait(true);
+        BatchTrace.LogListEnumerate("Trigger", triggers.Count, sw.ElapsedMilliseconds);
 
+        vm.ReportPreparation(UiStrings.BatchPreparingBuildList);
         IEnumerable<MetadataObject> scope = triggers;
         if (req.VisibleOnly)
         {
@@ -3991,8 +4026,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 : DdlGenerator.BuildAlterTriggerInactive(t.Name)))
             .ToList<(string, string, string)>();
 
-        var title = req.Activate ? UiStrings.BatchTitleActivateTriggers : UiStrings.BatchTitleDeactivateTriggers;
-        await RunBatchWithReportAsync(title, steps, refreshAfter: true).ConfigureAwait(true);
+        return new BatchPlan(steps, Array.Empty<BatchOperationResult>());
     }
 
     // Recompile every object of a kind (Procedure/Function/Trigger/Package) by re-running
@@ -4000,50 +4034,58 @@ public partial class MainWindowViewModel : ViewModelBase
     // rows in the report (no SQL to run for them).
     private async void OnRecompileGroupRequested(MetadataObjectKind kind)
     {
-        var (steps, preFailures) = await BuildRecompileStepsAsync(kind).ConfigureAwait(true);
-        if (steps is null) return; // list failed — message already surfaced
         var title = string.Format(CultureInfo.CurrentCulture, UiStrings.BatchTitleRecompileFormat, KindNoun(kind));
-        await RunBatchWithReportAsync(title, steps, refreshAfter: false, preFailures).ConfigureAwait(true);
+        await RunBatchWithReportAsync(title, async (vm, ct) =>
+        {
+            var (steps, pre) = await BuildRecompileStepsAsync(kind, vm, ct).ConfigureAwait(true);
+            return new BatchPlan(steps, pre);
+        }, refreshAfter: false).ConfigureAwait(true);
     }
 
-    // Shared source-fetch + step-build for recompile. Returns null steps when the object
-    // list couldn't be read. Package emits two steps (header + body).
-    private async Task<(List<(string, string, string)>? Steps, List<BatchOperationResult> PreFailures)>
-        BuildRecompileStepsAsync(MetadataObjectKind kind)
+    // Shared source-fetch + step-build for recompile — the dominant preparation cost: one
+    // source-fetch round-trip PER object (the reason recompile felt slow before the dialog
+    // opened up front). Reports live "Loading procedures 143 / 1965" progress into the
+    // preparing view and observes cancellation between objects. Throws
+    // MetadataReadException / InvalidOperationException if the object LIST can't be read
+    // (the caller turns that into a preparation error); per-object source-fetch failures
+    // are captured as failed rows. Package emits two steps (header + body).
+    private async Task<(List<(string, string, string)> Steps, List<BatchOperationResult> PreFailures)>
+        BuildRecompileStepsAsync(MetadataObjectKind kind, BatchResultsViewModel vm, CancellationToken ct)
     {
         var preFailures = new List<BatchOperationResult>();
-        IReadOnlyList<MetadataObject> objs;
-        try
-        {
-            objs = await _metadataReader.ListAsync(kind).ConfigureAwait(true);
-        }
-        catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
-        {
-            AddMessage(MessageSeverity.Error, ex.Message);
-            SelectedBottomTabIndex = 1;
-            return (null, preFailures);
-        }
+        var noun = KindNoun(kind) + "s";
+
+        vm.ReportPreparation(string.Format(CultureInfo.CurrentCulture, UiStrings.BatchPreparingListFormat, noun));
+        var listSw = System.Diagnostics.Stopwatch.StartNew();
+        var objs = await _metadataReader.ListAsync(kind, ct).ConfigureAwait(true);
+        BatchTrace.LogListEnumerate(kind.ToString(), objs.Count, listSw.ElapsedMilliseconds);
 
         var op = UiStrings.BatchOpRecompile;
         var steps = new List<(string, string, string)>();
+        var fetchSw = System.Diagnostics.Stopwatch.StartNew();
+        var i = 0;
         foreach (var o in objs)
         {
+            ct.ThrowIfCancellationRequested();
+            i++;
+            vm.ReportPreparation(i, objs.Count, string.Format(
+                CultureInfo.CurrentCulture, UiStrings.BatchPreparingLoadFormat, noun, i, objs.Count));
             try
             {
                 switch (kind)
                 {
                     case MetadataObjectKind.Procedure:
-                        steps.Add((o.Name, op, await _ddlReader.FetchProcedureSourceAsync(o).ConfigureAwait(true)));
+                        steps.Add((o.Name, op, await _ddlReader.FetchProcedureSourceAsync(o, ct).ConfigureAwait(true)));
                         break;
                     case MetadataObjectKind.Function:
-                        steps.Add((o.Name, op, await _ddlReader.FetchFunctionSourceAsync(o).ConfigureAwait(true)));
+                        steps.Add((o.Name, op, await _ddlReader.FetchFunctionSourceAsync(o, ct).ConfigureAwait(true)));
                         break;
                     case MetadataObjectKind.Trigger:
-                        steps.Add((o.Name, op, await _ddlReader.FetchTriggerSourceAsync(o).ConfigureAwait(true)));
+                        steps.Add((o.Name, op, await _ddlReader.FetchTriggerSourceAsync(o, ct).ConfigureAwait(true)));
                         break;
                     case MetadataObjectKind.Package:
-                        steps.Add((o.Name, UiStrings.BatchOpRecompileHeader, await _ddlReader.FetchPackageHeaderSourceAsync(o).ConfigureAwait(true)));
-                        steps.Add((o.Name, UiStrings.BatchOpRecompileBody, await _ddlReader.FetchPackageBodySourceAsync(o).ConfigureAwait(true)));
+                        steps.Add((o.Name, UiStrings.BatchOpRecompileHeader, await _ddlReader.FetchPackageHeaderSourceAsync(o, ct).ConfigureAwait(true)));
+                        steps.Add((o.Name, UiStrings.BatchOpRecompileBody, await _ddlReader.FetchPackageBodySourceAsync(o, ct).ConfigureAwait(true)));
                         break;
                 }
             }
@@ -4052,33 +4094,37 @@ public partial class MainWindowViewModel : ViewModelBase
                 preFailures.Add(new BatchOperationResult(o.Name, op, false, ex.Message));
             }
         }
+        BatchTrace.LogSourceFetch(kind.ToString(), steps.Count, preFailures.Count, fetchSw.ElapsedMilliseconds);
         return (steps, preFailures);
     }
 
     // ─── Connection-node (database-wide) bulk ops ─────────────────────────────
     // Recompute selectivity statistics for every index (SET STATISTICS INDEX).
-    internal async Task RecomputeAllIndexStatisticsAsync()
+    internal Task RecomputeAllIndexStatisticsAsync()
+        => RunBatchWithReportAsync(UiStrings.BatchTitleRecomputeStatistics, BuildRecomputeStatsPlanAsync, refreshAfter: false);
+
+    private async Task<BatchPlan> BuildRecomputeStatsPlanAsync(BatchResultsViewModel vm, CancellationToken ct)
     {
-        IReadOnlyList<MetadataObject> indexes;
-        try
-        {
-            indexes = await _metadataReader.ListAsync(MetadataObjectKind.Index).ConfigureAwait(true);
-        }
-        catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
-        {
-            AddMessage(MessageSeverity.Error, ex.Message);
-            SelectedBottomTabIndex = 1;
-            return;
-        }
+        vm.ReportPreparation(string.Format(CultureInfo.CurrentCulture, UiStrings.BatchPreparingListFormat, "indexes"));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var indexes = await _metadataReader.ListAsync(MetadataObjectKind.Index, ct).ConfigureAwait(true);
+        BatchTrace.LogListEnumerate("Index", indexes.Count, sw.ElapsedMilliseconds);
+
+        vm.ReportPreparation(UiStrings.BatchPreparingBuildList);
         var op = UiStrings.BatchOpRecomputeStatistics;
         var steps = indexes
             .Select(ix => (ix.Name, op, DdlGenerator.BuildSetIndexStatistics(ix.Name)))
             .ToList<(string, string, string)>();
-        await RunBatchWithReportAsync(UiStrings.BatchTitleRecomputeStatistics, steps, refreshAfter: false).ConfigureAwait(true);
+        return new BatchPlan(steps, Array.Empty<BatchOperationResult>());
     }
 
-    // Recompile every procedure, function, trigger and package.
-    internal async Task RecompileAllObjectsAsync()
+    // Recompile every procedure, function, trigger and package. A per-kind LIST failure is
+    // recorded as a failed row and the remaining kinds still proceed (unchanged resilience);
+    // cancellation propagates out to abort the whole preparation.
+    internal Task RecompileAllObjectsAsync()
+        => RunBatchWithReportAsync(UiStrings.BatchTitleRecompileAll, BuildRecompileAllPlanAsync, refreshAfter: false);
+
+    private async Task<BatchPlan> BuildRecompileAllPlanAsync(BatchResultsViewModel vm, CancellationToken ct)
     {
         var allSteps = new List<(string, string, string)>();
         var allPre = new List<BatchOperationResult>();
@@ -4090,11 +4136,19 @@ public partial class MainWindowViewModel : ViewModelBase
             MetadataObjectKind.Package,
         })
         {
-            var (steps, pre) = await BuildRecompileStepsAsync(kind).ConfigureAwait(true);
-            if (steps is not null) allSteps.AddRange(steps);
-            allPre.AddRange(pre);
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var (steps, pre) = await BuildRecompileStepsAsync(kind, vm, ct).ConfigureAwait(true);
+                allSteps.AddRange(steps);
+                allPre.AddRange(pre);
+            }
+            catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
+            {
+                allPre.Add(new BatchOperationResult(KindNoun(kind) + "s", UiStrings.BatchOpRecompile, false, ex.Message));
+            }
         }
-        await RunBatchWithReportAsync(UiStrings.BatchTitleRecompileAll, allSteps, refreshAfter: false, allPre).ConfigureAwait(true);
+        return new BatchPlan(allSteps, allPre);
     }
 
     // Singular lowercase noun for confirm/report messages.

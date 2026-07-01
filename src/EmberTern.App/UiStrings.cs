@@ -94,6 +94,12 @@ internal static class UiStrings
     public const string BatchResultsCopyFailed = "Copy Failed";
     public const string BatchResultsCancel = "Cancel";
     public const string BatchResultsClose = "Close";
+    // Preparation phase — the dialog opens here immediately so feedback is instant while
+    // the object list + per-object SQL are still being built (Batch Operations UX sprint).
+    public const string BatchPreparing = "Preparing operation…";
+    public const string BatchPreparingBuildList = "Building operation list…";
+    public const string BatchPreparingListFormat = "Loading {0}…";          // {0} = plural noun, count unknown
+    public const string BatchPreparingLoadFormat = "Loading {0} {1} / {2}";  // e.g. "Loading procedures 143 / 1965"
     public const string TabCloseTooltip = "Close tab";
 
     public const string ConnectionConnect = "Connect";
