@@ -290,72 +290,89 @@
                      Padding="6,4" />
           </Border>
 
-          <!-- Tree -->
-          <TreeView ItemsSource="{Binding RootNodes}"
-                    x:Name="SidebarTree"
-                    Background="Transparent"
-                    BorderThickness="0"
-                    SelectionChanged="OnSidebarTreeSelectionChanged">
-            <!-- Virtualization at the nested level: a category can hold 2000+ leaves.
-                 Without VSP, expanding Tables realizes ~2k TreeViewItems at once and the
-                 UI freezes for ~1s. With VSP, only visible rows materialize. -->
-            <TreeView.ItemsPanel>
+          <!-- Metadata sidebar — flat single-VirtualizingStackPanel ListBox. Replaces the
+               nested-VSP TreeView (whose per-item virtualization made the scroll extent
+               collapse/re-estimate on a random-access thumb drag). The hierarchy is
+               flattened into SidebarRows by SidebarFlatController; each row = indent + a
+               chevron + the SAME per-type node template as before (icons, colours, context
+               menus, double-click handlers — verbatim), so it looks identical to the tree
+               but scrolls on one stable-extent VSP. -->
+          <ListBox ItemsSource="{Binding SidebarRows}"
+                   x:Name="SidebarList"
+                   Classes="sidebar-list"
+                   Background="Transparent"
+                   BorderThickness="0"
+                   SelectionMode="Single"
+                   SelectionChanged="OnSidebarListSelectionChanged">
+            <ListBox.ItemsPanel>
               <ItemsPanelTemplate>
                 <VirtualizingStackPanel />
               </ItemsPanelTemplate>
-            </TreeView.ItemsPanel>
-            <TreeView.Styles>
-              <Style Selector="TreeViewItem">
-                <Setter Property="ItemsPanel">
-                  <ItemsPanelTemplate>
-                    <VirtualizingStackPanel />
-                  </ItemsPanelTemplate>
-                </Setter>
+            </ListBox.ItemsPanel>
+            <ListBox.Styles>
+              <!-- Dense, uniform sidebar rows (scoped to this ListBox so the Saved-Queries
+                   ListBox is unaffected). Uniform height keeps the single VSP's extent exact. -->
+              <Style Selector="ListBox.sidebar-list ListBoxItem">
+                <Setter Property="Padding" Value="2,0" />
+                <Setter Property="MinHeight" Value="24" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
               </Style>
-              <!-- Drag-and-drop drop-target overlay. Templates use Classes="row-target"
-                   as the base + Classes.drop-target="{Binding IsDropTarget}" toggle.
-                   Background is driven by Style.Setter so the Boolean class can flip
-                   between Transparent and the DropTarget overlay without each row
-                   needing a LocalValue Background (LocalValue would beat Style). -->
+              <!-- Expander chevron: subtle, borderless, matches the tree chevron. -->
+              <Style Selector="Button.sidebar-chevron">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Width" Value="14" />
+                <Setter Property="Height" Value="14" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+              </Style>
+              <Style Selector="Button.sidebar-chevron:pointerover">
+                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+              </Style>
+              <!-- Drag-and-drop drop-target overlay (base Transparent + Boolean class flip),
+                   preserved from the tree for Phase 3. -->
               <Style Selector="Border.row-target">
                 <Setter Property="Background" Value="Transparent" />
-              </Style>
-              <!-- Inactive triggers/indexes render dimmed (+ a "(inactive)" suffix in the
-                   label) so a deactivated object is visually distinct in the tree. -->
-              <Style Selector="TextBlock.inactive">
-                <Setter Property="Opacity" Value="0.5" />
               </Style>
               <Style Selector="Border.row-target.drop-target">
                 <Setter Property="Background" Value="{DynamicResource DropTargetBrush}" />
               </Style>
-              <!-- ONE TreeViewItem container style. The `TreeViewItem` selector matches
-                   EVERY item regardless of node type — x:DataType does NOT filter the
-                   selector at runtime, it's only a compile-time hint for the binding.
-                   The previous three concrete-typed styles therefore ALL applied to every
-                   container, and the last one (MetadataNodeViewModel) won: for a connection
-                   or folder node its compiled binding failed to cast the DataContext, the
-                   IsExpanded setter resolved to UnsetValue, and it clobbered the correct
-                   setter — so connection nodes never expanded (proven by the headless
-                   ConnectionExpandBindingProbe: VM IsExpanded=true, container exists, but
-                   container.IsExpanded stayed false). Fix: a single setter whose
-                   ReflectionBinding resolves IsExpanded by name at runtime against whatever
-                   VM is the DataContext — all three node types expose IsExpanded. IsVisible
-                   exists only on MetadataNodeViewModel; FallbackValue keeps the other two
-                   (which have no such property) visible. See gotcha #38. -->
-              <Style Selector="TreeViewItem">
-                <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded, Mode=TwoWay}" />
-                <Setter Property="IsVisible" Value="{ReflectionBinding IsVisible, FallbackValue=True}" />
+              <!-- Inactive triggers/indexes render dimmed (+ a "(inactive)" suffix). -->
+              <Style Selector="TextBlock.inactive">
+                <Setter Property="Opacity" Value="0.5" />
               </Style>
-            </TreeView.Styles>
+            </ListBox.Styles>
 
-            <!-- BOTH templates live in DataTemplates so TreeView resolves per-type at
-                 every nesting level. Setting TreeView.ItemTemplate to the ConnectionNode
-                 template (even with DataType match) makes Avalonia 12 skip child template
-                 lookup for nested MetadataNode items — categories rendered fine but their
-                 own ItemsSource={Binding Children} didn't kick in, so chevrons never showed. -->
-            <TreeView.DataTemplates>
-              <TreeDataTemplate DataType="vm:FolderNodeViewModel"
-                                ItemsSource="{Binding Connections}">
+            <ListBox.DataTemplates>
+              <!-- The flattened row: indentation spacer + chevron + the per-type node
+                   content (hosted via ContentControl, which resolves the DataTemplates
+                   below by node type). -->
+              <DataTemplate DataType="vm:SidebarRow">
+                <Grid ColumnDefinitions="Auto,Auto,*">
+                  <Border Grid.Column="0" Width="{Binding IndentWidth}" />
+                  <Panel Grid.Column="1" Width="14" VerticalAlignment="Center">
+                    <Button Classes="sidebar-chevron"
+                            IsVisible="{Binding IsExpandable}"
+                            Click="OnSidebarChevronClick">
+                      <Panel>
+                        <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}"
+                                          Width="10" Height="10"
+                                          IsVisible="{Binding !IsExpanded}" />
+                        <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}"
+                                          Width="10" Height="10"
+                                          IsVisible="{Binding IsExpanded}" />
+                      </Panel>
+                    </Button>
+                  </Panel>
+                  <ContentControl Grid.Column="2"
+                                  Content="{Binding Node}"
+                                  HorizontalContentAlignment="Stretch"
+                                  VerticalAlignment="Center" />
+                </Grid>
+              </DataTemplate>
+
+              <DataTemplate DataType="vm:FolderNodeViewModel">
                 <Border HorizontalAlignment="Stretch"
                         Classes="row-target"
                         Classes.drop-target="{Binding IsDropTarget}">
@@ -391,10 +408,9 @@
                              KeyDown="OnFolderRenameKeyDown" />
                   </Panel>
                 </Border>
-              </TreeDataTemplate>
+              </DataTemplate>
 
-              <TreeDataTemplate DataType="vm:ConnectionNodeViewModel"
-                                ItemsSource="{Binding Children}">
+              <DataTemplate DataType="vm:ConnectionNodeViewModel">
                 <Border HorizontalAlignment="Stretch"
                         Classes="row-target"
                         Classes.drop-target="{Binding IsDropTarget}"
@@ -414,7 +430,6 @@
                       <MenuItem Header="Edit" Command="{Binding EditCommand}" />
                       <MenuItem Header="Copy" Command="{Binding CopyCommand}" />
                       <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
-                      <!-- Database-wide maintenance (only when connected). -->
                       <Separator IsVisible="{Binding IsConnected}" />
                       <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecomputeStats}"
                                 Command="{Binding RecomputeAllStatisticsCommand}"
@@ -432,9 +447,6 @@
                     </ContextMenu>
                   </Border.ContextMenu>
                   <StackPanel Orientation="Horizontal" Spacing="5">
-                    <!-- Connection (server) icon; color encodes status via StatusBrushKey
-                         through IconBrushConverter: green connected, subtle disconnected.
-                         Replaces the old ●/○ status glyph. -->
                     <controls:SvgIcon Data="{StaticResource Icon.Connection}"
                                       Width="15" Height="15"
                                       VerticalAlignment="Center">
@@ -453,27 +465,20 @@
                                VerticalAlignment="Center" />
                   </StackPanel>
                 </Border>
-              </TreeDataTemplate>
+              </DataTemplate>
 
-              <TreeDataTemplate DataType="vm:MetadataNodeViewModel"
-                                ItemsSource="{Binding Children}">
-                <!-- Full-row hit target: Border with Stretch + transparent background. -->
+              <DataTemplate DataType="vm:MetadataNodeViewModel">
                 <Border HorizontalAlignment="Stretch"
                         Background="Transparent"
                         DoubleTapped="OnMetadataNodeDoubleTapped">
                   <Border.ContextMenu>
                     <ContextMenu>
-                      <!-- ── GROUP (category) items ────────────────────────────── -->
-                      <!-- New X (all kinds except Index / System Tables). -->
                       <MenuItem Header="{Binding ContextNewLabel}"
                                 Command="{Binding NewCommand}"
                                 IsVisible="{Binding SupportsNew}" />
-                      <!-- Recompile all (Procedures / Functions / Triggers / Packages). -->
                       <MenuItem Header="{Binding ContextRecompileAllLabel}"
                                 Command="{Binding RecompileAllCommand}"
                                 IsVisible="{Binding IsRecompilableGroup}" />
-                      <!-- Trigger category → bulk activate/deactivate over the visible
-                           (current filter) set, or all triggers in the database. -->
                       <Separator IsVisible="{Binding IsTriggerGroup}" />
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivateVisible}"
                                 Command="{Binding ActivateVisibleCommand}"
@@ -487,29 +492,22 @@
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivateAll}"
                                 Command="{Binding DeactivateAllCommand}"
                                 IsVisible="{Binding IsTriggerGroup}" />
-
-                      <!-- ── LEAF (object) items ──────────────────────────────── -->
-                      <!-- Edit / Open (Role/User → Security Manager; System table → read-only Open). -->
                       <MenuItem Header="{Binding ContextEditLabel}"
                                 Command="{Binding OpenDdlCommand}"
                                 IsVisible="{Binding CanEditLeaf}" />
-                      <!-- Procedure leaf → Execute. -->
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextExecuteProcedure}"
                                 Command="{Binding ExecuteProcedureCommand}"
                                 IsVisible="{Binding IsProcedureLeaf}" />
-                      <!-- Trigger leaf → activate/deactivate (only the applicable one). -->
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
                                 Command="{Binding ActivateCommand}"
                                 IsVisible="{Binding ShowActivate}" />
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
                                 Command="{Binding DeactivateCommand}"
                                 IsVisible="{Binding ShowDeactivate}" />
-                      <!-- Delete (deletable schema leaves; Role/User via Security Manager). -->
                       <Separator IsVisible="{Binding CanDeleteLeaf}" />
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDelete}"
                                 Command="{Binding DeleteCommand}"
                                 IsVisible="{Binding CanDeleteLeaf}" />
-                      <!-- Copy name (every actionable leaf). -->
                       <Separator IsVisible="{Binding IsActionable}" />
                       <MenuItem Header="{Binding ContextCopyNameLabel}"
                                 Command="{Binding CopyNameCommand}"
@@ -517,11 +515,6 @@
                     </ContextMenu>
                   </Border.ContextMenu>
                   <StackPanel Orientation="Horizontal" Spacing="5">
-                    <!-- Per-kind SVG icon (Lucide, DataGrip-style). Shape resolves from the
-                         geometry key via IconGeometryConverter (theme-invariant); color
-                         resolves the per-kind resource key against the *current* theme via
-                         IconBrushConverter, with the ActualThemeVariant binding forcing
-                         re-evaluation on theme toggle. Hidden for placeholders (empty key). -->
                     <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
                                       Width="15" Height="15"
                                       VerticalAlignment="Center"
@@ -545,9 +538,9 @@
                                IsVisible="{Binding IsLoading}" />
                   </StackPanel>
                 </Border>
-              </TreeDataTemplate>
-            </TreeView.DataTemplates>
-          </TreeView>
+              </DataTemplate>
+            </ListBox.DataTemplates>
+          </ListBox>
         </DockPanel>
       </Border>
 

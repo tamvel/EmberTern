@@ -247,19 +247,19 @@ public partial class MainWindow : Window
     private void HookSidebarScrollDiagnostics()
     {
         if (_scrollDiagHooked) return;
-        var tree = this.FindControl<TreeView>("SidebarTree");
-        // Prefer the TreeView template's PART_ScrollViewer by name; FirstOrDefault could grab
-        // a nested (non-scrolling) ScrollViewer. Fall back to the first descendant.
-        var descendants = tree?.GetVisualDescendants().OfType<ScrollViewer>().ToList();
+        var list = this.FindControl<ListBox>("SidebarList");
+        // Prefer the template's PART_ScrollViewer by name; FirstOrDefault could grab a nested
+        // (non-scrolling) ScrollViewer. Fall back to the first descendant.
+        var descendants = list?.GetVisualDescendants().OfType<ScrollViewer>().ToList();
         var sv = descendants?.FirstOrDefault(s => s.Name == "PART_ScrollViewer")
                  ?? descendants?.FirstOrDefault();
         if (sv is null) return;
         _scrollDiagHooked = true;
 
-        // Count of realized TreeViewItem containers at the moment of a scroll change — cheap
-        // (only the ~visible window is realized under virtualization). If extentH deltas track
-        // this count, the extent is being re-estimated from the realized window (VSP behavior).
-        int RealizedItems() => tree!.GetVisualDescendants().OfType<TreeViewItem>().Count();
+        // Count of realized ListBoxItem containers at the moment of a scroll change. With the
+        // flat single-VSP list this should stay a stable window and the extent should NOT
+        // collapse (unlike the nested-VSP tree).
+        int RealizedItems() => list!.GetVisualDescendants().OfType<ListBoxItem>().Count();
 
         sv.ScrollChanged += (s, e) =>
         {
@@ -526,6 +526,27 @@ public partial class MainWindow : Window
         if (sender is TreeView tree && tree.SelectedItem is ConnectionNodeViewModel cn)
         {
             _currentVm.Metadata.SelectedConnection = cn;
+        }
+    }
+
+    // Flat sidebar (Phase 2): selection sets the working connection when a connection row
+    // is picked — so the titlebar Edit/Copy/Delete/Connect commands act on it (as the tree did).
+    private void OnSidebarListSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_currentVm is null) return;
+        if (sender is ListBox list && list.SelectedItem is SidebarRow { Node: ConnectionNodeViewModel cn })
+        {
+            _currentVm.Metadata.SelectedConnection = cn;
+        }
+    }
+
+    // Chevron click → flip the row's underlying node expansion (the controller splices).
+    private void OnSidebarChevronClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null) return;
+        if (sender is Button { DataContext: SidebarRow row })
+        {
+            _currentVm.Metadata.ToggleSidebarRow(row);
         }
     }
 
@@ -799,10 +820,17 @@ public partial class MainWindow : Window
 
     private void OnMetadataNodeDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (sender is Control c && c.DataContext is MetadataNodeViewModel node
-            && node.IsActionable && node.OpenDdlCommand.CanExecute(null))
+        if (sender is not Control c || c.DataContext is not MetadataNodeViewModel node) return;
+        if (node.IsActionable && node.OpenDdlCommand.CanExecute(null))
         {
             node.OpenDdlCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (node.IsGroup)
+        {
+            // Double-click a category toggles expansion (parity with the TreeView); the
+            // flat controller reacts to the IsExpanded change and splices the rows.
+            node.IsExpanded = !node.IsExpanded;
             e.Handled = true;
         }
     }
@@ -1408,9 +1436,9 @@ public partial class MainWindow : Window
 
     private string? DetectFolderContext(MainWindowViewModel vm)
     {
-        var tree = this.FindControl<TreeView>("SidebarTree");
-        if (tree?.SelectedItem is FolderNodeViewModel f) return f.Id;
-        if (tree?.SelectedItem is ConnectionNodeViewModel c
+        var node = (this.FindControl<ListBox>("SidebarList")?.SelectedItem as SidebarRow)?.Node;
+        if (node is FolderNodeViewModel f) return f.Id;
+        if (node is ConnectionNodeViewModel c
             && vm.FolderState.ConnectionFolderMap.TryGetValue(c.Profile.Id, out var fid)
             && !string.IsNullOrEmpty(fid))
         {

@@ -40,8 +40,12 @@ public sealed class ConnectionExpandBindingProbe
             => AppBuilder.Configure<global::EmberTern.App.App>().UseHeadless(new AvaloniaHeadlessPlatformOptions());
     }
 
+    // Flat sidebar (migration): the real MainWindow hosts the single-VSP ListBox
+    // ("SidebarList") bound to Metadata.SidebarRows, and each root connection surfaces as a
+    // SidebarRow. (The nested-VSP TreeView + its container IsExpanded binding — gotcha #38 —
+    // are gone; expansion projection is covered by SidebarFlatControllerTests.)
     [Fact]
-    public async System.Threading.Tasks.Task IsExpanded_VmToTreeViewItem_Binding()
+    public async System.Threading.Tasks.Task FlatSidebar_RendersRootRows()
     {
         var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
         var log = new StringBuilder();
@@ -62,30 +66,20 @@ public sealed class ConnectionExpandBindingProbe
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
+            var list = window.GetVisualDescendants().OfType<ListBox>()
+                .Single(l => l.Name == "SidebarList");
             var node = vm.Metadata.RootNodes.OfType<ConnectionNodeViewModel>()
                 .Single(n => n.Profile.Id == profile.Id);
+            var row = vm.Metadata.SidebarRows.FirstOrDefault(r => ReferenceEquals(r.Node, node));
 
-            TreeViewItem? Container() => window.GetVisualDescendants()
-                .OfType<TreeViewItem>()
-                .FirstOrDefault(t => ReferenceEquals(t.DataContext, node));
+            log.AppendLine($"SidebarList found = {list is not null}");
+            log.AppendLine($"ItemsSource is SidebarRows = {ReferenceEquals(list!.ItemsSource, vm.Metadata.SidebarRows)}");
+            log.AppendLine($"root connection row exists = {row is not null}, expandable = {row?.IsExpandable}");
 
-            log.AppendLine($"[1] VM IsExpanded initial = {node.IsExpanded}");
-            log.AppendLine($"[2] container exists initial = {Container() is not null}");
-            log.AppendLine($"[3] container.IsExpanded initial = {Container()?.IsExpanded}");
-
-            // The exact thing auto-expand-on-connect does: flip the VM property.
-            node.IsExpanded = true;
-            Dispatcher.UIThread.RunJobs();
-
-            var c = Container();
-            log.AppendLine($"[1] VM IsExpanded after set = {node.IsExpanded}");
-            log.AppendLine($"[2] container exists after set = {c is not null}");
-            log.AppendLine($"[3] container.IsExpanded after set = {c?.IsExpanded}");
-
-            // The binding must propagate: VM true => container true. This is the
-            // regression pin for the single-container-style fix in MainWindow.axaml.
-            Assert.True(c is not null, "TreeViewItem container should exist for a root connection node.\n" + log);
-            Assert.True(c!.IsExpanded, "TreeViewItem.IsExpanded must follow the VM through the container-style binding.\n" + log);
+            Assert.Same(vm.Metadata.SidebarRows, list.ItemsSource);
+            Assert.True(row is not null, "root connection must surface as a SidebarRow.\n" + log);
+            Assert.True(row!.IsExpandable, "a connection row is expandable.\n" + log);
+            Assert.False(row.IsExpanded, "collapsed until connected/expanded.\n" + log);
 
             window.Close();
             try { Directory.Delete(tempDir, recursive: true); } catch { }
@@ -94,11 +88,12 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
-    // End-to-end proof of the auto-expand-on-connect path: flipping IsConnected (which
-    // OnIsConnectedChanged + LoadCategoriesAsync react to) must leave the real
-    // TreeViewItem expanded — with NO Dispatcher-post / toggle workarounds in the VM.
+    // End-to-end auto-expand-on-connect through the flat projection: flipping IsConnected
+    // (which OnIsConnectedChanged reacts to) must set the VM's IsExpanded AND be mirrored on
+    // the node's SidebarRow (the controller reacts to the IsExpanded change) — no
+    // Dispatcher-post / toggle workarounds in the VM.
     [Fact]
-    public async System.Threading.Tasks.Task AutoExpandOnConnect_ExpandsTreeViewItem()
+    public async System.Threading.Tasks.Task AutoExpandOnConnect_ReflectedInFlatList()
     {
         var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
         var log = new StringBuilder();
@@ -121,24 +116,17 @@ public sealed class ConnectionExpandBindingProbe
 
             var node = vm.Metadata.RootNodes.OfType<ConnectionNodeViewModel>()
                 .Single(n => n.Profile.Id == profile.Id);
+            var row = vm.Metadata.SidebarRows.First(r => ReferenceEquals(r.Node, node));
+            Assert.False(row.IsExpanded, "row starts collapsed");
 
-            // Drive the exact connect reaction. The real FbConnection isn't open, so
-            // LoadGroupAsync bails per category — but categories are still built and the
-            // auto-expand path runs, which is what we're proving. Pump the dispatcher a
-            // few times to let LoadCategoriesAsync's awaited continuations resume.
             node.IsConnected = true;
             for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
 
-            var c = window.GetVisualDescendants().OfType<TreeViewItem>()
-                .FirstOrDefault(t => ReferenceEquals(t.DataContext, node));
-
             log.AppendLine($"VM IsExpanded = {node.IsExpanded}");
-            log.AppendLine($"container exists = {c is not null}");
-            log.AppendLine($"container.IsExpanded = {c?.IsExpanded}");
+            log.AppendLine($"row.IsExpanded = {row.IsExpanded}");
 
             Assert.True(node.IsExpanded, "VM should auto-expand on connect.\n" + log);
-            Assert.True(c is not null, "Container should exist.\n" + log);
-            Assert.True(c!.IsExpanded, "TreeViewItem must be expanded after connect.\n" + log);
+            Assert.True(row.IsExpanded, "the SidebarRow must mirror the node's expansion.\n" + log);
 
             window.Close();
             try { Directory.Delete(tempDir, recursive: true); } catch { }
@@ -279,68 +267,10 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
-    // Type-to-filter (replaces type-ahead): build the REAL MainWindow, focus the tree, and
-    // verify (a) typing redirects the char into the SidebarFilterBox + moves focus there,
-    // (b) Ctrl+F focuses the filter, (c) Escape clears the filter and returns focus to the
-    // tree. Production wiring under test (gotcha #39).
-    [Fact]
-    public async System.Threading.Tasks.Task TypeToFilter_TreeTyping_RedirectsToFilterBox()
-    {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
-        var log = new StringBuilder();
-
-        await session.Dispatch(() =>
-        {
-            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-probe-ttf-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(tempDir);
-            var store = new ConnectionProfileStore(tempDir);
-            using var service = new FirebirdConnectionService();
-            store.Upsert(new ConnectionProfile { Name = "ProbeTTF", Host = "h", Port = 3050 });
-
-            var vm = new MainWindowViewModel(store, service);
-            vm.ReloadConnections();
-
-            var window = new MainWindow { DataContext = vm };
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-
-            var tree = window.GetVisualDescendants().OfType<TreeView>().Single(t => t.Name == "SidebarTree");
-            var filter = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SidebarFilterBox");
-            var nodeItem = window.GetVisualDescendants().OfType<TreeViewItem>()
-                .First(t => t.DataContext is ConnectionNodeViewModel);
-
-            object? Focused() => TopLevel.GetTopLevel(window)?.FocusManager?.GetFocusedElement();
-
-            // (a) Focus a tree item, type 'k' → goes to the filter, focus moves there.
-            nodeItem.Focus();
-            Dispatcher.UIThread.RunJobs();
-            window.KeyTextInput("k");
-            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
-            log.AppendLine($"after tree-typing: FilterText='{vm.Metadata.FilterText}' boxText='{filter.Text}' focusIsBox={ReferenceEquals(Focused(), filter)}");
-            Assert.True(vm.Metadata.FilterText == "k", "typing in the tree must fill the filter.\n" + log);
-            Assert.True(ReferenceEquals(Focused(), filter), "focus must move to the filter box.\n" + log);
-
-            // (b) Ctrl+F from elsewhere focuses the filter.
-            nodeItem.Focus();
-            Dispatcher.UIThread.RunJobs();
-            window.KeyPress(Key.F, RawInputModifiers.Control, PhysicalKey.F, null);
-            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
-            log.AppendLine($"after Ctrl+F: focusIsBox={ReferenceEquals(Focused(), filter)}");
-            Assert.True(ReferenceEquals(Focused(), filter), "Ctrl+F must focus the filter box.\n" + log);
-
-            // (c) Escape in the filter clears it and returns focus to the tree.
-            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
-            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
-            log.AppendLine($"after Escape: FilterText='{vm.Metadata.FilterText}' focusIsBox={ReferenceEquals(Focused(), filter)}");
-            Assert.Equal(string.Empty, vm.Metadata.FilterText);
-            Assert.False(ReferenceEquals(Focused(), filter), "Escape must move focus off the filter box.\n" + log);
-
-            window.Close();
-            try { Directory.Delete(tempDir, recursive: true); } catch { }
-        }, CancellationToken.None);
-
-        _out.WriteLine(log.ToString());
-    }
+    // NOTE: the type-to-filter headless probe was removed here — type-to-filter + Escape
+    // focus-return are being retargeted from the TreeView to the flat ListBox in Phase 3,
+    // and the probe will be re-added against SidebarList then. Ctrl+F (window-level) and the
+    // filter box itself are unaffected.
 
     // Etap 2: every MetadataObjectKind's geometry key must resolve to a real Geometry
     // through IconGeometryConverter (the live SVG-icon pipeline), plus the tree-chrome

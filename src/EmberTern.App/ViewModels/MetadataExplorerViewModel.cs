@@ -16,6 +16,7 @@ public partial class MetadataExplorerViewModel : ViewModelBase
 {
     private readonly FirebirdConnectionService _connectionService;
     private readonly FirebirdMetadataReader _reader;
+    private readonly SidebarFlatController _sidebar;
 
     public MetadataExplorerViewModel(FirebirdConnectionService connectionService, FirebirdMetadataReader reader)
     {
@@ -23,6 +24,16 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         _reader = reader;
         Connections = new ObservableCollection<ConnectionNodeViewModel>();
         RootNodes = new ObservableCollection<object>();
+        // Flat projection of RootNodes for the single-VSP sidebar ListBox (replaces the
+        // nested-VSP TreeView). Created once; it tracks RootNodes.CollectionChanged so it
+        // survives ReloadConnections (which clears + refills the same instance).
+        _sidebar = new SidebarFlatController(
+            RootNodes,
+            childrenSelector: SidebarChildren,
+            isExpandable: SidebarExpandable,
+            isExpanded: SidebarExpanded,
+            setExpanded: SidebarSetExpanded,
+            isVisible: SidebarVisible);
         // Refresh is only meaningful while a database is connected. The event fires
         // on the async-continuation thread (gotcha #11), so marshal the CanExecute
         // re-evaluation onto the UI thread.
@@ -42,6 +53,53 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     // The tree's actual ItemsSource — a mix of FolderNodeViewModel and
     // root-level ConnectionNodeViewModel instances, ordered by SortOrder.
     public ObservableCollection<object> RootNodes { get; }
+
+    // The flattened, single-level projection the sidebar ListBox binds to. Same nodes,
+    // same order, only the currently-visible (expanded) rows — a stable-extent single VSP.
+    public ObservableCollection<SidebarRow> SidebarRows => _sidebar.Rows;
+
+    // Chevron click → flip the underlying node's expansion (drives the projection).
+    public void ToggleSidebarRow(SidebarRow? row) => _sidebar.Toggle(row);
+
+    // Node-access delegates for the flat controller (kept here so the node-type knowledge
+    // stays with the explorer that owns the hierarchy).
+    private static IEnumerable<object>? SidebarChildren(object node) => node switch
+    {
+        FolderNodeViewModel f => f.Connections,
+        ConnectionNodeViewModel c => c.Children,
+        MetadataNodeViewModel m when m.IsGroup => m.Children,
+        _ => null,
+    };
+
+    private static bool SidebarExpandable(object node) => node switch
+    {
+        FolderNodeViewModel => true,
+        ConnectionNodeViewModel => true,
+        MetadataNodeViewModel m => m.IsGroup,
+        _ => false,
+    };
+
+    private static bool SidebarExpanded(object node) => node switch
+    {
+        FolderNodeViewModel f => f.IsExpanded,
+        ConnectionNodeViewModel c => c.IsExpanded,
+        MetadataNodeViewModel m => m.IsExpanded,
+        _ => false,
+    };
+
+    private static void SidebarSetExpanded(object node, bool value)
+    {
+        switch (node)
+        {
+            case FolderNodeViewModel f: f.IsExpanded = value; break;
+            case ConnectionNodeViewModel c: c.IsExpanded = value; break;
+            case MetadataNodeViewModel m: m.IsExpanded = value; break;
+        }
+    }
+
+    // Only metadata nodes are hidden by the filter (zero-match categories / non-matching
+    // leaves); connections and folders are always shown.
+    private static bool SidebarVisible(object node) => node is not MetadataNodeViewModel m || m.IsVisible;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(EditSelectedCommand))]
@@ -387,6 +445,10 @@ public partial class MetadataExplorerViewModel : ViewModelBase
                 }
             }
         }
+
+        // Re-project: the filter changed category visibility / a group's leaf set, so the
+        // flat sidebar list must reflect it (hides zero-match categories, shows matches).
+        _sidebar.Rebuild();
     }
 
     // Internal so tests can drive the loaded-group path directly. For an un-expanded
