@@ -23,19 +23,28 @@ namespace EmberTern.App.Diagnostics;
 /// </summary>
 internal static class ScrollTrace
 {
+    // Default-ON for the scroll-jump investigation. The previous env-GATED attempt captured
+    // NOTHING because EMBERTERN_SCROLL_DIAG was never set in the repro session — so the whole
+    // diagnostic silently no-op'd. Now it runs unless explicitly silenced with
+    // EMBERTERN_SCROLL_DIAG=0 (or =false). Revert to opt-in once the investigation closes.
     private static readonly bool Enabled =
-        Environment.GetEnvironmentVariable("EMBERTERN_SCROLL_DIAG") is not null;
+        Environment.GetEnvironmentVariable("EMBERTERN_SCROLL_DIAG") is not "0" and not "false";
 
     public static bool IsEnabled => Enabled;
 
-    /// <summary>One scroll change: current geometry + the deltas from this change.</summary>
-    public static void Scroll(double offsetY, double extentH, double viewportH, double offsetDeltaY, double extentDeltaY)
+    /// <summary>
+    /// One scroll change: current geometry + the deltas from this change. <paramref name="realized"/>
+    /// is the number of realized TreeViewItem containers at that instant — if the extent delta
+    /// tracks realized-count changes, the extent is being re-ESTIMATED from the realized window
+    /// (Avalonia VSP behavior), which is the fingerprint of the "thumb jumps as you scroll" bug.
+    /// </summary>
+    public static void Scroll(double offsetY, double extentH, double viewportH, double offsetDeltaY, double extentDeltaY, int realized = -1)
     {
         if (!Enabled) return;
         FirebirdDiagnostics.AppendDebugLog(string.Format(
             CultureInfo.InvariantCulture,
-            "SCROLL offsetY={0:0.0} extentH={1:0.0} viewportH={2:0.0} dOffset={3:0.0} dExtent={4:0.0}{5}",
-            offsetY, extentH, viewportH, offsetDeltaY, extentDeltaY,
+            "SCROLL offsetY={0:0.0} extentH={1:0.0} viewportH={2:0.0} dOffset={3:0.0} dExtent={4:0.0} realized={5}{6}",
+            offsetY, extentH, viewportH, offsetDeltaY, extentDeltaY, realized,
             Math.Abs(extentDeltaY) > 0.5 ? "  <-- EXTENT RE-ESTIMATED DURING SCROLL" : string.Empty));
     }
 

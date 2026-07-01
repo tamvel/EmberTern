@@ -65,6 +65,16 @@ public partial class ConnectionNodeViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isExpanded;
 
+    // The shared TreeViewItem container style (MainWindow.axaml) binds IsVisible via a
+    // ReflectionBinding across ALL node types — the same reason IsExpanded lives on all
+    // three (gotcha #38). Only MetadataNodeViewModel actually toggles IsVisible (zero-match
+    // category hide); a connection row is never filter-hidden, so this is a stable true.
+    // Without it the ReflectionBinding fails on EVERY realized connection container ("no
+    // property accessor for IsVisible on ConnectionNodeViewModel"), flooding during
+    // virtualization and re-asserting container visibility mid-measure → VSP layout cycle
+    // → scroll-extent never settles → thumb fights/snaps back (gotcha #156).
+    public bool IsVisible => true;
+
     // Drag/drop visual + state markers. IsDragging follows the row that the user
     // grabbed (cursor + suppression); IsDropTarget highlights the row under the
     // pointer with the AccentMutedBrush overlay. Both are driven by code-behind

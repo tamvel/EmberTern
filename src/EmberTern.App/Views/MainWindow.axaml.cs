@@ -248,16 +248,43 @@ public partial class MainWindow : Window
     {
         if (_scrollDiagHooked) return;
         var tree = this.FindControl<TreeView>("SidebarTree");
-        var sv = tree?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+        // Prefer the TreeView template's PART_ScrollViewer by name; FirstOrDefault could grab
+        // a nested (non-scrolling) ScrollViewer. Fall back to the first descendant.
+        var descendants = tree?.GetVisualDescendants().OfType<ScrollViewer>().ToList();
+        var sv = descendants?.FirstOrDefault(s => s.Name == "PART_ScrollViewer")
+                 ?? descendants?.FirstOrDefault();
         if (sv is null) return;
         _scrollDiagHooked = true;
+
+        // Count of realized TreeViewItem containers at the moment of a scroll change — cheap
+        // (only the ~visible window is realized under virtualization). If extentH deltas track
+        // this count, the extent is being re-estimated from the realized window (VSP behavior).
+        int RealizedItems() => tree!.GetVisualDescendants().OfType<TreeViewItem>().Count();
+
         sv.ScrollChanged += (s, e) =>
         {
             if (s is not ScrollViewer v) return;
             EmberTern.App.Diagnostics.ScrollTrace.Scroll(
-                v.Offset.Y, v.Extent.Height, v.Viewport.Height, e.OffsetDelta.Y, e.ExtentDelta.Y);
+                v.Offset.Y, v.Extent.Height, v.Viewport.Height, e.OffsetDelta.Y, e.ExtentDelta.Y, RealizedItems());
         };
-        EmberTern.App.Diagnostics.ScrollTrace.Rebuild("scroll diagnostics hooked");
+
+        // The first diagnostic attempt subscribed ONLY to ScrollChanged and logged nothing
+        // during a real drag: a thumb drag whose offset never COMMITS raises no net
+        // ScrollChanged. Observe Offset/Extent directly so the churn is captured even when
+        // ScrollChanged stays silent (a changing extentH while offsetY moves = VSP extent
+        // re-estimation — the "thumb fights/snaps back" fingerprint).
+        double lastOffset = sv.Offset.Y, lastExtent = sv.Extent.Height;
+        sv.PropertyChanged += (s, e) =>
+        {
+            if (e.Property != ScrollViewer.OffsetProperty && e.Property != ScrollViewer.ExtentProperty) return;
+            if (s is not ScrollViewer v) return;
+            EmberTern.App.Diagnostics.ScrollTrace.Scroll(
+                v.Offset.Y, v.Extent.Height, v.Viewport.Height,
+                v.Offset.Y - lastOffset, v.Extent.Height - lastExtent, RealizedItems());
+            lastOffset = v.Offset.Y;
+            lastExtent = v.Extent.Height;
+        };
+        EmberTern.App.Diagnostics.ScrollTrace.Rebuild($"scroll diagnostics hooked (name={sv.Name ?? "?"})");
     }
 
     private bool AreBoundsSane(WindowBounds b)

@@ -394,6 +394,15 @@
     <Setter Property="MinHeight" Value="0" />
   </Style>
 
+  <!-- NOTE: a uniform-row-height experiment (fixed Height on the TreeViewItem header parts)
+       was tried here to stabilise the VSP extent estimate and REVERTED — telemetry disproved
+       it: the sidebar's scroll instability is not an average-height drift but a hard
+       re-realization/reset (extent collapses to == viewport with ~4 realized rows, offset
+       clamps to 0, then rebuilds). That's Avalonia's nested VirtualizingStackPanel
+       derealizing the expanded subtree on a random-access thumb drag — not fixable from a
+       style. The fix is a structural migration to TreeDataGrid (one flattened virtualized
+       row stream). See gotcha #157. -->
+
   <!-- Hover/selection colors come from the TreeViewItemBackground* resource keys
        defined in Themes/Colors.axaml. Avalonia 12 FluentTheme's TreeViewItem template
        already routes :pointerover / :selected / etc. through those DynamicResource

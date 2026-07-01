@@ -38,6 +38,12 @@ public partial class FolderNodeViewModel : ViewModelBase
         // while ReloadConnections is restoring saved state.
         => _owner?.OnNodeExpansionChanged(Id, value);
 
+    // See ConnectionNodeViewModel.IsVisible / gotcha #156: the shared TreeViewItem style
+    // ReflectionBinds IsVisible across all node types; a folder row is never filter-hidden,
+    // so a stable true keeps the binding from failing per realized container (which would
+    // churn container visibility mid-measure and feed the VSP layout cycle).
+    public bool IsVisible => true;
+
     // Drag/drop visual markers — same shape as ConnectionNodeViewModel; the
     // sidebar's pointer handlers drive them.
     [ObservableProperty]
