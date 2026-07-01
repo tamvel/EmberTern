@@ -156,19 +156,19 @@ public partial class MainWindow : Window
         _sidebarRail = this.FindControl<Border>("SidebarRail");
         _resultsSplitter = this.FindControl<GridSplitter>("ResultsSplitter");
 
-        var sidebar = this.FindControl<TreeView>("SidebarTree");
+        var sidebar = this.FindControl<ListBox>("SidebarList");
         if (sidebar is not null)
         {
-            // Tunnel PointerPressed so we see it before TreeView's own selection handling
+            // Tunnel PointerPressed so we see it before the ListBox's own selection handling
             // (otherwise selection moves before we record the drag candidate). Moved/Released
             // bubble up — defaults are fine for those.
             sidebar.AddHandler(PointerPressedEvent, OnSidebarPointerPressed, RoutingStrategies.Tunnel);
             sidebar.PointerMoved += OnSidebarPointerMoved;
             sidebar.PointerReleased += OnSidebarPointerReleased;
             sidebar.PointerCaptureLost += OnSidebarPointerCaptureLost;
-            // Type-to-filter: while the tree (or a tree item) is focused, this tunnel handler
-            // sees printable input — when the filter box is focused the event no longer routes
-            // through the tree, so the redirect only fires from the tree. Redirects the char to
+            // Type-to-filter: while the list (or a row) is focused, this tunnel handler sees
+            // printable input — once the filter box is focused the event no longer routes
+            // through the list, so the redirect only fires from the list. Redirects the char to
             // the filter box and hands off focus; subsequent keys go to the box natively.
             sidebar.AddHandler(TextInputEvent, OnSidebarTreeTextInput, RoutingStrategies.Tunnel);
         }
@@ -595,28 +595,24 @@ public partial class MainWindow : Window
 
     private void FocusSidebarTree()
     {
-        var tree = this.FindControl<TreeView>("SidebarTree");
-        if (tree is null) return;
-        // Focus a real TreeViewItem — the TreeView container itself doesn't accept keyboard
-        // focus (it delegates to items). Prefer the selected row, else the first realized row.
-        var target = tree.SelectedItem is not null ? FindTreeViewItemFor(tree, tree.SelectedItem) : null;
-        target ??= tree.GetVisualDescendants().OfType<TreeViewItem>().FirstOrDefault();
+        var list = this.FindControl<ListBox>("SidebarList");
+        if (list is null) return;
+        // Focus a realized ListBoxItem (the ListBox delegates keyboard focus to its items).
+        var target = list.GetVisualDescendants().OfType<ListBoxItem>().FirstOrDefault();
         if (target is not null) target.Focus();
-        else tree.Focus();
+        else list.Focus();
     }
 
     // ---- Sidebar drag & drop --------------------------------------------------
 
     private void OnSidebarPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is not TreeView tree) return;
-        var point = e.GetCurrentPoint(tree);
+        if (sender is not ListBox list) return;
+        var point = e.GetCurrentPoint(list);
         if (!point.Properties.IsLeftButtonPressed) return;
 
-        // Find the closest row VM under the pointer. We only initiate drags for
-        // Folder / Connection rows — clicking a category or a metadata leaf does
-        // not start a drag.
-        var vm = FindRowVmAtPointer(tree, point.Position);
+        // Only Folder / Connection rows initiate a drag; category / leaf rows don't.
+        var vm = FindRowVmAtPointer(list, point.Position);
         if (vm is not (ConnectionNodeViewModel or FolderNodeViewModel)) return;
 
         // Don't grab connections that are mid-connect/disconnect — moving them
@@ -626,16 +622,14 @@ public partial class MainWindow : Window
         _dragSource = vm;
         _dragStart = point.Position;
         _isDragging = false;
-        // Leave PointerPressed routing un-handled so the TreeView's own selection
-        // handling still runs (clicking a connection still selects it normally if
-        // the user doesn't actually drag).
+        // Leave routing un-handled so the ListBox's own selection still runs on a plain click.
     }
 
     private void OnSidebarPointerMoved(object? sender, PointerEventArgs e)
     {
         if (_dragSource is null) return;
-        if (sender is not TreeView tree) return;
-        var point = e.GetCurrentPoint(tree);
+        if (sender is not ListBox list) return;
+        var point = e.GetCurrentPoint(list);
         if (!point.Properties.IsLeftButtonPressed)
         {
             ClearDragState();
@@ -650,16 +644,16 @@ public partial class MainWindow : Window
             if (dx * dx + dy * dy < DragThreshold * DragThreshold) return;
             _isDragging = true;
             MarkSourceDragging(true);
-            e.Pointer.Capture(tree);
-            tree.Cursor = new Avalonia.Input.Cursor(StandardCursorType.DragMove);
+            e.Pointer.Capture(list);
+            list.Cursor = new Avalonia.Input.Cursor(StandardCursorType.DragMove);
         }
 
-        UpdateDropTarget(tree, pos);
+        UpdateDropTarget(list, pos);
     }
 
     private void OnSidebarPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (sender is not TreeView tree) return;
+        if (sender is not ListBox list) return;
         try
         {
             if (!_isDragging || _dragSource is null) return;
@@ -673,7 +667,7 @@ public partial class MainWindow : Window
         }
         finally
         {
-            tree.Cursor = Avalonia.Input.Cursor.Default;
+            list.Cursor = Avalonia.Input.Cursor.Default;
             e.Pointer.Capture(null);
             ClearDragState();
         }
@@ -681,14 +675,14 @@ public partial class MainWindow : Window
 
     private void OnSidebarPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
-        if (sender is TreeView tree) tree.Cursor = Avalonia.Input.Cursor.Default;
+        if (sender is ListBox list) list.Cursor = Avalonia.Input.Cursor.Default;
         ClearDragState();
     }
 
-    private void UpdateDropTarget(TreeView tree, Point pos)
+    private void UpdateDropTarget(ListBox list, Point pos)
     {
-        var hover = FindRowVmAtPointer(tree, pos);
-        var (target, position) = ResolveDropTarget(_dragSource!, hover, tree, pos);
+        var hover = FindRowVmAtPointer(list, pos);
+        var (target, position) = ResolveDropTarget(_dragSource!, hover, list, pos);
 
         if (!ReferenceEquals(target, _currentDropTarget))
         {
@@ -700,14 +694,10 @@ public partial class MainWindow : Window
     }
 
     private static (object? target, DropPosition position) ResolveDropTarget(
-        object source, object? hover, TreeView tree, Point pos)
+        object source, object? hover, ListBox list, Point pos)
     {
-        // Dropped onto empty area or outside any row: if source is a connection in
-        // a folder, treat as "move to root" by targeting a root sibling or — if no
-        // siblings exist — surface a null target and let release no-op. Spec says
-        // "drop outside any valid target → cancel" so we keep it simple: no target.
+        // Dropped onto empty area / a non-droppable row → no target (release no-ops).
         if (hover is null) return (null, DropPosition.After);
-
         if (ReferenceEquals(source, hover)) return (null, DropPosition.After);
 
         if (source is ConnectionNodeViewModel)
@@ -716,7 +706,7 @@ public partial class MainWindow : Window
             if (hover is ConnectionNodeViewModel)
             {
                 // Top half = Before, bottom half = After (relative to the row container).
-                var pos2 = PositionFromVerticalSplit(tree, hover, pos);
+                var pos2 = PositionFromVerticalSplit(list, hover, pos);
                 return (hover, pos2);
             }
             return (null, DropPosition.After);
@@ -724,12 +714,11 @@ public partial class MainWindow : Window
 
         if (source is FolderNodeViewModel)
         {
-            // Folders only live at root. Reorder relative to another folder or a
-            // root-level connection. (ExecuteDrop rejects folder-into-folder-member
-            // contexts itself, so we don't have to filter here.)
+            // Folders only live at root. Reorder relative to another folder or a root-level
+            // connection. (ExecuteDrop rejects folder-into-folder-member contexts itself.)
             if (hover is FolderNodeViewModel or ConnectionNodeViewModel)
             {
-                var pos2 = PositionFromVerticalSplit(tree, hover, pos);
+                var pos2 = PositionFromVerticalSplit(list, hover, pos);
                 return (hover, pos2);
             }
             return (null, DropPosition.After);
@@ -738,37 +727,36 @@ public partial class MainWindow : Window
         return (null, DropPosition.After);
     }
 
-    private static DropPosition PositionFromVerticalSplit(TreeView tree, object hoverVm, Point pointerPos)
+    private static DropPosition PositionFromVerticalSplit(ListBox list, object hoverVm, Point pointerPos)
     {
-        // Walk the tree's visual tree for the TreeViewItem whose DataContext == hoverVm.
-        // Use its bounds (translated to tree coords) to decide top vs bottom half.
-        var item = FindTreeViewItemFor(tree, hoverVm);
+        // Find the ListBoxItem whose SidebarRow.Node == hoverVm; top half = Before, bottom = After.
+        var item = FindListBoxItemFor(list, hoverVm);
         if (item is null) return DropPosition.After;
-        var topLeft = item.TranslatePoint(new Point(0, 0), tree);
+        var topLeft = item.TranslatePoint(new Point(0, 0), list);
         if (topLeft is null) return DropPosition.After;
         var midY = topLeft.Value.Y + item.Bounds.Height / 2.0;
         return pointerPos.Y < midY ? DropPosition.Before : DropPosition.After;
     }
 
-    private static TreeViewItem? FindTreeViewItemFor(Visual root, object dataContext)
+    private static ListBoxItem? FindListBoxItemFor(Visual root, object nodeVm)
     {
         foreach (var d in root.GetVisualDescendants())
         {
-            if (d is TreeViewItem tvi && ReferenceEquals(tvi.DataContext, dataContext))
+            if (d is ListBoxItem lbi && lbi.DataContext is SidebarRow row && ReferenceEquals(row.Node, nodeVm))
             {
-                return tvi;
+                return lbi;
             }
         }
         return null;
     }
 
-    private static object? FindRowVmAtPointer(TreeView tree, Point pos)
+    private static object? FindRowVmAtPointer(ListBox list, Point pos)
     {
-        var hit = tree.InputHitTest(pos);
+        var hit = list.InputHitTest(pos);
         if (hit is not Visual v) return null;
-        // Walk up until we find a TreeViewItem; its DataContext is the row VM.
-        var item = v.FindAncestorOfType<TreeViewItem>(includeSelf: true);
-        return item?.DataContext;
+        // Walk up to the ListBoxItem; its DataContext is the SidebarRow → the underlying node.
+        var item = v.FindAncestorOfType<ListBoxItem>(includeSelf: true);
+        return (item?.DataContext as SidebarRow)?.Node;
     }
 
     private static bool IsBusyConnection(ConnectionNodeViewModel cn)

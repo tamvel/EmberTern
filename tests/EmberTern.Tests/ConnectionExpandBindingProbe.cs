@@ -268,10 +268,68 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
-    // NOTE: the type-to-filter headless probe was removed here — type-to-filter + Escape
-    // focus-return are being retargeted from the TreeView to the flat ListBox in Phase 3,
-    // and the probe will be re-added against SidebarList then. Ctrl+F (window-level) and the
-    // filter box itself are unaffected.
+    // Type-to-filter on the flat sidebar ListBox (Phase 3 retarget): build the REAL
+    // MainWindow, focus a row, and verify (a) typing redirects the char into SidebarFilterBox
+    // + moves focus there, (b) Ctrl+F focuses the filter, (c) Escape clears the filter and
+    // moves focus off the box (back onto a list row). Production wiring under test (gotcha #39).
+    [Fact]
+    public async System.Threading.Tasks.Task TypeToFilter_ListTyping_RedirectsToFilterBox()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-probe-ttf-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var store = new ConnectionProfileStore(tempDir);
+            using var service = new FirebirdConnectionService();
+            store.Upsert(new ConnectionProfile { Name = "ProbeTTF", Host = "h", Port = 3050 });
+
+            var vm = new MainWindowViewModel(store, service);
+            vm.ReloadConnections();
+
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var list = window.GetVisualDescendants().OfType<ListBox>().Single(l => l.Name == "SidebarList");
+            var filter = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SidebarFilterBox");
+            var rowItem = window.GetVisualDescendants().OfType<ListBoxItem>()
+                .First(i => i.DataContext is SidebarRow);
+
+            object? Focused() => TopLevel.GetTopLevel(window)?.FocusManager?.GetFocusedElement();
+
+            // (a) Focus a row, type 'k' → goes to the filter, focus moves there.
+            rowItem.Focus();
+            Dispatcher.UIThread.RunJobs();
+            window.KeyTextInput("k");
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"after list-typing: FilterText='{vm.Metadata.FilterText}' boxText='{filter.Text}' focusIsBox={ReferenceEquals(Focused(), filter)}");
+            Assert.True(vm.Metadata.FilterText == "k", "typing in the list must fill the filter.\n" + log);
+            Assert.True(ReferenceEquals(Focused(), filter), "focus must move to the filter box.\n" + log);
+
+            // (b) Ctrl+F focuses the filter.
+            rowItem.Focus();
+            Dispatcher.UIThread.RunJobs();
+            window.KeyPress(Key.F, RawInputModifiers.Control, PhysicalKey.F, null);
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"after Ctrl+F: focusIsBox={ReferenceEquals(Focused(), filter)}");
+            Assert.True(ReferenceEquals(Focused(), filter), "Ctrl+F must focus the filter box.\n" + log);
+
+            // (c) Escape clears the filter and returns focus off the box.
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"after Escape: FilterText='{vm.Metadata.FilterText}' focusIsBox={ReferenceEquals(Focused(), filter)}");
+            Assert.Equal(string.Empty, vm.Metadata.FilterText);
+            Assert.False(ReferenceEquals(Focused(), filter), "Escape must move focus off the filter box.\n" + log);
+
+            window.Close();
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
 
     // Etap 2: every MetadataObjectKind's geometry key must resolve to a real Geometry
     // through IconGeometryConverter (the live SVG-icon pipeline), plus the tree-chrome
