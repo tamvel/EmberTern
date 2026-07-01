@@ -26,7 +26,8 @@ public partial class SidebarFlatControllerTests
     private static SidebarFlatController Make(ObservableCollection<object> roots) => new(
         roots,
         childrenSelector: n => ((Node)n).Kids,
-        isExpandable: n => ((Node)n).Expandable,
+        isContainer: n => ((Node)n).Expandable,          // structural
+        hasChildren: n => ((Node)n).Kids.Count > 0,      // chevron
         isExpanded: n => ((Node)n).IsExpanded,
         setExpanded: (n, v) => ((Node)n).IsExpanded = v,
         isVisible: n => ((Node)n).IsVisible);
@@ -149,6 +150,19 @@ public partial class SidebarFlatControllerTests
         c.Toggle(c.Rows[0]);
         Assert.False(a.IsExpanded);
         Assert.Equal(new[] { "A" }, Labels(c));
+    }
+
+    [Fact]
+    public void AddingFirstChild_MakesRowExpandable_AndEmptyingRemovesIt()
+    {
+        var a = N("A", expandable: true);   // a container, but no children yet
+        var roots = new ObservableCollection<object> { a };
+        using var c = Make(roots);
+        Assert.False(c.Rows[0].IsExpandable, "no chevron for an empty container");
+        a.Kids.Add(N("A1"));
+        Assert.True(c.Rows[0].IsExpandable, "chevron appears once it has a child");
+        a.Kids.Clear();
+        Assert.False(c.Rows[0].IsExpandable, "chevron disappears when empty again");
     }
 
     [Fact]

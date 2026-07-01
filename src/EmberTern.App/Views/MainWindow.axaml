@@ -317,13 +317,16 @@
                 <Setter Property="MinHeight" Value="24" />
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
               </Style>
-              <!-- Expander chevron: subtle, borderless, matches the tree chevron. -->
+              <!-- Expander chevron: subtle, borderless, generous 20px hit area (modern
+                   explorer feel) with a 12px glyph. -->
               <Style Selector="Button.sidebar-chevron">
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="Padding" Value="0" />
-                <Setter Property="Width" Value="14" />
-                <Setter Property="Height" Value="14" />
+                <Setter Property="Width" Value="20" />
+                <Setter Property="Height" Value="20" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
               </Style>
@@ -351,16 +354,16 @@
               <DataTemplate DataType="vm:SidebarRow">
                 <Grid ColumnDefinitions="Auto,Auto,*">
                   <Border Grid.Column="0" Width="{Binding IndentWidth}" />
-                  <Panel Grid.Column="1" Width="14" VerticalAlignment="Center">
+                  <Panel Grid.Column="1" Width="20" VerticalAlignment="Center">
                     <Button Classes="sidebar-chevron"
                             IsVisible="{Binding IsExpandable}"
                             Click="OnSidebarChevronClick">
                       <Panel>
                         <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}"
-                                          Width="10" Height="10"
+                                          Width="12" Height="12"
                                           IsVisible="{Binding !IsExpanded}" />
                         <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}"
-                                          Width="10" Height="10"
+                                          Width="12" Height="12"
                                           IsVisible="{Binding IsExpanded}" />
                       </Panel>
                     </Button>

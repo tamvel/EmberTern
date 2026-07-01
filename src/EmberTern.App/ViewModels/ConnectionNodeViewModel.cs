@@ -130,18 +130,18 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         }
         _categoriesBuilt = true;
 
-        // Lazy load: fetch ONLY the per-category COUNT on connect (a single
-        // SELECT COUNT(*) each) so the user sees the full breakdown immediately
-        // (Tables (2356), Views (215), …) — but DON'T pull the potentially
-        // thousands-strong leaf lists. The full list for a category loads on its
-        // first expansion (MetadataNodeViewModel.OnIsExpandedChanged → LoadGroupAsync).
-        // This replaces the old eager full-load, which created ~5–15k leaf VMs on
-        // connect for a large ERP schema and froze the UI for ~1s. Sequential because
-        // the FbConnection services one command at a time (Task.WhenAll throws).
+        // Prefetch: on connect, load the FULL object list for every category (not just the
+        // count) so expanding a category is instant — data ready up front, UI renders on
+        // demand ("lazy rendering OK, lazy loading NO"). This is safe now that the sidebar is
+        // a single-VSP flat list: only visible rows are realized, so creating the leaf VMs up
+        // front no longer freezes the UI the way the old nested-VSP TreeView did (it realized
+        // ~2k TreeViewItems per category). LoadGroupAsync marks the category loaded, so a
+        // later expand renders from memory and never re-queries. Sequential because the
+        // FbConnection services one command at a time (Task.WhenAll throws).
         var sw = System.Diagnostics.Stopwatch.StartNew();
         foreach (var cat in categories)
         {
-            await metadata.LoadCountAsync(cat).ConfigureAwait(true);
+            await metadata.LoadGroupAsync(cat).ConfigureAwait(true);
         }
         sw.Stop();
         Diagnostics.PerfTrace.LogCategoryLoad(Profile.Name, categories.Count, sw.ElapsedMilliseconds);

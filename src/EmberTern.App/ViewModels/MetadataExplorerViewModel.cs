@@ -30,7 +30,8 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         _sidebar = new SidebarFlatController(
             RootNodes,
             childrenSelector: SidebarChildren,
-            isExpandable: SidebarExpandable,
+            isContainer: SidebarIsContainer,
+            hasChildren: SidebarHasChildren,
             isExpanded: SidebarExpanded,
             setExpanded: SidebarSetExpanded,
             isVisible: SidebarVisible);
@@ -71,11 +72,23 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         _ => null,
     };
 
-    private static bool SidebarExpandable(object node) => node switch
+    // Structural: can this node host children? (drives subscription + recursion — a category
+    // is a container even while empty, so its lazy populate is observed.)
+    private static bool SidebarIsContainer(object node) => node switch
     {
         FolderNodeViewModel => true,
         ConnectionNodeViewModel => true,
         MetadataNodeViewModel m => m.IsGroup,
+        _ => false,
+    };
+
+    // Does the node currently HAVE children? (drives the chevron — no expander for an empty
+    // category, a disconnected connection, or a folder with no connections.)
+    private static bool SidebarHasChildren(object node) => node switch
+    {
+        FolderNodeViewModel f => f.Connections.Count > 0,
+        ConnectionNodeViewModel c => c.Children.Count > 0,
+        MetadataNodeViewModel m => m.IsGroup && m.Children.Any(x => !x.IsPlaceholder),
         _ => false,
     };
 

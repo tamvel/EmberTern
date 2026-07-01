@@ -16,7 +16,12 @@ public partial class SidebarRow : ObservableObject
 {
     public object Node { get; }
     public int Depth { get; }
-    public bool IsExpandable { get; }
+
+    // Whether this node has children (drives the chevron's visibility). Observable because
+    // it changes as data arrives: a category has no chevron until its objects are known, a
+    // connection has none until connected. The controller keeps it in sync.
+    [ObservableProperty]
+    private bool _isExpandable;
 
     // Mirrors Node.IsExpanded so the chevron glyph updates; the controller keeps it in sync.
     [ObservableProperty]

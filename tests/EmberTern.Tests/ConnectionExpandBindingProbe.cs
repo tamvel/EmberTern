@@ -78,7 +78,8 @@ public sealed class ConnectionExpandBindingProbe
 
             Assert.Same(vm.Metadata.SidebarRows, list.ItemsSource);
             Assert.True(row is not null, "root connection must surface as a SidebarRow.\n" + log);
-            Assert.True(row!.IsExpandable, "a connection row is expandable.\n" + log);
+            // A disconnected connection has no children → no chevron (fix #2).
+            Assert.False(row!.IsExpandable, "disconnected connection has no children → no chevron.\n" + log);
             Assert.False(row.IsExpanded, "collapsed until connected/expanded.\n" + log);
 
             window.Close();
