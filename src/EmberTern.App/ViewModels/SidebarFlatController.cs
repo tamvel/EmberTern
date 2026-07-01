@@ -80,6 +80,22 @@ public sealed class SidebarFlatController : IDisposable
         RebuildRows();
     }
 
+    /// <summary>
+    /// Suspend reactions during a bulk mutation (the filter rebuilds many groups' Children
+    /// item-by-item — without this each Add would splice, an O(n²) storm when clearing a
+    /// filter with a big category expanded). Pair with <see cref="EndUpdate"/>, which
+    /// re-projects once. Nesting-safe.
+    /// </summary>
+    public void BeginUpdate() => _suspendDepth++;
+
+    public void EndUpdate()
+    {
+        if (_suspendDepth > 0) _suspendDepth--;
+        if (_suspendDepth == 0) Rebuild();
+    }
+
+    private int _suspendDepth;
+
     // ── Projection ───────────────────────────────────────────────────────────
 
     private void RebuildRows()
@@ -110,6 +126,7 @@ public sealed class SidebarFlatController : IDisposable
 
     private void OnExpandedChanged(object node)
     {
+        if (_suspendDepth > 0) return;
         int i = IndexOfNode(node);
         if (i < 0) return; // not projected (an ancestor is collapsed)
         var row = Rows[i];
@@ -132,6 +149,7 @@ public sealed class SidebarFlatController : IDisposable
     // re-splice only when the owner is shown AND expanded.
     private void OnChildrenChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (_suspendDepth > 0) return;
         if (sender is not INotifyCollectionChanged col
             || !_watchedCollections.TryGetValue(col, out var owner))
         {
@@ -176,7 +194,11 @@ public sealed class SidebarFlatController : IDisposable
         return false;
     }
 
-    private void OnRootsChanged(object? sender, NotifyCollectionChangedEventArgs e) => Rebuild();
+    private void OnRootsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (_suspendDepth > 0) return;
+        Rebuild();
+    }
 
     private void RemoveDescendants(int i, int depth)
     {

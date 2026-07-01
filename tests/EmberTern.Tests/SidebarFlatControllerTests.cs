@@ -139,6 +139,22 @@ public partial class SidebarFlatControllerTests
     }
 
     [Fact]
+    public void BeginEndUpdate_SuppressesReactionsThenReprojectsOnce()
+    {
+        var a = N("A", expandable: true); a.IsExpanded = true;
+        var roots = new ObservableCollection<object> { a };
+        using var c = Make(roots);
+        Assert.Equal(new[] { "A" }, Labels(c));
+
+        c.BeginUpdate();
+        a.Kids.Add(N("A1"));                       // bulk mutation, like the filter does
+        a.Kids.Add(N("A2"));
+        Assert.Equal(new[] { "A" }, Labels(c));    // suspended → not reflected yet
+        c.EndUpdate();
+        Assert.Equal(new[] { "A", "A1", "A2" }, Labels(c)); // one re-projection on end
+    }
+
+    [Fact]
     public void Toggle_FlipsExpansionAndSplices()
     {
         var a = N("A", true); a.Kids.Add(N("A1"));

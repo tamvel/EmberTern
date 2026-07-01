@@ -448,20 +448,28 @@ public partial class MetadataExplorerViewModel : ViewModelBase
             }
         }
 
-        foreach (var connection in Connections)
+        // Suspend the flat projection while the filter rebuilds each group's Children
+        // item-by-item, then re-project ONCE (EndUpdate → Rebuild). Without this, clearing a
+        // filter with a big category expanded would splice per restored leaf (O(n²)). The
+        // final projection hides zero-match categories and shows the matching leaves.
+        _sidebar.BeginUpdate();
+        try
         {
-            foreach (var group in connection.Children)
+            foreach (var connection in Connections)
             {
-                if (group.IsGroup)
+                foreach (var group in connection.Children)
                 {
-                    ApplyFilterToGroup(group, hasFilter, filter);
+                    if (group.IsGroup)
+                    {
+                        ApplyFilterToGroup(group, hasFilter, filter);
+                    }
                 }
             }
         }
-
-        // Re-project: the filter changed category visibility / a group's leaf set, so the
-        // flat sidebar list must reflect it (hides zero-match categories, shows matches).
-        _sidebar.Rebuild();
+        finally
+        {
+            _sidebar.EndUpdate();
+        }
     }
 
     // Internal so tests can drive the loaded-group path directly. For an un-expanded
