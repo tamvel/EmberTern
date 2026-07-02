@@ -916,27 +916,8 @@
                       Command="{Binding FormatSqlCommand}" IsVisible="{Binding IsQueryTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
-              <!-- Table Dane: refresh + pagination -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarRefreshDataTooltip}"
-                      Command="{Binding RefreshDataPreviewCommand}" IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" Foreground="{DynamicResource InfoIconBrush}" />
-              </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToFirstPageCommand}" IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" />
-              </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToPreviousPageCommand}" IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" />
-              </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToNextPageCommand}" IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" />
-              </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToLastPageCommand}" IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" />
-              </Button>
+              <!-- Table Dane refresh + pagination live in the Dane sub-tab's own grid
+                   toolbar (unified layout across all 5 data grids), not here. -->
               <!-- View: format -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveViewDetail.FormatSqlCommand}" IsVisible="{Binding IsViewDetailTabActive}">
@@ -1271,7 +1252,9 @@
           <TabControl SelectedIndex="{Binding SelectedBottomTabIndex, Mode=TwoWay}"
                       Padding="0">
             <TabItem Classes="bottom-tab" Header="{Binding ResultsLabel}">
-              <Grid Background="{DynamicResource BackgroundBrush}" RowDefinitions="Auto,Auto,*">
+              <!-- Rows: truncated banner · pagination+filter/agg toggles · filter panel ·
+                   aggregation bar · grid(+empty hint). -->
+              <Grid Background="{DynamicResource BackgroundBrush}" RowDefinitions="Auto,Auto,Auto,Auto,*">
                 <Border Grid.Row="0"
                         Background="{DynamicResource ElevatedPanelBrush}"
                         Padding="12,6"
@@ -1315,16 +1298,39 @@
                                FontSize="11"
                                Margin="8,0,0,0"
                                VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ResultRecordInfo}"
+                               Classes="subtle"
+                               FontSize="11"
+                               Margin="12,0,0,0"
+                               VerticalAlignment="Center" />
+                    <!-- Filter + aggregation toggles (right side of the pagination bar).
+                         ToggleButtons so the "on" look tracks panel visibility, not focus. -->
+                    <ToggleButton Classes="icon" Margin="12,0,0,0"
+                            ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
+                            IsChecked="{Binding ResultFilterPanel.IsPanelOpen, Mode=TwoWay}">
+                      <Panel>
+                        <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+                        <Border Classes="filter-active-dot" IsVisible="{Binding ResultFilterPanel.IsFilterActive}" />
+                      </Panel>
+                    </ToggleButton>
+                    <ToggleButton Classes="icon"
+                            ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
+                            IsChecked="{Binding ResultAggregationBar.IsBarOpen, Mode=TwoWay}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
+                    </ToggleButton>
                   </StackPanel>
                 </Border>
-                <TextBlock Grid.Row="2"
+                <views:FilterPanelView Grid.Row="2" DataContext="{Binding ResultFilterPanel}" />
+                <views:AggregationBarView Grid.Row="3" DataContext="{Binding ResultAggregationBar}" />
+                <TextBlock Grid.Row="4"
                            Text="{Binding ResultsEmptyHint}"
                            Classes="subtle"
                            Margin="14,14,0,0"
                            IsVisible="{Binding ShowResultsEmptyHint}" />
                 <DataGrid x:Name="ResultGrid"
-                          Grid.Row="2"
+                          Grid.Row="4"
                           behaviors:GridLayoutBehavior.GridId="QueryResults"
+                          SelectionChanged="OnResultGridSelectionChanged"
                           IsReadOnly="True"
                           GridLinesVisibility="Horizontal"
                           HeadersVisibility="Column"
@@ -1347,6 +1353,14 @@
                       <Separator />
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}"
                                 Click="OnCopyAllWithHeadersClick" />
+                      <Separator />
+                      <MenuItem Header="{x:Static app:UiStrings.FilterByValue}"
+                                Click="OnResultFilterByValueClick" />
+                      <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}"
+                                Click="OnResultExcludeValueClick" />
+                      <MenuItem x:Name="ResultFilterContainsItem"
+                                Header="{x:Static app:UiStrings.FilterContainsValue}"
+                                Click="OnResultFilterContainsClick" />
                     </ContextMenu>
                   </DataGrid.ContextMenu>
                 </DataGrid>

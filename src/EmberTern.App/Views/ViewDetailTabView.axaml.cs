@@ -59,6 +59,7 @@ public partial class ViewDetailTabView : UserControl
         if (_dataPreviewGrid is not null)
         {
             _dataPreviewGrid.Sorting += OnDataPreviewSorting;
+            _dataPreviewGrid.CellPointerPressed += OnViewDataCellPointerPressed;
         }
         ApplyEditorTheme();
         ActualThemeVariantChanged += (_, _) => ApplyEditorTheme();
@@ -253,6 +254,8 @@ public partial class ViewDetailTabView : UserControl
                 {
                     Header = columnName,
                     SortMemberPath = columnName,
+                    // Tag = data column index → the filter-from-cell resolver reads it.
+                    Tag = columnIndex,
                     CustomSortComparer = new RowIndexComparer(columnIndex),
                     CanUserSort = true,
                     CellTemplate = BuildTextCellTemplate(columnIndex),
@@ -261,6 +264,43 @@ public partial class ViewDetailTabView : UserControl
         }
 
         _dataPreviewGrid.ItemsSource = result.Rows;
+    }
+
+    // ── Filter-from-cell (View Data) ──────────────────────────────────────────
+    private GridCellFilterContext? _dataCellCtx;
+
+    private void OnViewDataSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        => _currentVm?.SetDataSelectedRow(_dataPreviewGrid?.SelectedIndex ?? -1);
+
+    private void OnViewDataCellPointerPressed(object? sender, DataGridCellPointerPressedEventArgs e)
+    {
+        if (_dataPreviewGrid is null || _currentVm is null) return;
+        if (!e.PointerPressedEventArgs.GetCurrentPoint(_dataPreviewGrid).Properties.IsRightButtonPressed) return;
+        if (e.Row?.DataContext is object?[] row) _dataPreviewGrid.SelectedItem = row;
+        _dataCellCtx = GridCellFilter.Resolve(_dataPreviewGrid, e, _currentVm.DataFilterPanel.Columns);
+        if (ViewDataFilterContainsItem is not null)
+            ViewDataFilterContainsItem.IsEnabled = _dataCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);
+    }
+
+    private void OnViewDataFilterByValueClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _dataCellCtx is not { } ctx) return;
+        var (col, op, val) = GridCellFilter.FilterByValue(ctx);
+        _ = _currentVm.DataFilterPanel.ApplyFromCellAsync(col, op, val);
+    }
+
+    private void OnViewDataExcludeValueClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _dataCellCtx is not { } ctx) return;
+        var (col, op, val) = GridCellFilter.ExcludeValue(ctx);
+        _ = _currentVm.DataFilterPanel.ApplyFromCellAsync(col, op, val);
+    }
+
+    private void OnViewDataFilterContainsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _dataCellCtx is not { } ctx) return;
+        if (GridCellFilter.Contains(ctx) is not { } triple) return;
+        _ = _currentVm.DataFilterPanel.ApplyFromCellAsync(triple.ColumnIndex, triple.Op, triple.Value);
     }
 
     private static IDataTemplate BuildTextCellTemplate(int columnIndex)

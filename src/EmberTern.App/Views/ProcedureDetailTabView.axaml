@@ -4,6 +4,7 @@
              xmlns:app="using:EmberTern.App"
              xmlns:controls="using:EmberTern.App.Controls"
              xmlns:behaviors="using:EmberTern.App.Behaviors"
+             xmlns:views="using:EmberTern.App.Views"
              xmlns:conv="using:EmberTern.App.Converters"
              xmlns:ae="using:AvaloniaEdit"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -322,7 +323,8 @@
            that reuses the Table/View Data experience (First/Prev/Next/Last + hint).
            Client-side over the materialized result — never re-runs the proc. -->
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabResult}">
-        <Grid RowDefinitions="Auto,*">
+        <!-- Rows: pagination+filter/agg toggles · filter panel · aggregation bar · grid. -->
+        <Grid RowDefinitions="Auto,Auto,Auto,*">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4" Margin="8,4"
                       IsVisible="{Binding HasExecResult}">
             <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
@@ -343,14 +345,33 @@
             </Button>
             <TextBlock Text="{Binding ExecPaginationHint}" Classes="subtle" FontSize="11"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
+            <TextBlock Text="{Binding ExecRecordInfo}" Classes="subtle" FontSize="11"
+                       VerticalAlignment="Center" Margin="12,0,0,0" />
+            <ToggleButton Classes="icon" Margin="12,0,0,0"
+                    ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
+                    IsChecked="{Binding ExecFilterPanel.IsPanelOpen, Mode=TwoWay}">
+              <Panel>
+                <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+                <Border Classes="filter-active-dot" IsVisible="{Binding ExecFilterPanel.IsFilterActive}" />
+              </Panel>
+            </ToggleButton>
+            <ToggleButton Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
+                    IsChecked="{Binding ExecAggregationBar.IsBarOpen, Mode=TwoWay}">
+              <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
+            </ToggleButton>
           </StackPanel>
 
-          <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ProcedureExecEmptyHint}" Classes="subtle"
+          <views:FilterPanelView Grid.Row="1" DataContext="{Binding ExecFilterPanel}" />
+          <views:AggregationBarView Grid.Row="2" DataContext="{Binding ExecAggregationBar}" />
+
+          <TextBlock Grid.Row="3" Text="{x:Static app:UiStrings.ProcedureExecEmptyHint}" Classes="subtle"
                      FontSize="11" Margin="8,4" IsVisible="{Binding !HasExecInfo}" />
-          <TextBlock Grid.Row="1" Text="{Binding ExecError}" Classes="subtle error" FontSize="11"
+          <TextBlock Grid.Row="3" Text="{Binding ExecError}" Classes="subtle error" FontSize="11"
                      Margin="8,4" TextWrapping="Wrap" IsVisible="{Binding ShowExecError}" />
-          <DataGrid Grid.Row="1" x:Name="ProcResultGrid"
+          <DataGrid Grid.Row="3" x:Name="ProcResultGrid"
                     behaviors:GridLayoutBehavior.GridId="ProcedureDetail.Result"
+                    SelectionChanged="OnProcResultSelectionChanged"
                     IsReadOnly="True" FontSize="11"
                     GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                     CanUserSortColumns="False" CanUserResizeColumns="True"
@@ -358,7 +379,16 @@
                     HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                     VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                     Background="{DynamicResource BackgroundBrush}"
-                    IsVisible="{Binding HasExecResult}" />
+                    IsVisible="{Binding HasExecResult}">
+            <DataGrid.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Click="OnProcFilterByValueClick" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnProcExcludeValueClick" />
+                <MenuItem x:Name="ProcFilterContainsItem"
+                          Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnProcFilterContainsClick" />
+              </ContextMenu>
+            </DataGrid.ContextMenu>
+          </DataGrid>
         </Grid>
       </TabItem>
 

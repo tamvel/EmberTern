@@ -1,0 +1,87 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:app="using:EmberTern.App"
+             xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="160"
+             x:Class="EmberTern.App.Views.FilterPanelView"
+             x:DataType="vm:FilterPanelViewModel"
+             IsVisible="{Binding IsPanelOpen}">
+
+  <!-- Shared filter panel, reused by every data grid. Self-hides via IsPanelOpen;
+       the host provides a ToggleButton bound to IsPanelOpen + wires ApplyRequested. -->
+  <Border Background="{DynamicResource PanelBrush}"
+          BorderBrush="{DynamicResource BorderBrush}"
+          BorderThickness="0,1,0,1"
+          Padding="8,6">
+    <StackPanel Spacing="6">
+
+      <!-- Header: title · AND/OR · Apply / Clear -->
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Left" Classes="field-label" VerticalAlignment="Center"
+                   Text="{x:Static app:UiStrings.FilterPanelTitle}" />
+
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+          <Button Classes="flat" Command="{Binding ApplyCommand}"
+                  Content="{x:Static app:UiStrings.FilterApply}" />
+          <Button Classes="flat" Command="{Binding ClearCommand}"
+                  Content="{x:Static app:UiStrings.FilterClear}" />
+        </StackPanel>
+
+        <!-- Single CheckBox (not two grouped RadioButtons): a shared RadioButton
+             GroupName is global to the window, so multiple FilterPanelView instances
+             would fight the group manager in an infinite binding loop. Unchecked =
+             match all (AND); checked = match any (OR). -->
+        <CheckBox Margin="16,0,0,0" VerticalAlignment="Center"
+                  Content="{x:Static app:UiStrings.FilterMatchAny}"
+                  IsChecked="{Binding MatchAny, Mode=TwoWay}" />
+      </DockPanel>
+
+      <!-- Condition rows -->
+      <ItemsControl ItemsSource="{Binding Conditions}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:FilterConditionRowViewModel">
+            <Grid ColumnDefinitions="160,130,*,Auto" Margin="0,2">
+              <ComboBox Grid.Column="0" Margin="0,0,4,0" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Columns}"
+                        SelectedItem="{Binding SelectedColumn, Mode=TwoWay}" />
+              <ComboBox Grid.Column="1" Margin="0,0,4,0" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding AvailableOperators}"
+                        SelectedItem="{Binding SelectedOperator, Mode=TwoWay}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:OperatorOption">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBox Grid.Column="2" Margin="0,0,4,0"
+                       Text="{Binding Value, Mode=TwoWay}"
+                       IsVisible="{Binding ShowValueEditor}" />
+              <Button Grid.Column="3" Classes="icon" Command="{Binding RemoveCommand}"
+                      ToolTip.Tip="{x:Static app:UiStrings.FilterRemoveConditionTooltip}">
+                <controls:SvgIcon Data="{StaticResource Icon.X}" />
+              </Button>
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- Empty hint -->
+      <TextBlock IsVisible="{Binding ShowEmptyHint}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                 FontStyle="Italic"
+                 Text="{x:Static app:UiStrings.FilterEmptyHint}" />
+
+      <!-- Add condition -->
+      <Button Classes="flat" HorizontalAlignment="Left" Command="{Binding AddConditionCommand}">
+        <StackPanel Orientation="Horizontal" Spacing="4">
+          <controls:SvgIcon Data="{StaticResource Icon.Plus}" Width="14" Height="14" />
+          <TextBlock Text="{x:Static app:UiStrings.FilterAddCondition}" />
+        </StackPanel>
+      </Button>
+
+    </StackPanel>
+  </Border>
+</UserControl>

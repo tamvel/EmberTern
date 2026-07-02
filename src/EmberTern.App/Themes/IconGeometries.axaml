@@ -30,6 +30,10 @@
   <StreamGeometry x:Key="Icon.Pencil">M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497zM15 5l4 4</StreamGeometry>
   <StreamGeometry x:Key="Icon.Trash">M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6</StreamGeometry>
   <StreamGeometry x:Key="Icon.ListX">M11 12H3M16 6H3M16 18H3M19 10l-4 4M15 10l4 4</StreamGeometry>
+  <!-- Filter (Lucide funnel): data-grid filter toggle. -->
+  <StreamGeometry x:Key="Icon.Filter">M22 3H2l8 9.46V19l4 2v-8.54L22 3z</StreamGeometry>
+  <!-- Sigma (Lucide sigma): data-grid aggregation toggle. -->
+  <StreamGeometry x:Key="Icon.Sigma">M18 7V4H6l6 8-6 8h12v-3</StreamGeometry>
   <StreamGeometry x:Key="Icon.Save">M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7M7 3v4a1 1 0 0 0 1 1h7</StreamGeometry>
   <!-- X (Lucide x): generic close / dismiss — tab strip close + Close-tab toolbar.
        Window caption close keeps its own Icon.WindowClose (window-chrome domain). -->

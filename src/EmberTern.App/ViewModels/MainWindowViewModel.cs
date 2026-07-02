@@ -161,6 +161,10 @@ public partial class MainWindowViewModel : ViewModelBase
             OnPropertyChanged(nameof(HasSavedQueries));
             OnPropertyChanged(nameof(ShowQueryPanelEmptyHint));
         };
+        // Shared filter panel + aggregation bar for the SQL Results grid. Materialized
+        // path: filter/aggregate/sort/page all run client-side over CurrentResult.Rows.
+        ResultFilterPanel = new FilterPanelViewModel { ApplyRequested = ApplyResultFilterAsync };
+        ResultAggregationBar = new AggregationBarViewModel(ComputeResultAggregateAsync);
         _service.ActiveConnectionChanged += OnActiveConnectionChanged;
         _service.ActiveProfileUpdated += OnActiveProfileUpdated;
         _transactionService.TransactionStateChanged += OnTransactionStateChanged;
@@ -257,7 +261,6 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ClearActiveEditorCommand))]
     [NotifyCanExecuteChangedFor(nameof(CloseActiveTabCommand))]
     [NotifyCanExecuteChangedFor(nameof(FormatSqlCommand))]
-    [NotifyCanExecuteChangedFor(nameof(RefreshDataPreviewCommand))]
     private WorkspaceTabViewModel? _selectedWorkspaceTab;
 
     public bool IsQueryTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Query };
@@ -399,8 +402,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool ShowModeSection => ShowFieldEditTools || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive;
     // Section 2 — every editor has a primary action (Execute / Compile / Commit).
     public bool ShowMainSection => SelectedWorkspaceTab is not null;
-    // Section 4 — helpers exist for SQL editor, View, Procedure, Trigger, Function, Package, and the Dane sub-tab.
-    public bool ShowHelperSection => IsQueryTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive || IsPackageDetailTabActive || IsDataTabActive;
+    // Section 4 — helpers exist for SQL editor, View, Procedure, Trigger, Function, Package.
+    // (Dane's refresh + pagination moved into the sub-tab's own grid toolbar, so the Data
+    // tab no longer contributes a helper section — otherwise its separator would orphan.)
+    public bool ShowHelperSection => IsQueryTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive || IsPackageDetailTabActive;
 
     // A separator shows only between two non-empty adjacent sections.
     private bool HasFrom2 => ShowMainSection || ShowCollectionTools || ShowHelperSection || IsClosableTabActive;
@@ -528,6 +533,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private int? _resultSortColumn;       // null = no sort (original row order)
     private bool _resultSortDescending;
     private int _resultPage = 1;          // 1-based
+    private int _selectedResultRowInPage = -1; // selection within the current page; -1 = none
 
     // Bumped on every paging / sort change so the code-behind re-slices the
     // grid's ItemsSource (and repaints sort arrows) without a full column
@@ -558,12 +564,76 @@ public partial class MainWindowViewModel : ViewModelBase
             _sortedRows.Count)
         : string.Empty;
 
-    // New result set → drop sort + return to page 1, then recompute the view.
+    // IBExpert-style "Record N of M": absolute 1-based position of the selected
+    // row across the full (sorted) result. When nothing is selected but rows
+    // exist, falls back to "M rows". Empty when there are no rows.
+    public string ResultRecordInfo
+    {
+        get
+        {
+            int total = _sortedRows.Count;
+            if (total == 0) return string.Empty;
+            if (_selectedResultRowInPage >= 0)
+            {
+                int global = (_resultPage - 1) * ResultPageSize + _selectedResultRowInPage + 1;
+                return string.Format(CultureInfo.CurrentCulture, UiStrings.RecordPositionFormat, global, total);
+            }
+            return string.Format(CultureInfo.CurrentCulture, UiStrings.RecordCountFormat, total);
+        }
+    }
+
+    // Called by the view when the results grid selection changes.
+    public void SetResultSelectedRow(int indexInPage)
+    {
+        if (_selectedResultRowInPage == indexInPage) return;
+        _selectedResultRowInPage = indexInPage;
+        OnPropertyChanged(nameof(ResultRecordInfo));
+    }
+
+    // ── Results grid: shared filter panel + aggregation bar (client-side) ─────
+    // Materialized set → filter/aggregate run in-memory over CurrentResult.Rows.
+    public FilterPanelViewModel ResultFilterPanel { get; }
+    public AggregationBarViewModel ResultAggregationBar { get; }
+    private GridFilter _resultFilter = GridFilter.Empty;
+
+    // Filter the materialized rows in-place (identical semantics to the SQL
+    // push-down path via GridFilterEvaluator). Empty filter → all rows.
+    private List<object?[]> ApplyResultFilter(IReadOnlyList<object?[]> rows)
+    {
+        if (_resultFilter.IsEmpty || CurrentResult is null) return new List<object?[]>(rows);
+        var cols = CurrentResult.Columns;
+        var list = new List<object?[]>();
+        foreach (var r in rows)
+            if (GridFilterEvaluator.Matches(r, _resultFilter, cols)) list.Add(r);
+        return list;
+    }
+
+    // Host callback for the filter panel: re-slice from page 1 over the filtered
+    // set, then recompute the aggregation lines against the new filtered rows.
+    private Task ApplyResultFilterAsync(GridFilter filter)
+    {
+        _resultFilter = filter;
+        _resultPage = 1;
+        RebuildResultView();
+        return ResultAggregationBar.RecomputeAllAsync();
+    }
+
+    // Host callback for the aggregation bar: compute over the filtered set (all
+    // pages), not just the current page. _sortedRows already holds the filtered rows.
+    private Task<object?> ComputeResultAggregateAsync(GridColumnRef col, GridAggregate agg)
+        => Task.FromResult(GridAggregator.Compute(_sortedRows, col.Index, agg, col.ClrType));
+
+    // New result set → drop filter + sort + return to page 1, re-point the panels
+    // at the new columns, then recompute the view.
     partial void OnCurrentResultChanged(QueryResult? value)
     {
+        _resultFilter = GridFilter.Empty;
         _resultSortColumn = null;
         _resultSortDescending = false;
         _resultPage = 1;
+        var cols = GridColumnRef.From(value is { HasResultSet: true } ? value.Columns : null);
+        ResultFilterPanel.SetColumns(cols);
+        ResultAggregationBar.SetColumns(cols);
         RebuildResultView();
     }
 
@@ -581,7 +651,8 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         else
         {
-            var list = new List<object?[]>(rows);
+            // Filter first (client-side), then sort + page over the filtered set.
+            var list = ApplyResultFilter(rows);
             if (_resultSortColumn is int col)
             {
                 var comparer = new RowIndexComparer(col);
@@ -589,19 +660,31 @@ public partial class MainWindowViewModel : ViewModelBase
             }
             _sortedRows = list;
 
-            if (_resultPage > TotalResultPages) _resultPage = TotalResultPages;
-            if (_resultPage < 1) _resultPage = 1;
+            if (list.Count == 0)
+            {
+                _resultPage = 1;
+                PagedResultRows = Array.Empty<object?[]>();
+            }
+            else
+            {
+                if (_resultPage > TotalResultPages) _resultPage = TotalResultPages;
+                if (_resultPage < 1) _resultPage = 1;
 
-            int start = (_resultPage - 1) * ResultPageSize;
-            int count = Math.Min(ResultPageSize, list.Count - start);
-            PagedResultRows = count > 0 ? list.GetRange(start, count) : Array.Empty<object?[]>();
+                int start = (_resultPage - 1) * ResultPageSize;
+                int count = Math.Min(ResultPageSize, list.Count - start);
+                PagedResultRows = count > 0 ? list.GetRange(start, count) : Array.Empty<object?[]>();
+            }
         }
+
+        // Re-slicing the page drops any grid selection; reset the record pointer.
+        _selectedResultRowInPage = -1;
 
         OnPropertyChanged(nameof(PagedResultRows));
         OnPropertyChanged(nameof(HasResultPreviousPage));
         OnPropertyChanged(nameof(HasResultNextPage));
         OnPropertyChanged(nameof(ResultPage));
         OnPropertyChanged(nameof(ResultPaginationHint));
+        OnPropertyChanged(nameof(ResultRecordInfo));
         ResultFirstPageCommand.NotifyCanExecuteChanged();
         ResultPreviousPageCommand.NotifyCanExecuteChanged();
         ResultNextPageCommand.NotifyCanExecuteChanged();
@@ -4565,24 +4648,12 @@ public partial class MainWindowViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsDataTabActive));
             OnPropertyChanged(nameof(ShowDataEditTools));
             OnPropertyChanged(nameof(ShowTransactionButtons));
-            RefreshDataPreviewCommand.NotifyCanExecuteChanged();
         }
         else if (e.PropertyName == nameof(TableDetailTabViewModel.IsFieldsSubTabActive))
         {
             OnPropertyChanged(nameof(IsFieldsTabActive));
             OnPropertyChanged(nameof(ShowFieldEditTools));
             OnPropertyChanged(nameof(ShowTransactionButtons));
-        }
-    }
-
-    public bool CanRefreshDataPreview => IsDataTabActive;
-
-    [RelayCommand(CanExecute = nameof(CanRefreshDataPreview))]
-    private async Task RefreshDataPreviewAsync()
-    {
-        if (SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TableDetail, TableDetail: { } td })
-        {
-            await td.ReloadDataPreviewAsync().ConfigureAwait(true);
         }
     }
 

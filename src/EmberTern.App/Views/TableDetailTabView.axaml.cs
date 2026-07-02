@@ -435,14 +435,22 @@ public partial class TableDetailTabView : UserControl
             _dataNullColumnIndex = grid.Columns.IndexOf(e.Column);
         }
 
-        if (grid.ContextMenu?.Items.Count > 0 && grid.ContextMenu.Items[0] is MenuItem setNull)
+        if (SetNullMenuItem is not null)
         {
-            setNull.IsEnabled =
+            SetNullMenuItem.IsEnabled =
                 _currentVm is not null
                 && _dataNullRow is not null
                 && _dataNullColumnIndex >= 0
                 && _currentVm.IsColumnNullable(_dataNullColumnIndex);
         }
+
+        // Filter-from-cell: resolve the clicked cell (reorder is off here, so the
+        // Tag / IndexOf both give the data index) + enable Contains for text cells.
+        _dataCellCtx = _currentVm is not null
+            ? GridCellFilter.Resolve(grid, e, _currentVm.DataFilterPanel.Columns)
+            : null;
+        if (DataFilterContainsItem is not null)
+            DataFilterContainsItem.IsEnabled = _dataCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);
     }
 
     private void OnSetCellNullClick(object? sender, RoutedEventArgs e)
@@ -452,6 +460,33 @@ public partial class TableDetailTabView : UserControl
         // Routes through the existing UpdateCellAsync path — same change-tracking
         // and UPDATE as a manual edit; no separate save path.
         _ = _currentVm.SetCellNullAsync(_dataNullRow, _dataNullColumnIndex);
+    }
+
+    // ── Filter-from-cell (Dane) ───────────────────────────────────────────────
+    private GridCellFilterContext? _dataCellCtx;
+
+    private void OnDataSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        => _currentVm?.SetDataSelectedRow(_dataPreviewGrid?.SelectedIndex ?? -1);
+
+    private void OnDataFilterByValueClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _dataCellCtx is not { } ctx) return;
+        var (col, op, val) = GridCellFilter.FilterByValue(ctx);
+        _ = _currentVm.DataFilterPanel.ApplyFromCellAsync(col, op, val);
+    }
+
+    private void OnDataExcludeValueClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _dataCellCtx is not { } ctx) return;
+        var (col, op, val) = GridCellFilter.ExcludeValue(ctx);
+        _ = _currentVm.DataFilterPanel.ApplyFromCellAsync(col, op, val);
+    }
+
+    private void OnDataFilterContainsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _dataCellCtx is not { } ctx) return;
+        if (GridCellFilter.Contains(ctx) is not { } triple) return;
+        _ = _currentVm.DataFilterPanel.ApplyFromCellAsync(triple.ColumnIndex, triple.Op, triple.Value);
     }
 
     // Double-click on a Pola row opens the Edit Field dialog. Filters out
@@ -568,6 +603,8 @@ public partial class TableDetailTabView : UserControl
                 {
                     Header = columnName,
                     SortMemberPath = columnName,
+                    // Tag = data column index → the filter-from-cell resolver reads it.
+                    Tag = columnIndex,
                     CustomSortComparer = new RowIndexComparer(columnIndex),
                     CanUserSort = true,
                     CellTemplate = BuildCellTemplate(columnIndex, kind, field),

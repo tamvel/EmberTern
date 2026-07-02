@@ -144,6 +144,56 @@ public class ResultPagingSortTests
         Assert.False(h.Main.HasResultPreviousPage);
     }
 
+    // ── Record N of M ─────────────────────────────────────────────────────
+    [Fact]
+    public void RecordInfo_NoResult_IsEmpty()
+    {
+        using var h = new Harness();
+        h.Main.CurrentResult = null;
+        Assert.Equal(string.Empty, h.Main.ResultRecordInfo);
+    }
+
+    [Fact]
+    public void RecordInfo_RowsButNoSelection_ShowsCount()
+    {
+        using var h = new Harness();
+        h.Main.CurrentResult = Numbers(10);
+        Assert.Equal("10 rows", h.Main.ResultRecordInfo);
+    }
+
+    [Fact]
+    public void RecordInfo_SelectionOnFirstPage_IsAbsolutePosition()
+    {
+        using var h = new Harness();
+        h.Main.CurrentResult = Numbers(10);
+        h.Main.SetResultSelectedRow(3); // 0-based within page → 4th record
+        Assert.Equal("Record 4 of 10", h.Main.ResultRecordInfo);
+    }
+
+    [Fact]
+    public void RecordInfo_SelectionOnSecondPage_AddsPageOffset()
+    {
+        using var h = new Harness();
+        int size = MainWindowViewModel.ResultPageSize;
+        h.Main.CurrentResult = Numbers(size * 2);
+        h.Main.ResultNextPageCommand.Execute(null); // page 2
+        h.Main.SetResultSelectedRow(0);             // first row of page 2
+        Assert.Equal($"Record {size + 1} of {size * 2}", h.Main.ResultRecordInfo);
+    }
+
+    [Fact]
+    public void RecordInfo_PageChange_ClearsSelection()
+    {
+        using var h = new Harness();
+        int size = MainWindowViewModel.ResultPageSize;
+        h.Main.CurrentResult = Numbers(size * 2);
+        h.Main.SetResultSelectedRow(5);
+        Assert.Equal("Record 6 of " + (size * 2), h.Main.ResultRecordInfo);
+
+        h.Main.ResultNextPageCommand.Execute(null); // re-slice drops selection
+        Assert.Equal($"{size * 2} rows", h.Main.ResultRecordInfo);
+    }
+
     private static QueryResult Numbers(int count)
     {
         var rows = new object?[count][];

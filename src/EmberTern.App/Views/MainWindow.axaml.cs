@@ -147,6 +147,9 @@ public partial class MainWindow : Window
             // driving the cycle through the VM (client-side sort over the materialized set
             // via the shared RowIndexComparer).
             _resultGrid.AddHandler(PointerPressedEvent, OnResultHeaderPointerPressed, RoutingStrategies.Tunnel);
+            // Filter-from-cell: capture the right-clicked cell (gotcha #99) so the
+            // context-menu's Filter-by/Exclude/Contains act on the exact cell.
+            _resultGrid.CellPointerPressed += OnResultCellPointerPressed;
         }
 
         // Resizable-layout controls. ColumnDefinition / RowDefinition aren't Controls,
@@ -1096,6 +1099,9 @@ public partial class MainWindow : Window
                 _resultGrid.Columns.Add(new DataGridTextColumn
                 {
                     Header = result.Columns[i].Name,
+                    // Tag = data column index → the filter-from-cell resolver reads it
+                    // (robust to any column reorder).
+                    Tag = i,
                     Binding = new Binding($"[{i}]")
                     {
                         StringFormat = "{0}",
@@ -1409,6 +1415,46 @@ public partial class MainWindow : Window
         _resultGrid.SelectedItem = row.DataContext;
         // Leave e.Handled = false so the right-click also bubbles up and triggers the
         // ContextMenu.
+    }
+
+    // Feeds the "Record N of M" indicator: the grid's SelectedIndex is the row's
+    // position within the current page; the VM adds the page offset.
+    private void OnResultGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        => _currentVm?.SetResultSelectedRow(_resultGrid?.SelectedIndex ?? -1);
+
+    // ── Filter-from-cell (SQL Results) ────────────────────────────────────────
+    private GridCellFilterContext? _resultCellCtx;
+
+    private void OnResultCellPointerPressed(object? sender, DataGridCellPointerPressedEventArgs e)
+    {
+        if (_resultGrid is null || _currentVm is null) return;
+        if (!e.PointerPressedEventArgs.GetCurrentPoint(_resultGrid).Properties.IsRightButtonPressed) return;
+        // Row selection is handled by OnResultGridPointerPressed; here we only resolve
+        // the clicked cell for the filter menu + enable Contains for text cells.
+        _resultCellCtx = GridCellFilter.Resolve(_resultGrid, e, _currentVm.ResultFilterPanel.Columns);
+        if (ResultFilterContainsItem is not null)
+            ResultFilterContainsItem.IsEnabled = _resultCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);
+    }
+
+    private void OnResultFilterByValueClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _resultCellCtx is not { } ctx) return;
+        var (col, op, val) = GridCellFilter.FilterByValue(ctx);
+        _ = _currentVm.ResultFilterPanel.ApplyFromCellAsync(col, op, val);
+    }
+
+    private void OnResultExcludeValueClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _resultCellCtx is not { } ctx) return;
+        var (col, op, val) = GridCellFilter.ExcludeValue(ctx);
+        _ = _currentVm.ResultFilterPanel.ApplyFromCellAsync(col, op, val);
+    }
+
+    private void OnResultFilterContainsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _resultCellCtx is not { } ctx) return;
+        if (GridCellFilter.Contains(ctx) is not { } triple) return;
+        _ = _currentVm.ResultFilterPanel.ApplyFromCellAsync(triple.ColumnIndex, triple.Op, triple.Value);
     }
 
     private void OnCopyCellClick(object? sender, RoutedEventArgs e)
