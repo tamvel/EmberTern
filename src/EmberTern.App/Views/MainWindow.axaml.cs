@@ -18,11 +18,13 @@ using AvaloniaEdit.Highlighting;
 using EmberTern.App.Behaviors;
 using EmberTern.App.Completion;
 using EmberTern.App.Controls;
+using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
 using EmberTern.Core.Settings;
 using EmberTern.Core.Sql;
+using EmberTern.Core.Sql.Templates;
 using EmberTern.Core.Workspace;
 
 namespace EmberTern.App.Views;
@@ -46,6 +48,16 @@ public partial class MainWindow : Window
     private object? _currentDropTarget;   // VM whose IsDropTarget is currently set
     private DropPosition _currentDropPosition;
     private const double DragThreshold = 8.0;
+
+    // SQL-template Drag & Drop (metadata leaf → SQL editor). Distinct from the pointer-based
+    // folder/connection reorder above: metadata leaves aren't reorder sources, so this uses
+    // the built-in DragDrop API (cross-control, stable single-editor drop target). The flyout
+    // is built from the object KIND on drop (no metadata read); the object's metadata loads
+    // only after the user picks a template.
+    private MetadataNodeViewModel? _snippetDragCandidate;
+    private Point _snippetDragStart;
+    private PointerPressedEventArgs? _snippetDragPressArgs;
+    private bool _snippetDropAttached;
 
     // Type-to-filter: when the tree has focus and the user starts typing, focus jumps to
     // the sidebar filter box and the typed character goes there (subsequent typing is
@@ -470,6 +482,13 @@ public partial class MainWindow : Window
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
 
+            // Metadata-object drop target on the main SQL editor (once — the VM is stable here).
+            if (!_snippetDropAttached && _editor is not null)
+            {
+                SqlSnippetDropTarget.Attach(_editor, _currentVm, SnippetInsertionContext.PlainSql);
+                _snippetDropAttached = true;
+            }
+
             // Restore VM state once, the first time a VM is attached. Done here (not in
             // Opened) so QueryText is set before we push it into the editor below, and so
             // the workspace store is built from the VM's settings location (never the real
@@ -596,8 +615,20 @@ public partial class MainWindow : Window
         var point = e.GetCurrentPoint(list);
         if (!point.Properties.IsLeftButtonPressed) return;
 
-        // Only Folder / Connection rows initiate a drag; category / leaf rows don't.
         var vm = FindRowVmAtPointer(list, point.Position);
+
+        // Actionable metadata leaf with at least one applicable template → candidate for a
+        // snippet drag onto an editor (built-in DragDrop, started once we cross the threshold).
+        if (vm is MetadataNodeViewModel node && node.IsActionable && node.Object is not null
+            && _currentVm is not null && _currentVm.HasSnippetTemplates(node.Kind))
+        {
+            _snippetDragCandidate = node;
+            _snippetDragStart = point.Position;
+            _snippetDragPressArgs = e; // DoDragDropAsync needs the originating press args
+            return; // leave selection to the ListBox; don't start a reorder drag
+        }
+
+        // Only Folder / Connection rows initiate a reorder drag; category rows don't.
         if (vm is not (ConnectionNodeViewModel or FolderNodeViewModel)) return;
 
         // Don't grab connections that are mid-connect/disconnect — moving them
@@ -612,6 +643,38 @@ public partial class MainWindow : Window
 
     private void OnSidebarPointerMoved(object? sender, PointerEventArgs e)
     {
+        // Snippet drag (metadata leaf → editor). Once past the threshold, hand off to the
+        // built-in DragDrop loop, which manages its own capture/cursor.
+        if (_snippetDragCandidate is not null)
+        {
+            if (sender is not Visual v || _snippetDragPressArgs is null)
+            {
+                _snippetDragCandidate = null;
+                _snippetDragPressArgs = null;
+                return;
+            }
+            var p = e.GetCurrentPoint(v);
+            if (!p.Properties.IsLeftButtonPressed)
+            {
+                _snippetDragCandidate = null;
+                _snippetDragPressArgs = null;
+                return;
+            }
+            var sdx = p.Position.X - _snippetDragStart.X;
+            var sdy = p.Position.Y - _snippetDragStart.Y;
+            if (sdx * sdx + sdy * sdy < DragThreshold * DragThreshold) return;
+
+            var obj = _snippetDragCandidate.Object!;
+            var pressArgs = _snippetDragPressArgs;
+            _snippetDragCandidate = null;
+            _snippetDragPressArgs = null;
+
+            var data = new DataTransfer();
+            data.Add(DataTransferItem.Create(SqlSnippetDropTarget.DragFormat, obj));
+            _ = DragDrop.DoDragDropAsync(pressArgs, data, DragDropEffects.Copy);
+            return;
+        }
+
         if (_dragSource is null) return;
         if (sender is not ListBox list) return;
         var point = e.GetCurrentPoint(list);
@@ -777,7 +840,10 @@ public partial class MainWindow : Window
         _dragSource = null;
         _currentDropTarget = null;
         _isDragging = false;
+        _snippetDragCandidate = null;
+        _snippetDragPressArgs = null;
     }
+
 
     private void OnConnectionNodeDoubleTapped(object? sender, TappedEventArgs e)
     {

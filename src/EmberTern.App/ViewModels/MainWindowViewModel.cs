@@ -10,11 +10,13 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Diagnostics;
 using EmberTern.App.Security;
+using EmberTern.App.Sql;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
 using EmberTern.Core.Security;
 using EmberTern.Core.Sql;
+using EmberTern.Core.Sql.Templates;
 using EmberTern.Core.Workspace;
 using EmberTern.Firebird;
 using CoreSavedQuery = EmberTern.Core.Workspace.SavedQuery;
@@ -44,6 +46,12 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdTableDetailReader _tableDetailReader;
     private readonly FirebirdDataEditor _dataEditor;
     private readonly FirebirdDdlExecutor _ddlExecutor;
+
+    // SQL-template engine (Drag & Drop snippets). The registry answers the drop flyout
+    // by object kind with no metadata read; the builder loads a dropped object's metadata
+    // only after the user picks a template.
+    private readonly SqlTemplateRegistry _templateRegistry = SqlTemplateCatalog.CreateRegistry();
+    private SnippetContextBuilder? _snippetContextBuilder;
     private CancellationTokenSource? _executionCts;
     private TransactionState _previousTransactionState = TransactionState.Idle;
     private TransactionState _previousMetadataTransactionState = TransactionState.Idle;
@@ -118,6 +126,12 @@ public partial class MainWindowViewModel : ViewModelBase
         _securityReader = new FirebirdSecurityReader(_service, _metadataTransactionService);
         _tableDetailReader = new FirebirdTableDetailReader(_service, _metadataTransactionService, _transactionService);
         _dataEditor = new FirebirdDataEditor(_service, _transactionService);
+        // Snippet metadata loaders wired to the TableDetail reader (metadata lane).
+        _snippetContextBuilder = new SnippetContextBuilder(
+            (name, ct) => _tableDetailReader.GetFieldsAsync(name, ct),
+            (name, ct) => _tableDetailReader.GetConstraintsAsync(name, ct),
+            (name, type, ct) => _tableDetailReader.GetProcedureParametersAsync(name, type, ct),
+            async (name, ct) => await _tableDetailReader.GetFunctionSignatureAsync(name, ct).ConfigureAwait(true));
         // Krok 1: DDL/Compile executes on the MAIN (data) connection — the same
         // attachment Execute Procedure / F5 use — so a Compile of a just-executed
         // object no longer hits "object is in use" (cross-attachment self-block). It
@@ -2100,6 +2114,34 @@ public partial class MainWindowViewModel : ViewModelBase
     // PK lookups). The reader's open methods are session-scoped via
     // CommandLock so concurrent reads from the wizard + main load are safe.
     internal FirebirdTableDetailReader TableDetailReader => _tableDetailReader;
+
+    // ---- SQL templates (Drag & Drop) ---------------------------------------
+    // Instant, metadata-free menu for a dropped object's kind + the target editor's
+    // insertion context (PSQL-only templates are hidden in a plain SQL editor).
+    internal IReadOnlyList<SqlTemplateDescriptor> SnippetTemplatesFor(
+        MetadataObjectKind kind, SnippetInsertionContext insertion)
+        => _templateRegistry.DescriptorsForKind(kind, insertion);
+
+    // Drag-start gate: is this object kind draggable onto an editor at all (any context)?
+    internal bool HasSnippetTemplates(MetadataObjectKind kind)
+        => _templateRegistry.HasTemplatesForKind(kind);
+
+    // Loads the dropped object's metadata (once, via the TableDetail reader) into a
+    // SnippetContext. The drop target caches this per drop so hover-previews AND the final
+    // insert share a single metadata read. Returns null when the builder isn't wired.
+    internal async Task<SnippetContext?> BuildSnippetContextAsync(
+        MetadataObject obj,
+        SnippetInsertionContext insertion = SnippetInsertionContext.PlainSql,
+        CancellationToken ct = default)
+    {
+        if (_snippetContextBuilder is null) return null;
+        return await _snippetContextBuilder.BuildAsync(obj, insertion, ct).ConfigureAwait(true);
+    }
+
+    // Pure, synchronous generation from an already-loaded context (used for both the
+    // preview tooltip and the insertion).
+    internal SqlSnippet GenerateSnippet(SnippetContext context, string templateId)
+        => _templateRegistry.Generate(templateId, context);
 
     public bool CanCreateTable => _service.IsConnected;
 
