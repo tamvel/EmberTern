@@ -1195,4 +1195,23 @@ internal static class UiStrings
     public const string ToolbarNewUserTooltip = "New user";
     public const string ToolbarNewRoleTooltip = "New role";
     public const string ToolbarSecurityManagerTooltip = "Security Manager (users, roles, privileges)";
+
+    // Performance Analysis (Phase 1 — plan + timings)
+    public const string PerformanceTabHeader = "Performance";
+    public const string PerformanceRunProfile = "Run & profile";
+    public const string PerformanceRunProfileTooltip = "Execute the active query with profiling and analyze its plan + timings";
+    public const string PerformanceProfilingHint = "Profiling…";
+    public const string PerformanceEmptyHint = "Run a query with profiling to see its execution plan and timings.";
+    public const string PerformancePlanHeader = "Execution plan";
+    public const string PerformancePlanEmptyHint = "No execution plan was captured for this statement.";
+    public const string PerformanceFindingsHeader = "Findings";
+    public const string PerformanceFindingsPlaceholder = "The advisor (findings & index suggestions) arrives in a later phase.";
+    public const string PerformanceAccessHeader = "Table access";
+    public const string PerformanceAccessPlaceholder = "Per-table read analysis arrives in a later phase.";
+    public const string PerformanceDetailsHeader = "Details";
+    public const string PerformanceTimingLabel = "Timing";
+    public const string PerformanceCaptureLabel = "Capture";
+    public const string PerformancePlanDialectLabel = "Plan form";
+    public const string PerformanceRawPlanLabel = "Execution plan (raw)";
+    public const string PerformanceCopy = "Copy";
 }

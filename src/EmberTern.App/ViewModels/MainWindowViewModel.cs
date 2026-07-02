@@ -13,6 +13,7 @@ using EmberTern.App.Security;
 using EmberTern.App.Sql;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Performance;
 using EmberTern.Core.Query;
 using EmberTern.Core.Security;
 using EmberTern.Core.Settings;
@@ -48,6 +49,11 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdTableDetailReader _tableDetailReader;
     private readonly FirebirdDataEditor _dataEditor;
     private readonly FirebirdDdlExecutor _ddlExecutor;
+    // Performance Analysis (Phase 1): opt-in "Run & profile" on the data lane — plan +
+    // timings only. No MON$/trace/advisor yet.
+    private readonly FirebirdPlanReader _planReader;
+    private readonly PerformanceProfiler _performanceProfiler;
+    private readonly PerformanceAnalyzer _performanceAnalyzer;
 
     // SQL-template engine (Drag & Drop snippets). The registry answers the drop flyout
     // by object kind with no metadata read; the builder loads a dropped object's metadata
@@ -145,6 +151,16 @@ public partial class MainWindowViewModel : ViewModelBase
         // passed so the executor can require the data working tx to be settled first
         // (gotcha #89: one FbConnection, one transaction at a time).
         _ddlExecutor = new FirebirdDdlExecutor(_service, _transactionService);
+        // Performance profiling runs on the data lane (same attachment as F5). Plan is
+        // read best-effort; a profiled run executes under the user's manual data tx.
+        _planReader = new FirebirdPlanReader(_service, _transactionService);
+        _performanceProfiler = new PerformanceProfiler(_executor, _planReader);
+        _performanceAnalyzer = new PerformanceAnalyzer();
+        Performance = new PerformancePanelViewModel
+        {
+            ProfileCallback = ProfileActiveQueryAsync,
+            ClipboardWriteRequested = text => ClipboardWriteRequested is { } write ? write(text) : Task.CompletedTask,
+        };
         Metadata = new MetadataExplorerViewModel(_service, _metadataReader);
         Metadata.OpenDdlRequested += OnOpenDdlRequested;
         Metadata.CopyNameRequested += OnCopyNameRequested;
@@ -188,6 +204,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<WorkspaceTabViewModel> WorkspaceTabs { get; }
     public ObservableCollection<SavedQueryViewModel> SavedQueries { get; }
     public MetadataExplorerViewModel Metadata { get; }
+
+    /// <summary>Performance Analysis panel (SQL Editor bottom-panel sub-tab). Phase 1.</summary>
+    public PerformancePanelViewModel Performance { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActiveWorkspace))]
@@ -2762,6 +2781,35 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         var selected = SelectedQueryTextProvider?.Invoke();
         return string.IsNullOrWhiteSpace(selected) ? QueryText : selected!;
+    }
+
+    // Performance Analysis "Run & profile" callback (Phase 1). Returns null when there is
+    // nothing to profile (not connected / no active query); converts Firebird exceptions
+    // to a plain message so the panel VM stays free of Firebird exception types.
+    internal async Task<PerformanceReport?> ProfileActiveQueryAsync(CancellationToken cancellationToken)
+    {
+        if (!_service.IsConnected)
+        {
+            return null;
+        }
+        var sql = ResolveActiveSql();
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return null;
+        }
+        try
+        {
+            var capture = await _performanceProfiler.ProfileAsync(sql, cancellationToken).ConfigureAwait(true);
+            return _performanceAnalyzer.Analyze(capture);
+        }
+        catch (QueryExecutionException ex)
+        {
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+        catch (PerformanceCaptureException ex)
+        {
+            throw new InvalidOperationException(ex.Message, ex);
+        }
     }
 
     // Column cache for ALIAS./TABLE. autocomplete. Keyed by uppercase table
