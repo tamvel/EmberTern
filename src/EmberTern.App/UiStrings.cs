@@ -325,6 +325,49 @@ internal static class UiStrings
     // Shown when the grid has rows but none is selected. {0} = total row count.
     public const string RecordCountFormat = "{0} rows";
 
+    // ── Grid filtering + aggregation (shared across all data grids) ──
+    // Operator labels (filter condition rows).
+    public const string FilterOpEquals = "=";
+    public const string FilterOpNotEquals = "≠";
+    public const string FilterOpLessThan = "<";
+    public const string FilterOpLessOrEqual = "≤";
+    public const string FilterOpGreaterThan = ">";
+    public const string FilterOpGreaterOrEqual = "≥";
+    public const string FilterOpContains = "contains";
+    public const string FilterOpStartsWith = "starts with";
+    public const string FilterOpEndsWith = "ends with";
+    public const string FilterOpIsNull = "is null";
+    public const string FilterOpIsNotNull = "is not null";
+    // Aggregate labels.
+    public const string AggregateSum = "SUM";
+    public const string AggregateAvg = "AVG";
+    public const string AggregateCount = "COUNT";
+    public const string AggregateCountDistinct = "COUNT DISTINCT";
+    public const string AggregateMin = "MIN";
+    public const string AggregateMax = "MAX";
+    // Filter panel chrome.
+    public const string FilterToggleTooltip = "Filter";
+    public const string FilterPanelTitle = "Filter";
+    public const string FilterAddCondition = "Add condition";
+    public const string FilterApply = "Apply";
+    public const string FilterClear = "Clear";
+    public const string FilterMatchAll = "Match all (AND)";
+    public const string FilterMatchAny = "Match any (OR)";
+    public const string FilterEmptyHint = "No conditions — add one to filter the results.";
+    public const string FilterRemoveConditionTooltip = "Remove condition";
+    // Filter-from-cell context menu.
+    public const string FilterByValue = "Filter by value";
+    public const string FilterExcludeValue = "Exclude value";
+    public const string FilterContainsValue = "Filter: contains…";
+    // Aggregation bar chrome.
+    public const string AggregationToggleTooltip = "Aggregations";
+    public const string AggregationBarTitle = "Aggregations";
+    public const string AggregationAddLine = "Add aggregate";
+    public const string AggregationRemoveLineTooltip = "Remove aggregate";
+    public const string AggregationRecomputeTooltip = "Recompute";
+    public const string AggregationNullResult = "∅";
+    public const string AggregationErrorResult = "error";
+
     // Main tab names — English (the app is English-language; the earlier
     // "keep Polish" choice was reversed 2026-07-02).
     public const string TableDetailTabFields = "Fields";
