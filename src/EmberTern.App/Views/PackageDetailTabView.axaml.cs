@@ -12,8 +12,10 @@ using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.Completion;
+using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Sql;
+using EmberTern.Core.Sql.Templates;
 
 namespace EmberTern.App.Views;
 
@@ -61,6 +63,10 @@ public partial class PackageDetailTabView : UserControl
         {
             if (_headerEditor is not null) SqlEditorBehavior.Attach(_headerEditor, mainVm);
             if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm);
+
+            // Metadata-object drop → snippet flyout, into the editable package editors.
+            if (_headerEditor is not null) SqlSnippetDropTarget.Attach(_headerEditor, mainVm, SnippetInsertionContext.PsqlBody);
+            if (_bodyEditor is not null) SqlSnippetDropTarget.Attach(_bodyEditor, mainVm, SnippetInsertionContext.PsqlBody);
             _completionAttached = true;
         }
     }

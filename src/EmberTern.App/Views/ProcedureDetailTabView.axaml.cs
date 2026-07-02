@@ -17,9 +17,11 @@ using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.Completion;
+using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql;
+using EmberTern.Core.Sql.Templates;
 
 namespace EmberTern.App.Views;
 
@@ -94,6 +96,12 @@ public partial class ProcedureDetailTabView : UserControl
             if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm);
             if (_cursorEditor is not null) SqlEditorBehavior.Attach(_cursorEditor, mainVm);
             if (_subprogramEditor is not null) SqlEditorBehavior.Attach(_subprogramEditor, mainVm);
+
+            // Metadata-object drop → snippet flyout, into every editable PSQL editor.
+            if (_sqlEditor is not null) SqlSnippetDropTarget.Attach(_sqlEditor, mainVm, SnippetInsertionContext.PsqlBody);
+            if (_bodyEditor is not null) SqlSnippetDropTarget.Attach(_bodyEditor, mainVm, SnippetInsertionContext.PsqlBody);
+            if (_cursorEditor is not null) SqlSnippetDropTarget.Attach(_cursorEditor, mainVm, SnippetInsertionContext.PsqlBody);
+            if (_subprogramEditor is not null) SqlSnippetDropTarget.Attach(_subprogramEditor, mainVm, SnippetInsertionContext.PsqlBody);
             _completionAttached = true;
         }
     }

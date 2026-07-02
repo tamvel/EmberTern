@@ -14,8 +14,10 @@ using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.Completion;
+using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Query;
+using EmberTern.Core.Sql.Templates;
 
 namespace EmberTern.App.Views;
 
@@ -77,6 +79,10 @@ public partial class ViewDetailTabView : UserControl
         {
             if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm);
             if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm);
+
+            // Metadata-object drop → snippet flyout. A view editor is SELECT/DDL, not PSQL.
+            if (_sqlEditor is not null) SqlSnippetDropTarget.Attach(_sqlEditor, mainVm, SnippetInsertionContext.PlainSql);
+            if (_bodyEditor is not null) SqlSnippetDropTarget.Attach(_bodyEditor, mainVm, SnippetInsertionContext.PlainSql);
             _completionAttached = true;
         }
     }
