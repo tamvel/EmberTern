@@ -343,6 +343,10 @@ public partial class ProcedureDetailTabView : UserControl
         _resultGrid.ItemsSource = _currentVm?.PagedExecRows;
     }
 
+    // Feeds the "Record N of M" indicator (SelectedIndex is within the page).
+    private void OnProcResultSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        => _currentVm?.SetExecSelectedRow(_resultGrid?.SelectedIndex ?? -1);
+
     private static IDataTemplate BuildTextCellTemplate(int columnIndex)
         => new FuncDataTemplate<object?[]>((row, _) =>
         {

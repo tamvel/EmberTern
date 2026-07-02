@@ -319,20 +319,26 @@ internal static class UiStrings
     public const string RowsFetchedFormat = "{0} rows in {1} ms";
     // {0} = current page, {1} = total pages, {2} = total rows in the result set.
     public const string ResultsPaginationHintFormat = "Page {0} of {1} · {2} rows";
+    // Record position (IBExpert-style). {0} = 1-based absolute position of the
+    // selected row in the full (sorted) result, {1} = total row count.
+    public const string RecordPositionFormat = "Record {0} of {1}";
+    // Shown when the grid has rows but none is selected. {0} = total row count.
+    public const string RecordCountFormat = "{0} rows";
 
-    // Main tab names stay Polish — pre-existing intentional choice.
-    public const string TableDetailTabFields = "Pola";
-    public const string TableDetailTabConstraints = "Ograniczenia";
-    public const string TableDetailTabIndexes = "Indeksy";
-    public const string TableDetailTabDependencies = "Zależności";
+    // Main tab names — English (the app is English-language; the earlier
+    // "keep Polish" choice was reversed 2026-07-02).
+    public const string TableDetailTabFields = "Fields";
+    public const string TableDetailTabConstraints = "Constraints";
+    public const string TableDetailTabIndexes = "Indexes";
+    public const string TableDetailTabDependencies = "Dependencies";
     public const string TableDetailDependsOnHeader = "Depends on";
     public const string TableDetailDependedOnByHeader = "Used by";
     public const string DependencyCategoryUdfs = "UDFs";
     public const string TableDetailDependencyType = "Type";
     public const string TableDetailDependencyName = "Name";
     public const string TableDetailDependencyField = "Field";
-    public const string TableDetailTabData = "Dane";
-    public const string TableDetailTabDescription = "Opis";
+    public const string TableDetailTabData = "Data";
+    public const string TableDetailTabDescription = "Description";
     public const string TableDetailTabDdl = "DDL";
     public const string TableDetailConstraintSubTabPrimaryKey = "Primary Key";
     public const string TableDetailConstraintSubTabForeignKey = "Foreign Keys";
@@ -413,18 +419,18 @@ internal static class UiStrings
     public const string BlobEditorButtonTooltip = "Edit BLOB content";
     public const string BlobEditorOk = "OK";
 
-    public const string FolderNewTooltip = "Nowy katalog";
+    public const string FolderNewTooltip = "New folder";
     public const string FolderNewIcon = "📁";
     public const string FolderNodeIcon = "📁";
-    public const string FolderDialogTitle = "Nowy katalog";
-    public const string FolderDialogNameLabel = "Nazwa katalogu";
-    public const string FolderDialogCreate = "Utwórz";
-    public const string FolderContextRename = "Zmień nazwę";
-    public const string FolderContextDelete = "Usuń katalog";
-    public const string FolderDeleteConfirmTitle = "Usuń katalog";
-    public const string FolderDeleteConfirmFormat = "Usunąć katalog „{0}”? Połączenia z tego katalogu wrócą do korzenia drzewa.";
-    public const string FolderDeleteConfirmYes = "Usuń";
-    public const string FolderDefaultName = "Nowy katalog";
+    public const string FolderDialogTitle = "New folder";
+    public const string FolderDialogNameLabel = "Folder name";
+    public const string FolderDialogCreate = "Create";
+    public const string FolderContextRename = "Rename";
+    public const string FolderContextDelete = "Delete folder";
+    public const string FolderDeleteConfirmTitle = "Delete folder";
+    public const string FolderDeleteConfirmFormat = "Delete folder \"{0}\"? Connections in this folder will move back to the tree root.";
+    public const string FolderDeleteConfirmYes = "Delete";
+    public const string FolderDefaultName = "New folder";
 
     // Connection deletion — HIGH risk (config + per-connection saved queries +
     // workspace state all gone, irreversible). Message phrased per the user's
@@ -449,16 +455,16 @@ internal static class UiStrings
         "Discard the unsaved table '{0}'? The form has not been compiled.";
     public const string NewTableCloseConfirmYes = "Discard";
 
-    public const string ConnectionContextSort = "Sortuj węzły";
-    public const string ConnectionContextSortAscending = "Rosnąco (A→Z)";
-    public const string ConnectionContextSortDescending = "Malejąco (Z→A)";
+    public const string ConnectionContextSort = "Sort nodes";
+    public const string ConnectionContextSortAscending = "Ascending (A→Z)";
+    public const string ConnectionContextSortDescending = "Descending (Z→A)";
 
-    public const string FolderContextAddConnection = "Dodaj połączenie";
+    public const string FolderContextAddConnection = "Add connection";
 
-    public const string QueryContextRename = "Zmień nazwę";
-    public const string QueryContextDelete = "Usuń";
+    public const string QueryContextRename = "Rename";
+    public const string QueryContextDelete = "Delete";
     public const string QueryRenameIcon = "✎";
-    public const string QueryRenameTooltip = "Zmień nazwę zapytania";
+    public const string QueryRenameTooltip = "Rename query";
 
     // ─── Table structure editing (New Table + Pola edit toolbar + AddFieldDialog) ───
     // Two glyphs: ▦ matches the metadata tree's Table icon (see MetadataNodeViewModel

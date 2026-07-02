@@ -1822,19 +1822,29 @@ public sealed class FirebirdTableDetailReader
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
-        => GetDataPreviewAsync(tableName, page, pageSize, null, cancellationToken);
+        => GetDataPreviewAsync(tableName, page, pageSize, null, null, cancellationToken);
+
+    public Task<QueryResult> GetDataPreviewAsync(
+        string tableName,
+        int page,
+        int pageSize,
+        string? orderBy,
+        CancellationToken cancellationToken = default)
+        => GetDataPreviewAsync(tableName, page, pageSize, orderBy, null, cancellationToken);
 
     /// <summary>
-    /// Variant that appends an <c>ORDER BY</c> clause. The <paramref name="orderBy"/>
-    /// string is inserted verbatim after the FROM — caller is responsible for
-    /// quoting identifiers (the VM wraps column names in <c>"..."</c> per Firebird
-    /// convention to handle reserved words).
+    /// Variant that appends an <c>ORDER BY</c> clause and an optional parameterized
+    /// <c>WHERE</c> (from <see cref="FirebirdGridSqlBuilder"/>). The
+    /// <paramref name="orderBy"/> string is inserted verbatim after the FROM —
+    /// caller is responsible for quoting identifiers (the VM wraps column names in
+    /// <c>"..."</c> per Firebird convention to handle reserved words).
     /// </summary>
     public async Task<QueryResult> GetDataPreviewAsync(
         string tableName,
         int page,
         int pageSize,
         string? orderBy,
+        FirebirdGridSqlBuilder.GridSqlFilter? filter,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(tableName))
@@ -1852,7 +1862,8 @@ public sealed class FirebirdTableDetailReader
         try
         {
             await using var cmd = connection.CreateCommand();
-            cmd.CommandText = BuildDataPreviewSql(tableName, startRow, endRow, orderBy);
+            cmd.CommandText = BuildDataPreviewSql(tableName, startRow, endRow, orderBy, filter?.WhereClause);
+            AddFilterParameters(cmd, filter);
             cmd.CommandTimeout = 0;
             cmd.Transaction = DataTx;
 
@@ -1901,9 +1912,16 @@ public sealed class FirebirdTableDetailReader
     /// counted <paramref name="cap"/> rows it stops. A return value equal to
     /// <paramref name="cap"/> means "≥ cap rows"; less means exact count.
     /// </summary>
+    public Task<int> GetRowCountAsync(
+        string tableName,
+        int cap,
+        CancellationToken cancellationToken = default)
+        => GetRowCountAsync(tableName, cap, null, cancellationToken);
+
     public async Task<int> GetRowCountAsync(
         string tableName,
         int cap,
+        FirebirdGridSqlBuilder.GridSqlFilter? filter,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(tableName)) return 0;
@@ -1916,7 +1934,8 @@ public sealed class FirebirdTableDetailReader
         try
         {
             await using var cmd = connection.CreateCommand();
-            cmd.CommandText = BuildRowCountSql(tableName, cap);
+            cmd.CommandText = BuildRowCountSql(tableName, cap, filter?.WhereClause);
+            AddFilterParameters(cmd, filter);
             cmd.CommandTimeout = 0;
             cmd.Transaction = DataTx;
             var raw = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
@@ -1935,6 +1954,52 @@ public sealed class FirebirdTableDetailReader
         finally
         {
             commandLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Runs a single aggregate (<c>SUM/AVG/MIN/MAX/COUNT/COUNT DISTINCT</c>) over the
+    /// WHOLE table/view (optionally filtered) — never over the current page. Returns
+    /// the raw scalar (or null for an empty set); the VM formats it.
+    /// </summary>
+    public async Task<object?> GetAggregateAsync(
+        string tableName,
+        string columnName,
+        GridAggregate aggregate,
+        FirebirdGridSqlBuilder.GridSqlFilter? filter,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(tableName) || string.IsNullOrEmpty(columnName)) return null;
+
+        var connection = DataConnection();
+        var commandLock = DataLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = BuildAggregateSql(tableName, columnName, aggregate, filter?.WhereClause);
+            AddFilterParameters(cmd, filter);
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = DataTx;
+            var raw = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            return raw is null or DBNull ? null : raw;
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException($"Could not aggregate {columnName} on {tableName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    private static void AddFilterParameters(FbCommand cmd, FirebirdGridSqlBuilder.GridSqlFilter? filter)
+    {
+        if (filter is null) return;
+        foreach (var p in filter.Parameters)
+        {
+            cmd.Parameters.AddWithValue(p.Name, p.Value);
         }
     }
 
@@ -1980,11 +2045,15 @@ public sealed class FirebirdTableDetailReader
     // ORDER BY between FROM and ROWS, and the 1-based inclusive ROWS m TO n
     // window. Embedded as literals (not parameters) because FB 2.5 doesn't
     // bind parameters in ROWS clauses; safe with integers.
-    internal static string BuildDataPreviewSql(string tableName, int startRow, int endRow, string? orderBy)
+    internal static string BuildDataPreviewSql(string tableName, int startRow, int endRow, string? orderBy, string? where = null)
     {
         var quoted = tableName.Replace("\"", "\"\"");
         var sb = new System.Text.StringBuilder();
         sb.AppendFormat(CultureInfo.InvariantCulture, "SELECT * FROM \"{0}\"", quoted);
+        if (!string.IsNullOrWhiteSpace(where))
+        {
+            sb.Append(" WHERE ").Append(where.Trim());
+        }
         if (!string.IsNullOrWhiteSpace(orderBy))
         {
             sb.Append(" ORDER BY ").Append(orderBy.Trim());
@@ -1993,17 +2062,34 @@ public sealed class FirebirdTableDetailReader
         return sb.ToString();
     }
 
-    // SELECT COUNT(*) FROM (SELECT FIRST {cap} 1 AS X FROM "T") — bounded
-    // row counter. Without the inner FIRST {cap}, COUNT(*) on a 50M-row
+    // SELECT COUNT(*) FROM (SELECT FIRST {cap} 1 AS X FROM "T" [WHERE ...]) —
+    // bounded row counter. Without the inner FIRST {cap}, COUNT(*) on a 50M-row
     // table is a sequential scan; with it, the engine stops after cap rows.
-    internal static string BuildRowCountSql(string tableName, int cap)
+    internal static string BuildRowCountSql(string tableName, int cap, string? where = null)
     {
         var quoted = tableName.Replace("\"", "\"\"");
+        var whereSql = string.IsNullOrWhiteSpace(where) ? string.Empty : " WHERE " + where.Trim();
         return string.Format(
             CultureInfo.InvariantCulture,
-            "SELECT COUNT(*) FROM (SELECT FIRST {0} 1 AS X FROM \"{1}\") sub",
+            "SELECT COUNT(*) FROM (SELECT FIRST {0} 1 AS X FROM \"{1}\"{2}) sub",
             cap,
-            quoted);
+            quoted,
+            whereSql);
+    }
+
+    // SELECT <agg>("col") FROM "T" [WHERE ...] — aggregate over the whole
+    // (optionally filtered) set, not the current page.
+    internal static string BuildAggregateSql(string tableName, string columnName, GridAggregate aggregate, string? where = null)
+    {
+        var quoted = tableName.Replace("\"", "\"\"");
+        var expr = FirebirdGridSqlBuilder.AggregateExpression(aggregate, columnName);
+        var whereSql = string.IsNullOrWhiteSpace(where) ? string.Empty : " WHERE " + where.Trim();
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "SELECT {0} FROM \"{1}\"{2}",
+            expr,
+            quoted,
+            whereSql);
     }
 
     // Internal so tests can verify mapping from raw catalog strings without a live FB.

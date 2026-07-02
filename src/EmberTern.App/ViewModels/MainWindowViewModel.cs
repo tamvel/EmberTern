@@ -528,6 +528,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private int? _resultSortColumn;       // null = no sort (original row order)
     private bool _resultSortDescending;
     private int _resultPage = 1;          // 1-based
+    private int _selectedResultRowInPage = -1; // selection within the current page; -1 = none
 
     // Bumped on every paging / sort change so the code-behind re-slices the
     // grid's ItemsSource (and repaints sort arrows) without a full column
@@ -557,6 +558,32 @@ public partial class MainWindowViewModel : ViewModelBase
             TotalResultPages,
             _sortedRows.Count)
         : string.Empty;
+
+    // IBExpert-style "Record N of M": absolute 1-based position of the selected
+    // row across the full (sorted) result. When nothing is selected but rows
+    // exist, falls back to "M rows". Empty when there are no rows.
+    public string ResultRecordInfo
+    {
+        get
+        {
+            int total = _sortedRows.Count;
+            if (total == 0) return string.Empty;
+            if (_selectedResultRowInPage >= 0)
+            {
+                int global = (_resultPage - 1) * ResultPageSize + _selectedResultRowInPage + 1;
+                return string.Format(CultureInfo.CurrentCulture, UiStrings.RecordPositionFormat, global, total);
+            }
+            return string.Format(CultureInfo.CurrentCulture, UiStrings.RecordCountFormat, total);
+        }
+    }
+
+    // Called by the view when the results grid selection changes.
+    public void SetResultSelectedRow(int indexInPage)
+    {
+        if (_selectedResultRowInPage == indexInPage) return;
+        _selectedResultRowInPage = indexInPage;
+        OnPropertyChanged(nameof(ResultRecordInfo));
+    }
 
     // New result set → drop sort + return to page 1, then recompute the view.
     partial void OnCurrentResultChanged(QueryResult? value)
@@ -597,11 +624,15 @@ public partial class MainWindowViewModel : ViewModelBase
             PagedResultRows = count > 0 ? list.GetRange(start, count) : Array.Empty<object?[]>();
         }
 
+        // Re-slicing the page drops any grid selection; reset the record pointer.
+        _selectedResultRowInPage = -1;
+
         OnPropertyChanged(nameof(PagedResultRows));
         OnPropertyChanged(nameof(HasResultPreviousPage));
         OnPropertyChanged(nameof(HasResultNextPage));
         OnPropertyChanged(nameof(ResultPage));
         OnPropertyChanged(nameof(ResultPaginationHint));
+        OnPropertyChanged(nameof(ResultRecordInfo));
         ResultFirstPageCommand.NotifyCanExecuteChanged();
         ResultPreviousPageCommand.NotifyCanExecuteChanged();
         ResultNextPageCommand.NotifyCanExecuteChanged();

@@ -286,6 +286,10 @@ public partial class FunctionDetailTabView : UserControl
 
     // ─── Execute Result grid (read-only, dynamic columns over object?[] rows) ──
 
+    // Feeds the "Record N of M" indicator (SelectedIndex is within the page).
+    private void OnFuncExecResultSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        => _currentVm?.SetExecSelectedRow(_execResultGrid?.SelectedIndex ?? -1);
+
     private void PopulateExecResultGrid()
     {
         if (_execResultGrid is null) return;

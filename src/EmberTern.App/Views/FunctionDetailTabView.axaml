@@ -348,6 +348,8 @@
             </Button>
             <TextBlock Text="{Binding ExecPaginationHint}" Classes="subtle" FontSize="11"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
+            <TextBlock Text="{Binding ExecRecordInfo}" Classes="subtle" FontSize="11"
+                       VerticalAlignment="Center" Margin="12,0,0,0" />
           </StackPanel>
 
           <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ProcedureExecEmptyHint}" Classes="subtle"
@@ -356,6 +358,7 @@
                      Margin="8,4" TextWrapping="Wrap" IsVisible="{Binding ShowExecError}" />
           <DataGrid Grid.Row="1" x:Name="FuncExecResultGrid"
                     behaviors:GridLayoutBehavior.GridId="FunctionDetail.ExecResult"
+                    SelectionChanged="OnFuncExecResultSelectionChanged"
                     IsReadOnly="True" FontSize="11"
                     GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                     CanUserSortColumns="False" CanUserResizeColumns="True"

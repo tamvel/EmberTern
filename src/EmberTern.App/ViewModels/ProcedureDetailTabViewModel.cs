@@ -431,6 +431,7 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
     public const int ExecResultPageSize = 200;
     private List<object?[]> _execRows = new();
     private int _execPage = 1;
+    private int _selectedExecRowInPage = -1; // selection within the current page; -1 = none
 
     public IReadOnlyList<object?[]> PagedExecRows { get; private set; } = Array.Empty<object?[]>();
     private int TotalExecPages => _execRows.Count == 0 ? 1 : (_execRows.Count + ExecResultPageSize - 1) / ExecResultPageSize;
@@ -440,6 +441,30 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
     public string ExecPaginationHint => HasExecResult
         ? string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsPaginationHintFormat, _execPage, TotalExecPages, _execRows.Count)
         : string.Empty;
+
+    // IBExpert-style "Record N of M" over the full (materialized) exec result.
+    public string ExecRecordInfo
+    {
+        get
+        {
+            int total = _execRows.Count;
+            if (total == 0) return string.Empty;
+            if (_selectedExecRowInPage >= 0)
+            {
+                int global = (_execPage - 1) * ExecResultPageSize + _selectedExecRowInPage + 1;
+                return string.Format(CultureInfo.CurrentCulture, UiStrings.RecordPositionFormat, global, total);
+            }
+            return string.Format(CultureInfo.CurrentCulture, UiStrings.RecordCountFormat, total);
+        }
+    }
+
+    // Called by the view when the exec-result grid selection changes.
+    public void SetExecSelectedRow(int indexInPage)
+    {
+        if (_selectedExecRowInPage == indexInPage) return;
+        _selectedExecRowInPage = indexInPage;
+        OnPropertyChanged(nameof(ExecRecordInfo));
+    }
 
     partial void OnExecResultChanged(QueryResult? value)
     {
@@ -456,11 +481,15 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         int count = Math.Min(ExecResultPageSize, _execRows.Count - start);
         PagedExecRows = count > 0 ? _execRows.GetRange(start, count) : Array.Empty<object?[]>();
 
+        // Re-slicing the page drops any grid selection; reset the record pointer.
+        _selectedExecRowInPage = -1;
+
         OnPropertyChanged(nameof(PagedExecRows));
         OnPropertyChanged(nameof(ExecPage));
         OnPropertyChanged(nameof(HasExecPreviousPage));
         OnPropertyChanged(nameof(HasExecNextPage));
         OnPropertyChanged(nameof(ExecPaginationHint));
+        OnPropertyChanged(nameof(ExecRecordInfo));
         ExecFirstPageCommand.NotifyCanExecuteChanged();
         ExecPreviousPageCommand.NotifyCanExecuteChanged();
         ExecNextPageCommand.NotifyCanExecuteChanged();

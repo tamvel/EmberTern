@@ -1411,6 +1411,11 @@ public partial class MainWindow : Window
         // ContextMenu.
     }
 
+    // Feeds the "Record N of M" indicator: the grid's SelectedIndex is the row's
+    // position within the current page; the VM adds the page offset.
+    private void OnResultGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        => _currentVm?.SetResultSelectedRow(_resultGrid?.SelectedIndex ?? -1);
+
     private void OnCopyCellClick(object? sender, RoutedEventArgs e)
         => InvokeCopy(CopyGridMode.Cell);
 
