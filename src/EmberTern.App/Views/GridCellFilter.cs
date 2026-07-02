@@ -43,9 +43,28 @@ public static class GridCellFilter
 
         var cell = row[index];
         bool isNull = cell is null or DBNull;
-        string? value = isNull ? null : Convert.ToString(cell, CultureInfo.CurrentCulture);
+        string? value = isNull ? null : FormatCellValue(cell!);
         var category = index < columns.Count ? columns[index].Category : GridColumnCategory.Other;
         return new GridCellFilterContext(index, value, isNull, category);
+    }
+
+    // The filter value must ROUND-TRIP: the string we produce here is later parsed
+    // back (GridValueConverter.TryConvert) for the comparison / SQL parameter. For a
+    // DateTime cell, Convert.ToString uses the "G" format, which DROPS sub-second
+    // precision — a Firebird TIMESTAMP with a fraction then never equals its own
+    // truncated value, so "Filter by value" on a timestamp found 0 rows. Emit an
+    // invariant, sub-second-preserving form (fraction only when non-zero, so a
+    // whole-second timestamp stays clean and matches the grid display).
+    internal static string? FormatCellValue(object cell)
+    {
+        if (cell is DateTime dt)
+        {
+            bool hasFraction = dt.Ticks % TimeSpan.TicksPerSecond != 0;
+            return dt.ToString(
+                hasFraction ? "yyyy-MM-dd HH:mm:ss.FFFFFFF" : "yyyy-MM-dd HH:mm:ss",
+                CultureInfo.InvariantCulture);
+        }
+        return Convert.ToString(cell, CultureInfo.CurrentCulture);
     }
 
     /// <summary>"Filter by value": = value, or IS NULL for a null cell.</summary>

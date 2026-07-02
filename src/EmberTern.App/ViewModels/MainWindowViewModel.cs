@@ -261,7 +261,6 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ClearActiveEditorCommand))]
     [NotifyCanExecuteChangedFor(nameof(CloseActiveTabCommand))]
     [NotifyCanExecuteChangedFor(nameof(FormatSqlCommand))]
-    [NotifyCanExecuteChangedFor(nameof(RefreshDataPreviewCommand))]
     private WorkspaceTabViewModel? _selectedWorkspaceTab;
 
     public bool IsQueryTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Query };
@@ -403,8 +402,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool ShowModeSection => ShowFieldEditTools || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive;
     // Section 2 — every editor has a primary action (Execute / Compile / Commit).
     public bool ShowMainSection => SelectedWorkspaceTab is not null;
-    // Section 4 — helpers exist for SQL editor, View, Procedure, Trigger, Function, Package, and the Dane sub-tab.
-    public bool ShowHelperSection => IsQueryTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive || IsPackageDetailTabActive || IsDataTabActive;
+    // Section 4 — helpers exist for SQL editor, View, Procedure, Trigger, Function, Package.
+    // (Dane's refresh + pagination moved into the sub-tab's own grid toolbar, so the Data
+    // tab no longer contributes a helper section — otherwise its separator would orphan.)
+    public bool ShowHelperSection => IsQueryTabActive || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive || IsPackageDetailTabActive;
 
     // A separator shows only between two non-empty adjacent sections.
     private bool HasFrom2 => ShowMainSection || ShowCollectionTools || ShowHelperSection || IsClosableTabActive;
@@ -4647,24 +4648,12 @@ public partial class MainWindowViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsDataTabActive));
             OnPropertyChanged(nameof(ShowDataEditTools));
             OnPropertyChanged(nameof(ShowTransactionButtons));
-            RefreshDataPreviewCommand.NotifyCanExecuteChanged();
         }
         else if (e.PropertyName == nameof(TableDetailTabViewModel.IsFieldsSubTabActive))
         {
             OnPropertyChanged(nameof(IsFieldsTabActive));
             OnPropertyChanged(nameof(ShowFieldEditTools));
             OnPropertyChanged(nameof(ShowTransactionButtons));
-        }
-    }
-
-    public bool CanRefreshDataPreview => IsDataTabActive;
-
-    [RelayCommand(CanExecute = nameof(CanRefreshDataPreview))]
-    private async Task RefreshDataPreviewAsync()
-    {
-        if (SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TableDetail, TableDetail: { } td })
-        {
-            await td.ReloadDataPreviewAsync().ConfigureAwait(true);
         }
     }
 

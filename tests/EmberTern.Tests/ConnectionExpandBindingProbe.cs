@@ -369,6 +369,122 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
+    // Bug probe: the SQL Results aggregation add-row. Builds the REAL MainWindow so
+    // the ComboBox SelectedItem TwoWay bindings (SelectedMenuColumn / SelectedMenuFunction)
+    // are the production ones, then reproduces the user's sequence: a result arrives
+    // (SetColumns while the Σ bar is collapsed) → open the bar → invoke "Add aggregate".
+    // Proves which layer (VM picker state vs. binding clobber vs. compute) is broken.
+    [Fact]
+    public async System.Threading.Tasks.Task AggregationAddRow_ProducesComputedChip()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-probe-agg-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var store = new ConnectionProfileStore(tempDir);
+            using var service = new FirebirdConnectionService();
+            var vm = new MainWindowViewModel(store, service);
+
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // A result arrives → OnCurrentResultChanged → ResultAggregationBar.SetColumns
+            // (while the Σ bar is still collapsed, exactly like production).
+            var rows = new object?[5][];
+            for (int i = 0; i < 5; i++) rows[i] = new object?[] { i };
+            vm.CurrentResult = new EmberTern.Core.Query.QueryResult
+            {
+                Columns = new[] { new EmberTern.Core.Query.QueryColumn("N", typeof(int)) },
+                Rows = rows,
+            };
+            Dispatcher.UIThread.RunJobs();
+
+            var bar = vm.ResultAggregationBar;
+
+            // Open the aggregation bar (the ComboBoxes fully realize now).
+            bar.IsBarOpen = true;
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+
+            log.AppendLine($"[open] columns={bar.Columns.Count} selCol={bar.SelectedMenuColumn?.Name ?? "<null>"} " +
+                           $"menuFns={bar.MenuFunctions.Count}");
+
+            // (A) A NEW result arrives while the bar is ALREADY OPEN — SetColumns runs
+            //     against realized ComboBoxes. This is the order that can clobber the
+            //     selection (gotcha #71: SelectedItem set before ItemsSource is current).
+            var rows2 = new object?[6][];
+            for (int i = 0; i < 6; i++) rows2[i] = new object?[] { i, i * 10 };
+            vm.CurrentResult = new EmberTern.Core.Query.QueryResult
+            {
+                Columns = new[]
+                {
+                    new EmberTern.Core.Query.QueryColumn("A", typeof(int)),
+                    new EmberTern.Core.Query.QueryColumn("B", typeof(int)),
+                },
+                Rows = rows2,
+            };
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[reopen-order] selCol={bar.SelectedMenuColumn?.Name ?? "<null>"} " +
+                           $"menuFns={bar.MenuFunctions.Count}");
+
+            // (B) Simulate the user changing the column pick (like the screenshot's TEST).
+            bar.SelectedMenuColumn = bar.Columns[1];
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[col-change] selCol={bar.SelectedMenuColumn?.Name ?? "<null>"} " +
+                           $"selFn={bar.SelectedMenuFunction?.Label ?? "<null>"}");
+
+            // (C) Picking a function AUTO-ADDS the chip (no separate Add button); the
+            //     picker then resets to its placeholder.
+            bar.SelectedMenuFunction = bar.MenuFunctions.First(f => f.Aggregate == EmberTern.Core.Query.GridAggregate.Sum);
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+
+            log.AppendLine($"[after-pick] lines={bar.Lines.Count} " +
+                           $"result='{(bar.Lines.Count > 0 ? bar.Lines[0].ResultText : "<no chip>")}' " +
+                           $"selFn={bar.SelectedMenuFunction?.Label ?? "<null>"}");
+
+            Assert.True(bar.SelectedMenuColumn is not null, "column context must persist.\n" + log);
+            Assert.Single(bar.Lines);
+            Assert.False(string.IsNullOrEmpty(bar.Lines[0].ResultText), "chip result must not be empty.\n" + log);
+            Assert.Null(bar.SelectedMenuFunction);   // reset to placeholder after auto-add
+
+            window.Close();
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Proves the shared "filter active" marker style resolves + applies. A typo'd
+    // class name would silently no-op (blank at runtime, no crash) — smoke wouldn't
+    // catch it; this does. The dot's IsVisible is a plain binding to the panel VM's
+    // IsFilterActive (toggled by Apply/Clear/SetColumns — covered by the VM tests).
+    [Fact]
+    public async System.Threading.Tasks.Task FilterActiveDotStyle_Applies()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var dot = new Border { Classes = { "filter-active-dot" } };
+            var window = new Window { Content = dot };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            log.AppendLine($"dot Width={dot.Width} background={(dot.Background is null ? "<null>" : "ok")}");
+            // Width/Background come only from the shared Border.filter-active-dot style.
+            Assert.Equal(7, dot.Width);
+            Assert.NotNull(dot.Background);
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
     // Proves the SearchableComboBox templates (ControlTheme loads, PART_Shell present)
     // and open/select/clear/close don't throw headless. The visual filtering UX is
     // verified manually on the live DB (popups live in a separate PopupRoot).

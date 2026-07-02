@@ -10,54 +10,66 @@
              x:DataType="vm:AggregationBarViewModel"
              IsVisible="{Binding IsBarOpen}">
 
-  <!-- Shared aggregation bar, reused by every data grid. Self-hides via IsBarOpen;
-       each line computes through the host-supplied delegate (client-side or SQL). -->
+  <!-- Shared aggregation bar, reused by every data grid. Self-hides via IsBarOpen.
+       Add-row (column + type-aware function + "＋ Add") produces chips that wrap
+       below; several aggregates coexist. Each chip computes through the
+       host-supplied delegate (client-side or SQL) and refreshes on filter change. -->
   <Border Background="{DynamicResource PanelBrush}"
           BorderBrush="{DynamicResource BorderBrush}"
           BorderThickness="0,1,0,1"
           Padding="8,6">
     <StackPanel Spacing="6">
 
-      <!-- Header: title · Add aggregate -->
-      <DockPanel>
-        <TextBlock DockPanel.Dock="Left" Classes="field-label" VerticalAlignment="Center"
+      <!-- Add-row: title · column · function. Picking a function auto-creates a chip
+           (no separate Add button); the function picker then resets to its placeholder. -->
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <TextBlock Classes="field-label" VerticalAlignment="Center"
+                   Margin="0,0,8,0"
                    Text="{x:Static app:UiStrings.AggregationBarTitle}" />
-        <Button DockPanel.Dock="Right" Classes="flat" HorizontalAlignment="Right"
-                Command="{Binding AddLineCommand}">
-          <StackPanel Orientation="Horizontal" Spacing="4">
-            <controls:SvgIcon Data="{StaticResource Icon.Plus}" Width="14" Height="14" />
-            <TextBlock Text="{x:Static app:UiStrings.AggregationAddLine}" />
-          </StackPanel>
-        </Button>
-      </DockPanel>
+        <ComboBox Width="150" VerticalAlignment="Center"
+                  IsEnabled="{Binding HasColumns}"
+                  ItemsSource="{Binding Columns}"
+                  SelectedItem="{Binding SelectedMenuColumn, Mode=TwoWay}" />
+        <ComboBox Width="170" VerticalAlignment="Center"
+                  IsEnabled="{Binding HasColumns}"
+                  PlaceholderText="{x:Static app:UiStrings.AggregationFunctionPlaceholder}"
+                  ItemsSource="{Binding MenuFunctions}"
+                  SelectedItem="{Binding SelectedMenuFunction, Mode=TwoWay}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:AggregateOption">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </StackPanel>
 
-      <!-- Aggregate lines -->
+      <!-- Aggregate chips (wrap onto multiple lines) -->
       <ItemsControl ItemsSource="{Binding Lines}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel Orientation="Horizontal" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:AggregationLineViewModel">
-            <Grid ColumnDefinitions="160,140,Auto,*,Auto" Margin="0,2">
-              <ComboBox Grid.Column="0" Margin="0,0,4,0" HorizontalAlignment="Stretch"
-                        ItemsSource="{Binding Columns}"
-                        SelectedItem="{Binding SelectedColumn, Mode=TwoWay}" />
-              <ComboBox Grid.Column="1" Margin="0,0,4,0" HorizontalAlignment="Stretch"
-                        ItemsSource="{Binding AvailableFunctions}"
-                        SelectedItem="{Binding SelectedFunction, Mode=TwoWay}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:AggregateOption">
-                    <TextBlock Text="{Binding Label}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <TextBlock Grid.Column="2" Text="=" VerticalAlignment="Center"
-                         Margin="4,0" Foreground="{DynamicResource SubtleForegroundBrush}" />
-              <TextBlock Grid.Column="3" VerticalAlignment="Center"
-                         FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
-                         Text="{Binding ResultText}" />
-              <Button Grid.Column="4" Classes="icon" Command="{Binding RemoveCommand}"
-                      ToolTip.Tip="{x:Static app:UiStrings.AggregationRemoveLineTooltip}">
-                <controls:SvgIcon Data="{StaticResource Icon.X}" />
-              </Button>
-            </Grid>
+            <Border CornerRadius="4" Padding="8,2" Margin="0,0,6,6"
+                    Background="{DynamicResource ElevatedPanelBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1">
+              <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Label}" VerticalAlignment="Center"
+                           Foreground="{DynamicResource SubtleForegroundBrush}" />
+                <TextBlock Text="=" VerticalAlignment="Center"
+                           Foreground="{DynamicResource SubtleForegroundBrush}" />
+                <TextBlock Text="{Binding ResultText}" VerticalAlignment="Center"
+                           FontWeight="SemiBold" />
+                <Button Classes="icon" Padding="2" VerticalAlignment="Center"
+                        Command="{Binding RemoveCommand}"
+                        ToolTip.Tip="{x:Static app:UiStrings.AggregationRemoveLineTooltip}">
+                  <controls:SvgIcon Data="{StaticResource Icon.X}" Width="10" Height="10" />
+                </Button>
+              </StackPanel>
+            </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>

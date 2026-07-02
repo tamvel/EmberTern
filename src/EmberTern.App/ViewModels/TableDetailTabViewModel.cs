@@ -1595,6 +1595,12 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
     // GoToLastPage probes COUNT(*) via the reader's bounded row-count query
     // before navigating; the others are pure CurrentPage assignment + reload.
 
+    // Re-fetch the current data page. Lives on the tab VM (not the window) so the
+    // Refresh button sits in the Dane sub-tab's own grid toolbar, alongside the
+    // pagination + filter/aggregation controls (unified layout across all grids).
+    [RelayCommand]
+    private Task RefreshDataPreview() => ReloadDataPreviewAsync();
+
     public bool CanGoToFirstPage => HasPreviousPage;
     public bool CanGoToPreviousPage => HasPreviousPage;
     public bool CanGoToNextPage => HasNextPage;

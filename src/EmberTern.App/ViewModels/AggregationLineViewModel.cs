@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -9,10 +8,12 @@ using EmberTern.Core.Query;
 namespace EmberTern.App.ViewModels;
 
 /// <summary>
-/// One aggregation line: column + function → result. The function menu follows
-/// the column's type category; the actual computation is delegated to the host
-/// (client-side <see cref="GridAggregator"/> over the filtered rows, or a
-/// server-side <c>SELECT agg(...)</c>) so the line stays data-agnostic.
+/// One aggregation chip: a fixed (column · function) pairing plus its computed
+/// result. The column + function are chosen once when the chip is added (via the
+/// bar's add-row) and never edited inline — the chip is a compact read-only pill
+/// with an ✕ to remove it. The computation is delegated to the host (client-side
+/// <see cref="GridAggregator"/> over the filtered rows, or a server-side
+/// <c>SELECT agg(...)</c>) so the chip stays data-agnostic.
 /// </summary>
 public partial class AggregationLineViewModel : ObservableObject
 {
@@ -20,28 +21,22 @@ public partial class AggregationLineViewModel : ObservableObject
     private readonly Action<AggregationLineViewModel> _remove;
 
     public AggregationLineViewModel(
-        IReadOnlyList<GridColumnRef> columns,
+        GridColumnRef column,
+        AggregateOption function,
         Func<GridColumnRef, GridAggregate, Task<object?>> compute,
         Action<AggregationLineViewModel> remove)
     {
-        Columns = columns;
+        Column = column;
+        Function = function;
         _compute = compute;
         _remove = remove;
-        _selectedColumn = columns.Count > 0 ? columns[0] : null;
-        _availableFunctions = BuildFunctions(_selectedColumn);
-        _selectedFunction = _availableFunctions.Count > 0 ? _availableFunctions[0] : null;
     }
 
-    public IReadOnlyList<GridColumnRef> Columns { get; }
+    public GridColumnRef Column { get; }
+    public AggregateOption Function { get; }
 
-    [ObservableProperty]
-    private GridColumnRef? _selectedColumn;
-
-    [ObservableProperty]
-    private IReadOnlyList<AggregateOption> _availableFunctions;
-
-    [ObservableProperty]
-    private AggregateOption? _selectedFunction;
+    /// <summary>The chip caption before the "= result", e.g. "KWOTA · SUM".</summary>
+    public string Label => $"{Column.Name} · {Function.Label}";
 
     [ObservableProperty]
     private string _resultText = string.Empty;
@@ -49,33 +44,14 @@ public partial class AggregationLineViewModel : ObservableObject
     [ObservableProperty]
     private bool _isComputing;
 
-    partial void OnSelectedColumnChanged(GridColumnRef? value)
-    {
-        // Rebuild the function menu for the new column type. Re-selecting the
-        // function (a new AggregateOption instance) fires OnSelectedFunctionChanged,
-        // which recomputes — so the result never goes stale after a column change.
-        var current = SelectedFunction?.Aggregate;
-        AvailableFunctions = BuildFunctions(value);
-        SelectedFunction = PickFunction(AvailableFunctions, current);
-    }
-
-    // Auto-recompute when the function changes so the line's result stays live
-    // without a manual "apply" — identical UX to the filter panel.
-    partial void OnSelectedFunctionChanged(AggregateOption? value)
-    {
-        ResultText = string.Empty;
-        ComputeCommand.Execute(null);
-    }
-
-    /// <summary>Recompute this line against the host's current (filtered) data.</summary>
+    /// <summary>Recompute this chip against the host's current (filtered) data.</summary>
     [RelayCommand]
     public async Task ComputeAsync()
     {
-        if (SelectedColumn is null || SelectedFunction is null) return;
         IsComputing = true;
         try
         {
-            var value = await _compute(SelectedColumn, SelectedFunction.Aggregate).ConfigureAwait(true);
+            var value = await _compute(Column, Function.Aggregate).ConfigureAwait(true);
             ResultText = Format(value);
         }
         catch (Exception)
@@ -98,18 +74,4 @@ public partial class AggregationLineViewModel : ObservableObject
         IFormattable f => f.ToString(null, CultureInfo.CurrentCulture),
         _ => value.ToString() ?? UiStrings.AggregationNullResult,
     };
-
-    private static IReadOnlyList<AggregateOption> BuildFunctions(GridColumnRef? column)
-        => GridFilterCatalog.AggregateOptionsFor(column?.Category ?? GridColumnCategory.Other);
-
-    private static AggregateOption? PickFunction(IReadOnlyList<AggregateOption> options, GridAggregate? desired)
-    {
-        if (options.Count == 0) return null;
-        if (desired is { } d)
-        {
-            foreach (var o in options)
-                if (o.Aggregate == d) return o;
-        }
-        return options[0];
-    }
 }

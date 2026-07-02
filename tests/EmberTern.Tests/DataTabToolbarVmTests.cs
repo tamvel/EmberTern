@@ -176,16 +176,13 @@ public class DataTabToolbarVmTests
     }
 
     [Fact]
-    public async Task RefreshDataPreviewCommand_NoTableDetailTabActive_IsNoOp()
+    public async Task RefreshDataPreviewCommand_OnTableDetail_NoReader_IsNoOp()
     {
-        using var harness = new Harness();
-        harness.Main.ApplyActiveConnectionChange("A");
-        // No live reader / Firebird → simply ensure CanExecute is false on a
-        // Query tab and Execute is a no-op.
-        Assert.False(harness.Main.CanRefreshDataPreview);
-        Assert.False(harness.Main.RefreshDataPreviewCommand.CanExecute(null));
-        // Awaiting still has to complete without throwing.
-        await harness.Main.RefreshDataPreviewCommand.ExecuteAsync(null);
+        // Refresh now lives on the tab VM (in the Dane sub-tab's own grid toolbar),
+        // not the main window. Without a live reader it completes without throwing.
+        var td = new TableDetailTabViewModel("T");
+        Assert.True(td.RefreshDataPreviewCommand.CanExecute(null));
+        await td.RefreshDataPreviewCommand.ExecuteAsync(null);
     }
 
     private sealed class Harness : IDisposable

@@ -94,9 +94,6 @@ public partial class FilterPanelViewModel : ObservableObject
         if (ApplyRequested is { } apply) await apply(GridFilter.Empty).ConfigureAwait(true);
     }
 
-    [RelayCommand]
-    private void Toggle() => IsPanelOpen = !IsPanelOpen;
-
     /// <summary>Assembles the current rows into an immutable filter (skips
     /// incomplete rows).</summary>
     public GridFilter BuildFilter()

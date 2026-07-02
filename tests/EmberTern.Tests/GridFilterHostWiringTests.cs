@@ -60,10 +60,9 @@ public class GridFilterHostWiringTests
         AddCondition(h.Main.ResultFilterPanel, 0, GridFilterOperator.GreaterOrEqual, "2");
         await h.Main.ResultFilterPanel.ApplyCommand.ExecuteAsync(null);
 
-        await h.Main.ResultAggregationBar.AddLineCommand.ExecuteAsync(null);
-        var line = h.Main.ResultAggregationBar.Lines[0];
-        line.SelectedFunction = line.AvailableFunctions.First(f => f.Aggregate == GridAggregate.Sum);
-        // Auto-recompute on function change; 2+3+4 over the filtered set.
+        var bar = h.Main.ResultAggregationBar;
+        var line = bar.AddAggregate(bar.Columns[0], GridAggregate.Sum);
+        // Computed on add over the filtered set: 2+3+4.
         Assert.Equal("9", line.ResultText);
     }
 
@@ -95,9 +94,8 @@ public class GridFilterHostWiringTests
         Assert.Equal(3, vm.PagedExecRows.Count); // 0,1,2
         Assert.Equal("3 rows", vm.ExecRecordInfo);
 
-        await vm.ExecAggregationBar.AddLineCommand.ExecuteAsync(null);
-        var line = vm.ExecAggregationBar.Lines[0];
-        line.SelectedFunction = line.AvailableFunctions.First(f => f.Aggregate == GridAggregate.Sum);
+        var bar = vm.ExecAggregationBar;
+        var line = bar.AddAggregate(bar.Columns[0], GridAggregate.Sum);
         Assert.Equal("3", line.ResultText); // 0+1+2
     }
 

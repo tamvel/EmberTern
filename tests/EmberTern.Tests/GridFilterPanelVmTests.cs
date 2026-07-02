@@ -177,9 +177,9 @@ public class GridFilterPanelVmTests
         Assert.False(p.IsFilterActive);
     }
 
-    // ── Aggregation bar ───────────────────────────────────────────────────
+    // ── Aggregation bar (column-first chips) ──────────────────────────────
     [Fact]
-    public async Task AggregationBar_AddLine_ComputesViaCallback()
+    public void AggregationBar_AddAggregate_ComputesViaCallback()
     {
         var calls = new List<(GridColumnRef Col, GridAggregate Agg)>();
         var bar = new AggregationBarViewModel((col, agg) =>
@@ -188,38 +188,71 @@ public class GridFilterPanelVmTests
             return Task.FromResult<object?>(1234L);
         });
         bar.SetColumns(Cols);
-        Assert.True(bar.AddLineCommand.CanExecute(null));
 
-        await bar.AddLineCommand.ExecuteAsync(null);
+        // Adding a chip computes it immediately (synchronous callback).
+        var line = bar.AddAggregate(Amount, GridAggregate.Sum);
 
-        var line = Assert.Single(bar.Lines);
+        Assert.Same(line, Assert.Single(bar.Lines));
         Assert.Equal("1234", line.ResultText);
+        Assert.Equal("AMOUNT · " + GridFilterCatalog.Label(GridAggregate.Sum), line.Label);
         Assert.Single(calls);
+        Assert.False(bar.ShowEmptyHint);
     }
 
     [Fact]
-    public void AggregationLine_Functions_FollowCategory()
+    public void AggregationBar_AddRow_FunctionsFollowColumnCategory()
     {
         var bar = new AggregationBarViewModel((_, _) => Task.FromResult<object?>(null));
         bar.SetColumns(Cols);
-        var line = new AggregationLineViewModel(Cols, (_, _) => Task.FromResult<object?>(null), _ => { });
 
-        line.SelectedColumn = Amount; // numeric → SUM available
-        Assert.Contains(line.AvailableFunctions, f => f.Aggregate == GridAggregate.Sum);
+        // Default add-row column = first (AMOUNT, numeric) → SUM available.
+        Assert.Equal(Amount, bar.SelectedMenuColumn);
+        Assert.Contains(bar.MenuFunctions, f => f.Aggregate == GridAggregate.Sum);
 
-        line.SelectedColumn = Name; // text → no SUM, but COUNT DISTINCT
-        Assert.DoesNotContain(line.AvailableFunctions, f => f.Aggregate == GridAggregate.Sum);
-        Assert.Contains(line.AvailableFunctions, f => f.Aggregate == GridAggregate.CountDistinct);
+        bar.SelectedMenuColumn = Name; // text → no SUM, but COUNT DISTINCT
+        Assert.DoesNotContain(bar.MenuFunctions, f => f.Aggregate == GridAggregate.Sum);
+        Assert.Contains(bar.MenuFunctions, f => f.Aggregate == GridAggregate.CountDistinct);
     }
 
     [Fact]
-    public async Task AggregationBar_RecomputeAll_RefreshesEveryLine()
+    public void AggregationBar_PickingFunction_AutoAddsChip()
+    {
+        var bar = new AggregationBarViewModel((_, _) => Task.FromResult<object?>(9L));
+        bar.SetColumns(Cols);
+        bar.SelectedMenuColumn = Name;
+
+        // Picking a function IS the add action — no separate "+ Add" step.
+        bar.SelectedMenuFunction = bar.MenuFunctions.First(f => f.Aggregate == GridAggregate.CountDistinct);
+
+        var line = Assert.Single(bar.Lines);
+        Assert.Equal(Name, line.Column);
+        Assert.Equal(GridAggregate.CountDistinct, line.Function.Aggregate);
+        Assert.Equal("9", line.ResultText);
+        // The picker resets to its placeholder so the same function can be re-picked.
+        Assert.Null(bar.SelectedMenuFunction);
+    }
+
+    [Fact]
+    public void AggregationBar_ColumnChange_ResetsFunctionAndAddsNothing()
+    {
+        var bar = new AggregationBarViewModel((_, _) => Task.FromResult<object?>(1L));
+        bar.SetColumns(Cols);
+
+        // Selecting a column alone never adds a chip (the function stays on placeholder).
+        bar.SelectedMenuColumn = Amount;
+        Assert.Null(bar.SelectedMenuFunction);
+        Assert.Empty(bar.Lines);
+        Assert.True(bar.ShowEmptyHint);
+    }
+
+    [Fact]
+    public async Task AggregationBar_RecomputeAll_RefreshesEveryChip()
     {
         int calls = 0;
         var bar = new AggregationBarViewModel((_, _) => { calls++; return Task.FromResult<object?>(7L); });
         bar.SetColumns(Cols);
-        await bar.AddLineCommand.ExecuteAsync(null); // calls=1
-        await bar.AddLineCommand.ExecuteAsync(null); // calls=2
+        bar.AddAggregate(Amount, GridAggregate.Sum); // calls=1
+        bar.AddAggregate(Amount, GridAggregate.Avg); // calls=2
 
         await bar.RecomputeAllAsync(); // +2
 
@@ -228,11 +261,25 @@ public class GridFilterPanelVmTests
     }
 
     [Fact]
-    public async Task AggregationLine_NullResult_ShowsPlaceholder()
+    public void AggregationBar_Remove_DropsChip()
+    {
+        var bar = new AggregationBarViewModel((_, _) => Task.FromResult<object?>(1L));
+        bar.SetColumns(Cols);
+        var line = bar.AddAggregate(Amount, GridAggregate.Sum);
+        Assert.False(bar.ShowEmptyHint);
+
+        line.RemoveCommand.Execute(null);
+
+        Assert.Empty(bar.Lines);
+        Assert.True(bar.ShowEmptyHint);
+    }
+
+    [Fact]
+    public void AggregationBar_NullResult_ShowsPlaceholder()
     {
         var bar = new AggregationBarViewModel((_, _) => Task.FromResult<object?>(null));
         bar.SetColumns(Cols);
-        await bar.AddLineCommand.ExecuteAsync(null);
+        bar.AddAggregate(Amount, GridAggregate.Sum);
         Assert.Equal(UiStrings.AggregationNullResult, bar.Lines[0].ResultText);
     }
 }

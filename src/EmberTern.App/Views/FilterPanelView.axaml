@@ -11,7 +11,7 @@
              IsVisible="{Binding IsPanelOpen}">
 
   <!-- Shared filter panel, reused by every data grid. Self-hides via IsPanelOpen;
-       the host provides a toolbar toggle (ToggleCommand) + wires ApplyRequested. -->
+       the host provides a ToggleButton bound to IsPanelOpen + wires ApplyRequested. -->
   <Border Background="{DynamicResource PanelBrush}"
           BorderBrush="{DynamicResource BorderBrush}"
           BorderThickness="0,1,0,1"

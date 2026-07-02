@@ -94,6 +94,24 @@
     <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
   </Style>
 
+  <!-- "Filter active" marker: a small accent dot overlaid on the top-right of the
+       filter icon (DataGrip / IBExpert convention). Shown (bound to IsFilterActive)
+       whenever a non-empty filter is applied — INDEPENDENT of whether the panel is
+       open (that's the ToggleButton :checked state). The 1px ring in the window
+       background colour keeps the dot legible over both the plain and :checked states. -->
+  <Style Selector="Border.filter-active-dot">
+    <Setter Property="Width" Value="7" />
+    <Setter Property="Height" Value="7" />
+    <Setter Property="CornerRadius" Value="3.5" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BackgroundBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="0,-2,-3,0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
   <!-- Collapsed-sidebar grab rail: a thin full-height vertical strip pinned to the
        left edge (VS Code / DataGrip activity-bar style). A Border (not a Button) so
        it doesn't swallow PointerPressed in its own class handler — the strip is only

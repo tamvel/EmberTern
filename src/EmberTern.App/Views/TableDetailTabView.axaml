@@ -906,39 +906,72 @@
         <!-- Rows: hint+filter/agg toggles · edit status · pagination-hint+record ·
              filter panel · aggregation bar · error+grid. -->
         <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*">
-          <!-- Inline edit hint row + filter/aggregation toggles. Add/Delete +
-               pagination live in the main app toolbar (gated on IsDataTabActive). -->
+          <!-- Unified grid toolbar (identical across all 5 data grids): refresh +
+               pagination · hint · Record N of M · filter/aggregation toggles.
+               Add/Delete rows live in the main toolbar's shared collection section. -->
           <StackPanel Grid.Row="0"
                       Orientation="Horizontal"
                       Spacing="4"
                       Margin="8,4">
-            <TextBlock Text="{Binding EditModeHint}"
-                       Classes="subtle"
-                       FontSize="11"
-                       VerticalAlignment="Center"
-                       IsVisible="{Binding EditModeHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
-                    Command="{Binding DataFilterPanel.ToggleCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
+                    Command="{Binding GoToFirstPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="14" Height="14" />
             </Button>
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
-                    Command="{Binding DataAggregationBar.ToggleCommand}">
+                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
+                    Command="{Binding GoToPreviousPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="14" Height="14" />
+            </Button>
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
+                    Command="{Binding GoToNextPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="14" Height="14" />
+            </Button>
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
+                    Command="{Binding GoToLastPageCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="14" Height="14" />
+            </Button>
+            <TextBlock Text="{Binding DataPreviewHint}" Classes="subtle" FontSize="11"
+                       VerticalAlignment="Center" Margin="6,0,0,0" />
+            <TextBlock Text="{Binding DataRecordInfo}" Classes="subtle" FontSize="11"
+                       VerticalAlignment="Center" Margin="12,0,0,0" />
+            <ToggleButton Classes="icon" Margin="12,0,0,0"
+                          ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
+                          IsChecked="{Binding DataFilterPanel.IsPanelOpen, Mode=TwoWay}">
+              <Panel>
+                <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+                <Border Classes="filter-active-dot" IsVisible="{Binding DataFilterPanel.IsFilterActive}" />
+              </Panel>
+            </ToggleButton>
+            <ToggleButton Classes="icon"
+                          ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
+                          IsChecked="{Binding DataAggregationBar.IsBarOpen, Mode=TwoWay}">
               <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
+            </ToggleButton>
+            <!-- Refresh is a data-reload action, not navigation → at the end of the row,
+                 flush with the filter/aggregation toggles (same icon group). -->
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.ToolbarRefreshDataTooltip}"
+                    Command="{Binding RefreshDataPreviewCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" Foreground="{DynamicResource InfoIconBrush}" Width="14" Height="14" />
             </Button>
           </StackPanel>
           <TextBlock Grid.Row="1"
+                     Text="{Binding EditModeHint}"
+                     Classes="subtle"
+                     FontSize="11"
+                     Margin="8,0,8,4"
+                     VerticalAlignment="Center"
+                     IsVisible="{Binding EditModeHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Grid.Row="2"
                      Text="{Binding EditStatusMessage}"
                      Classes="subtle error"
                      FontSize="11"
                      Margin="8,0,8,4"
                      TextWrapping="Wrap"
                      IsVisible="{Binding HasEditStatusMessage}" />
-          <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="0" Margin="8,4">
-            <TextBlock Text="{Binding DataPreviewHint}" Classes="subtle" FontSize="11" />
-            <TextBlock Text="{Binding DataRecordInfo}" Classes="subtle" FontSize="11" Margin="12,0,0,0" />
-          </StackPanel>
           <views:FilterPanelView Grid.Row="3" DataContext="{Binding DataFilterPanel}" />
           <views:AggregationBarView Grid.Row="4" DataContext="{Binding DataAggregationBar}" />
           <TextBlock Grid.Row="5"

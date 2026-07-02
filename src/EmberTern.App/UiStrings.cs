@@ -363,6 +363,8 @@ internal static class UiStrings
     public const string AggregationToggleTooltip = "Aggregations";
     public const string AggregationBarTitle = "Aggregations";
     public const string AggregationAddLine = "Add aggregate";
+    // Placeholder on the function picker — picking a function adds the aggregate chip.
+    public const string AggregationFunctionPlaceholder = "Add aggregate…";
     public const string AggregationEmptyHint = "No aggregates — add one to compute over the results.";
     public const string AggregationRemoveLineTooltip = "Remove aggregate";
     public const string AggregationRecomputeTooltip = "Recompute";

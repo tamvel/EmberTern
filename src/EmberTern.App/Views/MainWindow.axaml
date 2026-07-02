@@ -916,27 +916,8 @@
                       Command="{Binding FormatSqlCommand}" IsVisible="{Binding IsQueryTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
-              <!-- Table Dane: refresh + pagination -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarRefreshDataTooltip}"
-                      Command="{Binding RefreshDataPreviewCommand}" IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" Foreground="{DynamicResource InfoIconBrush}" />
-              </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToFirstPageCommand}" IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" />
-              </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToPreviousPageCommand}" IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" />
-              </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToNextPageCommand}" IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" />
-              </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
-                      Command="{Binding ActiveTableDetail.GoToLastPageCommand}" IsVisible="{Binding IsDataTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" />
-              </Button>
+              <!-- Table Dane refresh + pagination live in the Dane sub-tab's own grid
+                   toolbar (unified layout across all 5 data grids), not here. -->
               <!-- View: format -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveViewDetail.FormatSqlCommand}" IsVisible="{Binding IsViewDetailTabActive}">
@@ -1322,17 +1303,21 @@
                                FontSize="11"
                                Margin="12,0,0,0"
                                VerticalAlignment="Center" />
-                    <!-- Filter + aggregation toggles (right side of the pagination bar). -->
-                    <Button Classes="icon" Margin="12,0,0,0"
+                    <!-- Filter + aggregation toggles (right side of the pagination bar).
+                         ToggleButtons so the "on" look tracks panel visibility, not focus. -->
+                    <ToggleButton Classes="icon" Margin="12,0,0,0"
                             ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
-                            Command="{Binding ResultFilterPanel.ToggleCommand}">
-                      <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
-                    </Button>
-                    <Button Classes="icon"
+                            IsChecked="{Binding ResultFilterPanel.IsPanelOpen, Mode=TwoWay}">
+                      <Panel>
+                        <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+                        <Border Classes="filter-active-dot" IsVisible="{Binding ResultFilterPanel.IsFilterActive}" />
+                      </Panel>
+                    </ToggleButton>
+                    <ToggleButton Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
-                            Command="{Binding ResultAggregationBar.ToggleCommand}">
+                            IsChecked="{Binding ResultAggregationBar.IsBarOpen, Mode=TwoWay}">
                       <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
-                    </Button>
+                    </ToggleButton>
                   </StackPanel>
                 </Border>
                 <views:FilterPanelView Grid.Row="2" DataContext="{Binding ResultFilterPanel}" />
