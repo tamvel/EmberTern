@@ -51,6 +51,7 @@ public partial class FunctionDetailTabView : UserControl
         _cursorEditor = this.FindControl<TextEditor>("FuncCursorEditor");
         _subprogramEditor = this.FindControl<TextEditor>("FuncSubprogramEditor");
         _execResultGrid = this.FindControl<DataGrid>("FuncExecResultGrid");
+        if (_execResultGrid is not null) _execResultGrid.CellPointerPressed += OnFuncExecCellPointerPressed;
         _argumentsGrid = this.FindControl<DataGrid>("FuncArgumentsGrid");
         _resultTypeGrid = this.FindControl<DataGrid>("FuncResultTypeGrid");
         _variablesGrid = this.FindControl<DataGrid>("FuncVariablesGrid");
@@ -290,6 +291,40 @@ public partial class FunctionDetailTabView : UserControl
     private void OnFuncExecResultSelectionChanged(object? sender, SelectionChangedEventArgs e)
         => _currentVm?.SetExecSelectedRow(_execResultGrid?.SelectedIndex ?? -1);
 
+    // ── Filter-from-cell (Execute Result) ────────────────────────────────────
+    private GridCellFilterContext? _execCellCtx;
+
+    private void OnFuncExecCellPointerPressed(object? sender, DataGridCellPointerPressedEventArgs e)
+    {
+        if (_execResultGrid is null || _currentVm is null) return;
+        if (!e.PointerPressedEventArgs.GetCurrentPoint(_execResultGrid).Properties.IsRightButtonPressed) return;
+        if (e.Row?.DataContext is object?[] row) _execResultGrid.SelectedItem = row;
+        _execCellCtx = GridCellFilter.Resolve(_execResultGrid, e, _currentVm.ExecFilterPanel.Columns);
+        if (FuncFilterContainsItem is not null)
+            FuncFilterContainsItem.IsEnabled = _execCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);
+    }
+
+    private void OnFuncFilterByValueClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _execCellCtx is not { } ctx) return;
+        var (col, op, val) = GridCellFilter.FilterByValue(ctx);
+        _ = _currentVm.ExecFilterPanel.ApplyFromCellAsync(col, op, val);
+    }
+
+    private void OnFuncExcludeValueClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _execCellCtx is not { } ctx) return;
+        var (col, op, val) = GridCellFilter.ExcludeValue(ctx);
+        _ = _currentVm.ExecFilterPanel.ApplyFromCellAsync(col, op, val);
+    }
+
+    private void OnFuncFilterContainsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _execCellCtx is not { } ctx) return;
+        if (GridCellFilter.Contains(ctx) is not { } triple) return;
+        _ = _currentVm.ExecFilterPanel.ApplyFromCellAsync(triple.ColumnIndex, triple.Op, triple.Value);
+    }
+
     private void PopulateExecResultGrid()
     {
         if (_execResultGrid is null) return;
@@ -328,6 +363,8 @@ public partial class FunctionDetailTabView : UserControl
                 _execResultGrid.Columns.Add(new DataGridTemplateColumn
                 {
                     Header = columnName,
+                    // Tag = data column index → the filter-from-cell resolver reads it.
+                    Tag = columnIndex,
                     CanUserSort = false,
                     CellTemplate = BuildTextCellTemplate(columnIndex),
                 });

@@ -1,0 +1,73 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:app="using:EmberTern.App"
+             xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="120"
+             x:Class="EmberTern.App.Views.AggregationBarView"
+             x:DataType="vm:AggregationBarViewModel"
+             IsVisible="{Binding IsBarOpen}">
+
+  <!-- Shared aggregation bar, reused by every data grid. Self-hides via IsBarOpen;
+       each line computes through the host-supplied delegate (client-side or SQL). -->
+  <Border Background="{DynamicResource PanelBrush}"
+          BorderBrush="{DynamicResource BorderBrush}"
+          BorderThickness="0,1,0,1"
+          Padding="8,6">
+    <StackPanel Spacing="6">
+
+      <!-- Header: title · Add aggregate -->
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Left" Classes="field-label" VerticalAlignment="Center"
+                   Text="{x:Static app:UiStrings.AggregationBarTitle}" />
+        <Button DockPanel.Dock="Right" Classes="flat" HorizontalAlignment="Right"
+                Command="{Binding AddLineCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <controls:SvgIcon Data="{StaticResource Icon.Plus}" Width="14" Height="14" />
+            <TextBlock Text="{x:Static app:UiStrings.AggregationAddLine}" />
+          </StackPanel>
+        </Button>
+      </DockPanel>
+
+      <!-- Aggregate lines -->
+      <ItemsControl ItemsSource="{Binding Lines}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:AggregationLineViewModel">
+            <Grid ColumnDefinitions="160,140,Auto,*,Auto" Margin="0,2">
+              <ComboBox Grid.Column="0" Margin="0,0,4,0" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Columns}"
+                        SelectedItem="{Binding SelectedColumn, Mode=TwoWay}" />
+              <ComboBox Grid.Column="1" Margin="0,0,4,0" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding AvailableFunctions}"
+                        SelectedItem="{Binding SelectedFunction, Mode=TwoWay}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:AggregateOption">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Grid.Column="2" Text="=" VerticalAlignment="Center"
+                         Margin="4,0" Foreground="{DynamicResource SubtleForegroundBrush}" />
+              <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                         FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                         Text="{Binding ResultText}" />
+              <Button Grid.Column="4" Classes="icon" Command="{Binding RemoveCommand}"
+                      ToolTip.Tip="{x:Static app:UiStrings.AggregationRemoveLineTooltip}">
+                <controls:SvgIcon Data="{StaticResource Icon.X}" />
+              </Button>
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- Empty hint -->
+      <TextBlock IsVisible="{Binding ShowEmptyHint}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                 FontStyle="Italic"
+                 Text="{x:Static app:UiStrings.AggregationEmptyHint}" />
+
+    </StackPanel>
+  </Border>
+</UserControl>

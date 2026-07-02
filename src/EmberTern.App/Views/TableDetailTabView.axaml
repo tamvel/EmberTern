@@ -4,6 +4,7 @@
              xmlns:app="using:EmberTern.App"
              xmlns:controls="using:EmberTern.App.Controls"
              xmlns:behaviors="using:EmberTern.App.Behaviors"
+             xmlns:views="using:EmberTern.App.Views"
              xmlns:conv="using:EmberTern.App.Converters"
              xmlns:metadata="using:EmberTern.Core.Metadata"
              xmlns:ae="using:AvaloniaEdit"
@@ -902,11 +903,11 @@
       </TabItem>
 
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabData}">
-        <Grid RowDefinitions="Auto,Auto,Auto,*">
-          <!-- Inline edit hint row. Add/Delete buttons + pagination controls
-               live in the main app toolbar (MainWindow.axaml), gated on
-               IsDataTabActive — keeping them in a single chrome row matches
-               the existing Execute/Commit/Refresh affordances. -->
+        <!-- Rows: hint+filter/agg toggles · edit status · pagination-hint+record ·
+             filter panel · aggregation bar · error+grid. -->
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*">
+          <!-- Inline edit hint row + filter/aggregation toggles. Add/Delete +
+               pagination live in the main app toolbar (gated on IsDataTabActive). -->
           <StackPanel Grid.Row="0"
                       Orientation="Horizontal"
                       Spacing="4"
@@ -916,6 +917,16 @@
                        FontSize="11"
                        VerticalAlignment="Center"
                        IsVisible="{Binding EditModeHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
+                    Command="{Binding DataFilterPanel.ToggleCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+            </Button>
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
+                    Command="{Binding DataAggregationBar.ToggleCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
+            </Button>
           </StackPanel>
           <TextBlock Grid.Row="1"
                      Text="{Binding EditStatusMessage}"
@@ -924,24 +935,26 @@
                      Margin="8,0,8,4"
                      TextWrapping="Wrap"
                      IsVisible="{Binding HasEditStatusMessage}" />
-          <TextBlock Grid.Row="2"
-                     Text="{Binding DataPreviewHint}"
-                     Classes="subtle"
-                     FontSize="11"
-                     Margin="8,4" />
-          <TextBlock Grid.Row="3"
+          <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="0" Margin="8,4">
+            <TextBlock Text="{Binding DataPreviewHint}" Classes="subtle" FontSize="11" />
+            <TextBlock Text="{Binding DataRecordInfo}" Classes="subtle" FontSize="11" Margin="12,0,0,0" />
+          </StackPanel>
+          <views:FilterPanelView Grid.Row="3" DataContext="{Binding DataFilterPanel}" />
+          <views:AggregationBarView Grid.Row="4" DataContext="{Binding DataAggregationBar}" />
+          <TextBlock Grid.Row="5"
                      Text="{Binding DataError}"
                      Classes="subtle error"
                      FontSize="11"
                      Margin="8,4"
                      TextWrapping="Wrap"
                      IsVisible="{Binding ShowDataError}" />
-          <DataGrid Grid.Row="3"
+          <DataGrid Grid.Row="5"
                     x:Name="DataPreviewGrid"
                     behaviors:GridLayoutBehavior.GridId="TableDetail.Data"
                     Classes="data-edit"
                     ItemsSource="{Binding EditableRows}"
                     SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                    SelectionChanged="OnDataSelectionChanged"
                     IsReadOnly="{Binding IsDataReadOnly}"
                     FontSize="11"
                     GridLinesVisibility="Horizontal"
@@ -956,15 +969,19 @@
                     Background="{DynamicResource BackgroundBrush}"
                     IsVisible="{Binding HasDataResult}">
             <DataGrid.ContextMenu>
-              <!-- Per-cell "Set NULL". The right-clicked row + column are resolved in
-                   OnDataGridPointerPressed, which also enables/disables this item by the
-                   clicked column's nullability. The Click handler routes through the VM's
-                   SetCellNullAsync → UpdateCellAsync (the existing edit/save path). -->
-              <ContextMenu IsVisible="{Binding CanEditData}">
+              <!-- Per-cell "Set NULL" (edit-only) + filter-from-cell (always). The
+                   right-clicked row/column are resolved in OnDataCellPointerPressed;
+                   Set NULL enables by nullability, Contains by text category. -->
+              <ContextMenu>
                 <MenuItem x:Name="SetNullMenuItem"
                           Header="{x:Static app:UiStrings.DataEditSetNull}"
                           Click="OnSetCellNullClick"
                           IsVisible="{Binding CanEditData}" />
+                <Separator IsVisible="{Binding CanEditData}" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Click="OnDataFilterByValueClick" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnDataExcludeValueClick" />
+                <MenuItem x:Name="DataFilterContainsItem"
+                          Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnDataFilterContainsClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>

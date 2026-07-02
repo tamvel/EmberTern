@@ -137,6 +137,12 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         // "Recompute all statistics" is enabled only when the table has indexes —
         // re-evaluate its CanExecute when the loaded index list changes.
         Indexes.CollectionChanged += OnIndexesCollectionChanged;
+
+        // Shared filter panel + aggregation bar for the Dane grid. Server-paged →
+        // filter + aggregates are pushed to SQL (WHERE / SELECT agg over the FULL set),
+        // never over the current page. Identical UX to the materialized grids.
+        DataFilterPanel = new FilterPanelViewModel { ApplyRequested = ApplyDataFilterAsync };
+        DataAggregationBar = new AggregationBarViewModel(ComputeDataAggregateAsync);
     }
 
     private void OnIndexesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -758,6 +764,100 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         else if (value > MaxPageSize) PageSize = MaxPageSize;
     }
 
+    // ── Dane grid: shared filter panel + aggregation bar (SQL push-down) ──────
+    public FilterPanelViewModel DataFilterPanel { get; }
+    public AggregationBarViewModel DataAggregationBar { get; }
+    private GridFilter _dataFilter = GridFilter.Empty;
+    private FirebirdGridSqlBuilder.GridSqlFilter? _dataSqlFilter;
+    private int _selectedDataRowInPage = -1; // selection within the current page; -1 = none
+
+    // IBExpert-style "Record N of M" for the server-paged Dane grid. M = the bounded
+    // COUNT probe (LastKnownRowCount, refreshed on load / sort / filter). A "+" suffix
+    // marks a count that hit RowCountCap (i.e. "≥ cap").
+    public string DataRecordInfo
+    {
+        get
+        {
+            if (DataResult is not { HasResultSet: true }) return string.Empty;
+            if (LastKnownRowCount is not { } total) return string.Empty;
+            string totalText = total >= RowCountCap
+                ? total.ToString(System.Globalization.CultureInfo.CurrentCulture) + "+"
+                : total.ToString(System.Globalization.CultureInfo.CurrentCulture);
+            if (_selectedDataRowInPage >= 0)
+            {
+                int global = (CurrentPage - 1) * PageSize + _selectedDataRowInPage + 1;
+                return string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.RecordPositionFormat, global, totalText);
+            }
+            return string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.RecordCountFormat, totalText);
+        }
+    }
+
+    // Called by the view when the Dane grid selection changes.
+    public void SetDataSelectedRow(int indexInPage)
+    {
+        if (_selectedDataRowInPage == indexInPage) return;
+        _selectedDataRowInPage = indexInPage;
+        OnPropertyChanged(nameof(DataRecordInfo));
+    }
+
+    // Re-point the filter/aggregation panels only when the column STRUCTURE changes
+    // (first load / table change) — NOT on every page or filter reload (that would
+    // wipe the just-applied conditions, since SetColumns clears them).
+    private void SyncDataFilterColumns(QueryResult? value)
+    {
+        var newNames = value is { HasResultSet: true }
+            ? value.Columns.Select(c => c.Name).ToList()
+            : new List<string>();
+        var curNames = DataFilterPanel.Columns.Select(c => c.Name).ToList();
+        if (newNames.SequenceEqual(curNames, StringComparer.Ordinal)) return;
+        var cols = GridColumnRef.From(value is { HasResultSet: true } ? value.Columns : null);
+        DataFilterPanel.SetColumns(cols);
+        DataAggregationBar.SetColumns(cols);
+        _dataFilter = GridFilter.Empty;
+        _dataSqlFilter = null;
+    }
+
+    private FirebirdGridSqlBuilder.GridSqlFilter? BuildDataSqlFilter(GridFilter filter)
+    {
+        if (filter.IsEmpty) return null;
+        var cols = DataFilterPanel.Columns.Select(c => new QueryColumn(c.Name, c.ClrType)).ToList();
+        return FirebirdGridSqlBuilder.BuildWhere(filter, cols);
+    }
+
+    // Host callback for the filter panel: push the filter to SQL, re-fetch page 1,
+    // re-probe the row count (for Record N of M), and recompute the aggregates.
+    private async Task ApplyDataFilterAsync(GridFilter filter)
+    {
+        _dataFilter = filter;
+        _dataSqlFilter = BuildDataSqlFilter(filter);
+        LastKnownRowCount = null; // the filter changes the row count
+        CurrentPage = 1;
+        await ReloadDataPreviewAsync().ConfigureAwait(true);
+        await RefreshDataRowCountAsync().ConfigureAwait(true);
+        await DataAggregationBar.RecomputeAllAsync().ConfigureAwait(true);
+    }
+
+    // Host callback for the aggregation bar: a server-side SELECT agg over the WHOLE
+    // (filtered) table — never over the current page.
+    private Task<object?> ComputeDataAggregateAsync(GridColumnRef col, GridAggregate agg)
+        => _reader is null
+            ? Task.FromResult<object?>(null)
+            : _reader.GetAggregateAsync(TableName, col.Name, agg, _dataSqlFilter);
+
+    // Bounded COUNT(*) (capped at RowCountCap) so Record N of M has an M. Refreshed
+    // on initial load / sort / filter — NOT on plain page navigation (the count is
+    // stable between pages of the same filter+sort).
+    private async Task RefreshDataRowCountAsync(CancellationToken cancellationToken = default)
+    {
+        if (_reader is null) return;
+        try
+        {
+            LastKnownRowCount = await _reader.GetRowCountAsync(TableName, RowCountCap, _dataSqlFilter, cancellationToken).ConfigureAwait(true);
+            OnPropertyChanged(nameof(DataRecordInfo));
+        }
+        catch (MetadataReadException) { /* keep the prior count */ }
+    }
+
     /// <summary>
     /// Writable mirror of <see cref="DataResult"/>.Rows. The DataGrid binds to
     /// this so AddRow / DeleteRow can mutate the visible row list without
@@ -813,10 +913,16 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
     // mirror collection in sync without those tests caring about it.
     partial void OnDataResultChanged(QueryResult? value)
     {
+        // Re-point the filter/aggregation panels when the columns change (first
+        // load / table change); a same-column filter reload keeps the conditions.
+        SyncDataFilterColumns(value);
         RebuildEditableRows();
+        // Re-slicing a page drops grid selection → reset the record pointer.
+        _selectedDataRowInPage = -1;
         // HasNextPage reads DataResult.Rows.Count when LastKnownRowCount is null —
         // so the property re-fires whenever the result lands.
         OnPropertyChanged(nameof(HasNextPage));
+        OnPropertyChanged(nameof(DataRecordInfo));
         GoToNextPageCommand.NotifyCanExecuteChanged();
     }
 
@@ -1391,9 +1497,11 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         Diagnostics.RefreshTrace.Log("LoadDataPreview", $"SELECT * table={TableName} page={CurrentPage} size={PageSize}");
         try
         {
-            var preview = await _reader.GetDataPreviewAsync(TableName, CurrentPage, PageSize, cancellationToken).ConfigureAwait(true);
+            var preview = await _reader.GetDataPreviewAsync(TableName, CurrentPage, PageSize, null, _dataSqlFilter, cancellationToken).ConfigureAwait(true);
             DataResult = preview;
             DataResultVersionTag = System.Guid.NewGuid().ToString("N");
+            // Probe the (bounded) row count so Record N of M has an M on first load.
+            await RefreshDataRowCountAsync(cancellationToken).ConfigureAwait(true);
         }
         catch (MetadataReadException ex)
         {
@@ -1439,6 +1547,8 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         }
 
         await ReloadDataPreviewAsync(cancellationToken).ConfigureAwait(true);
+        // Sort reset LastKnownRowCount → re-probe so Record N of M keeps its M.
+        await RefreshDataRowCountAsync(cancellationToken).ConfigureAwait(true);
     }
 
     internal async Task ReloadDataPreviewAsync(CancellationToken cancellationToken = default)
@@ -1464,7 +1574,7 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
 
         try
         {
-            var preview = await _reader.GetDataPreviewAsync(TableName, CurrentPage, PageSize, orderBy, cancellationToken).ConfigureAwait(true);
+            var preview = await _reader.GetDataPreviewAsync(TableName, CurrentPage, PageSize, orderBy, _dataSqlFilter, cancellationToken).ConfigureAwait(true);
             DataResult = preview;
             DataError = string.Empty;
             DataResultVersionTag = System.Guid.NewGuid().ToString("N");
@@ -1525,7 +1635,7 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         if (_reader is null) return;
         try
         {
-            var count = await _reader.GetRowCountAsync(TableName, RowCountCap).ConfigureAwait(true);
+            var count = await _reader.GetRowCountAsync(TableName, RowCountCap, _dataSqlFilter).ConfigureAwait(true);
             LastKnownRowCount = count;
             if (count <= 0)
             {

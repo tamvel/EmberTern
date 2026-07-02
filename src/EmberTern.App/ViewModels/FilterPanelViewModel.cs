@@ -41,6 +41,10 @@ public partial class FilterPanelViewModel : ObservableObject
     public bool HasColumns => _columns.Count > 0;
     public bool ShowEmptyHint => Conditions.Count == 0;
 
+    /// <summary>The current column set — used by the host's filter-from-cell menu to
+    /// resolve the clicked cell's column category.</summary>
+    public IReadOnlyList<GridColumnRef> Columns => _columns;
+
     /// <summary>Point the panel at a new result's columns. Clears any existing
     /// conditions (they referenced the previous column set).</summary>
     public void SetColumns(IReadOnlyList<GridColumnRef> columns)

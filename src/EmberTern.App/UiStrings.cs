@@ -363,6 +363,7 @@ internal static class UiStrings
     public const string AggregationToggleTooltip = "Aggregations";
     public const string AggregationBarTitle = "Aggregations";
     public const string AggregationAddLine = "Add aggregate";
+    public const string AggregationEmptyHint = "No aggregates — add one to compute over the results.";
     public const string AggregationRemoveLineTooltip = "Remove aggregate";
     public const string AggregationRecomputeTooltip = "Recompute";
     public const string AggregationNullResult = "∅";

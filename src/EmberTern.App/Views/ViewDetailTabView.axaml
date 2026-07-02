@@ -4,6 +4,7 @@
              xmlns:app="using:EmberTern.App"
              xmlns:controls="using:EmberTern.App.Controls"
              xmlns:behaviors="using:EmberTern.App.Behaviors"
+             xmlns:views="using:EmberTern.App.Views"
              xmlns:conv="using:EmberTern.App.Converters"
              xmlns:metadata="using:EmberTern.Core.Metadata"
              xmlns:ae="using:AvaloniaEdit"
@@ -279,7 +280,8 @@
            TableDetail. Pagination controls are self-contained here (no inline
            data editing on a view). -->
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabData}">
-        <Grid RowDefinitions="Auto,Auto,*">
+        <!-- Rows: pagination+record+filter/agg toggles · filter panel · aggregation bar · error+grid. -->
+        <Grid RowDefinitions="Auto,Auto,Auto,*">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4" Margin="8,4">
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
@@ -306,17 +308,37 @@
                        FontSize="11"
                        VerticalAlignment="Center"
                        Margin="6,0,0,0" />
+            <TextBlock Text="{Binding DataRecordInfo}"
+                       Classes="subtle"
+                       FontSize="11"
+                       VerticalAlignment="Center"
+                       Margin="12,0,0,0" />
+            <Button Classes="icon" Margin="12,0,0,0"
+                    ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
+                    Command="{Binding DataFilterPanel.ToggleCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+            </Button>
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
+                    Command="{Binding DataAggregationBar.ToggleCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
+            </Button>
           </StackPanel>
-          <TextBlock Grid.Row="1"
+
+          <views:FilterPanelView Grid.Row="1" DataContext="{Binding DataFilterPanel}" />
+          <views:AggregationBarView Grid.Row="2" DataContext="{Binding DataAggregationBar}" />
+
+          <TextBlock Grid.Row="3"
                      Text="{Binding DataError}"
                      Classes="subtle error"
                      FontSize="11"
                      Margin="8,0,8,4"
                      TextWrapping="Wrap"
                      IsVisible="{Binding ShowDataError}" />
-          <DataGrid Grid.Row="2"
+          <DataGrid Grid.Row="3"
                     x:Name="DataPreviewGrid"
                     behaviors:GridLayoutBehavior.GridId="ViewDetail.Data"
+                    SelectionChanged="OnViewDataSelectionChanged"
                     IsReadOnly="True"
                     FontSize="11"
                     GridLinesVisibility="Horizontal"
@@ -329,7 +351,16 @@
                     HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                     VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                     Background="{DynamicResource BackgroundBrush}"
-                    IsVisible="{Binding HasDataResult}" />
+                    IsVisible="{Binding HasDataResult}">
+            <DataGrid.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Click="OnViewDataFilterByValueClick" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnViewDataExcludeValueClick" />
+                <MenuItem x:Name="ViewDataFilterContainsItem"
+                          Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnViewDataFilterContainsClick" />
+              </ContextMenu>
+            </DataGrid.ContextMenu>
+          </DataGrid>
         </Grid>
       </TabItem>
 

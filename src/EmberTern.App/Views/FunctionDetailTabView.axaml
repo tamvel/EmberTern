@@ -4,6 +4,7 @@
              xmlns:app="using:EmberTern.App"
              xmlns:controls="using:EmberTern.App.Controls"
              xmlns:behaviors="using:EmberTern.App.Behaviors"
+             xmlns:views="using:EmberTern.App.Views"
              xmlns:conv="using:EmberTern.App.Converters"
              xmlns:ae="using:AvaloniaEdit"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -327,7 +328,8 @@
       <!-- Execute Result — read-only function-execution output (distinct from the
            Easy-mode Result metadata). Client-side paging over the materialized result. -->
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.FunctionDetailExecuteResultTab}">
-        <Grid RowDefinitions="Auto,*">
+        <!-- Rows: pagination+filter/agg toggles · filter panel · aggregation bar · grid. -->
+        <Grid RowDefinitions="Auto,Auto,Auto,*">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4" Margin="8,4"
                       IsVisible="{Binding HasExecResult}">
             <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
@@ -350,13 +352,26 @@
                        VerticalAlignment="Center" Margin="6,0,0,0" />
             <TextBlock Text="{Binding ExecRecordInfo}" Classes="subtle" FontSize="11"
                        VerticalAlignment="Center" Margin="12,0,0,0" />
+            <Button Classes="icon" Margin="12,0,0,0"
+                    ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
+                    Command="{Binding ExecFilterPanel.ToggleCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+            </Button>
+            <Button Classes="icon"
+                    ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
+                    Command="{Binding ExecAggregationBar.ToggleCommand}">
+              <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
+            </Button>
           </StackPanel>
 
-          <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ProcedureExecEmptyHint}" Classes="subtle"
+          <views:FilterPanelView Grid.Row="1" DataContext="{Binding ExecFilterPanel}" />
+          <views:AggregationBarView Grid.Row="2" DataContext="{Binding ExecAggregationBar}" />
+
+          <TextBlock Grid.Row="3" Text="{x:Static app:UiStrings.ProcedureExecEmptyHint}" Classes="subtle"
                      FontSize="11" Margin="8,4" IsVisible="{Binding !HasExecInfo}" />
-          <TextBlock Grid.Row="1" Text="{Binding ExecError}" Classes="subtle error" FontSize="11"
+          <TextBlock Grid.Row="3" Text="{Binding ExecError}" Classes="subtle error" FontSize="11"
                      Margin="8,4" TextWrapping="Wrap" IsVisible="{Binding ShowExecError}" />
-          <DataGrid Grid.Row="1" x:Name="FuncExecResultGrid"
+          <DataGrid Grid.Row="3" x:Name="FuncExecResultGrid"
                     behaviors:GridLayoutBehavior.GridId="FunctionDetail.ExecResult"
                     SelectionChanged="OnFuncExecResultSelectionChanged"
                     IsReadOnly="True" FontSize="11"
@@ -366,7 +381,16 @@
                     HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                     VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                     Background="{DynamicResource BackgroundBrush}"
-                    IsVisible="{Binding HasExecResult}" />
+                    IsVisible="{Binding HasExecResult}">
+            <DataGrid.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Click="OnFuncFilterByValueClick" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnFuncExcludeValueClick" />
+                <MenuItem x:Name="FuncFilterContainsItem"
+                          Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnFuncFilterContainsClick" />
+              </ContextMenu>
+            </DataGrid.ContextMenu>
+          </DataGrid>
         </Grid>
       </TabItem>
 

@@ -51,13 +51,21 @@ public partial class AggregationLineViewModel : ObservableObject
 
     partial void OnSelectedColumnChanged(GridColumnRef? value)
     {
+        // Rebuild the function menu for the new column type. Re-selecting the
+        // function (a new AggregateOption instance) fires OnSelectedFunctionChanged,
+        // which recomputes — so the result never goes stale after a column change.
         var current = SelectedFunction?.Aggregate;
         AvailableFunctions = BuildFunctions(value);
         SelectedFunction = PickFunction(AvailableFunctions, current);
-        ResultText = string.Empty;
     }
 
-    partial void OnSelectedFunctionChanged(AggregateOption? value) => ResultText = string.Empty;
+    // Auto-recompute when the function changes so the line's result stays live
+    // without a manual "apply" — identical UX to the filter panel.
+    partial void OnSelectedFunctionChanged(AggregateOption? value)
+    {
+        ResultText = string.Empty;
+        ComputeCommand.Execute(null);
+    }
 
     /// <summary>Recompute this line against the host's current (filtered) data.</summary>
     [RelayCommand]

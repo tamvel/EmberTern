@@ -90,6 +90,12 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
         TrackDirty(ResultRows);
         TrackDirty(Cursors);
         TrackDirty(Subprograms);
+
+        // Shared filter panel + aggregation bar for the Execute Result grid
+        // (materialized: filter/aggregate/page all client-side over the exec result).
+        ExecFilterPanel = new FilterPanelViewModel { ApplyRequested = ApplyExecFilterAsync };
+        ExecAggregationBar = new AggregationBarViewModel(ComputeExecAggregateAsync);
+
         // Release the ctor-time suppression now that all fields are assigned.
         _suppressDirty = false;
     }
@@ -385,9 +391,37 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
     // Client-side paging over the materialized result set — a function scalar is one row,
     // but the same shape as the procedure result grid keeps the view identical.
     public const int ExecResultPageSize = 200;
-    private List<object?[]> _execRows = new();
+    private List<object?[]> _execAllRows = new(); // full (unfiltered) exec result
+    private List<object?[]> _execRows = new();    // filtered + displayed
     private int _execPage = 1;
     private int _selectedExecRowInPage = -1; // selection within the current page; -1 = none
+
+    // ── Execute Result grid: shared filter panel + aggregation bar (client-side) ──
+    public FilterPanelViewModel ExecFilterPanel { get; }
+    public AggregationBarViewModel ExecAggregationBar { get; }
+    private GridFilter _execFilter = GridFilter.Empty;
+
+    private List<object?[]> ApplyExecFilter(IReadOnlyList<object?[]> rows)
+    {
+        if (_execFilter.IsEmpty || ExecResult is null) return new List<object?[]>(rows);
+        var cols = ExecResult.Columns;
+        var list = new List<object?[]>();
+        foreach (var r in rows)
+            if (GridFilterEvaluator.Matches(r, _execFilter, cols)) list.Add(r);
+        return list;
+    }
+
+    private Task ApplyExecFilterAsync(GridFilter filter)
+    {
+        _execFilter = filter;
+        _execRows = ApplyExecFilter(_execAllRows);
+        _execPage = 1;
+        RebuildExecPage();
+        return ExecAggregationBar.RecomputeAllAsync();
+    }
+
+    private Task<object?> ComputeExecAggregateAsync(GridColumnRef col, GridAggregate agg)
+        => Task.FromResult(GridAggregator.Compute(_execRows, col.Index, agg, col.ClrType));
 
     public IReadOnlyList<object?[]> PagedExecRows { get; private set; } = Array.Empty<object?[]>();
     private int TotalExecPages => _execRows.Count == 0 ? 1 : (_execRows.Count + ExecResultPageSize - 1) / ExecResultPageSize;
@@ -424,7 +458,12 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
 
     partial void OnExecResultChanged(QueryResult? value)
     {
-        _execRows = value?.Rows is { } rows ? new List<object?[]>(rows) : new List<object?[]>();
+        _execAllRows = value?.Rows is { } rows ? new List<object?[]>(rows) : new List<object?[]>();
+        _execFilter = GridFilter.Empty;
+        var cols = GridColumnRef.From(value is { HasResultSet: true } ? value.Columns : null);
+        ExecFilterPanel.SetColumns(cols);
+        ExecAggregationBar.SetColumns(cols);
+        _execRows = ApplyExecFilter(_execAllRows);
         _execPage = 1;
         RebuildExecPage();
     }

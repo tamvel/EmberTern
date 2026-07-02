@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using EmberTern.Core.Query;
 
 namespace EmberTern.App.ViewModels;
@@ -14,6 +15,17 @@ public sealed record GridColumnRef(int Index, string Name, Type ClrType)
 
     // Shown in the column ComboBox.
     public override string ToString() => Name;
+
+    /// <summary>Build column refs from a result's columns (index = position). Shared
+    /// by every data-grid host so the filter/aggregation column set is derived one way.</summary>
+    public static IReadOnlyList<GridColumnRef> From(IReadOnlyList<QueryColumn>? columns)
+    {
+        if (columns is null || columns.Count == 0) return System.Array.Empty<GridColumnRef>();
+        var list = new List<GridColumnRef>(columns.Count);
+        for (int i = 0; i < columns.Count; i++)
+            list.Add(new GridColumnRef(i, columns[i].Name, columns[i].ClrType));
+        return list;
+    }
 }
 
 /// <summary>

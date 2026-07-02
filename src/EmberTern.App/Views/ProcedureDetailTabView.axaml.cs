@@ -56,6 +56,7 @@ public partial class ProcedureDetailTabView : UserControl
         _cursorEditor = this.FindControl<TextEditor>("CursorSourceEditor");
         _subprogramEditor = this.FindControl<TextEditor>("SubprogramSourceEditor");
         _resultGrid = this.FindControl<DataGrid>("ProcResultGrid");
+        if (_resultGrid is not null) _resultGrid.CellPointerPressed += OnProcResultCellPointerPressed;
         _inputGrid = this.FindControl<DataGrid>("InputParamsGrid");
         _outputGrid = this.FindControl<DataGrid>("OutputParamsGrid");
         _variablesGrid = this.FindControl<DataGrid>("VariablesGrid");
@@ -334,6 +335,8 @@ public partial class ProcedureDetailTabView : UserControl
                 _resultGrid.Columns.Add(new DataGridTemplateColumn
                 {
                     Header = columnName,
+                    // Tag = data column index → the filter-from-cell resolver reads it.
+                    Tag = columnIndex,
                     CanUserSort = false,
                     CellTemplate = BuildTextCellTemplate(columnIndex),
                 });
@@ -346,6 +349,40 @@ public partial class ProcedureDetailTabView : UserControl
     // Feeds the "Record N of M" indicator (SelectedIndex is within the page).
     private void OnProcResultSelectionChanged(object? sender, SelectionChangedEventArgs e)
         => _currentVm?.SetExecSelectedRow(_resultGrid?.SelectedIndex ?? -1);
+
+    // ── Filter-from-cell (Execute Result) ────────────────────────────────────
+    private GridCellFilterContext? _execCellCtx;
+
+    private void OnProcResultCellPointerPressed(object? sender, DataGridCellPointerPressedEventArgs e)
+    {
+        if (_resultGrid is null || _currentVm is null) return;
+        if (!e.PointerPressedEventArgs.GetCurrentPoint(_resultGrid).Properties.IsRightButtonPressed) return;
+        if (e.Row?.DataContext is object?[] row) _resultGrid.SelectedItem = row;
+        _execCellCtx = GridCellFilter.Resolve(_resultGrid, e, _currentVm.ExecFilterPanel.Columns);
+        if (ProcFilterContainsItem is not null)
+            ProcFilterContainsItem.IsEnabled = _execCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);
+    }
+
+    private void OnProcFilterByValueClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _execCellCtx is not { } ctx) return;
+        var (col, op, val) = GridCellFilter.FilterByValue(ctx);
+        _ = _currentVm.ExecFilterPanel.ApplyFromCellAsync(col, op, val);
+    }
+
+    private void OnProcExcludeValueClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _execCellCtx is not { } ctx) return;
+        var (col, op, val) = GridCellFilter.ExcludeValue(ctx);
+        _ = _currentVm.ExecFilterPanel.ApplyFromCellAsync(col, op, val);
+    }
+
+    private void OnProcFilterContainsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null || _execCellCtx is not { } ctx) return;
+        if (GridCellFilter.Contains(ctx) is not { } triple) return;
+        _ = _currentVm.ExecFilterPanel.ApplyFromCellAsync(triple.ColumnIndex, triple.Op, triple.Value);
+    }
 
     private static IDataTemplate BuildTextCellTemplate(int columnIndex)
         => new FuncDataTemplate<object?[]>((row, _) =>
