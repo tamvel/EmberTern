@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.Core.Settings;
 
 namespace EmberTern.App.ViewModels;
 
@@ -15,8 +17,8 @@ public enum ExecuteParamKind
     Text,        // CHAR / VARCHAR / unknown → TextBox
     Numeric,     // SMALLINT / INTEGER / BIGINT / NUMERIC / DECIMAL / FLOAT / DOUBLE → NumericUpDown
     Date,        // DATE → CalendarDatePicker
-    Time,        // TIME → TimePicker
-    Timestamp,   // TIMESTAMP → CalendarDatePicker + TimePicker
+    Time,        // TIME → text field (HH:mm:ss, typed)
+    Timestamp,   // TIMESTAMP → CalendarDatePicker + text time field
     Boolean,     // BOOLEAN → CheckBox
     BlobText,    // BLOB SUB_TYPE 1 (TEXT) → multi-line TextBox
     BlobBinary,  // BLOB SUB_TYPE 0 (binary) → text input (binary file input out of scope)
@@ -40,38 +42,28 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
         var now = DateTime.Now;
         switch (Kind)
         {
-            case ExecuteParamKind.Date: DateValue = now.Date; break;
-            case ExecuteParamKind.Timestamp: DateValue = now.Date; TimeValue = now.TimeOfDay; break;
-            case ExecuteParamKind.Time: TimeValue = now.TimeOfDay; break;
-            case ExecuteParamKind.Numeric: NumericValue = 0m; break;
-            case ExecuteParamKind.Boolean: BoolValue = false; break;
-            // Text/Blob default to the empty string (TextValue's initial value).
-        }
-    }
-
-    /// <summary>Restores a previously-used value (from the in-memory history) into
-    /// the matching typed holder; null restores the NULL state.</summary>
-    internal void ApplyHistoryValue(object? value)
-    {
-        if (value is null) { IsNull = true; return; }
-        IsNull = false;
-        switch (Kind)
-        {
-            case ExecuteParamKind.Boolean: BoolValue = value is bool b && b; break;
-            case ExecuteParamKind.Numeric:
-                try { NumericValue = Convert.ToDecimal(value, CultureInfo.InvariantCulture); } catch { }
-                break;
             case ExecuteParamKind.Date:
-                if (value is DateTime d1) DateValue = d1.Date;
+                DateValue = now.Date;
                 break;
             case ExecuteParamKind.Timestamp:
-                if (value is DateTime d2) { DateValue = d2.Date; TimeValue = d2.TimeOfDay; }
+                // Today at midnight — TIMESTAMP columns are used as date ranges (DATAOD /
+                // DATADO) far more than as "now". Defaulting to the current wall-clock time
+                // was the reported annoyance.
+                DateValue = now.Date;
+                TimeValue = TimeSpan.Zero;
+                _timeText = FormatTime(TimeSpan.Zero);
                 break;
             case ExecuteParamKind.Time:
-                if (value is TimeSpan ts) TimeValue = ts;
-                else if (value is DateTime d3) TimeValue = d3.TimeOfDay;
+                TimeValue = now.TimeOfDay;
+                _timeText = FormatTime(now.TimeOfDay);
                 break;
-            default: TextValue = value.ToString() ?? string.Empty; break;
+            case ExecuteParamKind.Numeric:
+                NumericValue = 0m;
+                break;
+            case ExecuteParamKind.Boolean:
+                BoolValue = false;
+                break;
+            // Text/Blob default to the empty string (TextValue's initial value).
         }
     }
 
@@ -86,13 +78,21 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
     public bool IsValueEnabled => !IsNull;
 
     // Per-kind value holders — bound directly to the matching control's value
-    // property (CalendarDatePicker.SelectedDate is DateTime?, TimePicker.SelectedTime
-    // is TimeSpan?, NumericUpDown.Value is decimal? — gotcha #51).
+    // property (CalendarDatePicker.SelectedDate is DateTime?, NumericUpDown.Value is
+    // decimal? — gotcha #51). Time is edited as free text (see TimeText).
     [ObservableProperty] private string _textValue = string.Empty;
     [ObservableProperty] private decimal? _numericValue;
     [ObservableProperty] private DateTime? _dateValue;
     [ObservableProperty] private TimeSpan? _timeValue;
     [ObservableProperty] private bool _boolValue;
+
+    // Free-text time entry (Time + Timestamp). The user types 8 / 8:30 / 8:30:15;
+    // CommitTime parses + normalizes to HH:mm:ss (called on focus-loss and before OK).
+    // TimeValue stays the canonical value used by Resolve.
+    [ObservableProperty] private string _timeText = string.Empty;
+
+    // True when the current TimeText can't be parsed — drives the red border and blocks OK.
+    [ObservableProperty] private bool _hasTimeError;
 
     // Per-kind control visibility.
     public bool IsSingleLineTextKind => Kind == ExecuteParamKind.Text;
@@ -102,6 +102,29 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
     public bool IsTimeKind => Kind is ExecuteParamKind.Time or ExecuteParamKind.Timestamp;
     public bool IsDateTimeKind => IsDateKind || IsTimeKind;
     public bool IsBooleanKind => Kind == ExecuteParamKind.Boolean;
+
+    /// <summary>Parses <see cref="TimeText"/> into <see cref="TimeValue"/>, normalizing to
+    /// HH:mm:ss on success. On a NULL row (time irrelevant) or a non-time kind this is a
+    /// no-op that clears any error. Returns true when the row is valid to execute.</summary>
+    public bool CommitTime()
+    {
+        if (!IsTimeKind || IsNull)
+        {
+            HasTimeError = false;
+            return true;
+        }
+
+        if (TryParseTime(TimeText, out var parsed))
+        {
+            TimeValue = parsed;
+            TimeText = FormatTime(parsed);
+            HasTimeError = false;
+            return true;
+        }
+
+        HasTimeError = true;
+        return false;
+    }
 
     /// <summary>The bound CLR value (null for NULL), typed per <see cref="Kind"/>.</summary>
     public object? Resolve()
@@ -117,6 +140,99 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
                 DateValue is { } d ? d.Date + (TimeValue ?? TimeSpan.Zero) : (object?)null,
             _ => string.IsNullOrEmpty(TextValue) ? null : TextValue,
         };
+    }
+
+    // ─── History serialization (round-trippable invariant strings) ───────────
+
+    /// <summary>Snapshots this row for the persistent history — a NULL flag plus a
+    /// canonical invariant-culture string (TIMESTAMP keeps sub-second precision).</summary>
+    internal ParameterValue ToHistoryValue()
+    {
+        if (IsNull) return new ParameterValue { Name = Name, IsNull = true, Text = null };
+        var text = Kind switch
+        {
+            ExecuteParamKind.Boolean => BoolValue ? "true" : "false",
+            ExecuteParamKind.Numeric => NumericValue?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            ExecuteParamKind.Date => DateValue?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+            ExecuteParamKind.Time => FormatTime(TimeValue ?? TimeSpan.Zero),
+            ExecuteParamKind.Timestamp =>
+                (DateValue?.Date + (TimeValue ?? TimeSpan.Zero))?
+                    .ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture) ?? string.Empty,
+            _ => TextValue,
+        };
+        return new ParameterValue { Name = Name, IsNull = false, Text = text };
+    }
+
+    /// <summary>Restores a previously-used value (from the persistent history) into the
+    /// matching typed holder; a NULL entry restores the NULL state. Unparseable values
+    /// are ignored so a schema/type change never crashes the restore.</summary>
+    internal void ApplyHistoryValue(ParameterValue value)
+    {
+        if (value.IsNull)
+        {
+            IsNull = true;
+            return;
+        }
+        IsNull = false;
+        var text = value.Text ?? string.Empty;
+        switch (Kind)
+        {
+            case ExecuteParamKind.Boolean:
+                if (bool.TryParse(text, out var b)) BoolValue = b;
+                break;
+            case ExecuteParamKind.Numeric:
+                if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var d))
+                    NumericValue = d;
+                break;
+            case ExecuteParamKind.Date:
+                if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dd))
+                    DateValue = dd.Date;
+                break;
+            case ExecuteParamKind.Timestamp:
+                if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var ts))
+                {
+                    DateValue = ts.Date;
+                    TimeValue = ts.TimeOfDay;
+                    TimeText = FormatTime(ts.TimeOfDay);
+                    HasTimeError = false;
+                }
+                break;
+            case ExecuteParamKind.Time:
+                if (TryParseTime(text, out var t))
+                {
+                    TimeValue = t;
+                    TimeText = FormatTime(t);
+                    HasTimeError = false;
+                }
+                break;
+            default:
+                TextValue = text;
+                break;
+        }
+    }
+
+    internal static string FormatTime(TimeSpan t) => t.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture);
+
+    /// <summary>Tolerant time parse: accepts "8", "8:30", "8:30:15" (H / H:mm / H:mm:ss),
+    /// empty → 00:00:00. Ranges enforced (0–23 h, 0–59 m/s). Returns false on garbage.</summary>
+    internal static bool TryParseTime(string? input, out TimeSpan value)
+    {
+        value = TimeSpan.Zero;
+        var s = (input ?? string.Empty).Trim();
+        if (s.Length == 0) return true; // empty = midnight
+
+        var parts = s.Split(':');
+        if (parts.Length is < 1 or > 3) return false;
+
+        int hh = 0, mm = 0, ss = 0;
+        if (!int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out hh)) return false;
+        if (parts.Length >= 2 && !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out mm)) return false;
+        if (parts.Length == 3 && !int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out ss)) return false;
+
+        if (hh is < 0 or > 23 || mm is < 0 or > 59 || ss is < 0 or > 59) return false;
+
+        value = new TimeSpan(hh, mm, ss);
+        return true;
     }
 
     internal static ExecuteParamKind ClassifyKind(string? typeText)
@@ -167,35 +283,115 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
     }
 }
 
+/// <summary>One saved parameter set shown in the history dropdown. Exposes a two-line
+/// display (timestamp + a compact "name=value, …" preview) so the user recognises the
+/// set before loading it.</summary>
+public sealed class ParameterHistorySnapshotViewModel
+{
+    private const int PreviewMaxLength = 90;
+
+    public ParameterHistorySnapshotViewModel(ParameterSet set)
+    {
+        Set = set;
+        TimestampText = set.ExecutedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+        PreviewText = BuildPreview(set.Values);
+    }
+
+    public ParameterSet Set { get; }
+    public string TimestampText { get; }
+    public string PreviewText { get; }
+
+    private static string BuildPreview(IReadOnlyList<ParameterValue> values)
+    {
+        var sb = new StringBuilder();
+        foreach (var v in values)
+        {
+            if (sb.Length > 0) sb.Append(", ");
+            sb.Append(v.Name).Append('=').Append(v.IsNull ? "NULL" : (v.Text ?? string.Empty));
+            if (sb.Length > PreviewMaxLength) { sb.Length = PreviewMaxLength; sb.Append('…'); break; }
+        }
+        return sb.ToString();
+    }
+}
+
 /// <summary>
-/// Modal for collecting Execute Procedure input values with type-appropriate
-/// controls. Returns the ordered bound values (null entry = SQL NULL) via
-/// <see cref="Result"/>, or null on Cancel.
+/// Modal for collecting Execute Procedure / Execute Function input values with
+/// type-appropriate controls. Returns the ordered bound values (null entry = SQL NULL)
+/// via <see cref="Result"/>, or null on Cancel. Persists and restores per-object
+/// parameter history via <see cref="ParameterHistoryStore"/>.
 /// </summary>
 public partial class ExecuteProcedureDialogViewModel : ObservableObject
 {
-    private readonly string? _procedureName;
+    private readonly string? _objectName;
+    private readonly string? _connectionId;
+    private readonly string _objectKind;
+    private readonly ParameterHistoryStore? _historyStore;
+    private bool _applyingHistory;
 
-    public ExecuteProcedureDialogViewModel(IEnumerable<ProcedureParamRowViewModel> inputs, string? procedureName = null)
+    public ExecuteProcedureDialogViewModel(
+        IEnumerable<ProcedureParamRowViewModel> inputs,
+        string? objectName = null,
+        string? connectionId = null,
+        string objectKind = "Procedure",
+        ParameterHistoryStore? historyStore = null)
     {
-        _procedureName = procedureName;
+        _objectName = objectName;
+        _connectionId = connectionId;
+        _objectKind = objectKind;
+        _historyStore = historyStore;
+
         Params = new ObservableCollection<ExecuteProcedureParamRowViewModel>();
         foreach (var p in inputs)
         {
             Params.Add(new ExecuteProcedureParamRowViewModel(p.Name, p.TypeText));
         }
 
-        // Restore the last-used values for this procedure (in-memory, app-lifetime).
-        if (procedureName is not null && ExecuteProcedureHistory.Get(procedureName) is { } history)
+        History = new ObservableCollection<ParameterHistorySnapshotViewModel>();
+        if (_historyStore is not null)
         {
-            for (int k = 0; k < Params.Count && k < history.Count; k++)
+            foreach (var set in _historyStore.Get(_connectionId, _objectKind, _objectName))
             {
-                Params[k].ApplyHistoryValue(history[k]);
+                History.Add(new ParameterHistorySnapshotViewModel(set));
             }
+        }
+
+        // Auto-load the most recent set ("last run") so re-opening the dialog shows the
+        // values used last time — the common re-run case needs zero interaction.
+        if (History.Count > 0)
+        {
+            SelectedHistory = History[0];
         }
     }
 
     public ObservableCollection<ExecuteProcedureParamRowViewModel> Params { get; }
+
+    public ObservableCollection<ParameterHistorySnapshotViewModel> History { get; }
+
+    public bool HasHistory => History.Count > 0;
+
+    // The chosen history entry; selecting one loads its values into the parameter grid.
+    [ObservableProperty]
+    private ParameterHistorySnapshotViewModel? _selectedHistory;
+
+    partial void OnSelectedHistoryChanged(ParameterHistorySnapshotViewModel? value)
+    {
+        if (value is null || _applyingHistory) return;
+        _applyingHistory = true;
+        try
+        {
+            foreach (var pv in value.Set.Values)
+            {
+                var row = Params.FirstOrDefault(
+                    r => string.Equals(r.Name, pv.Name, StringComparison.OrdinalIgnoreCase));
+                row?.ApplyHistoryValue(pv);
+            }
+        }
+        finally { _applyingHistory = false; }
+    }
+
+    // True when any time-typed, non-null row has an unparseable TimeText — blocks OK.
+    [ObservableProperty]
+    private bool _hasValidationError;
 
     /// <summary>Ordered bound values once accepted; null on cancel.</summary>
     public IReadOnlyList<object?>? Result { get; private set; }
@@ -205,9 +401,22 @@ public partial class ExecuteProcedureDialogViewModel : ObservableObject
     [RelayCommand]
     private void Accept()
     {
+        // Validate + normalize all time fields first; a bad time blocks execution.
+        bool valid = true;
+        foreach (var p in Params)
+        {
+            if (!p.CommitTime()) valid = false;
+        }
+        HasValidationError = !valid;
+        if (!valid) return;
+
         var values = Params.Select(p => p.Resolve()).ToList();
         Result = values;
-        if (_procedureName is not null) ExecuteProcedureHistory.Set(_procedureName, values);
+
+        _historyStore?.Record(
+            _connectionId, _objectKind, _objectName,
+            Params.Select(p => p.ToHistoryValue()).ToList());
+
         RequestClose?.Invoke();
     }
 
@@ -217,21 +426,4 @@ public partial class ExecuteProcedureDialogViewModel : ObservableObject
         Result = null;
         RequestClose?.Invoke();
     }
-}
-
-/// <summary>
-/// Process-lifetime store of the last Execute Procedure parameter values, keyed by
-/// procedure name. In-memory only (no persistence) — cleared when the app closes.
-/// Matches IBExpert's per-session parameter history.
-/// </summary>
-internal static class ExecuteProcedureHistory
-{
-    private static readonly Dictionary<string, IReadOnlyList<object?>> Store =
-        new(StringComparer.OrdinalIgnoreCase);
-
-    public static IReadOnlyList<object?>? Get(string procedureName)
-        => Store.TryGetValue(procedureName, out var v) ? v : null;
-
-    public static void Set(string procedureName, IReadOnlyList<object?> values)
-        => Store[procedureName] = values;
 }

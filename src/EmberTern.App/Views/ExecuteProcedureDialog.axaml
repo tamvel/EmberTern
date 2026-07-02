@@ -10,13 +10,24 @@
         Title="{x:Static app:UiStrings.ProcedureExecuteDialogTitle}"
         Width="660"
         SizeToContent="Height"
-        MaxHeight="700"
+        MaxHeight="720"
         CanResize="True"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BackgroundBrush}"
         Foreground="{DynamicResource ForegroundBrush}">
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto">
+  <Window.Styles>
+    <!-- Invalid time entry: red border, no hardcoded color. -->
+    <Style Selector="TextBox.time-error">
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="TextBox.time-error:focus /template/ Border#PART_BorderElement">
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto">
 
     <Border Grid.Row="0"
             Background="{DynamicResource PanelBrush}"
@@ -26,15 +37,36 @@
       <TextBlock Text="{x:Static app:UiStrings.ProcedureExecuteDialogTitle}" Classes="h1" />
     </Border>
 
+    <!-- History dropdown (hidden until there's at least one saved set). Selecting an
+         entry loads its values into the parameter grid; the newest is auto-selected. -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="16,12,16,4" IsVisible="{Binding HasHistory}">
+      <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ProcedureExecuteDialogHistoryLabel}"
+                 Classes="field-label" VerticalAlignment="Center" Margin="0,0,10,0" />
+      <ComboBox Grid.Column="1"
+                ItemsSource="{Binding History}"
+                SelectedItem="{Binding SelectedHistory, Mode=TwoWay}"
+                HorizontalAlignment="Stretch" FontSize="11">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:ParameterHistorySnapshotViewModel">
+            <StackPanel Spacing="1" Margin="0,2">
+              <TextBlock Text="{Binding TimestampText}" FontSize="11"
+                         Foreground="{DynamicResource SubtleForegroundBrush}" />
+              <TextBlock Text="{Binding PreviewText}" FontSize="11" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+    </Grid>
+
     <!-- Column headers -->
-    <Grid Grid.Row="1" ColumnDefinitions="170,130,46,*" Margin="16,8,16,2">
+    <Grid Grid.Row="2" ColumnDefinitions="170,130,46,*" Margin="16,8,16,2">
       <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ProcedureExecuteDialogColumnName}" Classes="field-label" />
       <TextBlock Grid.Column="1" Text="{x:Static app:UiStrings.ProcedureExecuteDialogColumnType}" Classes="field-label" />
       <TextBlock Grid.Column="2" Text="{x:Static app:UiStrings.ProcedureExecuteDialogColumnNull}" Classes="field-label" />
       <TextBlock Grid.Column="3" Text="{x:Static app:UiStrings.ProcedureExecuteDialogColumnValue}" Classes="field-label" />
     </Grid>
 
-    <ScrollViewer Grid.Row="2" Margin="16,0,16,8" VerticalScrollBarVisibility="Auto">
+    <ScrollViewer Grid.Row="3" Margin="16,0,16,8" VerticalScrollBarVisibility="Auto">
       <ItemsControl ItemsSource="{Binding Params}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:ExecuteProcedureParamRowViewModel">
@@ -58,10 +90,13 @@
                   <CalendarDatePicker IsVisible="{Binding IsDateKind}"
                                       SelectedDate="{Binding DateValue, Mode=TwoWay}"
                                       IsEnabled="{Binding IsValueEnabled}" />
-                  <TimePicker IsVisible="{Binding IsTimeKind}"
-                              SelectedTime="{Binding TimeValue, Mode=TwoWay}"
-                              IsEnabled="{Binding IsValueEnabled}"
-                              ClockIdentifier="24HourClock" UseSeconds="True" />
+                  <!-- Time as free text (type 8 / 8:30 / 8:30:15); parsed on focus-loss + OK. -->
+                  <TextBox IsVisible="{Binding IsTimeKind}" IsEnabled="{Binding IsValueEnabled}"
+                           Text="{Binding TimeText, Mode=TwoWay}"
+                           Classes.time-error="{Binding HasTimeError}"
+                           Width="92" FontSize="11"
+                           PlaceholderText="{x:Static app:UiStrings.ProcedureExecuteDialogTimeWatermark}"
+                           GotFocus="OnTimeBoxGotFocus" LostFocus="OnTimeBoxLostFocus" />
                 </StackPanel>
                 <CheckBox IsVisible="{Binding IsBooleanKind}" IsEnabled="{Binding IsValueEnabled}"
                           IsChecked="{Binding BoolValue, Mode=TwoWay}" />
@@ -72,7 +107,13 @@
       </ItemsControl>
     </ScrollViewer>
 
-    <Border Grid.Row="3"
+    <!-- Validation line (invalid time blocks Execute) -->
+    <TextBlock Grid.Row="4" Margin="16,0,16,8"
+               Text="{x:Static app:UiStrings.ProcedureExecuteDialogTimeInvalid}"
+               Foreground="{DynamicResource ErrorBrush}" FontSize="11"
+               IsVisible="{Binding HasValidationError}" />
+
+    <Border Grid.Row="5"
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0"

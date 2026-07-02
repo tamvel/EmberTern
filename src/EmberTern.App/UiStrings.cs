@@ -816,6 +816,10 @@ internal static class UiStrings
     public const string ProcedureExecuteDialogColumnNull = "NULL";
     public const string ProcedureExecuteDialogRun = "Execute";
     public const string ProcedureExecuteDialogCancel = "Cancel";
+    public const string ProcedureExecuteDialogHistoryLabel = "History";
+    public const string ProcedureExecuteDialogHistoryEmpty = "No previous executions";
+    public const string ProcedureExecuteDialogTimeWatermark = "HH:MM:SS";
+    public const string ProcedureExecuteDialogTimeInvalid = "Invalid time format — use HH:MM:SS (e.g. 08:00:00).";
 
     // ─── Trigger Detail ─────────────────────────────────────────────────────
     public const string TriggerNameHeader = "Trigger name";
