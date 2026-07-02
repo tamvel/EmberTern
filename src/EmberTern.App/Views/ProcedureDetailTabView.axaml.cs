@@ -291,7 +291,10 @@ public partial class ProcedureDetailTabView : UserControl
     {
         var window = this.FindAncestorOfType<Window>();
         if (window is null) return null;
-        var vm = new ExecuteProcedureDialogViewModel(inputs, _currentVm?.ProcedureName);
+        var mainVm = window.DataContext as MainWindowViewModel;
+        var vm = new ExecuteProcedureDialogViewModel(
+            inputs, _currentVm?.ProcedureName,
+            mainVm?.Service.ActiveProfile?.Id, "Procedure", mainVm?.ParameterHistory);
         return await ExecuteProcedureDialog.ShowAsync(window, vm).ConfigureAwait(true);
     }
 

@@ -9,4 +9,8 @@ public sealed class UserSettings
 {
     // One profile per grid, keyed by GridProfile.GridId.
     public List<GridProfile> GridProfiles { get; set; } = new();
+
+    // Last-used Execute Procedure / Execute Function parameter sets, one entry per
+    // (ConnectionId, ObjectKind, ObjectName). See ParameterHistoryStore.
+    public List<ParameterHistoryEntry> ParameterHistory { get; set; } = new();
 }

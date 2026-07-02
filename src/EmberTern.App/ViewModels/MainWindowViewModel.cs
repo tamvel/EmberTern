@@ -15,6 +15,7 @@ using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
 using EmberTern.Core.Security;
+using EmberTern.Core.Settings;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Templates;
 using EmberTern.Core.Workspace;
@@ -28,6 +29,7 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly ConnectionProfileStore _store;
     private readonly FolderStore _folderStore;
+    private readonly ParameterHistoryStore _parameterHistory;
     private FolderState _folderState = new();
     private readonly FirebirdConnectionService _service;
     // Data lane (connection #1): SQL Editor F5, data preview/edit.
@@ -104,6 +106,10 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         _store = store;
         _folderStore = folderStore;
+        // Same settings.dat + protector as the other section facades (gotcha #88) so
+        // Execute Procedure/Function parameter history persists in the shared file.
+        _parameterHistory = new ParameterHistoryStore(
+            System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
         _folderState = _folderStore.Load();
         _service = service;
         _transactionService = transactionService;
@@ -176,6 +182,7 @@ public partial class MainWindowViewModel : ViewModelBase
     internal ConnectionProfileStore Store => _store;
     internal FirebirdConnectionService Service => _service;
     internal TransactionService TransactionService => _transactionService;
+    internal ParameterHistoryStore ParameterHistory => _parameterHistory;
 
     public ObservableCollection<QueryMessageViewModel> Messages { get; }
     public ObservableCollection<WorkspaceTabViewModel> WorkspaceTabs { get; }

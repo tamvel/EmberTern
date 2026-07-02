@@ -652,17 +652,22 @@ public class ProcedureDetailTests
     }
 
     [Fact]
-    public void ExecuteDialog_History_RoundTripsDuringSession()
+    public void ExecuteDialog_History_RoundTripsThroughStore()
     {
+        var dir = Path.Combine(Path.GetTempPath(), "embertern-parmhist-" + Guid.NewGuid().ToString("N"));
+        var store = new EmberTern.Core.Settings.ParameterHistoryStore(dir);
         var inputs = new[] { new ProcedureParamRowViewModel { Name = "N", TypeText = "INTEGER" } };
 
-        var dlg1 = new ExecuteProcedureDialogViewModel(inputs, "HIST_PROC_TEST");
+        var dlg1 = new ExecuteProcedureDialogViewModel(inputs, "HIST_PROC_TEST", "conn-1", "Procedure", store);
         dlg1.Params[0].IsNull = false;
         dlg1.Params[0].NumericValue = 42m;
         dlg1.AcceptCommand.Execute(null);
 
-        var dlg2 = new ExecuteProcedureDialogViewModel(inputs, "HIST_PROC_TEST");
-        Assert.False(dlg2.Params[0].IsNull);   // restored from in-memory history
+        // A fresh dialog (fresh store instance over the same file) auto-loads last run.
+        var store2 = new EmberTern.Core.Settings.ParameterHistoryStore(dir);
+        var dlg2 = new ExecuteProcedureDialogViewModel(inputs, "HIST_PROC_TEST", "conn-1", "Procedure", store2);
+        Assert.True(dlg2.HasHistory);
+        Assert.False(dlg2.Params[0].IsNull);   // restored from persisted history
         Assert.Equal(42m, dlg2.Params[0].NumericValue);
     }
 
