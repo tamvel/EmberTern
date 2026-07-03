@@ -190,21 +190,31 @@
           <ItemsControl ItemsSource="{Binding TableAccess}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:TableAccessBarViewModel">
-                <Grid ColumnDefinitions="150,Auto,*" Margin="0,0,0,3">
-                  <TextBlock Grid.Column="0" Text="{Binding Table}" FontSize="11"
-                             FontFamily="Consolas,Cascadia Code,monospace" TextTrimming="CharacterEllipsis"
-                             Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" />
-                  <StackPanel Grid.Column="1" Orientation="Horizontal" Height="12" VerticalAlignment="Center">
-                    <Border Width="{Binding SeqWidth}" Background="{DynamicResource DangerIconBrush}" CornerRadius="2,0,0,2" />
-                    <Border Width="{Binding IdxWidth}" Background="{DynamicResource InfoIconBrush}" />
-                  </StackPanel>
-                  <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding ReadsText}" FontSize="10"
-                               Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding ChangesText}" FontSize="10" IsVisible="{Binding HasChanges}"
-                               Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
-                  </StackPanel>
-                </Grid>
+                <!-- Row band: a hairline separator + padding gives each row a clear extent, so
+                     the eye tracks a table name across to its bar mid-list. -->
+                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,4">
+                  <Grid ColumnDefinitions="170,160,*" VerticalAlignment="Center">
+                    <TextBlock Grid.Column="0" Text="{Binding Table}" FontSize="11"
+                               FontFamily="Consolas,Cascadia Code,monospace" TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding Table}" Margin="0,0,10,0"
+                               Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" />
+                    <!-- Fixed-width lane: every bar shares the same start AND end, so the reads
+                         column no longer floats, and a faint track anchors even a 1px bar. -->
+                    <Panel Grid.Column="1" Width="160" Height="12" VerticalAlignment="Center" HorizontalAlignment="Left">
+                      <Border Background="{DynamicResource RowAlternateBrush}" CornerRadius="3" />
+                      <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                        <Border Width="{Binding SeqWidth}" Background="{DynamicResource DangerIconBrush}" CornerRadius="3,0,0,3" />
+                        <Border Width="{Binding IdxWidth}" Background="{DynamicResource InfoIconBrush}" />
+                      </StackPanel>
+                    </Panel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding ReadsText}" FontSize="10"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding ChangesText}" FontSize="10" IsVisible="{Binding HasChanges}"
+                                 Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
