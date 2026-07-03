@@ -112,8 +112,8 @@
                 <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6">
                   <StackPanel Spacing="3">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <Border CornerRadius="3" Padding="4,0" VerticalAlignment="Center">
+                    <DockPanel LastChildFill="True">
+                      <Border DockPanel.Dock="Left" CornerRadius="3" Padding="4,0" VerticalAlignment="Center" Margin="0,0,6,0">
                         <Border.Background>
                           <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                             <Binding Path="SeverityBrushKey" />
@@ -123,9 +123,12 @@
                         <TextBlock Text="{Binding SeverityText}" FontSize="10" FontWeight="SemiBold"
                                    Foreground="{DynamicResource OnAccentBrush}" />
                       </Border>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding ConfidenceText}" FontSize="10"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
+                                 Margin="6,0,0,0" />
                       <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
                                  Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" />
-                    </StackPanel>
+                    </DockPanel>
                     <TextBlock Text="{Binding Explanation}" FontSize="11" TextWrapping="Wrap"
                                Foreground="{DynamicResource SubtleForegroundBrush}" />
                     <ItemsControl ItemsSource="{Binding Evidence}" IsVisible="{Binding HasEvidence}" Margin="0,2,0,0">

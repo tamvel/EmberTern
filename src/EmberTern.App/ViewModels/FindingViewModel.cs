@@ -3,8 +3,9 @@ using EmberTern.Core.Performance;
 
 namespace EmberTern.App.ViewModels;
 
-/// <summary>Read-only projection of a <see cref="Finding"/> for the Findings zone.
-/// Phase 2 findings are measured-reads observations — no recommendation/action buttons.</summary>
+/// <summary>Read-only projection of a <see cref="Finding"/> for the Findings zone. Phase 3a
+/// findings are measured-first advisor observations with a confidence level — investigation-
+/// oriented, no recommendation/action buttons.</summary>
 public sealed class FindingViewModel
 {
     public FindingViewModel(Finding finding) => Finding = finding;
@@ -28,6 +29,14 @@ public sealed class FindingViewModel
         FindingSeverity.Medium => "WarningBrush",
         FindingSeverity.Low => "InfoIconBrush",
         _ => "SubtleForegroundBrush",
+    };
+
+    /// <summary>"High/Medium/Low confidence" — surfaced so a questionable finding reads as such.</summary>
+    public string ConfidenceText => Finding.Confidence switch
+    {
+        FindingConfidence.High => "High confidence",
+        FindingConfidence.Medium => "Medium confidence",
+        _ => "Low confidence",
     };
 
     public string Title => Finding.Title;

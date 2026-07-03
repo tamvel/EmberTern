@@ -54,6 +54,7 @@ public partial class MainWindowViewModel : ViewModelBase
     // re-execution). Plan + timings only; no MON$/trace/advisor yet.
     private readonly FirebirdPlanReader _planReader;
     private readonly FirebirdPerfStatsReader _perfStatsReader;
+    private readonly FirebirdCatalogReader _catalogReader;
     private readonly PerformanceAnalyzer _performanceAnalyzer;
     private string? _lastProfiledSql;
     private QueryResult? _lastProfiledResult;
@@ -164,6 +165,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // Per-table reads (Phase 2): stats read on the metadata lane, attachment id on the
         // data lane — so before/after snapshots stay fresh and never touch the data tx.
         _perfStatsReader = new FirebirdPerfStatsReader(_service, _metadataTransactionService, _transactionService);
+        // Catalog (indexes/selectivity/cardinality) for the advisor — read on the metadata lane
+        // for the profiled query's tables when the Performance panel builds (Phase 3a).
+        _catalogReader = new FirebirdCatalogReader(_service, _metadataTransactionService);
         _performanceAnalyzer = new PerformanceAnalyzer();
         Performance = new PerformancePanelViewModel
         {
@@ -2840,7 +2844,25 @@ public partial class MainWindowViewModel : ViewModelBase
             TableReads = reads,
             Method = reads.Count > 0 ? CaptureMethod.MonAttachmentDelta : CaptureMethod.PlanOnly,
         };
-        return _performanceAnalyzer.Analyze(capture);
+
+        // Advisor catalog (Phase 3a): indexes/selectivity/cardinality for the tables the query
+        // actually read. Best-effort on the metadata lane — any failure degrades to the
+        // measured-reads findings that don't need the catalog. Scoped to the measured tables.
+        CatalogModel? catalog = null;
+        var tables = reads.Select(r => r.Table).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (_service.IsConnected && tables.Count > 0)
+        {
+            try
+            {
+                catalog = await _catalogReader.CaptureAsync(tables, cancellationToken).ConfigureAwait(true);
+            }
+            catch (PerformanceCaptureException)
+            {
+                // Catalog unavailable — advisor still runs on measured reads alone.
+            }
+        }
+
+        return _performanceAnalyzer.Analyze(capture, catalog);
     }
 
     // Performance tab visibility drives lazy analysis (Option B): build on first view
