@@ -1972,6 +1972,8 @@ public partial class MainWindowViewModel : ViewModelBase
         Messages.Clear();
         OnPropertyChanged(nameof(HasMessages));
         OnPropertyChanged(nameof(ShowMessagesEmptyHint));
+        CopyAllMessagesCommand.NotifyCanExecuteChanged();
+        ClearMessagesCommand.NotifyCanExecuteChanged();
 
         QueryStatsText = string.Empty;
 
@@ -5076,7 +5078,34 @@ public partial class MainWindowViewModel : ViewModelBase
         Messages.Add(new QueryMessageViewModel(severity, text));
         OnPropertyChanged(nameof(HasMessages));
         OnPropertyChanged(nameof(ShowMessagesEmptyHint));
+        CopyAllMessagesCommand.NotifyCanExecuteChanged();
+        ClearMessagesCommand.NotifyCanExecuteChanged();
     }
+
+    // Copy the whole Messages log as text (timestamp + message per line). Selecting text
+    // within a single message + Ctrl+C is handled natively by the SelectableTextBlock.
+    [RelayCommand(CanExecute = nameof(HasMessages))]
+    private async Task CopyAllMessagesAsync()
+    {
+        if (ClipboardWriteRequested is { } write)
+        {
+            await write(BuildMessagesClipboardText(Messages)).ConfigureAwait(true);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasMessages))]
+    private void ClearMessages()
+    {
+        Messages.Clear();
+        OnPropertyChanged(nameof(HasMessages));
+        OnPropertyChanged(nameof(ShowMessagesEmptyHint));
+        CopyAllMessagesCommand.NotifyCanExecuteChanged();
+        ClearMessagesCommand.NotifyCanExecuteChanged();
+    }
+
+    // Tab-separated timestamp + text per line — pastes cleanly into a log / editor.
+    internal static string BuildMessagesClipboardText(IEnumerable<QueryMessageViewModel> messages)
+        => string.Join("\n", messages.Select(m => m.TimestampLabel + "\t" + m.Text));
 
     private void OnActiveConnectionChanged(object? sender, EventArgs e)
     {

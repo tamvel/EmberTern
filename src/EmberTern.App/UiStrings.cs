@@ -317,6 +317,8 @@ internal static class UiStrings
     public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
     public const string ResultsTruncatedFormat = "Results limited to {0} rows.";
     public const string RowsFetchedFormat = "{0} rows in {1} ms";
+    public const string MessagesCopyAll = "Copy all";
+    public const string MessagesClear = "Clear messages";
     // {0} = current page, {1} = total pages, {2} = total rows in the result set.
     public const string ResultsPaginationHintFormat = "Page {0} of {1} · {2} rows";
     // Record position (IBExpert-style). {0} = 1-based absolute position of the

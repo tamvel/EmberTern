@@ -381,7 +381,8 @@
     <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
   </Style>
 
-  <Style Selector="TextBlock.error">
+  <!-- :is(TextBlock) so it also matches SelectableTextBlock (a TextBlock subclass) — e.g. the Messages log. -->
+  <Style Selector=":is(TextBlock).error">
     <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
   </Style>
 

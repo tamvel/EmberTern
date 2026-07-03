@@ -1368,6 +1368,14 @@
             </TabItem>
             <TabItem Classes="bottom-tab" Header="{Binding MessagesLabel}">
               <Grid Background="{DynamicResource BackgroundBrush}">
+                <Grid.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Header="{x:Static app:UiStrings.MessagesCopyAll}"
+                              Command="{Binding CopyAllMessagesCommand}" />
+                    <MenuItem Header="{x:Static app:UiStrings.MessagesClear}"
+                              Command="{Binding ClearMessagesCommand}" />
+                  </ContextMenu>
+                </Grid.ContextMenu>
                 <TextBlock Text="{Binding MessagesEmptyHint}"
                            Classes="subtle"
                            Margin="14,14,0,0"
@@ -1386,7 +1394,7 @@
                                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                                        FontSize="11"
                                        VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="1"
+                            <SelectableTextBlock Grid.Column="1"
                                        Text="{Binding Text}"
                                        FontSize="12"
                                        TextWrapping="Wrap"
