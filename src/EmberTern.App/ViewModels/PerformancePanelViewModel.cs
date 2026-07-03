@@ -8,25 +8,33 @@ using EmberTern.Core.Performance;
 
 namespace EmberTern.App.ViewModels;
 
-/// <summary>Hosts the Performance panel (SQL Editor bottom-panel sub-tab). Phase 1 fills
-/// the verdict, the plan tree and the details drawer; the findings (zone ②) and table-access
-/// (zone ③-left) areas show placeholder empty-states until later phases supply them.
+/// <summary>Hosts the Performance panel (SQL Editor bottom-panel sub-tab).
 ///
-/// The VM holds no Firebird types: the host wires <see cref="ProfileCallback"/> (run the
-/// profiler + analyzer, return a report or null when there is nothing to profile) and
-/// <see cref="ClipboardWriteRequested"/>. A profiling/execution error is surfaced inline
-/// as <see cref="ErrorMessage"/> — the host converts Firebird exceptions to a message.</summary>
+/// Option B workflow: performance is a VIEW of the last real execution, not a separate
+/// run. The host marks the panel stale after each query (no re-execution — the timing and
+/// row count come from the run the user already did), and the analysis is built lazily the
+/// first time the panel is shown while stale (a cheap prepare-only plan capture). "Refresh"
+/// re-reads the plan for the last query; it never re-runs the query.
+///
+/// Information hierarchy: a plain-language summary (grade + which table is full-scanned +
+/// timing) is primary; the execution plan is demoted into a collapsed "advanced" section
+/// with the raw plan folded in. Findings + table-access are Phase-2 homes shown as subtle
+/// placeholders. The VM holds no Firebird types — the host supplies the build callback and
+/// converts Firebird exceptions to a message.</summary>
 public sealed partial class PerformancePanelViewModel : ViewModelBase
 {
-    /// <summary>Runs the profile and returns the analyzed report, or null when there is
-    /// nothing to profile (not connected / no query). Throws with a user-facing message
-    /// on an execution/capture failure.</summary>
-    public Func<CancellationToken, Task<PerformanceReport?>>? ProfileCallback { get; set; }
+    /// <summary>Builds the analyzed report from the LAST executed query (reads its plan;
+    /// does not re-run it). Returns null when there is nothing to analyze (no run yet /
+    /// not connected). Throws with a user-facing message on a capture failure.</summary>
+    public Func<CancellationToken, Task<PerformanceReport?>>? BuildCallback { get; set; }
 
     public Func<string, Task>? ClipboardWriteRequested { get; set; }
 
+    private bool _isVisible;
+    private bool _isStale;
+
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(RunAndProfileCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshCommand))]
     [NotifyPropertyChangedFor(nameof(ShowEmptyState))]
     private bool _isProfiling;
 
@@ -48,18 +56,68 @@ public sealed partial class PerformancePanelViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ShowPlanEmpty))]
     private IReadOnlyList<PlanNodeViewModel> _planRoots = Array.Empty<PlanNodeViewModel>();
 
+    // Plain-language primary summary (derived from the report by PerformanceInsight).
+    [ObservableProperty] private string? _gradeLine;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPlanLead))]
+    private string? _planLead;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNoiseSummary))]
+    private string? _noiseSummary;
+
+    [ObservableProperty] private bool _showForwardPointer;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTiming))]
+    private string? _timingText;
+
     public bool HasReport => Verdict is not null;
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
     public bool HasPlan => PlanRoots.Count > 0;
     public bool ShowPlanEmpty => HasReport && !HasPlan;
     public bool ShowEmptyState => !HasReport && !IsProfiling && !HasError;
+    public bool HasPlanLead => !string.IsNullOrEmpty(PlanLead);
+    public bool HasNoiseSummary => !string.IsNullOrEmpty(NoiseSummary);
+    public bool HasTiming => !string.IsNullOrEmpty(TimingText);
 
-    private bool CanRunProfile => !IsProfiling;
-
-    [RelayCommand(CanExecute = nameof(CanRunProfile))]
-    private async Task RunAndProfileAsync(CancellationToken cancellationToken)
+    /// <summary>Called by the host after each executed query. Marks the analysis stale;
+    /// if the panel is currently shown, refreshes immediately.</summary>
+    public void MarkStale()
     {
-        if (ProfileCallback is null)
+        _isStale = true;
+        if (_isVisible)
+        {
+            TriggerRefresh();
+        }
+    }
+
+    /// <summary>Called by the host when the Performance tab is shown/hidden. On becoming
+    /// visible while stale, the analysis is built lazily (cheap plan capture).</summary>
+    public void SetVisible(bool visible)
+    {
+        _isVisible = visible;
+        if (visible && _isStale)
+        {
+            TriggerRefresh();
+        }
+    }
+
+    private void TriggerRefresh() => _ = EnsureFreshAsync();
+
+    private bool CanRefresh => !IsProfiling;
+
+    [RelayCommand(CanExecute = nameof(CanRefresh))]
+    private Task RefreshAsync()
+    {
+        _isStale = true;
+        return EnsureFreshAsync();
+    }
+
+    private async Task EnsureFreshAsync()
+    {
+        if (IsProfiling || !_isStale || BuildCallback is null)
         {
             return;
         }
@@ -68,25 +126,26 @@ public sealed partial class PerformancePanelViewModel : ViewModelBase
         ErrorMessage = null;
         try
         {
-            var report = await ProfileCallback(cancellationToken).ConfigureAwait(true);
+            var report = await BuildCallback(CancellationToken.None).ConfigureAwait(true);
             if (report is null)
             {
-                // Nothing to profile — clear to the empty prompt.
                 Reset();
             }
             else
             {
                 ApplyReport(report);
             }
+            _isStale = false;
         }
         catch (OperationCanceledException)
         {
-            // user cancelled — leave prior state
+            // leave prior state
         }
         catch (Exception ex)
         {
             Reset();
             ErrorMessage = ex.Message;
+            _isStale = false;
         }
         finally
         {
@@ -106,8 +165,13 @@ public sealed partial class PerformancePanelViewModel : ViewModelBase
     private void ApplyReport(PerformanceReport report)
     {
         Verdict = new VerdictViewModel(report.Verdict);
-        PlanRoots = PlanNodeViewModel.BuildRoots(report.Plan);
         Details = new ExecutionDetailsViewModel(report.Details);
+        PlanRoots = PlanNodeViewModel.BuildRoots(report.Plan);
+        GradeLine = PerformanceInsight.GradeLine(report);
+        PlanLead = PerformanceInsight.PlanLead(report);
+        NoiseSummary = PerformanceInsight.NoiseSummary(report);
+        ShowForwardPointer = PerformanceInsight.ShowForwardPointer(report);
+        TimingText = Details.HasTimings ? Details.TimingsText : null;
     }
 
     private void Reset()
@@ -115,5 +179,10 @@ public sealed partial class PerformancePanelViewModel : ViewModelBase
         Verdict = null;
         Details = null;
         PlanRoots = Array.Empty<PlanNodeViewModel>();
+        GradeLine = null;
+        PlanLead = null;
+        NoiseSummary = null;
+        ShowForwardPointer = false;
+        TimingText = null;
     }
 }

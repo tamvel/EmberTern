@@ -49,11 +49,14 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdTableDetailReader _tableDetailReader;
     private readonly FirebirdDataEditor _dataEditor;
     private readonly FirebirdDdlExecutor _ddlExecutor;
-    // Performance Analysis (Phase 1): opt-in "Run & profile" on the data lane — plan +
-    // timings only. No MON$/trace/advisor yet.
+    // Performance Analysis (Phase 1): auto-available after execution (Option B) — the
+    // panel builds the report from the LAST data-lane run (plan re-read on view, no
+    // re-execution). Plan + timings only; no MON$/trace/advisor yet.
     private readonly FirebirdPlanReader _planReader;
-    private readonly PerformanceProfiler _performanceProfiler;
     private readonly PerformanceAnalyzer _performanceAnalyzer;
+    private string? _lastProfiledSql;
+    private QueryResult? _lastProfiledResult;
+    private const int PerformanceBottomTabIndex = 3; // Results=0, Messages=1, Output=2, Performance=3
 
     // SQL-template engine (Drag & Drop snippets). The registry answers the drop flyout
     // by object kind with no metadata read; the builder loads a dropped object's metadata
@@ -154,11 +157,10 @@ public partial class MainWindowViewModel : ViewModelBase
         // Performance profiling runs on the data lane (same attachment as F5). Plan is
         // read best-effort; a profiled run executes under the user's manual data tx.
         _planReader = new FirebirdPlanReader(_service, _transactionService);
-        _performanceProfiler = new PerformanceProfiler(_executor, _planReader);
         _performanceAnalyzer = new PerformanceAnalyzer();
         Performance = new PerformancePanelViewModel
         {
-            ProfileCallback = ProfileActiveQueryAsync,
+            BuildCallback = BuildPerformanceFromLastRunAsync,
             ClipboardWriteRequested = text => ClipboardWriteRequested is { } write ? write(text) : Task.CompletedTask,
         };
         Metadata = new MetadataExplorerViewModel(_service, _metadataReader);
@@ -1961,6 +1963,12 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowMessagesEmptyHint));
 
         QueryStatsText = string.Empty;
+
+        // Drop the last profiled run so the Performance panel doesn't show a stale report
+        // from a previous connection; MarkStale rebuilds it to the empty prompt.
+        _lastProfiledSql = null;
+        _lastProfiledResult = null;
+        Performance.MarkStale();
     }
 
     public async Task ConnectAsync(ConnectionProfile profile)
@@ -2783,34 +2791,51 @@ public partial class MainWindowViewModel : ViewModelBase
         return string.IsNullOrWhiteSpace(selected) ? QueryText : selected!;
     }
 
-    // Performance Analysis "Run & profile" callback (Phase 1). Returns null when there is
-    // nothing to profile (not connected / no active query); converts Firebird exceptions
-    // to a plain message so the panel VM stays free of Firebird exception types.
-    internal async Task<PerformanceReport?> ProfileActiveQueryAsync(CancellationToken cancellationToken)
+    // Performance Analysis build callback (Phase 1, Option B). Builds the report from the
+    // LAST data-lane execution — reads its plan (prepare-only, no re-execution) and
+    // assembles the capture from the run's own timing + row count. Returns null when there
+    // is no run to analyze. Timing + rows always render even if the plan can't be read;
+    // Firebird exceptions become a plain message so the panel VM stays Firebird-free.
+    internal async Task<PerformanceReport?> BuildPerformanceFromLastRunAsync(CancellationToken cancellationToken)
     {
-        if (!_service.IsConnected)
+        if (_lastProfiledResult is not { } result || string.IsNullOrWhiteSpace(_lastProfiledSql))
         {
             return null;
         }
-        var sql = ResolveActiveSql();
-        if (string.IsNullOrWhiteSpace(sql))
+
+        RawPlanCapture? plan = null;
+        TimeSpan? prepare = null;
+        if (_service.IsConnected)
         {
-            return null;
+            try
+            {
+                var planResult = await _planReader.GetPlanAsync(_lastProfiledSql!, cancellationToken).ConfigureAwait(true);
+                plan = planResult.Plan;
+                prepare = planResult.PrepareTime > TimeSpan.Zero ? planResult.PrepareTime : null;
+            }
+            catch (PerformanceCaptureException)
+            {
+                // Plan unavailable — the report still shows timing + rows.
+            }
         }
-        try
+
+        var capture = new PerformanceCapture
         {
-            var capture = await _performanceProfiler.ProfileAsync(sql, cancellationToken).ConfigureAwait(true);
-            return _performanceAnalyzer.Analyze(capture);
-        }
-        catch (QueryExecutionException ex)
-        {
-            throw new InvalidOperationException(ex.Message, ex);
-        }
-        catch (PerformanceCaptureException ex)
-        {
-            throw new InvalidOperationException(ex.Message, ex);
-        }
+            Statement = new StatementIdentity { Sql = _lastProfiledSql! },
+            Plan = plan,
+            Timings = new ExecutionTimings { Prepare = prepare, Execute = result.Elapsed },
+            RowsReturned = result.Rows.Count,
+            Truncated = result.Truncated,
+            RecordsAffected = result.RecordsAffected,
+            Method = CaptureMethod.PlanOnly,
+        };
+        return _performanceAnalyzer.Analyze(capture);
     }
+
+    // Performance tab visibility drives lazy analysis (Option B): build on first view
+    // while stale, so the panel reflects the last run without a manual profiling action.
+    partial void OnSelectedBottomTabIndexChanged(int value)
+        => Performance.SetVisible(value == PerformanceBottomTabIndex);
 
     // Column cache for ALIAS./TABLE. autocomplete. Keyed by uppercase table
     // name; cleared on disconnect (in ClearWorkspaceTabs path via
@@ -4410,6 +4435,15 @@ public partial class MainWindowViewModel : ViewModelBase
             var result = await executor.ExecuteAsync(sql, _executionCts.Token).ConfigureAwait(true);
             CurrentResult = result;
             CurrentResultVersionTag = Guid.NewGuid().ToString("N");
+
+            // Performance panel (Option B): remember the data-lane run so the panel can
+            // analyze it on view — no re-execution. Metadata/DDL runs are not profiled.
+            if (!metadata)
+            {
+                _lastProfiledSql = sql;
+                _lastProfiledResult = result;
+                Performance.MarkStale();
+            }
 
             var ms = (long)result.Elapsed.TotalMilliseconds;
             if (result.HasResultSet)
