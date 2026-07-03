@@ -22,6 +22,7 @@ public enum FindingKind
     LowSelectivityIndex,
     NonSargablePredicate,
     StaleStatistics,
+    MissingIndexCandidate,
 }
 
 /// <summary>How confident the advisor is that a finding is real (not just plan-shaped noise).
