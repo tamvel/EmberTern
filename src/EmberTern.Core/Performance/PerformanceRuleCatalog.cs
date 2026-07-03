@@ -10,6 +10,10 @@ public static class PerformanceRuleCatalog
 {
     public static IReadOnlyList<IPerformanceRule> Default() => new IPerformanceRule[]
     {
-        new CostlyFullScanRule(), // R1
+        new CostlyFullScanRule(),       // R1
+        new LowSelectivityIndexRule(),  // R4
+        new NonSargablePredicateRule(), // R3
+        new HighReadAmplificationRule(),// R6
+        new StaleStatisticsRule(),      // R5
     };
 }
