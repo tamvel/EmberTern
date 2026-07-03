@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using EmberTern.App.ViewModels;
 using EmberTern.Core.Performance;
 using Xunit;
 
@@ -7,6 +8,20 @@ namespace EmberTern.Tests;
 
 public class FindingGuidanceCatalogTests
 {
+    [Fact]
+    public void FindingViewModel_ExposesGuidanceForItsKind()
+    {
+        var vm = new FindingViewModel(new Finding
+        {
+            Kind = FindingKind.CostlyFullScan,
+            Severity = FindingSeverity.High,
+            Title = "x",
+        });
+        Assert.True(vm.HasGuidance);
+        Assert.Equal("What to investigate", vm.GuidanceHeading);
+        Assert.NotEmpty(vm.GuidanceItems);
+    }
+
     // Every finding kind the advisor actually emits (R1–R6) must carry guidance.
     [Theory]
     [InlineData(FindingKind.CostlyFullScan)]

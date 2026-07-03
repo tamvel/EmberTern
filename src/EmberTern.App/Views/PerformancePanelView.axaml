@@ -143,6 +143,24 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
+
+                    <!-- Phase 4: investigation guidance (inherits the finding's confidence) -->
+                    <StackPanel Spacing="2" Margin="0,4,0,0" IsVisible="{Binding HasGuidance}">
+                      <TextBlock Text="{Binding GuidanceHeading}" FontSize="10" FontWeight="SemiBold"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}" />
+                      <ItemsControl ItemsSource="{Binding GuidanceItems}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="x:String">
+                            <Grid ColumnDefinitions="Auto,*" Margin="0,1,0,0">
+                              <TextBlock Grid.Column="0" Text="•" FontSize="11" Margin="0,0,6,0"
+                                         Foreground="{DynamicResource SubtleForegroundBrush}" />
+                              <TextBlock Grid.Column="1" Text="{Binding}" FontSize="11" TextWrapping="Wrap"
+                                         Foreground="{DynamicResource SubtleForegroundBrush}" />
+                            </Grid>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
                   </StackPanel>
                 </Border>
               </DataTemplate>
