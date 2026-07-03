@@ -19,6 +19,15 @@ public class FirebirdPerfStatsReaderTests
     }
 
     [Fact]
+    public void SnapshotSql_IncludesRowChangeColumns()
+    {
+        var sql = FirebirdPerfStatsReader.SnapshotSql;
+        Assert.Contains("MON$RECORD_INSERTS", sql);
+        Assert.Contains("MON$RECORD_UPDATES", sql);
+        Assert.Contains("MON$RECORD_DELETES", sql);
+    }
+
+    [Fact]
     public void SnapshotSql_FiltersToAttachmentAndExcludesSystemTables()
     {
         var sql = FirebirdPerfStatsReader.SnapshotSql;

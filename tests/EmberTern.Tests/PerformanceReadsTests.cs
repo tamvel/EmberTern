@@ -25,6 +25,37 @@ public class PerformanceReadsTests
     private static PerTableReadRow[] Rows(params (string t, long seq, long idx)[] rows)
         => rows.Select(r => new PerTableReadRow(r.t, r.seq, r.idx)).ToArray();
 
+    // ---- TableStatsDiffer: row-change counters (Execution Metrics step 1) -----------
+    [Fact]
+    public void Diff_ComputesInsertUpdateDeleteDelta()
+    {
+        var before = new[] { new PerTableReadRow("NAGL", 0, 0, Inserts: 5, Updates: 2, Deletes: 1) };
+        var after = new[] { new PerTableReadRow("NAGL", 0, 0, Inserts: 25, Updates: 12, Deletes: 4) };
+        var d = Assert.Single(TableStatsDiffer.Diff(before, after));
+        Assert.Equal(20, d.Inserts);
+        Assert.Equal(10, d.Updates);
+        Assert.Equal(3, d.Deletes);
+        Assert.Equal(33, d.TotalChanges);
+    }
+
+    [Fact]
+    public void Diff_KeepsPureDmlRow_WithNoReads()
+    {
+        // A DML / procedure that only wrote rows (0 reads) must NOT be dropped.
+        var after = new[] { new PerTableReadRow("T", 0, 0, Inserts: 8) };
+        var d = Assert.Single(TableStatsDiffer.Diff(Array.Empty<PerTableReadRow>(), after));
+        Assert.Equal("T", d.Table);
+        Assert.Equal(8, d.Inserts);
+    }
+
+    [Fact]
+    public void Diff_ClampsNegativeChangeDeltas()
+    {
+        var before = new[] { new PerTableReadRow("T", 0, 0, Updates: 100) };
+        var after = new[] { new PerTableReadRow("T", 0, 0, Updates: 40) }; // went down → clamp, then dropped
+        Assert.Empty(TableStatsDiffer.Diff(before, after));
+    }
+
     // ---- TableStatsDiffer -----------------------------------------------------------
     [Fact]
     public void Diff_SubtractsBeforeFromAfter()

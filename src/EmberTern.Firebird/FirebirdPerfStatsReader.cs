@@ -26,7 +26,8 @@ public sealed class FirebirdPerfStatsReader
     // MON$ATTACHMENTS ⋈ MON$TABLE_STATS ⋈ MON$RECORD_STATS at connection scope, filtered to
     // one attachment; system tables excluded. Names are space-padded → TRIM.
     internal const string SnapshotSql =
-        "SELECT TRIM(ts.MON$TABLE_NAME), rs.MON$RECORD_SEQ_READS, rs.MON$RECORD_IDX_READS " +
+        "SELECT TRIM(ts.MON$TABLE_NAME), rs.MON$RECORD_SEQ_READS, rs.MON$RECORD_IDX_READS, " +
+        "rs.MON$RECORD_INSERTS, rs.MON$RECORD_UPDATES, rs.MON$RECORD_DELETES " +
         "FROM MON$ATTACHMENTS a " +
         "JOIN MON$TABLE_STATS ts ON ts.MON$STAT_ID = a.MON$STAT_ID " +
         "JOIN MON$RECORD_STATS rs ON rs.MON$STAT_ID = ts.MON$RECORD_STAT_ID " +
@@ -106,9 +107,12 @@ public sealed class FirebirdPerfStatsReader
                 var name = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
                 long seq = reader.IsDBNull(1) ? 0 : reader.GetInt64(1);
                 long idx = reader.IsDBNull(2) ? 0 : reader.GetInt64(2);
+                long ins = reader.IsDBNull(3) ? 0 : reader.GetInt64(3);
+                long upd = reader.IsDBNull(4) ? 0 : reader.GetInt64(4);
+                long del = reader.IsDBNull(5) ? 0 : reader.GetInt64(5);
                 if (name.Length > 0)
                 {
-                    rows.Add(new PerTableReadRow(name, seq, idx));
+                    rows.Add(new PerTableReadRow(name, seq, idx, ins, upd, del));
                 }
             }
             return rows;
