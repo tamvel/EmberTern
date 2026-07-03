@@ -1,0 +1,73 @@
+2026-07-03T19:10:34.8830 (7320:00000000053417C0) EXECUTE_TRIGGER_FINISH
+	C:\PRESTIZ\BAZA\SZKOLENIE.FB (ATT_3093, SYSSTR:NONE, WIN1250, TCPv6:::1/62149)
+	C:\Prestiz\PCbiznes.exe:10856
+		(TRA_220476, READ_COMMITTED | REC_VERSION | WAIT | READ_ONLY)
+
+Trigger XXX_WS_TRANS_ON_COMMIT (ON TRANSACTION_COMMIT):
+      0 ms
+
+2026-07-03T19:10:34.8830 (7320:00000000053417C0) EXECUTE_FUNCTION_START
+	C:\PRESTIZ\BAZA\SZKOLENIE.FB (ATT_3093, SYSSTR:NONE, WIN1250, TCPv6:::1/62149)
+	C:\Prestiz\PCbiznes.exe:10856
+		(TRA_218699, READ_COMMITTED | REC_VERSION | NOWAIT | READ_ONLY)
+
+Function SIGN:
+
+param0 = double precision, "<NULL>"
+
+
+2026-07-03T19:10:34.8830 (7320:00000000053417C0) EXECUTE_FUNCTION_FINISH
+	C:\PRESTIZ\BAZA\SZKOLENIE.FB (ATT_3093, SYSSTR:NONE, WIN1250, TCPv6:::1/62149)
+	C:\Prestiz\PCbiznes.exe:10856
+		(TRA_218699, READ_COMMITTED | REC_VERSION | NOWAIT | READ_ONLY)
+
+Function SIGN:
+
+param0 = double precision, "<NULL>"
+
+returns:
+param0 = integer, "0"
+
+      0 ms
+
+2026-07-03T19:10:34.8830 (7320:00000000053417C0) EXECUTE_FUNCTION_START
+	C:\PRESTIZ\BAZA\SZKOLENIE.FB (ATT_3093, SYSSTR:NONE, WIN1250, TCPv6:::1/62149)
+	C:\Prestiz\PCbiznes.exe:10856
+		(TRA_218699, READ_COMMITTED | REC_VERSION | NOWAIT | READ_ONLY)
+
+Function SIGN:
+
+param0 = double precision, "10004"
+
+
+2026-07-03T19:10:34.8830 (7320:00000000053417C0) EXECUTE_FUNCTION_FINISH
+	C:\PRESTIZ\BAZA\SZKOLENIE.FB (ATT_3093, SYSSTR:NONE, WIN1250, TCPv6:::1/62149)
+	C:\Prestiz\PCbiznes.exe:10856
+		(TRA_218699, READ_COMMITTED | REC_VERSION | NOWAIT | READ_ONLY)
+
+Function SIGN:
+
+param0 = double precision, "10004"
+
+returns:
+param0 = integer, "1"
+
+      0 ms
+
+2026-07-03T19:10:34.8830 (7320:00000000053417C0) EXECUTE_STATEMENT_FINISH
+	C:\PRESTIZ\BAZA\SZKOLENIE.FB (ATT_3093, SYSSTR:NONE, WIN1250, TCPv6:::1/62149)
+	C:\Prestiz\PCbiznes.exe:10856
+		(TRA_218699, READ_COMMITTED | REC_VERSION | NOWAIT | READ_ONLY)
+
+Statement 4237371:
+-------------------------------------------------------------------------------
+SELECT *
+FROM MAGAZYN
+2 records fetched
+      1 ms, 3 read(s), 27 fetch(es)
+
+Table                              Natural     Index    Update    Insert    Delete   Backout     Purge   Expunge
+****************************************************************************************************************
+RDB$FORMATS                                        1                                                            
+DEFCENY                                            1                                                            
+MAGAZYN                                  2                                                                      

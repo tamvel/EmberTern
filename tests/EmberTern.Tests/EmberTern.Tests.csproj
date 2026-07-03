@@ -12,6 +12,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Byte-exact real trace snippets for the whitespace-sensitive TraceLogParser. -->
+    <Content Include="Fixtures\Trace\*.trace" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
     <ProjectReference Include="..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
     <ProjectReference Include="..\..\src\EmberTern.App\EmberTern.App.csproj" />

@@ -1,0 +1,18 @@
+2026-07-03T19:10:34.7490 (7320:00000000053417C0) EXECUTE_STATEMENT_FINISH
+	C:\PRESTIZ\BAZA\SZKOLENIE.FB (ATT_3093, SYSSTR:NONE, WIN1250, TCPv6:::1/62149)
+	C:\Prestiz\PCbiznes.exe:10856
+		(TRA_218699, READ_COMMITTED | REC_VERSION | NOWAIT | READ_ONLY)
+
+Statement 4237341:
+-------------------------------------------------------------------------------
+SELECT F.ID_FILTRDEF, f.ID_UZYTKOWNIK, f.IDOKNA, f.NAZWA, f.DEFFILTRU, f.SKROTKLAWISZ, f.DOSTEPNY, f.opis,fu.lp, fu.WYWOLAJ_DLA_MNIE, fu.POZWOL_WYLACZYC, fu.DEFFILTRU as DEFFILTRU_USER
+FROM FILTRDEF F JOIN FILTRDEF_USER FU on (FU.ID_FILTRDEF = F.ID_FILTRDEF)
+WHERE
+(F.IDOKNA = 5310 AND FU.ID_UZYTKOWNIK = 14790001)
+ORDER BY FU.LP 
+0 records fetched
+      0 ms, 6 fetch(es)
+
+Table                              Natural     Index    Update    Insert    Delete   Backout     Purge   Expunge
+****************************************************************************************************************
+FILTRDEF                                 1                                                                      

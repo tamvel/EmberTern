@@ -1,0 +1,75 @@
+
+IBE> Trace session "IBE_2026-07-03 19:10:31" started successfully...
+IBE> Server: localhost/3050
+IBE> Client library: gds32.dll
+IBE> User: SYSDBA
+IBE> Trace config:
+IBE>     database = "C:\Prestiz\BAZA\SZKOLENIE.FB"
+IBE>     {
+IBE>         enabled = true
+IBE>         connection_id = 0
+IBE>         include_filter = %(SELECT|INSERT|UPDATE|DELETE)%
+IBE>         log_connections = true
+IBE>         log_transactions = false
+IBE>         log_statement_prepare = false
+IBE>         log_statement_free = false
+IBE>         log_statement_start = false
+IBE>         log_statement_finish = true
+IBE>         log_procedure_start = true
+IBE>         log_procedure_finish = true
+IBE>         log_function_start = true
+IBE>         log_function_finish = true
+IBE>         log_trigger_start = false
+IBE>         log_trigger_finish = true
+IBE>         log_context = false
+IBE>         print_plan = false
+IBE>         explain_plan = false
+IBE>         print_perf = true
+IBE>         log_blr_requests = false
+IBE>         print_blr = false
+IBE>         log_dyn_requests = true
+IBE>         print_dyn = false
+IBE>         time_threshold = 0
+IBE>         max_sql_length = 265536
+IBE>         max_blr_length = 5000
+IBE>         max_dyn_length = 5000
+IBE>         max_arg_length = 1024
+IBE>         max_arg_count = 300
+IBE>         log_errors = true
+IBE>     }
+IBE>     services
+IBE>     {
+IBE>         enabled = false
+IBE>         log_services = false
+IBE>         log_service_query = false
+IBE>     }
+
+Trace session ID 2 started
+2026-07-03T19:10:34.0380 (7320:00000000053417C0) TRACE_INIT
+	SESSION_2 IBE_2026-07-03 19:10:31
+	
+
+2026-07-03T19:10:34.0380 (7320:00000000053417C0) EXECUTE_STATEMENT_FINISH
+	C:\PRESTIZ\BAZA\SZKOLENIE.FB (ATT_3093, SYSSTR:NONE, WIN1250, TCPv6:::1/62149)
+	C:\Prestiz\PCbiznes.exe:10856
+		(TRA_218699, READ_COMMITTED | REC_VERSION | NOWAIT | READ_ONLY)
+
+Statement 967310:
+-------------------------------------------------------------------------------
+SELECT WARTOSC
+FROM KONFFIRMY
+WHERE
+(NUMERPARAM = ?)
+
+param0 = integer, "3234"
+
+1 records fetched
+      0 ms, 3 fetch(es)
+
+Table                              Natural     Index    Update    Insert    Delete   Backout     Purge   Expunge
+****************************************************************************************************************
+KONFFIRMY                                          1                                                            
+
+Error creating trace session for database "C:\PRESTIZ\BAZA\SYSTEMST.FB":
+error while parsing trace configuration
+	line 13: error while compiling regular expression "C:\Prestiz\BAZA\SZKOLENIE.FB"

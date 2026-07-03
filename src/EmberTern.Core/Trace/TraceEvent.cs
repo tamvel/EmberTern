@@ -78,6 +78,11 @@ public sealed record TraceEvent
     /// <summary>Firebird attachment id (<c>ATT_n</c>) — used to compute <see cref="IsSelfActivity"/>.</summary>
     public long? AttachmentId { get; init; }
 
+    /// <summary>Per-connection/thread context handle from the raw header (the hex token). Carried so a
+    /// future call-hierarchy pass can nest events executed on the same context without re-parsing.
+    /// Not shown in the grid.</summary>
+    public string? ContextToken { get; init; }
+
     /// <summary>True when this event belongs to one of EmberTern's own attachments (data/metadata
     /// lanes). Hidden by default so the monitored ERP's activity is not drowned by self-noise.</summary>
     public bool IsSelfActivity { get; init; }
