@@ -161,6 +161,14 @@
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>
                     </StackPanel>
+
+                    <!-- Phase 5: recommendation (inherits the finding's confidence) -->
+                    <StackPanel Spacing="2" Margin="0,4,0,0" IsVisible="{Binding HasRecommendation}">
+                      <TextBlock Text="{Binding RecommendationHeading}" FontSize="10" FontWeight="SemiBold"
+                                 Foreground="{DynamicResource AccentBrush}" />
+                      <TextBlock Text="{Binding RecommendationText}" FontSize="11" TextWrapping="Wrap"
+                                 Foreground="{DynamicResource ForegroundBrush}" />
+                    </StackPanel>
                   </StackPanel>
                 </Border>
               </DataTemplate>

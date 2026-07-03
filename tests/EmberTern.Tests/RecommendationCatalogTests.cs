@@ -1,4 +1,5 @@
 using System;
+using EmberTern.App.ViewModels;
 using EmberTern.Core.Performance;
 using Xunit;
 
@@ -6,6 +7,15 @@ namespace EmberTern.Tests;
 
 public class RecommendationCatalogTests
 {
+    [Fact]
+    public void FindingViewModel_ExposesRecommendation()
+    {
+        var vm = new FindingViewModel(F(FindingKind.MissingIndexCandidate, column: "CUSTOMER_ID"));
+        Assert.True(vm.HasRecommendation);
+        Assert.Equal("Potential improvement", vm.RecommendationHeading);
+        Assert.Contains("CUSTOMER_ID", vm.RecommendationText);
+    }
+
     private static Finding F(FindingKind kind, string? column = null) => new()
     {
         Kind = kind,

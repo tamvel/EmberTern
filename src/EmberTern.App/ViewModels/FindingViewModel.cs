@@ -9,11 +9,13 @@ namespace EmberTern.App.ViewModels;
 public sealed class FindingViewModel
 {
     private readonly FindingGuidance _guidance;
+    private readonly Recommendation _recommendation;
 
     public FindingViewModel(Finding finding)
     {
         Finding = finding;
         _guidance = FindingGuidanceCatalog.For(finding.Kind);
+        _recommendation = RecommendationCatalog.For(finding);
     }
 
     public Finding Finding { get; }
@@ -59,4 +61,11 @@ public sealed class FindingViewModel
     public IReadOnlyList<string> GuidanceItems => _guidance.Items;
 
     public bool HasGuidance => _guidance.HasItems;
+
+    // Phase 5 — recommendation ("potential improvement"; inherits the finding's confidence).
+    public string RecommendationHeading => _recommendation.Heading;
+
+    public string RecommendationText => _recommendation.Text;
+
+    public bool HasRecommendation => _recommendation.HasText;
 }
