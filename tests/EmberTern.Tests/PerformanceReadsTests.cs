@@ -2,12 +2,26 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EmberTern.Core.Performance;
+using EmberTern.Core.Performance.Rules;
 using Xunit;
 
 namespace EmberTern.Tests;
 
 public class PerformanceReadsTests
 {
+    // R1 (CostlyFullScanRule) is the migrated home of the measured full-scan finding — run it
+    // through the context the same way the report builder does.
+    private static IReadOnlyList<Finding> R1(TableAccessProfile? access, long rowsReturned)
+    {
+        var capture = new PerformanceCapture
+        {
+            Statement = new StatementIdentity { Sql = "SELECT ..." },
+            RowsReturned = rowsReturned,
+        };
+        var context = PerformanceContextBuilder.Build(capture, plan: null, access: access, catalog: null);
+        return new CostlyFullScanRule().Evaluate(context);
+    }
+
     private static PerTableReadRow[] Rows(params (string t, long seq, long idx)[] rows)
         => rows.Select(r => new PerTableReadRow(r.t, r.seq, r.idx)).ToArray();
 
@@ -54,7 +68,7 @@ public class PerformanceReadsTests
     public void Findings_LargeSequentialScan_IsHigh()
     {
         var access = Profile(("INVOICE", 100_010, 0));
-        var f = Assert.Single(PerformanceFindings.Build(access, rowsReturned: 285));
+        var f = Assert.Single(R1(access, rowsReturned: 285));
         Assert.Equal(FindingKind.CostlyFullScan, f.Kind);
         Assert.Equal(FindingSeverity.High, f.Severity);
         Assert.Equal("INVOICE", f.Table);
@@ -66,20 +80,20 @@ public class PerformanceReadsTests
     public void Findings_SmallScan_IsNotFlagged()
     {
         // The "72 looks scary" fix: a 72-row scan produces no finding.
-        Assert.Empty(PerformanceFindings.Build(Profile(("SMALL", 72, 0)), rowsReturned: 72));
+        Assert.Empty(R1(Profile(("SMALL", 72, 0)), rowsReturned: 72));
     }
 
     [Fact]
     public void Findings_IndexOnlyAccess_NoFinding()
     {
-        Assert.Empty(PerformanceFindings.Build(Profile(("T", 0, 5000)), rowsReturned: 10));
+        Assert.Empty(R1(Profile(("T", 0, 5000)), rowsReturned: 10));
     }
 
     [Fact]
     public void Findings_AmplificationRaisesSeverity()
     {
         // 5000 seq reads returning 1 row → amplification 5000 → High via the amp branch.
-        var f = Assert.Single(PerformanceFindings.Build(Profile(("T", 5_000, 0)), rowsReturned: 1));
+        var f = Assert.Single(R1(Profile(("T", 5_000, 0)), rowsReturned: 1));
         Assert.Equal(FindingSeverity.High, f.Severity);
     }
 
@@ -87,15 +101,15 @@ public class PerformanceReadsTests
     public void Findings_MidScan_ModerateReturn_IsMediumOrLow()
     {
         // 800 seq reads returning 800 rows (amp 1×) → Low (below Medium floor, no amp boost).
-        var f = Assert.Single(PerformanceFindings.Build(Profile(("T", 800, 0)), rowsReturned: 800));
+        var f = Assert.Single(R1(Profile(("T", 800, 0)), rowsReturned: 800));
         Assert.Equal(FindingSeverity.Low, f.Severity);
     }
 
     [Fact]
     public void Findings_NullOrEmptyAccess_NoFindings()
     {
-        Assert.Empty(PerformanceFindings.Build(null, 100));
-        Assert.Empty(PerformanceFindings.Build(new TableAccessProfile(), 100));
+        Assert.Empty(R1(null, 100));
+        Assert.Empty(R1(new TableAccessProfile(), 100));
     }
 
     // ---- ReportBuilder with reads ---------------------------------------------------

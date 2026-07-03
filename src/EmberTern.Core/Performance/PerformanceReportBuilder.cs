@@ -14,11 +14,15 @@ namespace EmberTern.Core.Performance;
 public sealed class PerformanceReportBuilder
 {
     private readonly PlanParser _planParser;
+    private readonly PerformanceRuleEngine _ruleEngine;
 
-    public PerformanceReportBuilder(PlanParser? planParser = null)
-        => _planParser = planParser ?? new PlanParser();
+    public PerformanceReportBuilder(PlanParser? planParser = null, PerformanceRuleEngine? ruleEngine = null)
+    {
+        _planParser = planParser ?? new PlanParser();
+        _ruleEngine = ruleEngine ?? new PerformanceRuleEngine();
+    }
 
-    public PerformanceReport Build(PerformanceCapture capture)
+    public PerformanceReport Build(PerformanceCapture capture, CatalogModel? catalog = null)
     {
         ArgumentNullException.ThrowIfNull(capture);
 
@@ -27,15 +31,14 @@ public sealed class PerformanceReportBuilder
         int fullScans = plan is null ? 0 : plan.EnumerateNodes().Count(n => n.IsSequentialScan);
         long rowsReturned = capture.HasResultSet ? capture.RowsReturned : 0;
 
-        // Measured per-table reads (Phase 2): build the access profile + reads-based
-        // findings + read amplification. Null/empty when reads weren't captured.
+        // Measured per-table reads (Phase 2): build the access profile. The advisor rule engine
+        // (Phase 3a) then derives findings from the measured access + plan + predicates + catalog.
         TableAccessProfile? access = BuildAccess(capture);
-        var findings = PerformanceFindings.Build(access, rowsReturned);
+        var context = PerformanceContextBuilder.Build(capture, plan, access, catalog);
+        var findings = _ruleEngine.Evaluate(context);
 
-        long? rowsRead = access?.TotalRowsRead;
-        double? amplification = (access is not null && rowsReturned > 0)
-            ? (double)access.TotalRowsRead / rowsReturned
-            : null;
+        long? rowsRead = context.RowsRead;
+        double? amplification = context.Amplification;
 
         var verdict = new PerformanceVerdict
         {

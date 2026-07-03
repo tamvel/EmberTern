@@ -13,9 +13,9 @@ public sealed class PerformanceAnalyzer
     public PerformanceAnalyzer(PerformanceReportBuilder? builder = null)
         => _builder = builder ?? new PerformanceReportBuilder();
 
-    public PerformanceReport Analyze(PerformanceCapture capture)
+    public PerformanceReport Analyze(PerformanceCapture capture, CatalogModel? catalog = null)
     {
         ArgumentNullException.ThrowIfNull(capture);
-        return _builder.Build(capture);
+        return _builder.Build(capture, catalog);
     }
 }
