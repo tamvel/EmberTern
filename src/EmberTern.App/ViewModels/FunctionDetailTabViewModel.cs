@@ -535,18 +535,33 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
         {
             ExecResult = outcome.Result;
             ExecError = string.Empty;
-            ExecInfo = BuildExecInfo(outcome.Result);
+            ExecInfo = BuildExecInfo(outcome);
             ExecInfoIsError = false;
             if (HasExecResult) ActiveSubTabIndex = ExecuteResultSubTabIndex;
         }
     }
 
-    private static string BuildExecInfo(QueryResult? r)
+    // A function is usually read-only: a scalar result shows "1 row in T ms" (+ rows read);
+    // a set-returning function shows its rows + reads. Same metrics infrastructure as the
+    // SQL Editor and Procedure Detail.
+    private static string BuildExecInfo(ProcedureExecOutcome outcome)
     {
+        var r = outcome.Result;
         if (r is null) return UiStrings.ProcedureExecCompleted;
         var ms = (long)r.Elapsed.TotalMilliseconds;
         if (r.HasResultSet)
-            return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoRowsFormat, r.Rows.Count, ms);
+        {
+            var line = string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoRowsFormat, r.Rows.Count, ms);
+            if (outcome.Summary is { ReadsMeasured: true, RowsRead: > 0 } s)
+            {
+                line += "\n\n" + string.Format(CultureInfo.InvariantCulture, "{0} rows read", s.RowsRead);
+            }
+            return line;
+        }
+        if (outcome.Summary is { } summary)
+        {
+            return summary.BuildDetailedMessage();
+        }
         return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoCompletedFormat, ms);
     }
 

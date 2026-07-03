@@ -15,8 +15,10 @@ using EmberTern.Firebird;
 
 namespace EmberTern.App.ViewModels;
 
-/// <summary>Result of an Execute Procedure run — a result set or an error message.</summary>
-public sealed record ProcedureExecOutcome(QueryResult? Result, string? Error);
+/// <summary>Result of an Execute Procedure/Function run: a result set (or null for a
+/// non-result EXECUTE PROCEDURE), an optional error, and — for a successful non-result run —
+/// the work <see cref="Summary"/> (rows changed + rows read) built from the MON$ metrics delta.</summary>
+public sealed record ProcedureExecOutcome(QueryResult? Result, string? Error, ExecutionSummary? Summary = null);
 
 /// <summary>
 /// Detail surface for a Firebird stored PROCEDURE. Tabs: Editor (Source ⇄ Easy modes)
@@ -579,7 +581,7 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         {
             ExecResult = outcome.Result;
             ExecError = string.Empty;
-            ExecInfo = BuildExecInfo(outcome.Result);
+            ExecInfo = BuildExecInfo(outcome);
             ExecInfoIsError = false;
             // Only jump to the Result tab when there are rows — a no-result-set
             // procedure (EXECUTE PROCEDURE) gives feedback via the bottom info panel
@@ -588,14 +590,27 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         }
     }
 
-    private static string BuildExecInfo(QueryResult? r)
+    // Execution Metrics: a result-returning proc shows "N rows in T ms" (+ rows read); a
+    // non-result EXECUTE PROCEDURE shows the multi-line work summary (rows changed + rows
+    // read, or "No data modifications detected." when it only read).
+    private static string BuildExecInfo(ProcedureExecOutcome outcome)
     {
+        var r = outcome.Result;
         if (r is null) return UiStrings.ProcedureExecCompleted;
         var ms = (long)r.Elapsed.TotalMilliseconds;
         if (r.HasResultSet)
-            return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoRowsFormat, r.Rows.Count, ms);
-        if (r.RecordsAffected is { } n && n >= 0)
-            return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoAffectedFormat, n, ms);
+        {
+            var line = string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoRowsFormat, r.Rows.Count, ms);
+            if (outcome.Summary is { ReadsMeasured: true, RowsRead: > 0 } s)
+            {
+                line += "\n\n" + string.Format(CultureInfo.InvariantCulture, "{0} rows read", s.RowsRead);
+            }
+            return line;
+        }
+        if (outcome.Summary is { } summary)
+        {
+            return summary.BuildDetailedMessage();
+        }
         return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoCompletedFormat, ms);
     }
 

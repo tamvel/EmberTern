@@ -520,15 +520,45 @@ public class ProcedureDetailTests
     [Fact]
     public async Task ExecInfo_Affected_WhenNoResultSet()
     {
+        // Production always attaches a work Summary; with reads unmeasured it degrades to the
+        // driver's affected-rows total.
+        var summary = new ExecutionSummary { RecordsAffected = 3, Elapsed = TimeSpan.FromMilliseconds(5), ChangesMeasured = false };
         var vm = new ProcedureDetailTabViewModel("P")
         {
             RunExecuteRequested = (_, _) => Task.FromResult(
-                new ProcedureExecOutcome(new QueryResult { RecordsAffected = 3, Elapsed = TimeSpan.FromMilliseconds(5) }, null)),
+                new ProcedureExecOutcome(new QueryResult { RecordsAffected = 3, Elapsed = TimeSpan.FromMilliseconds(5) }, null, summary)),
         };
         await vm.ExecuteProcedureCommand.ExecuteAsync(null);
 
         Assert.False(vm.HasExecResult);               // no result set
-        Assert.Contains("3 row(s) affected", vm.ExecInfo);
+        Assert.Contains("3 rows affected", vm.ExecInfo);
+    }
+
+    [Fact]
+    public async Task ExecInfo_WorkSummary_ShowsChangesAndReads()
+    {
+        // The Execution Metrics summary: a non-result procedure reports what it changed + read.
+        var summary = new ExecutionSummary
+        {
+            Inserts = 8,
+            Updates = 16,
+            Deletes = 8,
+            RowsRead = 20_552,
+            ChangesMeasured = true,
+            ReadsMeasured = true,
+            Elapsed = TimeSpan.FromMilliseconds(93),
+        };
+        var vm = new ProcedureDetailTabViewModel("P")
+        {
+            RunExecuteRequested = (_, _) => Task.FromResult(
+                new ProcedureExecOutcome(new QueryResult { RecordsAffected = null, Elapsed = TimeSpan.FromMilliseconds(93) }, null, summary)),
+        };
+        await vm.ExecuteProcedureCommand.ExecuteAsync(null);
+
+        Assert.False(vm.HasExecResult);
+        Assert.Contains("16 rows updated", vm.ExecInfo);
+        Assert.Contains("20552 rows read", vm.ExecInfo);
+        Assert.DoesNotContain("0 rows affected", vm.ExecInfo);
     }
 
     [Fact]

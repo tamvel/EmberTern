@@ -2894,6 +2894,50 @@ public partial class MainWindowViewModel : ViewModelBase
     private static long SumChanges(IReadOnlyList<PerTableReadRow>? rows, Func<PerTableReadRow, long> selector)
         => rows is null ? 0 : rows.Sum(selector);
 
+    // Total rows read (sequential + index) across the captured per-table delta.
+    private static long SumReads(IReadOnlyList<PerTableReadRow>? rows)
+        => rows is null ? 0 : rows.Sum(r => r.SeqReads + r.IdxReads);
+
+    // The ONE data-lane execution path with Execution Metrics: bracket the run with
+    // before/after MON$ snapshots and return the per-table read/change delta alongside the
+    // result. Used by the SQL Editor (RunExecuteAsync) AND Procedure/Function Detail
+    // (RunProcedure/FunctionExecuteAsync) so every place a statement runs surfaces the same
+    // diagnostics. The execution error propagates (QueryExecutionException); the snapshots
+    // are best-effort — any MON$ failure degrades to a null delta (RecordsAffected fallback).
+    private async Task<(QueryResult Result, IReadOnlyList<PerTableReadRow>? Reads)> ExecuteWithMetricsAsync(
+        string sql, IReadOnlyList<QueryParameter>? parameters, CancellationToken cancellationToken)
+    {
+        var before = await TrySnapshotReadsAsync().ConfigureAwait(true);
+        var result = parameters is null
+            ? await _executor.ExecuteAsync(sql, cancellationToken).ConfigureAwait(true)
+            : await _executor.ExecuteAsync(sql, parameters, cancellationToken).ConfigureAwait(true);
+        IReadOnlyList<PerTableReadRow>? reads = null;
+        if (before is not null)
+        {
+            var after = await TrySnapshotReadsAsync().ConfigureAwait(true);
+            if (after is not null)
+            {
+                reads = TableStatsDiffer.Diff(before, after);
+            }
+        }
+        return (result, reads);
+    }
+
+    // Assemble the work summary (rows changed + rows read) from an execution's result +
+    // measured read delta. Shared by every execution entry point.
+    private static ExecutionSummary BuildExecutionSummary(QueryResult result, IReadOnlyList<PerTableReadRow>? reads)
+        => new()
+        {
+            Inserts = SumChanges(reads, static r => r.Inserts),
+            Updates = SumChanges(reads, static r => r.Updates),
+            Deletes = SumChanges(reads, static r => r.Deletes),
+            RowsRead = SumReads(reads),
+            ReadsMeasured = reads is not null,
+            RecordsAffected = result.RecordsAffected,
+            Elapsed = result.Elapsed,
+            ChangesMeasured = reads is not null,
+        };
+
     // Column cache for ALIAS./TABLE. autocomplete. Keyed by uppercase table
     // name; cleared on disconnect (in ClearWorkspaceTabs path via
     // ApplyActiveConnectionChange). A separate "table doesn't exist or has no
@@ -3651,33 +3695,33 @@ public partial class MainWindowViewModel : ViewModelBase
     // (no literal embedding). Wraps the result/error so the procedure tab can show
     // it in its own Result region. EXECUTE PROCEDURE/SELECT are Data-lane per the
     // classifier — auto-begins the data working tx; the user Commits/Rolls back.
-    private async Task<ProcedureExecOutcome> RunProcedureExecuteAsync(string sql, IReadOnlyList<QueryParameter> parameters)
-    {
-        try
-        {
-            var result = await _executor.ExecuteAsync(sql, parameters).ConfigureAwait(true);
-            AddMessage(MessageSeverity.Info, UiStrings.ProcedureExecutedViaDataProfile);
-            return new ProcedureExecOutcome(result, null);
-        }
-        catch (QueryExecutionException ex)
-        {
-            return new ProcedureExecOutcome(null, ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return new ProcedureExecOutcome(null, ex.Message);
-        }
-    }
+    private Task<ProcedureExecOutcome> RunProcedureExecuteAsync(string sql, IReadOnlyList<QueryParameter> parameters)
+        => RunExecutableWithMetricsAsync(sql, parameters, UiStrings.ProcedureExecutedViaDataProfile);
 
     // Runs an Execute Function statement (SELECT fn(...) FROM RDB$DATABASE) on the Data
     // lane with bound parameters. Same wrapping + lane as RunProcedureExecuteAsync.
-    private async Task<ProcedureExecOutcome> RunFunctionExecuteAsync(string sql, IReadOnlyList<QueryParameter> parameters)
+    private Task<ProcedureExecOutcome> RunFunctionExecuteAsync(string sql, IReadOnlyList<QueryParameter> parameters)
+        => RunExecutableWithMetricsAsync(sql, parameters, UiStrings.FunctionExecutedViaDataProfile);
+
+    // Shared Procedure/Function execution: the SAME metrics path the SQL Editor uses
+    // (before/after MON$ delta → reads + INSERT/UPDATE/DELETE), feeds the global Performance
+    // panel, and returns a work-summary so the detail panel shows what the code did + read
+    // instead of "0 rows affected".
+    private async Task<ProcedureExecOutcome> RunExecutableWithMetricsAsync(
+        string sql, IReadOnlyList<QueryParameter> parameters, string executedViaMessage)
     {
         try
         {
-            var result = await _executor.ExecuteAsync(sql, parameters).ConfigureAwait(true);
-            AddMessage(MessageSeverity.Info, UiStrings.FunctionExecutedViaDataProfile);
-            return new ProcedureExecOutcome(result, null);
+            var (result, reads) = await ExecuteWithMetricsAsync(sql, parameters, CancellationToken.None).ConfigureAwait(true);
+            // Feed the existing global Performance panel — reuses it for procedures/functions
+            // (no new UI); the last execution wins regardless of where it was launched from.
+            _lastProfiledSql = sql;
+            _lastProfiledResult = result;
+            _lastTableReads = reads;
+            Performance.MarkStale();
+
+            AddMessage(MessageSeverity.Info, executedViaMessage);
+            return new ProcedureExecOutcome(result, null, BuildExecutionSummary(result, reads));
         }
         catch (QueryExecutionException ex)
         {
@@ -4484,46 +4528,31 @@ public partial class MainWindowViewModel : ViewModelBase
 
         // Always log which lane/profile the auto-router chose, so the user never has to
         // guess which transaction this statement ran under.
-        var executor = metadata ? _metadataExecutor : _executor;
         AddMessage(MessageSeverity.Info, BuildExecutedViaMessage(metadata));
-
-        // Bracket every data-lane run with before/after MON$ snapshots so the Messages
-        // summary always has per-table INSERT/UPDATE/DELETE counts (Execution Metrics) and
-        // the Performance panel has measured reads without needing its tab open. Two small
-        // metadata-lane reads per data execute; they never touch the user's data tx or fire
-        // its ON COMMIT trigger. Best-effort — any MON$ failure degrades to RecordsAffected.
-        bool captureStats = !metadata;
-        IReadOnlyList<PerTableReadRow>? readsBefore = null;
 
         try
         {
-            if (captureStats)
+            // Data-lane runs go through the shared metrics path (before/after MON$ delta →
+            // per-table INSERT/UPDATE/DELETE + reads); metadata/DDL runs don't capture.
+            QueryResult result;
+            IReadOnlyList<PerTableReadRow>? reads = null;
+            if (metadata)
             {
-                readsBefore = await TrySnapshotReadsAsync().ConfigureAwait(true);
-                captureStats = readsBefore is not null;
+                result = await _metadataExecutor.ExecuteAsync(sql, _executionCts.Token).ConfigureAwait(true);
             }
-
-            var result = await executor.ExecuteAsync(sql, _executionCts.Token).ConfigureAwait(true);
-            CurrentResult = result;
-            CurrentResultVersionTag = Guid.NewGuid().ToString("N");
-
-            // Performance panel (Option B): remember the data-lane run so the panel can
-            // analyze it on view — no re-execution. Metadata/DDL runs are not profiled.
-            if (!metadata)
+            else
             {
+                (result, reads) = await ExecuteWithMetricsAsync(sql, null, _executionCts.Token).ConfigureAwait(true);
+                // Performance panel (Option B): remember the data-lane run so the panel can
+                // analyze it on view — no re-execution.
                 _lastProfiledSql = sql;
                 _lastProfiledResult = result;
-                _lastTableReads = null;
-                if (captureStats)
-                {
-                    var readsAfter = await TrySnapshotReadsAsync().ConfigureAwait(true);
-                    if (readsAfter is not null)
-                    {
-                        _lastTableReads = TableStatsDiffer.Diff(readsBefore!, readsAfter);
-                    }
-                }
+                _lastTableReads = reads;
                 Performance.MarkStale();
             }
+
+            CurrentResult = result;
+            CurrentResultVersionTag = Guid.NewGuid().ToString("N");
 
             var ms = (long)result.Elapsed.TotalMilliseconds;
             if (result.HasResultSet)
@@ -4545,16 +4574,7 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 // IBExpert-style work summary: inserted/updated/deleted from the MON$ delta
                 // (works for EXECUTE PROCEDURE/BLOCK/DML), falling back to the driver's total.
-                var summary = new ExecutionSummary
-                {
-                    Inserts = SumChanges(_lastTableReads, static r => r.Inserts),
-                    Updates = SumChanges(_lastTableReads, static r => r.Updates),
-                    Deletes = SumChanges(_lastTableReads, static r => r.Deletes),
-                    RecordsAffected = result.RecordsAffected,
-                    Elapsed = result.Elapsed,
-                    ChangesMeasured = _lastTableReads is not null,
-                };
-                QueryStatsText = summary.BuildMessage();
+                QueryStatsText = BuildExecutionSummary(result, reads).BuildMessage();
                 AddMessage(MessageSeverity.Info, QueryStatsText);
                 SelectedBottomTabIndex = 1;
             }

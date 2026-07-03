@@ -17,6 +17,19 @@ public class ExecutionSummaryTests
             Elapsed = TimeSpan.FromMilliseconds(ms),
         };
 
+    private static ExecutionSummary D(long ins, long upd, long del, long read, bool changesMeasured = true, bool readsMeasured = true, int? affected = null, long ms = 93)
+        => new()
+        {
+            Inserts = ins,
+            Updates = upd,
+            Deletes = del,
+            RowsRead = read,
+            ChangesMeasured = changesMeasured,
+            ReadsMeasured = readsMeasured,
+            RecordsAffected = affected,
+            Elapsed = TimeSpan.FromMilliseconds(ms),
+        };
+
     [Fact]
     public void Measured_AllThree_ListsInsertUpdateDelete()
         => Assert.Equal("inserted 8 · updated 16 · deleted 8 in 93 ms", S(8, 16, 8).BuildMessage());
@@ -44,4 +57,44 @@ public class ExecutionSummaryTests
     [Fact]
     public void TotalChanges_Sums()
         => Assert.Equal(32, S(8, 16, 8).TotalChanges);
+
+    // ---- BuildDetailedMessage (Procedure/Function exec-info bar) --------------------
+    [Fact]
+    public void Detailed_ChangesAndReads_MultiLine()
+    {
+        var msg = D(ins: 8, upd: 16, del: 8, read: 20_552).BuildDetailedMessage();
+        Assert.Equal(
+            "Executed in 93 ms\n\n8 rows inserted\n16 rows updated\n8 rows deleted\n\n20552 rows read",
+            msg);
+    }
+
+    [Fact]
+    public void Detailed_ReadsOnly_SaysNoModifications()
+    {
+        // Significant work (reads) but nothing modified — never the misleading "0 rows affected".
+        var msg = D(ins: 0, upd: 0, del: 0, read: 20_552, ms: 21).BuildDetailedMessage();
+        Assert.Equal("Executed in 21 ms\n\n20552 rows read\n\nNo data modifications detected.", msg);
+    }
+
+    [Fact]
+    public void Detailed_OmitsZeroChangeTerms_AndSingularizes()
+    {
+        // One insert IS a change → no "No modifications" line; singular "1 row inserted".
+        var msg = D(ins: 1, upd: 0, del: 0, read: 0, ms: 5).BuildDetailedMessage();
+        Assert.Equal("Executed in 5 ms\n\n1 row inserted", msg);
+    }
+
+    [Fact]
+    public void Detailed_NotMeasured_FallsBackToAffectedLine()
+    {
+        var msg = D(0, 0, 0, 0, changesMeasured: false, readsMeasured: false, affected: 42, ms: 5).BuildDetailedMessage();
+        Assert.Equal("Executed in 5 ms · 42 rows affected", msg);
+    }
+
+    [Fact]
+    public void Detailed_ChangesWithoutReadsMeasured_OmitsReadLine()
+    {
+        var msg = D(ins: 0, upd: 3, del: 0, read: 0, readsMeasured: false, ms: 10).BuildDetailedMessage();
+        Assert.Equal("Executed in 10 ms\n\n3 rows updated", msg);
+    }
 }

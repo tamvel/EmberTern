@@ -28,6 +28,12 @@ public sealed record ExecutionSummary
     /// false → fall back to <see cref="RecordsAffected"/>.</summary>
     public bool ChangesMeasured { get; init; }
 
+    /// <summary>Total rows read (sequential + index) across all tables, from the MON$ delta.</summary>
+    public long RowsRead { get; init; }
+
+    /// <summary>True when per-table reads were captured (so <see cref="RowsRead"/> is meaningful).</summary>
+    public bool ReadsMeasured { get; init; }
+
     public long TotalChanges => Inserts + Updates + Deletes;
 
     /// <summary>The Messages/status line, e.g. "inserted 8 · updated 16 · deleted 8 in 93 ms",
@@ -46,7 +52,67 @@ public sealed record ExecutionSummary
         return string.Format(CultureInfo.CurrentCulture, "{0} rows affected in {1} ms", RecordsAffected ?? 0, ms);
     }
 
+    /// <summary>The richer, multi-line summary for a non-result execution's info panel — what
+    /// the statement DID (rows inserted/updated/deleted) and how much it READ. Examples:
+    /// <code>
+    /// Executed in 93 ms
+    ///
+    /// 8 rows inserted
+    /// 16 rows updated
+    /// 8 rows deleted
+    ///
+    /// 20552 rows read
+    /// </code>
+    /// or, when nothing was modified but work was done:
+    /// <code>
+    /// Executed in 21 ms
+    ///
+    /// 20552 rows read
+    ///
+    /// No data modifications detected.
+    /// </code>
+    /// When reads weren't measured it degrades to the compact affected-rows line.</summary>
+    public string BuildDetailedMessage()
+    {
+        long ms = (long)Elapsed.TotalMilliseconds;
+        var sb = new System.Text.StringBuilder();
+        sb.Append("Executed in ").Append(ms.ToString(CultureInfo.CurrentCulture)).Append(" ms");
+
+        if (!ChangesMeasured)
+        {
+            // No MON$ delta captured — the driver's total is all we honestly have.
+            sb.Append(" · ").Append((RecordsAffected ?? 0).ToString(CultureInfo.CurrentCulture)).Append(" rows affected");
+            return sb.ToString();
+        }
+
+        var changeLines = new List<string>(3);
+        if (Inserts > 0) changeLines.Add(Rows(Inserts, "inserted"));
+        if (Updates > 0) changeLines.Add(Rows(Updates, "updated"));
+        if (Deletes > 0) changeLines.Add(Rows(Deletes, "deleted"));
+
+        bool hasChanges = changeLines.Count > 0;
+        if (hasChanges)
+        {
+            sb.Append("\n\n").Append(string.Join("\n", changeLines));
+        }
+        if (ReadsMeasured && RowsRead > 0)
+        {
+            sb.Append("\n\n").Append(Rows(RowsRead, "read"));
+        }
+        if (!hasChanges)
+        {
+            // Significant work may still have happened (reads) — never the misleading
+            // "0 rows affected"; say plainly that nothing was modified.
+            sb.Append("\n\nNo data modifications detected.");
+        }
+        return sb.ToString();
+    }
+
     // Plain integers (no grouping) to match the existing "N rows in T ms" message style.
     private static string Part(string verb, long n)
         => string.Format(CultureInfo.InvariantCulture, "{0} {1}", verb, n);
+
+    // "8 rows inserted" / "1 row inserted" / "20552 rows read".
+    private static string Rows(long n, string verb)
+        => string.Format(CultureInfo.InvariantCulture, "{0} {1} {2}", n, n == 1 ? "row" : "rows", verb);
 }
