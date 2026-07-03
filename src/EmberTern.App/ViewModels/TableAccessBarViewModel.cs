@@ -39,9 +39,27 @@ public sealed class TableAccessBarViewModel
             {
                 return $"{N(Stat.SequentialReads)} seq · {N(Stat.IndexReads)} idx";
             }
-            return Stat.SequentialReads > 0
-                ? $"{N(Stat.SequentialReads)} seq"
-                : $"{N(Stat.IndexReads)} idx";
+            if (Stat.SequentialReads > 0)
+            {
+                return $"{N(Stat.SequentialReads)} seq";
+            }
+            return Stat.IndexReads > 0 ? $"{N(Stat.IndexReads)} idx" : string.Empty;
+        }
+    }
+
+    public bool HasChanges => Stat.TotalChanges > 0;
+
+    /// <summary>Rows this DML / procedure wrote against the table, e.g. "8 upd" or
+    /// "3 ins · 8 upd · 2 del" (zero terms omitted). Empty for a read-only table.</summary>
+    public string ChangesText
+    {
+        get
+        {
+            var parts = new System.Collections.Generic.List<string>(3);
+            if (Stat.Inserts > 0) parts.Add($"{N(Stat.Inserts)} ins");
+            if (Stat.Updates > 0) parts.Add($"{N(Stat.Updates)} upd");
+            if (Stat.Deletes > 0) parts.Add($"{N(Stat.Deletes)} del");
+            return string.Join(" · ", parts);
         }
     }
 

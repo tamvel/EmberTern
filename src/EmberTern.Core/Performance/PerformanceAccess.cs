@@ -23,11 +23,20 @@ public sealed record PerTableReadRow(
     public long TotalChanges => Inserts + Updates + Deletes;
 }
 
-/// <summary>Per-table access for one profiled statement: how many rows were read
-/// sequentially (full scan) vs. via an index. The single most diagnostic signal.</summary>
-public sealed record TableAccessStat(string Table, long SequentialReads, long IndexReads)
+/// <summary>Per-table access for one profiled statement: rows read sequentially (full scan) vs.
+/// via an index, plus rows changed (insert/update/delete). Reads are the diagnostic signal;
+/// changes show which tables a DML / procedure wrote (default 0 for a read-only SELECT).</summary>
+public sealed record TableAccessStat(
+    string Table,
+    long SequentialReads,
+    long IndexReads,
+    long Inserts = 0,
+    long Updates = 0,
+    long Deletes = 0)
 {
     public long TotalReads => SequentialReads + IndexReads;
+
+    public long TotalChanges => Inserts + Updates + Deletes;
 
     /// <summary>True when the table was read (at least partly) by a full/sequential scan.</summary>
     public bool IsSequential => SequentialReads > 0;

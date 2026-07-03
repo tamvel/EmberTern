@@ -74,9 +74,15 @@ internal static class PerformanceInsight
         }
 
         long read = report.Verdict.RowsRead ?? report.Access!.TotalRowsRead;
-        return string.Format(CultureInfo.CurrentCulture, UiStrings.PerformanceMeasuredNoCostlyScan,
-            read.ToString("N0", CultureInfo.CurrentCulture),
-            report.Verdict.RowsReturned.ToString("N0", CultureInfo.CurrentCulture));
+        // Frame around the statement's output — rows returned for a SELECT, rows changed for a
+        // DML / procedure — so a non-result statement doesn't read "to return 0".
+        return report.Verdict.HasResultSet
+            ? string.Format(CultureInfo.CurrentCulture, UiStrings.PerformanceMeasuredNoCostlyScan,
+                read.ToString("N0", CultureInfo.CurrentCulture),
+                report.Verdict.RowsReturned.ToString("N0", CultureInfo.CurrentCulture))
+            : string.Format(CultureInfo.CurrentCulture, UiStrings.PerformanceMeasuredNoCostlyScanChanges,
+                read.ToString("N0", CultureInfo.CurrentCulture),
+                report.Verdict.RowsChanged.ToString("N0", CultureInfo.CurrentCulture));
     }
 
     /// <summary>The "it also evaluates N sub-queries" noise summary, or null when the plan

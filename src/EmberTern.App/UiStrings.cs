@@ -1218,6 +1218,7 @@ internal static class UiStrings
     public const string PerformanceMeasuredCostlyScanSingle = "It reads table {0} row by row (a full table scan) — the largest measured cost in this query.";
     public const string PerformanceMeasuredCostlyScanMultiple = "It reads tables {0} row by row (full table scans) — the largest measured cost in this query.";
     public const string PerformanceMeasuredNoCostlyScan = "No costly full table scans were measured — it read {0} rows to return {1}.";
+    public const string PerformanceMeasuredNoCostlyScanChanges = "No costly full table scans were measured — it read {0} rows to change {1}.";
     public const string PerformanceNoiseSubqueriesSingle = "It also evaluates 1 sub-query (see the execution plan below).";
     public const string PerformanceNoiseSubqueriesMultiple = "It also evaluates {0} sub-queries (see the execution plan below).";
     public const string PerformanceForwardPointer = "Per-table read analysis — which confirms whether this is the cause — arrives in a later phase.";

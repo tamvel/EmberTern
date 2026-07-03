@@ -77,7 +77,7 @@ public sealed class PerformanceReportBuilder
             return null;
         }
         var tables = capture.TableReads
-            .Select(r => new TableAccessStat(r.Table, r.SeqReads, r.IdxReads))
+            .Select(r => new TableAccessStat(r.Table, r.SeqReads, r.IdxReads, r.Inserts, r.Updates, r.Deletes))
             .OrderByDescending(t => t.SequentialReads)
             .ThenByDescending(t => t.TotalReads)
             .ToList();

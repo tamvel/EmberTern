@@ -39,9 +39,22 @@ public sealed class VerdictViewModel
 
     public string DurationText => FormatDuration(Verdict.Duration.TotalMilliseconds);
 
-    public string RowsText => Verdict.RowsReturned == 1
-        ? "1 row"
-        : Verdict.RowsReturned.ToString("N0", CultureInfo.CurrentCulture) + " rows";
+    // A SELECT reports rows returned; a DML / procedure reports rows changed (returned is 0).
+    public string RowsText
+    {
+        get
+        {
+            if (Verdict.HasResultSet)
+            {
+                return Verdict.RowsReturned == 1
+                    ? "1 row"
+                    : Verdict.RowsReturned.ToString("N0", CultureInfo.CurrentCulture) + " rows";
+            }
+            return Verdict.RowsChanged == 1
+                ? "1 row changed"
+                : Verdict.RowsChanged.ToString("N0", CultureInfo.CurrentCulture) + " rows changed";
+        }
+    }
 
     public bool HasRowsRead => Verdict.RowsRead is not null;
 
