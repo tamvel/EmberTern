@@ -3567,6 +3567,49 @@ The measurement half of Phase 2: **answers "is the detected full scan actually a
 
 165. **Once measured data exists, the plain-language summary MUST be derived from the measurement, never from a plan heuristic that can contradict it.** The Phase-1 lead asserted a plan full scan was "often why a query is slow"; measured per-table reads proved that scan cheap (285 rows) while the Findings zone correctly said "no costly full scans" — so the same panel showed an amber "Needs attention", a plan-blaming lead, and a green "nothing costly" note simultaneously. The fix is layering, not new logic: the verdict **grade** stays an honest coarse signal (time + a finding-driven bump — never suppressed, a slow query is slow), but the **narrative** (`PerformanceInsight` lead) switches to the measured findings the moment reads are available, so grade/summary/findings describe the same reality from different angles instead of fighting. **Rule:** when a richer measured signal supersedes an earlier heuristic, route the *user-facing explanation* through the measured signal and keep the heuristic only as the no-measurement fallback — don't leave two independent narrators that can disagree.
 
+### Performance Analysis — Phase 3 (Advisor) — OFFICIAL PLAN (approved 2026-07-03, branch `feat/performance-analysis-phase3-advisor`)
+
+The advisor phase. Goal: explain **what likely causes the cost, why it's a problem, and what to investigate** — **measured-data-first** (Phase 2 reads/amplification gate every rule; the plan/SQL only explains *why*). **NOT** in Phase 3: `CREATE INDEX` generation, recommendation DDL, one-click fixes, UI redesign, plan cost heatmap (FB6), trace, performance history, procedure/function cursor breakdown. Phase 3 is about *understanding causes*; recommendations/fix actions are a later phase. Extends the frozen design (do not redesign).
+
+**Headline shift Phase 2 forces:** the frozen R1–R5 were plan-first heuristics; Phase 2 inverts this — **a rule fires on MEASURED cost, then predicate/sargability/catalog analysis supplies the explanation.** A plan full scan is no longer evidence of a problem (the NAGL case: full scan, 285 reads, cheap). Consequence: the **catalog reader** (frozen Phase-2 step 3, deferred) is the Phase-3 prerequisite — R2/R4/R5 + "% scanned" are blind without indexes/selectivity/cardinality.
+
+**Architecture (Core pure; `IPerformanceRule` is the one justified interface — the `ISqlTemplate` precedent):**
+```
+PerformanceCapture ─┐
+CatalogCapture ─────┤→ PerformanceContextBuilder → PerformanceContext → PerformanceRuleEngine → IReadOnlyList<Finding>
+QueryPredicate[] ───┤        (Core, pure)          (measured+plan+          (runs IPerformanceRule[],
+SargabilityVerdict[]┘                               predicate+catalog)        composed by PerformanceRuleCatalog)
+```
+- `IPerformanceRule.Evaluate(PerformanceContext) → IReadOnlyList<Finding>` (Core). `PerformanceRuleEngine` runs the ordered set; `PerformanceRuleCatalog` composes it.
+- `PerformanceContext` = measured `TableAccessProfile` + verdict metrics + `PlanTree` + `QueryPredicate[]` + `SargabilityVerdict[]` + `CatalogModel`, assembled by `PerformanceContextBuilder`.
+- `FirebirdCatalogReader → CatalogModel/TableCatalogInfo/IndexModel` (Firebird, metadata lane, capture-lock-once — gotchas #98/#120; returns Core DTOs). `PerformanceAnalyzer.Analyze(capture, catalog?)` — **additive** overload; the existing single-arg call keeps working.
+- **DECISION 1 (locked):** extend `Finding` with **`RuleId` + `Confidence`** (enum `High`/`Medium`/`Low`); rules return a flat `IReadOnlyList<Finding>`. **Do NOT introduce `PerformanceRuleResult`** — findings already flow through the report model + UI; no extra abstraction without a consumer.
+- **Migration:** the existing `PerformanceFindings.CostlyFullScan` static builder becomes **R1** behind the engine — `PerformanceReport.Findings` shape unchanged (its Core comment anticipates this), zero UI change.
+- The plan parser already gives structured `PlanNode.{Method(AccessMethod), TableName, Alias, IndexName, Detail}` — so a plan index-access node maps to (table, index) for catalog/predicate cross-check with no new plan work. `PlanNodeMetrics` (Cardinality/Cost) is null on FB3–5 (FB6 only) → **measured reads remain the cost proxy.**
+
+**Predicate analysis** — `PredicateExtractor` (Core, reuse `SqlScanHelpers` + `SqlAliasResolver`, gotchas #18/#129) → `QueryPredicate { Table, Alias, Column, Operator, Rhs, Kind(Where|JoinOn) }` over top-level WHERE conjuncts + JOIN ON. Lightweight scanner, NOT a grammar: subquery/CASE/computed/OR-tree/view predicates are out; **unparseable ⇒ emit nothing** (never a false finding) ⇒ predicate-derived findings are ≤ Medium confidence, investigation-phrased.
+
+**Sargability** — `SargabilityClassifier` (Core, pure) → `SargabilityVerdict` per predicate. Patterns: function/expression on the indexed column (`UPPER(col)`, `CAST(col…)`, `col+0`, `SUBSTRING`), leading-wildcard `LIKE '%x'`, implicit conversion, non-leading-segment use. Value = structural + measured joined (non-sargable on an indexed, NATURAL-scanned, expensively-read column). Remedy is *rewrite* (R3), which is why R3 is distinct from R2.
+
+**DECISION 4 (locked) — confidence + language.** Every finding carries **High/Medium/Low confidence** and uses **investigation-oriented** language — "Investigate…", "Likely cause…", "Potential contributor…". **No imperative / no fix language** ("Create index…", "Change query…") — that's a later phase.
+
+**Rule set (R1–R6):**
+
+| Rule | What | Measured-first behaviour | Status |
+|---|---|---|---|
+| **R1** costly full scan | table read sequentially, costly | shipped in Phase 2 (measured SEQ + amplification); migrate into engine, add catalog **% of table scanned** | **Phase 3a** (migrate + enrich) |
+| **R3** non-sargable predicate | expression/function blocks index use on an expensively-scanned column | sargability (structural) gated by measured cost; remedy = investigate a predicate rewrite | **Phase 3a** |
+| **R4** low-selectivity index | index used but reads many rows for few returned | measured **IDX-read amplification** = primary signal; catalog `RDB$STATISTICS` = the *why* | **Phase 3a** |
+| **R5** uninitialized stats | `RDB$INDICES.RDB$STATISTICS ≈ 0` | catalog signal; measured bad-path corroboration optional; remedy (**Recompute statistics**) already exists in EmberTern | **Phase 3a** |
+| **R6** high read amplification | slow + amplified with **no single culprit scan** (the Szkoleniowa 72× via index reads + 19 sub-queries) | Phase-2 amplification metric; `FindingKind.HighReadAmplification` already defined (unemitted) | **Phase 3a** (DECISION 2: included) |
+| **R2** missing index | likely-missing-index *candidate* | R1-costly ∧ high-amp ∧ **sargable** predicate on the scanned column ∧ catalog shows **no usable index** ∧ table not tiny; **finding only, no DDL**, Low/Medium confidence, caveats surfaced | **Phase 3b** (DECISION 3: split — highest false-positive risk, must not block 3a) |
+
+**DECISION 3 (locked) — Phase 3a vs 3b.** **Phase 3a** = catalog reader → predicate extraction → sargability → context+engine → migrate R1 → R4 → R3 → R6 → R5. **Phase 3b** (after 3a is working + validated) = R2 missing-index detection (finding-only; DDL/one-click are a still-later phase).
+
+**Phase 3a implementation order (locked):** (1) `FirebirdCatalogReader` + `CatalogModel`/`TableCatalogInfo`/`IndexModel` + `CatalogCapture` (indexes, segment/leading columns, `RDB$STATISTICS` selectivity, capped cardinality, FB5 partial-index `RDB$CONDITION_SOURCE`; additive `Analyze(capture, catalog?)`). (2) `PredicateExtractor`. (3) `SargabilityClassifier`. (4) `PerformanceContext` + `PerformanceContextBuilder` + `IPerformanceRule` + `PerformanceRuleEngine` + `PerformanceRuleCatalog`; `Finding += RuleId + Confidence`. (5) migrate the measured full-scan finding into **R1**. (6) **R4**. (7) **R3**. (8) **R6**. (9) **R5**. App: enrich `FindingViewModel` with confidence + investigation text — no one-click, no DDL, no UI redesign. **Do NOT start R2, do NOT generate DDL/CREATE INDEX, do NOT implement one-click fixes in this phase.**
+
+**Missing-index (R2, Phase 3b) false-positive gates (for reference):** one-off query (1 execution, no frequency) → cap confidence; small-table scan is optimal → cardinality gate; optimizer chose NATURAL to return most rows → amplification gate (low amp ⇒ suppress); non-sargable predicate → route to R3 not R2; existing partial/expression/composite index → catalog must model it. All five must hold; finding-only.
+
 ## Current state
 
 - **✅ Performance Analysis Phase 1 — COMPLETE + merged to `master` (2026-07-03).** Plan-only foundation + a UX refinement pass. **Phase 2 MEASUREMENT SLICE COMPLETE + merged to `master` (2026-07-03)** — MON$ per-table reads (seq vs idx), read amplification, measured findings ("is the full scan actually a problem?"), Table Access bars, and the Summary↔Verdict↔Findings consistency fix; verified live on FB 5.0.3. Advisor / predicate parser / missing-index / recommendations / "% table scanned" are **deferred to the Phase 3 advisor phase** (branch `feat/performance-analysis-phase3-advisor`; see the "Phase 2 measurement slice" milestone + the frozen roadmap). Build 0/0, 2209 + 9 tests green. Design frozen (see the "Performance Analysis" section above) — extend, don't redesign.
