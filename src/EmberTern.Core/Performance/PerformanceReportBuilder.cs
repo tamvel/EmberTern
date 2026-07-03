@@ -46,6 +46,8 @@ public sealed class PerformanceReportBuilder
             Headline = BuildHeadline(capture, plan, fullScans),
             Duration = timings?.Total ?? TimeSpan.Zero,
             RowsReturned = rowsReturned,
+            RowsChanged = context.RowsChanged,
+            HasResultSet = capture.HasResultSet,
             RowsRead = rowsRead,
             Amplification = amplification,
         };

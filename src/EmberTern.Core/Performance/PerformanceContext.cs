@@ -21,11 +21,29 @@ public sealed record PerformanceContext
 
     public long RowsReturned { get; init; }
 
+    /// <summary>True for a result-producing SELECT; false for DML / EXECUTE PROCEDURE / BLOCK.</summary>
+    public bool HasResultSet { get; init; } = true;
+
+    /// <summary>Rows changed (insert + update + delete) — the meaningful "output" of a non-result
+    /// statement (from the MON$ delta), 0 for a SELECT.</summary>
+    public long RowsChanged { get; init; }
+
     /// <summary>Total measured rows read (null when no reads).</summary>
     public long? RowsRead { get; init; }
 
-    /// <summary>Rows read ÷ rows returned (null when no reads / zero returned).</summary>
+    /// <summary>Rows read ÷ output rows (null when no reads / zero output).</summary>
     public double? Amplification { get; init; }
+
+    /// <summary>The meaningful "output" of the statement — rows returned for a SELECT, rows
+    /// changed for a DML/procedure — so read amplification and finding wording aren't framed
+    /// around "returned 0" for a statement that did its work by changing rows.</summary>
+    public long OutputRows => HasResultSet ? RowsReturned : RowsChanged;
+
+    /// <summary>Infinitive for "reading N rows to {verb} M rows" — "return" or "change".</summary>
+    public string OutputVerb => HasResultSet ? "return" : "change";
+
+    /// <summary>Evidence label for <see cref="OutputRows"/> — "Rows returned" / "Rows changed".</summary>
+    public string OutputRowsLabel => HasResultSet ? "Rows returned" : "Rows changed";
 
     public IReadOnlyList<QueryPredicate> Predicates { get; init; } = Array.Empty<QueryPredicate>();
 

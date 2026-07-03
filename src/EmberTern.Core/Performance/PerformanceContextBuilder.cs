@@ -19,9 +19,13 @@ public static class PerformanceContextBuilder
         var sargability = predicates.Select(SargabilityClassifier.Classify).ToList();
 
         long returned = capture.HasResultSet ? capture.RowsReturned : 0;
+        long changed = capture.TableReads.Sum(r => r.TotalChanges);
         long? read = access?.TotalRowsRead;
-        double? amplification = (access is not null && returned > 0)
-            ? (double)access.TotalRowsRead / returned
+        // Amplification is framed around the statement's OUTPUT — rows returned for a SELECT,
+        // rows changed for a DML/procedure — so a procedure isn't "reads ÷ 0".
+        long output = capture.HasResultSet ? returned : changed;
+        double? amplification = (access is not null && output > 0)
+            ? (double)access.TotalRowsRead / output
             : null;
 
         return new PerformanceContext
@@ -30,6 +34,8 @@ public static class PerformanceContextBuilder
             Plan = plan,
             Access = access,
             RowsReturned = returned,
+            HasResultSet = capture.HasResultSet,
+            RowsChanged = changed,
             RowsRead = read,
             Amplification = amplification,
             Predicates = predicates,

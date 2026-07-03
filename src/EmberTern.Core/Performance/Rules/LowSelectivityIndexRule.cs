@@ -26,7 +26,7 @@ public sealed class LowSelectivityIndexRule : IPerformanceRule
             return Array.Empty<Finding>();
         }
 
-        long returned = Math.Max(context.RowsReturned, 1);
+        long returned = Math.Max(context.OutputRows, 1);
         var findings = new List<Finding>();
 
         foreach (var table in context.Access.Tables
@@ -70,13 +70,13 @@ public sealed class LowSelectivityIndexRule : IPerformanceRule
                     "Index {0} on {1} has low selectivity", culprit.Name, table.Table),
                 Explanation = string.Format(CultureInfo.CurrentCulture,
                     "Likely cause: {0} was read through index {1}, but that index has low selectivity ({2}), "
-                    + "so it read {3} index entries to return {4} rows — a low-selectivity index reads many rows "
+                    + "so it read {3} index entries to {5} {4} rows — a low-selectivity index reads many rows "
                     + "the query then discards. Investigate whether a more selective access path fits this query.",
-                    table.Table, culprit.Name, Sel(culprit.Selectivity), N(table.IndexReads), N(context.RowsReturned)),
+                    table.Table, culprit.Name, Sel(culprit.Selectivity), N(table.IndexReads), N(context.OutputRows), context.OutputVerb),
                 Evidence = new List<FindingEvidence>
                 {
                     new("Index reads", N(table.IndexReads)),
-                    new("Rows returned", N(context.RowsReturned)),
+                    new(context.OutputRowsLabel, N(context.OutputRows)),
                     new("Index amplification", idxAmplification.ToString("0.#", CultureInfo.CurrentCulture) + "×"),
                     new("Index selectivity", Sel(culprit.Selectivity)),
                 },

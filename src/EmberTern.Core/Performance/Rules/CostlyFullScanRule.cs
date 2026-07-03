@@ -29,7 +29,7 @@ public sealed class CostlyFullScanRule : IPerformanceRule
             return Array.Empty<Finding>();
         }
 
-        long returned = Math.Max(context.RowsReturned, 1);
+        long returned = Math.Max(context.OutputRows, 1);
         var findings = new List<Finding>();
 
         foreach (var table in access.Tables
@@ -47,7 +47,7 @@ public sealed class CostlyFullScanRule : IPerformanceRule
             {
                 new("Sequential reads", N(table.SequentialReads)),
                 new("Index reads", N(table.IndexReads)),
-                new("Rows returned", N(context.RowsReturned)),
+                new(context.OutputRowsLabel, N(context.OutputRows)),
                 new("Read amplification", AmplificationText(table.SequentialReads, returned)),
             };
 
@@ -70,10 +70,10 @@ public sealed class CostlyFullScanRule : IPerformanceRule
                 Title = string.Format(CultureInfo.CurrentCulture,
                     "Table {0} was scanned sequentially — {1} rows read", table.Table, N(table.SequentialReads)),
                 Explanation = string.Format(CultureInfo.CurrentCulture,
-                    "This table was read row-by-row (a full table scan), reading {0} rows to return {1}. "
+                    "This table was read row-by-row (a full table scan), reading {0} rows to {1} {2}. "
                     + "A sequential scan reads every row, so it is often the largest cost in a slow query. "
                     + "Likely cause: no index served the filter on this table.",
-                    N(table.SequentialReads), N(context.RowsReturned)),
+                    N(table.SequentialReads), context.OutputVerb, N(context.OutputRows)),
                 Evidence = evidence,
             });
         }

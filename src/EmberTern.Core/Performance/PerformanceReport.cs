@@ -14,10 +14,17 @@ public sealed record PerformanceVerdict
 
     public long RowsReturned { get; init; }
 
-    /// <summary>Rows read (per-table). Null until Phase 2 supplies per-table reads.</summary>
+    /// <summary>True for a result-producing SELECT; false for DML / EXECUTE PROCEDURE / BLOCK.</summary>
+    public bool HasResultSet { get; init; } = true;
+
+    /// <summary>Rows changed (insert + update + delete) — the meaningful output of a non-result
+    /// statement; 0 for a SELECT.</summary>
+    public long RowsChanged { get; init; }
+
+    /// <summary>Rows read (per-table). Null when reads weren't captured.</summary>
     public long? RowsRead { get; init; }
 
-    /// <summary>Rows read ÷ rows returned. Null until Phase 2.</summary>
+    /// <summary>Rows read ÷ output rows (returned for a SELECT, changed for a DML/procedure).</summary>
     public double? Amplification { get; init; }
 }
 

@@ -49,7 +49,7 @@ public sealed class MissingIndexRule : IPerformanceRule
             return Array.Empty<Finding>();
         }
 
-        long returned = Math.Max(context.RowsReturned, 1);
+        long returned = Math.Max(context.OutputRows, 1);
         var findings = new List<Finding>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -105,7 +105,7 @@ public sealed class MissingIndexRule : IPerformanceRule
             {
                 new("Filter", Condition(p)),
                 new("Sequential reads", N(access.SequentialReads)),
-                new("Rows returned", N(context.RowsReturned)),
+                new(context.OutputRowsLabel, N(context.OutputRows)),
                 new("Read amplification", amplification.ToString("0.#", CultureInfo.CurrentCulture) + "×"),
             };
             if (catalog?.RowCountEstimate is { } card)
@@ -124,10 +124,10 @@ public sealed class MissingIndexRule : IPerformanceRule
                 Title = string.Format(CultureInfo.CurrentCulture,
                     "Candidate index opportunity on {0}.{1}", p.Table, p.Column),
                 Explanation = string.Format(CultureInfo.CurrentCulture,
-                    "Potential contributor: {0} was read sequentially ({1} rows) to return {2}, and the filter on "
+                    "Potential contributor: {0} was read sequentially ({1} rows) to {5} {2}, and the filter on "
                     + "{3} ({4}) had no usable index to seek. This is a candidate index opportunity — investigate "
                     + "whether {3}'s selectivity and this query's frequency would justify one. No change is applied here.",
-                    p.Table, N(access.SequentialReads), N(context.RowsReturned), p.Column, Condition(p)),
+                    p.Table, N(access.SequentialReads), N(context.OutputRows), p.Column, Condition(p), context.OutputVerb),
                 Evidence = evidence,
             });
         }

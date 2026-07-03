@@ -44,7 +44,7 @@ public sealed class HighReadAmplificationRule : IPerformanceRule
         var evidence = new List<FindingEvidence>
         {
             new("Rows read", N(read)),
-            new("Rows returned", N(context.RowsReturned)),
+            new(context.OutputRowsLabel, N(context.OutputRows)),
             new("Read amplification", amplification.ToString("0.#", CultureInfo.CurrentCulture) + "×"),
         };
         if (subqueries > 0)
@@ -61,12 +61,12 @@ public sealed class HighReadAmplificationRule : IPerformanceRule
                 Confidence = FindingConfidence.Medium,
                 RuleId = Id,
                 Title = string.Format(CultureInfo.CurrentCulture,
-                    "Query reads {0}× more rows than it returns", amplification.ToString("0.#", CultureInfo.CurrentCulture)),
+                    "Query reads {0}× more rows than it {1}s", amplification.ToString("0.#", CultureInfo.CurrentCulture), context.OutputVerb),
                 Explanation = string.Format(CultureInfo.CurrentCulture,
-                    "This query read {0} rows to return {1} ({2}×). No single full table scan dominates — the cost "
-                    + "is spread across index reads{3}. Likely cause: the query touches far more rows than it returns "
+                    "This statement read {0} rows to {4} {1} ({2}×). No single full table scan dominates — the cost "
+                    + "is spread across index reads{3}. Likely cause: it touches far more rows than it {4}s "
                     + "(broad joins or many sub-queries). Investigate the sub-queries and join breadth.",
-                    N(read), N(context.RowsReturned), amplification.ToString("0.#", CultureInfo.CurrentCulture), spread),
+                    N(read), N(context.OutputRows), amplification.ToString("0.#", CultureInfo.CurrentCulture), spread, context.OutputVerb),
                 Evidence = evidence,
             },
         };
