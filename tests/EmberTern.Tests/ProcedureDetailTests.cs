@@ -559,7 +559,54 @@ public class ProcedureDetailTests
         Assert.Contains("16 rows updated", vm.ExecInfo);
         Assert.Contains("20552 rows read", vm.ExecInfo);
         Assert.DoesNotContain("0 rows affected", vm.ExecInfo);
+
+        // The collapsed Expander header shows the single-line compact summary.
+        Assert.Equal("Executed in 93 ms · 8 inserted · 16 updated · 8 deleted · 20552 read", vm.ExecInfoCompact);
+        Assert.DoesNotContain("\n", vm.ExecInfoCompact);
     }
+
+    [Fact]
+    public async Task ExecSummaryFallback_ReadOnlyMeasured_ShowsCleanNoChangesLine()
+    {
+        // A read-only run: change counts measured (MON$ delta), but nothing was written.
+        var summary = new ExecutionSummary
+        {
+            RowsRead = 285, ReadsMeasured = true, ChangesMeasured = true,
+            Elapsed = TimeSpan.FromMilliseconds(47),
+        };
+        var vm = new ProcedureDetailTabViewModel("P")
+        {
+            RunExecuteRequested = (_, _) => Task.FromResult(
+                new ProcedureExecOutcome(new QueryResult { Elapsed = TimeSpan.FromMilliseconds(47) }, null, summary)),
+        };
+        await vm.ExecuteProcedureCommand.ExecuteAsync(null);
+
+        Assert.False(vm.HasExecTableActivity);                 // no change cards
+        Assert.Equal("No data was changed by this execution.", vm.ExecSummaryFallbackText);
+        Assert.DoesNotContain("read", vm.ExecSummaryFallbackText);   // reads live in Performance
+    }
+
+    [Fact]
+    public async Task ExecSummaryFallback_NotMeasured_FallsBackToAggregate()
+    {
+        var summary = new ExecutionSummary
+        {
+            RecordsAffected = 5, ChangesMeasured = false, Elapsed = TimeSpan.FromMilliseconds(9),
+        };
+        var vm = new ProcedureDetailTabViewModel("P")
+        {
+            RunExecuteRequested = (_, _) => Task.FromResult(
+                new ProcedureExecOutcome(new QueryResult { RecordsAffected = 5, Elapsed = TimeSpan.FromMilliseconds(9) }, null, summary)),
+        };
+        await vm.ExecuteProcedureCommand.ExecuteAsync(null);
+
+        Assert.False(vm.HasExecTableActivity);
+        Assert.Contains("rows affected", vm.ExecSummaryFallbackText);   // honest aggregate, not "nothing changed"
+    }
+
+    [Fact]
+    public void PerformanceSubTabIndex_FollowsResult()
+        => Assert.Equal(ProcedureDetailTabViewModel.ResultSubTabIndex + 1, ProcedureDetailTabViewModel.PerformanceSubTabIndex);
 
     [Fact]
     public async Task ExecInfo_Completed_WhenNoRowsNoAffected()

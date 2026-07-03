@@ -1,5 +1,7 @@
 using System;
+using System.Threading.Tasks;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Query;
 using Xunit;
 
 namespace EmberTern.Tests;
@@ -187,4 +189,33 @@ public class FunctionDetailTests
         created.SourceText = "x";
         Assert.False(created.CanRevertChanges);         // new → nothing to revert to
     }
+
+    [Fact]
+    public async Task ExecInfo_WorkSummary_SetsDetailAndCompact()
+    {
+        var summary = new ExecutionSummary
+        {
+            Inserts = 8,
+            Updates = 16,
+            Deletes = 8,
+            RowsRead = 20_552,
+            ChangesMeasured = true,
+            ReadsMeasured = true,
+            Elapsed = TimeSpan.FromMilliseconds(93),
+        };
+        var vm = new FunctionDetailTabViewModel("F")
+        {
+            RunExecuteRequested = (_, _) => Task.FromResult(
+                new ProcedureExecOutcome(new QueryResult { Elapsed = TimeSpan.FromMilliseconds(93) }, null, summary)),
+        };
+        await vm.ExecuteFunctionCommand.ExecuteAsync(null);
+
+        Assert.Contains("20552 rows read", vm.ExecInfo);
+        Assert.Equal("Executed in 93 ms · 8 inserted · 16 updated · 8 deleted · 20552 read", vm.ExecInfoCompact);
+        Assert.DoesNotContain("\n", vm.ExecInfoCompact);
+    }
+
+    [Fact]
+    public void PerformanceSubTabIndex_FollowsExecuteResult()
+        => Assert.Equal(FunctionDetailTabViewModel.ExecuteResultSubTabIndex + 1, FunctionDetailTabViewModel.PerformanceSubTabIndex);
 }

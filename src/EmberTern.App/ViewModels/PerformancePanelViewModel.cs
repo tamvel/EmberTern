@@ -56,7 +56,6 @@ public sealed partial class PerformancePanelViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPlan))]
-    [NotifyPropertyChangedFor(nameof(ShowPlanEmpty))]
     private IReadOnlyList<PlanNodeViewModel> _planRoots = Array.Empty<PlanNodeViewModel>();
 
     // Plain-language primary summary (derived from the report by PerformanceInsight).
@@ -106,7 +105,6 @@ public sealed partial class PerformancePanelViewModel : ViewModelBase
     public bool HasReport => Verdict is not null;
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
     public bool HasPlan => PlanRoots.Count > 0;
-    public bool ShowPlanEmpty => HasReport && !HasPlan;
     public bool ShowEmptyState => !HasReport && !IsProfiling && !HasError;
     public bool HasPlanLead => !string.IsNullOrEmpty(PlanLead);
     public bool HasNoiseSummary => !string.IsNullOrEmpty(NoiseSummary);

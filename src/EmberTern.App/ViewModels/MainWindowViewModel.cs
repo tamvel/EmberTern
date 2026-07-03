@@ -56,9 +56,6 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdPerfStatsReader _perfStatsReader;
     private readonly FirebirdCatalogReader _catalogReader;
     private readonly PerformanceAnalyzer _performanceAnalyzer;
-    private string? _lastProfiledSql;
-    private QueryResult? _lastProfiledResult;
-    private IReadOnlyList<PerTableReadRow>? _lastTableReads;
     private long? _dataAttachmentId;
     private bool _performanceTabActive;
     private const int PerformanceBottomTabIndex = 3; // Results=0, Messages=1, Output=2, Performance=3
@@ -169,11 +166,11 @@ public partial class MainWindowViewModel : ViewModelBase
         // for the profiled query's tables when the Performance panel builds (Phase 3a).
         _catalogReader = new FirebirdCatalogReader(_service, _metadataTransactionService);
         _performanceAnalyzer = new PerformanceAnalyzer();
-        Performance = new PerformancePanelViewModel
-        {
-            BuildCallback = BuildPerformanceFromLastRunAsync,
-            ClipboardWriteRequested = text => ClipboardWriteRequested is { } write ? write(text) : Task.CompletedTask,
-        };
+        // The SQL Editor gets its OWN Performance context (its own captured run). Procedure/
+        // Function detail tabs each get their own via the factory — no shared global panel.
+        SqlEditorPerformance = new HostPerformanceContext(
+            BuildPerformanceReportAsync,
+            text => ClipboardWriteRequested is { } write ? write(text) : Task.CompletedTask);
         Metadata = new MetadataExplorerViewModel(_service, _metadataReader);
         Metadata.OpenDdlRequested += OnOpenDdlRequested;
         Metadata.CopyNameRequested += OnCopyNameRequested;
@@ -218,8 +215,20 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<SavedQueryViewModel> SavedQueries { get; }
     public MetadataExplorerViewModel Metadata { get; }
 
-    /// <summary>Performance Analysis panel (SQL Editor bottom-panel sub-tab). Phase 1.</summary>
-    public PerformancePanelViewModel Performance { get; }
+    /// <summary>The SQL Editor's own Performance context (its captured run + panel). Procedure/
+    /// Function detail tabs each own a separate <see cref="HostPerformanceContext"/> — nothing is
+    /// shared, so a run in one place never shows up in another.</summary>
+    internal HostPerformanceContext SqlEditorPerformance { get; }
+
+    /// <summary>Performance Analysis panel for the SQL Editor bottom-panel sub-tab.</summary>
+    public PerformancePanelViewModel Performance => SqlEditorPerformance.Panel;
+
+    /// <summary>Builds a per-run Performance report (plan + reads + advisor) from a captured
+    /// execution. Shared by every <see cref="HostPerformanceContext"/> — the readers live here, the
+    /// captured data lives in the context.</summary>
+    internal HostPerformanceContext CreatePerformanceContext()
+        => new(BuildPerformanceReportAsync,
+               text => ClipboardWriteRequested is { } write ? write(text) : Task.CompletedTask);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActiveWorkspace))]
@@ -1977,13 +1986,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
         QueryStatsText = string.Empty;
 
-        // Drop the last profiled run so the Performance panel doesn't show a stale report
-        // from a previous connection; MarkStale rebuilds it to the empty prompt.
-        _lastProfiledSql = null;
-        _lastProfiledResult = null;
-        _lastTableReads = null;
+        // Drop the SQL Editor's last profiled run so its Performance panel doesn't show a stale
+        // report from a previous connection. (Procedure/Function contexts are discarded when
+        // their tabs close on disconnect.)
         _dataAttachmentId = null;
-        Performance.MarkStale();
+        SqlEditorPerformance.Clear();
     }
 
     public async Task ConnectAsync(ConnectionProfile profile)
@@ -2806,14 +2813,15 @@ public partial class MainWindowViewModel : ViewModelBase
         return string.IsNullOrWhiteSpace(selected) ? QueryText : selected!;
     }
 
-    // Performance Analysis build callback (Phase 1, Option B). Builds the report from the
-    // LAST data-lane execution — reads its plan (prepare-only, no re-execution) and
-    // assembles the capture from the run's own timing + row count. Returns null when there
-    // is no run to analyze. Timing + rows always render even if the plan can't be read;
-    // Firebird exceptions become a plain message so the panel VM stays Firebird-free.
-    internal async Task<PerformanceReport?> BuildPerformanceFromLastRunAsync(CancellationToken cancellationToken)
+    // Performance Analysis build callback (Option B), now PER-HOST: the captured run (sql +
+    // result + reads) is passed in by the calling HostPerformanceContext instead of read from a
+    // shared global, so the SQL Editor / each Procedure / each Function analyzes only its OWN
+    // last execution. Reads the plan (prepare-only, no re-execution) + advisor catalog. Returns
+    // null when there is no run. Firebird exceptions become a plain message (VM stays Firebird-free).
+    internal async Task<PerformanceReport?> BuildPerformanceReportAsync(
+        string? sql, QueryResult? result, IReadOnlyList<PerTableReadRow>? capturedReads, CancellationToken cancellationToken)
     {
-        if (_lastProfiledResult is not { } result || string.IsNullOrWhiteSpace(_lastProfiledSql))
+        if (result is null || string.IsNullOrWhiteSpace(sql))
         {
             return null;
         }
@@ -2824,7 +2832,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             try
             {
-                var planResult = await _planReader.GetPlanAsync(_lastProfiledSql!, cancellationToken).ConfigureAwait(true);
+                var planResult = await _planReader.GetPlanAsync(sql!, cancellationToken).ConfigureAwait(true);
                 plan = planResult.Plan;
                 prepare = planResult.PrepareTime > TimeSpan.Zero ? planResult.PrepareTime : null;
             }
@@ -2834,10 +2842,10 @@ public partial class MainWindowViewModel : ViewModelBase
             }
         }
 
-        var reads = _lastTableReads ?? Array.Empty<PerTableReadRow>();
+        var reads = capturedReads ?? Array.Empty<PerTableReadRow>();
         var capture = new PerformanceCapture
         {
-            Statement = new StatementIdentity { Sql = _lastProfiledSql! },
+            Statement = new StatementIdentity { Sql = sql! },
             Plan = plan,
             Timings = new ExecutionTimings { Prepare = prepare, Execute = result.Elapsed },
             RowsReturned = result.Rows.Count,
@@ -3561,6 +3569,8 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.RunExecuteRequested = RunProcedureExecuteAsync;
+        // Its OWN Performance context — analyzes only this procedure tab's Execute.
+        detail.PerformanceContext = CreatePerformanceContext();
         // Lazy column loader for the Variables grid's merged Domain/Column picker.
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         // Best-effort domain + table lists for the Variables grid (Easy mode).
@@ -3659,6 +3669,8 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.RunExecuteRequested = RunFunctionExecuteAsync;
+        // Its OWN Performance context — analyzes only this function tab's Execute.
+        detail.PerformanceContext = CreatePerformanceContext();
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadFunctionListsAsync(detail);
         if (detail.CanUseEasyMode) detail.EasyMode = FunctionEasyModePreference;
@@ -3704,24 +3716,17 @@ public partial class MainWindowViewModel : ViewModelBase
         => RunExecutableWithMetricsAsync(sql, parameters, UiStrings.FunctionExecutedViaDataProfile);
 
     // Shared Procedure/Function execution: the SAME metrics path the SQL Editor uses
-    // (before/after MON$ delta → reads + INSERT/UPDATE/DELETE), feeds the global Performance
-    // panel, and returns a work-summary so the detail panel shows what the code did + read
-    // instead of "0 rows affected".
+    // (before/after MON$ delta → reads + INSERT/UPDATE/DELETE). Returns the work-summary AND the
+    // per-table reads in the outcome so the calling detail tab records them into ITS OWN
+    // Performance context (no shared global panel) and shows the per-table exec breakdown.
     private async Task<ProcedureExecOutcome> RunExecutableWithMetricsAsync(
         string sql, IReadOnlyList<QueryParameter> parameters, string executedViaMessage)
     {
         try
         {
             var (result, reads) = await ExecuteWithMetricsAsync(sql, parameters, CancellationToken.None).ConfigureAwait(true);
-            // Feed the existing global Performance panel — reuses it for procedures/functions
-            // (no new UI); the last execution wins regardless of where it was launched from.
-            _lastProfiledSql = sql;
-            _lastProfiledResult = result;
-            _lastTableReads = reads;
-            Performance.MarkStale();
-
             AddMessage(MessageSeverity.Info, executedViaMessage);
-            return new ProcedureExecOutcome(result, null, BuildExecutionSummary(result, reads));
+            return new ProcedureExecOutcome(result, null, BuildExecutionSummary(result, reads), reads);
         }
         catch (QueryExecutionException ex)
         {
@@ -4543,12 +4548,9 @@ public partial class MainWindowViewModel : ViewModelBase
             else
             {
                 (result, reads) = await ExecuteWithMetricsAsync(sql, null, _executionCts.Token).ConfigureAwait(true);
-                // Performance panel (Option B): remember the data-lane run so the panel can
-                // analyze it on view — no re-execution.
-                _lastProfiledSql = sql;
-                _lastProfiledResult = result;
-                _lastTableReads = reads;
-                Performance.MarkStale();
+                // Performance panel (Option B): remember THIS SQL Editor run so its own panel can
+                // analyze it on view — no re-execution, and no leaking into proc/func contexts.
+                SqlEditorPerformance.Record(sql, result, reads);
             }
 
             CurrentResult = result;
@@ -4574,8 +4576,15 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 // IBExpert-style work summary: inserted/updated/deleted from the MON$ delta
                 // (works for EXECUTE PROCEDURE/BLOCK/DML), falling back to the driver's total.
+                // Status bar stays the concise aggregate; the Messages entry adds the SAME
+                // per-table breakdown the Procedure/Function panels show (one shared model —
+                // ExecutionActivity), so the detail level is consistent wherever a run is launched.
                 QueryStatsText = BuildExecutionSummary(result, reads).BuildMessage();
-                AddMessage(MessageSeverity.Info, QueryStatsText);
+                var perTable = ExecutionActivity.BuildLogLines(reads);
+                var messageText = perTable.Count > 0
+                    ? QueryStatsText + "\n" + string.Join("\n", perTable)
+                    : QueryStatsText;
+                AddMessage(MessageSeverity.Info, messageText);
                 SelectedBottomTabIndex = 1;
             }
         }

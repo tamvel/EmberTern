@@ -727,6 +727,16 @@ internal static class UiStrings
 
     // ─── Procedure Detail V1.1 (modes, locals, execute, comment) ────────────
     public const string ProcedureDetailTabResult = "Result";
+
+    // Performance sub-tab in Procedure/Function Detail — hosts the per-tab PerformancePanelView.
+    public const string DetailTabPerformance = "Performance";
+
+    // Heading above the per-table breakdown in the expanded exec-info panel.
+    public const string ExecutionSummaryHeader = "Execution summary";
+
+    // Clean styled line for a run that changed nothing (read-only) in the expanded exec-info panel
+    // — reads/returned rows live in the collapsed header + the Performance tab, not here.
+    public const string ExecutionSummaryNoChanges = "No data was changed by this execution.";
     public const string ProcedureDetailLocalsVariablesFormat = "Variables ({0})";
     public const string ProcedureDetailLocalsCursorsFormat = "Cursors ({0})";
     public const string ProcedureDetailLocalsSubprogramsFormat = "Subprograms ({0})";
@@ -1222,11 +1232,8 @@ internal static class UiStrings
     public const string PerformanceNoiseSubqueriesSingle = "It also evaluates 1 sub-query (see the execution plan below).";
     public const string PerformanceNoiseSubqueriesMultiple = "It also evaluates {0} sub-queries (see the execution plan below).";
     public const string PerformanceForwardPointer = "Per-table read analysis — which confirms whether this is the cause — arrives in a later phase.";
-    // Secondary (Phase-2 homes) + advanced
-    public const string PerformanceFindingsPlaceholder = "Findings & index suggestions — arrives in a later phase.";
-    public const string PerformanceAccessPlaceholder = "Per-table read analysis — arrives in a later phase.";
+    // Advanced (execution plan)
     public const string PerformancePlanAdvancedHeader = "Execution plan (advanced)";
-    public const string PerformancePlanEmptyHint = "No execution plan was captured for this statement.";
     public const string PerformanceTimingLabel = "Timing";
     public const string PerformanceCaptureLabel = "Capture";
     public const string PerformancePlanDialectLabel = "Plan form";

@@ -33,6 +33,7 @@ public partial class FunctionDetailTabView : UserControl
     private DataGrid? _argumentsGrid;
     private DataGrid? _resultTypeGrid;
     private DataGrid? _variablesGrid;
+    private PerformancePanelView? _performancePanel;
     private FunctionDetailTabViewModel? _currentVm;
     private readonly List<string> _execColumnNames = new();
     private bool _suppressSourceSync;
@@ -55,6 +56,7 @@ public partial class FunctionDetailTabView : UserControl
         _argumentsGrid = this.FindControl<DataGrid>("FuncArgumentsGrid");
         _resultTypeGrid = this.FindControl<DataGrid>("FuncResultTypeGrid");
         _variablesGrid = this.FindControl<DataGrid>("FuncVariablesGrid");
+        _performancePanel = this.FindControl<PerformancePanelView>("FuncPerformancePanel");
         if (_argumentsGrid is not null) FieldGridColumns.Build(_argumentsGrid, includeDefault: true);
         // The return value is a single, unnamed row — omit the Name + Default columns.
         if (_resultTypeGrid is not null) FieldGridColumns.Build(_resultTypeGrid, includeDefault: false, includeName: false);
@@ -83,6 +85,8 @@ public partial class FunctionDetailTabView : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        // A restored/re-shown tab may re-attach with the Performance sub-tab already active.
+        NotifyPerformanceVisibility();
         if (_completionAttached) return;
         if (this.FindAncestorOfType<Window>()?.DataContext is MainWindowViewModel mainVm)
         {
@@ -107,6 +111,8 @@ public partial class FunctionDetailTabView : UserControl
             _currentVm.PropertyChanged -= OnVmPropertyChanged;
             _currentVm.CommentRequested -= OnCommentRequested;
             _currentVm.UncommentRequested -= OnUncommentRequested;
+            // The outgoing function's Performance surface is no longer on screen.
+            _currentVm.Performance?.SetVisible(false);
         }
         _currentVm = DataContext as FunctionDetailTabViewModel;
         if (_currentVm is not null)
@@ -114,6 +120,10 @@ public partial class FunctionDetailTabView : UserControl
             _currentVm.PropertyChanged += OnVmPropertyChanged;
             _currentVm.CommentRequested += OnCommentRequested;
             _currentVm.UncommentRequested += OnUncommentRequested;
+            // Bind the hosted Performance panel to THIS function's own context (the one reused
+            // view instance follows ActiveFunctionDetail), then arm visibility for lazy build.
+            if (_performancePanel is not null) _performancePanel.DataContext = _currentVm.Performance;
+            NotifyPerformanceVisibility();
             _currentVm.SelectedTextProvider = GetActiveEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceActiveEditorSelectionOrAll;
             _currentVm.ExecuteParamsRequested = CollectExecuteParamsAsync;
@@ -201,8 +211,15 @@ public partial class FunctionDetailTabView : UserControl
             case nameof(FunctionDetailTabViewModel.ExecResultVersionTag): PopulateExecResultGrid(); break;
             case nameof(FunctionDetailTabViewModel.SelectedCursor): PushCursor(); break;
             case nameof(FunctionDetailTabViewModel.SelectedSubprogram): PushSubprogram(); break;
+            case nameof(FunctionDetailTabViewModel.ActiveSubTabIndex): NotifyPerformanceVisibility(); break;
         }
     }
+
+    // Tell THIS function's own Performance context whether its sub-tab is currently shown, so a
+    // stale analysis (marked after this function's last Execute) is built lazily on show.
+    private void NotifyPerformanceVisibility()
+        => _currentVm?.Performance?.SetVisible(
+            _currentVm.ActiveSubTabIndex == FunctionDetailTabViewModel.PerformanceSubTabIndex);
 
     private void OnSqlEditorTextChanged(object? sender, EventArgs e)
     {

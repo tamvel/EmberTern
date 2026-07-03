@@ -212,17 +212,20 @@
                      Foreground="{DynamicResource SubtleForegroundBrush}" />
         </StackPanel>
 
-        <!-- (advanced) Execution plan — demoted, collapsed by default, raw folded in -->
+        <!-- (advanced) Execution plan — demoted, collapsed by default, raw folded in. Shown ONLY
+             when a plan was actually captured (HasPlan); a procedure's EXECUTE has no plan, so the
+             whole section is hidden rather than showing an empty "no plan / MON$" placeholder.
+             Compact chrome (a touch lighter than Execution Summary) so it reads as a Performance
+             section without the Fluent Expander's default 48px header. -->
         <Expander Header="{x:Static app:UiStrings.PerformancePlanAdvancedHeader}"
-                  IsExpanded="False" IsVisible="{Binding HasReport}">
-          <StackPanel Spacing="10" Margin="0,4,0,4">
+                  IsExpanded="False" IsVisible="{Binding HasPlan}" MinHeight="34">
+          <Expander.Resources>
+            <Thickness x:Key="ExpanderHeaderPadding">10,0,0,0</Thickness>
+            <Thickness x:Key="ExpanderContentPadding">0</Thickness>
+          </Expander.Resources>
+          <StackPanel Spacing="8" Margin="0,6,0,4">
 
-            <TextBlock Text="{x:Static app:UiStrings.PerformancePlanEmptyHint}"
-                       FontSize="11" FontStyle="Italic"
-                       Foreground="{DynamicResource SubtleForegroundBrush}"
-                       IsVisible="{Binding ShowPlanEmpty}" />
-
-            <TreeView ItemsSource="{Binding PlanRoots}" IsVisible="{Binding HasPlan}"
+            <TreeView ItemsSource="{Binding PlanRoots}"
                       Background="Transparent" BorderThickness="0" MaxHeight="320">
               <TreeView.Styles>
                 <Style Selector="TreeViewItem">

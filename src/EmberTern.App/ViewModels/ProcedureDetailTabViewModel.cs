@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Performance;
 using EmberTern.Core.Query;
 using EmberTern.Core.Sql;
 using EmberTern.Firebird;
@@ -16,9 +17,14 @@ using EmberTern.Firebird;
 namespace EmberTern.App.ViewModels;
 
 /// <summary>Result of an Execute Procedure/Function run: a result set (or null for a
-/// non-result EXECUTE PROCEDURE), an optional error, and — for a successful non-result run —
-/// the work <see cref="Summary"/> (rows changed + rows read) built from the MON$ metrics delta.</summary>
-public sealed record ProcedureExecOutcome(QueryResult? Result, string? Error, ExecutionSummary? Summary = null);
+/// non-result EXECUTE PROCEDURE), an optional error, the work <see cref="Summary"/> (rows
+/// changed + rows read) built from the MON$ metrics delta, and the raw per-table
+/// <see cref="Reads"/> delta (so the tab feeds its own Performance context + per-table summary).</summary>
+public sealed record ProcedureExecOutcome(
+    QueryResult? Result,
+    string? Error,
+    ExecutionSummary? Summary = null,
+    IReadOnlyList<PerTableReadRow>? Reads = null);
 
 /// <summary>
 /// Detail surface for a Firebird stored PROCEDURE. Tabs: Editor (Source ⇄ Easy modes)
@@ -41,6 +47,7 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
     // Top-tab indices — must match the TabItem order in the view.
     public const int EditorSubTabIndex = 0;
     public const int ResultSubTabIndex = 4;
+    public const int PerformanceSubTabIndex = 5;
 
     public const string NewProcedureTemplate =
         "CREATE OR ALTER PROCEDURE NEW_PROCEDURE\nRETURNS (\n    RESULT INTEGER\n)\nAS\nBEGIN\n    RESULT = 0;\n    SUSPEND;\nEND";
@@ -420,10 +427,23 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
     public bool HasExecResult => ExecResult is { HasResultSet: true } && string.IsNullOrEmpty(ExecError);
     public bool ShowExecError => !string.IsNullOrEmpty(ExecError);
 
+    /// <summary>This procedure tab's OWN Performance context (its captured run + panel). Set by
+    /// the owning MainWindowViewModel factory. Never shared with the SQL Editor or another tab.</summary>
+    public HostPerformanceContext? PerformanceContext { get; internal set; }
+
+    /// <summary>The Performance sub-tab panel for THIS procedure — analyzes only this tab's last
+    /// Execute. Null until the factory wires the context.</summary>
+    public PerformancePanelViewModel? Performance => PerformanceContext?.Panel;
+
     // Persistent execution info (status / time / rows / affected / error) shown in the
     // bottom panel — feedback even for procedures that return no result set.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExecSummaryFallbackText))]
     private string _execInfo = string.Empty;
+
+    // The one-line summary shown as the exec-info Expander's header (collapsed state).
+    [ObservableProperty]
+    private string _execInfoCompact = string.Empty;
 
     [ObservableProperty]
     private bool _execInfoIsError;
@@ -431,6 +451,23 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
     public bool HasExecInfo => !string.IsNullOrEmpty(ExecInfo);
 
     partial void OnExecInfoChanged(string value) => OnPropertyChanged(nameof(HasExecInfo));
+
+    /// <summary>Per-table CHANGE breakdown for the exec-info Expander's expanded body (table name
+    /// + inserted/updated/deleted), built from the MON$ delta. Reads are NOT here — they live in
+    /// the Performance tab.</summary>
+    public ObservableCollection<TableActivityLine> ExecTableActivity { get; } = new();
+
+    public bool HasExecTableActivity => ExecTableActivity.Count > 0;
+
+    // True when the run's change counts were measured (MON$ delta captured). Distinguishes a
+    // genuine read-only run ("nothing changed") from a degraded run where MON$ was unavailable.
+    private bool _execChangesMeasured;
+
+    /// <summary>The clean, styled line shown in the expanded Execution Summary when there are no
+    /// per-table change cards: a genuine read-only run says "nothing changed"; a run whose changes
+    /// weren't measured falls back to the concise aggregate. Never the raw multi-line dump.</summary>
+    public string ExecSummaryFallbackText =>
+        _execChangesMeasured ? UiStrings.ExecutionSummaryNoChanges : ExecInfo;
 
     // ── Result grid: client-side paging over the materialized result set
     // (≤5000 rows, executor-capped). Mirrors the SQL editor's paging shape, but a
@@ -575,19 +612,37 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
             ExecResult = null;
             ExecError = err;
             ExecInfo = err;
+            ExecInfoCompact = err;
             ExecInfoIsError = true;
         }
         else
         {
             ExecResult = outcome.Result;
             ExecError = string.Empty;
+            _execChangesMeasured = outcome.Summary?.ChangesMeasured ?? (outcome.Reads is not null);
             ExecInfo = BuildExecInfo(outcome);
+            ExecInfoCompact = BuildExecInfoCompact(outcome);
             ExecInfoIsError = false;
+            ApplyExecTableActivity(outcome.Reads);
+            OnPropertyChanged(nameof(ExecSummaryFallbackText));
+            // Feed THIS tab's OWN Performance context (never the SQL Editor / another tab).
+            PerformanceContext?.Record(sql, outcome.Result, outcome.Reads);
             // Only jump to the Result tab when there are rows — a no-result-set
             // procedure (EXECUTE PROCEDURE) gives feedback via the bottom info panel
             // instead of an empty grid.
             if (HasExecResult) ActiveSubTabIndex = ResultSubTabIndex;
         }
+    }
+
+    // Rebuild the per-table exec breakdown (expanded exec-info body) from the MON$ delta.
+    private void ApplyExecTableActivity(IReadOnlyList<PerTableReadRow>? reads)
+    {
+        ExecTableActivity.Clear();
+        foreach (var line in ExecutionActivity.Build(reads))
+        {
+            ExecTableActivity.Add(line);
+        }
+        OnPropertyChanged(nameof(HasExecTableActivity));
     }
 
     // Execution Metrics: a result-returning proc shows "N rows in T ms" (+ rows read); a
@@ -610,6 +665,30 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         if (outcome.Summary is { } summary)
         {
             return summary.BuildDetailedMessage();
+        }
+        return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoCompletedFormat, ms);
+    }
+
+    // The collapsed one-line counterpart of BuildExecInfo — shown as the exec-info panel's
+    // Expander header. A result-returning proc keeps "N rows in T ms" (+ read); a non-result
+    // EXECUTE PROCEDURE shows the compact work line ("Executed in T ms · 8 inserted · 376 read").
+    private static string BuildExecInfoCompact(ProcedureExecOutcome outcome)
+    {
+        var r = outcome.Result;
+        if (r is null) return UiStrings.ProcedureExecCompleted;
+        var ms = (long)r.Elapsed.TotalMilliseconds;
+        if (r.HasResultSet)
+        {
+            var line = string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoRowsFormat, r.Rows.Count, ms);
+            if (outcome.Summary is { ReadsMeasured: true, RowsRead: > 0 } s)
+            {
+                line += string.Format(CultureInfo.InvariantCulture, " · {0} read", s.RowsRead);
+            }
+            return line;
+        }
+        if (outcome.Summary is { } summary)
+        {
+            return summary.BuildCompactLine();
         }
         return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoCompletedFormat, ms);
     }

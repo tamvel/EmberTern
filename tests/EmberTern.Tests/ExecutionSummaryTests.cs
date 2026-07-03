@@ -97,4 +97,47 @@ public class ExecutionSummaryTests
         var msg = D(ins: 0, upd: 3, del: 0, read: 0, readsMeasured: false, ms: 10).BuildDetailedMessage();
         Assert.Equal("Executed in 10 ms\n\n3 rows updated", msg);
     }
+
+    // ---- BuildCompactLine (collapsed exec-info Expander header) ---------------------
+    [Fact]
+    public void Compact_ChangesAndReads_SingleLineDotSeparated()
+    {
+        var line = D(ins: 14, upd: 28, del: 8, read: 376, ms: 54).BuildCompactLine();
+        Assert.Equal("Executed in 54 ms · 14 inserted · 28 updated · 8 deleted · 376 read", line);
+    }
+
+    [Fact]
+    public void Compact_OmitsZeroChangeTerms()
+    {
+        var line = D(ins: 0, upd: 3, del: 0, read: 0, readsMeasured: false, ms: 10).BuildCompactLine();
+        Assert.Equal("Executed in 10 ms · 3 updated", line);
+    }
+
+    [Fact]
+    public void Compact_ReadsOnly_ShowsReadTerm()
+    {
+        var line = D(ins: 0, upd: 0, del: 0, read: 20_552, ms: 21).BuildCompactLine();
+        Assert.Equal("Executed in 21 ms · 20552 read", line);
+    }
+
+    [Fact]
+    public void Compact_MeasuredButNoWork_JustTime()
+    {
+        var line = D(ins: 0, upd: 0, del: 0, read: 0, ms: 4).BuildCompactLine();
+        Assert.Equal("Executed in 4 ms", line);
+    }
+
+    [Fact]
+    public void Compact_NotMeasured_FallsBackToAffected()
+    {
+        var line = D(0, 0, 0, 0, changesMeasured: false, readsMeasured: false, affected: 42, ms: 5).BuildCompactLine();
+        Assert.Equal("Executed in 5 ms · 42 rows affected", line);
+    }
+
+    [Fact]
+    public void Compact_IsSingleLine_NoNewlines()
+    {
+        var line = D(ins: 1, upd: 2, del: 3, read: 4).BuildCompactLine();
+        Assert.DoesNotContain("\n", line);
+    }
 }

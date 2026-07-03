@@ -6,6 +6,7 @@
              xmlns:behaviors="using:EmberTern.App.Behaviors"
              xmlns:views="using:EmberTern.App.Views"
              xmlns:conv="using:EmberTern.App.Converters"
+             xmlns:core="using:EmberTern.Core.Query"
              xmlns:ae="using:AvaloniaEdit"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -392,6 +393,16 @@
         </Grid>
       </TabItem>
 
+      <!-- Performance — the reusable PerformancePanelView bound to THIS procedure tab's OWN
+           PerformanceContext (fed by this procedure's last Execute via the unified metrics
+           pipeline: reads / findings / table access / advisor / plan). Same view type as the
+           SQL Editor's panel, but each host owns a separate context — no shared global state. -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DetailTabPerformance}">
+        <!-- DataContext set in code-behind to this tab's own PerformanceContext.Panel
+             (the current ProcedureDetailTabViewModel.Performance). -->
+        <views:PerformancePanelView x:Name="ProcPerformancePanel" />
+      </TabItem>
+
     </TabControl>
 
     <!-- Persistent execution-info panel — visible after any Execute regardless of
@@ -402,10 +413,84 @@
               Background="{DynamicResource ElevatedPanelBrush}"
               BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="0,1,0,0"
-              Padding="10,5">
+              Padding="10,3">
         <Panel>
-          <TextBlock Text="{Binding ExecInfo}" Classes="subtle" FontSize="11" TextWrapping="Wrap"
-                     IsVisible="{Binding !ExecInfoIsError}" />
+          <!-- Success: collapsible summary — the header is a compact one-line ("Executed in 19 ms
+               · 14 inserted · 28 updated · 8 deleted · 376 read"); the expanded body is the
+               PER-TABLE breakdown from the same MON$ delta. Default expanded; the user can
+               collapse it. MinHeight + the header/content padding resources shrink the Fluent
+               Expander's chunky 48px chrome so the COLLAPSED state stays compact. -->
+          <Expander IsExpanded="True" IsVisible="{Binding !ExecInfoIsError}" Padding="0" MinHeight="26">
+            <Expander.Resources>
+              <Thickness x:Key="ExpanderHeaderPadding">8,0,0,0</Thickness>
+              <Thickness x:Key="ExpanderContentPadding">0</Thickness>
+            </Expander.Resources>
+            <Expander.Header>
+              <TextBlock Text="{Binding ExecInfoCompact}" Classes="subtle" FontSize="11" TextWrapping="Wrap" />
+            </Expander.Header>
+            <StackPanel Margin="6,6,10,8" Spacing="6">
+              <TextBlock Text="{x:Static app:UiStrings.ExecutionSummaryHeader}"
+                         Foreground="{DynamicResource SubtleForegroundBrush}"
+                         FontSize="10" FontWeight="SemiBold" />
+              <!-- What was CHANGED, one distinct card per table (reads live in Performance). -->
+              <ItemsControl ItemsSource="{Binding ExecTableActivity}" IsVisible="{Binding HasExecTableActivity}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="core:TableActivityLine">
+                    <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="4"
+                            Padding="8,6" Margin="0,0,0,8">
+                      <StackPanel Spacing="5">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <controls:SvgIcon Data="{StaticResource Icon.Table}"
+                                            Foreground="{DynamicResource AccentBrush}"
+                                            Width="14" Height="14" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Table}" FontSize="12" FontWeight="SemiBold"
+                                     VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding Changes}" Margin="2,0,0,0">
+                          <ItemsControl.DataTemplates>
+                            <DataTemplate x:DataType="core:InsertChange">
+                              <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
+                                <controls:SvgIcon Data="{StaticResource Icon.Plus}"
+                                                  Foreground="{DynamicResource SuccessIconBrush}"
+                                                  Width="12" Height="12" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Count}" Foreground="{DynamicResource SuccessIconBrush}"
+                                           FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="11" VerticalAlignment="Center" />
+                              </StackPanel>
+                            </DataTemplate>
+                            <DataTemplate x:DataType="core:UpdateChange">
+                              <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
+                                <controls:SvgIcon Data="{StaticResource Icon.Pencil}"
+                                                  Foreground="{DynamicResource WarningIconBrush}"
+                                                  Width="12" Height="12" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Count}" Foreground="{DynamicResource WarningIconBrush}"
+                                           FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="11" VerticalAlignment="Center" />
+                              </StackPanel>
+                            </DataTemplate>
+                            <DataTemplate x:DataType="core:DeleteChange">
+                              <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
+                                <controls:SvgIcon Data="{StaticResource Icon.Trash}"
+                                                  Foreground="{DynamicResource DangerIconBrush}"
+                                                  Width="12" Height="12" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Count}" Foreground="{DynamicResource DangerIconBrush}"
+                                           FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="11" VerticalAlignment="Center" />
+                              </StackPanel>
+                            </DataTemplate>
+                          </ItemsControl.DataTemplates>
+                        </ItemsControl>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <!-- No change cards: a read-only run shows a clean "nothing changed" line; a run
+                   with unmeasured changes falls back to the concise aggregate (never the raw dump). -->
+              <TextBlock Text="{Binding ExecSummaryFallbackText}" Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                         IsVisible="{Binding !HasExecTableActivity}" />
+            </StackPanel>
+          </Expander>
           <TextBlock Text="{Binding ExecInfo}" Classes="subtle error" FontSize="11" TextWrapping="Wrap"
                      IsVisible="{Binding ExecInfoIsError}" />
         </Panel>

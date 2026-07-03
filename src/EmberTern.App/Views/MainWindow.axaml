@@ -1393,7 +1393,7 @@
                                        Classes="subtle"
                                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                                        FontSize="11"
-                                       VerticalAlignment="Center" />
+                                       VerticalAlignment="Top" />
                             <SelectableTextBlock Grid.Column="1"
                                        Text="{Binding Text}"
                                        FontSize="12"

@@ -36,6 +36,7 @@ public partial class ProcedureDetailTabView : UserControl
     private DataGrid? _inputGrid;
     private DataGrid? _outputGrid;
     private DataGrid? _variablesGrid;
+    private PerformancePanelView? _performancePanel;
     private ProcedureDetailTabViewModel? _currentVm;
     private readonly List<string> _resultColumnNames = new();
     private bool _suppressSourceSync;
@@ -60,6 +61,7 @@ public partial class ProcedureDetailTabView : UserControl
         _inputGrid = this.FindControl<DataGrid>("InputParamsGrid");
         _outputGrid = this.FindControl<DataGrid>("OutputParamsGrid");
         _variablesGrid = this.FindControl<DataGrid>("VariablesGrid");
+        _performancePanel = this.FindControl<PerformancePanelView>("ProcPerformancePanel");
         if (_inputGrid is not null) FieldGridColumns.Build(_inputGrid, includeDefault: true);
         if (_outputGrid is not null) FieldGridColumns.Build(_outputGrid, includeDefault: false);
         if (_variablesGrid is not null) FieldGridColumns.Build(_variablesGrid, includeDefault: true);
@@ -90,6 +92,8 @@ public partial class ProcedureDetailTabView : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        // A restored/re-shown tab may re-attach with the Performance sub-tab already active.
+        NotifyPerformanceVisibility();
         if (_completionAttached) return;
         if (this.FindAncestorOfType<Window>()?.DataContext is MainWindowViewModel mainVm)
         {
@@ -114,6 +118,8 @@ public partial class ProcedureDetailTabView : UserControl
             _currentVm.PropertyChanged -= OnVmPropertyChanged;
             _currentVm.CommentRequested -= OnCommentRequested;
             _currentVm.UncommentRequested -= OnUncommentRequested;
+            // The outgoing procedure's Performance surface is no longer on screen.
+            _currentVm.Performance?.SetVisible(false);
         }
         _currentVm = DataContext as ProcedureDetailTabViewModel;
         if (_currentVm is not null)
@@ -121,6 +127,10 @@ public partial class ProcedureDetailTabView : UserControl
             _currentVm.PropertyChanged += OnVmPropertyChanged;
             _currentVm.CommentRequested += OnCommentRequested;
             _currentVm.UncommentRequested += OnUncommentRequested;
+            // Bind the hosted Performance panel to THIS procedure's own context (the one reused
+            // view instance follows ActiveProcedureDetail), then arm visibility for lazy build.
+            if (_performancePanel is not null) _performancePanel.DataContext = _currentVm.Performance;
+            NotifyPerformanceVisibility();
             _currentVm.SelectedTextProvider = GetActiveEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceActiveEditorSelectionOrAll;
             _currentVm.ExecuteParamsRequested = CollectExecuteParamsAsync;
@@ -211,8 +221,15 @@ public partial class ProcedureDetailTabView : UserControl
             case nameof(ProcedureDetailTabViewModel.ExecResultVersionTag): PopulateResultGrid(); break;
             case nameof(ProcedureDetailTabViewModel.SelectedCursor): PushCursor(); break;
             case nameof(ProcedureDetailTabViewModel.SelectedSubprogram): PushSubprogram(); break;
+            case nameof(ProcedureDetailTabViewModel.ActiveSubTabIndex): NotifyPerformanceVisibility(); break;
         }
     }
+
+    // Tell THIS procedure's own Performance context whether its sub-tab is currently shown, so a
+    // stale analysis (marked after this procedure's last Execute) is built lazily on show.
+    private void NotifyPerformanceVisibility()
+        => _currentVm?.Performance?.SetVisible(
+            _currentVm.ActiveSubTabIndex == ProcedureDetailTabViewModel.PerformanceSubTabIndex);
 
     private void OnSqlEditorTextChanged(object? sender, EventArgs e)
     {

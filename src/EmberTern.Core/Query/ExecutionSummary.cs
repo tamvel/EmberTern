@@ -108,6 +108,35 @@ public sealed record ExecutionSummary
         return sb.ToString();
     }
 
+    /// <summary>The compact one-line form for the collapsed exec-info Expander header, e.g.
+    /// "Executed in 54 ms · 14 inserted · 28 updated · 8 deleted · 376 read". Zero change terms
+    /// are omitted; the read term shows only when measured; falls back to "· N rows affected"
+    /// when the change delta wasn't measured. Single line (never wraps to the detailed body).
+    /// The expanded body shows the per-table breakdown (<see cref="ExecutionActivity"/>).</summary>
+    public string BuildCompactLine()
+    {
+        long ms = (long)Elapsed.TotalMilliseconds;
+        var sb = new System.Text.StringBuilder();
+        sb.Append("Executed in ").Append(ms.ToString(CultureInfo.InvariantCulture)).Append(" ms");
+
+        if (!ChangesMeasured)
+        {
+            // No MON$ delta captured — the driver's total is all we honestly have.
+            sb.Append(" · ").Append((RecordsAffected ?? 0).ToString(CultureInfo.InvariantCulture)).Append(" rows affected");
+            return sb.ToString();
+        }
+
+        if (Inserts > 0) sb.Append(" · ").Append(Count(Inserts, "inserted"));
+        if (Updates > 0) sb.Append(" · ").Append(Count(Updates, "updated"));
+        if (Deletes > 0) sb.Append(" · ").Append(Count(Deletes, "deleted"));
+        if (ReadsMeasured && RowsRead > 0) sb.Append(" · ").Append(Count(RowsRead, "read"));
+        return sb.ToString();
+    }
+
+    // "14 inserted" / "376 read" — plain integers (no grouping), for the compact one-liner.
+    private static string Count(long n, string verb)
+        => string.Format(CultureInfo.InvariantCulture, "{0} {1}", n, verb);
+
     // Plain integers (no grouping) to match the existing "N rows in T ms" message style.
     private static string Part(string verb, long n)
         => string.Format(CultureInfo.InvariantCulture, "{0} {1}", verb, n);
