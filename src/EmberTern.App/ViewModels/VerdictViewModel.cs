@@ -43,6 +43,18 @@ public sealed class VerdictViewModel
         ? "1 row"
         : Verdict.RowsReturned.ToString("N0", CultureInfo.CurrentCulture) + " rows";
 
+    public bool HasRowsRead => Verdict.RowsRead is not null;
+
+    public string RowsReadText => Verdict.RowsRead is { } read
+        ? read.ToString("N0", CultureInfo.CurrentCulture) + " read"
+        : string.Empty;
+
+    public bool HasAmplification => Verdict.Amplification is not null;
+
+    public string AmplificationText => Verdict.Amplification is { } amp
+        ? amp.ToString("0.#", CultureInfo.CurrentCulture) + "×"
+        : string.Empty;
+
     private static string FormatDuration(double ms) => ms < 1000
         ? ms.ToString("0", CultureInfo.CurrentCulture) + " ms"
         : (ms / 1000.0).ToString("0.00", CultureInfo.CurrentCulture) + " s";

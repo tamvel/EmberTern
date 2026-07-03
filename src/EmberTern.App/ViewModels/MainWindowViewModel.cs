@@ -53,9 +53,13 @@ public partial class MainWindowViewModel : ViewModelBase
     // panel builds the report from the LAST data-lane run (plan re-read on view, no
     // re-execution). Plan + timings only; no MON$/trace/advisor yet.
     private readonly FirebirdPlanReader _planReader;
+    private readonly FirebirdPerfStatsReader _perfStatsReader;
     private readonly PerformanceAnalyzer _performanceAnalyzer;
     private string? _lastProfiledSql;
     private QueryResult? _lastProfiledResult;
+    private IReadOnlyList<PerTableReadRow>? _lastTableReads;
+    private long? _dataAttachmentId;
+    private bool _performanceTabActive;
     private const int PerformanceBottomTabIndex = 3; // Results=0, Messages=1, Output=2, Performance=3
 
     // SQL-template engine (Drag & Drop snippets). The registry answers the drop flyout
@@ -157,6 +161,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // Performance profiling runs on the data lane (same attachment as F5). Plan is
         // read best-effort; a profiled run executes under the user's manual data tx.
         _planReader = new FirebirdPlanReader(_service, _transactionService);
+        // Per-table reads (Phase 2): stats read on the metadata lane, attachment id on the
+        // data lane — so before/after snapshots stay fresh and never touch the data tx.
+        _perfStatsReader = new FirebirdPerfStatsReader(_service, _metadataTransactionService, _transactionService);
         _performanceAnalyzer = new PerformanceAnalyzer();
         Performance = new PerformancePanelViewModel
         {
@@ -1968,6 +1975,8 @@ public partial class MainWindowViewModel : ViewModelBase
         // from a previous connection; MarkStale rebuilds it to the empty prompt.
         _lastProfiledSql = null;
         _lastProfiledResult = null;
+        _lastTableReads = null;
+        _dataAttachmentId = null;
         Performance.MarkStale();
     }
 
@@ -2819,6 +2828,7 @@ public partial class MainWindowViewModel : ViewModelBase
             }
         }
 
+        var reads = _lastTableReads ?? Array.Empty<PerTableReadRow>();
         var capture = new PerformanceCapture
         {
             Statement = new StatementIdentity { Sql = _lastProfiledSql! },
@@ -2827,15 +2837,34 @@ public partial class MainWindowViewModel : ViewModelBase
             RowsReturned = result.Rows.Count,
             Truncated = result.Truncated,
             RecordsAffected = result.RecordsAffected,
-            Method = CaptureMethod.PlanOnly,
+            TableReads = reads,
+            Method = reads.Count > 0 ? CaptureMethod.MonAttachmentDelta : CaptureMethod.PlanOnly,
         };
         return _performanceAnalyzer.Analyze(capture);
     }
 
     // Performance tab visibility drives lazy analysis (Option B): build on first view
-    // while stale, so the panel reflects the last run without a manual profiling action.
+    // while stale. When the tab is active it also ARMS per-table read capture on execute.
     partial void OnSelectedBottomTabIndexChanged(int value)
-        => Performance.SetVisible(value == PerformanceBottomTabIndex);
+    {
+        _performanceTabActive = value == PerformanceBottomTabIndex;
+        Performance.SetVisible(_performanceTabActive);
+    }
+
+    // Per-table read snapshot on the metadata lane (best-effort — any failure disables
+    // reads for this run and the panel degrades to plan + timings).
+    private async Task<IReadOnlyList<PerTableReadRow>?> TrySnapshotReadsAsync()
+    {
+        try
+        {
+            _dataAttachmentId ??= await _perfStatsReader.GetDataAttachmentIdAsync().ConfigureAwait(true);
+            return await _perfStatsReader.SnapshotAsync(_dataAttachmentId.Value).ConfigureAwait(true);
+        }
+        catch (PerformanceCaptureException)
+        {
+            return null;
+        }
+    }
 
     // Column cache for ALIAS./TABLE. autocomplete. Keyed by uppercase table
     // name; cleared on disconnect (in ClearWorkspaceTabs path via
@@ -4430,8 +4459,20 @@ public partial class MainWindowViewModel : ViewModelBase
         var executor = metadata ? _metadataExecutor : _executor;
         AddMessage(MessageSeverity.Info, BuildExecutedViaMessage(metadata));
 
+        // Arm per-table read capture only when the Performance tab is being watched — a
+        // data run gets bracketed by before/after MON$ snapshots, so there's no cost on
+        // executes the user isn't profiling.
+        bool profileReads = !metadata && _performanceTabActive;
+        IReadOnlyList<PerTableReadRow>? readsBefore = null;
+
         try
         {
+            if (profileReads)
+            {
+                readsBefore = await TrySnapshotReadsAsync().ConfigureAwait(true);
+                profileReads = readsBefore is not null;
+            }
+
             var result = await executor.ExecuteAsync(sql, _executionCts.Token).ConfigureAwait(true);
             CurrentResult = result;
             CurrentResultVersionTag = Guid.NewGuid().ToString("N");
@@ -4442,6 +4483,15 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 _lastProfiledSql = sql;
                 _lastProfiledResult = result;
+                _lastTableReads = null;
+                if (profileReads)
+                {
+                    var readsAfter = await TrySnapshotReadsAsync().ConfigureAwait(true);
+                    if (readsAfter is not null)
+                    {
+                        _lastTableReads = TableStatsDiffer.Diff(readsBefore!, readsAfter);
+                    }
+                }
                 Performance.MarkStale();
             }
 
@@ -4454,7 +4504,12 @@ public partial class MainWindowViewModel : ViewModelBase
                 {
                     AddMessage(MessageSeverity.Warning, TruncatedBannerText);
                 }
-                SelectedBottomTabIndex = 0;
+                // Keep the Performance tab in view when the user is watching it (so the
+                // panel updates and the next run re-captures reads); otherwise show Results.
+                if (!_performanceTabActive)
+                {
+                    SelectedBottomTabIndex = 0;
+                }
             }
             else
             {

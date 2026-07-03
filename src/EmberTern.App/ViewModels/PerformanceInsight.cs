@@ -7,10 +7,11 @@ using EmberTern.Core.Performance;
 namespace EmberTern.App.ViewModels;
 
 /// <summary>Derives the plain-language summary shown in the primary zone of the Performance
-/// panel from a Phase-1 <see cref="PerformanceReport"/> (parsed plan + timings only).
-/// Pure presentation — no analysis, no rules, no recommendations. It renders the facts the
-/// plan already contains (which tables are full-scanned, how many sub-queries) in words a
-/// non-Firebird developer can act on. Lives in the App layer so Core stays unchanged.</summary>
+/// panel from a <see cref="PerformanceReport"/>. When per-table reads were measured the lead
+/// is derived from the MEASURED findings, so it always agrees with the Findings zone (a plan
+/// full scan that measurement proves cheap must not be reported as "why it's slow"); with no
+/// measured reads it falls back to the parsed plan (Phase-1 behaviour). Pure presentation —
+/// no analysis, no rules, no recommendations. Lives in the App layer so Core stays unchanged.</summary>
 internal static class PerformanceInsight
 {
     /// <summary>The grade line, e.g. "Needs attention — this query took 1.79 s."</summary>
@@ -27,10 +28,19 @@ internal static class PerformanceInsight
         };
     }
 
-    /// <summary>The plain-language plan lead — names the full-scanned table(s), or states
-    /// that everything uses indexes. Empty when no plan was captured.</summary>
+    /// <summary>The plain-language lead. When per-table reads were measured it is derived
+    /// from the measured findings (so it agrees with the Findings zone); otherwise it falls
+    /// back to naming the plan's full-scanned table(s). Empty when no plan was captured.</summary>
     public static string PlanLead(PerformanceReport report)
     {
+        // Measured reads available → the lead comes from the measurement, never the plan.
+        // The plan can show a full scan that the measured reads prove cheap; reporting that
+        // as "why it's slow" would contradict the green "no costly scans" finding.
+        if (report.Access is not null)
+        {
+            return MeasuredLead(report);
+        }
+
         if (report.Plan is not { } plan)
         {
             return string.Empty;
@@ -44,6 +54,29 @@ internal static class PerformanceInsight
         return tables.Count == 1
             ? string.Format(CultureInfo.CurrentCulture, UiStrings.PerformanceLeadFullScanSingle, names)
             : string.Format(CultureInfo.CurrentCulture, UiStrings.PerformanceLeadFullScanMultiple, names);
+    }
+
+    // Lead derived from measured reads: name the costly scan(s) the findings identified, or
+    // — when nothing costly was measured — state that plainly, agreeing with the Findings zone.
+    private static string MeasuredLead(PerformanceReport report)
+    {
+        var costly = report.Findings
+            .Where(f => f.Kind == FindingKind.CostlyFullScan && !string.IsNullOrEmpty(f.Table))
+            .Select(f => f.Table!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (costly.Count > 0)
+        {
+            var names = string.Join(", ", costly);
+            return costly.Count == 1
+                ? string.Format(CultureInfo.CurrentCulture, UiStrings.PerformanceMeasuredCostlyScanSingle, names)
+                : string.Format(CultureInfo.CurrentCulture, UiStrings.PerformanceMeasuredCostlyScanMultiple, names);
+        }
+
+        long read = report.Verdict.RowsRead ?? report.Access!.TotalRowsRead;
+        return string.Format(CultureInfo.CurrentCulture, UiStrings.PerformanceMeasuredNoCostlyScan,
+            read.ToString("N0", CultureInfo.CurrentCulture),
+            report.Verdict.RowsReturned.ToString("N0", CultureInfo.CurrentCulture));
     }
 
     /// <summary>The "it also evaluates N sub-queries" noise summary, or null when the plan

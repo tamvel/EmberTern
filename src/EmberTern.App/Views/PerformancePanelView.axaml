@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:perf="using:EmberTern.Core.Performance"
              xmlns:app="using:EmberTern.App"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -54,17 +55,27 @@
             <TextBlock Text="{Binding Verdict.RowsText}" FontSize="11"
                        Foreground="{DynamicResource SubtleForegroundBrush}" />
             <TextBlock Text="·" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}"
+                       IsVisible="{Binding Verdict.HasRowsRead}" />
+            <TextBlock Text="{Binding Verdict.RowsReadText}" FontSize="11"
+                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                       IsVisible="{Binding Verdict.HasRowsRead}" />
+            <TextBlock Text="·" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}"
+                       IsVisible="{Binding Verdict.HasAmplification}" />
+            <TextBlock Text="{Binding Verdict.AmplificationText}" FontSize="11" FontWeight="SemiBold"
+                       Foreground="{DynamicResource ForegroundBrush}"
+                       IsVisible="{Binding Verdict.HasAmplification}" />
+            <TextBlock Text="·" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}"
                        IsVisible="{Binding HasTiming}" />
             <TextBlock Text="{Binding TimingText}" FontSize="11"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        IsVisible="{Binding HasTiming}" />
           </StackPanel>
 
-          <!-- honest forward-pointer (only when there is a full scan Phase 1 can't size) -->
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceForwardPointer}"
+          <!-- nudge to measure reads: a full scan, but this run wasn't profiled with reads -->
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceReadsNotMeasured}"
                      FontSize="11" FontStyle="Italic" TextWrapping="Wrap"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
-                     IsVisible="{Binding ShowForwardPointer}" />
+                     IsVisible="{Binding ShowReadsNudge}" />
 
           <!-- empty / progress / error states -->
           <TextBlock Text="{x:Static app:UiStrings.PerformanceEmptyHint}" FontSize="12" TextWrapping="Wrap"
@@ -90,13 +101,81 @@
     <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Spacing="0" Margin="12,8,12,12">
 
-        <!-- Phase-2 homes: subtle one-liners, de-emphasized -->
-        <StackPanel Spacing="2" Margin="0,0,0,6" IsVisible="{Binding HasReport}">
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsPlaceholder}"
-                     FontSize="11" FontStyle="Italic"
-                     Foreground="{DynamicResource SubtleForegroundBrush}" />
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceAccessPlaceholder}"
-                     FontSize="11" FontStyle="Italic"
+        <!-- FINDINGS (measured reads) -->
+        <StackPanel Spacing="6" Margin="0,0,0,10" IsVisible="{Binding HasReport}">
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsHeader}"
+                     FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ForegroundBrush}" />
+
+          <ItemsControl ItemsSource="{Binding Findings}" IsVisible="{Binding HasFindings}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:FindingViewModel">
+                <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6">
+                  <StackPanel Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Border CornerRadius="3" Padding="4,0" VerticalAlignment="Center">
+                        <Border.Background>
+                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                            <Binding Path="SeverityBrushKey" />
+                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                          </MultiBinding>
+                        </Border.Background>
+                        <TextBlock Text="{Binding SeverityText}" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource OnAccentBrush}" />
+                      </Border>
+                      <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+                                 Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Explanation}" FontSize="11" TextWrapping="Wrap"
+                               Foreground="{DynamicResource SubtleForegroundBrush}" />
+                    <ItemsControl ItemsSource="{Binding Evidence}" IsVisible="{Binding HasEvidence}" Margin="0,2,0,0">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="perf:FindingEvidence">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding Label}" FontSize="10" Width="120"
+                                       Foreground="{DynamicResource SubtleForegroundBrush}" />
+                            <TextBlock Text="{Binding Value}" FontSize="10"
+                                       Foreground="{DynamicResource ForegroundBrush}" />
+                          </StackPanel>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsNone}" FontSize="11"
+                     Foreground="{DynamicResource SuccessIconBrush}"
+                     IsVisible="{Binding FindingsNoneVisible}" />
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsFuture}" FontSize="11" FontStyle="Italic"
+                     Foreground="{DynamicResource SubtleForegroundBrush}"
+                     IsVisible="{Binding HasFindings}" />
+        </StackPanel>
+
+        <!-- TABLE ACCESS (red = sequential, blue = index) -->
+        <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding HasTableAccess}">
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceAccessHeader}"
+                     FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ForegroundBrush}" />
+          <ItemsControl ItemsSource="{Binding TableAccess}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TableAccessBarViewModel">
+                <Grid ColumnDefinitions="150,Auto,*" Margin="0,0,0,3">
+                  <TextBlock Grid.Column="0" Text="{Binding Table}" FontSize="11"
+                             FontFamily="Consolas,Cascadia Code,monospace" TextTrimming="CharacterEllipsis"
+                             Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Height="12" VerticalAlignment="Center">
+                    <Border Width="{Binding SeqWidth}" Background="{DynamicResource DangerIconBrush}" CornerRadius="2,0,0,2" />
+                    <Border Width="{Binding IdxWidth}" Background="{DynamicResource InfoIconBrush}" />
+                  </StackPanel>
+                  <TextBlock Grid.Column="2" Text="{Binding ReadsText}" FontSize="10" Margin="8,0,0,0"
+                             Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceAccessLegend}" FontSize="10"
                      Foreground="{DynamicResource SubtleForegroundBrush}" />
         </StackPanel>
 

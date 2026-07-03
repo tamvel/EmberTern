@@ -1211,6 +1211,11 @@ internal static class UiStrings
     public const string PerformanceLeadFullScanSingle = "It reads table {0} in full (a full table scan). A full scan reads every row, which is often why a query is slow.";
     public const string PerformanceLeadFullScanMultiple = "It reads tables {0} in full (full table scans). A full scan reads every row, which is often why a query is slow.";
     public const string PerformanceLeadNoFullScan = "All table access in the plan uses indexes — no full table scans.";
+    // Measurement-derived lead (used instead of the plan heuristic once per-table reads exist,
+    // so the summary always agrees with the Findings zone).
+    public const string PerformanceMeasuredCostlyScanSingle = "It reads table {0} row by row (a full table scan) — the largest measured cost in this query.";
+    public const string PerformanceMeasuredCostlyScanMultiple = "It reads tables {0} row by row (full table scans) — the largest measured cost in this query.";
+    public const string PerformanceMeasuredNoCostlyScan = "No costly full table scans were measured — it read {0} rows to return {1}.";
     public const string PerformanceNoiseSubqueriesSingle = "It also evaluates 1 sub-query (see the execution plan below).";
     public const string PerformanceNoiseSubqueriesMultiple = "It also evaluates {0} sub-queries (see the execution plan below).";
     public const string PerformanceForwardPointer = "Per-table read analysis — which confirms whether this is the cause — arrives in a later phase.";
@@ -1224,4 +1229,11 @@ internal static class UiStrings
     public const string PerformancePlanDialectLabel = "Plan form";
     public const string PerformanceRawPlanLabel = "Raw plan";
     public const string PerformanceCopy = "Copy";
+    // Phase 2 — measured per-table reads (Findings + Table Access zones)
+    public const string PerformanceReadsNotMeasured = "This run wasn't measured for per-table reads. Re-run the query with this tab open to measure whether the full scan is actually costly.";
+    public const string PerformanceFindingsHeader = "Findings";
+    public const string PerformanceFindingsNone = "Per-table reads measured — no costly full scans found.";
+    public const string PerformanceFindingsFuture = "Index recommendations and fix suggestions arrive in a later phase.";
+    public const string PerformanceAccessHeader = "Table access";
+    public const string PerformanceAccessLegend = "Red = sequential (full scan) reads · Blue = indexed reads";
 }
