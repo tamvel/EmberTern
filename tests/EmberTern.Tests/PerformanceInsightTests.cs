@@ -35,7 +35,9 @@ public class PerformanceInsightTests
         var report = Build(Rows(("NAGL", 285, 3135), ("POZ", 0, 7535)), returned: 285, fullScanTable: "NAGL");
 
         Assert.NotNull(report.Access);          // reads were measured
-        Assert.Empty(report.Findings);          // nothing costly → matches green Findings note
+        // No costly SCAN (R1) — the lead must agree. R6 (high amplification) may legitimately
+        // fire here (diffuse cost, no dominant scan); that's a different finding kind.
+        Assert.DoesNotContain(report.Findings, f => f.Kind == FindingKind.CostlyFullScan);
         var lead = PerformanceInsight.PlanLead(report);
 
         Assert.StartsWith("No costly full table scans were measured", lead);
