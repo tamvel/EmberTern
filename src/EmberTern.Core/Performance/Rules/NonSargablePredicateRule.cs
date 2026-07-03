@@ -65,6 +65,7 @@ public sealed class NonSargablePredicateRule : IPerformanceRule
                 Confidence = FindingConfidence.Medium,
                 RuleId = Id,
                 Table = p.Table,
+                Column = p.Column,
                 Title = string.Format(CultureInfo.CurrentCulture,
                     "Condition on {0}.{1} can't use index {2}", p.Table, p.Column, index.Name),
                 Explanation = string.Format(CultureInfo.CurrentCulture,

@@ -120,6 +120,7 @@ public sealed class MissingIndexRule : IPerformanceRule
                 Confidence = confidence,
                 RuleId = Id,
                 Table = p.Table,
+                Column = p.Column,
                 Title = string.Format(CultureInfo.CurrentCulture,
                     "Candidate index opportunity on {0}.{1}", p.Table, p.Column),
                 Explanation = string.Format(CultureInfo.CurrentCulture,

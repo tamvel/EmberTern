@@ -57,6 +57,10 @@ public sealed record Finding
     /// <summary>The table this finding is about, when applicable.</summary>
     public string? Table { get; init; }
 
+    /// <summary>The column this finding is about, when applicable (e.g. the predicate column for
+    /// a missing-index or non-sargable finding) — lets a recommendation name it exactly.</summary>
+    public string? Column { get; init; }
+
     /// <summary>The advisor rule that produced this finding (e.g. "R1", "R4"); empty for the
     /// legacy static path.</summary>
     public string RuleId { get; init; } = string.Empty;
