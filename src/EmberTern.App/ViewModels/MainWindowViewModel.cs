@@ -2888,6 +2888,10 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    // Sum one change counter across the captured per-table delta (0 when reads weren't captured).
+    private static long SumChanges(IReadOnlyList<PerTableReadRow>? rows, Func<PerTableReadRow, long> selector)
+        => rows is null ? 0 : rows.Sum(selector);
+
     // Column cache for ALIAS./TABLE. autocomplete. Keyed by uppercase table
     // name; cleared on disconnect (in ClearWorkspaceTabs path via
     // ApplyActiveConnectionChange). A separate "table doesn't exist or has no
@@ -4481,18 +4485,20 @@ public partial class MainWindowViewModel : ViewModelBase
         var executor = metadata ? _metadataExecutor : _executor;
         AddMessage(MessageSeverity.Info, BuildExecutedViaMessage(metadata));
 
-        // Arm per-table read capture only when the Performance tab is being watched — a
-        // data run gets bracketed by before/after MON$ snapshots, so there's no cost on
-        // executes the user isn't profiling.
-        bool profileReads = !metadata && _performanceTabActive;
+        // Bracket every data-lane run with before/after MON$ snapshots so the Messages
+        // summary always has per-table INSERT/UPDATE/DELETE counts (Execution Metrics) and
+        // the Performance panel has measured reads without needing its tab open. Two small
+        // metadata-lane reads per data execute; they never touch the user's data tx or fire
+        // its ON COMMIT trigger. Best-effort — any MON$ failure degrades to RecordsAffected.
+        bool captureStats = !metadata;
         IReadOnlyList<PerTableReadRow>? readsBefore = null;
 
         try
         {
-            if (profileReads)
+            if (captureStats)
             {
                 readsBefore = await TrySnapshotReadsAsync().ConfigureAwait(true);
-                profileReads = readsBefore is not null;
+                captureStats = readsBefore is not null;
             }
 
             var result = await executor.ExecuteAsync(sql, _executionCts.Token).ConfigureAwait(true);
@@ -4506,7 +4512,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 _lastProfiledSql = sql;
                 _lastProfiledResult = result;
                 _lastTableReads = null;
-                if (profileReads)
+                if (captureStats)
                 {
                     var readsAfter = await TrySnapshotReadsAsync().ConfigureAwait(true);
                     if (readsAfter is not null)
@@ -4535,7 +4541,18 @@ public partial class MainWindowViewModel : ViewModelBase
             }
             else
             {
-                QueryStatsText = string.Format(UiStrings.AffectedRowsFormat, result.RecordsAffected ?? 0, ms);
+                // IBExpert-style work summary: inserted/updated/deleted from the MON$ delta
+                // (works for EXECUTE PROCEDURE/BLOCK/DML), falling back to the driver's total.
+                var summary = new ExecutionSummary
+                {
+                    Inserts = SumChanges(_lastTableReads, static r => r.Inserts),
+                    Updates = SumChanges(_lastTableReads, static r => r.Updates),
+                    Deletes = SumChanges(_lastTableReads, static r => r.Deletes),
+                    RecordsAffected = result.RecordsAffected,
+                    Elapsed = result.Elapsed,
+                    ChangesMeasured = _lastTableReads is not null,
+                };
+                QueryStatsText = summary.BuildMessage();
                 AddMessage(MessageSeverity.Info, QueryStatsText);
                 SelectedBottomTabIndex = 1;
             }
