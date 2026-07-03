@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace EmberTern.Core.Performance;
 
@@ -42,6 +43,12 @@ public sealed record PerformanceReport
 
     /// <summary>Parsed plan tree, or null when no plan could be captured/parsed.</summary>
     public PlanTree? Plan { get; init; }
+
+    /// <summary>Measured per-table access, or null when reads were not captured. Phase 2.</summary>
+    public TableAccessProfile? Access { get; init; }
+
+    /// <summary>Reads-based findings (empty when no reads / nothing notable). Phase 2.</summary>
+    public IReadOnlyList<Finding> Findings { get; init; } = Array.Empty<Finding>();
 
     public required ExecutionDetails Details { get; init; }
 }

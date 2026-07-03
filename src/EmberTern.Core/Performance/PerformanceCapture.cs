@@ -27,10 +27,16 @@ public sealed class PerformanceCapture
 
     public CaptureMethod Method { get; init; } = CaptureMethod.PlanOnly;
 
+    /// <summary>Per-table read deltas (MON$ before/after), or empty when reads were not
+    /// captured (e.g. the Performance tab wasn't armed on execute). Phase 2.</summary>
+    public IReadOnlyList<PerTableReadRow> TableReads { get; init; } = Array.Empty<PerTableReadRow>();
+
     /// <summary>Internal PSQL cursors (procedure/function breakdown). Empty in Phase 1.</summary>
     public IReadOnlyList<PerformanceCapture> Cursors { get; init; } = Array.Empty<PerformanceCapture>();
 
     public bool PlanAvailable => Plan is not null;
+
+    public bool ReadsAvailable => TableReads.Count > 0;
 
     public bool HasResultSet => RecordsAffected is null;
 }

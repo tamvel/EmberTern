@@ -25,15 +25,26 @@ public sealed class PerformanceReportBuilder
         PlanTree? plan = capture.Plan is { } raw ? _planParser.Parse(raw) : null;
         var timings = capture.Timings;
         int fullScans = plan is null ? 0 : plan.EnumerateNodes().Count(n => n.IsSequentialScan);
+        long rowsReturned = capture.HasResultSet ? capture.RowsReturned : 0;
+
+        // Measured per-table reads (Phase 2): build the access profile + reads-based
+        // findings + read amplification. Null/empty when reads weren't captured.
+        TableAccessProfile? access = BuildAccess(capture);
+        var findings = PerformanceFindings.Build(access, rowsReturned);
+
+        long? rowsRead = access?.TotalRowsRead;
+        double? amplification = (access is not null && rowsReturned > 0)
+            ? (double)access.TotalRowsRead / rowsReturned
+            : null;
 
         var verdict = new PerformanceVerdict
         {
-            Grade = GradeByTime(timings),
+            Grade = Grade(timings, findings),
             Headline = BuildHeadline(capture, plan, fullScans),
             Duration = timings?.Total ?? TimeSpan.Zero,
-            RowsReturned = capture.HasResultSet ? capture.RowsReturned : 0,
-            RowsRead = null,        // Phase 2 (per-table reads)
-            Amplification = null,   // Phase 2
+            RowsReturned = rowsReturned,
+            RowsRead = rowsRead,
+            Amplification = amplification,
         };
 
         var details = new ExecutionDetails
@@ -44,7 +55,41 @@ public sealed class PerformanceReportBuilder
             Method = capture.Method,
         };
 
-        return new PerformanceReport { Verdict = verdict, Plan = plan, Details = details };
+        return new PerformanceReport
+        {
+            Verdict = verdict,
+            Plan = plan,
+            Access = access,
+            Findings = findings,
+            Details = details,
+        };
+    }
+
+    private static TableAccessProfile? BuildAccess(PerformanceCapture capture)
+    {
+        if (!capture.ReadsAvailable)
+        {
+            return null;
+        }
+        var tables = capture.TableReads
+            .Select(r => new TableAccessStat(r.Table, r.SeqReads, r.IdxReads))
+            .OrderByDescending(t => t.SequentialReads)
+            .ThenByDescending(t => t.TotalReads)
+            .ToList();
+        return new TableAccessProfile { Tables = tables, Method = capture.Method };
+    }
+
+    // Grade is time-based, but a High measured-reads finding raises it to at least
+    // "Needs attention" — now we have evidence, not a guess.
+    private static PerformanceGrade Grade(ExecutionTimings? timings, IReadOnlyList<Finding> findings)
+    {
+        var byTime = GradeByTime(timings);
+        bool hasHigh = findings.Any(f => f.Severity == FindingSeverity.High);
+        if (hasHigh && byTime is PerformanceGrade.Fast or PerformanceGrade.Acceptable or PerformanceGrade.Unknown)
+        {
+            return PerformanceGrade.NeedsAttention;
+        }
+        return byTime;
     }
 
     private static PerformanceGrade GradeByTime(ExecutionTimings? timings)
