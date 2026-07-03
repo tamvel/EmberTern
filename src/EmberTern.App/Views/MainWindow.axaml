@@ -1402,6 +1402,9 @@
             <TabItem Classes="bottom-tab" Header="{Binding OutputLabel}">
               <Grid Background="{DynamicResource BackgroundBrush}" />
             </TabItem>
+            <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.PerformanceTabHeader}">
+              <views:PerformancePanelView DataContext="{Binding Performance}" />
+            </TabItem>
           </TabControl>
           </Grid>
         </Border>

@@ -1,0 +1,177 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:app="using:EmberTern.App"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="480"
+             x:Class="EmberTern.App.Views.PerformancePanelView"
+             x:Name="RootControl"
+             x:DataType="vm:PerformancePanelViewModel"
+             Background="{DynamicResource BackgroundBrush}">
+
+  <!-- Comprehension-first: a plain-language summary is primary; the execution plan is
+       demoted into a collapsed "advanced" section with the raw plan folded in. Findings +
+       table-access are Phase-2 homes (subtle placeholders). Auto-available after execution
+       (Option B) — no manual profiling run. -->
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- (1) PRIMARY SUMMARY -->
+    <Border Grid.Row="0"
+            Background="{DynamicResource ElevatedPanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="12,10">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center">
+
+          <!-- grade line: dot + plain-language grade + time -->
+          <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasReport}">
+            <TextBlock Text="●" FontSize="13" VerticalAlignment="Top" Margin="0,1,0,0">
+              <TextBlock.Foreground>
+                <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                  <Binding Path="Verdict.GradeBrushKey" />
+                  <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                </MultiBinding>
+              </TextBlock.Foreground>
+            </TextBlock>
+            <TextBlock Text="{Binding GradeLine}" FontWeight="SemiBold" FontSize="14"
+                       TextWrapping="Wrap" Foreground="{DynamicResource ForegroundBrush}" />
+          </StackPanel>
+
+          <!-- plain-language plan lead: which table is full-scanned, in words -->
+          <TextBlock Text="{Binding PlanLead}" FontSize="13" TextWrapping="Wrap"
+                     Foreground="{DynamicResource ForegroundBrush}"
+                     IsVisible="{Binding HasPlanLead}" />
+
+          <!-- noise summary: N sub-queries -->
+          <TextBlock Text="{Binding NoiseSummary}" FontSize="12" TextWrapping="Wrap"
+                     Foreground="{DynamicResource SubtleForegroundBrush}"
+                     IsVisible="{Binding HasNoiseSummary}" />
+
+          <!-- metrics + timing (promoted from the old Details panel) -->
+          <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasReport}">
+            <TextBlock Text="{Binding Verdict.RowsText}" FontSize="11"
+                       Foreground="{DynamicResource SubtleForegroundBrush}" />
+            <TextBlock Text="·" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}"
+                       IsVisible="{Binding HasTiming}" />
+            <TextBlock Text="{Binding TimingText}" FontSize="11"
+                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                       IsVisible="{Binding HasTiming}" />
+          </StackPanel>
+
+          <!-- honest forward-pointer (only when there is a full scan Phase 1 can't size) -->
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceForwardPointer}"
+                     FontSize="11" FontStyle="Italic" TextWrapping="Wrap"
+                     Foreground="{DynamicResource SubtleForegroundBrush}"
+                     IsVisible="{Binding ShowForwardPointer}" />
+
+          <!-- empty / progress / error states -->
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceEmptyHint}" FontSize="12" TextWrapping="Wrap"
+                     Foreground="{DynamicResource SubtleForegroundBrush}"
+                     IsVisible="{Binding ShowEmptyState}" />
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceProfilingHint}" FontSize="12"
+                     Foreground="{DynamicResource SubtleForegroundBrush}"
+                     IsVisible="{Binding IsProfiling}" />
+          <TextBlock Text="{Binding ErrorMessage}" FontSize="12" TextWrapping="Wrap"
+                     Foreground="{DynamicResource DangerIconBrush}"
+                     IsVisible="{Binding HasError}" />
+        </StackPanel>
+
+        <Button Grid.Column="1" Classes="flat"
+                Content="{x:Static app:UiStrings.PerformanceRefresh}"
+                ToolTip.Tip="{x:Static app:UiStrings.PerformanceRefreshTooltip}"
+                Command="{Binding RefreshCommand}"
+                VerticalAlignment="Top" />
+      </Grid>
+    </Border>
+
+    <!-- Analysis body -->
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="0" Margin="12,8,12,12">
+
+        <!-- Phase-2 homes: subtle one-liners, de-emphasized -->
+        <StackPanel Spacing="2" Margin="0,0,0,6" IsVisible="{Binding HasReport}">
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsPlaceholder}"
+                     FontSize="11" FontStyle="Italic"
+                     Foreground="{DynamicResource SubtleForegroundBrush}" />
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceAccessPlaceholder}"
+                     FontSize="11" FontStyle="Italic"
+                     Foreground="{DynamicResource SubtleForegroundBrush}" />
+        </StackPanel>
+
+        <!-- (advanced) Execution plan — demoted, collapsed by default, raw folded in -->
+        <Expander Header="{x:Static app:UiStrings.PerformancePlanAdvancedHeader}"
+                  IsExpanded="False" IsVisible="{Binding HasReport}">
+          <StackPanel Spacing="10" Margin="0,4,0,4">
+
+            <TextBlock Text="{x:Static app:UiStrings.PerformancePlanEmptyHint}"
+                       FontSize="11" FontStyle="Italic"
+                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                       IsVisible="{Binding ShowPlanEmpty}" />
+
+            <TreeView ItemsSource="{Binding PlanRoots}" IsVisible="{Binding HasPlan}"
+                      Background="Transparent" BorderThickness="0" MaxHeight="320">
+              <TreeView.Styles>
+                <Style Selector="TreeViewItem">
+                  <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded, Mode=TwoWay}" />
+                </Style>
+                <Style Selector="TextBlock.seq">
+                  <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+                  <Setter Property="FontWeight" Value="SemiBold" />
+                </Style>
+              </TreeView.Styles>
+              <TreeView.ItemTemplate>
+                <TreeDataTemplate ItemsSource="{Binding Children}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="●" FontSize="9" VerticalAlignment="Center"
+                               Foreground="{DynamicResource WarningBrush}"
+                               IsVisible="{Binding IsSequentialScan}"
+                               ToolTip.Tip="Sequential (full) table scan" />
+                    <TextBlock Text="{Binding DisplayText}" FontSize="11"
+                               FontFamily="Consolas,Cascadia Code,monospace"
+                               Classes.seq="{Binding IsSequentialScan}"
+                               Foreground="{DynamicResource ForegroundBrush}"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                </TreeDataTemplate>
+              </TreeView.ItemTemplate>
+            </TreeView>
+
+            <!-- raw plan + provenance (folded-in Details) -->
+            <DockPanel IsVisible="{Binding Details.HasPlanText}">
+              <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.PerformanceRawPlanLabel}"
+                           FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource SubtleForegroundBrush}" />
+                <Button Grid.Column="1" Classes="flat"
+                        Content="{x:Static app:UiStrings.PerformanceCopy}"
+                        Command="{Binding CopyDetailsCommand}" />
+              </Grid>
+              <Border Background="{DynamicResource PanelBrush}"
+                      BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                      CornerRadius="3" Padding="8">
+                <SelectableTextBlock Text="{Binding Details.RawPlanText}"
+                                     FontFamily="Consolas,Cascadia Code,monospace" FontSize="11"
+                                     Foreground="{DynamicResource ForegroundBrush}" />
+              </Border>
+            </DockPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasReport}">
+              <TextBlock Text="{x:Static app:UiStrings.PerformanceCaptureLabel}" FontSize="11"
+                         Foreground="{DynamicResource SubtleForegroundBrush}" />
+              <TextBlock Text="{Binding Details.CaptureMethodText}" FontSize="11"
+                         Foreground="{DynamicResource ForegroundBrush}" />
+              <TextBlock Text="·" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.PerformancePlanDialectLabel}" FontSize="11"
+                         Foreground="{DynamicResource SubtleForegroundBrush}" />
+              <TextBlock Text="{Binding Details.PlanDialectText}" FontSize="11"
+                         Foreground="{DynamicResource ForegroundBrush}" />
+            </StackPanel>
+          </StackPanel>
+        </Expander>
+
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

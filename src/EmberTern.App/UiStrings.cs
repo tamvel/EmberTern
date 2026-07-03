@@ -1195,4 +1195,33 @@ internal static class UiStrings
     public const string ToolbarNewUserTooltip = "New user";
     public const string ToolbarNewRoleTooltip = "New role";
     public const string ToolbarSecurityManagerTooltip = "Security Manager (users, roles, privileges)";
+
+    // Performance Analysis (Phase 1 — plan + timings)
+    public const string PerformanceTabHeader = "Performance";
+    public const string PerformanceRefresh = "Refresh";
+    public const string PerformanceRefreshTooltip = "Re-analyze the last executed query (re-reads the plan; does not re-run the query)";
+    public const string PerformanceProfilingHint = "Analyzing…";
+    public const string PerformanceEmptyHint = "Execute a query, then open this tab to see its performance analysis.";
+    // Primary plain-language summary (interpolated in PerformanceInsight)
+    public const string PerformanceGradeFast = "Fast — this query ran in {0}.";
+    public const string PerformanceGradeAcceptable = "This query ran in {0}.";
+    public const string PerformanceGradeNeedsAttention = "Needs attention — this query took {0}.";
+    public const string PerformanceGradeSlow = "Slow — this query took {0}.";
+    public const string PerformanceGradeUnknown = "Executed.";
+    public const string PerformanceLeadFullScanSingle = "It reads table {0} in full (a full table scan). A full scan reads every row, which is often why a query is slow.";
+    public const string PerformanceLeadFullScanMultiple = "It reads tables {0} in full (full table scans). A full scan reads every row, which is often why a query is slow.";
+    public const string PerformanceLeadNoFullScan = "All table access in the plan uses indexes — no full table scans.";
+    public const string PerformanceNoiseSubqueriesSingle = "It also evaluates 1 sub-query (see the execution plan below).";
+    public const string PerformanceNoiseSubqueriesMultiple = "It also evaluates {0} sub-queries (see the execution plan below).";
+    public const string PerformanceForwardPointer = "Per-table read analysis — which confirms whether this is the cause — arrives in a later phase.";
+    // Secondary (Phase-2 homes) + advanced
+    public const string PerformanceFindingsPlaceholder = "Findings & index suggestions — arrives in a later phase.";
+    public const string PerformanceAccessPlaceholder = "Per-table read analysis — arrives in a later phase.";
+    public const string PerformancePlanAdvancedHeader = "Execution plan (advanced)";
+    public const string PerformancePlanEmptyHint = "No execution plan was captured for this statement.";
+    public const string PerformanceTimingLabel = "Timing";
+    public const string PerformanceCaptureLabel = "Capture";
+    public const string PerformancePlanDialectLabel = "Plan form";
+    public const string PerformanceRawPlanLabel = "Raw plan";
+    public const string PerformanceCopy = "Copy";
 }
