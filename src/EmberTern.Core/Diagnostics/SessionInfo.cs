@@ -41,6 +41,10 @@ public sealed record SessionInfo
     /// <summary><c>MON$STATEMENTS.MON$SQL_TEXT</c> of its currently active statement, if any.</summary>
     public string CurrentStatement { get; init; } = string.Empty;
 
+    /// <summary><c>MON$STATEMENTS.MON$STATEMENT_ID</c> of the active statement — the Cancel
+    /// Statement target (<c>DELETE FROM MON$STATEMENTS WHERE MON$STATEMENT_ID = ?</c>).</summary>
+    public long? ActiveStatementId { get; init; }
+
     /// <summary>Snapshot total record reads (sequential + indexed) for the attachment.</summary>
     public long RecordReads { get; init; }
 
