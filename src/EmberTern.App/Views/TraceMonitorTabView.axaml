@@ -1,0 +1,217 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:EmberTern.App"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:controls="using:EmberTern.App.Controls"
+             x:Class="EmberTern.App.Views.TraceMonitorTabView"
+             x:Name="RootControl"
+             x:DataType="vm:TraceMonitorTabViewModel"
+             Background="{DynamicResource BackgroundBrush}"
+             Foreground="{DynamicResource ForegroundBrush}">
+
+  <Grid RowDefinitions="Auto,*,4,230">
+
+    <!-- ① Session bar -->
+    <Border Grid.Row="0" Background="{DynamicResource ElevatedPanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
+      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <Button Classes="icon" Command="{Binding StartCommand}" ToolTip.Tip="{x:Static app:UiStrings.TraceStart}">
+          <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+        </Button>
+        <Button Classes="icon" Command="{Binding PauseResumeCommand}" ToolTip.Tip="{x:Static app:UiStrings.TracePauseResume}">
+          <controls:SvgIcon Data="{StaticResource Icon.Pause}" Foreground="{DynamicResource WarningBrush}" />
+        </Button>
+        <Button Classes="icon" Command="{Binding StopCommand}" ToolTip.Tip="{x:Static app:UiStrings.TraceStop}">
+          <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}" />
+        </Button>
+        <Button Classes="icon" Command="{Binding ClearCommand}" ToolTip.Tip="{x:Static app:UiStrings.TraceClear}">
+          <controls:SvgIcon Data="{StaticResource Icon.Eraser}" />
+        </Button>
+
+        <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+
+        <!-- Group / lens selector -->
+        <Button Content="{x:Static app:UiStrings.TraceGroupNone}" Classes="flat" Command="{Binding ShowChronologicalCommand}" />
+        <Button Content="{x:Static app:UiStrings.TraceGroupTransaction}" Classes="flat" Command="{Binding ShowTransactionsCommand}" />
+        <Button Content="{x:Static app:UiStrings.TraceGroupStatement}" Classes="flat" Command="{Binding ShowStatementsCommand}" />
+
+        <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+
+        <CheckBox Content="{x:Static app:UiStrings.TraceHideSelf}" IsChecked="{Binding HideSelfActivity}" />
+        <CheckBox Content="{x:Static app:UiStrings.TraceFollowTail}" IsChecked="{Binding FollowTail}" />
+        <CheckBox Content="{x:Static app:UiStrings.TraceShowOnlySelected}" IsChecked="{Binding ShowOnlySelected}" />
+
+        <TextBox Width="180" Watermark="{x:Static app:UiStrings.TraceFilterWatermark}"
+                 Text="{Binding FilterText}" />
+
+        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}" Margin="8,0,0,0" />
+      </StackPanel>
+    </Border>
+
+    <!-- ② Lens rail (optional) + chronological grid -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+
+      <Border Grid.Column="0" Width="270" IsVisible="{Binding IsLensOpen}"
+              Background="{DynamicResource PanelBrush}"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+        <ListBox ItemsSource="{Binding CurrentLens}" SelectedItem="{Binding SelectedLensItem}">
+          <ListBox.DataTemplates>
+            <DataTemplate DataType="vm:TraceTransactionLensItem">
+              <StackPanel Spacing="1" Margin="2">
+                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" FontSize="11" />
+                <TextBlock Text="{Binding SubText}" FontSize="10" Foreground="{DynamicResource SubtleForegroundBrush}" />
+              </StackPanel>
+            </DataTemplate>
+            <DataTemplate DataType="vm:TraceFingerprintLensItem">
+              <StackPanel Spacing="1" Margin="2">
+                <TextBlock Text="{Binding Sql}" TextTrimming="CharacterEllipsis" FontSize="11" />
+                <TextBlock Text="{Binding SubText}" FontSize="10" Foreground="{DynamicResource SubtleForegroundBrush}" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.DataTemplates>
+        </ListBox>
+      </Border>
+
+      <DataGrid Grid.Column="1" x:Name="EventsGrid"
+                ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow}"
+                AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                CanUserSortColumns="False" CanUserReorderColumns="False"
+                GridLinesVisibility="Horizontal" FontSize="11">
+        <DataGrid.Columns>
+          <!-- operation band (+ accent overlay when a lens highlights this row) -->
+          <DataGridTemplateColumn Header="" Width="6" CanUserResize="False">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="vm:TraceEventRowViewModel">
+                <Panel>
+                  <Border>
+                    <Border.Background>
+                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                        <Binding Path="BandKey" />
+                        <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                      </MultiBinding>
+                    </Border.Background>
+                  </Border>
+                  <Border Background="{DynamicResource AccentBrush}" IsVisible="{Binding IsHighlighted}" />
+                </Panel>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+
+          <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColSeq}" Binding="{Binding Sequence}" Width="56" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColTime}" Binding="{Binding TimeText}" Width="92" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColDelta}" Binding="{Binding DeltaText}" Width="50" />
+
+          <DataGridTemplateColumn Header="{x:Static app:UiStrings.TraceColEvent}" Width="110">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="vm:TraceEventRowViewModel">
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                  <TextBlock Text="!" Foreground="{DynamicResource DangerIconBrush}" FontWeight="Bold"
+                             IsVisible="{Binding IsError}" />
+                  <controls:SvgIcon Width="13" Height="13"
+                                    Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
+                    <controls:SvgIcon.Foreground>
+                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                        <Binding Path="IconResourceKey" />
+                        <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                      </MultiBinding>
+                    </controls:SvgIcon.Foreground>
+                  </controls:SvgIcon>
+                  <TextBlock Text="{Binding KindLabel}" VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+
+          <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColDuration}" Binding="{Binding DurationText}" Width="55" />
+
+          <!-- Object: hierarchy indentation + branch glyph + kind icon + elided SQL / name -->
+          <DataGridTemplateColumn Header="{x:Static app:UiStrings.TraceColObject}" Width="*">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="vm:TraceEventRowViewModel">
+                <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                  <Border Width="{Binding IndentMargin}" />
+                  <TextBlock Text="└" Foreground="{DynamicResource SubtleForegroundBrush}"
+                             IsVisible="{Binding IsChild}" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding ObjectText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+
+          <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColRows}" Binding="{Binding RowsText}" Width="56" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColReads}" Binding="{Binding ReadsText}" Width="66" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColTx}" Binding="{Binding TransactionId}" Width="80" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </Grid>
+
+    <GridSplitter Grid.Row="2" ResizeDirection="Rows" HorizontalAlignment="Stretch"
+                  Background="{DynamicResource BorderBrush}" />
+
+    <!-- ③ Detail panel -->
+    <Border Grid.Row="3" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="8">
+      <Grid RowDefinitions="Auto,*">
+        <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TraceDetailNoSelection}"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   IsVisible="{Binding !Detail.HasSelection}" />
+
+        <Grid Grid.Row="1" IsVisible="{Binding Detail.HasSelection}" ColumnDefinitions="*,Auto,260" ColumnSpacing="10">
+          <!-- SQL / object -->
+          <DockPanel Grid.Column="0">
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,4">
+              <TextBlock Text="{Binding Detail.KindLabel}" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding Detail.ObjectName}" Foreground="{DynamicResource AccentBrush}"
+                         IsVisible="{Binding Detail.HasObjectName}" />
+              <Button Classes="flat" Content="{x:Static app:UiStrings.TraceDetailCopySql}"
+                      Command="{Binding CopySqlCommand}" IsVisible="{Binding Detail.HasSql}" />
+              <Button Classes="flat" Content="{x:Static app:UiStrings.TraceDetailOpenInEditor}"
+                      Command="{Binding OpenInEditorCommand}" IsVisible="{Binding Detail.HasSql}" />
+            </StackPanel>
+            <TextBox Text="{Binding Detail.Sql}" IsReadOnly="True" AcceptsReturn="True"
+                     FontFamily="Cascadia Mono,Consolas,monospace"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     IsVisible="{Binding Detail.HasSql}" />
+          </DockPanel>
+
+          <!-- parameters -->
+          <StackPanel Grid.Column="1" IsVisible="{Binding Detail.HasParameters}" MinWidth="140">
+            <TextBlock Text="{x:Static app:UiStrings.TraceDetailParameters}" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <ItemsControl ItemsSource="{Binding Detail.Parameters}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="11" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <!-- timing / tx / table access -->
+          <StackPanel Grid.Column="2" Spacing="4">
+            <TextBlock Text="{Binding Detail.TimingText}" FontSize="11" />
+            <TextBlock Text="{Binding Detail.TransactionText}" FontSize="11"
+                       Foreground="{DynamicResource SubtleForegroundBrush}" />
+            <TextBlock Text="{Binding Detail.ErrorText}" Foreground="{DynamicResource DangerIconBrush}"
+                       TextWrapping="Wrap" IsVisible="{Binding Detail.HasError}" />
+            <TextBlock Text="{x:Static app:UiStrings.TraceDetailTableAccess}" FontWeight="SemiBold"
+                       Margin="0,4,0,2" IsVisible="{Binding Detail.HasTableAccess}" />
+            <ItemsControl ItemsSource="{Binding Detail.TableAccess}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TableAccessBarViewModel">
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                    <TextBlock Grid.Column="0" Text="{Binding Stat.Table}" FontSize="11"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}"
+                               Text="{Binding Stat.TotalReads}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Grid>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

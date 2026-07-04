@@ -1207,6 +1207,36 @@ internal static class UiStrings
     public const string ToolbarNewUserTooltip = "New user";
     public const string ToolbarNewRoleTooltip = "New role";
     public const string ToolbarSecurityManagerTooltip = "Security Manager (users, roles, privileges)";
+    public const string ToolbarActivityMonitorTooltip = "Activity Monitor — live database trace";
+
+    // ── Activity Monitor (Database Trace) ──
+    public const string TraceMonitorTabTitle = "Activity Monitor";
+    public const string TraceStart = "Start";
+    public const string TraceStop = "Stop";
+    public const string TracePauseResume = "Pause / Resume";
+    public const string TraceClear = "Clear";
+    public const string TraceGroupNone = "Events";
+    public const string TraceGroupTransaction = "Transactions";
+    public const string TraceGroupStatement = "Statements";
+    public const string TraceHideSelf = "Hide EmberTern's own activity";
+    public const string TraceFollowTail = "Follow tail";
+    public const string TraceShowOnlySelected = "Show only selected";
+    public const string TraceFilterWatermark = "Filter…";
+    public const string TraceColSeq = "#";
+    public const string TraceColTime = "Time";
+    public const string TraceColDelta = "Δ ms";
+    public const string TraceColEvent = "Event";
+    public const string TraceColDuration = "ms";
+    public const string TraceColObject = "Object";
+    public const string TraceColRows = "Rows";
+    public const string TraceColReads = "Reads";
+    public const string TraceColTx = "Tx";
+    public const string TraceDetailParameters = "Parameters";
+    public const string TraceDetailTableAccess = "Table access";
+    public const string TraceDetailCopySql = "Copy SQL";
+    public const string TraceDetailOpenInEditor = "Open in SQL Editor";
+    public const string TraceDetailNoSelection = "Select an event to see its detail.";
+    public const string TraceEmptyHint = "Press Start to begin monitoring database activity.";
 
     // Performance Analysis (Phase 1 — plan + timings)
     public const string PerformanceTabHeader = "Performance";

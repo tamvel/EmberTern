@@ -85,6 +85,10 @@
       <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}" />
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
+      <!-- Activity Monitor "operation bands": a 2-shade left stripe that flips on each
+           transaction change (theme-independent subtle overlay; alpha-first per gotcha #1). -->
+      <SolidColorBrush x:Key="TxBand0" Color="#00000000" />
+      <SolidColorBrush x:Key="TxBand1" Color="#20808CA8" />
       <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
       <SolidColorBrush x:Key="OccurrenceHighlightBrush" Color="{StaticResource OccurrenceHighlightColor}" />
       <SolidColorBrush x:Key="RowModifiedBrush" Color="{StaticResource RowModifiedColor}" />
@@ -248,6 +252,10 @@
       <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}" />
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
+      <!-- Activity Monitor "operation bands": a 2-shade left stripe that flips on each
+           transaction change (theme-independent subtle overlay; alpha-first per gotcha #1). -->
+      <SolidColorBrush x:Key="TxBand0" Color="#00000000" />
+      <SolidColorBrush x:Key="TxBand1" Color="#20808CA8" />
       <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
       <SolidColorBrush x:Key="OccurrenceHighlightBrush" Color="{StaticResource OccurrenceHighlightColor}" />
       <SolidColorBrush x:Key="RowModifiedBrush" Color="{StaticResource RowModifiedColor}" />

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using EmberTern.Core.Diagnostics;
 
 namespace EmberTern.Core.Trace;
 
@@ -86,6 +88,13 @@ public sealed class TraceEventFolder
             RowsFetched = r.RecordsFetched,
             Reads = reads,
             ErrorText = r.ErrorText,
+            Parameters = r.Parameters,
+            TableAccess = r.TableReads.Count > 0
+                ? r.TableReads.Select(t => t.ToTableAccess()).ToArray()
+                : Array.Empty<TableAccessStat>(),
+            PageReads = r.PageReads,
+            Writes = r.Writes,
+            Fetches = r.Fetches,
         };
         _prevStart = startTime;
         return ev;

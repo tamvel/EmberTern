@@ -280,6 +280,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveIndexDetail))]
     [NotifyPropertyChangedFor(nameof(IsSecurityManagerTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveSecurityManager))]
+    [NotifyPropertyChangedFor(nameof(IsTraceMonitorTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveTraceMonitor))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowEditorToolbar))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
@@ -361,6 +363,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsSecurityManagerTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SecurityManager };
     public SecurityManagerTabViewModel? ActiveSecurityManager
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SecurityManager } t ? t.SecurityManager : null;
+
+    public bool IsTraceMonitorTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TraceMonitor };
+    public TraceMonitorTabViewModel? ActiveTraceMonitor
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TraceMonitor } t ? t.TraceMonitor : null;
 
     // Drives the whole editor-toolbar Border's IsVisible so an empty command strip never
     // reserves space above the document tabs. True for every tab kind that exposes at
@@ -1507,9 +1513,8 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         foreach (var tab in WorkspaceTabs)
         {
-            // The Security Manager is a live admin tool, reopened from the tree —
-            // not persisted (it has no object DDL to fall back to).
-            if (tab.Kind == WorkspaceTabKind.SecurityManager) continue;
+            // The Security Manager and Activity Monitor are live tools, not persisted.
+            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor) continue;
 
             if (tab.Kind == WorkspaceTabKind.Query)
             {
@@ -1954,6 +1959,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void ClearWorkspaceTabs()
     {
+        foreach (var t in WorkspaceTabs)
+            if (t.Kind == WorkspaceTabKind.TraceMonitor && t.TraceMonitor is { } monitor)
+                _ = monitor.DisposeAsync(); // stop live trace sessions on disconnect (best-effort)
         WorkspaceTabs.Clear();
         _tabActivationHistory.Clear();
         SelectedWorkspaceTab = null;
@@ -3443,6 +3451,46 @@ public partial class MainWindowViewModel : ViewModelBase
         return manager;
     }
 
+    // ---- Activity Monitor (live database trace) ----
+
+    public bool CanOpenTraceMonitor => _service.IsConnected;
+
+    [RelayCommand(CanExecute = nameof(CanOpenTraceMonitor))]
+    private void OpenTraceMonitor()
+    {
+        // Near-singleton per connection: focus the existing monitor tab if one is open.
+        foreach (var tab in WorkspaceTabs)
+        {
+            if (tab.Kind == WorkspaceTabKind.TraceMonitor)
+            {
+                SelectTab(tab);
+                return;
+            }
+        }
+
+        var service = new FirebirdTraceService(_service);
+        var monitor = new TraceMonitorTabViewModel(service, ResolveSelfAttachmentIdsAsync);
+        monitor.OpenInEditorRequested += OnTraceOpenInEditor;
+        monitor.CopySqlRequested += sql => ClipboardWriteRequested?.Invoke(sql);
+
+        var newTab = WorkspaceTabViewModel.CreateTraceMonitor(this, monitor, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(newTab);
+        SelectTab(newTab);
+    }
+
+    private async Task<IReadOnlyList<long>> ResolveSelfAttachmentIdsAsync(CancellationToken ct)
+    {
+        try { return new[] { await _perfStatsReader.GetDataAttachmentIdAsync(ct).ConfigureAwait(true) }; }
+        catch { return Array.Empty<long>(); }
+    }
+
+    private void OnTraceOpenInEditor(string sql)
+    {
+        var query = WorkspaceTabs.FirstOrDefault(t => t.Kind == WorkspaceTabKind.Query);
+        if (query is not null) SelectTab(query);
+        QueryText = sql;
+    }
+
     public bool CanOpenSecurityManager => _service.IsConnected;
 
     // Central Security Manager button (main toolbar): opens a context-less manager
@@ -4052,6 +4100,8 @@ public partial class MainWindowViewModel : ViewModelBase
         var wasSelected = SelectedWorkspaceTab == tab;
         WorkspaceTabs.RemoveAt(index);
         _tabActivationHistory.Remove(tab);
+        if (tab.Kind == WorkspaceTabKind.TraceMonitor && tab.TraceMonitor is { } monitor)
+            _ = monitor.DisposeAsync(); // stop the live trace session (best-effort)
 
         if (wasSelected && WorkspaceTabs.Count > 0)
         {
@@ -5248,6 +5298,8 @@ public partial class MainWindowViewModel : ViewModelBase
         NewExceptionCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanOpenSecurityManager));
         OpenSecurityManagerCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanOpenTraceMonitor));
+        OpenTraceMonitorCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

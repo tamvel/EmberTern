@@ -21,6 +21,7 @@ public enum WorkspaceTabKind
     ExceptionDetail,
     IndexDetail,
     SecurityManager,
+    TraceMonitor,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -254,6 +255,23 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         };
     }
 
+    // The Activity Monitor is a live, near-singleton-per-connection diagnostic tab (like the
+    // Security Manager). Opened from the Monitoring toolbar button; not persisted.
+    public static WorkspaceTabViewModel CreateTraceMonitor(
+        MainWindowViewModel owner, TraceMonitorTabViewModel monitor, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.TraceMonitor,
+            BaseTitle = UiStrings.TraceMonitorTabTitle,
+            IsClosable = true,
+            ObjectName = string.Empty,
+            ConnectionProfileId = connectionProfileId,
+            Icon = string.Empty,
+            IconResourceKey = "AccentBrush",
+            IconGeometryKey = "Icon.Activity",
+            TraceMonitor = monitor,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -277,6 +295,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public ExceptionDetailTabViewModel? ExceptionDetail { get; private init; }
     public IndexDetailTabViewModel? IndexDetail { get; private init; }
     public SecurityManagerTabViewModel? SecurityManager { get; private init; }
+    public TraceMonitorTabViewModel? TraceMonitor { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]

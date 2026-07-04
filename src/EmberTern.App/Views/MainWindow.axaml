@@ -176,6 +176,13 @@
             <controls:SvgIcon Data="{StaticResource Icon.Role}"
                               Foreground="{DynamicResource IconColor_Role}" />
           </Button>
+          <!-- Monitoring section: live database Activity Monitor (trace). -->
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarActivityMonitorTooltip}"
+                  Command="{Binding OpenTraceMonitorCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.Activity}"
+                              Foreground="{DynamicResource AccentBrush}" />
+          </Button>
           <!-- Table-creation section sits AFTER all connection-related buttons.
                Icon ▦＋ mirrors the metadata tree's Table glyph with a plus —
                visually rhymes with the sidebar where new tables will appear. -->
@@ -1054,6 +1061,9 @@
               <views:SecurityManagerTabView x:Name="SecurityManagerView"
                                             DataContext="{Binding ActiveSecurityManager}"
                                             IsVisible="{Binding DataContext.IsSecurityManagerTabActive, ElementName=RootWindow}" />
+              <views:TraceMonitorTabView x:Name="TraceMonitorView"
+                                         DataContext="{Binding ActiveTraceMonitor}"
+                                         IsVisible="{Binding DataContext.IsTraceMonitorTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query

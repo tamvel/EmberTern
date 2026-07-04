@@ -19,6 +19,8 @@
   <!-- Actions -->
   <StreamGeometry x:Key="Icon.Play">M8 5 L19 12 L8 19 Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.Stop">M6 6 H18 V18 H6 Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Pause">M10 4 V20 M14 4 V20</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Activity">M22 12 H18 L15 21 L9 3 L6 12 H2</StreamGeometry>
   <StreamGeometry x:Key="Icon.Check">M5 12.5 L10 17.5 L19 6.5</StreamGeometry>
   <StreamGeometry x:Key="Icon.Undo">M10 8 L5 12.5 L10 17 M5 12.5 H15 A4.5 4.5 0 0 1 15 21.5</StreamGeometry>
   <StreamGeometry x:Key="Icon.Plus">M12 5 V19 M5 12 H19</StreamGeometry>

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using EmberTern.Core.Diagnostics;
 
 namespace EmberTern.Core.Trace;
 
@@ -97,6 +99,21 @@ public sealed record TraceEvent
 
     /// <summary>Error text for an error-bearing event; null otherwise.</summary>
     public string? ErrorText { get; init; }
+
+    // ---- Detail-panel payload (not shown in the grid; curated from the source record) ----
+
+    /// <summary>Input parameters, for the detail panel. Empty when none.</summary>
+    public IReadOnlyList<RawTraceParam> Parameters { get; init; } = Array.Empty<RawTraceParam>();
+
+    /// <summary>Per-table access (sequential vs indexed record reads) for the detail panel's Table
+    /// Access bars — the SAME <see cref="TableAccessStat"/> the Performance module renders. Empty when
+    /// the event reported no per-table block.</summary>
+    public IReadOnlyList<TableAccessStat> TableAccess { get; init; } = Array.Empty<TableAccessStat>();
+
+    /// <summary>Page reads / writes / fetches from the perf line, for the detail timing section.</summary>
+    public long? PageReads { get; init; }
+    public long? Writes { get; init; }
+    public long? Fetches { get; init; }
 
     // ---- Computed helpers (no stored state) ----
 
