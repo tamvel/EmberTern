@@ -3471,7 +3471,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var service = new FirebirdTraceService(_service);
         var monitor = new TraceMonitorTabViewModel(service, ResolveSelfAttachmentIdsAsync);
         monitor.OpenInEditorRequested += OnTraceOpenInEditor;
-        monitor.CopySqlRequested += sql => ClipboardWriteRequested?.Invoke(sql);
+        monitor.CopyToClipboardRequested += sql => ClipboardWriteRequested?.Invoke(sql);
 
         var newTab = WorkspaceTabViewModel.CreateTraceMonitor(this, monitor, _service.ActiveProfile?.Id);
         WorkspaceTabs.Add(newTab);

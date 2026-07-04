@@ -3,6 +3,7 @@
              xmlns:app="using:EmberTern.App"
              xmlns:vm="using:EmberTern.App.ViewModels"
              xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:behaviors="using:EmberTern.App.Behaviors"
              xmlns:ae="using:AvaloniaEdit"
              x:Class="EmberTern.App.Views.TraceMonitorTabView"
              x:Name="RootControl"
@@ -15,6 +16,10 @@
     <Style Selector="TextBlock.slow">
       <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
       <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <!-- Error rows: the message shown in the Object column reads in the danger colour -->
+    <Style Selector="TextBlock.trace-error">
+      <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
     </Style>
     <!-- Segmented control (grouping + quick filter): flat segments, active one raised -->
     <Style Selector="Button.seg">
@@ -45,7 +50,7 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid RowDefinitions="Auto,*,4,240">
+  <Grid x:Name="RootGrid" RowDefinitions="Auto,*,4,240">
 
     <!-- ① Session bar -->
     <Border Grid.Row="0" Background="{DynamicResource ElevatedPanelBrush}"
@@ -92,6 +97,36 @@
           </StackPanel>
         </Border>
 
+        <!-- Filter events (flyout, not toolbar buttons): hide captured rows by kind + operation.
+             DISPLAY-level — distinct from the source-level "Include function calls" capture toggle. -->
+        <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TraceFilterEventsTip}">
+          <Panel>
+            <controls:SvgIcon Data="{StaticResource Icon.Filter}" />
+            <Border Classes="filter-active-dot" IsVisible="{Binding IsEventFilterActive}" />
+          </Panel>
+          <Button.Flyout>
+            <Flyout Placement="Bottom">
+              <StackPanel Spacing="5" MinWidth="190">
+                <TextBlock Classes="section" Text="{x:Static app:UiStrings.TraceFilterSectionTypes}" />
+                <CheckBox IsChecked="{Binding ShowStatementEvents}"><TextBlock Text="{x:Static app:UiStrings.TraceFilterStatements}" /></CheckBox>
+                <CheckBox IsChecked="{Binding ShowProcedureEvents}"><TextBlock Text="{x:Static app:UiStrings.TraceFilterProcedures}" /></CheckBox>
+                <CheckBox IsChecked="{Binding ShowTriggerEvents}"><TextBlock Text="{x:Static app:UiStrings.TraceFilterTriggers}" /></CheckBox>
+                <CheckBox IsChecked="{Binding ShowFunctionEvents}"><TextBlock Text="{x:Static app:UiStrings.TraceFilterFunctions}" /></CheckBox>
+                <Border Height="1" Margin="0,3" Background="{DynamicResource BorderBrush}" />
+                <TextBlock Classes="section" Text="{x:Static app:UiStrings.TraceFilterSectionOperations}" />
+                <CheckBox IsChecked="{Binding ShowOpSelect}"><TextBlock Text="{x:Static app:UiStrings.TraceFilterOpSelect}" /></CheckBox>
+                <CheckBox IsChecked="{Binding ShowOpInsert}"><TextBlock Text="{x:Static app:UiStrings.TraceFilterOpInsert}" /></CheckBox>
+                <CheckBox IsChecked="{Binding ShowOpUpdate}"><TextBlock Text="{x:Static app:UiStrings.TraceFilterOpUpdate}" /></CheckBox>
+                <CheckBox IsChecked="{Binding ShowOpDelete}"><TextBlock Text="{x:Static app:UiStrings.TraceFilterOpDelete}" /></CheckBox>
+                <CheckBox IsChecked="{Binding ShowOpExecute}"><TextBlock Text="{x:Static app:UiStrings.TraceFilterOpExecute}" /></CheckBox>
+                <CheckBox IsChecked="{Binding ShowOpDdl}"><TextBlock Text="{x:Static app:UiStrings.TraceFilterOpDdl}" /></CheckBox>
+                <Button Classes="flat" HorizontalAlignment="Right" Margin="0,4,0,0"
+                        Command="{Binding ResetEventFilterCommand}" Content="{x:Static app:UiStrings.TraceFilterReset}" />
+              </StackPanel>
+            </Flyout>
+          </Button.Flyout>
+        </Button>
+
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <!-- Compact icon toggles -->
@@ -105,8 +140,12 @@
                       ToolTip.Tip="{x:Static app:UiStrings.TraceShowOnlySelectedTip}">
           <controls:SvgIcon Data="{StaticResource Icon.Filter}" />
         </ToggleButton>
+        <ToggleButton Classes="icon" IsChecked="{Binding IncludeFunctions}"
+                      ToolTip.Tip="{x:Static app:UiStrings.TraceIncludeFunctionsTip}">
+          <controls:SvgIcon Data="{StaticResource Icon.Function}" />
+        </ToggleButton>
 
-        <TextBox Width="150" Watermark="{x:Static app:UiStrings.TraceFilterWatermark}"
+        <TextBox Width="150" PlaceholderText="{x:Static app:UiStrings.TraceFilterWatermark}"
                  Text="{Binding FilterText}" Margin="4,0,0,0" />
 
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
@@ -150,16 +189,30 @@
       <!-- grid + empty-state overlay + jump-to-latest affordance -->
       <Panel Grid.Column="1">
         <DataGrid x:Name="EventsGrid"
+                  behaviors:GridLayoutBehavior.GridId="TraceEvents"
+                  CellPointerPressed="OnEventCellPointerPressed"
                   ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow}"
                   AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
-                  CanUserSortColumns="False" CanUserReorderColumns="False"
+                  CanUserSortColumns="False" CanUserReorderColumns="True"
+                  ColumnWidth="Auto"
                   GridLinesVisibility="Horizontal" FontSize="11">
+          <DataGrid.ContextMenu>
+            <ContextMenu>
+              <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}" Click="OnCopyCellClick" />
+              <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}" Click="OnCopyRowClick" />
+              <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}" Click="OnCopyRowWithHeadersClick" />
+              <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}" Click="OnCopyAllWithHeadersClick" />
+              <MenuItem Header="{x:Static app:UiStrings.TraceDetailCopySql}" Click="OnCopySqlClick" />
+            </ContextMenu>
+          </DataGrid.ContextMenu>
           <DataGrid.Columns>
-            <!-- gutter: transaction-boundary rule (4A) + error stripe + lens highlight -->
-            <DataGridTemplateColumn Header="" Width="8" CanUserResize="False">
+            <!-- gutter: transaction-boundary rule (4A) + error stripe + lens highlight.
+                 Space header (not empty) so grid-layout ordering keeps it stable + non-reorderable;
+                 Auto width over a fixed-width cell so it survives the auto-fit reset. -->
+            <DataGridTemplateColumn Header=" " Width="Auto" CanUserResize="False" CanUserReorder="False">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate x:DataType="vm:TraceEventRowViewModel">
-                  <Panel>
+                  <Panel Width="8">
                     <Border Height="2" VerticalAlignment="Top" HorizontalAlignment="Stretch"
                             Background="{DynamicResource AccentMutedBrush}"
                             IsVisible="{Binding IsTransactionStart}" />
@@ -170,10 +223,10 @@
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
 
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColSeq}" Binding="{Binding Sequence}" Width="52" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColTime}" Binding="{Binding TimeText}" Width="92" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColSeq}" Binding="{Binding Sequence}" MinWidth="48" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColTime}" Binding="{Binding TimeText}" MinWidth="86" />
 
-            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TraceColEvent}" Width="108">
+            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TraceColEvent}" MinWidth="100">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate x:DataType="vm:TraceEventRowViewModel">
                   <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
@@ -192,7 +245,7 @@
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
 
-            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TraceColDuration}" Width="96">
+            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TraceColDuration}" MinWidth="90">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate x:DataType="vm:TraceEventRowViewModel">
                   <TextBlock Text="{Binding DurationText}" Classes.slow="{Binding IsSlow}"
@@ -202,22 +255,23 @@
             </DataGridTemplateColumn>
 
             <!-- Object: hierarchy indentation + branch glyph + elided SQL / name -->
-            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TraceColObject}" Width="*">
+            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TraceColObject}" MinWidth="320">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate x:DataType="vm:TraceEventRowViewModel">
                   <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
                     <Border Width="{Binding IndentMargin}" />
                     <TextBlock Text="└" Foreground="{DynamicResource SubtleForegroundBrush}"
                                IsVisible="{Binding IsChild}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding ObjectText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ObjectText}" Classes.trace-error="{Binding IsError}"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                   </StackPanel>
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
 
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColRows}" Binding="{Binding RowsText}" Width="76" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColReads}" Binding="{Binding ReadsText}" Width="84" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColTx}" Binding="{Binding TransactionId}" Width="100" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColRows}" Binding="{Binding RowsText}" MinWidth="64" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColReads}" Binding="{Binding ReadsText}" MinWidth="72" />
+            <DataGridTextColumn Header="{x:Static app:UiStrings.TraceColTx}" Binding="{Binding TransactionId}" MinWidth="90" />
           </DataGrid.Columns>
         </DataGrid>
 
@@ -238,8 +292,10 @@
       </Panel>
     </Grid>
 
+    <!-- Double-tap the splitter to maximize/restore the detail panel (mirrors the SQL editor). -->
     <GridSplitter Grid.Row="2" ResizeDirection="Rows" HorizontalAlignment="Stretch"
-                  Background="{DynamicResource BorderBrush}" />
+                  Background="{DynamicResource BorderBrush}"
+                  DoubleTapped="OnDetailSplitterDoubleTapped" />
 
     <!-- ③ Detail panel -->
     <Border Grid.Row="3" Background="{DynamicResource PanelBrush}"
@@ -253,7 +309,7 @@
         <Grid IsVisible="{Binding Detail.HasSelection}" ColumnDefinitions="*,14,340">
           <!-- left: header + SQL -->
           <DockPanel Grid.Column="0">
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="0,0,0,6">
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto" Margin="0,0,0,6">
               <controls:SvgIcon Grid.Column="0" Width="15" Height="15" VerticalAlignment="Center" Margin="0,0,6,0"
                                 Data="{Binding Detail.IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
                 <controls:SvgIcon.Foreground>
@@ -267,13 +323,24 @@
               <TextBlock Grid.Column="2" Text="{Binding Detail.ObjectName}" Foreground="{DynamicResource AccentBrush}"
                          IsVisible="{Binding Detail.HasObjectName}" Margin="8,0,0,0" VerticalAlignment="Center"
                          TextTrimming="CharacterEllipsis" />
-              <Button Grid.Column="3" Classes="icon" Command="{Binding CopySqlCommand}"
+              <ToggleButton Grid.Column="3" Classes="icon" IsChecked="{Binding ShowValues}"
+                            IsVisible="{Binding Detail.HasParameters}" ToolTip.Tip="{x:Static app:UiStrings.TraceDetailShowValuesTip}">
+                <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
+              </ToggleButton>
+              <Button Grid.Column="4" Classes="icon" Command="{Binding CopySqlCommand}"
                       IsVisible="{Binding Detail.HasSql}" ToolTip.Tip="{x:Static app:UiStrings.TraceDetailCopySql}">
                 <controls:SvgIcon Data="{StaticResource Icon.Copy}" />
               </Button>
-              <Button Grid.Column="4" Classes="icon" Command="{Binding OpenInEditorCommand}"
+              <Button Grid.Column="5" Classes="icon" Command="{Binding OpenInEditorCommand}"
                       IsVisible="{Binding Detail.HasSql}" ToolTip.Tip="{x:Static app:UiStrings.TraceDetailOpenInEditor}">
                 <controls:SvgIcon Data="{StaticResource Icon.Query}" />
+              </Button>
+              <Button Grid.Column="6" Classes="icon" Click="OnToggleDetailMaximizeClick"
+                      ToolTip.Tip="{x:Static app:UiStrings.TraceDetailMaximizeTip}">
+                <Panel>
+                  <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" IsVisible="{Binding !IsDetailMaximized}" />
+                  <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" IsVisible="{Binding IsDetailMaximized}" />
+                </Panel>
               </Button>
             </Grid>
             <ae:TextEditor x:Name="DetailSqlEditor" IsReadOnly="True"

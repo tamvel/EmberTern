@@ -26,7 +26,28 @@ public sealed partial class TraceEventRowViewModel : ObservableObject
     public long Sequence => Event.Sequence;
     public string TimeText => Event.StartTime.ToString("HH:mm:ss.fff");
     public string DeltaText => Event.DeltaMs is { } d ? d.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
-    public string KindLabel => Event.Kind.ToString();
+
+    private TraceSqlOperation? _operation;
+    /// <summary>The SQL operation (SELECT/UPDATE/…) for a statement event; <c>None</c> for routines
+    /// and unclassifiable SQL. Cached; drives the Event-column label and the operation filter.</summary>
+    public TraceSqlOperation Operation => _operation ??= Event.Kind == TraceEventKind.Statement
+        ? TraceSqlOperationClassifier.Classify(CleanSql(Event.Sql))
+        : TraceSqlOperation.None;
+
+    /// <summary>Event-column label: the SQL operation for a statement (e.g. "UPDATE" — far more
+    /// useful than a generic "Statement"; the icon still conveys the kind), else the kind name.</summary>
+    public string KindLabel => DisplayLabelFor(Event);
+
+    /// <summary>Shared Event/detail label: operation for a classifiable statement, else the kind name.</summary>
+    internal static string DisplayLabelFor(TraceEvent e)
+    {
+        if (e.Kind == TraceEventKind.Statement)
+        {
+            var op = TraceSqlOperationClassifier.Classify(CleanSql(e.Sql));
+            if (op != TraceSqlOperation.None) return TraceSqlOperationClassifier.Label(op);
+        }
+        return e.Kind.ToString();
+    }
     public string DurationText => Event.Duration is { } d ? ((long)d.TotalMilliseconds).ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
 
     /// <summary>Duration (ms) at/above which an operation is worth a glance — drives the amber
@@ -44,10 +65,24 @@ public sealed partial class TraceEventRowViewModel : ObservableObject
     public double IndentMargin => Event.Depth * 16;
     public bool IsChild => Event.Depth > 0;
 
-    /// <summary>The grid's Object column: elided SQL for a statement, else the routine name.</summary>
-    public string ObjectText => Event.Kind == TraceEventKind.Statement
-        ? Elide(Event.Sql)
-        : Event.ObjectName ?? string.Empty;
+    /// <summary>The grid's Object column: for an error, the (shortened) error message so the grid is
+    /// self-explanatory at a glance — the message otherwise lives only in the Detail panel; for a
+    /// statement, the elided SQL; else the routine name.</summary>
+    public string ObjectText => IsError && !string.IsNullOrWhiteSpace(Event.ErrorText)
+        ? ShortErrorMessage(Event.ErrorText!)
+        : Event.Kind == TraceEventKind.Statement
+            ? Elide(Event.Sql)
+            : Event.ObjectName ?? string.Empty;
+
+    /// <summary>First status-vector line of the error, stripped of its leading "&lt;gdscode&gt; : "
+    /// prefix and elided — e.g. "Input parameter mismatch for procedure …".</summary>
+    internal static string ShortErrorMessage(string errorText)
+    {
+        var first = errorText.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n')[0].Trim();
+        var m = System.Text.RegularExpressions.Regex.Match(first, @"^-?\d+\s*:\s*(?<msg>.+)$");
+        var msg = (m.Success ? m.Groups["msg"].Value : first).Trim();
+        return msg.Length <= 120 ? msg : msg[..117] + "…";
+    }
 
     /// <summary>Per-kind glyph + colour (reuses the metadata icon system's keys).</summary>
     public string IconGeometryKey => IconGeometryKeyFor(Event.Kind);

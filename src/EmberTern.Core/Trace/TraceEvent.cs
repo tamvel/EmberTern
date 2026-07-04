@@ -72,10 +72,20 @@ public sealed record TraceEvent
     /// <summary>Procedure / trigger / function name for routine events; null for plain statements.</summary>
     public string? ObjectName { get; init; }
 
+    /// <summary>For a trigger event, the firing operation as printed by the trace (e.g.
+    /// <c>AFTER UPDATE</c>) — parsed from <c>Trigger NAME (evt):</c>; null otherwise. Surfaced in
+    /// the detail panel so a trigger reads as "what fired" not just a name (V1.1).</summary>
+    public string? TriggerEvent { get; init; }
+
     // ---- Context ----
 
     /// <summary>Firebird transaction id (<c>TRA_n</c>) — the grouping key for "by transaction".</summary>
     public long? TransactionId { get; init; }
+
+    /// <summary>The transaction's isolation/TPB parameters as printed by the trace (e.g.
+    /// <c>READ_COMMITTED | REC_VERSION | WAIT | READ_WRITE</c>); null when the block had no
+    /// transaction line. Shown in the detail panel for lock/isolation diagnosis (V1.1).</summary>
+    public string? TransactionParams { get; init; }
 
     /// <summary>Firebird attachment id (<c>ATT_n</c>) — used to compute <see cref="IsSelfActivity"/>.</summary>
     public long? AttachmentId { get; init; }

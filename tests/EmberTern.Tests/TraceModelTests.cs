@@ -103,7 +103,7 @@ public class TraceModelTests
         var p = TraceSessionConfig.DefaultPreset;
         Assert.True(p.IncludeStatements);
         Assert.True(p.IncludeProcedures);
-        Assert.True(p.IncludeFunctions);
+        Assert.False(p.IncludeFunctions);     // V1.1 noise reduction — off at the source by default
         Assert.True(p.IncludeTriggers);
         Assert.True(p.IncludeErrors);
         Assert.False(p.IncludeConnections);   // noise for reverse-engineering

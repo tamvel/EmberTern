@@ -1239,7 +1239,25 @@ internal static class UiStrings
     public const string TraceHideSelfTip = "Hide EmberTern's own activity";
     public const string TraceFollowTailTip = "Follow tail — auto-scroll to the newest event";
     public const string TraceShowOnlySelectedTip = "Show only the selected transaction / statement";
+    public const string TraceIncludeFunctionsTip = "Include function calls (built-in + user) — floods the stream; applies on next Start";
+    public const string TraceDetailShowValuesTip = "Show parameter values inline in the SQL";
+    public const string TraceDetailMaximizeTip = "Maximize / restore the detail panel";
     public const string TraceJumpLatest = "Jump to latest";
+    // Event filter flyout (display-level; distinct from the source-level Include-Functions capture toggle)
+    public const string TraceFilterEventsTip = "Filter events by type and operation";
+    public const string TraceFilterSectionTypes = "Event types";
+    public const string TraceFilterSectionOperations = "Operations (statements)";
+    public const string TraceFilterStatements = "Statements";
+    public const string TraceFilterProcedures = "Procedures";
+    public const string TraceFilterTriggers = "Triggers";
+    public const string TraceFilterFunctions = "Functions";
+    public const string TraceFilterOpSelect = "SELECT";
+    public const string TraceFilterOpInsert = "INSERT";
+    public const string TraceFilterOpUpdate = "UPDATE";
+    public const string TraceFilterOpDelete = "DELETE";
+    public const string TraceFilterOpExecute = "EXECUTE";
+    public const string TraceFilterOpDdl = "DDL";
+    public const string TraceFilterReset = "Reset";
     // Detail sections
     public const string TraceDetailParameters = "Parameters";
     public const string TraceDetailTableAccess = "Table access";

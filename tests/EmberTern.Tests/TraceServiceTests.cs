@@ -16,22 +16,32 @@ namespace EmberTern.Tests;
 public class TraceServiceTests
 {
     [Fact]
-    public void BuildDatabaseEvents_DefaultPreset_HasStatementsRoutinesErrorsAndPerf()
+    public void BuildDatabaseEvents_DefaultPreset_HasStatementsRoutinesErrorsAndPerf_ButNoFunctions()
     {
         var e = FirebirdTraceService.BuildDatabaseEvents(TraceSessionConfig.DefaultPreset);
 
         Assert.True(e.HasFlag(FbDatabaseTraceEvents.StatementFinish));
         Assert.True(e.HasFlag(FbDatabaseTraceEvents.ProcedureStart));   // START needed so pairs fold
         Assert.True(e.HasFlag(FbDatabaseTraceEvents.ProcedureFinish));
-        Assert.True(e.HasFlag(FbDatabaseTraceEvents.FunctionStart));
-        Assert.True(e.HasFlag(FbDatabaseTraceEvents.FunctionFinish));
         Assert.True(e.HasFlag(FbDatabaseTraceEvents.TriggerFinish));
         Assert.True(e.HasFlag(FbDatabaseTraceEvents.Errors));
         Assert.True(e.HasFlag(FbDatabaseTraceEvents.PrintPerf));        // always — duration + per-table reads
 
+        // V1.1 noise reduction: function events are suppressed at the source by default.
+        Assert.False(e.HasFlag(FbDatabaseTraceEvents.FunctionStart));
+        Assert.False(e.HasFlag(FbDatabaseTraceEvents.FunctionFinish));
+
         Assert.False(e.HasFlag(FbDatabaseTraceEvents.Connections));    // off by default
         Assert.False(e.HasFlag(FbDatabaseTraceEvents.Transactions));
         Assert.False(e.HasFlag(FbDatabaseTraceEvents.StatementStart)); // we only want the FINISH (has the result)
+    }
+
+    [Fact]
+    public void BuildDatabaseEvents_IncludeFunctions_TurnsOnFunctionFlags()
+    {
+        var e = FirebirdTraceService.BuildDatabaseEvents(TraceSessionConfig.DefaultPreset with { IncludeFunctions = true });
+        Assert.True(e.HasFlag(FbDatabaseTraceEvents.FunctionStart));
+        Assert.True(e.HasFlag(FbDatabaseTraceEvents.FunctionFinish));
     }
 
     [Fact]

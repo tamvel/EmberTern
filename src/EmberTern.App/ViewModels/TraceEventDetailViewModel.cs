@@ -53,16 +53,23 @@ public sealed partial class TraceEventDetailViewModel : ObservableObject
         SessionRows.Clear(); HasSession = false;
     }
 
-    public void Update(TraceEvent e)
+    /// <param name="showValues">When true (the default), parameter values are inlined into the
+    /// displayed SQL (<c>= ?</c> → <c>= 10036</c>) via <see cref="TraceSqlInliner"/> — a
+    /// presentation-only aid; the raw SQL on the event is untouched. When false, the faithful
+    /// parameterised source is shown.</param>
+    public void Update(TraceEvent e, bool showValues = true)
     {
         HasSelection = true;
-        KindLabel = e.Kind.ToString();
+        KindLabel = TraceEventRowViewModel.DisplayLabelFor(e); // operation for statements, else kind
         IconGeometryKey = TraceEventRowViewModel.IconGeometryKeyFor(e.Kind);
         IconResourceKey = TraceEventRowViewModel.IconResourceKeyFor(e.Kind);
         ObjectName = e.ObjectName ?? string.Empty;
         HasObjectName = !string.IsNullOrEmpty(e.ObjectName);
 
-        Sql = TraceEventRowViewModel.CleanSql(e.Sql);
+        var cleanSql = TraceEventRowViewModel.CleanSql(e.Sql);
+        Sql = showValues && e.Parameters.Count > 0
+            ? TraceSqlInliner.Inline(cleanSql, e.Parameters)
+            : cleanSql;
         HasSql = Sql.Length > 0;
 
         ErrorText = e.ErrorText ?? string.Empty;
@@ -87,8 +94,9 @@ public sealed partial class TraceEventDetailViewModel : ObservableObject
         AddRow("Role", e.RoleName);
         AddRow("Host", e.RemoteAddress);
         AddRow("Process", FormatProcess(e.ProcessName, e.ClientProcessId));
+        AddRow("Trigger event", e.TriggerEvent);   // "what fired" — only present for triggers
         AddRow("Attachment", e.AttachmentId is { } att ? "ATT " + att.ToString(CultureInfo.InvariantCulture) : null);
-        AddRow("Transaction", e.TransactionId is { } tx ? "TRA " + tx.ToString(CultureInfo.InvariantCulture) : null);
+        AddRow("Transaction", FormatTransaction(e.TransactionId, e.TransactionParams)); // id · isolation/TPB
         HasSession = SessionRows.Count > 0;
     }
 
@@ -101,6 +109,13 @@ public sealed partial class TraceEventDetailViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(name)) return pid is { } p ? "pid " + p.ToString(CultureInfo.InvariantCulture) : null;
         return pid is { } q ? $"{name} (pid {q.ToString(CultureInfo.InvariantCulture)})" : name;
+    }
+
+    private static string? FormatTransaction(long? id, string? txParams)
+    {
+        if (id is not { } tx) return null;
+        var s = "TRA " + tx.ToString(CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(txParams) ? s : s + " · " + txParams;
     }
 
     private static string BuildTiming(TraceEvent e)

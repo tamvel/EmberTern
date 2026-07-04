@@ -29,8 +29,10 @@ namespace EmberTern.Core.Trace;
 public static class TraceLogParser
 {
     // Header: "2026-07-03T19:10:34.8830 (7320:00000000053417C0) EXECUTE_STATEMENT_FINISH"
+    // The event token is normally a single UPPER_SNAKE word, but error events carry a suffix —
+    // "ERROR AT jrd8_execute" — so allow an optional " AT <fn>" tail.
     private static readonly Regex HeaderRx = new(
-        @"^(?<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)\s+\((?<pid>\d+):(?<tok>[0-9A-Fa-f]+)\)\s+(?<evt>[A-Z_]+)\s*$",
+        @"^(?<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)\s+\((?<pid>\d+):(?<tok>[0-9A-Fa-f]+)\)\s+(?<evt>[A-Z_]+(?: AT .+?)?)\s*$",
         RegexOptions.Compiled);
 
     private static readonly Regex AttachRx = new(
@@ -47,6 +49,11 @@ public static class TraceLogParser
     private static readonly Regex RecordsRx = new(@"^(?<n>\d+) records fetched\s*$", RegexOptions.Compiled);
     private static readonly Regex PerfRx = new(@"^\s+(?<ms>\d+) ms(?:,\s*(?<rest>.*\S))?\s*$", RegexOptions.Compiled);
     private static readonly Regex PerfTokenRx = new(@"(?<n>\d+)\s+(?<kind>read|write|fetch|mark)", RegexOptions.Compiled);
+
+    // Firebird status-vector line, e.g. "335544665 : violation of PRIMARY or UNIQUE KEY constraint …"
+    // or "-803 : attempt to store duplicate value …". The distinctive "<code> : <message>" shape
+    // never collides with SQL/param/perf/table lines.
+    private static readonly Regex StatusRx = new(@"^\s*-?\d+\s*:\s+\S.*$", RegexOptions.Compiled);
 
     private static readonly string[] TableColumns =
         { "Natural", "Index", "Update", "Insert", "Delete", "Backout", "Purge", "Expunge" };
@@ -100,6 +107,7 @@ public static class TraceLogParser
         var tableReads = new List<RawTableRead>();
 
         var sqlBuffer = new StringBuilder();
+        var errorBuffer = new StringBuilder();
         bool inSql = false, inReturns = false;
         string? tableHeaderLine = null; // non-null => currently reading the per-table block
 
@@ -123,12 +131,22 @@ public static class TraceLogParser
             // the SQL-accumulation block would otherwise swallow it.
             if (IsDashes(line)) continue;
 
-            // SQL accumulation ends at the first recognised terminator line
+            // SQL accumulation ends at the first recognised terminator line (incl. a status-vector
+            // error line, so an error block's SQL isn't polluted by the message).
             if (inSql)
             {
-                if (ParamRx.IsMatch(line) || RecordsRx.IsMatch(line) || PerfRx.IsMatch(line) || IsTableHeader(line))
+                if (ParamRx.IsMatch(line) || RecordsRx.IsMatch(line) || PerfRx.IsMatch(line)
+                    || IsTableHeader(line) || StatusRx.IsMatch(line))
                     inSql = false;
                 else { sqlBuffer.Append(line).Append('\n'); continue; }
+            }
+
+            // Status-vector / error line → accumulate as the block's error text.
+            if (StatusRx.IsMatch(line))
+            {
+                if (errorBuffer.Length > 0) errorBuffer.Append('\n');
+                errorBuffer.Append(line.Trim());
+                continue;
             }
 
             if (line.Contains("(ATT_", StringComparison.Ordinal))
@@ -224,9 +242,15 @@ public static class TraceLogParser
         if (sqlBuffer.Length > 0)
             sql = sqlBuffer.ToString().Trim('\n', '\r', ' ', '\t');
 
+        var rawEvt = header.Groups["evt"].Value;
+        if (errorBuffer.Length > 0)
+            errorText = errorBuffer.ToString();
+        else if (rawEvt.Contains("ERROR", StringComparison.Ordinal))
+            errorText = rawEvt; // ERROR event without a parsed status line → still flag it
+
         return new RawTraceRecord
         {
-            RawEventType = header.Groups["evt"].Value,
+            RawEventType = rawEvt,
             Timestamp = ts,
             ServerProcessId = int.Parse(header.Groups["pid"].Value, CultureInfo.InvariantCulture),
             ContextToken = header.Groups["tok"].Value,

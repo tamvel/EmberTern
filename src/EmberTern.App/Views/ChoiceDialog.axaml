@@ -7,8 +7,9 @@
         x:Class="EmberTern.App.Views.ChoiceDialog"
         x:DataType="vm:ChoiceDialogViewModel"
         Title="{Binding Title}"
-        Width="460"
-        SizeToContent="Height"
+        SizeToContent="WidthAndHeight"
+        MinWidth="480"
+        MaxWidth="720"
         CanResize="False"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BackgroundBrush}"
@@ -35,16 +36,19 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0"
             Padding="20,12">
+      <!-- WrapPanel (not StackPanel): with several long labels the buttons wrap to a second
+           right-aligned row instead of overflowing the fixed-width window and getting clipped. -->
       <ItemsControl ItemsSource="{Binding Options}" HorizontalAlignment="Right">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <StackPanel Orientation="Horizontal" Spacing="8" />
+            <WrapPanel Orientation="Horizontal" HorizontalAlignment="Right" />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:ChoiceOptionViewModel">
             <Button Content="{Binding Label}"
                     Command="{Binding InvokeCommand}"
+                    Margin="8,4,0,0"
                     Classes.primary="{Binding IsDefault}"
                     Classes.flat="{Binding IsNotDefault}"
                     IsDefault="{Binding IsDefault}"

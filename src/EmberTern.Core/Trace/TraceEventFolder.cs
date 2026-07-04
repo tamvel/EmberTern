@@ -33,6 +33,13 @@ public sealed class TraceEventFolder
     {
         var kind = TraceLogParser.MapKind(r.RawEventType);
 
+        // An "ERROR AT jrd8_execute"-style event maps to System, but with SQL/an object it is really
+        // a failed statement/routine — surface it as such so the grid reads naturally.
+        if (r.ErrorText is not null && kind == TraceEventKind.System)
+            kind = r.Sql is not null || r.StatementId is not null ? TraceEventKind.Statement
+                 : r.ObjectName is not null ? TraceEventKind.Procedure
+                 : kind;
+
         if (r.RawEventType.EndsWith("_START", StringComparison.Ordinal))
         {
             var key = FoldKey(r.ContextToken, kind);
@@ -81,7 +88,9 @@ public sealed class TraceEventFolder
             DeltaMs = _prevStart is { } p ? (long)Math.Round((startTime - p).TotalMilliseconds) : null,
             Sql = r.Sql,
             ObjectName = r.ObjectName,
+            TriggerEvent = r.TriggerEvent,
             TransactionId = r.TransactionId,
+            TransactionParams = r.TransactionParams,
             AttachmentId = r.AttachmentId,
             ContextToken = r.ContextToken,
             IsSelfActivity = r.AttachmentId is { } a && _selfIds.Contains(a),

@@ -1,18 +1,19 @@
 namespace EmberTern.Core.Trace;
 
 /// <summary>
-/// The Activity Monitor's trace preset, as a pure Core DTO — decoupled from the
-/// Firebird driver's strongly-typed <c>FbDatabaseTraceConfiguration</c> so Core
-/// stays driver-free and a V2 config editor is purely additive (settable props +
-/// future JSON round-trip). The (M2) Firebird layer translates this into the
-/// driver's configuration object.
+/// The Activity Monitor's trace preset, as a pure Core DTO (a record, so callers can
+/// derive a tweaked preset with <c>with</c>) — decoupled from the Firebird driver's
+/// strongly-typed <c>FbDatabaseTraceConfiguration</c> so Core stays driver-free and a
+/// V2 config editor is purely additive (settable props + future JSON round-trip). The
+/// Firebird layer translates this into the driver's configuration object.
 /// <para>
-/// V1 ships exactly one preset — <see cref="DefaultPreset"/> — and never surfaces
-/// a checkbox matrix (the explicit IBExpert anti-goal). The knobs exist in the
+/// V1.1 ships one opinionated preset — <see cref="DefaultPreset"/> — plus a single
+/// user-facing knob (<see cref="IncludeFunctions"/>, off by default). It never surfaces
+/// a checkbox matrix (the explicit IBExpert anti-goal). The other knobs exist in the
 /// model only so V2 can expose them without a schema change.
 /// </para>
 /// </summary>
-public sealed class TraceSessionConfig
+public sealed record TraceSessionConfig
 {
     /// <summary>Log DSQL statement executions (the workhorse; on by default).</summary>
     public bool IncludeStatements { get; init; } = true;
@@ -20,8 +21,14 @@ public sealed class TraceSessionConfig
     /// <summary>Log stored-procedure executions.</summary>
     public bool IncludeProcedures { get; init; } = true;
 
-    /// <summary>Log PSQL/stored-function executions.</summary>
-    public bool IncludeFunctions { get; init; } = true;
+    /// <summary>Log PSQL/stored-function executions. OFF by default (V1.1 noise reduction):
+    /// on a real ERP the stream is dominated by built-in scalar functions (MOD, BIN_AND, …)
+    /// that flood the buffer and drown the statements the user actually wants. Turning this
+    /// off suppresses them at the SOURCE — the event mask never carries FUNCTION events — which
+    /// also removes the ring-buffer-overflow risk. The user can consciously re-enable it (the
+    /// "Include function calls" toggle) when profiling functions; note that user PSQL functions
+    /// are hidden alongside the built-ins while this is off.</summary>
+    public bool IncludeFunctions { get; init; }
 
     /// <summary>Log trigger executions.</summary>
     public bool IncludeTriggers { get; init; } = true;
@@ -50,7 +57,8 @@ public sealed class TraceSessionConfig
     /// flag drives <see cref="TraceEvent.IsSelfActivity"/> filtering rather than the server config.</summary>
     public bool ExcludeSelfActivity { get; init; } = true;
 
-    /// <summary>The single opinionated V1 preset: statements + procedures + functions + triggers +
-    /// errors, no threshold, self-activity excluded. One button, no configuration.</summary>
+    /// <summary>The opinionated V1.1 preset: statements + procedures + triggers + errors, NO
+    /// function calls (noise reduction), no threshold, self-activity excluded. One button; the
+    /// VM derives a copy with <c>with { IncludeFunctions = … }</c> when the user opts functions in.</summary>
     public static TraceSessionConfig DefaultPreset { get; } = new();
 }

@@ -61,10 +61,44 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     [ObservableProperty] private bool _hideSelfActivity = true;
     [ObservableProperty] private bool _followTail = true;
     [ObservableProperty] private bool _showOnlySelected;
+
+    /// <summary>V1.1 noise reduction: trace built-in + user function calls. OFF by default —
+    /// the flood of built-in scalar functions (MOD, BIN_AND, …) is suppressed at the source.
+    /// Applies on the NEXT Start (a live session's event mask is fixed).</summary>
+    [ObservableProperty] private bool _includeFunctions;
+
+    /// <summary>V1.1 SQL inlining: show captured parameter values inline in the detail SQL
+    /// (<c>= ?</c> → <c>= 10036</c>). ON by default — that's what reverse-engineering wants.</summary>
+    [ObservableProperty] private bool _showValues = true;
+
+    // ── V1.2 event filter (a flyout, not toolbar buttons) — DISPLAY-level: hide captured rows by
+    //    kind + (for statements) operation. Distinct from IncludeFunctions (SOURCE-level capture).
+    //    All default true = no filtering. Errors are never hidden by this filter. ──
+    [ObservableProperty] private bool _showStatementEvents = true;
+    [ObservableProperty] private bool _showProcedureEvents = true;
+    [ObservableProperty] private bool _showTriggerEvents = true;
+    [ObservableProperty] private bool _showFunctionEvents = true;
+    [ObservableProperty] private bool _showOpSelect = true;
+    [ObservableProperty] private bool _showOpInsert = true;
+    [ObservableProperty] private bool _showOpUpdate = true;
+    [ObservableProperty] private bool _showOpDelete = true;
+    [ObservableProperty] private bool _showOpExecute = true;
+    [ObservableProperty] private bool _showOpDdl = true;
+    [ObservableProperty] private bool _showOpOther = true;
+
+    /// <summary>True when any event-type/operation checkbox is unchecked — drives the funnel's
+    /// active-filter dot.</summary>
+    public bool IsEventFilterActive =>
+        !(ShowStatementEvents && ShowProcedureEvents && ShowTriggerEvents && ShowFunctionEvents
+          && ShowOpSelect && ShowOpInsert && ShowOpUpdate && ShowOpDelete && ShowOpExecute && ShowOpDdl && ShowOpOther);
     [ObservableProperty] private string _filterText = string.Empty;
     [ObservableProperty] private TraceEventRowViewModel? _selectedRow;
     [ObservableProperty] private object? _selectedLensItem;
     [ObservableProperty] private TraceQuickFilter _quickFilter = TraceQuickFilter.All;
+
+    /// <summary>Display flag for the detail-panel maximize/restore glyph. The view code-behind owns
+    /// the actual row sizing (mirrors the SQL editor's results-panel maximize).</summary>
+    [ObservableProperty] private bool _isDetailMaximized;
 
     public bool IsGroupNone => GroupMode == TraceGroupMode.None;
     public bool IsTransactionLens => GroupMode == TraceGroupMode.Transaction;
@@ -120,7 +154,7 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     public event Action<TraceEventRowViewModel>? ScrollToRowRequested;
     public event Action<string>? DetailSqlChanged;   // push SQL to the read-only editor
     public event Action<string>? OpenInEditorRequested;
-    public event Action<string>? CopySqlRequested;
+    public event Action<string>? CopyToClipboardRequested;   // generic clipboard write (Copy SQL + grid copy)
 
     // ================================================================ lifecycle
 
@@ -139,9 +173,14 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
             catch { /* self-hide is best-effort */ }
         }
         EnsurePump();
-        await _service.StartAsync(TraceSessionConfig.DefaultPreset, selfIds).ConfigureAwait(true);
+        await _service.StartAsync(BuildSessionConfig(), selfIds).ConfigureAwait(true);
         NotifyCommands();
     }
+
+    /// <summary>The preset the next Start uses: the default (functions off) with the user's
+    /// "Include function calls" opt-in applied. Internal so tests can assert the mapping.</summary>
+    internal TraceSessionConfig BuildSessionConfig()
+        => TraceSessionConfig.DefaultPreset with { IncludeFunctions = IncludeFunctions };
 
     [RelayCommand(CanExecute = nameof(CanPauseResume))]
     private async Task PauseResumeAsync()
@@ -250,7 +289,55 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
         if (QuickFilter == TraceQuickFilter.Slow && !r.IsSlow) return false;
         if (!r.IsError && FilterText.Length > 0 && !MatchesText(r)) return false;
         if (ShowOnlySelected && _lensPredicate is { } pred && !pred(r.Event)) return false;
+        if (!r.IsError && !EventKindPasses(r)) return false; // event-type/operation flyout (errors always shown)
         return true;
+    }
+
+    private bool EventKindPasses(TraceEventRowViewModel r) => r.Event.Kind switch
+    {
+        TraceEventKind.Statement => ShowStatementEvents && OperationPasses(r.Operation),
+        TraceEventKind.Procedure => ShowProcedureEvents,
+        TraceEventKind.Trigger => ShowTriggerEvents,
+        TraceEventKind.Function => ShowFunctionEvents,
+        _ => true, // System / Connection / Transaction are not part of the flyout
+    };
+
+    private bool OperationPasses(TraceSqlOperation op) => op switch
+    {
+        TraceSqlOperation.Select => ShowOpSelect,
+        TraceSqlOperation.Insert => ShowOpInsert,
+        TraceSqlOperation.Update => ShowOpUpdate,
+        TraceSqlOperation.Delete => ShowOpDelete,
+        TraceSqlOperation.Execute => ShowOpExecute,
+        TraceSqlOperation.Ddl => ShowOpDdl,
+        TraceSqlOperation.Merge or TraceSqlOperation.Other => ShowOpOther,
+        _ => true, // None (unclassifiable) is never hidden
+    };
+
+    // Any event-filter checkbox change re-filters the grid + refreshes the active-filter dot.
+    partial void OnShowStatementEventsChanged(bool value) => OnEventFilterChanged();
+    partial void OnShowProcedureEventsChanged(bool value) => OnEventFilterChanged();
+    partial void OnShowTriggerEventsChanged(bool value) => OnEventFilterChanged();
+    partial void OnShowFunctionEventsChanged(bool value) => OnEventFilterChanged();
+    partial void OnShowOpSelectChanged(bool value) => OnEventFilterChanged();
+    partial void OnShowOpInsertChanged(bool value) => OnEventFilterChanged();
+    partial void OnShowOpUpdateChanged(bool value) => OnEventFilterChanged();
+    partial void OnShowOpDeleteChanged(bool value) => OnEventFilterChanged();
+    partial void OnShowOpExecuteChanged(bool value) => OnEventFilterChanged();
+    partial void OnShowOpDdlChanged(bool value) => OnEventFilterChanged();
+    partial void OnShowOpOtherChanged(bool value) => OnEventFilterChanged();
+
+    private void OnEventFilterChanged()
+    {
+        OnPropertyChanged(nameof(IsEventFilterActive));
+        RebuildRows();
+    }
+
+    [RelayCommand]
+    private void ResetEventFilter()
+    {
+        ShowStatementEvents = ShowProcedureEvents = ShowTriggerEvents = ShowFunctionEvents = true;
+        ShowOpSelect = ShowOpInsert = ShowOpUpdate = ShowOpDelete = ShowOpExecute = ShowOpDdl = ShowOpOther = true;
     }
 
     private bool MatchesText(TraceEventRowViewModel r)
@@ -300,8 +387,16 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     partial void OnSelectedRowChanged(TraceEventRowViewModel? value)
     {
         if (value is null) Detail.Clear();
-        else Detail.Update(value.Event);
-        DetailSqlChanged?.Invoke(Detail.Sql); // cleaned (separators stripped) for the read-only editor
+        else Detail.Update(value.Event, ShowValues);
+        DetailSqlChanged?.Invoke(Detail.Sql); // cleaned + (when on) value-inlined, for the read-only editor
+    }
+
+    // Re-render the selected event's SQL with/without inlined parameter values.
+    partial void OnShowValuesChanged(bool value)
+    {
+        if (SelectedRow is not { } row) return;
+        Detail.Update(row.Event, value);
+        DetailSqlChanged?.Invoke(Detail.Sql);
     }
 
     partial void OnSelectedLensItemChanged(object? value)
@@ -382,8 +477,93 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     }
 
     // ---- detail bridges ----
-    [RelayCommand] private void CopySql() { if (Detail.HasSql) CopySqlRequested?.Invoke(Detail.Sql); }
+    [RelayCommand] private void CopySql() { if (Detail.HasSql) CopyToClipboardRequested?.Invoke(Detail.Sql); }
     [RelayCommand] private void OpenInEditor() { if (Detail.HasSql) OpenInEditorRequested?.Invoke(Detail.Sql); }
+
+    // ---- grid copy (context menu) — reuses the shared clipboard channel, no new mechanism ----
+
+    /// <summary>Copies one grid cell (by column header) to the clipboard.</summary>
+    public void CopyCell(TraceEventRowViewModel? r, string? header)
+    {
+        if (r is null) return;
+        CopyToClipboardRequested?.Invoke(CellText(r, header));
+    }
+
+    /// <summary>Copies the row as tab-separated values (matches the other grids' TSV copy).</summary>
+    public void CopyRow(TraceEventRowViewModel? r)
+    {
+        if (r is null) return;
+        CopyToClipboardRequested?.Invoke(RowTsv(r));
+    }
+
+    /// <summary>Copies the row with a leading header line — the Excel/Teams/e-mail paste target.</summary>
+    public void CopyRowWithHeaders(TraceEventRowViewModel? r)
+    {
+        if (r is null) return;
+        CopyToClipboardRequested?.Invoke(HeaderTsv() + "\n" + RowTsv(r));
+    }
+
+    /// <summary>Copies every currently-displayed (filtered) row with a header line — the bulk export
+    /// for a bug report / spreadsheet.</summary>
+    public void CopyAllWithHeaders()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append(HeaderTsv());
+        foreach (var r in Rows) sb.Append('\n').Append(RowTsv(r));
+        CopyToClipboardRequested?.Invoke(sb.ToString());
+    }
+
+    /// <summary>Copies the row's SQL — cleaned + value-inlined per <see cref="ShowValues"/> for a
+    /// statement, else the routine name (multi-line preserved).</summary>
+    public void CopyRowSql(TraceEventRowViewModel? r)
+    {
+        if (r is null) return;
+        var sql = RowSql(r.Event);
+        if (sql.Length > 0) CopyToClipboardRequested?.Invoke(sql);
+    }
+
+    // Header + row share the same column set as the grid (gutter excluded) so a paste lines up.
+    private static string HeaderTsv() => string.Join('\t',
+        UiStrings.TraceColSeq, UiStrings.TraceColTime, UiStrings.TraceColEvent, UiStrings.TraceColDuration,
+        UiStrings.TraceColObject, UiStrings.TraceColRows, UiStrings.TraceColReads, UiStrings.TraceColTx);
+
+    private string RowTsv(TraceEventRowViewModel r)
+    {
+        var e = r.Event;
+        return string.Join('\t',
+            r.Sequence.ToString(CultureInfo.InvariantCulture),
+            r.TimeText, r.KindLabel, r.DurationText,
+            Flatten(ObjectCell(r)), r.RowsText, r.ReadsText,
+            e.TransactionId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty);
+    }
+
+    // The Object column as shown in the grid: error message for errors, else SQL / routine name.
+    private string ObjectCell(TraceEventRowViewModel r)
+        => r.IsError ? r.ObjectText : RowSql(r.Event);
+
+    private string RowSql(TraceEvent e)
+    {
+        if (e.Kind != TraceEventKind.Statement)
+            return e.ObjectName ?? string.Empty;
+        var clean = TraceEventRowViewModel.CleanSql(e.Sql);
+        return ShowValues && e.Parameters.Count > 0 ? TraceSqlInliner.Inline(clean, e.Parameters) : clean;
+    }
+
+    private string CellText(TraceEventRowViewModel r, string? header)
+    {
+        var e = r.Event;
+        if (header == UiStrings.TraceColSeq) return r.Sequence.ToString(CultureInfo.InvariantCulture);
+        if (header == UiStrings.TraceColTime) return r.TimeText;
+        if (header == UiStrings.TraceColEvent) return r.KindLabel;
+        if (header == UiStrings.TraceColDuration) return r.DurationText;
+        if (header == UiStrings.TraceColRows) return r.RowsText;
+        if (header == UiStrings.TraceColReads) return r.ReadsText;
+        if (header == UiStrings.TraceColTx) return e.TransactionId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        return Flatten(ObjectCell(r)); // Object column (or the gutter) → what the grid shows there
+    }
+
+    private static string Flatten(string s)
+        => s.Replace("\r", " ").Replace("\n", " ").Trim();
 
     private void RaiseCounts()
     {

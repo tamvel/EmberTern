@@ -197,6 +197,73 @@ public class TraceMonitorVmTests
         Assert.DoesNotContain("-", TraceEventRowViewModel.Elide("--------\nSELECT 1"));
     }
 
+    // ---- V1.1 ----
+
+    [Fact]
+    public void IncludeFunctions_DefaultsOff_AndBuildSessionConfigReflectsToggle()
+    {
+        var vm = NewVm();
+        Assert.False(vm.IncludeFunctions);
+        Assert.False(vm.BuildSessionConfig().IncludeFunctions);
+
+        vm.IncludeFunctions = true;
+        Assert.True(vm.BuildSessionConfig().IncludeFunctions);
+        Assert.True(vm.BuildSessionConfig().IncludeStatements); // other knobs unchanged
+    }
+
+    [Fact]
+    public void ShowValues_DefaultsOn_InlinesParameters_AndToggleReverts()
+    {
+        var vm = NewVm();
+        var e = new TraceEvent
+        {
+            Id = 1, Sequence = 1, Kind = TraceEventKind.Statement, StartTime = T0,
+            Sql = "SELECT * FROM NAGL WHERE ID_NAGL = ?",
+            Parameters = new[] { new RawTraceParam(0, "integer", "10036") },
+        };
+        vm.Ingest(new[] { e });
+        vm.SelectedRow = vm.Rows[0];
+
+        Assert.True(vm.ShowValues);
+        Assert.Contains("= 10036", vm.Detail.Sql);          // inlined by default
+
+        vm.ShowValues = false;
+        Assert.Contains("= ?", vm.Detail.Sql);              // faithful parameterised source
+        Assert.DoesNotContain("10036", vm.Detail.Sql);
+    }
+
+    [Fact]
+    public void Folder_CarriesTriggerEventAndTransactionParams()
+    {
+        var folder = new TraceEventFolder();
+        var ev = folder.Push(new RawTraceRecord
+        {
+            RawEventType = "EXECUTE_TRIGGER_FINISH",
+            Timestamp = T0,
+            ObjectName = "TR_NAGL_AU",
+            TriggerEvent = "AFTER UPDATE",
+            TransactionId = 42,
+            TransactionParams = "READ_COMMITTED | REC_VERSION | WAIT | READ_WRITE",
+        });
+        Assert.NotNull(ev);
+        Assert.Equal("AFTER UPDATE", ev!.TriggerEvent);
+        Assert.Equal("READ_COMMITTED | REC_VERSION | WAIT | READ_WRITE", ev.TransactionParams);
+    }
+
+    [Fact]
+    public void DetailPanel_SurfacesTriggerEventAndTransactionIsolation()
+    {
+        var detail = new TraceEventDetailViewModel();
+        detail.Update(new TraceEvent
+        {
+            Id = 1, Sequence = 1, Kind = TraceEventKind.Trigger, StartTime = T0,
+            ObjectName = "TR_NAGL_AU", TriggerEvent = "AFTER UPDATE",
+            TransactionId = 42, TransactionParams = "READ_COMMITTED | REC_VERSION | WAIT",
+        });
+        Assert.Contains(detail.SessionRows, r => r.Label == "Trigger event" && r.Value == "AFTER UPDATE");
+        Assert.Contains(detail.SessionRows, r => r.Label == "Transaction" && r.Value.Contains("TRA 42") && r.Value.Contains("READ_COMMITTED"));
+    }
+
     [Fact]
     public void DetailPanel_Session_ExposesExecutorIdentity()
     {
@@ -213,5 +280,197 @@ public class TraceMonitorVmTests
         Assert.Contains(detail.SessionRows, r => r.Label == "Process" && r.Value.Contains("erp.exe") && r.Value.Contains("1234"));
         Assert.Contains(detail.SessionRows, r => r.Label == "Transaction" && r.Value == "TRA 42");
         Assert.Contains(detail.SessionRows, r => r.Label == "Attachment" && r.Value == "ATT 7");
+    }
+
+    // ---- V1.2 ----
+
+    [Fact]
+    public void Row_KindLabel_ShowsOperationForStatements()
+    {
+        var vm = NewVm();
+        vm.Ingest(new[]
+        {
+            Ev(TraceEventKind.Statement, sql: "UPDATE NAGL SET S = 1 WHERE ID = 3"),
+            Ev(TraceEventKind.Procedure, obj: "NAGL_GET_STANREALIZ"),
+        });
+        Assert.Equal("UPDATE", vm.Rows[0].KindLabel);      // operation, not "Statement"
+        Assert.Equal(TraceSqlOperation.Update, vm.Rows[0].Operation);
+        Assert.Equal("Procedure", vm.Rows[1].KindLabel);   // routine keeps the kind name
+    }
+
+    [Fact]
+    public void EventFilter_HidesUncheckedKind_ButNeverErrors()
+    {
+        var vm = NewVm();
+        vm.Ingest(new[]
+        {
+            Ev(TraceEventKind.Statement, sql: "SELECT 1"),
+            Ev(TraceEventKind.Procedure, obj: "P"),
+            Error(),                                        // an error statement
+        });
+        Assert.Equal(3, vm.Rows.Count);
+        Assert.False(vm.IsEventFilterActive);
+
+        vm.ShowProcedureEvents = false;
+        Assert.True(vm.IsEventFilterActive);
+        Assert.DoesNotContain(vm.Rows, r => r.Event.Kind == TraceEventKind.Procedure);
+        Assert.Equal(2, vm.Rows.Count);
+
+        vm.ShowStatementEvents = false;                     // hides the SELECT, keeps the error
+        Assert.Contains(vm.Rows, r => r.IsError);
+        Assert.DoesNotContain(vm.Rows, r => r is { IsError: false });
+    }
+
+    [Fact]
+    public void EventFilter_OperationGate_HidesOnlyThatOperation()
+    {
+        var vm = NewVm();
+        vm.Ingest(new[]
+        {
+            Ev(TraceEventKind.Statement, sql: "SELECT * FROM T"),
+            Ev(TraceEventKind.Statement, sql: "UPDATE T SET A = 1"),
+        });
+        vm.ShowOpUpdate = false;
+        Assert.Single(vm.Rows);
+        Assert.Equal(TraceSqlOperation.Select, vm.Rows[0].Operation);
+    }
+
+    [Fact]
+    public void ResetEventFilter_RestoresAll()
+    {
+        var vm = NewVm();
+        vm.ShowProcedureEvents = false;
+        vm.ShowOpDelete = false;
+        Assert.True(vm.IsEventFilterActive);
+
+        vm.ResetEventFilterCommand.Execute(null);
+        Assert.False(vm.IsEventFilterActive);
+        Assert.True(vm.ShowProcedureEvents);
+        Assert.True(vm.ShowOpDelete);
+    }
+
+    [Fact]
+    public void CopyRow_And_CopyCell_And_CopySql_RaiseClipboard()
+    {
+        var vm = NewVm();
+        string? copied = null;
+        vm.CopyToClipboardRequested += t => copied = t;
+        vm.Ingest(new[] { Ev(TraceEventKind.Statement, tx: 55, sql: "UPDATE NAGL SET S = 1") });
+        var row = vm.Rows[0];
+
+        vm.CopyRow(row);
+        Assert.NotNull(copied);
+        Assert.Contains("UPDATE NAGL SET S = 1", copied);
+        Assert.Contains("\t", copied);                      // TSV
+
+        vm.CopyCell(row, UiStrings.TraceColEvent);
+        Assert.Equal("UPDATE", copied);
+
+        vm.CopyCell(row, UiStrings.TraceColTx);
+        Assert.Equal("55", copied);
+
+        vm.CopyRowSql(row);
+        Assert.Equal("UPDATE NAGL SET S = 1", copied);
+    }
+
+    [Fact]
+    public void ErrorBlock_ParsesThroughPipeline_FlaggedAndMessaged()
+    {
+        // A real Firebird "ERROR AT jrd8_execute" block: attach/app/tx lines, a failed statement,
+        // and a status-vector error line. Verifies Firebird → Parser → TraceEvent (→ Grid/Detail).
+        const string trace =
+            "2026-07-04T13:00:00.0000 (8188:0000000A) ERROR AT jrd8_execute\n" +
+            "\tSZKOLENIE (ATT_132, SYSDBA:NONE, WIN1250, TCPv6:::1/57835)\n" +
+            "\tC:\\App.exe:8188\n" +
+            "\t\t(TRA_14040, READ_COMMITTED | REC_VERSION | WAIT | READ_WRITE)\n" +
+            "Statement 42:\n" +
+            "-------------------------------------------------------------------------------\n" +
+            "UPDATE NAGL SET STATUS = 5 WHERE ID_NAGL = ?\n" +
+            "param0 = integer, \"10037\"\n" +
+            "335544665 : violation of PRIMARY or UNIQUE KEY constraint \"PK_NAGL\" on table \"NAGL\"\n";
+
+        var events = TraceLogParser.Parse(trace);
+        var e = Assert.Single(events);
+        Assert.Equal(TraceEventSeverity.Error, e.Severity);
+        Assert.Equal(TraceEventKind.Statement, e.Kind);          // ERROR-AT-with-SQL → Statement
+        Assert.Contains("violation of PRIMARY", e.ErrorText);
+        Assert.Contains("UPDATE NAGL", e.Sql);                   // SQL not polluted by the status line
+
+        // Grid + Errors quick-filter surface it.
+        var vm = NewVm();
+        vm.Ingest(events);
+        Assert.True(vm.Rows[0].IsError);
+        vm.QuickFilter = TraceQuickFilter.Errors;
+        Assert.Single(vm.Rows);
+        Assert.True(vm.Rows[0].IsError);
+
+        // Detail shows the error message.
+        vm.SelectedRow = vm.Rows[0];
+        Assert.True(vm.Detail.HasError);
+        Assert.Contains("violation of PRIMARY", vm.Detail.ErrorText);
+
+        // V1.2 #1: the grid's Object column shows the (code-stripped) error message.
+        Assert.StartsWith("violation of PRIMARY", vm.Rows[0].ObjectText);
+    }
+
+    [Fact]
+    public void ShortErrorMessage_StripsGdsCodeAndTakesFirstLine()
+    {
+        var text = "335544876 : Error while parsing procedure POZZAMWSP_DODAJ_DO_STANMAG's BLR\n"
+                 + "335544343 : invalid request BLR at offset 555";
+        Assert.Equal("Error while parsing procedure POZZAMWSP_DODAJ_DO_STANMAG's BLR",
+            TraceEventRowViewModel.ShortErrorMessage(text));
+    }
+
+    [Fact]
+    public void ErrorRow_ObjectText_ShowsMessage_NotEmpty()
+    {
+        var vm = NewVm();
+        vm.Ingest(new[]
+        {
+            new TraceEvent
+            {
+                Id = 1, Sequence = 1, Kind = TraceEventKind.System, StartTime = T0,
+                Severity = TraceEventSeverity.Error,
+                ErrorText = "335544512 : Input parameter mismatch for procedure STANMAG_DODAJ_JESLIBRAK",
+            },
+        });
+        Assert.True(vm.Rows[0].IsError);
+        Assert.Equal("Input parameter mismatch for procedure STANMAG_DODAJ_JESLIBRAK", vm.Rows[0].ObjectText);
+    }
+
+    [Fact]
+    public void CopyRowWithHeaders_PrependsHeaderLine()
+    {
+        var vm = NewVm();
+        string? copied = null;
+        vm.CopyToClipboardRequested += t => copied = t;
+        vm.Ingest(new[] { Ev(TraceEventKind.Statement, tx: 7, sql: "SELECT 1") });
+
+        vm.CopyRowWithHeaders(vm.Rows[0]);
+        var lines = copied!.Split('\n');
+        Assert.Equal(2, lines.Length);
+        Assert.Contains(UiStrings.TraceColEvent, lines[0]);      // header row
+        Assert.Contains(UiStrings.TraceColObject, lines[0]);
+        Assert.Contains("SELECT 1", lines[1]);                    // value row
+    }
+
+    [Fact]
+    public void CopyAllWithHeaders_EmitsHeaderPlusEveryVisibleRow()
+    {
+        var vm = NewVm();
+        string? copied = null;
+        vm.CopyToClipboardRequested += t => copied = t;
+        vm.Ingest(new[]
+        {
+            Ev(TraceEventKind.Statement, sql: "SELECT 1"),
+            Ev(TraceEventKind.Procedure, obj: "P"),
+        });
+        vm.CopyAllWithHeaders();
+        var lines = copied!.Split('\n');
+        Assert.Equal(3, lines.Length);                            // header + 2 rows
+        Assert.Contains(UiStrings.TraceColSeq, lines[0]);
+        Assert.Contains("SELECT 1", lines[1]);
+        Assert.Contains("P", lines[2]);
     }
 }
