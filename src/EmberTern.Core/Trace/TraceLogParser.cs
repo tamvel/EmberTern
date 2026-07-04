@@ -264,87 +264,21 @@ public static class TraceLogParser
     /// events are flagged <see cref="TraceEvent.IsSelfActivity"/> so the UI can hide self-noise.</param>
     public static IReadOnlyList<TraceEvent> Parse(string text, IReadOnlyCollection<long> selfAttachmentIds)
     {
-        var raw = ParseRecords(text);
-        var events = new List<TraceEvent>(raw.Count);
-
-        // Fold *_START into its matching *_FINISH using a per-(context token + kind) LIFO stack,
-        // so a nested same-kind call pairs correctly.
-        var openStarts = new Dictionary<string, Stack<RawTraceRecord>>(StringComparer.Ordinal);
-
-        long id = 0;
-        DateTimeOffset? prevStart = null;
-
-        foreach (var r in raw)
-        {
-            var kind = MapKind(r.RawEventType);
-
-            if (r.RawEventType.EndsWith("_START", StringComparison.Ordinal))
-            {
-                var key = FoldKey(r.ContextToken, kind);
-                (openStarts.TryGetValue(key, out var stack) ? stack : openStarts[key] = new Stack<RawTraceRecord>()).Push(r);
-                continue; // START markers never become their own event
-            }
-
-            RawTraceRecord? startPair = null;
-            if (r.RawEventType.EndsWith("_FINISH", StringComparison.Ordinal))
-            {
-                var key = FoldKey(r.ContextToken, kind);
-                if (openStarts.TryGetValue(key, out var stack) && stack.Count > 0)
-                    startPair = stack.Pop();
-            }
-
-            var duration = r.DurationMs is { } ms ? TimeSpan.FromMilliseconds(ms) : (TimeSpan?)null;
-            DateTimeOffset startTime, endTime;
-            if (startPair is not null)
-            {
-                startTime = startPair.Timestamp;
-                endTime = r.Timestamp;
-                duration ??= endTime - startTime;
-            }
-            else
-            {
-                // FINISH-only (statement/trigger) or a standalone event: the logged timestamp is the end.
-                endTime = r.Timestamp;
-                startTime = endTime - (duration ?? TimeSpan.Zero);
-            }
-
-            long? reads = r.TableReads.Count > 0 ? SumRecordReads(r.TableReads) : null;
-            var severity = r.ErrorText is not null ? TraceEventSeverity.Error
-                : IsSystemKind(kind) ? TraceEventSeverity.System
-                : TraceEventSeverity.Normal;
-
-            id++;
-            events.Add(new TraceEvent
-            {
-                Id = id,
-                Sequence = id,
-                Kind = kind,
-                Severity = severity,
-                StartTime = startTime,
-                EndTime = endTime,
-                Duration = duration,
-                DeltaMs = prevStart is { } p ? (long)Math.Round((startTime - p).TotalMilliseconds) : null,
-                Sql = r.Sql,
-                ObjectName = r.ObjectName,
-                TransactionId = r.TransactionId,
-                AttachmentId = r.AttachmentId,
-                ContextToken = r.ContextToken,
-                IsSelfActivity = r.AttachmentId is { } a && selfAttachmentIds.Contains(a),
-                RowsFetched = r.RecordsFetched,
-                Reads = reads,
-                ErrorText = r.ErrorText,
-            });
-            prevStart = startTime;
-        }
-
+        var folder = new TraceEventFolder(selfAttachmentIds);
+        var events = new List<TraceEvent>();
+        foreach (var r in ParseRecords(text))
+            if (folder.Push(r) is { } e)
+                events.Add(e);
         return events;
     }
 
+    /// <summary>True when <paramref name="line"/> is a raw trace block header
+    /// (<c>TS (pid:token) EVENT</c>). Used by the streaming accumulator to find block boundaries.</summary>
+    public static bool IsHeaderLine(string line) => HeaderRx.IsMatch(line);
+
     // ---------------------------------------------------------------- helpers
 
-    private static string FoldKey(string token, TraceEventKind kind) => token + "|" + kind;
-
-    private static TraceEventKind MapKind(string rawEventType)
+    internal static TraceEventKind MapKind(string rawEventType)
     {
         if (rawEventType.StartsWith("EXECUTE_STATEMENT", StringComparison.Ordinal)) return TraceEventKind.Statement;
         if (rawEventType.StartsWith("EXECUTE_PROCEDURE", StringComparison.Ordinal)) return TraceEventKind.Procedure;
@@ -356,10 +290,10 @@ public static class TraceLogParser
         return TraceEventKind.System;
     }
 
-    private static bool IsSystemKind(TraceEventKind kind)
+    internal static bool IsSystemKind(TraceEventKind kind)
         => kind is TraceEventKind.System or TraceEventKind.Connection or TraceEventKind.Transaction;
 
-    private static long SumRecordReads(IReadOnlyList<RawTableRead> reads)
+    internal static long SumRecordReads(IReadOnlyList<RawTableRead> reads)
     {
         long total = 0;
         foreach (var t in reads) total += t.RecordReads;

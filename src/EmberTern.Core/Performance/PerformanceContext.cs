@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EmberTern.Core.Sql;
+using EmberTern.Core.Diagnostics;
 
 namespace EmberTern.Core.Performance;
 

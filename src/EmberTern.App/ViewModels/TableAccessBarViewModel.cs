@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using EmberTern.Core.Performance;
+using EmberTern.Core.Diagnostics;
 
 namespace EmberTern.App.ViewModels;
 

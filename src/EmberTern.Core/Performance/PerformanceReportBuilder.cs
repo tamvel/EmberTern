@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using EmberTern.Core.Diagnostics;
 
 namespace EmberTern.Core.Performance;
 

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using EmberTern.Core.Performance;
+using EmberTern.Core.Diagnostics;
 using Xunit;
 
 namespace EmberTern.Tests;

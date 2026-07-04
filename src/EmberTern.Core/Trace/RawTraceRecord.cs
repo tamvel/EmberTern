@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EmberTern.Core.Diagnostics;
 
 namespace EmberTern.Core.Trace;
 
@@ -95,4 +96,9 @@ public sealed record RawTableRead
 
     /// <summary>Record reads that surface in the curated grid: natural (full-scan) + indexed.</summary>
     public long RecordReads => Natural + Indexed;
+
+    /// <summary>Maps this faithful trace row to the shared <see cref="TableAccessStat"/> (the curated
+    /// diagnostic leaf reused by Performance's Table Access bars). The housekeeping counters
+    /// (Backout/Purge/Expunge) are trace-only detail and are intentionally dropped.</summary>
+    public TableAccessStat ToTableAccess() => new(TableName, Natural, Indexed, Insert, Update, Delete);
 }

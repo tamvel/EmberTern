@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EmberTern.Core.Diagnostics;
 
 namespace EmberTern.Core.Performance;
 
@@ -23,24 +24,7 @@ public sealed record PerTableReadRow(
     public long TotalChanges => Inserts + Updates + Deletes;
 }
 
-/// <summary>Per-table access for one profiled statement: rows read sequentially (full scan) vs.
-/// via an index, plus rows changed (insert/update/delete). Reads are the diagnostic signal;
-/// changes show which tables a DML / procedure wrote (default 0 for a read-only SELECT).</summary>
-public sealed record TableAccessStat(
-    string Table,
-    long SequentialReads,
-    long IndexReads,
-    long Inserts = 0,
-    long Updates = 0,
-    long Deletes = 0)
-{
-    public long TotalReads => SequentialReads + IndexReads;
-
-    public long TotalChanges => Inserts + Updates + Deletes;
-
-    /// <summary>True when the table was read (at least partly) by a full/sequential scan.</summary>
-    public bool IsSequential => SequentialReads > 0;
-}
+// TableAccessStat moved to EmberTern.Core.Diagnostics (the shared diagnostic leaf).
 
 /// <summary>The per-table access profile for a statement, plus which capture strategy
 /// produced it. Ordered most-sequential-first for the Table Access bars.</summary>
