@@ -89,6 +89,23 @@ public sealed record TraceEvent
     /// lanes). Hidden by default so the monitored ERP's activity is not drowned by self-noise.</summary>
     public bool IsSelfActivity { get; init; }
 
+    // ---- Executor identity (detail-panel "Session" section — "who ran this?") ----
+
+    /// <summary>DB user the attachment connected as.</summary>
+    public string? UserName { get; init; }
+
+    /// <summary>Active SQL role, when set.</summary>
+    public string? RoleName { get; init; }
+
+    /// <summary>Client network address (host/IP) from the raw attachment header.</summary>
+    public string? RemoteAddress { get; init; }
+
+    /// <summary>Client process (application) name.</summary>
+    public string? ProcessName { get; init; }
+
+    /// <summary>Client process id.</summary>
+    public int? ClientProcessId { get; init; }
+
     // ---- Summary metrics (the full per-table breakdown is a detail-panel concern, added later) ----
 
     /// <summary>Records fetched, when reported.</summary>

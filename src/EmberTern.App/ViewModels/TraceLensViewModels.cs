@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 using EmberTern.Core.Trace;
 
@@ -12,6 +13,27 @@ public enum TraceGroupMode
     Statement,
 }
 
+/// <summary>The session-bar quick filter chips. Fast diagnostic narrowing (All / Errors / Slow) —
+/// not a filter builder. Composes with the text filter, hide-self, and the active lens.</summary>
+public enum TraceQuickFilter
+{
+    All,
+    Errors,
+    Slow,
+}
+
+internal static class TraceFormat
+{
+    /// <summary>Human-readable duration: "0 ms" / "240 ms" / "4.8 s" / "1.2 min".</summary>
+    public static string Ms(TimeSpan t)
+    {
+        var ms = t.TotalMilliseconds;
+        if (ms < 1000) return $"{(long)ms} ms";
+        if (ms < 60_000) return (ms / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " s";
+        return (ms / 60_000).ToString("0.0", CultureInfo.InvariantCulture) + " min";
+    }
+}
+
 /// <summary>A transaction in the Transactions lens — an ERP business operation. Labelled by a
 /// representative statement (the id is secondary, per the design), with aggregates.</summary>
 public sealed class TraceTransactionLensItem
@@ -22,10 +44,10 @@ public sealed class TraceTransactionLensItem
         EventCount = group.EventCount;
         StatementCount = group.StatementCount;
         Label = BuildLabel(group);
-        SubText = string.Format(CultureInfo.InvariantCulture, "{0} · {1} stmt · {2} ms",
+        SubText = string.Format(CultureInfo.InvariantCulture, "{0} · {1} stmt · {2}",
             TransactionId is { } tx ? "TRA " + tx : "no tx",
             StatementCount,
-            (long)group.TotalDuration.TotalMilliseconds);
+            TraceFormat.Ms(group.TotalDuration));
     }
 
     public long? TransactionId { get; }
@@ -56,20 +78,20 @@ public sealed class TraceFingerprintLensItem
         Fingerprint = group.Fingerprint;
         Sql = TraceEventRowViewModel.Elide(group.RepresentativeSql);
         Count = group.Count;
-        TotalText = Ms(group.TotalDuration);
-        AverageText = Ms(group.AverageDuration);
-        MaxText = Ms(group.MaxDuration);
-        SubText = string.Format(CultureInfo.InvariantCulture, "×{0} · {1} ms total · {2} avg · {3} max",
-            Count, Ms(group.TotalDuration), Ms(group.AverageDuration), Ms(group.MaxDuration));
+        CountText = "×" + Count.ToString(CultureInfo.InvariantCulture);
+        MetricsText = string.Format(CultureInfo.InvariantCulture, "{0} total · {1} avg · {2} max",
+            TraceFormat.Ms(group.TotalDuration),
+            TraceFormat.Ms(group.AverageDuration),
+            TraceFormat.Ms(group.MaxDuration));
     }
 
     public string Fingerprint { get; }
     public string Sql { get; }
     public int Count { get; }
-    public string TotalText { get; }
-    public string AverageText { get; }
-    public string MaxText { get; }
-    public string SubText { get; }
 
-    private static string Ms(System.TimeSpan t) => ((long)t.TotalMilliseconds).ToString(CultureInfo.InvariantCulture);
+    /// <summary>The prominent "×N" call-count badge.</summary>
+    public string CountText { get; }
+
+    /// <summary>"4.8 s total · 240 ms avg · 900 ms max".</summary>
+    public string MetricsText { get; }
 }

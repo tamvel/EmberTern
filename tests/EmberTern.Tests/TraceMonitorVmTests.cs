@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EmberTern.App;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Trace;
 using EmberTern.Firebird;
@@ -151,5 +152,66 @@ public class TraceMonitorVmTests
         vm.ShowOnlySelected = true;
         Assert.Single(vm.Rows);                                   // narrowed to tx 2
         Assert.Equal(2, vm.Rows[0].TransactionId);
+    }
+
+    [Fact]
+    public void QuickFilter_Errors_ShowsOnlyErrors()
+    {
+        var vm = NewVm();
+        vm.Ingest(new[] { Ev(TraceEventKind.Statement, sql: "SELECT 1"), Error(), Ev(TraceEventKind.Statement, sql: "SELECT 2") });
+        vm.QuickFilter = TraceQuickFilter.Errors;
+        Assert.Single(vm.Rows);
+        Assert.True(vm.Rows[0].IsError);
+    }
+
+    [Fact]
+    public void QuickFilter_Slow_ShowsOnlySlowOperations()
+    {
+        var vm = NewVm();
+        vm.Ingest(new[] { Ev(TraceEventKind.Statement, sql: "fast", durMs: 5), Ev(TraceEventKind.Statement, sql: "slow", durMs: 250) });
+        vm.QuickFilter = TraceQuickFilter.Slow;
+        Assert.Single(vm.Rows);
+        Assert.True(vm.Rows[0].IsSlow);
+    }
+
+    [Fact]
+    public void EmptyState_ReflectsNoSession_ThenNoMatch()
+    {
+        var vm = NewVm();
+        Assert.True(vm.ShowEmptyState);
+        Assert.Equal(UiStrings.TraceEmptyHint, vm.EmptyStateText);
+
+        vm.Ingest(new[] { Ev(TraceEventKind.Statement, sql: "SELECT 1") });
+        Assert.False(vm.ShowEmptyState);
+
+        vm.QuickFilter = TraceQuickFilter.Errors;   // no errors → nothing matches
+        Assert.True(vm.ShowEmptyState);
+        Assert.Equal(UiStrings.TraceEmptyNoMatch, vm.EmptyStateText);
+    }
+
+    [Fact]
+    public void CleanSql_StripsTraceSeparatorLines()
+    {
+        Assert.Equal("SELECT * FROM CECHA",
+            TraceEventRowViewModel.CleanSql("-----------------------------\nSELECT * FROM CECHA"));
+        Assert.DoesNotContain("-", TraceEventRowViewModel.Elide("--------\nSELECT 1"));
+    }
+
+    [Fact]
+    public void DetailPanel_Session_ExposesExecutorIdentity()
+    {
+        var detail = new TraceEventDetailViewModel();
+        detail.Update(new TraceEvent
+        {
+            Id = 1, Sequence = 1, Kind = TraceEventKind.Statement, StartTime = T0,
+            TransactionId = 42, AttachmentId = 7,
+            UserName = "SYSDBA", RoleName = "RDB$ADMIN", RemoteAddress = "10.0.0.5/54321",
+            ProcessName = "erp.exe", ClientProcessId = 1234, Sql = "SELECT 1",
+        });
+        Assert.True(detail.HasSession);
+        Assert.Contains(detail.SessionRows, r => r.Label == "User" && r.Value == "SYSDBA");
+        Assert.Contains(detail.SessionRows, r => r.Label == "Process" && r.Value.Contains("erp.exe") && r.Value.Contains("1234"));
+        Assert.Contains(detail.SessionRows, r => r.Label == "Transaction" && r.Value == "TRA 42");
+        Assert.Contains(detail.SessionRows, r => r.Label == "Attachment" && r.Value == "ATT 7");
     }
 }

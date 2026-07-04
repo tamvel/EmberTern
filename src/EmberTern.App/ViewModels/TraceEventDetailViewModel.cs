@@ -7,6 +7,9 @@ using EmberTern.Core.Trace;
 
 namespace EmberTern.App.ViewModels;
 
+/// <summary>A label : value row in the detail panel (Session / Timing sections).</summary>
+public sealed record TraceDetailKv(string Label, string Value);
+
 /// <summary>
 /// The detail panel (zone ③): everything about the selected event that does NOT belong in
 /// the grid (rule 5). Reuses the Performance module's <see cref="TableAccessBarViewModel"/>
@@ -18,46 +21,55 @@ public sealed partial class TraceEventDetailViewModel : ObservableObject
     [ObservableProperty] private string _sql = string.Empty;
     [ObservableProperty] private bool _hasSql;
     [ObservableProperty] private string _kindLabel = string.Empty;
+    [ObservableProperty] private string _iconGeometryKey = "Icon.Query";
+    [ObservableProperty] private string _iconResourceKey = "IconColor_Query";
     [ObservableProperty] private string _objectName = string.Empty;
     [ObservableProperty] private bool _hasObjectName;
     [ObservableProperty] private string _timingText = string.Empty;
-    [ObservableProperty] private string _transactionText = string.Empty;
+    [ObservableProperty] private bool _hasTiming;
     [ObservableProperty] private string _errorText = string.Empty;
     [ObservableProperty] private bool _hasError;
     [ObservableProperty] private bool _hasParameters;
     [ObservableProperty] private bool _hasTableAccess;
+    [ObservableProperty] private bool _hasSession;
 
     public ObservableCollection<string> Parameters { get; } = new();
     public ObservableCollection<TableAccessBarViewModel> TableAccess { get; } = new();
+
+    /// <summary>Executor identity — "who ran this?" (User / Role / Host / Process / Attachment /
+    /// Transaction), only the rows that have a value.</summary>
+    public ObservableCollection<TraceDetailKv> SessionRows { get; } = new();
 
     public void Clear()
     {
         HasSelection = false;
         Sql = string.Empty; HasSql = false;
         KindLabel = string.Empty; ObjectName = string.Empty; HasObjectName = false;
-        TimingText = string.Empty; TransactionText = string.Empty;
+        IconGeometryKey = "Icon.Query"; IconResourceKey = "IconColor_Query";
+        TimingText = string.Empty; HasTiming = false;
         ErrorText = string.Empty; HasError = false;
         Parameters.Clear(); HasParameters = false;
         TableAccess.Clear(); HasTableAccess = false;
+        SessionRows.Clear(); HasSession = false;
     }
 
     public void Update(TraceEvent e)
     {
         HasSelection = true;
         KindLabel = e.Kind.ToString();
+        IconGeometryKey = TraceEventRowViewModel.IconGeometryKeyFor(e.Kind);
+        IconResourceKey = TraceEventRowViewModel.IconResourceKeyFor(e.Kind);
         ObjectName = e.ObjectName ?? string.Empty;
         HasObjectName = !string.IsNullOrEmpty(e.ObjectName);
 
-        Sql = e.Sql ?? string.Empty;
-        HasSql = !string.IsNullOrEmpty(e.Sql);
+        Sql = TraceEventRowViewModel.CleanSql(e.Sql);
+        HasSql = Sql.Length > 0;
 
         ErrorText = e.ErrorText ?? string.Empty;
         HasError = !string.IsNullOrEmpty(e.ErrorText);
 
         TimingText = BuildTiming(e);
-        TransactionText = e.TransactionId is { } tx
-            ? string.Format(CultureInfo.InvariantCulture, "TRA {0}", tx)
-            : string.Empty;
+        HasTiming = TimingText.Length > 0;
 
         Parameters.Clear();
         foreach (var p in e.Parameters)
@@ -69,13 +81,33 @@ public sealed partial class TraceEventDetailViewModel : ObservableObject
         foreach (var t in e.TableAccess.OrderByDescending(t => t.SequentialReads).ThenByDescending(t => t.TotalReads))
             TableAccess.Add(new TableAccessBarViewModel(t, max));
         HasTableAccess = TableAccess.Count > 0;
+
+        SessionRows.Clear();
+        AddRow("User", e.UserName);
+        AddRow("Role", e.RoleName);
+        AddRow("Host", e.RemoteAddress);
+        AddRow("Process", FormatProcess(e.ProcessName, e.ClientProcessId));
+        AddRow("Attachment", e.AttachmentId is { } att ? "ATT " + att.ToString(CultureInfo.InvariantCulture) : null);
+        AddRow("Transaction", e.TransactionId is { } tx ? "TRA " + tx.ToString(CultureInfo.InvariantCulture) : null);
+        HasSession = SessionRows.Count > 0;
+    }
+
+    private void AddRow(string label, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value)) SessionRows.Add(new TraceDetailKv(label, value!));
+    }
+
+    private static string? FormatProcess(string? name, int? pid)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return pid is { } p ? "pid " + p.ToString(CultureInfo.InvariantCulture) : null;
+        return pid is { } q ? $"{name} (pid {q.ToString(CultureInfo.InvariantCulture)})" : name;
     }
 
     private static string BuildTiming(TraceEvent e)
     {
         var parts = new List<string>();
         if (e.Duration is { } d) parts.Add($"{(long)d.TotalMilliseconds} ms");
-        if (e.RowsFetched is { } r) parts.Add($"{r} rows");
+        if (e.RowsFetched is { } r) parts.Add($"{r} row{(r == 1 ? "" : "s")}");
         if (e.Reads is { } reads) parts.Add($"{reads} reads");
         if (e.Writes is { } w) parts.Add($"{w} writes");
         if (e.Fetches is { } f) parts.Add($"{f} fetches");

@@ -1226,17 +1226,31 @@ internal static class UiStrings
     public const string TraceColTime = "Time";
     public const string TraceColDelta = "Δ ms";
     public const string TraceColEvent = "Event";
-    public const string TraceColDuration = "ms";
+    public const string TraceColDuration = "Duration";
     public const string TraceColObject = "Object";
     public const string TraceColRows = "Rows";
     public const string TraceColReads = "Reads";
     public const string TraceColTx = "Tx";
+    // Quick filter chips (All / Errors / Slow)
+    public const string TraceFilterAll = "All";
+    public const string TraceFilterErrors = "Errors";
+    public const string TraceFilterSlow = "Slow";
+    // Toolbar toggle tooltips
+    public const string TraceHideSelfTip = "Hide EmberTern's own activity";
+    public const string TraceFollowTailTip = "Follow tail — auto-scroll to the newest event";
+    public const string TraceShowOnlySelectedTip = "Show only the selected transaction / statement";
+    public const string TraceJumpLatest = "Jump to latest";
+    // Detail sections
     public const string TraceDetailParameters = "Parameters";
     public const string TraceDetailTableAccess = "Table access";
+    public const string TraceDetailTiming = "Timing";
+    public const string TraceDetailSession = "Session";
     public const string TraceDetailCopySql = "Copy SQL";
     public const string TraceDetailOpenInEditor = "Open in SQL Editor";
     public const string TraceDetailNoSelection = "Select an event to see its detail.";
     public const string TraceEmptyHint = "Press Start to begin monitoring database activity.";
+    public const string TraceEmptyWaiting = "Waiting for database activity…";
+    public const string TraceEmptyNoMatch = "No events match the current filter.";
 
     // Performance Analysis (Phase 1 — plan + timings)
     public const string PerformanceTabHeader = "Performance";

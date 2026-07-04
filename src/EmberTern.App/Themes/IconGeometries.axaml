@@ -34,6 +34,8 @@
   <StreamGeometry x:Key="Icon.ListX">M11 12H3M16 6H3M16 18H3M19 10l-4 4M15 10l4 4</StreamGeometry>
   <!-- Filter (Lucide funnel): data-grid filter toggle. -->
   <StreamGeometry x:Key="Icon.Filter">M22 3H2l8 9.46V19l4 2v-8.54L22 3z</StreamGeometry>
+  <!-- EyeOff (Lucide): "hide own activity" toggle in the Activity Monitor. -->
+  <StreamGeometry x:Key="Icon.EyeOff">M9.88 9.88a3 3 0 1 0 4.24 4.24 M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68 M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61 M2 2l20 20</StreamGeometry>
   <!-- Sigma (Lucide sigma): data-grid aggregation toggle. -->
   <StreamGeometry x:Key="Icon.Sigma">M18 7V4H6l6 8-6 8h12v-3</StreamGeometry>
   <StreamGeometry x:Key="Icon.Save">M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7M7 3v4a1 1 0 0 0 1 1h7</StreamGeometry>

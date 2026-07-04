@@ -64,10 +64,30 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     [ObservableProperty] private string _filterText = string.Empty;
     [ObservableProperty] private TraceEventRowViewModel? _selectedRow;
     [ObservableProperty] private object? _selectedLensItem;
+    [ObservableProperty] private TraceQuickFilter _quickFilter = TraceQuickFilter.All;
 
+    public bool IsGroupNone => GroupMode == TraceGroupMode.None;
     public bool IsTransactionLens => GroupMode == TraceGroupMode.Transaction;
     public bool IsStatementLens => GroupMode == TraceGroupMode.Statement;
     public bool IsLensOpen => GroupMode != TraceGroupMode.None;
+
+    public bool IsQuickFilterAll => QuickFilter == TraceQuickFilter.All;
+    public bool IsQuickFilterErrors => QuickFilter == TraceQuickFilter.Errors;
+    public bool IsQuickFilterSlow => QuickFilter == TraceQuickFilter.Slow;
+
+    /// <summary>Empty-state overlay: no session yet / waiting for activity / filter matched nothing.</summary>
+    public bool ShowEmptyState => Rows.Count == 0;
+    public string EmptyStateText
+    {
+        get
+        {
+            if (_all.Count == 0)
+                return State is TraceSessionState.Running or TraceSessionState.Paused
+                    ? UiStrings.TraceEmptyWaiting
+                    : UiStrings.TraceEmptyHint;
+            return UiStrings.TraceEmptyNoMatch;
+        }
+    }
 
     /// <summary>The active lens's items (transaction or fingerprint). ONE bound collection so the
     /// rail's single SelectedItem can't be clobbered by an inactive list (gotcha #75).</summary>
@@ -196,8 +216,9 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     {
         foreach (var e in batch)
         {
-            if (e.TransactionId != _lastBandTx) { _bandCounter++; _lastBandTx = e.TransactionId; }
-            var row = new TraceEventRowViewModel(e, "TxBand" + (_bandCounter & 1));
+            bool newTx = e.TransactionId != _lastBandTx;
+            if (newTx) { _bandCounter++; _lastBandTx = e.TransactionId; }
+            var row = new TraceEventRowViewModel(e, "TxBand" + (_bandCounter & 1)) { IsTransactionStart = newTx };
             _all.Add(row);
             if (RowPasses(row))
             {
@@ -225,6 +246,8 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     internal bool RowPasses(TraceEventRowViewModel r)
     {
         if (HideSelfActivity && r.IsSelfActivity) return false;
+        if (QuickFilter == TraceQuickFilter.Errors && !r.IsError) return false;
+        if (QuickFilter == TraceQuickFilter.Slow && !r.IsSlow) return false;
         if (!r.IsError && FilterText.Length > 0 && !MatchesText(r)) return false;
         if (ShowOnlySelected && _lensPredicate is { } pred && !pred(r.Event)) return false;
         return true;
@@ -278,7 +301,7 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     {
         if (value is null) Detail.Clear();
         else Detail.Update(value.Event);
-        DetailSqlChanged?.Invoke(value?.Event.Sql ?? string.Empty);
+        DetailSqlChanged?.Invoke(Detail.Sql); // cleaned (separators stripped) for the read-only editor
     }
 
     partial void OnSelectedLensItemChanged(object? value)
@@ -299,6 +322,20 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     partial void OnShowOnlySelectedChanged(bool value) => RebuildRows();
     partial void OnFilterTextChanged(string value) => RebuildRows();
 
+    partial void OnQuickFilterChanged(TraceQuickFilter value)
+    {
+        OnPropertyChanged(nameof(IsQuickFilterAll));
+        OnPropertyChanged(nameof(IsQuickFilterErrors));
+        OnPropertyChanged(nameof(IsQuickFilterSlow));
+        RebuildRows();
+    }
+
+    // Follow-tail: enabling it jumps to the newest row; the view auto-pauses it on manual scroll-up.
+    partial void OnFollowTailChanged(bool value)
+    {
+        if (value && Rows.Count > 0) ScrollToRowRequested?.Invoke(Rows[^1]);
+    }
+
     partial void OnHideSelfActivityChanged(bool value)
     {
         RebuildRows();
@@ -307,6 +344,7 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
 
     partial void OnGroupModeChanged(TraceGroupMode value)
     {
+        OnPropertyChanged(nameof(IsGroupNone));
         OnPropertyChanged(nameof(IsTransactionLens));
         OnPropertyChanged(nameof(IsStatementLens));
         OnPropertyChanged(nameof(IsLensOpen));
@@ -321,6 +359,7 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     partial void OnStateChanged(TraceSessionState value)
     {
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(EmptyStateText));
         NotifyCommands();
     }
 
@@ -328,6 +367,19 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     [RelayCommand] private void ShowChronological() => GroupMode = TraceGroupMode.None;
     [RelayCommand] private void ShowTransactions() => GroupMode = TraceGroupMode.Transaction;
     [RelayCommand] private void ShowStatements() => GroupMode = TraceGroupMode.Statement;
+
+    // ---- quick filter chips (All / Errors / Slow) ----
+    [RelayCommand] private void ShowAll() => QuickFilter = TraceQuickFilter.All;
+    [RelayCommand] private void ShowErrors() => QuickFilter = TraceQuickFilter.Errors;
+    [RelayCommand] private void ShowSlow() => QuickFilter = TraceQuickFilter.Slow;
+
+    // Re-arm follow-tail and jump to the newest row (the "↓ Latest" affordance).
+    [RelayCommand]
+    private void JumpToLatest()
+    {
+        if (!FollowTail) FollowTail = true;                 // OnFollowTailChanged scrolls
+        else if (Rows.Count > 0) ScrollToRowRequested?.Invoke(Rows[^1]);
+    }
 
     // ---- detail bridges ----
     [RelayCommand] private void CopySql() { if (Detail.HasSql) CopySqlRequested?.Invoke(Detail.Sql); }
@@ -339,6 +391,8 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
         OnPropertyChanged(nameof(TotalCount));
         OnPropertyChanged(nameof(DroppedCount));
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(ShowEmptyState));
+        OnPropertyChanged(nameof(EmptyStateText));
     }
 
     private void NotifyCommands()

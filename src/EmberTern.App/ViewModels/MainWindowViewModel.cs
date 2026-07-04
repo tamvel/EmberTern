@@ -3484,11 +3484,25 @@ public partial class MainWindowViewModel : ViewModelBase
         catch { return Array.Empty<long>(); }
     }
 
+    // Non-destructive: a traced statement lands as a NEW Saved Query (never overwrites the
+    // editor's current content). The previously-edited query is preserved as its own Saved
+    // Query — selecting the new one just swaps the editor to it.
     private void OnTraceOpenInEditor(string sql)
     {
+        if (string.IsNullOrWhiteSpace(sql)) return;
         var query = WorkspaceTabs.FirstOrDefault(t => t.Kind == WorkspaceTabKind.Query);
         if (query is not null) SelectTab(query);
-        QueryText = sql;
+        IsQueryPanelVisible = true; // reveal the panel so the new query is visible
+        var sq = new SavedQueryViewModel(Guid.NewGuid().ToString("N"), BuildTraceQueryName(sql), sql, this);
+        SavedQueries.Add(sq);
+        SelectedSavedQuery = sq;
+    }
+
+    private static string BuildTraceQueryName(string sql)
+    {
+        var flat = System.Text.RegularExpressions.Regex.Replace(sql.Trim(), @"\s+", " ");
+        if (flat.Length > 40) flat = flat[..40] + "…";
+        return "Trace: " + flat;
     }
 
     public bool CanOpenSecurityManager => _service.IsConnected;
