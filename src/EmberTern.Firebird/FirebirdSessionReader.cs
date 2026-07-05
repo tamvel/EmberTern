@@ -15,21 +15,48 @@ namespace EmberTern.Firebird;
 ///
 /// Acquisition follows the proven readers (<see cref="FirebirdDiagnostics"/> /
 /// <see cref="FirebirdPerfStatsReader"/>): runs on the METADATA lane, holds that lane's command
-/// lock (captured once — gotcha #120), and reads with an implicit per-command transaction
-/// (<c>cmd.Transaction = null</c>) so EVERY poll is a FRESH MON$ snapshot (the MON$-snapshot rule
-/// — a long-lived reader silently freezes the view) and it never touches the user's data working
-/// transaction. Returns Core DTOs only; holds all <c>Fb*</c> internally. Decoders reused from
-/// <see cref="FirebirdDiagnostics"/>. Kill/cancel reuse
+/// lock (captured once — gotcha #120), and BORROWS the lane's working transaction via
+/// <see cref="TxFor"/> (gotcha #22-revised). In the normal case the metadata lane has no working
+/// transaction so <see cref="TxFor"/> is null → an implicit per-command transaction → EVERY poll
+/// is a FRESH MON$ snapshot (the MON$-snapshot rule — a long-lived reader silently freezes the
+/// view). It must NOT hardcode <c>cmd.Transaction = null</c>: the id read runs on the DATA lane,
+/// and after any SQL-Editor execute the data connection has a PENDING local transaction — a
+/// null-transaction command there throws "Execute requires the Command object to have a
+/// Transaction object …" (gotcha #173). Returns Core DTOs only; holds all <c>Fb*</c> internally.
+/// Decoders reused from <see cref="FirebirdDiagnostics"/>. Kill/cancel reuse
 /// <see cref="FirebirdConnectionService.ExecuteAdminBatchAsync"/> (autonomous, auto-committed).
 /// </summary>
 public sealed class FirebirdSessionReader
 {
     private readonly FirebirdConnectionService _connectionService;
+    private readonly TransactionService? _dataTransactionService;
+    private readonly TransactionService? _metadataTransactionService;
 
-    public FirebirdSessionReader(FirebirdConnectionService connectionService)
+    public FirebirdSessionReader(
+        FirebirdConnectionService connectionService,
+        TransactionService? dataTransactionService = null,
+        TransactionService? metadataTransactionService = null)
     {
         _connectionService = connectionService;
+        _dataTransactionService = dataTransactionService;
+        _metadataTransactionService = metadataTransactionService;
     }
+
+    /// <summary>The working transaction to attach to for a lane — null when that lane has none
+    /// (the norm for the metadata lane → an implicit per-command tx → a fresh MON$ snapshot). When
+    /// the connection HAS a pending local transaction (always true for the data lane after a
+    /// SQL-Editor execute; also the degraded single-connection case where the metadata lane aliases
+    /// the data lane), we MUST attach to it or the driver rejects the command (gotcha #173). The
+    /// metadata service forwards to the data service in degraded mode, so this stays correct there.</summary>
+    private FbTransaction? TxFor(ConnectionRole role)
+        => SelectTransactionService(role, _dataTransactionService, _metadataTransactionService)?.ActiveTransaction;
+
+    /// <summary>Pure lane→service routing (unit-pinned): the data lane borrows the data working
+    /// transaction, the metadata lane the metadata one. A null service (a lane with no working tx,
+    /// the norm for the metadata lane) yields a null transaction → an implicit per-command tx.</summary>
+    internal static TransactionService? SelectTransactionService(
+        ConnectionRole role, TransactionService? data, TransactionService? metadata)
+        => role == ConnectionRole.Metadata ? metadata : data;
 
     // --- SQL (kept as consts so the shape is unit-pinnable; FB 2.5+ column set, no FB4-only
     //     MON$SNAPSHOT_NUMBER so it stays portable across the supported engines) -------------
@@ -90,7 +117,7 @@ public sealed class FirebirdSessionReader
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = SessionsSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = null; // implicit per-command tx → fresh MON$ snapshot each poll
+            cmd.Transaction = TxFor(ConnectionRole.Metadata); // null in the norm → fresh MON$ snapshot
 
             var results = new List<SessionInfo>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -143,7 +170,7 @@ public sealed class FirebirdSessionReader
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = TransactionsSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = null;
+            cmd.Transaction = TxFor(ConnectionRole.Metadata);
 
             var results = new List<TransactionInfo>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -188,7 +215,7 @@ public sealed class FirebirdSessionReader
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = DatabaseStateSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = null;
+            cmd.Transaction = TxFor(ConnectionRole.Metadata);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -255,7 +282,7 @@ public sealed class FirebirdSessionReader
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = StatementsSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = null;
+            cmd.Transaction = TxFor(ConnectionRole.Metadata);
 
             var map = new Dictionary<long, (long, string)>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -292,7 +319,7 @@ public sealed class FirebirdSessionReader
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = "SELECT CURRENT_CONNECTION FROM RDB$DATABASE";
             cmd.CommandTimeout = 0;
-            cmd.Transaction = null;
+            cmd.Transaction = TxFor(role); // attach to the lane's pending working tx (data lane after an execute) — the id is tx-invariant
             var value = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
             return value is null or DBNull ? 0 : Convert.ToInt64(value, CultureInfo.InvariantCulture);
         }

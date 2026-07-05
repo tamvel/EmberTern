@@ -163,7 +163,10 @@ public partial class MainWindowViewModel : ViewModelBase
         // Per-table reads (Phase 2): stats read on the metadata lane, attachment id on the
         // data lane — so before/after snapshots stay fresh and never touch the data tx.
         _perfStatsReader = new FirebirdPerfStatsReader(_service, _metadataTransactionService, _transactionService);
-        _sessionReader = new FirebirdSessionReader(_service);
+        // Borrow each lane's working transaction so a MON$/CURRENT_CONNECTION read never runs a
+        // null-transaction command on a connection with a pending local tx (gotcha #173): the id
+        // read hits the DATA lane, which holds a pending working tx after any SQL-Editor execute.
+        _sessionReader = new FirebirdSessionReader(_service, _transactionService, _metadataTransactionService);
         // Catalog (indexes/selectivity/cardinality) for the advisor — read on the metadata lane
         // for the profiled query's tables when the Performance panel builds (Phase 3a).
         _catalogReader = new FirebirdCatalogReader(_service, _metadataTransactionService);

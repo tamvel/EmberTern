@@ -75,4 +75,24 @@ public class FirebirdSessionReaderTests
     [InlineData(99, "Unknown")]
     public void ShortIsolation_DecodesModeCodes(int code, string expected)
         => Assert.Equal(expected, FirebirdSessionReader.ShortIsolation(code));
+
+    // Regression (gotcha #173): a MON$/CURRENT_CONNECTION read must BORROW the lane's working
+    // transaction, not hardcode cmd.Transaction = null — otherwise the data-lane id read throws
+    // "Execute requires the Command object to have a Transaction object …" once the data connection
+    // holds a pending working tx (after any SQL-Editor execute). This pins the lane→service routing
+    // (each lane borrows its OWN service; a null service → null tx → fresh implicit MON$ snapshot).
+    // The actual driver behaviour is the user's manual smoke, like every DB-path reader.
+    [Fact]
+    public void SelectTransactionService_RoutesEachLaneToItsOwnService()
+    {
+        var cs = new FirebirdConnectionService();
+        var data = new TransactionService(cs);
+        var metadata = new TransactionService(cs);
+
+        Assert.Same(data, FirebirdSessionReader.SelectTransactionService(ConnectionRole.Data, data, metadata));
+        Assert.Same(metadata, FirebirdSessionReader.SelectTransactionService(ConnectionRole.Metadata, data, metadata));
+        // A lane with no working-tx service (the metadata norm) yields null → implicit per-command tx.
+        Assert.Null(FirebirdSessionReader.SelectTransactionService(ConnectionRole.Metadata, data, null));
+        Assert.Null(FirebirdSessionReader.SelectTransactionService(ConnectionRole.Data, null, metadata));
+    }
 }
