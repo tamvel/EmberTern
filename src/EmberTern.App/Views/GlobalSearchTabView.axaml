@@ -1,0 +1,87 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:EmberTern.App"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:ae="using:AvaloniaEdit"
+             x:Class="EmberTern.App.Views.GlobalSearchTabView"
+             x:Name="GlobalSearchRoot"
+             x:DataType="vm:GlobalSearchTabViewModel">
+
+  <UserControl.Styles>
+    <!-- Groups start expanded so results are visible; leaves have no children.
+         ReflectionBinding (gotcha #38): the shared TreeViewItem style binds by name
+         against whatever node is the DataContext, falling back for leaf items. -->
+    <Style Selector="TreeViewItem">
+      <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded, FallbackValue=True}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid ColumnDefinitions="5*,4,7*">
+    <!-- Left: status + results tree -->
+    <DockPanel Grid.Column="0" Background="{DynamicResource PanelBrush}">
+      <Border DockPanel.Dock="Top"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+              Padding="10,6">
+        <TextBlock Text="{Binding StatusText}"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   FontSize="12" TextWrapping="Wrap" />
+      </Border>
+
+      <TreeView x:Name="ResultsTree"
+                ItemsSource="{Binding Groups}"
+                SelectionChanged="OnResultsSelectionChanged"
+                DoubleTapped="OnResultDoubleTapped"
+                Background="Transparent">
+        <TreeView.DataTemplates>
+          <TreeDataTemplate DataType="vm:SearchResultGroupViewModel" ItemsSource="{Binding Items}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                Width="15" Height="15" VerticalAlignment="Center">
+                <controls:SvgIcon.Foreground>
+                  <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                    <Binding Path="IconResourceKey" />
+                    <Binding ElementName="GlobalSearchRoot" Path="ActualThemeVariant" />
+                  </MultiBinding>
+                </controls:SvgIcon.Foreground>
+              </controls:SvgIcon>
+              <TextBlock Text="{Binding Header}" FontWeight="SemiBold" VerticalAlignment="Center" />
+            </StackPanel>
+          </TreeDataTemplate>
+
+          <DataTemplate DataType="vm:SearchResultItemViewModel">
+            <StackPanel Orientation="Horizontal" Spacing="6" Background="Transparent">
+              <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                Width="14" Height="14" VerticalAlignment="Center">
+                <controls:SvgIcon.Foreground>
+                  <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                    <Binding Path="IconResourceKey" />
+                    <Binding ElementName="GlobalSearchRoot" Path="ActualThemeVariant" />
+                  </MultiBinding>
+                </controls:SvgIcon.Foreground>
+              </controls:SvgIcon>
+              <TextBlock Text="{Binding DisplayLabel}" VerticalAlignment="Center" />
+            </StackPanel>
+          </DataTemplate>
+        </TreeView.DataTemplates>
+      </TreeView>
+    </DockPanel>
+
+    <GridSplitter Grid.Column="1" ResizeDirection="Columns"
+                  Background="{DynamicResource BorderBrush}" Width="4" />
+
+    <!-- Right: read-only source preview with all matches highlighted -->
+    <Grid Grid.Column="2">
+      <ae:TextEditor x:Name="PreviewEditor"
+                     IsReadOnly="True"
+                     ShowLineNumbers="True"
+                     FontFamily="Cascadia Code,Consolas,Courier New,monospace"
+                     FontSize="12"
+                     IsVisible="{Binding HasSelection}" />
+      <TextBlock Text="{x:Static app:UiStrings.GlobalSearchPreviewHint}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                 IsVisible="{Binding !HasSelection}" />
+    </Grid>
+  </Grid>
+</UserControl>

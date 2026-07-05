@@ -1431,6 +1431,26 @@ internal static class UiStrings
     public const string SessionManagerCopyHeaders = "ID\tUser\tApplication\tHost\tState\tTx\tOldest Tx\tLoad";
     public const string SessionManagerLastRefreshFormat = "Last refresh {0:HH:mm:ss}";
 
+    // Global Search (Etap 3 — Search Results)
+    public const string ToolbarGlobalSearchTooltip = "Global Search (Ctrl+Shift+F)";
+    public const string GlobalSearchDialogTitle = "Global Search";
+    public const string GlobalSearchTermLabel = "Search for";
+    public const string GlobalSearchTermWatermark = "text to find in metadata…";
+    public const string GlobalSearchMatchNames = "In names";
+    public const string GlobalSearchMatchSource = "In source";
+    public const string GlobalSearchCaseSensitive = "Case sensitive";
+    public const string GlobalSearchWholeWord = "Whole word";
+    public const string GlobalSearchScopeHint =
+        "Searches procedures, functions, triggers, views, packages, tables (and their fields), domains, generators and exceptions in the active connection.";
+    public const string GlobalSearchDialogFind = "Find";
+    public const string GlobalSearchDialogCancel = "Cancel";
+    public const string GlobalSearchTabTitleFormat = "Search: {0}";
+    public const string GlobalSearchSearching = "Searching…";
+    public const string GlobalSearchNoResults = "No matches for '{0}'.";
+    public const string GlobalSearchResultCount = "{0} object(s) matched '{1}'.";
+    public const string GlobalSearchPreviewHint = "Select a result to preview its source.";
+    public const string GlobalSearchPreviewError = "Could not load source: {0}";
+
     // Editor context menu + Find/Replace (Etap 1 — Global Search / Editor Find)
     public const string EditorMenuUndo = "Undo";
     public const string EditorMenuRedo = "Redo";

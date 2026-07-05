@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EmberTern.App"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        x:Class="EmberTern.App.Views.GlobalSearchDialog"
+        x:DataType="vm:GlobalSearchDialogViewModel"
+        Title="{x:Static app:UiStrings.GlobalSearchDialogTitle}"
+        Width="460"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <Grid RowDefinitions="Auto,Auto,Auto">
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="20,14">
+      <TextBlock Text="{x:Static app:UiStrings.GlobalSearchDialogTitle}" Classes="h1" />
+    </Border>
+
+    <StackPanel Grid.Row="1" Margin="20,18" Spacing="10">
+      <TextBlock Text="{x:Static app:UiStrings.GlobalSearchTermLabel}" Classes="field-label" />
+      <TextBox x:Name="TermBox" Text="{Binding Term}"
+               PlaceholderText="{x:Static app:UiStrings.GlobalSearchTermWatermark}"
+               KeyDown="OnTermKeyDown" />
+
+      <StackPanel Orientation="Horizontal" Spacing="18">
+        <CheckBox Content="{x:Static app:UiStrings.GlobalSearchMatchNames}" IsChecked="{Binding MatchNames}" />
+        <CheckBox Content="{x:Static app:UiStrings.GlobalSearchMatchSource}" IsChecked="{Binding MatchSource}" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="18">
+        <CheckBox Content="{x:Static app:UiStrings.GlobalSearchCaseSensitive}" IsChecked="{Binding CaseSensitive}" />
+        <CheckBox Content="{x:Static app:UiStrings.GlobalSearchWholeWord}" IsChecked="{Binding WholeWord}" />
+      </StackPanel>
+
+      <TextBlock Text="{x:Static app:UiStrings.GlobalSearchScopeHint}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                 FontSize="11" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <Border Grid.Row="2"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="20,12">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Classes="flat" Content="{x:Static app:UiStrings.GlobalSearchDialogCancel}"
+                Command="{Binding CancelCommand}" />
+        <Button Classes="primary" Content="{x:Static app:UiStrings.GlobalSearchDialogFind}"
+                Command="{Binding AcceptCommand}" IsDefault="True" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</Window>

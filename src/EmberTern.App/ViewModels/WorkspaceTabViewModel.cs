@@ -23,6 +23,7 @@ public enum WorkspaceTabKind
     SecurityManager,
     TraceMonitor,
     SessionManager,
+    GlobalSearch,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -290,6 +291,23 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             SessionManager = manager,
         };
 
+    // A Global Search results tab — one per phrase (NOT a singleton, no overwrite);
+    // opened from the toolbar / Ctrl+Shift+F. Not persisted.
+    public static WorkspaceTabViewModel CreateGlobalSearch(
+        MainWindowViewModel owner, GlobalSearchTabViewModel search, string phrase, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.GlobalSearch,
+            BaseTitle = string.Format(CultureInfo.CurrentCulture, UiStrings.GlobalSearchTabTitleFormat, phrase),
+            IsClosable = true,
+            ObjectName = phrase,
+            ConnectionProfileId = connectionProfileId,
+            Icon = string.Empty,
+            IconResourceKey = "AccentBrush",
+            IconGeometryKey = "Icon.Search",
+            GlobalSearch = search,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -315,6 +333,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public SecurityManagerTabViewModel? SecurityManager { get; private init; }
     public TraceMonitorTabViewModel? TraceMonitor { get; private init; }
     public SessionManagerTabViewModel? SessionManager { get; private init; }
+    public GlobalSearchTabViewModel? GlobalSearch { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]

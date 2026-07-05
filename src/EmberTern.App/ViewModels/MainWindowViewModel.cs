@@ -15,6 +15,7 @@ using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Performance;
 using EmberTern.Core.Query;
+using EmberTern.Core.Search;
 using EmberTern.Core.Security;
 using EmberTern.Core.Settings;
 using EmberTern.Core.Sql;
@@ -44,6 +45,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdQueryExecutor _executor;          // data lane
     private readonly FirebirdQueryExecutor _metadataExecutor;  // metadata lane
     private readonly FirebirdMetadataReader _metadataReader;
+    private readonly FirebirdMetadataSearchReader _searchReader;
     private readonly FirebirdDdlReader _ddlReader;
     private readonly FirebirdSecurityReader _securityReader;
     private readonly FirebirdTableDetailReader _tableDetailReader;
@@ -140,6 +142,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // the metadata lane so it doesn't pin objects in the data working tx. The
         // TableDetail reader splits per method: structure → metadata, data preview → data.
         _metadataReader = new FirebirdMetadataReader(_service, _metadataTransactionService);
+        _searchReader = new FirebirdMetadataSearchReader(_service, _metadataTransactionService);
         _ddlReader = new FirebirdDdlReader(_service, _metadataTransactionService);
         _securityReader = new FirebirdSecurityReader(_service, _metadataTransactionService);
         _tableDetailReader = new FirebirdTableDetailReader(_service, _metadataTransactionService, _transactionService);
@@ -289,6 +292,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveTraceMonitor))]
     [NotifyPropertyChangedFor(nameof(IsSessionManagerTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveSessionManager))]
+    [NotifyPropertyChangedFor(nameof(IsGlobalSearchTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveGlobalSearch))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowEditorToolbar))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
@@ -377,6 +382,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsSessionManagerTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SessionManager };
     public SessionManagerTabViewModel? ActiveSessionManager
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SessionManager } t ? t.SessionManager : null;
+
+    public bool IsGlobalSearchTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GlobalSearch };
+    public GlobalSearchTabViewModel? ActiveGlobalSearch
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GlobalSearch } t ? t.GlobalSearch : null;
 
     // Drives the whole editor-toolbar Border's IsVisible so an empty command strip never
     // reserves space above the document tabs. True for every tab kind that exposes at
@@ -1524,7 +1533,7 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var tab in WorkspaceTabs)
         {
             // The Security Manager and Activity Monitor are live tools, not persisted.
-            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager) continue;
+            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch) continue;
 
             if (tab.Kind == WorkspaceTabKind.Query)
             {
@@ -3537,6 +3546,29 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectTab(newTab);
     }
 
+    // ---- Global Search (metadata names + source bodies) ----
+
+    public bool CanOpenGlobalSearch => _service.IsConnected;
+
+    // Raised by OpenGlobalSearch — the view shows GlobalSearchDialog and returns the
+    // query (or null on cancel). VM stays free of Avalonia dialog types.
+    public event Func<Task<MetadataSearchQuery?>>? GlobalSearchRequested;
+
+    [RelayCommand(CanExecute = nameof(CanOpenGlobalSearch))]
+    private async Task OpenGlobalSearchAsync()
+    {
+        if (GlobalSearchRequested is null) return;
+        var query = await GlobalSearchRequested.Invoke().ConfigureAwait(true);
+        if (query is null || string.IsNullOrWhiteSpace(query.Term)) return;
+
+        // A fresh tab per phrase — never overwrites earlier results.
+        var vm = new GlobalSearchTabViewModel(this, _searchReader, _ddlReader, query);
+        var tab = WorkspaceTabViewModel.CreateGlobalSearch(this, vm, query.Term, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+        await vm.RunAsync().ConfigureAwait(true);
+    }
+
     // Non-destructive: a traced statement lands as a NEW Saved Query (never overwrites the
     // editor's current content). The previously-edited query is preserved as its own Saved
     // Query — selecting the new one just swaps the editor to it.
@@ -5371,6 +5403,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OpenTraceMonitorCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanOpenSessionManager));
         OpenSessionManagerCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanOpenGlobalSearch));
+        OpenGlobalSearchCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

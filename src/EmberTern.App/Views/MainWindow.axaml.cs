@@ -470,6 +470,7 @@ public partial class MainWindow : Window
             _currentVm.ClipboardWriteRequested -= OnClipboardWriteRequested;
             _currentVm.AddConnectionRequested -= OnAddConnectionRequested;
             _currentVm.BatchResultsRequested -= OnBatchResultsRequested;
+            _currentVm.GlobalSearchRequested -= OnGlobalSearchRequested;
             _currentVm.SelectedQueryTextProvider = null;
             _currentVm.ReplaceSelectedOrAllText = null;
         }
@@ -487,6 +488,7 @@ public partial class MainWindow : Window
             _currentVm.ClipboardWriteRequested += OnClipboardWriteRequested;
             _currentVm.AddConnectionRequested += OnAddConnectionRequested;
             _currentVm.BatchResultsRequested += OnBatchResultsRequested;
+            _currentVm.GlobalSearchRequested += OnGlobalSearchRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
 
@@ -597,6 +599,16 @@ public partial class MainWindow : Window
     // sidebar filter — the historical behaviour. (Ctrl+H is handled per-editor.)
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
+        // Ctrl+Shift+F → Global Search dialog (metadata names + source).
+        if (e.Key == Key.F && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+        {
+            if (_currentVm?.OpenGlobalSearchCommand.CanExecute(null) == true)
+            {
+                _currentVm.OpenGlobalSearchCommand.Execute(null);
+                e.Handled = true;
+            }
+            return;
+        }
         if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
         {
             var focused = (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement()) as Visual;
@@ -931,6 +943,16 @@ public partial class MainWindow : Window
     {
         var dialog = new NewRoleDialog { DataContext = new NewRoleDialogViewModel() };
         return await dialog.ShowDialog<string?>(this);
+    }
+
+    // Global Search dialog → the search query (or null on cancel). Prefills with the
+    // SQL editor's current selection when there is one (convenience).
+    private async System.Threading.Tasks.Task<EmberTern.Core.Search.MetadataSearchQuery?> OnGlobalSearchRequested()
+    {
+        var seed = GetSqlEditorSelection();
+        if (seed is not null && seed.Contains('\n')) seed = null; // don't seed a multi-line selection
+        var dialog = new GlobalSearchDialog { DataContext = new GlobalSearchDialogViewModel(seed) };
+        return await dialog.ShowDialog<EmberTern.Core.Search.MetadataSearchQuery?>(this);
     }
 
     private async void OnEditConnectionRequested(EmberTern.Core.Connections.ConnectionProfile profile)
