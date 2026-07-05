@@ -1335,6 +1335,12 @@ internal static class UiStrings
     public const string SessionManagerGradeAtRisk = "At risk";
 
     // sessions grid
+    public const string SessionColHealth = "Health";
+    public const string SessionManagerHealthHealthy = "Healthy";
+    public const string SessionManagerHealthWarning = "Warning — long-running transaction";
+    public const string SessionManagerHealthGcRisk = "GC risk — blocking garbage collection";
+    public const string SessionManagerHealthSelf = "EmberTern (this tool)";
+    public const string SessionManagerHealthSystem = "System / internal (Firebird)";
     public const string SessionColId = "ID";
     public const string SessionColUser = "User";
     public const string SessionColApplication = "Application";
@@ -1377,9 +1383,6 @@ internal static class UiStrings
     public const string SessionManagerActivityInserts = "Inserts";
     public const string SessionManagerActivityUpdates = "Updates";
     public const string SessionManagerActivityDeletes = "Deletes";
-    public const string SessionManagerRiskGcBlocker = "Blocking garbage collection";
-    public const string SessionManagerRiskLongTx = "Holds a long-running transaction";
-    public const string SessionManagerRiskNone = "No issues detected for this session.";
     public const string SessionManagerWhyHeader = "Why it matters";
     public const string SessionManagerWhyGc =
         "One of this session's transactions is the oldest active transaction in the database. Until it " +
@@ -1400,14 +1403,20 @@ internal static class UiStrings
         "Open in the SQL Editor and reveal the Performance tab — run it (F5) to analyze (it is not run automatically)";
     public const string SessionManagerCurrentStatementHeader = "Current statement";
 
-    // transaction-gap bar
+    // transactions grid — always-on Health dot (mirrors the Sessions grid)
+    public const string SessionManagerTxHealthGcBlocker = "Blocking garbage collection — the oldest active transaction";
+    public const string SessionManagerTxHealthLong = "Long-running transaction";
+    public const string SessionManagerTxHealthNormal = "Normal transaction";
+
+    // transaction-gap gauge (measured against the GC-danger budget — educate, don't alarm)
     public const string SessionManagerGapCaption = "Transaction gap";
     public const string SessionManagerGapExplain =
-        "The shaded part is how far the oldest active transaction (OAT) lags behind the newest — the record versions Firebird must keep from garbage collection.";
-    public const string SessionManagerGapOit = "OIT";
-    public const string SessionManagerGapOat = "OAT";
-    public const string SessionManagerGapOst = "OST";
-    public const string SessionManagerGapNext = "Next";
+        "How far the oldest active transaction lags behind the newest — the record versions Firebird must keep from garbage collection. Shown against the point where it starts to matter.";
+    public const string SessionManagerGapScaleMin = "0";
+    public const string SessionManagerGapScaleMaxFormat = "GC risk near {0}";
+    public const string SessionManagerGapStatusHealthy = "Well within the safe range.";
+    public const string SessionManagerGapStatusWatch = "Getting large — check for a long-running transaction.";
+    public const string SessionManagerGapStatusCritical = "Very large — a transaction is blocking garbage collection.";
 
     // context menu
     public const string SessionManagerMenuDisconnect = "Disconnect session";

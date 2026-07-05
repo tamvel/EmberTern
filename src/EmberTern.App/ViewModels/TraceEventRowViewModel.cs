@@ -84,9 +84,43 @@ public sealed partial class TraceEventRowViewModel : ObservableObject
         return msg.Length <= 120 ? msg : msg[..117] + "…";
     }
 
-    /// <summary>Per-kind glyph + colour (reuses the metadata icon system's keys).</summary>
-    public string IconGeometryKey => IconGeometryKeyFor(Event.Kind);
-    public string IconResourceKey => IconResourceKeyFor(Event.Kind);
+    /// <summary>Glyph + colour. A statement's icon reflects its SQL OPERATION so that write
+    /// operations (INSERT/UPDATE/DELETE) pop out of a sea of SELECTs at a glance — reusing the
+    /// app's data-change vocabulary (Plus=green / Pencil=amber / Trash=red, as in the Execution
+    /// Summary); non-statement events keep their per-kind glyph. SELECT stays the calm baseline.</summary>
+    public string IconGeometryKey => OperationGeometryKey(Operation) ?? IconGeometryKeyFor(Event.Kind);
+    public string IconResourceKey => OperationColorKey(Operation) ?? IconResourceKeyFor(Event.Kind);
+
+    /// <summary>Event-aware icon (used by the detail panel, which has an event, not a row VM).</summary>
+    internal static string IconGeometryKeyFor(TraceEvent e) =>
+        (e.Kind == TraceEventKind.Statement
+            ? OperationGeometryKey(TraceSqlOperationClassifier.Classify(CleanSql(e.Sql)))
+            : null) ?? IconGeometryKeyFor(e.Kind);
+
+    internal static string IconResourceKeyFor(TraceEvent e) =>
+        (e.Kind == TraceEventKind.Statement
+            ? OperationColorKey(TraceSqlOperationClassifier.Classify(CleanSql(e.Sql)))
+            : null) ?? IconResourceKeyFor(e.Kind);
+
+    /// <summary>Operation-specific glyph for a statement, or null to fall back to the kind glyph
+    /// (SELECT / DDL / other reads keep the neutral query glyph).</summary>
+    private static string? OperationGeometryKey(TraceSqlOperation op) => op switch
+    {
+        TraceSqlOperation.Insert => "Icon.Plus",
+        TraceSqlOperation.Update or TraceSqlOperation.Merge => "Icon.Pencil",
+        TraceSqlOperation.Delete => "Icon.Trash",
+        TraceSqlOperation.Execute => "Icon.Play",
+        _ => null,
+    };
+
+    private static string? OperationColorKey(TraceSqlOperation op) => op switch
+    {
+        TraceSqlOperation.Insert => "SuccessIconBrush",
+        TraceSqlOperation.Update or TraceSqlOperation.Merge => "WarningIconBrush",
+        TraceSqlOperation.Delete => "DangerIconBrush",
+        TraceSqlOperation.Execute => "IconColor_Procedure",
+        _ => null,
+    };
 
     internal static string IconGeometryKeyFor(TraceEventKind kind) => kind switch
     {

@@ -228,14 +228,20 @@
           </ContextMenu>
         </DataGrid.ContextMenu>
         <DataGrid.Columns>
-          <!-- risk stripe gutter: single priority stripe (mirrors the trace gutter) -->
-          <DataGridTemplateColumn Header=" " Width="Auto" CanUserResize="False" CanUserReorder="False" CanUserSort="False">
+          <!-- Health: an always-on status dot (never blank), tooltip explains the state -->
+          <DataGridTemplateColumn Header="{x:Static app:UiStrings.SessionColHealth}" MinWidth="58"
+                                  CanUserResize="False" CanUserReorder="False" CanUserSort="False">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="vm:SessionRowViewModel">
-                <Panel Width="8">
-                  <Border Background="{DynamicResource DangerIconBrush}" IsVisible="{Binding IsGcBlocker}" />
-                  <Border Background="{DynamicResource WarningBrush}" IsVisible="{Binding IsLongTransaction}" />
-                </Panel>
+                <Border Width="10" Height="10" CornerRadius="5" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        ToolTip.Tip="{Binding HealthTooltip}">
+                  <Border.Background>
+                    <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                      <Binding Path="HealthBrushKey" />
+                      <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                    </MultiBinding>
+                  </Border.Background>
+                </Border>
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
@@ -275,29 +281,44 @@
       <TabControl>
         <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.SessionManagerTabTransactions}">
           <Grid RowDefinitions="Auto,Auto,*">
-            <!-- Transaction-gap bar (DB-wide OIT→OAT→Next; the pinned segment = OAT lag). One bar. -->
+            <!-- Transaction-gap GAUGE: the OAT lag measured against the GC-danger budget, so a
+                 small/normal gap is a calm sliver and only a materially large one turns orange/red
+                 (scale-before-alarm — the gauge and the Health Bar can't contradict). -->
             <Border Grid.Row="0" Background="{DynamicResource PanelBrush}" IsVisible="{Binding HasGap}"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,5"
                     ToolTip.Tip="{x:Static app:UiStrings.SessionManagerGapExplain}">
               <StackPanel Spacing="3">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <TextBlock Text="{x:Static app:UiStrings.SessionManagerGapCaption}" FontWeight="SemiBold" FontSize="11" />
-                  <TextBlock Text="{Binding GapValueText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}" />
-                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerGapExplain}" FontSize="10"
+                  <!-- value coloured by severity (grey when healthy — no permanent orange) -->
+                  <TextBlock Text="{Binding GapValueText}" FontSize="11" FontWeight="SemiBold">
+                    <TextBlock.Foreground>
+                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                        <Binding Path="GapSeverityBrushKey" />
+                        <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                      </MultiBinding>
+                    </TextBlock.Foreground>
+                  </TextBlock>
+                  <TextBlock Text="{Binding GapStatusText}" FontSize="10"
                              Foreground="{DynamicResource SubtleForegroundBrush}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-                <Panel Width="280" Height="10" HorizontalAlignment="Left">
-                  <Border Background="{DynamicResource RowAlternateBrush}" CornerRadius="3" />
-                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                    <Border Width="{Binding GapLeadWidth}" Background="{DynamicResource SubtleForegroundBrush}" CornerRadius="3,0,0,3" />
-                    <Border Width="{Binding GapLagWidth}" Background="{DynamicResource WarningBrush}" CornerRadius="0,3,3,0" />
-                  </StackPanel>
-                </Panel>
+                <!-- One rounded, clipped pill track so BOTH ends stay rounded regardless of the fill -->
+                <Border Width="280" Height="10" HorizontalAlignment="Left" CornerRadius="5" ClipToBounds="True"
+                        Background="{DynamicResource RowAlternateBrush}">
+                  <Border Width="{Binding GapFillWidth}" HorizontalAlignment="Left">
+                    <Border.Background>
+                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                        <Binding Path="GapSeverityBrushKey" />
+                        <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                      </MultiBinding>
+                    </Border.Background>
+                  </Border>
+                </Border>
                 <Grid Width="280" HorizontalAlignment="Left">
                   <TextBlock HorizontalAlignment="Left" FontSize="9" Foreground="{DynamicResource SubtleForegroundBrush}"
-                             Text="{Binding GapOitText, StringFormat='OIT {0}'}" />
+                             Text="{x:Static app:UiStrings.SessionManagerGapScaleMin}" />
                   <TextBlock HorizontalAlignment="Right" FontSize="9" Foreground="{DynamicResource SubtleForegroundBrush}"
-                             Text="{Binding GapNextText, StringFormat='Next {0}'}" />
+                             Text="{Binding GapScaleMaxText, StringFormat='GC risk near {0}'}" />
                 </Grid>
               </StackPanel>
             </Border>
@@ -321,13 +342,21 @@
                       CanUserSortColumns="True" CanUserReorderColumns="True"
                       ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="11">
               <DataGrid.Columns>
-                <DataGridTemplateColumn Header=" " Width="Auto" CanUserResize="False" CanUserReorder="False" CanUserSort="False">
+                <!-- Health: an always-on status dot (never blank), tooltip explains the state —
+                     mirrors the Sessions grid so both grids read the same way -->
+                <DataGridTemplateColumn Header="{x:Static app:UiStrings.SessionColHealth}" MinWidth="58"
+                                        CanUserResize="False" CanUserReorder="False" CanUserSort="False">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="vm:TransactionRowViewModel">
-                      <Panel Width="8">
-                        <Border Background="{DynamicResource DangerIconBrush}" IsVisible="{Binding IsGcBlocker}" />
-                        <Border Background="{DynamicResource WarningBrush}" IsVisible="{Binding IsLong}" />
-                      </Panel>
+                      <Border Width="10" Height="10" CornerRadius="5" HorizontalAlignment="Center" VerticalAlignment="Center"
+                              ToolTip.Tip="{Binding HealthTooltip}">
+                        <Border.Background>
+                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                            <Binding Path="HealthBrushKey" />
+                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                          </MultiBinding>
+                        </Border.Background>
+                      </Border>
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

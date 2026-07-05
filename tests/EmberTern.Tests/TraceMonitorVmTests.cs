@@ -298,6 +298,53 @@ public class TraceMonitorVmTests
         Assert.Equal("Procedure", vm.Rows[1].KindLabel);   // routine keeps the kind name
     }
 
+    [Theory]
+    [InlineData("INSERT INTO NAGL (A) VALUES (1)", "Icon.Plus", "SuccessIconBrush")]
+    [InlineData("UPDATE NAGL SET S = 1 WHERE ID = 3", "Icon.Pencil", "WarningIconBrush")]
+    [InlineData("DELETE FROM NAGL WHERE ID = 3", "Icon.Trash", "DangerIconBrush")]
+    [InlineData("SELECT * FROM NAGL", "Icon.Query", "IconColor_Query")] // calm baseline
+    public void Row_Icon_IsOperationAware_SoWritesPop(string sql, string geoKey, string colorKey)
+    {
+        var vm = NewVm();
+        vm.Ingest(new[] { Ev(TraceEventKind.Statement, sql: sql) });
+        Assert.Equal(geoKey, vm.Rows[0].IconGeometryKey);
+        Assert.Equal(colorKey, vm.Rows[0].IconResourceKey);
+    }
+
+    [Fact]
+    public void Row_Icon_NonStatement_KeepsPerKindGlyph()
+    {
+        var vm = NewVm();
+        vm.Ingest(new[] { Ev(TraceEventKind.Procedure, obj: "P"), Ev(TraceEventKind.Trigger, obj: "T") });
+        Assert.Equal("Icon.Procedure", vm.Rows[0].IconGeometryKey);
+        Assert.Equal("IconColor_Procedure", vm.Rows[0].IconResourceKey);
+        Assert.Equal("Icon.Trigger", vm.Rows[1].IconGeometryKey);
+    }
+
+    [Fact]
+    public void DetailPanel_Icon_IsOperationAware()
+    {
+        var detail = new TraceEventDetailViewModel();
+        detail.Update(new TraceEvent
+        {
+            Id = 1, Sequence = 1, Kind = TraceEventKind.Statement, StartTime = T0,
+            Sql = "DELETE FROM NAGL WHERE ID = 3",
+        });
+        Assert.Equal("Icon.Trash", detail.IconGeometryKey);
+        Assert.Equal("DangerIconBrush", detail.IconResourceKey);
+    }
+
+    [Fact]
+    public void DetailPanel_Sql_IsAlwaysFormatted()
+    {
+        var vm = NewVm();
+        // A single-line statement the shared formatter breaks onto clauses + lowercases keywords.
+        vm.Ingest(new[] { Ev(TraceEventKind.Statement, sql: "SELECT A, B FROM NAGL WHERE X = 1") });
+        vm.SelectedRow = vm.Rows[0];
+        Assert.Contains("\nfrom", vm.Detail.Sql);   // formatted, not a single line
+        Assert.DoesNotContain("SELECT", vm.Detail.Sql); // keyword lowercased by the formatter
+    }
+
     [Fact]
     public void EventFilter_HidesUncheckedKind_ButNeverErrors()
     {

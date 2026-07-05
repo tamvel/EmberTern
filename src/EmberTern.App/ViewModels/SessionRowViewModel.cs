@@ -28,9 +28,30 @@ public sealed class SessionRowViewModel
     public bool HasStatement => !string.IsNullOrEmpty(_s.CurrentStatement);
     public SessionRisk Risk => _h.Risk;
 
-    // --- risk stripe (DynamicResource brushes — mirrors the trace gutter) ---
-    public bool IsGcBlocker => _h.Risk == SessionRisk.GcBlocker;
-    public bool IsLongTransaction => _h.Risk == SessionRisk.LongTransaction;
+    // --- Health state (the Health column always shows a dot; also drives the Session Details verdict) ---
+    // A Firebird internal attachment (Cache Writer / Garbage Collector) has no remote endpoint —
+    // classify it grey so those rows read as "system", not "healthy user session".
+    public bool IsSystem => !IsSelf && string.IsNullOrEmpty(_s.Host);
+
+    public string HealthBrushKey =>
+        IsSelf ? "InfoIconBrush"                    // 🔵 EmberTern's own
+        : IsSystem ? "SubtleForegroundBrush"        // ⚪ Firebird internal
+        : _h.Risk switch
+        {
+            SessionRisk.GcBlocker => "DangerIconBrush",       // 🔴
+            SessionRisk.LongTransaction => "WarningBrush",    // 🟠
+            _ => "SuccessIconBrush",                          // 🟢 healthy user session
+        };
+
+    public string HealthTooltip =>
+        IsSelf ? UiStrings.SessionManagerHealthSelf
+        : IsSystem ? UiStrings.SessionManagerHealthSystem
+        : _h.Risk switch
+        {
+            SessionRisk.GcBlocker => UiStrings.SessionManagerHealthGcRisk,
+            SessionRisk.LongTransaction => UiStrings.SessionManagerHealthWarning,
+            _ => UiStrings.SessionManagerHealthHealthy,
+        };
 
     // --- columns ---
     public string IdText => IsSelf
@@ -55,20 +76,10 @@ public sealed class SessionRowViewModel
     public string UpdatesText => _s.Updates.ToString("N0", CultureInfo.CurrentCulture);
     public string DeletesText => _s.Deletes.ToString("N0", CultureInfo.CurrentCulture);
 
-    /// <summary>One-line session verdict for the Session Details General section.</summary>
-    public string RiskText => _h.Risk switch
-    {
-        SessionRisk.GcBlocker => UiStrings.SessionManagerRiskGcBlocker,
-        SessionRisk.LongTransaction => UiStrings.SessionManagerRiskLongTx,
-        _ => UiStrings.SessionManagerRiskNone,
-    };
-
-    public string RiskBrushKey => _h.Risk switch
-    {
-        SessionRisk.GcBlocker => "DangerIconBrush",
-        SessionRisk.LongTransaction => "WarningBrush",
-        _ => "SuccessIconBrush",
-    };
+    /// <summary>One-line session verdict + dot for the Session Details General section — the same
+    /// health state as the grid Health column.</summary>
+    public string RiskText => HealthTooltip;
+    public string RiskBrushKey => HealthBrushKey;
 
     /// <summary>Cumulative records touched since the session connected (not a rate — V1 shows the
     /// lifetime total; the inter-poll rate + heavy classification are a V2 feature).</summary>

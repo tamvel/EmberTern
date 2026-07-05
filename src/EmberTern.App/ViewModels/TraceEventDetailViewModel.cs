@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EmberTern.Core.Sql;
 using EmberTern.Core.Trace;
 
 namespace EmberTern.App.ViewModels;
@@ -61,15 +62,16 @@ public sealed partial class TraceEventDetailViewModel : ObservableObject
     {
         HasSelection = true;
         KindLabel = TraceEventRowViewModel.DisplayLabelFor(e); // operation for statements, else kind
-        IconGeometryKey = TraceEventRowViewModel.IconGeometryKeyFor(e.Kind);
-        IconResourceKey = TraceEventRowViewModel.IconResourceKeyFor(e.Kind);
+        IconGeometryKey = TraceEventRowViewModel.IconGeometryKeyFor(e); // operation-aware (writes pop)
+        IconResourceKey = TraceEventRowViewModel.IconResourceKeyFor(e);
         ObjectName = e.ObjectName ?? string.Empty;
         HasObjectName = !string.IsNullOrEmpty(e.ObjectName);
 
         var cleanSql = TraceEventRowViewModel.CleanSql(e.Sql);
-        Sql = showValues && e.Parameters.Count > 0
+        var display = showValues && e.Parameters.Count > 0
             ? TraceSqlInliner.Inline(cleanSql, e.Parameters)
             : cleanSql;
+        Sql = FormatForDisplay(display);
         HasSql = Sql.Length > 0;
 
         ErrorText = e.ErrorText ?? string.Empty;
@@ -98,6 +100,16 @@ public sealed partial class TraceEventDetailViewModel : ObservableObject
         AddRow("Attachment", e.AttachmentId is { } att ? "ATT " + att.ToString(CultureInfo.InvariantCulture) : null);
         AddRow("Transaction", FormatTransaction(e.TransactionId, e.TransactionParams)); // id · isolation/TPB
         HasSession = SessionRows.Count > 0;
+    }
+
+    /// <summary>Always show the SQL formatted — long traced statements arrive as a single line
+    /// and are hard to read. Reuses the shared <see cref="SqlFormatter"/> (no second formatter);
+    /// presentation-only, and defensive against truncated/odd trace SQL (falls back to the input).</summary>
+    internal static string FormatForDisplay(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return sql;
+        try { return SqlFormatter.Format(sql); }
+        catch { return sql; }
     }
 
     private void AddRow(string label, string? value)

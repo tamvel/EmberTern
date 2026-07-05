@@ -395,13 +395,14 @@
                         <TextBlock Grid.Column="0" Text="{Binding Table}" FontSize="11"
                                    FontFamily="Consolas,Cascadia Code,monospace" TextTrimming="CharacterEllipsis"
                                    ToolTip.Tip="{Binding Table}" Margin="0,0,8,0" VerticalAlignment="Center" />
-                        <Panel Grid.Column="1" Width="160" Height="10" VerticalAlignment="Center" HorizontalAlignment="Left">
-                          <Border Background="{DynamicResource RowAlternateBrush}" CornerRadius="3" />
+                        <!-- One rounded, clipped pill track so BOTH ends stay rounded regardless of the seq/idx split -->
+                        <Border Grid.Column="1" Width="160" Height="10" CornerRadius="5" ClipToBounds="True"
+                                Background="{DynamicResource RowAlternateBrush}" VerticalAlignment="Center" HorizontalAlignment="Left">
                           <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                            <Border Width="{Binding SeqWidth}" Background="{DynamicResource DangerIconBrush}" CornerRadius="3,0,0,3" />
+                            <Border Width="{Binding SeqWidth}" Background="{DynamicResource DangerIconBrush}" />
                             <Border Width="{Binding IdxWidth}" Background="{DynamicResource InfoIconBrush}" />
                           </StackPanel>
-                        </Panel>
+                        </Border>
                         <TextBlock Grid.Column="2" Text="{Binding ReadsText}" FontSize="10" Margin="8,0,0,0"
                                    Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
                       </Grid>

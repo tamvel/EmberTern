@@ -102,16 +102,15 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     [ObservableProperty] private int _gcRiskCount;
     [ObservableProperty] private string _oldestActiveLagText = "0";
 
-    // --- transaction-gap bar (DB-wide OIT/OAT/OST/Next — a single two-segment bar) ---
+    // --- transaction-gap gauge (scale-before-alarm: the OAT lag measured against the GC-danger
+    //     budget, NOT the internal OIT→Next proportion — so a small/normal gap reads as a calm
+    //     sliver, and only a materially large gap turns orange/red) ---
     [ObservableProperty] private bool _hasGap;
-    [ObservableProperty] private double _gapLeadWidth;   // OIT→OAT (settled) segment px
-    [ObservableProperty] private double _gapLagWidth;    // OAT→Next (pinned) segment px
-    [ObservableProperty] private double _gapOstOffset;   // OST tick offset px from the bar start
-    [ObservableProperty] private string _gapOitText = "0";
-    [ObservableProperty] private string _gapOatText = "0";
-    [ObservableProperty] private string _gapOstText = "0";
-    [ObservableProperty] private string _gapNextText = "0";
-    [ObservableProperty] private string _gapValueText = "0";
+    [ObservableProperty] private double _gapFillWidth;               // fill px = lag / danger budget
+    [ObservableProperty] private string _gapValueText = "0";         // the gap count (severity-coloured)
+    [ObservableProperty] private string _gapSeverityBrushKey = "SubtleForegroundBrush";
+    [ObservableProperty] private string _gapStatusText = string.Empty; // plain-language "what it means"
+    [ObservableProperty] private string _gapScaleMaxText = "0";      // right-hand scale label (the danger line)
 
     // --- Session Details: plain-language "why it matters" ---
     [ObservableProperty] private string _selectedSessionWhyItMatters = string.Empty;
@@ -430,29 +429,47 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         }
     }
 
-    // A single two-segment bar over the OIT..Next axis: [OIT→OAT settled][OAT→Next pinned],
-    // with an OST tick. The pinned segment's proportion is the visible "how far the oldest
-    // active transaction lags" signal (the Firebird GC concept made visual — one bar, no chart).
+    // A "GC-budget gauge": the fill is the OAT lag measured against the danger threshold
+    // (SessionHealthOptions.LargeGapThreshold — the SAME line the health engine uses to flag a
+    // GC risk), NOT the OIT→Next proportion. Rationale (educate, don't scare): a normal editing
+    // workflow produces a tiny lag (e.g. 59) that is nowhere near the 10,000-transaction danger
+    // line, so it renders as a barely-there calm sliver — consistent with the "Healthy / GC Risk 0"
+    // verdict. Colour only escalates (grey → orange → red) as the lag approaches / crosses the line.
     private void BuildGapBar(DatabaseTransactionState db)
     {
-        long span = db.NextTransaction - db.OldestTransaction;
-        HasGap = span > 0 && db.OldestTransaction > 0 && db.NextTransaction > 0;
+        HasGap = db.OldestTransaction > 0 && db.NextTransaction > 0
+                 && db.NextTransaction > db.OldestTransaction;
         if (!HasGap)
         {
-            GapLeadWidth = GapLagWidth = GapOstOffset = 0;
+            GapFillWidth = 0;
             return;
         }
 
-        double Frac(long v) => Math.Clamp((double)(v - db.OldestTransaction) / span, 0, 1);
-        var oatFrac = Frac(db.OldestActive);
-        GapLeadWidth = oatFrac * GapBarWidth;
-        GapLagWidth = (1 - oatFrac) * GapBarWidth;
-        GapOstOffset = Frac(db.OldestSnapshot) * GapBarWidth;
-        GapOitText = db.OldestTransaction.ToString("N0", CultureInfo.CurrentCulture);
-        GapOatText = db.OldestActive.ToString("N0", CultureInfo.CurrentCulture);
-        GapOstText = db.OldestSnapshot.ToString("N0", CultureInfo.CurrentCulture);
-        GapNextText = db.NextTransaction.ToString("N0", CultureInfo.CurrentCulture);
-        GapValueText = db.OldestActiveLag.ToString("N0", CultureInfo.CurrentCulture);
+        long lag = Math.Max(0, db.OldestActiveLag);
+        long danger = SessionHealthOptions.Default.LargeGapThreshold; // 10,000 — the GC-risk line
+        var (frac, severityKey, statusText) = ResolveGapGauge(lag, danger);
+
+        // A nonzero lag always shows a small sliver so it's never invisible; a zero lag shows nothing.
+        GapFillWidth = lag <= 0 ? 0 : Math.Max(3, frac * GapBarWidth);
+        GapSeverityBrushKey = severityKey;
+        GapStatusText = statusText;
+        GapValueText = lag.ToString("N0", CultureInfo.CurrentCulture);
+        GapScaleMaxText = danger.ToString("N0", CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>Pure gap-gauge decision (scale-before-alarm): the fill fraction of the danger
+    /// budget plus a severity brush key + plain-language status. Aligned with the engine's
+    /// <see cref="SessionHealthOptions.LargeGapThreshold"/> so the gauge and the Health Bar
+    /// verdict can never contradict — calm/grey below half the budget, orange approaching it,
+    /// red at/over it.</summary>
+    internal static (double Fraction, string SeverityBrushKey, string StatusText) ResolveGapGauge(long lag, long danger)
+    {
+        double frac = danger > 0 ? Math.Clamp((double)lag / danger, 0, 1) : 0;
+        if (lag >= danger)
+            return (frac, "DangerIconBrush", UiStrings.SessionManagerGapStatusCritical);
+        if (lag >= danger / 2)
+            return (frac, "WarningBrush", UiStrings.SessionManagerGapStatusWatch);
+        return (frac, "SubtleForegroundBrush", UiStrings.SessionManagerGapStatusHealthy);
     }
 
     private Task<bool> ConfirmAsync(string title, string message, string confirmLabel, bool destructive = false)

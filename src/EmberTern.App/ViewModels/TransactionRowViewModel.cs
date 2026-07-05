@@ -28,9 +28,20 @@ public sealed class TransactionRowViewModel
     public long AttachmentId => _t.AttachmentId;
     public string SessionLabel { get; }
 
-    // --- impact stripe (GC blocker = danger, long = warning) ---
+    // --- Health dot (always on — never blank; tooltip explains the state). Mirrors the
+    // Sessions grid Health column so the two grids read the same way. ---
     public bool IsGcBlocker => _h.IsGcBlocker;
     public bool IsLong => _h.IsLong && !_h.IsGcBlocker;
+
+    public string HealthBrushKey =>
+        _h.IsGcBlocker ? "DangerIconBrush"        // 🔴 the OAT gatekeeper — blocking GC
+        : IsLong ? "WarningBrush"                 // 🟠 long-running
+        : "SubtleForegroundBrush";                // ⚪ normal transaction
+
+    public string HealthTooltip =>
+        _h.IsGcBlocker ? UiStrings.SessionManagerTxHealthGcBlocker
+        : IsLong ? UiStrings.SessionManagerTxHealthLong
+        : UiStrings.SessionManagerTxHealthNormal;
 
     // --- columns ---
     public string TransactionIdText => _t.TransactionId.ToString(CultureInfo.InvariantCulture);
