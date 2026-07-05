@@ -12,7 +12,9 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using AvaloniaEdit;
 using EmberTern.App;
+using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
 using EmberTern.Core.Connections;
@@ -539,4 +541,42 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
+    // Etap 1 — Editor Find/Replace: the SearchPanel installer must attach cleanly and
+    // set a context menu, and the Ctrl+F router predicate (IsInsideEditor) must return
+    // true for an element inside a TextEditor and false otherwise. Guards the routing
+    // decision that leaves Ctrl+F for the editor vs. the sidebar filter.
+    [Fact]
+    public async System.Threading.Tasks.Task EditorSearch_InstallsAndRoutingPredicateHolds()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 300, Height = 120 };
+            var outside = new TextBox { Width = 100, Height = 24 };
+            var root = new StackPanel { Children = { editor, outside } };
+            var window = new Window { Width = 400, Height = 300, Content = root };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var panel = EditorSearch.Install(editor);
+            log.AppendLine($"[1] panel installed = {panel is not null}, contextMenu = {editor.ContextMenu is not null}");
+            Assert.NotNull(panel);
+            Assert.NotNull(editor.ContextMenu);
+
+            // Routing predicate: the editor (and its inner visual descendants) count as
+            // "inside an editor"; a sibling TextBox and null do not.
+            Assert.True(EditorSearch.IsInsideEditor(editor), "editor itself should be inside-editor");
+            var inner = editor.GetVisualDescendants().OfType<Avalonia.Visual>().FirstOrDefault(v => v != editor);
+            if (inner is not null)
+                Assert.True(EditorSearch.IsInsideEditor(inner), "inner text view should be inside-editor");
+            Assert.False(EditorSearch.IsInsideEditor(outside), "sibling TextBox is not inside-editor");
+            Assert.False(EditorSearch.IsInsideEditor(null), "null is not inside-editor");
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
 }

@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Search;
 using EmberTern.Firebird;
 
 namespace EmberTern.App.ViewModels;
@@ -419,6 +420,22 @@ public partial class MetadataExplorerViewModel : ViewModelBase
             }
         }
         _nameCache = cache;
+    }
+
+    // Name search over the already-loaded name cache (zero DB round-trips) — the
+    // "names" half of Global Search. Ensures the cache first, then runs the pure
+    // MetadataNameSearch matcher over every group, keyed by kind. The source / field /
+    // message half lives in FirebirdMetadataSearchReader. Only groups whose kind the
+    // query includes contribute.
+    internal async Task<IReadOnlyList<MetadataSearchHit>> SearchNamesAsync(MetadataSearchQuery query)
+    {
+        if (!query.MatchNames || string.IsNullOrWhiteSpace(query.Term))
+            return Array.Empty<MetadataSearchHit>();
+        await EnsureNameCacheAsync().ConfigureAwait(true);
+        var cache = _nameCache;
+        if (cache is null) return Array.Empty<MetadataSearchHit>();
+        var groups = cache.Select(kv => (kv.Key.Kind, kv.Value));
+        return MetadataNameSearch.MatchAll(groups, query);
     }
 
     // ─── Filter ───────────────────────────────────────────────────────────

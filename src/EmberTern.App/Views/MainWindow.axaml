@@ -189,6 +189,13 @@
             <controls:SvgIcon Data="{StaticResource Icon.Connection}"
                               Foreground="{DynamicResource AccentBrush}" />
           </Button>
+          <!-- Global Search (metadata names + source bodies) — Ctrl+Shift+F. -->
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarGlobalSearchTooltip}"
+                  Command="{Binding OpenGlobalSearchCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.Search}"
+                              Foreground="{DynamicResource AccentBrush}" />
+          </Button>
           <!-- Table-creation section sits AFTER all connection-related buttons.
                Icon ▦＋ mirrors the metadata tree's Table glyph with a plus —
                visually rhymes with the sidebar where new tables will appear. -->
@@ -1073,6 +1080,9 @@
               <views:SessionManagerTabView x:Name="SessionManagerView"
                                            DataContext="{Binding ActiveSessionManager}"
                                            IsVisible="{Binding DataContext.IsSessionManagerTabActive, ElementName=RootWindow}" />
+              <views:GlobalSearchTabView x:Name="GlobalSearchView"
+                                         DataContext="{Binding ActiveGlobalSearch}"
+                                         IsVisible="{Binding DataContext.IsGlobalSearchTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query
