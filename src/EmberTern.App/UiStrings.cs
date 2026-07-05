@@ -1367,6 +1367,48 @@ internal static class UiStrings
     public const string SessionManagerNoWarnings = "No health issues detected.";
     public const string SessionManagerWarningWhatToCheck = "What to check";
 
+    // session details (M4) — sections + plain-language diagnostics
+    public const string SessionManagerGeneralHeader = "General";
+    public const string SessionManagerActivityHeader = "Activity (since connect)";
+    public const string SessionManagerRoleLabel = "Role";
+    public const string SessionManagerConnectedLabel = "Connected";
+    public const string SessionManagerActivitySeqReads = "Sequential reads";
+    public const string SessionManagerActivityIdxReads = "Index reads";
+    public const string SessionManagerActivityInserts = "Inserts";
+    public const string SessionManagerActivityUpdates = "Updates";
+    public const string SessionManagerActivityDeletes = "Deletes";
+    public const string SessionManagerRiskGcBlocker = "Blocking garbage collection";
+    public const string SessionManagerRiskLongTx = "Holds a long-running transaction";
+    public const string SessionManagerRiskNone = "No issues detected for this session.";
+    public const string SessionManagerWhyHeader = "Why it matters";
+    public const string SessionManagerWhyGc =
+        "One of this session's transactions is the oldest active transaction in the database. Until it " +
+        "finishes, Firebird must keep every row version created since it started — so obsolete versions " +
+        "build up (database bloat) and reads gradually slow down. This is most often a reporting/BI " +
+        "connection, or a screen left open mid-edit. Committing or ending that transaction lets garbage " +
+        "collection catch up.";
+    public const string SessionManagerWhyLongTx =
+        "This session holds a transaction that has been open for a long time. A long-lived snapshot keeps " +
+        "a stable view of the data, which holds back garbage collection of newer row versions. Committing " +
+        "or restarting it releases that hold.";
+
+    // integration bridges
+    public const string SessionManagerOpenInEditor = "Open in SQL Editor";
+    public const string SessionManagerOpenInEditorTip = "Open this statement in the SQL Editor as a new saved query";
+    public const string SessionManagerAnalyze = "Analyze in Performance";
+    public const string SessionManagerAnalyzeTip =
+        "Open in the SQL Editor and reveal the Performance tab — run it (F5) to analyze (it is not run automatically)";
+    public const string SessionManagerCurrentStatementHeader = "Current statement";
+
+    // transaction-gap bar
+    public const string SessionManagerGapCaption = "Transaction gap";
+    public const string SessionManagerGapExplain =
+        "The shaded part is how far the oldest active transaction (OAT) lags behind the newest — the record versions Firebird must keep from garbage collection.";
+    public const string SessionManagerGapOit = "OIT";
+    public const string SessionManagerGapOat = "OAT";
+    public const string SessionManagerGapOst = "OST";
+    public const string SessionManagerGapNext = "Next";
+
     // context menu
     public const string SessionManagerMenuDisconnect = "Disconnect session";
     public const string SessionManagerMenuCopy = "Copy";

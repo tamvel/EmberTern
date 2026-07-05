@@ -19,8 +19,8 @@ public class SessionHealthAnalyzerTests
         Application = @"C:\Prestiz\PCbiznes.exe",
         Host = "10.0.0." + id,
         StateCode = 1,
-        RecordReads = reads,
-        RecordWrites = writes,
+        SequentialReads = reads,
+        Inserts = writes,
         IsSelf = self,
     };
 
@@ -214,6 +214,22 @@ public class SessionHealthAnalyzerTests
 
         Assert.True(report.Findings.Count >= 2);
         Assert.Equal(SessionHealthSeverity.Critical, report.Findings[0].Severity);
+    }
+
+    // --- Activity breakdown (Session Details) -----------------------------------------------
+
+    [Fact]
+    public void SessionInfo_RecordSumsFromBreakdown()
+    {
+        var s = new SessionInfo
+        {
+            AttachmentId = 1,
+            SequentialReads = 100, IndexedReads = 20,
+            Inserts = 3, Updates = 4, Deletes = 5,
+        };
+        Assert.Equal(120, s.RecordReads);   // seq + idx
+        Assert.Equal(12, s.RecordWrites);    // ins + upd + del
+        Assert.Equal(132, s.Load);           // reads + writes
     }
 
     // --- ApplicationName leaf ---------------------------------------------------------------

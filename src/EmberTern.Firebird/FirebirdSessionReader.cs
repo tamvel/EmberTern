@@ -98,8 +98,6 @@ public sealed class FirebirdSessionReader
             {
                 var id = GetInt64(reader, 0);
                 statements.TryGetValue(id, out var stmt);
-                long seq = GetInt64(reader, 10), idx = GetInt64(reader, 11);
-                long ins = GetInt64(reader, 12), upd = GetInt64(reader, 13), del = GetInt64(reader, 14);
                 results.Add(new SessionInfo
                 {
                     AttachmentId = id,
@@ -112,8 +110,11 @@ public sealed class FirebirdSessionReader
                     StateCode = (int)GetInt64(reader, 7),
                     ConnectedAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8),
                     GarbageCollectionAllowed = reader.IsDBNull(9) || GetInt64(reader, 9) != 0,
-                    RecordReads = seq + idx,
-                    RecordWrites = ins + upd + del,
+                    SequentialReads = GetInt64(reader, 10),
+                    IndexedReads = GetInt64(reader, 11),
+                    Inserts = GetInt64(reader, 12),
+                    Updates = GetInt64(reader, 13),
+                    Deletes = GetInt64(reader, 14),
                     CurrentStatement = stmt.Sql,
                     ActiveStatementId = stmt.StatementId,
                     IsSelf = ownAttachmentIds.Contains(id),

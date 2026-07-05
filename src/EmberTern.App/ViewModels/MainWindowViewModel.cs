@@ -3495,6 +3495,15 @@ public partial class MainWindowViewModel : ViewModelBase
         catch { return Array.Empty<long>(); }
     }
 
+    // Analyze in Performance = open in the editor (as a Saved Query) + reveal the Performance
+    // bottom tab. It is NOT auto-run — the statement belongs to another session; the user runs
+    // it (F5), which feeds the Performance analysis. Consistent with the Activity Monitor bridge.
+    private void OnSessionAnalyzeInPerformance(string sql)
+    {
+        OnTraceOpenInEditor(sql);
+        SelectedBottomTabIndex = PerformanceBottomTabIndex;
+    }
+
     // ---- Session Manager (live database sessions / transactions / health) ----
 
     public bool CanOpenSessionManager => _service.IsConnected;
@@ -3515,6 +3524,10 @@ public partial class MainWindowViewModel : ViewModelBase
         var manager = new SessionManagerTabViewModel(_sessionReader);
         manager.ConfirmationRequested += RequestConfirmAsync;
         manager.CopyToClipboardRequested += text => ClipboardWriteRequested?.Invoke(text);
+        // Integration bridges reuse the trace Open-in-SQL-Editor path (drops the statement as a
+        // Saved Query — never auto-runs another session's SQL). Analyze also reveals Performance.
+        manager.OpenInEditorRequested += OnTraceOpenInEditor;
+        manager.AnalyzeInPerformanceRequested += OnSessionAnalyzeInPerformance;
 
         var newTab = WorkspaceTabViewModel.CreateSessionManager(this, manager, _service.ActiveProfile?.Id);
         WorkspaceTabs.Add(newTab);

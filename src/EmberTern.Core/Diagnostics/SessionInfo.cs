@@ -45,11 +45,20 @@ public sealed record SessionInfo
     /// Statement target (<c>DELETE FROM MON$STATEMENTS WHERE MON$STATEMENT_ID = ?</c>).</summary>
     public long? ActiveStatementId { get; init; }
 
+    // Cumulative record counters since the attachment connected (MON$RECORD_STATS at
+    // attachment scope). Lifetime totals, not a rate — kept individually for the Activity
+    // breakdown in Session Details; summed for the Load column.
+    public long SequentialReads { get; init; }
+    public long IndexedReads { get; init; }
+    public long Inserts { get; init; }
+    public long Updates { get; init; }
+    public long Deletes { get; init; }
+
     /// <summary>Snapshot total record reads (sequential + indexed) for the attachment.</summary>
-    public long RecordReads { get; init; }
+    public long RecordReads => SequentialReads + IndexedReads;
 
     /// <summary>Snapshot total record writes (insert + update + delete) for the attachment.</summary>
-    public long RecordWrites { get; init; }
+    public long RecordWrites => Inserts + Updates + Deletes;
 
     /// <summary>True for EmberTern's own attachments (the data + metadata lanes). Excluded
     /// from findings, heavy-user ranking, and counters — we never warn about our own tool.</summary>

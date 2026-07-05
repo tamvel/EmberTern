@@ -1,19 +1,24 @@
+using System;
 using System.Globalization;
 using EmberTern.Core.Diagnostics;
 
 namespace EmberTern.App.ViewModels;
 
 /// <summary>Read-only projection of one <see cref="SessionInfo"/> + its
-/// <see cref="SessionHealthEntry"/> for the Sessions grid. Immutable — rebuilt each poll.</summary>
+/// <see cref="SessionHealthEntry"/> for the Sessions grid + Session Details. Immutable —
+/// rebuilt each poll.</summary>
 public sealed class SessionRowViewModel
 {
     private readonly SessionInfo _s;
     private readonly SessionHealthEntry _h;
 
-    public SessionRowViewModel(SessionInfo session, SessionHealthEntry health)
+    public SessionRowViewModel(SessionInfo session, SessionHealthEntry health, DateTime referenceTime)
     {
         _s = session;
         _h = health;
+        ConnectedText = session.ConnectedAt is { } at
+            ? DiagnosticsFormat.Age(Math.Max(0, (referenceTime - at).TotalSeconds))
+            : string.Empty;
     }
 
     public long AttachmentId => _s.AttachmentId;
@@ -39,6 +44,31 @@ public sealed class SessionRowViewModel
     public string StateText => _s.IsActive ? "Active" : "Idle";
     public string ActiveTxText => _h.ActiveTransactionCount.ToString(CultureInfo.InvariantCulture);
     public string OldestTxText => DiagnosticsFormat.Age(_h.OldestTransactionAgeSeconds);
+
+    /// <summary>Time since the attachment connected (empty when unknown).</summary>
+    public string ConnectedText { get; }
+
+    // Activity breakdown (lifetime totals since connect) for the Session Details Activity section.
+    public string SequentialReadsText => _s.SequentialReads.ToString("N0", CultureInfo.CurrentCulture);
+    public string IndexedReadsText => _s.IndexedReads.ToString("N0", CultureInfo.CurrentCulture);
+    public string InsertsText => _s.Inserts.ToString("N0", CultureInfo.CurrentCulture);
+    public string UpdatesText => _s.Updates.ToString("N0", CultureInfo.CurrentCulture);
+    public string DeletesText => _s.Deletes.ToString("N0", CultureInfo.CurrentCulture);
+
+    /// <summary>One-line session verdict for the Session Details General section.</summary>
+    public string RiskText => _h.Risk switch
+    {
+        SessionRisk.GcBlocker => UiStrings.SessionManagerRiskGcBlocker,
+        SessionRisk.LongTransaction => UiStrings.SessionManagerRiskLongTx,
+        _ => UiStrings.SessionManagerRiskNone,
+    };
+
+    public string RiskBrushKey => _h.Risk switch
+    {
+        SessionRisk.GcBlocker => "DangerIconBrush",
+        SessionRisk.LongTransaction => "WarningBrush",
+        _ => "SuccessIconBrush",
+    };
 
     /// <summary>Cumulative records touched since the session connected (not a rate — V1 shows the
     /// lifetime total; the inter-poll rate + heavy classification are a V2 feature).</summary>

@@ -31,9 +31,12 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
 {
     private readonly FirebirdSessionReader _reader;
 
+    private const double GapBarWidth = 280;
+
     private readonly List<SessionRowViewModel> _allSessions = new();
     private readonly List<TransactionRowViewModel> _allTransactions = new();
     private readonly Dictionary<long, string> _sessionLabels = new();
+    private SessionHealthReport? _report; // last analysis, for scoped Session-Details rebuilds
 
     private DispatcherTimer? _timer;
     private CancellationTokenSource? _cts;
@@ -55,6 +58,9 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     public ObservableCollection<TransactionRowViewModel> Transactions { get; } = new();
     public ObservableCollection<SessionWarningViewModel> Warnings { get; } = new();
 
+    /// <summary>Findings scoped to the selected session (Session Details → Warnings).</summary>
+    public ObservableCollection<SessionWarningViewModel> SelectedSessionWarnings { get; } = new();
+
     public IReadOnlyList<SessionRefreshOption> RefreshOptions { get; } = new[]
     {
         new SessionRefreshOption("Off", 0),
@@ -69,6 +75,8 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DisconnectCommand))]
     [NotifyCanExecuteChangedFor(nameof(CopyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenInEditorCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AnalyzeInPerformanceCommand))]
     private SessionRowViewModel? _selectedSession;
 
     [ObservableProperty] private TransactionRowViewModel? _selectedTransaction;
@@ -94,6 +102,25 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     [ObservableProperty] private int _gcRiskCount;
     [ObservableProperty] private string _oldestActiveLagText = "0";
 
+    // --- transaction-gap bar (DB-wide OIT/OAT/OST/Next — a single two-segment bar) ---
+    [ObservableProperty] private bool _hasGap;
+    [ObservableProperty] private double _gapLeadWidth;   // OIT→OAT (settled) segment px
+    [ObservableProperty] private double _gapLagWidth;    // OAT→Next (pinned) segment px
+    [ObservableProperty] private double _gapOstOffset;   // OST tick offset px from the bar start
+    [ObservableProperty] private string _gapOitText = "0";
+    [ObservableProperty] private string _gapOatText = "0";
+    [ObservableProperty] private string _gapOstText = "0";
+    [ObservableProperty] private string _gapNextText = "0";
+    [ObservableProperty] private string _gapValueText = "0";
+
+    // --- Session Details: plain-language "why it matters" ---
+    [ObservableProperty] private string _selectedSessionWhyItMatters = string.Empty;
+    public bool HasSelectedSessionWhyItMatters => SelectedSessionWhyItMatters.Length > 0;
+    public bool HasSelectedSessionWarnings => SelectedSessionWarnings.Count > 0;
+
+    partial void OnSelectedSessionWhyItMattersChanged(string value)
+        => OnPropertyChanged(nameof(HasSelectedSessionWhyItMatters));
+
     public bool IsFilterAll => QuickFilter == SessionQuickFilter.All;
     public bool IsFilterGcRisk => QuickFilter == SessionQuickFilter.GcRisk;
     public bool IsFilterLongTx => QuickFilter == SessionQuickFilter.LongTx;
@@ -106,9 +133,11 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         ? string.Format(CultureInfo.CurrentCulture, UiStrings.SessionManagerTransactionsFilteredFormat, s.AttachmentId)
         : string.Empty;
 
-    // Wired by MainWindowViewModel to the shared ConfirmDialog + clipboard channel.
+    // Wired by MainWindowViewModel to the shared ConfirmDialog + clipboard channel + bridges.
     public event Func<ConfirmRequest, Task<bool>>? ConfirmationRequested;
     public event Action<string>? CopyToClipboardRequested;
+    public event Action<string>? OpenInEditorRequested;
+    public event Action<string>? AnalyzeInPerformanceRequested;
 
     // --- polling lifecycle ---
     private void StartTimer()
@@ -150,7 +179,31 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         OnPropertyChanged(nameof(HasSelectedSession));
         OnPropertyChanged(nameof(IsSessionFilterActive));
         OnPropertyChanged(nameof(SessionFilterText));
+        RebuildSelectedSessionDetail();
         ApplyTransactionFilter();
+    }
+
+    /// <summary>Scoped Session-Details content: this session's warnings + the plain-language
+    /// "why it matters" explanation. Rebuilt on selection change and after each refresh.</summary>
+    private void RebuildSelectedSessionDetail()
+    {
+        SelectedSessionWarnings.Clear();
+        var sel = SelectedSession;
+        if (sel is not null && _report is not null)
+        {
+            foreach (var f in _report.Findings.Where(f => f.AttachmentId == sel.AttachmentId))
+            {
+                SelectedSessionWarnings.Add(new SessionWarningViewModel(f));
+            }
+        }
+        OnPropertyChanged(nameof(HasSelectedSessionWarnings));
+
+        SelectedSessionWhyItMatters = sel?.Risk switch
+        {
+            SessionRisk.GcBlocker => UiStrings.SessionManagerWhyGc,
+            SessionRisk.LongTransaction => UiStrings.SessionManagerWhyLongTx,
+            _ => string.Empty,
+        };
     }
 
     [RelayCommand]
@@ -204,6 +257,23 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         CopyToClipboardRequested?.Invoke(UiStrings.SessionManagerCopyHeaders + "\n" + s.ToTsv());
     }
 
+    // Integration bridges — reuse the existing SQL-editor / Performance workflows. Neither
+    // executes the statement (it's another session's running SQL): both drop it into the SQL
+    // editor as a Saved Query so the user consciously runs it (F5), which then feeds Performance.
+    private bool CanOpenStatement => SelectedSession is { HasStatement: true };
+
+    [RelayCommand(CanExecute = nameof(CanOpenStatement))]
+    private void OpenInEditor()
+    {
+        if (SelectedSession is { CurrentStatement.Length: > 0 } s) OpenInEditorRequested?.Invoke(s.CurrentStatement);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanOpenStatement))]
+    private void AnalyzeInPerformance()
+    {
+        if (SelectedSession is { CurrentStatement.Length: > 0 } s) AnalyzeInPerformanceRequested?.Invoke(s.CurrentStatement);
+    }
+
     // --- refresh core ---
     private async Task RefreshCoreAsync()
     {
@@ -244,15 +314,19 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         SessionHealthReport report,
         DateTime referenceTime)
     {
+        _report = report;
+
         // masters
         _allSessions.Clear();
         _sessionLabels.Clear();
         foreach (var s in sessions)
         {
-            _allSessions.Add(new SessionRowViewModel(s, report.EntryFor(s.AttachmentId)));
+            _allSessions.Add(new SessionRowViewModel(s, report.EntryFor(s.AttachmentId), referenceTime));
             var name = string.IsNullOrWhiteSpace(s.ApplicationName) ? s.User : s.ApplicationName;
             _sessionLabels[s.AttachmentId] = $"{s.AttachmentId} · {name}";
         }
+
+        BuildGapBar(report.Database);
 
         _allTransactions.Clear();
         foreach (var t in transactions)
@@ -354,6 +428,31 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         {
             Transactions.Add(t);
         }
+    }
+
+    // A single two-segment bar over the OIT..Next axis: [OIT→OAT settled][OAT→Next pinned],
+    // with an OST tick. The pinned segment's proportion is the visible "how far the oldest
+    // active transaction lags" signal (the Firebird GC concept made visual — one bar, no chart).
+    private void BuildGapBar(DatabaseTransactionState db)
+    {
+        long span = db.NextTransaction - db.OldestTransaction;
+        HasGap = span > 0 && db.OldestTransaction > 0 && db.NextTransaction > 0;
+        if (!HasGap)
+        {
+            GapLeadWidth = GapLagWidth = GapOstOffset = 0;
+            return;
+        }
+
+        double Frac(long v) => Math.Clamp((double)(v - db.OldestTransaction) / span, 0, 1);
+        var oatFrac = Frac(db.OldestActive);
+        GapLeadWidth = oatFrac * GapBarWidth;
+        GapLagWidth = (1 - oatFrac) * GapBarWidth;
+        GapOstOffset = Frac(db.OldestSnapshot) * GapBarWidth;
+        GapOitText = db.OldestTransaction.ToString("N0", CultureInfo.CurrentCulture);
+        GapOatText = db.OldestActive.ToString("N0", CultureInfo.CurrentCulture);
+        GapOstText = db.OldestSnapshot.ToString("N0", CultureInfo.CurrentCulture);
+        GapNextText = db.NextTransaction.ToString("N0", CultureInfo.CurrentCulture);
+        GapValueText = db.OldestActiveLag.ToString("N0", CultureInfo.CurrentCulture);
     }
 
     private Task<bool> ConfirmAsync(string title, string message, string confirmLabel, bool destructive = false)

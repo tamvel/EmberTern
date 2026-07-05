@@ -38,12 +38,61 @@
     <Style Selector="DataGridColumnHeader">
       <Setter Property="Padding" Value="6,4" />
     </Style>
-    <!-- Heavy-load marker + danger accents -->
-    <Style Selector="TextBlock.heavy">
-      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
+    <!-- Session Details key/value label -->
+    <Style Selector="TextBlock.kv">
+      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="TextBlock.kvv">
+      <Setter Property="FontSize" Value="11" />
     </Style>
   </UserControl.Styles>
+
+  <UserControl.Resources>
+    <!-- Shared warning card (Performance-findings shape) — ONE definition, used by the Warnings
+         tab AND the scoped warnings in Session Details. -->
+    <DataTemplate x:Key="SessionWarningCard" x:DataType="vm:SessionWarningViewModel">
+      <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
+              BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
+        <StackPanel Spacing="4">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+                              Data="{Binding SeverityGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
+              <controls:SvgIcon.Foreground>
+                <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                  <Binding Path="SeverityBrushKey" />
+                  <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                </MultiBinding>
+              </controls:SvgIcon.Foreground>
+            </controls:SvgIcon>
+            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </StackPanel>
+          <TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" FontSize="12" />
+          <TextBlock Text="{Binding Impact}" TextWrapping="Wrap" FontSize="11"
+                     Foreground="{DynamicResource SubtleForegroundBrush}" IsVisible="{Binding HasImpact}" />
+          <ItemsControl ItemsSource="{Binding Evidence}" IsVisible="{Binding HasEvidence}" Margin="0,2,0,0">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding}" FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
+                           Foreground="{DynamicResource SubtleForegroundBrush}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel IsVisible="{Binding HasWhatToCheck}" Margin="0,3,0,0" Spacing="1">
+            <TextBlock Text="{x:Static app:UiStrings.SessionManagerWarningWhatToCheck}"
+                       FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
+            <ItemsControl ItemsSource="{Binding WhatToCheck}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="11" Margin="0,1,0,0" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+  </UserControl.Resources>
 
   <Grid x:Name="RootGrid" RowDefinitions="Auto,Auto,*,4,240">
 
@@ -225,9 +274,36 @@
     <Panel Grid.Row="4">
       <TabControl>
         <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.SessionManagerTabTransactions}">
-          <Grid RowDefinitions="Auto,*">
+          <Grid RowDefinitions="Auto,Auto,*">
+            <!-- Transaction-gap bar (DB-wide OIT→OAT→Next; the pinned segment = OAT lag). One bar. -->
+            <Border Grid.Row="0" Background="{DynamicResource PanelBrush}" IsVisible="{Binding HasGap}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,5"
+                    ToolTip.Tip="{x:Static app:UiStrings.SessionManagerGapExplain}">
+              <StackPanel Spacing="3">
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerGapCaption}" FontWeight="SemiBold" FontSize="11" />
+                  <TextBlock Text="{Binding GapValueText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}" />
+                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerGapExplain}" FontSize="10"
+                             Foreground="{DynamicResource SubtleForegroundBrush}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <Panel Width="280" Height="10" HorizontalAlignment="Left">
+                  <Border Background="{DynamicResource RowAlternateBrush}" CornerRadius="3" />
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                    <Border Width="{Binding GapLeadWidth}" Background="{DynamicResource SubtleForegroundBrush}" CornerRadius="3,0,0,3" />
+                    <Border Width="{Binding GapLagWidth}" Background="{DynamicResource WarningBrush}" CornerRadius="0,3,3,0" />
+                  </StackPanel>
+                </Panel>
+                <Grid Width="280" HorizontalAlignment="Left">
+                  <TextBlock HorizontalAlignment="Left" FontSize="9" Foreground="{DynamicResource SubtleForegroundBrush}"
+                             Text="{Binding GapOitText, StringFormat='OIT {0}'}" />
+                  <TextBlock HorizontalAlignment="Right" FontSize="9" Foreground="{DynamicResource SubtleForegroundBrush}"
+                             Text="{Binding GapNextText, StringFormat='Next {0}'}" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
             <!-- "Filtered by session N ✕" chip -->
-            <Border Grid.Row="0" Background="{DynamicResource SelectionBrush}" CornerRadius="4"
+            <Border Grid.Row="1" Background="{DynamicResource SelectionBrush}" CornerRadius="4"
                     Padding="8,3" Margin="6,6,6,0" HorizontalAlignment="Left"
                     IsVisible="{Binding IsSessionFilterActive}">
               <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
@@ -238,7 +314,7 @@
               </StackPanel>
             </Border>
 
-            <DataGrid Grid.Row="1" x:Name="TransactionsGrid"
+            <DataGrid Grid.Row="2" x:Name="TransactionsGrid"
                       behaviors:GridLayoutBehavior.GridId="SessionManagerTransactions"
                       ItemsSource="{Binding Transactions}" SelectedItem="{Binding SelectedTransaction}"
                       AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
@@ -274,41 +350,117 @@
           </Grid>
         </TabItem>
 
-        <!-- Session Details — lightweight in M3 (expanded in M4) -->
+        <!-- Session Details — General / Why it matters / Statement (+bridges) / Activity / Transactions / Warnings -->
         <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.SessionManagerTabDetails}">
           <Panel>
             <TextBlock Text="{x:Static app:UiStrings.SessionManagerDetailsNoSelection}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        IsVisible="{Binding !HasSelectedSession}" />
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                          IsVisible="{Binding HasSelectedSession}">
-              <StackPanel Spacing="8" Margin="10,8" DataContext="{Binding SelectedSession}"
-                          x:DataType="vm:SessionRowViewModel">
-                <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" >
-                  <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static app:UiStrings.SessionColId}" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
-                  <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding IdText}" FontSize="11" />
-                  <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static app:UiStrings.SessionColUser}" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
-                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding User}" FontSize="11" />
-                  <TextBlock Grid.Row="2" Grid.Column="0" Text="Role" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
-                  <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Role}" FontSize="11" />
-                  <TextBlock Grid.Row="3" Grid.Column="0" Text="{x:Static app:UiStrings.SessionColApplication}" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
-                  <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Application}" FontSize="11" />
-                  <TextBlock Grid.Row="4" Grid.Column="0" Text="{x:Static app:UiStrings.SessionColHost}" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
-                  <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Host}" FontSize="11" />
-                  <TextBlock Grid.Row="5" Grid.Column="0" Text="{x:Static app:UiStrings.SessionColState}" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
-                  <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding StateText}" FontSize="11" />
-                </Grid>
-                <StackPanel Spacing="3">
-                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerDetailStatement}" />
-                  <TextBox Text="{Binding CurrentStatement}" IsReadOnly="True" TextWrapping="Wrap"
-                           FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
-                           Background="{DynamicResource BackgroundBrush}"
-                           IsVisible="{Binding HasStatement}" />
-                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerDetailNoStatement}"
-                             Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11"
-                             IsVisible="{Binding !HasStatement}" />
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasSelectedSession}">
+              <StackPanel Spacing="10" Margin="10,8">
+
+                <!-- General + one-line session verdict -->
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerGeneralHeader}" />
+                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Border Width="9" Height="9" CornerRadius="4.5" VerticalAlignment="Center">
+                      <Border.Background>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="SelectedSession.RiskBrushKey" />
+                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </Border.Background>
+                    </Border>
+                    <TextBlock Text="{Binding SelectedSession.RiskText}" FontSize="12" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColId}" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.IdText}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColUser}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.User}" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerRoleLabel}" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.Role}" />
+                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColApplication}" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.Application}" />
+                    <TextBlock Grid.Row="4" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColHost}" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.Host}" />
+                    <TextBlock Grid.Row="5" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColState}" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.StateText}" />
+                    <TextBlock Grid.Row="6" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerConnectedLabel}" />
+                    <TextBlock Grid.Row="6" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.ConnectedText}" />
+                  </Grid>
                 </StackPanel>
+
+                <!-- Why it matters (plain-language) -->
+                <StackPanel Spacing="3" IsVisible="{Binding HasSelectedSessionWhyItMatters}">
+                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerWhyHeader}" />
+                  <TextBlock Text="{Binding SelectedSessionWhyItMatters}" TextWrapping="Wrap" FontSize="11" />
+                </StackPanel>
+
+                <!-- Current statement + integration bridges -->
+                <StackPanel Spacing="3" IsVisible="{Binding SelectedSession.HasStatement}">
+                  <Grid ColumnDefinitions="*,Auto,Auto">
+                    <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center"
+                               Text="{x:Static app:UiStrings.SessionManagerCurrentStatementHeader}" />
+                    <Button Grid.Column="1" Classes="icon" Command="{Binding OpenInEditorCommand}"
+                            ToolTip.Tip="{x:Static app:UiStrings.SessionManagerOpenInEditorTip}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Query}" />
+                    </Button>
+                    <Button Grid.Column="2" Classes="icon" Command="{Binding AnalyzeInPerformanceCommand}"
+                            ToolTip.Tip="{x:Static app:UiStrings.SessionManagerAnalyzeTip}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Activity}" />
+                    </Button>
+                  </Grid>
+                  <TextBox Text="{Binding SelectedSession.CurrentStatement}" IsReadOnly="True" TextWrapping="Wrap"
+                           FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
+                           Background="{DynamicResource BackgroundBrush}" />
+                </StackPanel>
+
+                <!-- Activity (lifetime totals) -->
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerActivityHeader}" />
+                  <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerActivitySeqReads}" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.SequentialReadsText}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerActivityIdxReads}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.IndexedReadsText}" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerActivityInserts}" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.InsertsText}" />
+                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerActivityUpdates}" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.UpdatesText}" />
+                    <TextBlock Grid.Row="4" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerActivityDeletes}" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.DeletesText}" />
+                  </Grid>
+                </StackPanel>
+
+                <!-- This session's transactions (compact; the full grid is the Transactions tab) -->
+                <StackPanel Spacing="3" IsVisible="{Binding IsSessionFilterActive}">
+                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerTabTransactions}" />
+                  <ItemsControl ItemsSource="{Binding Transactions}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:TransactionRowViewModel">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,1">
+                          <TextBlock Text="{Binding TransactionIdText}" FontSize="11" FontWeight="SemiBold"
+                                     FontFamily="Cascadia Code,Consolas,monospace" />
+                          <TextBlock Text="{Binding IsolationText}" FontSize="11" />
+                          <TextBlock Text="{Binding AgeText}" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}" />
+                          <TextBlock Text="{Binding GcImpactText, StringFormat='GC {0}'}" FontSize="11"
+                                     Foreground="{DynamicResource SubtleForegroundBrush}" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+
+                <!-- Warnings scoped to this session (shared card) -->
+                <StackPanel Spacing="3" IsVisible="{Binding HasSelectedSessionWarnings}">
+                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerTabWarnings}" />
+                  <ItemsControl ItemsSource="{Binding SelectedSessionWarnings}"
+                                ItemTemplate="{StaticResource SessionWarningCard}" />
+                </StackPanel>
+
               </StackPanel>
             </ScrollViewer>
           </Panel>
@@ -327,51 +479,8 @@
             </StackPanel>
 
             <ScrollViewer VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasWarnings}">
-              <ItemsControl ItemsSource="{Binding Warnings}" Margin="8">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:SessionWarningViewModel">
-                    <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
-                            BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
-                      <StackPanel Spacing="4">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                          <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
-                                            Data="{Binding SeverityGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
-                            <controls:SvgIcon.Foreground>
-                              <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                                <Binding Path="SeverityBrushKey" />
-                                <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                              </MultiBinding>
-                            </controls:SvgIcon.Foreground>
-                          </controls:SvgIcon>
-                          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        </StackPanel>
-                        <TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" FontSize="12" />
-                        <TextBlock Text="{Binding Impact}" TextWrapping="Wrap" FontSize="11"
-                                   Foreground="{DynamicResource SubtleForegroundBrush}" IsVisible="{Binding HasImpact}" />
-                        <ItemsControl ItemsSource="{Binding Evidence}" IsVisible="{Binding HasEvidence}" Margin="0,2,0,0">
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                              <TextBlock Text="{Binding}" FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
-                                         Foreground="{DynamicResource SubtleForegroundBrush}" />
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <StackPanel IsVisible="{Binding HasWhatToCheck}" Margin="0,3,0,0" Spacing="1">
-                          <TextBlock Text="{x:Static app:UiStrings.SessionManagerWarningWhatToCheck}"
-                                     FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
-                          <ItemsControl ItemsSource="{Binding WhatToCheck}">
-                            <ItemsControl.ItemTemplate>
-                              <DataTemplate>
-                                <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="11" Margin="0,1,0,0" />
-                              </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                          </ItemsControl>
-                        </StackPanel>
-                      </StackPanel>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+              <ItemsControl ItemsSource="{Binding Warnings}" Margin="8"
+                            ItemTemplate="{StaticResource SessionWarningCard}" />
             </ScrollViewer>
           </Panel>
 
