@@ -150,33 +150,13 @@ public class SessionHealthAnalyzerTests
         Assert.Empty(report.Findings);
     }
 
-    // --- Heavy user -------------------------------------------------------------------------
-
-    [Fact]
-    public void TopLoadSessionsOverFloor_AreHeavy_CounterAndMarker()
-    {
-        var sessions = new[]
-        {
-            Session(60, reads: 500_000, writes: 20_000), // heavy
-            Session(61, reads: 40_000, writes: 5_000),   // heavy
-            Session(62, reads: 100, writes: 0),          // under floor
-        };
-        var txs = new[] { Tx(90000, 60, 2, Now.AddSeconds(-1)) };
-        var report = SessionHealthAnalyzer.Analyze(sessions, txs, Db(89990, 90000, 90000, 90005), Now,
-            new SessionHealthOptions { HeavyLoadFloor = 10_000, HeavyUserTopN = 3 });
-
-        Assert.Equal(2, report.Counters.HeavyUsers);
-        Assert.True(report.EntryFor(60).IsHeavy);
-        Assert.True(report.EntryFor(61).IsHeavy);
-        Assert.False(report.EntryFor(62).IsHeavy);
-        Assert.Equal(SessionRisk.Heavy, report.EntryFor(60).Risk);
-        Assert.Equal(HealthGrade.Watch, report.Verdict.Grade); // heavy but no critical/warning tx
-    }
+    // Heavy-user detection is deferred to V2 (needs an inter-poll rate, not the cumulative
+    // MON$RECORD_STATS total) — no heavy test in V1.
 
     // --- Self exclusion ---------------------------------------------------------------------
 
     [Fact]
-    public void SelfAttachments_ExcludedFromFindingsHeavyAndCounters()
+    public void SelfAttachments_ExcludedFromFindingsAndCounters()
     {
         var sessions = new[]
         {
@@ -192,7 +172,6 @@ public class SessionHealthAnalyzerTests
         var report = SessionHealthAnalyzer.Analyze(sessions, txs, db, Now);
 
         Assert.Empty(report.Findings);               // self tx is not a finding
-        Assert.Equal(0, report.Counters.HeavyUsers); // self not ranked
         Assert.Equal(1, report.Counters.Sessions);   // self not counted
         Assert.Equal(1, report.Counters.Transactions);
         Assert.Equal(SessionRisk.None, report.EntryFor(1).Risk);

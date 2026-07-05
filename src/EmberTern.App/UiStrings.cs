@@ -1316,7 +1316,6 @@ internal static class UiStrings
     // toolbar
     public const string SessionManagerRefreshTip = "Refresh now";
     public const string SessionManagerAutoRefreshTip = "Auto-refresh interval";
-    public const string SessionManagerCancelStatementTip = "Cancel statement (soft — keeps the connection)";
     public const string SessionManagerDisconnectTip = "Disconnect session (hard — rolls back its work)";
     public const string SessionManagerCopyTip = "Copy selected session";
     public const string SessionManagerHideSelfTip = "Hide EmberTern's own sessions";
@@ -1328,8 +1327,7 @@ internal static class UiStrings
     public const string SessionManagerCountTransactions = "Transactions";
     public const string SessionManagerCountLongTx = "Long Tx";
     public const string SessionManagerCountGcRisk = "GC Risk";
-    public const string SessionManagerCountHeavy = "Heavy";
-    public const string SessionManagerCountOatLag = "OAT lag";
+    public const string SessionManagerCountOatLag = "Tx Gap";
     public const string SessionManagerPrivilegeBanner =
         "Showing your own sessions only — connect as SYSDBA or a user with MONITOR ANY ATTACHMENT to see all sessions.";
     public const string SessionManagerGradeHealthy = "Healthy";
@@ -1370,16 +1368,10 @@ internal static class UiStrings
     public const string SessionManagerWarningWhatToCheck = "What to check";
 
     // context menu
-    public const string SessionManagerMenuCancelStatement = "Cancel statement";
     public const string SessionManagerMenuDisconnect = "Disconnect session";
     public const string SessionManagerMenuCopy = "Copy";
 
     // confirmations + status (VM)
-    public const string SessionManagerCancelStatementConfirmTitle = "Cancel statement";
-    public const string SessionManagerCancelStatementConfirmFormat =
-        "Cancel the running statement on session {0}? The connection stays open.";
-    public const string SessionManagerCancelStatementConfirmYes = "Cancel statement";
-    public const string SessionManagerCancelStatementDone = "Statement cancel requested for session {0}.";
     public const string SessionManagerDisconnectConfirmTitle = "Disconnect session";
     public const string SessionManagerDisconnectConfirmFormat =
         "Disconnect session {0} ({1})? Its uncommitted work will be rolled back.";

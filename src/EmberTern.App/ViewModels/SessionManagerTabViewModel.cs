@@ -17,7 +17,7 @@ namespace EmberTern.App.ViewModels;
 public sealed record SessionRefreshOption(string Label, int Seconds);
 
 /// <summary>Sessions-grid quick filter driven by the Health-Bar counter chips.</summary>
-public enum SessionQuickFilter { All, GcRisk, LongTx, Heavy }
+public enum SessionQuickFilter { All, GcRisk, LongTx }
 
 /// <summary>
 /// The Session Manager workspace tab (the Diagnostics Center → Sessions/Transactions). Owns a
@@ -39,7 +39,8 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     private CancellationTokenSource? _cts;
     private bool _refreshing;
     private bool _disposed;
-    private long? _selectedAttachmentId; // preserve selection across polls
+    private long? _selectedAttachmentId;      // preserve selection across polls
+    private bool _suppressSelectionTracking;  // true while rebuilding Sessions (Clear nulls the grid's selection)
 
     public SessionManagerTabViewModel(FirebirdSessionReader reader)
     {
@@ -66,7 +67,6 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     [ObservableProperty] private SessionRefreshOption? _selectedRefreshOption;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(CancelStatementCommand))]
     [NotifyCanExecuteChangedFor(nameof(DisconnectCommand))]
     [NotifyCanExecuteChangedFor(nameof(CopyCommand))]
     private SessionRowViewModel? _selectedSession;
@@ -92,13 +92,11 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     [ObservableProperty] private int _transactionCount;
     [ObservableProperty] private int _longTransactionCount;
     [ObservableProperty] private int _gcRiskCount;
-    [ObservableProperty] private int _heavyCount;
     [ObservableProperty] private string _oldestActiveLagText = "0";
 
     public bool IsFilterAll => QuickFilter == SessionQuickFilter.All;
     public bool IsFilterGcRisk => QuickFilter == SessionQuickFilter.GcRisk;
     public bool IsFilterLongTx => QuickFilter == SessionQuickFilter.LongTx;
-    public bool IsFilterHeavy => QuickFilter == SessionQuickFilter.Heavy;
 
     public bool ShowSessionsEmpty => Sessions.Count == 0;
     public bool HasWarnings => Warnings.Count > 0;
@@ -137,7 +135,6 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         OnPropertyChanged(nameof(IsFilterAll));
         OnPropertyChanged(nameof(IsFilterGcRisk));
         OnPropertyChanged(nameof(IsFilterLongTx));
-        OnPropertyChanged(nameof(IsFilterHeavy));
         ApplyFilters();
     }
 
@@ -145,7 +142,11 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
 
     partial void OnSelectedSessionChanged(SessionRowViewModel? value)
     {
-        _selectedAttachmentId = value?.AttachmentId;
+        // Only a USER selection updates the remembered id — a rebuild-induced null must not wipe it.
+        if (!_suppressSelectionTracking)
+        {
+            _selectedAttachmentId = value?.AttachmentId;
+        }
         OnPropertyChanged(nameof(HasSelectedSession));
         OnPropertyChanged(nameof(IsSessionFilterActive));
         OnPropertyChanged(nameof(SessionFilterText));
@@ -161,35 +162,13 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     private void FilterGcRisk() => QuickFilter = QuickFilter == SessionQuickFilter.GcRisk ? SessionQuickFilter.All : SessionQuickFilter.GcRisk;
     [RelayCommand]
     private void FilterLongTx() => QuickFilter = QuickFilter == SessionQuickFilter.LongTx ? SessionQuickFilter.All : SessionQuickFilter.LongTx;
-    [RelayCommand]
-    private void FilterHeavy() => QuickFilter = QuickFilter == SessionQuickFilter.Heavy ? SessionQuickFilter.All : SessionQuickFilter.Heavy;
 
     [RelayCommand]
     private void ClearSessionFilter() => SelectedSession = null;
 
-    private bool CanCancelStatement => SelectedSession is { ActiveStatementId: not null };
-
-    [RelayCommand(CanExecute = nameof(CanCancelStatement))]
-    private async Task CancelStatement()
-    {
-        if (SelectedSession is not { ActiveStatementId: { } statementId } session) return;
-        var ok = await ConfirmAsync(
-            UiStrings.SessionManagerCancelStatementConfirmTitle,
-            string.Format(CultureInfo.CurrentCulture, UiStrings.SessionManagerCancelStatementConfirmFormat, session.AttachmentId),
-            UiStrings.SessionManagerCancelStatementConfirmYes).ConfigureAwait(true);
-        if (!ok) return;
-
-        try
-        {
-            var error = await _reader.CancelStatementAsync(statementId).ConfigureAwait(true);
-            StatusText = error ?? string.Format(CultureInfo.CurrentCulture, UiStrings.SessionManagerCancelStatementDone, session.AttachmentId);
-        }
-        catch (Exception ex)
-        {
-            StatusText = ex.Message;
-        }
-        await RefreshCoreAsync().ConfigureAwait(true);
-    }
+    // Cancel Statement is deferred to V2 — for V1, Disconnect is the one clear, low-surprise
+    // administrative action (Cancel Statement is Firebird-internals-y and risky to misread).
+    // FirebirdSessionReader.CancelStatementAsync stays for that future revival.
 
     private bool CanDisconnect => SelectedSession is { IsSelf: false };
 
@@ -300,7 +279,6 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         TransactionCount = report.Counters.Transactions;
         LongTransactionCount = report.Counters.LongTransactions;
         GcRiskCount = report.Counters.GcRisks;
-        HeavyCount = report.Counters.HeavyUsers;
         OldestActiveLagText = report.Counters.OldestActiveLag.ToString("N0", CultureInfo.CurrentCulture);
 
         // warnings
@@ -328,7 +306,6 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         {
             SessionQuickFilter.GcRisk => query.Where(s => s.Risk == SessionRisk.GcBlocker),
             SessionQuickFilter.LongTx => query.Where(s => s.Risk == SessionRisk.LongTransaction),
-            SessionQuickFilter.Heavy => query.Where(s => s.IsHeavy),
             _ => query,
         };
         if (text.Length > 0)
@@ -336,17 +313,23 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
             query = query.Where(s => s.FilterKey.Contains(text));
         }
 
-        Sessions.Clear();
-        foreach (var s in query)
+        // Preserve the selected attachment across the rebuild. Sessions.Clear() nulls the grid's
+        // SelectedItem, which fires OnSelectedSessionChanged(null) — so we snapshot the target id
+        // first and suppress selection-tracking so that callback can't wipe it before we restore.
+        var targetId = _selectedAttachmentId;
+        _suppressSelectionTracking = true;
+        try
         {
-            Sessions.Add(s);
+            Sessions.Clear();
+            foreach (var s in query)
+            {
+                Sessions.Add(s);
+            }
+            SelectedSession = targetId is { } id ? Sessions.FirstOrDefault(s => s.AttachmentId == id) : null;
         }
-
-        // restore selection by id
-        var restored = _selectedAttachmentId is { } id ? Sessions.FirstOrDefault(s => s.AttachmentId == id) : null;
-        if (!ReferenceEquals(restored, SelectedSession))
+        finally
         {
-            SelectedSession = restored;
+            _suppressSelectionTracking = false;
         }
 
         OnPropertyChanged(nameof(ShowSessionsEmpty));

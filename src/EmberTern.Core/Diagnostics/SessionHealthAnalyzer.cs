@@ -12,11 +12,8 @@ public sealed record SessionHealthOptions
     /// <summary>A long transaction older than this escalates to Critical.</summary>
     public TimeSpan LongTransactionCritical { get; init; } = TimeSpan.FromMinutes(10);
 
-    /// <summary>How many top-load sessions may be marked heavy.</summary>
-    public int HeavyUserTopN { get; init; } = 3;
-
-    /// <summary>Minimum load (record reads + writes) to be eligible as a heavy user.</summary>
-    public long HeavyLoadFloor { get; init; } = 10_000;
+    // Heavy-user thresholds are gone in V1 — that classification needs an inter-poll rate
+    // (deferred to V2). Only the long-transaction + GC-gap thresholds remain.
 
     /// <summary>An OAT lag at/above this is itself enough to flag a GC risk / escalate it.</summary>
     public long LargeGapThreshold { get; init; } = 10_000;
@@ -114,14 +111,6 @@ public static class SessionHealthAnalyzer
             findings.Add(BuildLongTransactionFinding(tx, age, severity));
         }
 
-        // --- Heavy users -----------------------------------------------------------------
-        var heavyIds = visibleSessions
-            .Where(s => s.Load >= options.HeavyLoadFloor)
-            .OrderByDescending(s => s.Load)
-            .Take(options.HeavyUserTopN)
-            .Select(s => s.AttachmentId)
-            .ToHashSet();
-
         // --- Per-session entries ---------------------------------------------------------
         var sessionEntries = new Dictionary<long, SessionHealthEntry>();
         foreach (var s in sessions)
@@ -142,24 +131,18 @@ public static class SessionHealthAnalyzer
             var risk = SessionRisk.None;
             if (!s.IsSelf)
             {
-                var ownsGc = own.Any(t => gcSet.Contains(t.TransactionId));
-                var ownsLong = own.Any(t => longSet.Contains(t.TransactionId));
-                if (ownsGc)
+                if (own.Any(t => gcSet.Contains(t.TransactionId)))
                 {
                     risk = SessionRisk.GcBlocker;
                 }
-                else if (ownsLong)
+                else if (own.Any(t => longSet.Contains(t.TransactionId)))
                 {
                     risk = SessionRisk.LongTransaction;
-                }
-                else if (heavyIds.Contains(s.AttachmentId))
-                {
-                    risk = SessionRisk.Heavy;
                 }
             }
 
             sessionEntries[s.AttachmentId] = new SessionHealthEntry(
-                s.AttachmentId, risk, heavyIds.Contains(s.AttachmentId), activeCount, oldestAge);
+                s.AttachmentId, risk, activeCount, oldestAge);
         }
 
         // --- Per-transaction entries -----------------------------------------------------
@@ -189,10 +172,9 @@ public static class SessionHealthAnalyzer
             Transactions: visibleTransactions.Count,
             LongTransactions: longSet.Count,
             GcRisks: gcSet.Count,
-            HeavyUsers: heavyIds.Count,
             OldestActiveLag: database.OldestActiveLag);
 
-        var verdict = BuildVerdict(findings, gcSet.Count, longSet.Count, heavyIds.Count);
+        var verdict = BuildVerdict(findings, gcSet.Count, longSet.Count);
 
         return new SessionHealthReport
         {
@@ -282,11 +264,11 @@ public static class SessionHealthAnalyzer
         };
 
     private static SessionHealthVerdict BuildVerdict(
-        IReadOnlyList<SessionHealthFinding> findings, int gcCount, int longCount, int heavyCount)
+        IReadOnlyList<SessionHealthFinding> findings, int gcCount, int longCount)
     {
         var grade = findings.Any(f => f.Severity == SessionHealthSeverity.Critical)
             ? HealthGrade.AtRisk
-            : findings.Count > 0 || heavyCount > 0
+            : findings.Count > 0
                 ? HealthGrade.Watch
                 : HealthGrade.Healthy;
 
@@ -302,12 +284,6 @@ public static class SessionHealthAnalyzer
             headline = longCount == 1
                 ? "1 long-running transaction detected."
                 : $"{longCount} long-running transactions detected.";
-        }
-        else if (heavyCount > 0)
-        {
-            headline = heavyCount == 1
-                ? "1 session is generating heavy load."
-                : $"{heavyCount} sessions are generating heavy load.";
         }
         else
         {

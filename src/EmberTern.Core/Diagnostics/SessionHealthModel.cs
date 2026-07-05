@@ -31,14 +31,15 @@ public enum SessionRisk
 {
     None = 0,
 
-    /// <summary>Heavy load (top-N over the floor).</summary>
-    Heavy = 1,
-
     /// <summary>Holds a long-running / snapshot transaction (not the GC gatekeeper).</summary>
-    LongTransaction = 2,
+    LongTransaction = 1,
 
     /// <summary>Owns the transaction pinning the OAT — blocking garbage collection.</summary>
-    GcBlocker = 3,
+    GcBlocker = 2,
+
+    // Heavy-load classification is deferred to V2 — it requires an inter-poll activity RATE
+    // (snapshot delta), not the cumulative MON$RECORD_STATS total, which misleadingly flags a
+    // long-lived idle session as heavy. See the Session Manager "Deferred V2" notes.
 }
 
 /// <summary>
@@ -70,11 +71,10 @@ public sealed record SessionHealthFinding
     public IReadOnlyList<string> WhatToCheck { get; init; } = Array.Empty<string>();
 }
 
-/// <summary>Per-session derived health for the grid (stripe + heavy marker + counts).</summary>
+/// <summary>Per-session derived health for the grid (risk stripe + counts).</summary>
 public sealed record SessionHealthEntry(
     long AttachmentId,
     SessionRisk Risk,
-    bool IsHeavy,
     int ActiveTransactionCount,
     double? OldestTransactionAgeSeconds);
 
@@ -89,13 +89,12 @@ public sealed record TransactionHealthEntry(
 /// <summary>The one-line verdict for the Health Bar (mirrors the Performance verdict shape).</summary>
 public sealed record SessionHealthVerdict(HealthGrade Grade, string Headline);
 
-/// <summary>Health-Bar counters — each is a clickable filter chip in the UI.</summary>
+/// <summary>Health-Bar counters — the risk ones are clickable filter chips in the UI.</summary>
 public sealed record SessionHealthCounters(
     int Sessions,
     int Transactions,
     int LongTransactions,
     int GcRisks,
-    int HeavyUsers,
     long OldestActiveLag);
 
 /// <summary>The full analysis result: verdict + findings + per-session / per-transaction
@@ -123,7 +122,7 @@ public sealed record SessionHealthReport
     public SessionHealthEntry EntryFor(long attachmentId)
         => Sessions.TryGetValue(attachmentId, out var e)
             ? e
-            : new SessionHealthEntry(attachmentId, SessionRisk.None, false, 0, null);
+            : new SessionHealthEntry(attachmentId, SessionRisk.None, 0, null);
 
     public TransactionHealthEntry EntryForTransaction(long transactionId)
         => Transactions.TryGetValue(transactionId, out var e)

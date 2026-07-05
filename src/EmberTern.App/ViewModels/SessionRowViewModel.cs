@@ -23,10 +23,9 @@ public sealed class SessionRowViewModel
     public bool HasStatement => !string.IsNullOrEmpty(_s.CurrentStatement);
     public SessionRisk Risk => _h.Risk;
 
-    // --- risk stripe (one of three, DynamicResource brushes — mirrors the trace gutter) ---
+    // --- risk stripe (DynamicResource brushes — mirrors the trace gutter) ---
     public bool IsGcBlocker => _h.Risk == SessionRisk.GcBlocker;
     public bool IsLongTransaction => _h.Risk == SessionRisk.LongTransaction;
-    public bool IsHeavyRisk => _h.Risk == SessionRisk.Heavy;
 
     // --- columns ---
     public string IdText => IsSelf
@@ -41,7 +40,8 @@ public sealed class SessionRowViewModel
     public string ActiveTxText => _h.ActiveTransactionCount.ToString(CultureInfo.InvariantCulture);
     public string OldestTxText => DiagnosticsFormat.Age(_h.OldestTransactionAgeSeconds);
 
-    public bool IsHeavy => _h.IsHeavy;
+    /// <summary>Cumulative records touched since the session connected (not a rate — V1 shows the
+    /// lifetime total; the inter-poll rate + heavy classification are a V2 feature).</summary>
     public string LoadText => _s.Load.ToString("N0", CultureInfo.CurrentCulture);
 
     // Numeric sort keys (SortMemberPath targets — the display strings sort lexically; gotcha #42).
