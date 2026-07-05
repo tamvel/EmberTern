@@ -54,6 +54,7 @@ public partial class MainWindowViewModel : ViewModelBase
     // re-execution). Plan + timings only; no MON$/trace/advisor yet.
     private readonly FirebirdPlanReader _planReader;
     private readonly FirebirdPerfStatsReader _perfStatsReader;
+    private readonly FirebirdSessionReader _sessionReader;
     private readonly FirebirdCatalogReader _catalogReader;
     private readonly PerformanceAnalyzer _performanceAnalyzer;
     private long? _dataAttachmentId;
@@ -162,6 +163,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // Per-table reads (Phase 2): stats read on the metadata lane, attachment id on the
         // data lane — so before/after snapshots stay fresh and never touch the data tx.
         _perfStatsReader = new FirebirdPerfStatsReader(_service, _metadataTransactionService, _transactionService);
+        _sessionReader = new FirebirdSessionReader(_service);
         // Catalog (indexes/selectivity/cardinality) for the advisor — read on the metadata lane
         // for the profiled query's tables when the Performance panel builds (Phase 3a).
         _catalogReader = new FirebirdCatalogReader(_service, _metadataTransactionService);
@@ -282,6 +284,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveSecurityManager))]
     [NotifyPropertyChangedFor(nameof(IsTraceMonitorTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveTraceMonitor))]
+    [NotifyPropertyChangedFor(nameof(IsSessionManagerTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveSessionManager))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(ShowEditorToolbar))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
@@ -367,6 +371,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsTraceMonitorTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TraceMonitor };
     public TraceMonitorTabViewModel? ActiveTraceMonitor
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.TraceMonitor } t ? t.TraceMonitor : null;
+    public bool IsSessionManagerTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SessionManager };
+    public SessionManagerTabViewModel? ActiveSessionManager
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SessionManager } t ? t.SessionManager : null;
 
     // Drives the whole editor-toolbar Border's IsVisible so an empty command strip never
     // reserves space above the document tabs. True for every tab kind that exposes at
@@ -1514,7 +1521,7 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var tab in WorkspaceTabs)
         {
             // The Security Manager and Activity Monitor are live tools, not persisted.
-            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor) continue;
+            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager) continue;
 
             if (tab.Kind == WorkspaceTabKind.Query)
             {
@@ -1960,8 +1967,12 @@ public partial class MainWindowViewModel : ViewModelBase
     private void ClearWorkspaceTabs()
     {
         foreach (var t in WorkspaceTabs)
+        {
             if (t.Kind == WorkspaceTabKind.TraceMonitor && t.TraceMonitor is { } monitor)
                 _ = monitor.DisposeAsync(); // stop live trace sessions on disconnect (best-effort)
+            else if (t.Kind == WorkspaceTabKind.SessionManager && t.SessionManager is { } sm)
+                _ = sm.DisposeAsync(); // stop the MON$ poll timer on disconnect (best-effort)
+        }
         WorkspaceTabs.Clear();
         _tabActivationHistory.Clear();
         SelectedWorkspaceTab = null;
@@ -3484,6 +3495,32 @@ public partial class MainWindowViewModel : ViewModelBase
         catch { return Array.Empty<long>(); }
     }
 
+    // ---- Session Manager (live database sessions / transactions / health) ----
+
+    public bool CanOpenSessionManager => _service.IsConnected;
+
+    [RelayCommand(CanExecute = nameof(CanOpenSessionManager))]
+    private void OpenSessionManager()
+    {
+        // Near-singleton per connection: focus the existing manager tab if one is open.
+        foreach (var tab in WorkspaceTabs)
+        {
+            if (tab.Kind == WorkspaceTabKind.SessionManager)
+            {
+                SelectTab(tab);
+                return;
+            }
+        }
+
+        var manager = new SessionManagerTabViewModel(_sessionReader);
+        manager.ConfirmationRequested += RequestConfirmAsync;
+        manager.CopyToClipboardRequested += text => ClipboardWriteRequested?.Invoke(text);
+
+        var newTab = WorkspaceTabViewModel.CreateSessionManager(this, manager, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(newTab);
+        SelectTab(newTab);
+    }
+
     // Non-destructive: a traced statement lands as a NEW Saved Query (never overwrites the
     // editor's current content). The previously-edited query is preserved as its own Saved
     // Query — selecting the new one just swaps the editor to it.
@@ -4116,6 +4153,8 @@ public partial class MainWindowViewModel : ViewModelBase
         _tabActivationHistory.Remove(tab);
         if (tab.Kind == WorkspaceTabKind.TraceMonitor && tab.TraceMonitor is { } monitor)
             _ = monitor.DisposeAsync(); // stop the live trace session (best-effort)
+        else if (tab.Kind == WorkspaceTabKind.SessionManager && tab.SessionManager is { } sm)
+            _ = sm.DisposeAsync(); // stop the MON$ poll timer (best-effort)
 
         if (wasSelected && WorkspaceTabs.Count > 0)
         {
@@ -5314,6 +5353,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OpenSecurityManagerCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanOpenTraceMonitor));
         OpenTraceMonitorCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanOpenSessionManager));
+        OpenSessionManagerCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

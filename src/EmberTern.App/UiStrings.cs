@@ -1308,4 +1308,83 @@ internal static class UiStrings
     public const string PerformanceFindingsFuture = "Index recommendations and fix suggestions arrive in a later phase.";
     public const string PerformanceAccessHeader = "Table access";
     public const string PerformanceAccessLegend = "Red = sequential (full scan) reads · Blue = indexed reads";
+
+    // ── Session Manager (live sessions / transactions / health) ──
+    public const string SessionManagerTabTitle = "Session Manager";
+    public const string ToolbarSessionManagerTooltip = "Session Manager — live sessions, transactions & database health";
+
+    // toolbar
+    public const string SessionManagerRefreshTip = "Refresh now";
+    public const string SessionManagerAutoRefreshTip = "Auto-refresh interval";
+    public const string SessionManagerCancelStatementTip = "Cancel statement (soft — keeps the connection)";
+    public const string SessionManagerDisconnectTip = "Disconnect session (hard — rolls back its work)";
+    public const string SessionManagerCopyTip = "Copy selected session";
+    public const string SessionManagerHideSelfTip = "Hide EmberTern's own sessions";
+    public const string SessionManagerFilterWatermark = "Filter user / app / host…";
+    public const string SessionManagerMaximizeTip = "Maximize / restore panel";
+
+    // health bar
+    public const string SessionManagerCountSessions = "Sessions";
+    public const string SessionManagerCountTransactions = "Transactions";
+    public const string SessionManagerCountLongTx = "Long Tx";
+    public const string SessionManagerCountGcRisk = "GC Risk";
+    public const string SessionManagerCountHeavy = "Heavy";
+    public const string SessionManagerCountOatLag = "OAT lag";
+    public const string SessionManagerPrivilegeBanner =
+        "Showing your own sessions only — connect as SYSDBA or a user with MONITOR ANY ATTACHMENT to see all sessions.";
+    public const string SessionManagerGradeHealthy = "Healthy";
+    public const string SessionManagerGradeWatch = "Watch";
+    public const string SessionManagerGradeAtRisk = "At risk";
+
+    // sessions grid
+    public const string SessionColId = "ID";
+    public const string SessionColUser = "User";
+    public const string SessionColApplication = "Application";
+    public const string SessionColHost = "Host";
+    public const string SessionColState = "State";
+    public const string SessionColTx = "Tx";
+    public const string SessionColOldestTx = "Oldest Tx";
+    public const string SessionColLoad = "Load";
+    public const string SessionsEmpty = "No sessions match the current filter.";
+
+    // transactions tab
+    public const string SessionManagerTabTransactions = "Transactions";
+    public const string SessionManagerTransactionsFilteredFormat = "Filtered by session {0}";
+    public const string TxColId = "Tx ID";
+    public const string TxColSession = "Session";
+    public const string TxColState = "State";
+    public const string TxColAge = "Age";
+    public const string TxColIsolation = "Isolation";
+    public const string TxColReadOnly = "Read only";
+    public const string TxColGcImpact = "GC impact";
+
+    // session details tab (lightweight in M3)
+    public const string SessionManagerTabDetails = "Session Details";
+    public const string SessionManagerDetailsNoSelection = "Select a session to see its details.";
+    public const string SessionManagerDetailStatement = "Current statement";
+    public const string SessionManagerDetailNoStatement = "No active statement.";
+
+    // warnings tab
+    public const string SessionManagerTabWarnings = "Warnings";
+    public const string SessionManagerNoWarnings = "No health issues detected.";
+    public const string SessionManagerWarningWhatToCheck = "What to check";
+
+    // context menu
+    public const string SessionManagerMenuCancelStatement = "Cancel statement";
+    public const string SessionManagerMenuDisconnect = "Disconnect session";
+    public const string SessionManagerMenuCopy = "Copy";
+
+    // confirmations + status (VM)
+    public const string SessionManagerCancelStatementConfirmTitle = "Cancel statement";
+    public const string SessionManagerCancelStatementConfirmFormat =
+        "Cancel the running statement on session {0}? The connection stays open.";
+    public const string SessionManagerCancelStatementConfirmYes = "Cancel statement";
+    public const string SessionManagerCancelStatementDone = "Statement cancel requested for session {0}.";
+    public const string SessionManagerDisconnectConfirmTitle = "Disconnect session";
+    public const string SessionManagerDisconnectConfirmFormat =
+        "Disconnect session {0} ({1})? Its uncommitted work will be rolled back.";
+    public const string SessionManagerDisconnectConfirmYes = "Disconnect";
+    public const string SessionManagerDisconnectDone = "Disconnect requested for session {0}.";
+    public const string SessionManagerCopyHeaders = "ID\tUser\tApplication\tHost\tState\tTx\tOldest Tx\tLoad";
+    public const string SessionManagerLastRefreshFormat = "Last refresh {0:HH:mm:ss}";
 }

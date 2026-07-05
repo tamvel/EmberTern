@@ -176,11 +176,17 @@
             <controls:SvgIcon Data="{StaticResource Icon.Role}"
                               Foreground="{DynamicResource IconColor_Role}" />
           </Button>
-          <!-- Monitoring section: live database Activity Monitor (trace). -->
+          <!-- Monitoring section: live database Activity Monitor (trace) + Session Manager. -->
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarActivityMonitorTooltip}"
                   Command="{Binding OpenTraceMonitorCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Activity}"
+                              Foreground="{DynamicResource AccentBrush}" />
+          </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarSessionManagerTooltip}"
+                  Command="{Binding OpenSessionManagerCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.Connection}"
                               Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <!-- Table-creation section sits AFTER all connection-related buttons.
@@ -1064,6 +1070,9 @@
               <views:TraceMonitorTabView x:Name="TraceMonitorView"
                                          DataContext="{Binding ActiveTraceMonitor}"
                                          IsVisible="{Binding DataContext.IsTraceMonitorTabActive, ElementName=RootWindow}" />
+              <views:SessionManagerTabView x:Name="SessionManagerView"
+                                           DataContext="{Binding ActiveSessionManager}"
+                                           IsVisible="{Binding DataContext.IsSessionManagerTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query

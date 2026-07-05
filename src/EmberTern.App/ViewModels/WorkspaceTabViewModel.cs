@@ -22,6 +22,7 @@ public enum WorkspaceTabKind
     IndexDetail,
     SecurityManager,
     TraceMonitor,
+    SessionManager,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -272,6 +273,23 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             TraceMonitor = monitor,
         };
 
+    // The Session Manager is a live, near-singleton-per-connection diagnostic tab (like the
+    // Activity Monitor). Opened from the Monitoring toolbar; not persisted.
+    public static WorkspaceTabViewModel CreateSessionManager(
+        MainWindowViewModel owner, SessionManagerTabViewModel manager, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.SessionManager,
+            BaseTitle = UiStrings.SessionManagerTabTitle,
+            IsClosable = true,
+            ObjectName = string.Empty,
+            ConnectionProfileId = connectionProfileId,
+            Icon = string.Empty,
+            IconResourceKey = "AccentBrush",
+            IconGeometryKey = "Icon.Connection",
+            SessionManager = manager,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -296,6 +314,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public IndexDetailTabViewModel? IndexDetail { get; private init; }
     public SecurityManagerTabViewModel? SecurityManager { get; private init; }
     public TraceMonitorTabViewModel? TraceMonitor { get; private init; }
+    public SessionManagerTabViewModel? SessionManager { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]

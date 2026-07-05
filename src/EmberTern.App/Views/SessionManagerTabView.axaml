@@ -1,0 +1,413 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:EmberTern.App"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:behaviors="using:EmberTern.App.Behaviors"
+             x:Class="EmberTern.App.Views.SessionManagerTabView"
+             x:Name="RootControl"
+             x:DataType="vm:SessionManagerTabViewModel"
+             Background="{DynamicResource BackgroundBrush}"
+             Foreground="{DynamicResource ForegroundBrush}">
+
+  <UserControl.Styles>
+    <!-- Health-Bar filter chips: same segmented language as the Activity Monitor toolbar -->
+    <Style Selector="Button.seg">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+    </Style>
+    <Style Selector="Button.seg.active">
+      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <!-- Detail-panel section header (matches the trace detail) -->
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Margin" Value="0,0,0,3" />
+    </Style>
+    <!-- Compact, uncramped column headers for these grids only (matches the trace) -->
+    <Style Selector="DataGridColumnHeader">
+      <Setter Property="Padding" Value="6,4" />
+    </Style>
+    <!-- Heavy-load marker + danger accents -->
+    <Style Selector="TextBlock.heavy">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid x:Name="RootGrid" RowDefinitions="Auto,Auto,*,4,240">
+
+    <!-- ① Toolbar (same density / spacing as the Activity Monitor session bar) -->
+    <Border Grid.Row="0" Background="{DynamicResource ElevatedPanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
+      <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+        <Button Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="{x:Static app:UiStrings.SessionManagerRefreshTip}">
+          <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" />
+        </Button>
+        <ComboBox ItemsSource="{Binding RefreshOptions}" SelectedItem="{Binding SelectedRefreshOption}"
+                  Width="74" VerticalAlignment="Center" ToolTip.Tip="{x:Static app:UiStrings.SessionManagerAutoRefreshTip}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:SessionRefreshOption">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+
+        <Button Classes="icon" Command="{Binding CancelStatementCommand}"
+                ToolTip.Tip="{x:Static app:UiStrings.SessionManagerCancelStatementTip}">
+          <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource WarningBrush}" />
+        </Button>
+        <Button Classes="icon" Command="{Binding DisconnectCommand}"
+                ToolTip.Tip="{x:Static app:UiStrings.SessionManagerDisconnectTip}">
+          <controls:SvgIcon Data="{StaticResource Icon.Unplug}" Foreground="{DynamicResource DangerIconBrush}" />
+        </Button>
+
+        <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+
+        <Button Classes="icon" Command="{Binding CopyCommand}" ToolTip.Tip="{x:Static app:UiStrings.SessionManagerCopyTip}">
+          <controls:SvgIcon Data="{StaticResource Icon.Copy}" />
+        </Button>
+
+        <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+
+        <ToggleButton Classes="icon" IsChecked="{Binding HideSelfActivity}"
+                      ToolTip.Tip="{x:Static app:UiStrings.SessionManagerHideSelfTip}">
+          <controls:SvgIcon Data="{StaticResource Icon.EyeOff}" />
+        </ToggleButton>
+
+        <TextBox Width="150" PlaceholderText="{x:Static app:UiStrings.SessionManagerFilterWatermark}"
+                 Text="{Binding FilterText}" Margin="4,0,0,0" />
+
+        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}" Margin="8,0,0,0" />
+      </StackPanel>
+    </Border>
+
+    <!-- ② Health Bar — verdict + clickable counter chips (answer at the top) -->
+    <Border Grid.Row="1" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,5">
+      <StackPanel Spacing="4">
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <!-- verdict dot (theme brush resolved from the grade key) -->
+          <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center">
+            <Border.Background>
+              <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                <Binding Path="GradeBrushKey" />
+                <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+              </MultiBinding>
+            </Border.Background>
+          </Border>
+          <TextBlock Text="{Binding GradeText}" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding Headline}" Foreground="{DynamicResource SubtleForegroundBrush}"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+
+          <Border Width="1" Margin="6,1" Background="{DynamicResource BorderBrush}" />
+
+          <!-- informational counts -->
+          <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <TextBlock Text="{x:Static app:UiStrings.SessionManagerCountSessions}" Foreground="{DynamicResource SubtleForegroundBrush}" />
+            <TextBlock Text="{Binding SessionCount}" FontWeight="SemiBold" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <TextBlock Text="{x:Static app:UiStrings.SessionManagerCountTransactions}" Foreground="{DynamicResource SubtleForegroundBrush}" />
+            <TextBlock Text="{Binding TransactionCount}" FontWeight="SemiBold" />
+          </StackPanel>
+
+          <Border Width="1" Margin="6,1" Background="{DynamicResource BorderBrush}" />
+
+          <!-- filter chips (segmented) -->
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+            <StackPanel Orientation="Horizontal">
+              <Button Classes="seg" Classes.active="{Binding IsFilterAll}" Command="{Binding FilterAllCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <TextBlock Text="All" />
+                </StackPanel>
+              </Button>
+              <Button Classes="seg" Classes.active="{Binding IsFilterLongTx}" Command="{Binding FilterLongTxCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerCountLongTx}" />
+                  <TextBlock Text="{Binding LongTransactionCount}" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}" />
+                </StackPanel>
+              </Button>
+              <Button Classes="seg" Classes.active="{Binding IsFilterGcRisk}" Command="{Binding FilterGcRiskCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerCountGcRisk}" />
+                  <TextBlock Text="{Binding GcRiskCount}" FontWeight="SemiBold" Foreground="{DynamicResource DangerIconBrush}" />
+                </StackPanel>
+              </Button>
+              <Button Classes="seg" Classes.active="{Binding IsFilterHeavy}" Command="{Binding FilterHeavyCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerCountHeavy}" />
+                  <TextBlock Text="{Binding HeavyCount}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Border>
+
+          <Border Width="1" Margin="6,1" Background="{DynamicResource BorderBrush}" />
+
+          <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                      ToolTip.Tip="Oldest Active Transaction lag — how far the oldest active transaction is behind the newest (records pinned from garbage collection)">
+            <TextBlock Text="{x:Static app:UiStrings.SessionManagerCountOatLag}" Foreground="{DynamicResource SubtleForegroundBrush}" />
+            <TextBlock Text="{Binding OldestActiveLagText}" FontWeight="SemiBold" />
+          </StackPanel>
+        </StackPanel>
+
+        <!-- privilege banner (only when we can see just our own sessions) -->
+        <TextBlock Text="{x:Static app:UiStrings.SessionManagerPrivilegeBanner}" FontSize="11"
+                   Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"
+                   IsVisible="{Binding ShowPrivilegeBanner}" />
+      </StackPanel>
+    </Border>
+
+    <!-- ③ Sessions grid (sortable — sorting by risk/load is the point) -->
+    <Panel Grid.Row="2">
+      <DataGrid x:Name="SessionsGrid"
+                behaviors:GridLayoutBehavior.GridId="SessionManagerSessions"
+                CellPointerPressed="OnSessionCellPointerPressed"
+                ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}"
+                AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                CanUserSortColumns="True" CanUserReorderColumns="True"
+                ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="11">
+        <DataGrid.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuCancelStatement}" Command="{Binding CancelStatementCommand}" />
+            <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuDisconnect}" Command="{Binding DisconnectCommand}" />
+            <Separator />
+            <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuCopy}" Command="{Binding CopyCommand}" />
+          </ContextMenu>
+        </DataGrid.ContextMenu>
+        <DataGrid.Columns>
+          <!-- risk stripe gutter: single priority stripe (mirrors the trace gutter) -->
+          <DataGridTemplateColumn Header=" " Width="Auto" CanUserResize="False" CanUserReorder="False" CanUserSort="False">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="vm:SessionRowViewModel">
+                <Panel Width="8">
+                  <Border Background="{DynamicResource DangerIconBrush}" IsVisible="{Binding IsGcBlocker}" />
+                  <Border Background="{DynamicResource WarningBrush}" IsVisible="{Binding IsLongTransaction}" />
+                  <Border Background="{DynamicResource AccentBrush}" IsVisible="{Binding IsHeavyRisk}" />
+                </Panel>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+
+          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColId}" Binding="{Binding IdText}"
+                              SortMemberPath="AttachmentId" MinWidth="60" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColUser}" Binding="{Binding User}"
+                              SortMemberPath="User" MinWidth="90" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColApplication}" Binding="{Binding Application}"
+                              SortMemberPath="Application" MinWidth="130" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColHost}" Binding="{Binding Host}"
+                              SortMemberPath="Host" MinWidth="110" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColState}" Binding="{Binding StateText}"
+                              SortMemberPath="StateText" MinWidth="70" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColTx}" Binding="{Binding ActiveTxText}"
+                              SortMemberPath="ActiveTxValue" MinWidth="50" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColOldestTx}" Binding="{Binding OldestTxText}"
+                              SortMemberPath="OldestTxValue" MinWidth="90" />
+          <!-- Load: numeric text + heavy 🔥 marker -->
+          <DataGridTemplateColumn Header="{x:Static app:UiStrings.SessionColLoad}" SortMemberPath="LoadValue" MinWidth="90">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="vm:SessionRowViewModel">
+                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Margin="6,0">
+                  <TextBlock Text="{Binding LoadText}" VerticalAlignment="Center" />
+                  <controls:SvgIcon Width="12" Height="12" Data="{StaticResource Icon.Activity}"
+                                    Foreground="{DynamicResource AccentBrush}" IsVisible="{Binding IsHeavy}"
+                                    VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+        </DataGrid.Columns>
+      </DataGrid>
+
+      <TextBlock IsVisible="{Binding ShowSessionsEmpty}" Text="{x:Static app:UiStrings.SessionsEmpty}"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,0"
+                 Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="13" />
+    </Panel>
+
+    <!-- splitter: double-tap to maximize/restore (identical to the Activity Monitor bottom panel) -->
+    <GridSplitter Grid.Row="3" ResizeDirection="Rows" HorizontalAlignment="Stretch"
+                  Background="{DynamicResource BorderBrush}"
+                  DoubleTapped="OnBottomSplitterDoubleTapped" />
+
+    <!-- ④ Bottom tabs (Transactions / Session Details / Warnings) -->
+    <Panel Grid.Row="4">
+      <TabControl>
+        <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.SessionManagerTabTransactions}">
+          <Grid RowDefinitions="Auto,*">
+            <!-- "Filtered by session N ✕" chip -->
+            <Border Grid.Row="0" Background="{DynamicResource SelectionBrush}" CornerRadius="4"
+                    Padding="8,3" Margin="6,6,6,0" HorizontalAlignment="Left"
+                    IsVisible="{Binding IsSessionFilterActive}">
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <TextBlock Text="{Binding SessionFilterText}" FontSize="11" VerticalAlignment="Center" />
+                <Button Classes="icon" Padding="2" Command="{Binding ClearSessionFilterCommand}">
+                  <controls:SvgIcon Width="11" Height="11" Data="{StaticResource Icon.X}" />
+                </Button>
+              </StackPanel>
+            </Border>
+
+            <DataGrid Grid.Row="1" x:Name="TransactionsGrid"
+                      behaviors:GridLayoutBehavior.GridId="SessionManagerTransactions"
+                      ItemsSource="{Binding Transactions}" SelectedItem="{Binding SelectedTransaction}"
+                      AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                      CanUserSortColumns="True" CanUserReorderColumns="True"
+                      ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="11">
+              <DataGrid.Columns>
+                <DataGridTemplateColumn Header=" " Width="Auto" CanUserResize="False" CanUserReorder="False" CanUserSort="False">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate x:DataType="vm:TransactionRowViewModel">
+                      <Panel Width="8">
+                        <Border Background="{DynamicResource DangerIconBrush}" IsVisible="{Binding IsGcBlocker}" />
+                        <Border Background="{DynamicResource WarningBrush}" IsVisible="{Binding IsLong}" />
+                      </Panel>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColId}" Binding="{Binding TransactionIdText}"
+                                    SortMemberPath="TransactionId" MinWidth="80" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColSession}" Binding="{Binding SessionLabel}"
+                                    SortMemberPath="SessionLabel" MinWidth="120" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColState}" Binding="{Binding StateText}"
+                                    SortMemberPath="StateText" MinWidth="70" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColAge}" Binding="{Binding AgeText}"
+                                    SortMemberPath="AgeValue" MinWidth="80" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColIsolation}" Binding="{Binding IsolationText}"
+                                    SortMemberPath="IsolationText" MinWidth="120" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColReadOnly}" Binding="{Binding ReadOnlyText}"
+                                    SortMemberPath="ReadOnlyText" MinWidth="80" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColGcImpact}" Binding="{Binding GcImpactText}"
+                                    SortMemberPath="GcImpactValue" MinWidth="90" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+        </TabItem>
+
+        <!-- Session Details — lightweight in M3 (expanded in M4) -->
+        <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.SessionManagerTabDetails}">
+          <Panel>
+            <TextBlock Text="{x:Static app:UiStrings.SessionManagerDetailsNoSelection}"
+                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsVisible="{Binding !HasSelectedSession}" />
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          IsVisible="{Binding HasSelectedSession}">
+              <StackPanel Spacing="8" Margin="10,8" DataContext="{Binding SelectedSession}"
+                          x:DataType="vm:SessionRowViewModel">
+                <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" >
+                  <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static app:UiStrings.SessionColId}" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
+                  <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding IdText}" FontSize="11" />
+                  <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static app:UiStrings.SessionColUser}" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding User}" FontSize="11" />
+                  <TextBlock Grid.Row="2" Grid.Column="0" Text="Role" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
+                  <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Role}" FontSize="11" />
+                  <TextBlock Grid.Row="3" Grid.Column="0" Text="{x:Static app:UiStrings.SessionColApplication}" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
+                  <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Application}" FontSize="11" />
+                  <TextBlock Grid.Row="4" Grid.Column="0" Text="{x:Static app:UiStrings.SessionColHost}" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
+                  <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Host}" FontSize="11" />
+                  <TextBlock Grid.Row="5" Grid.Column="0" Text="{x:Static app:UiStrings.SessionColState}" Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
+                  <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding StateText}" FontSize="11" />
+                </Grid>
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerDetailStatement}" />
+                  <TextBox Text="{Binding CurrentStatement}" IsReadOnly="True" TextWrapping="Wrap"
+                           FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
+                           Background="{DynamicResource BackgroundBrush}"
+                           IsVisible="{Binding HasStatement}" />
+                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerDetailNoStatement}"
+                             Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11"
+                             IsVisible="{Binding !HasStatement}" />
+                </StackPanel>
+              </StackPanel>
+            </ScrollViewer>
+          </Panel>
+        </TabItem>
+
+        <!-- Warnings — same card shape as the Performance findings -->
+        <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.SessionManagerTabWarnings}">
+          <Panel>
+            <!-- clean state -->
+            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        IsVisible="{Binding !HasWarnings}">
+              <controls:SvgIcon Width="15" Height="15" Data="{StaticResource Icon.Check}"
+                                Foreground="{DynamicResource SuccessIconBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.SessionManagerNoWarnings}"
+                         Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasWarnings}">
+              <ItemsControl ItemsSource="{Binding Warnings}" Margin="8">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SessionWarningViewModel">
+                    <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
+                      <StackPanel Spacing="4">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+                                            Data="{Binding SeverityGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
+                            <controls:SvgIcon.Foreground>
+                              <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                                <Binding Path="SeverityBrushKey" />
+                                <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                              </MultiBinding>
+                            </controls:SvgIcon.Foreground>
+                          </controls:SvgIcon>
+                          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" FontSize="12" />
+                        <TextBlock Text="{Binding Impact}" TextWrapping="Wrap" FontSize="11"
+                                   Foreground="{DynamicResource SubtleForegroundBrush}" IsVisible="{Binding HasImpact}" />
+                        <ItemsControl ItemsSource="{Binding Evidence}" IsVisible="{Binding HasEvidence}" Margin="0,2,0,0">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <TextBlock Text="{Binding}" FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
+                                         Foreground="{DynamicResource SubtleForegroundBrush}" />
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <StackPanel IsVisible="{Binding HasWhatToCheck}" Margin="0,3,0,0" Spacing="1">
+                          <TextBlock Text="{x:Static app:UiStrings.SessionManagerWarningWhatToCheck}"
+                                     FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
+                          <ItemsControl ItemsSource="{Binding WhatToCheck}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="11" Margin="0,1,0,0" />
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Panel>
+
+          <!-- overlaid maximize / restore (mirrors the trace detail-panel affordance) -->
+        </TabItem>
+      </TabControl>
+
+      <Button Classes="icon" Click="OnToggleBottomMaximizeClick" ToolTip.Tip="{x:Static app:UiStrings.SessionManagerMaximizeTip}"
+              HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,6,0">
+        <Panel>
+          <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" IsVisible="{Binding !IsDetailMaximized}" />
+          <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" IsVisible="{Binding IsDetailMaximized}" />
+        </Panel>
+      </Button>
+    </Panel>
+  </Grid>
+</UserControl>

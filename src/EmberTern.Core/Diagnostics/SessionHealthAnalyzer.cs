@@ -322,11 +322,5 @@ public static class SessionHealthAnalyzer
             ? (tx.IsSnapshot ? "Snapshot" : "Read Committed")
             : tx.IsolationMode;
 
-    internal static string FormatAge(double seconds)
-    {
-        var ts = TimeSpan.FromSeconds(seconds);
-        return ts.TotalHours >= 1
-            ? string.Format(CultureInfo.InvariantCulture, "{0:D2}:{1:D2}:{2:D2}", (int)ts.TotalHours, ts.Minutes, ts.Seconds)
-            : string.Format(CultureInfo.InvariantCulture, "{0:D2}:{1:D2}", ts.Minutes, ts.Seconds);
-    }
+    private static string FormatAge(double seconds) => DiagnosticsFormat.Age(seconds);
 }
