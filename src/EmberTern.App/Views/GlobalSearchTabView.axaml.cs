@@ -64,18 +64,13 @@ public partial class GlobalSearchTabView : UserControl
         SelectFirstMatch();
     }
 
-    private void OnResultsSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    // Selection is bound VM-side (SelectedNode), so no code-behind SelectionChanged.
+    // Double-click a leaf → open it, using the tapped element's DataContext (never a
+    // named control — that was the ResultsTree-null crash).
+    private void OnLeafDoubleTapped(object? sender, TappedEventArgs e)
     {
         if (_currentVm is null) return;
-        if (ResultsTree.SelectedItem is SearchResultItemViewModel item)
-            _currentVm.SelectedItem = item;
-    }
-
-    private void OnResultDoubleTapped(object? sender, TappedEventArgs e)
-    {
-        if (_currentVm is null) return;
-        // Only act on a leaf (double-clicking a group toggles it).
-        if (ResultsTree.SelectedItem is SearchResultItemViewModel item)
+        if (sender is Control { DataContext: SearchResultItemViewModel item })
         {
             _currentVm.Open(item);
             e.Handled = true;

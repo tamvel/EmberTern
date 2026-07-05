@@ -28,10 +28,8 @@
                    FontSize="12" TextWrapping="Wrap" />
       </Border>
 
-      <TreeView x:Name="ResultsTree"
-                ItemsSource="{Binding Groups}"
-                SelectionChanged="OnResultsSelectionChanged"
-                DoubleTapped="OnResultDoubleTapped"
+      <TreeView ItemsSource="{Binding Groups}"
+                SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
                 Background="Transparent">
         <TreeView.DataTemplates>
           <TreeDataTemplate DataType="vm:SearchResultGroupViewModel" ItemsSource="{Binding Items}">
@@ -50,7 +48,8 @@
           </TreeDataTemplate>
 
           <DataTemplate DataType="vm:SearchResultItemViewModel">
-            <StackPanel Orientation="Horizontal" Spacing="6" Background="Transparent">
+            <StackPanel Orientation="Horizontal" Spacing="6" Background="Transparent"
+                        DoubleTapped="OnLeafDoubleTapped">
               <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
                                 Width="14" Height="14" VerticalAlignment="Center">
                 <controls:SvgIcon.Foreground>

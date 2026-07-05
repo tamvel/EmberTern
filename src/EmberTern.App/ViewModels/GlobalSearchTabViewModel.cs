@@ -39,6 +39,10 @@ public sealed class SearchResultItemViewModel
 
     // The metadata object to open on double-click — a field hit opens its table.
     public MetadataObject Target => new(ObjectName, Kind);
+
+    // Leaves have no children; present but always-true so the shared TreeViewItem
+    // IsExpanded style binds cleanly across group + leaf node types (gotcha #156).
+    public bool IsExpanded => true;
 }
 
 /// <summary>One result group (per object kind), header "Procedures (5)".</summary>
@@ -111,9 +115,20 @@ public sealed partial class GlobalSearchTabViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     private SearchResultItemViewModel? _selectedItem;
 
+    // TwoWay-bound to the TreeView's SelectedItem (heterogeneous: group or leaf). Driving
+    // selection through the VM keeps the view out of the control's internals — the crash
+    // was a code-behind handler touching the named TreeView field before it was assigned.
+    [ObservableProperty] private object? _selectedNode;
+
     [ObservableProperty] private string _previewText = string.Empty;
 
     public bool HasSelection => SelectedItem is not null;
+
+    partial void OnSelectedNodeChanged(object? value)
+    {
+        // A leaf drives the preview; selecting a group keeps the current preview.
+        if (value is SearchResultItemViewModel item) SelectedItem = item;
+    }
 
     /// <summary>Runs the search and populates the results tree. Errors surface as status text.</summary>
     public async Task RunAsync(CancellationToken cancellationToken = default)
@@ -165,8 +180,9 @@ public sealed partial class GlobalSearchTabViewModel : ViewModelBase
             // Guard against a race: only apply if the selection hasn't moved on.
             if (ReferenceEquals(SelectedItem, item)) PreviewText = ddl;
         }
-        catch (MetadataReadException ex)
+        catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
         {
+            // InvalidOperationException = no open connection (e.g. clicked after a disconnect).
             if (ReferenceEquals(SelectedItem, item))
                 PreviewText = string.Format(CultureInfo.CurrentCulture, UiStrings.GlobalSearchPreviewError, ex.Message);
         }
