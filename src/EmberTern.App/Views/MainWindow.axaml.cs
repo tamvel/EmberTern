@@ -128,8 +128,13 @@ public partial class MainWindow : Window
                 cachedColumnsProvider: GetCachedColumns,
                 ensureColumnsAsync: EnsureColumnsAsync);
             Completion.OccurrenceHighlighter.Attach(_editor);
+            Completion.EditorSearch.Install(_editor);
         }
-        if (_ddlEditor is not null) Completion.OccurrenceHighlighter.Attach(_ddlEditor);
+        if (_ddlEditor is not null)
+        {
+            Completion.OccurrenceHighlighter.Attach(_ddlEditor);
+            Completion.EditorSearch.Install(_ddlEditor);
+        }
         // Re-apply on theme toggle. ActualThemeVariantChanged fires after the
         // resolved variant flips, so the read in ApplySyntaxHighlighting is
         // already on the new theme by the time we get the callback.
@@ -586,11 +591,18 @@ public partial class MainWindow : Window
         FocusSidebarTree();
     }
 
-    // Ctrl+F → focus + select the sidebar filter.
+    // Ctrl+F is context-aware: inside a code editor it belongs to that editor's own
+    // Find bar (AvaloniaEdit SearchPanel), so we leave the event unhandled and let it
+    // tunnel down to the editor. Anywhere else (Explorer, grids, …) it focuses the
+    // sidebar filter — the historical behaviour. (Ctrl+H is handled per-editor.)
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
         {
+            var focused = (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement()) as Visual;
+            if (Completion.EditorSearch.IsInsideEditor(focused))
+                return; // editor's SearchPanel opens Find
+
             if (_sidebarFilterBox is not null)
             {
                 _sidebarFilterBox.Focus();

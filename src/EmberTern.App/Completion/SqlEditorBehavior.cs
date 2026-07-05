@@ -33,6 +33,9 @@ internal static class SqlEditorBehavior
         // Select-an-identifier → box all its occurrences in this editor.
         OccurrenceHighlighter.Attach(editor);
 
+        // Find (Ctrl+F) / Replace (Ctrl+H) + right-click menu — one shared installer.
+        EditorSearch.Install(editor);
+
         // Double-click on an identifier → open the object (same as the SQL Editor).
         editor.DoubleTapped += (_, e) =>
         {

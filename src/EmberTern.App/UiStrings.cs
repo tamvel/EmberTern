@@ -1430,4 +1430,17 @@ internal static class UiStrings
     public const string SessionManagerDisconnectDone = "Disconnect requested for session {0}.";
     public const string SessionManagerCopyHeaders = "ID\tUser\tApplication\tHost\tState\tTx\tOldest Tx\tLoad";
     public const string SessionManagerLastRefreshFormat = "Last refresh {0:HH:mm:ss}";
+
+    // Editor context menu + Find/Replace (Etap 1 — Global Search / Editor Find)
+    public const string EditorMenuUndo = "Undo";
+    public const string EditorMenuRedo = "Redo";
+    public const string EditorMenuCut = "Cut";
+    public const string EditorMenuCopy = "Copy";
+    public const string EditorMenuPaste = "Paste";
+    public const string EditorMenuSelectAll = "Select All";
+    public const string EditorMenuFind = "Find…";
+    public const string EditorMenuReplace = "Replace…";
+    public const string EditorMenuComment = "Comment";
+    public const string EditorMenuUncomment = "Uncomment";
+    public const string EditorMenuFormat = "Format SQL";
 }
