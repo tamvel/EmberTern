@@ -837,7 +837,10 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
 
             await SafeLoadAsync(async () =>
             {
-                DdlText = await _ddlReader.FetchDdlAsync(
+                // DDL tab == Export: render the complete portable script (structure +
+                // COMMENT ON) via the same MetadataExportService the Export button uses.
+                // The editable Source (Editor tab) is untouched.
+                DdlText = await new MetadataExportService(_ddlReader, _reader).BuildObjectScriptAsync(
                     new MetadataObject(ViewName, MetadataObjectKind.View), cancellationToken).ConfigureAwait(true);
             });
 
