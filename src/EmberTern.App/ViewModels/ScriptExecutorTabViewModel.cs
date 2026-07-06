@@ -92,6 +92,19 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRun))]
     private async Task RunAsync()
     {
+        // Pre-flight (Etap 3): a script runs in ONE transaction started here. If a transaction
+        // is already open — a prior script run left it open, or an uncommitted SQL Editor
+        // statement — block with a targeted message and keep the current results + open-tx state
+        // (so the Commit/Rollback buttons stay actionable). This is the "no other working tx"
+        // gate; the executor also guards as a backstop.
+        var block = ResolveRunBlock(_transactionService.IsActive, TransactionOpen);
+        if (block is not null)
+        {
+            HasError = true;
+            StatusText = block;
+            return;
+        }
+
         IsRunning = true;
         HasError = false;
         ClearRows();
@@ -119,7 +132,7 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         var disallowed = ScriptValidation.FindDisallowed(statements);
         if (disallowed.Count > 0)
         {
-            Fail(UiStrings.ScriptStatusDisallowed);
+            Fail(BuildDisallowedMessage(disallowed));
             return;
         }
 
@@ -305,6 +318,31 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         => elapsed.TotalMilliseconds < 1000
             ? string.Format(CultureInfo.CurrentCulture, "{0:0} ms", elapsed.TotalMilliseconds)
             : string.Format(CultureInfo.CurrentCulture, "{0:0.00} s", elapsed.TotalSeconds);
+
+    // Pure Run gate: returns null when a script may run, else the message explaining which
+    // open transaction must be settled first — distinguishing this tab's own leftover
+    // (Commit/Rollback are right here) from an external one (e.g. an uncommitted SQL Editor
+    // statement). A script must own its transaction end-to-end, so it never joins an existing one.
+    internal static string? ResolveRunBlock(bool transactionActive, bool ownLeftover)
+    {
+        if (!transactionActive) return null;
+        return ownLeftover ? UiStrings.ScriptBlockOwnTxOpen : UiStrings.ScriptBlockExternalTxOpen;
+    }
+
+    // Pure: lists the offending transaction-control / session statements so the message is
+    // actionable ("remove these: COMMIT; SET NAMES WIN1250") rather than generic.
+    internal static string BuildDisallowedMessage(IReadOnlyList<ScriptStatement> disallowed)
+    {
+        var snippets = string.Join("; ", disallowed.Select(s => Snippet(s.Text)));
+        return string.Format(CultureInfo.CurrentCulture, UiStrings.ScriptStatusDisallowedFormat, snippets);
+    }
+
+    private static string Snippet(string text)
+    {
+        var flat = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        while (flat.Contains("  ", StringComparison.Ordinal)) flat = flat.Replace("  ", " ");
+        return flat.Length > 40 ? flat.Substring(0, 40) + "…" : flat;
+    }
 }
 
 /// <summary>One row in the Script Executor results grid.</summary>

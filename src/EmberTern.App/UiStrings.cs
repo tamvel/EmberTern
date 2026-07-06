@@ -125,8 +125,13 @@ internal static class UiStrings
     public const string ScriptStatusCommitted = "Committed.";
     public const string ScriptStatusRolledBack = "Rolled back.";
     public const string ScriptStatusParseErrorFormat = "Could not parse the script: {0}";
-    public const string ScriptStatusDisallowed =
-        "The script contains transaction-control or session statements (COMMIT / ROLLBACK / SET TRANSACTION / CONNECT / SET NAMES …) that can't run under a managed script transaction. Remove them and try again.";
+    public const string ScriptStatusDisallowedFormat =
+        "Cannot run — remove the transaction-control / session statements: {0}";
+    // Run gate: a transaction is already open and must be settled before a script runs.
+    public const string ScriptBlockOwnTxOpen =
+        "This script's previous run left a transaction open. Commit or Roll back (buttons above) before running again.";
+    public const string ScriptBlockExternalTxOpen =
+        "A transaction is already open (e.g. an uncommitted SQL Editor statement). Commit or roll back that transaction before running a script.";
     public const string ScriptStatusManualSummaryFormat =
         "{0} succeeded, {1} failed in {2}. Transaction open — Commit or Rollback.";
     public const string ScriptStatusAutoSummaryFormat = "{0} {1} succeeded, {2} failed in {3}.";
