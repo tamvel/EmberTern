@@ -317,7 +317,9 @@ public partial class TriggerDetailTabViewModel : SourceObjectDetailTabViewModel
 
         await SafeLoadAsync(async () =>
         {
-            DdlText = await DdlReader!.FetchDdlAsync(
+            // DDL tab == Export (structure + COMMENT ON via MetadataExportService); the
+            // editable Source (Editor tab) is untouched.
+            DdlText = await new MetadataExportService(DdlReader!, Reader!).BuildObjectScriptAsync(
                 new MetadataObject(TriggerName, MetadataObjectKind.Trigger), cancellationToken).ConfigureAwait(true);
         });
 

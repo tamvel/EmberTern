@@ -125,7 +125,7 @@ public partial class ExceptionDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     private string _editableDescription = string.Empty;
 
     partial void OnDescriptionChanged(string value) => EditableDescription = value ?? string.Empty;
-    partial void OnEditableDescriptionChanged(string value) => MarkDirty();
+    partial void OnEditableDescriptionChanged(string value) { MarkDirty(); RefreshDdl(); }
 
     public ObservableCollection<DependencyGroupNode> DependsOnTree { get; }
     public ObservableCollection<DependencyGroupNode> DependedOnByTree { get; }
@@ -277,7 +277,14 @@ public partial class ExceptionDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     {
         var name = (IsNew ? EditableName : ExceptionName) ?? string.Empty;
         if (string.IsNullOrWhiteSpace(name)) { DdlText = string.Empty; return; }
-        try { DdlText = DdlGenerator.BuildCreateException(name, Message ?? string.Empty) + ";\n"; }
+        try
+        {
+            // DDL tab == Export: structure (live form; the message is part of the CREATE) +
+            // COMMENT ON EXCEPTION, composed through the same PortableDdl the export uses.
+            DdlText = PortableDdl.Compose(
+                DdlGenerator.BuildCreateException(name, Message ?? string.Empty),
+                new[] { PortableDdl.ObjectComment(MetadataObjectKind.Exception, name, EditableDescription) });
+        }
         catch (ArgumentException) { DdlText = string.Empty; }
     }
 

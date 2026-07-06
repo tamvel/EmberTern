@@ -520,7 +520,9 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
 
             await SafeLoadAsync(async () =>
             {
-                DdlText = await _ddlReader.FetchDdlAsync(obj, cancellationToken).ConfigureAwait(true);
+                // DDL tab == Export (structure + COMMENT ON via MetadataExportService); the
+                // editable header/body Source editors are untouched.
+                DdlText = await new MetadataExportService(_ddlReader, _reader).BuildObjectScriptAsync(obj, cancellationToken).ConfigureAwait(true);
             });
 
             await SafeLoadAsync(async () =>

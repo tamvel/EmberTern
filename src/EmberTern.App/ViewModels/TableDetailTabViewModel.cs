@@ -1455,10 +1455,12 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         await SafeLoadAsync(
             async () =>
             {
-                var ddl = await _ddlReader.FetchDdlAsync(
+                // DDL tab == Export: the full portable script (structure + table/column
+                // COMMENT ON) via the same MetadataExportService the Export button uses.
+                // DdlWithPendingPreview appends any queued designer changes on top of this.
+                DdlText = await new MetadataExportService(_ddlReader, _reader).BuildObjectScriptAsync(
                     new MetadataObject(TableName, MetadataObjectKind.Table),
                     cancellationToken).ConfigureAwait(true);
-                DdlText = ddl;
             });
 
         await SafeLoadAsync(

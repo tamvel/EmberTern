@@ -49,11 +49,13 @@ public sealed class MetadataExportService
             }
 
             // FetchDdlAsync only stubs Index — BuildIndexDdl already bakes the COMMENT ON
-            // INDEX only-when-present, so no separate append is needed.
+            // INDEX only-when-present (and an /* INACTIVE */ note), so return it verbatim:
+            // no Compose (which would append a stray ';' after the note) — this is exactly
+            // what the Index Detail DDL tab renders, so export == tab byte-for-byte.
             case MetadataObjectKind.Index:
             {
                 var info = await _detailReader.GetIndexDetailAsync(obj.Name, cancellationToken).ConfigureAwait(false);
-                return info is null ? string.Empty : PortableDdl.Compose(DdlGenerator.BuildIndexDdl(info));
+                return info is null ? string.Empty : DdlGenerator.BuildIndexDdl(info);
             }
 
             // Tables carry both a table comment and per-column comments.

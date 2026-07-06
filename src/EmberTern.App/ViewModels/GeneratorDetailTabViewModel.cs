@@ -457,7 +457,8 @@ public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
 
             await SafeLoadAsync(async () =>
             {
-                DdlText = await _ddlReader.FetchDdlAsync(
+                // DDL tab == Export (structure + COMMENT ON SEQUENCE via MetadataExportService).
+                DdlText = await new MetadataExportService(_ddlReader, _reader).BuildObjectScriptAsync(
                     new MetadataObject(GeneratorName, MetadataObjectKind.Generator), cancellationToken).ConfigureAwait(true);
             });
         }

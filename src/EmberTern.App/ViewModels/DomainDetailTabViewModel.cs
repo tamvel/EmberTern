@@ -166,7 +166,7 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
     private string _editableDescription = string.Empty;
 
     partial void OnDescriptionChanged(string value) => EditableDescription = value ?? string.Empty;
-    partial void OnEditableDescriptionChanged(string value) => MarkDirty();
+    partial void OnEditableDescriptionChanged(string value) { MarkDirty(); RefreshDdl(); }
 
     public ObservableCollection<DependencyGroupNode> UsedByTree { get; }
 
@@ -426,7 +426,16 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
     {
         var name = (IsNew ? EditableName : DomainName) ?? string.Empty;
         if (string.IsNullOrWhiteSpace(name)) { DdlText = string.Empty; return; }
-        try { DdlText = DdlGenerator.BuildCreateDomain(BuildCurrentDomainInfo()); }
+        try
+        {
+            // DDL tab == Export: structure (live form) + COMMENT ON DOMAIN, composed through
+            // the same PortableDdl the MetadataExportService uses. Live (reflects unsaved
+            // edits) yet identical to the exported script at rest.
+            var info = BuildCurrentDomainInfo();
+            DdlText = PortableDdl.Compose(
+                DdlGenerator.BuildCreateDomain(info),
+                new[] { PortableDdl.ObjectComment(MetadataObjectKind.Domain, info.Name, info.Description) });
+        }
         catch (ArgumentException) { DdlText = string.Empty; }
     }
 
