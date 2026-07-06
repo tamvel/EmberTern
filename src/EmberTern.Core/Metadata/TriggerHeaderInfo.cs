@@ -24,4 +24,9 @@ public sealed class TriggerHeaderInfo
 
     /// <summary>True when the trigger is ACTIVE (RDB$TRIGGER_INACTIVE != 1).</summary>
     public bool Active { get; init; } = true;
+
+    /// <summary>True for a database-level (ON CONNECT / ON TRANSACTION …) or DDL trigger —
+    /// it has no relation and no BEFORE/AFTER event set, so the relation-trigger Easy model
+    /// can't represent it. The editor keeps such triggers in Source mode.</summary>
+    public bool IsDatabaseTrigger { get; init; }
 }

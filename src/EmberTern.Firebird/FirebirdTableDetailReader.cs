@@ -380,7 +380,8 @@ public sealed class FirebirdTableDetailReader
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText =
-                "SELECT RDB$DESCRIPTION FROM RDB$PROCEDURES WHERE RDB$PROCEDURE_NAME = @name";
+                "SELECT RDB$DESCRIPTION FROM RDB$PROCEDURES WHERE RDB$PROCEDURE_NAME = @name" +
+                FirebirdDdlReader.StandalonePackageFilter(FirebirdDdlReader.ParseServerMajor(connection.ServerVersion));
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
             cmd.Parameters.AddWithValue("@name", procedureName);
@@ -429,7 +430,11 @@ public sealed class FirebirdTableDetailReader
         try
         {
             await using var cmd = connection.CreateCommand();
-            cmd.CommandText = ProcedureParametersSql;
+            // Exclude a packaged namesake on FB3+ (else its params merge with the
+            // standalone procedure's → doubled "MSG, MSG" grid — see StandalonePackageFilter).
+            cmd.CommandText = FirebirdDdlReader.InsertBeforeOrderBy(
+                ProcedureParametersSql,
+                FirebirdDdlReader.StandalonePackageFilter(FirebirdDdlReader.ParseServerMajor(connection.ServerVersion), "pp."));
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
             cmd.Parameters.AddWithValue("@name", procedureName);
@@ -776,7 +781,8 @@ public sealed class FirebirdTableDetailReader
         {
             await using var cmd = connection.CreateCommand();
             cmd.CommandText =
-                "SELECT RDB$DESCRIPTION FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name";
+                "SELECT RDB$DESCRIPTION FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name" +
+                FirebirdDdlReader.StandalonePackageFilter(FirebirdDdlReader.ParseServerMajor(connection.ServerVersion));
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
             cmd.Parameters.AddWithValue("@name", functionName);
@@ -816,11 +822,18 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            // Exclude a packaged namesake on FB3+ (else its args merge with the standalone
+            // function's → doubled "A, A, B, B" — see StandalonePackageFilter).
+            var pkgFilter = FirebirdDdlReader.StandalonePackageFilter(
+                FirebirdDdlReader.ParseServerMajor(connection.ServerVersion), "fa.");
+            var infoFilter = FirebirdDdlReader.StandalonePackageFilter(
+                FirebirdDdlReader.ParseServerMajor(connection.ServerVersion));
+
             int returnArgPos = 0;
             bool deterministic = false;
             await using (var infoCmd = connection.CreateCommand())
             {
-                infoCmd.CommandText = FunctionInfoSql;
+                infoCmd.CommandText = FirebirdDdlReader.InsertBeforeOrderBy(FunctionInfoSql, infoFilter);
                 infoCmd.CommandTimeout = 0;
                 infoCmd.Transaction = MetaTx;
                 infoCmd.Parameters.AddWithValue("@name", functionName);
@@ -836,7 +849,7 @@ public sealed class FirebirdTableDetailReader
             var returnType = string.Empty;
             await using (var cmd = connection.CreateCommand())
             {
-                cmd.CommandText = FunctionArgumentsSql;
+                cmd.CommandText = FirebirdDdlReader.InsertBeforeOrderBy(FunctionArgumentsSql, pkgFilter);
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
                 cmd.Parameters.AddWithValue("@name", functionName);
@@ -1566,6 +1579,9 @@ public sealed class FirebirdTableDetailReader
             int inactive = reader.IsDBNull(3) ? 0 : Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture);
 
             var (isBefore, ins, upd, del) = DecodeTriggerHeader(type);
+            // A relation trigger always has a table and a type in 1..127; a DB-level
+            // (>= 8192) or DDL trigger has neither — flag it so the editor stays in Source.
+            bool isDbTrigger = type >= 8192 || string.IsNullOrEmpty(table);
             return new TriggerHeaderInfo
             {
                 Table = table,
@@ -1575,6 +1591,7 @@ public sealed class FirebirdTableDetailReader
                 FiresDelete = del,
                 Position = sequence,
                 Active = inactive != 1,
+                IsDatabaseTrigger = isDbTrigger,
             };
         }
         catch (FbException ex)
@@ -2534,16 +2551,25 @@ public sealed class FirebirdTableDetailReader
     internal static bool IsPrimaryConstraint(string? constraintType)
         => string.Equals(constraintType, "PRIMARY KEY", StringComparison.OrdinalIgnoreCase);
 
-    // RDB$DEFAULT_SOURCE includes the leading "DEFAULT " keyword (sometimes "default ").
-    // Strip it so the grid shows just the value the user wrote.
+    // RDB$DEFAULT_SOURCE stores the default with its leading token exactly as written:
+    // table columns / domains use "DEFAULT value", while procedure/function parameters
+    // use the "= value" form (Firebird keeps whichever the DDL used). Strip either so the
+    // grid shows — and Source regeneration re-adds — just the bare value. Without stripping
+    // the "=" form a parameter default surfaced as "= 1" and BuildCreateOrAlterProcedure
+    // re-prepended " = ", producing the un-compilable "SMALLINT = = 1".
     internal static string? StripDefaultPrefix(string? defaultSource)
     {
         if (string.IsNullOrEmpty(defaultSource)) return null;
+        var value = defaultSource.Trim();
         const string prefix = "DEFAULT ";
-        if (defaultSource.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        if (value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
-            return defaultSource.Substring(prefix.Length).Trim();
+            return value.Substring(prefix.Length).Trim();
         }
-        return defaultSource;
+        if (value.StartsWith('='))
+        {
+            return value.Substring(1).Trim();
+        }
+        return value;
     }
 }

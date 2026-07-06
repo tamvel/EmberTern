@@ -111,6 +111,33 @@ public class MetadataReaderTests
         }
     }
 
+    [Theory]
+    [InlineData(MetadataObjectKind.Procedure)]
+    [InlineData(MetadataObjectKind.Function)]
+    public void SqlFor_Fb3Plus_ExcludesPackagedRoutines(MetadataObjectKind kind)
+    {
+        // On FB3+ packaged routines share the catalog with standalone ones — the
+        // top-level Functions/Procedures list must exclude them (else a packaged
+        // namesake shows as a duplicate). Gated on the server major.
+        Assert.Contains("RDB$PACKAGE_NAME IS NULL", FirebirdMetadataReader.SqlFor(kind, 5));
+        Assert.Contains("RDB$PACKAGE_NAME IS NULL", FirebirdMetadataReader.CountSqlFor(kind, 5));
+        // FB2.5 has no RDB$PACKAGE_NAME column — the filter must NOT be emitted there.
+        Assert.DoesNotContain("RDB$PACKAGE_NAME", FirebirdMetadataReader.SqlFor(kind, 2));
+        Assert.DoesNotContain("RDB$PACKAGE_NAME", FirebirdMetadataReader.CountSqlFor(kind, 2));
+        // The 1-arg overload (used by the shape tests) stays FB2.5-safe too.
+        Assert.DoesNotContain("RDB$PACKAGE_NAME", FirebirdMetadataReader.SqlFor(kind));
+    }
+
+    [Theory]
+    [InlineData(MetadataObjectKind.Table)]
+    [InlineData(MetadataObjectKind.Trigger)]
+    [InlineData(MetadataObjectKind.Index)]
+    public void SqlFor_Fb3Plus_NonRoutineKinds_Unfiltered(MetadataObjectKind kind)
+    {
+        // The package filter applies ONLY to standalone procedures/functions.
+        Assert.DoesNotContain("RDB$PACKAGE_NAME", FirebirdMetadataReader.SqlFor(kind, 5));
+    }
+
     [Fact]
     public void SqlFor_TableVsView_DistinguishesByViewBlr()
     {

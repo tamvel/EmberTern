@@ -75,6 +75,11 @@ public class FirebirdTableDetailReaderTests
     [InlineData("0", "0")]
     [InlineData(null, null)]
     [InlineData("", null)]
+    // Procedure/function parameter defaults are stored with the "= value" form; strip the
+    // "=" so Source regeneration doesn't produce the un-compilable "SMALLINT = = 1".
+    [InlineData("= 1", "1")]
+    [InlineData("=1", "1")]
+    [InlineData("= 'x'", "'x'")]
     public void StripDefaultPrefix_RemovesLeadingDefaultKeyword(string? input, string? expected)
     {
         Assert.Equal(expected, FirebirdTableDetailReader.StripDefaultPrefix(input));

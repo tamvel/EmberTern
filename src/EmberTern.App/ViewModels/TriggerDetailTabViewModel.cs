@@ -120,6 +120,17 @@ public partial class TriggerDetailTabViewModel : SourceObjectDetailTabViewModel
 
     partial void OnActiveChanged(bool value) => MarkDirty();
 
+    /// <summary>True for a database-level (ON CONNECT / ON TRANSACTION …) or DDL trigger.
+    /// Such triggers have no table / BEFORE-AFTER event, so the relation-trigger Easy model
+    /// can't represent them — Easy mode is disabled and they stay in Source mode.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanUseEasyMode))]
+    private bool _isDatabaseTrigger;
+
+    /// <summary>Easy mode is only meaningful for relation triggers; a DB-level / DDL
+    /// trigger is Source-only (see <see cref="IsDatabaseTrigger"/>).</summary>
+    public override bool CanUseEasyMode => !IsDatabaseTrigger;
+
     // ─── Trigger name (auto-derived until overridden) ─────────────────────
 
     /// <summary>Trigger name shown in Easy mode. Editable in the New Trigger flow
@@ -191,6 +202,11 @@ public partial class TriggerDetailTabViewModel : SourceObjectDetailTabViewModel
     /// filled in (a real Compile validates the metadata first).</summary>
     internal override string BuildFullSource()
     {
+        // A DB-level / DDL trigger can't be represented by the relation-trigger Easy model
+        // (no table, no BEFORE/AFTER). Keep the loaded Source text as the single source of
+        // truth so a stray Easy⇄Source toggle can't fabricate "FOR TABLE_NAME BEFORE INSERT".
+        if (IsDatabaseTrigger) return SourceText;
+
         var name = string.IsNullOrWhiteSpace(EditableTriggerName) ? TriggerName : EditableTriggerName.Trim();
         var table = string.IsNullOrWhiteSpace(TableName) ? "TABLE_NAME" : TableName.Trim();
         bool ins = FiresInsert, upd = FiresUpdate, del = FiresDelete;
@@ -276,6 +292,10 @@ public partial class TriggerDetailTabViewModel : SourceObjectDetailTabViewModel
         await SafeLoadAsync(async () =>
         {
             var header = await Reader!.GetTriggerHeaderAsync(TriggerName, cancellationToken).ConfigureAwait(true);
+            // Set the DB-trigger flag first so it gates BuildFullSource before we force
+            // Source mode — a DB-level trigger has no relation-trigger Easy representation.
+            IsDatabaseTrigger = header.IsDatabaseTrigger;
+            if (IsDatabaseTrigger) EasyMode = false;
             ApplyHeader(header.Table, header.IsBefore, header.FiresInsert, header.FiresUpdate, header.FiresDelete, header.Position, header.Active);
         });
 

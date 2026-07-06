@@ -104,9 +104,68 @@ public class DdlReaderTests
     [Fact]
     public void DescribeTriggerType_DbLevelTriggers_ReturnNullForFallback()
     {
-        // DB-level triggers use codes >= 8192. We don't decode them, just fall back.
+        // DB-level triggers use codes >= 8192; relation-trigger decoding falls back
+        // (they're described by DescribeDatabaseTriggerEvent instead).
         Assert.Null(FirebirdDdlReader.DescribeTriggerType(8192));
         Assert.Null(FirebirdDdlReader.DescribeTriggerType(8193));
+    }
+
+    [Theory]
+    [InlineData(8192L, "ON CONNECT")]
+    [InlineData(8193L, "ON DISCONNECT")]
+    [InlineData(8194L, "ON TRANSACTION START")]
+    [InlineData(8195L, "ON TRANSACTION COMMIT")]
+    [InlineData(8196L, "ON TRANSACTION ROLLBACK")]
+    public void DescribeDatabaseTriggerEvent_MapsDbLevelCodes(long t, string expected)
+    {
+        Assert.Equal(expected, FirebirdDdlReader.DescribeDatabaseTriggerEvent(t));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(1L)]    // relation trigger — not a DB-level event
+    [InlineData(3L)]
+    [InlineData(8197L)] // out of the DB-level range
+    public void DescribeDatabaseTriggerEvent_NonDbLevel_ReturnsNull(long? t)
+    {
+        Assert.Null(FirebirdDdlReader.DescribeDatabaseTriggerEvent(t));
+    }
+
+    [Theory]
+    [InlineData(5, "", " AND RDB$PACKAGE_NAME IS NULL ")]
+    [InlineData(5, "pp.", " AND pp.RDB$PACKAGE_NAME IS NULL ")]
+    [InlineData(4, "fa.", " AND fa.RDB$PACKAGE_NAME IS NULL ")]
+    [InlineData(3, "", " AND RDB$PACKAGE_NAME IS NULL ")]
+    [InlineData(2, "pp.", "")]   // FB2.5 has no RDB$PACKAGE_NAME column — emit nothing.
+    [InlineData(0, "", "")]
+    public void StandalonePackageFilter_GatesOnServerMajor(int serverMajor, string alias, string expected)
+    {
+        Assert.Equal(expected, FirebirdDdlReader.StandalonePackageFilter(serverMajor, alias));
+    }
+
+    [Fact]
+    public void InsertBeforeOrderBy_PlacesClauseBeforeOrderBy()
+    {
+        var sql = "SELECT X FROM T WHERE A = @name AND B = @pt ORDER BY N";
+        var result = FirebirdDdlReader.InsertBeforeOrderBy(sql, " AND T.RDB$PACKAGE_NAME IS NULL ");
+        // The filter must land inside the WHERE, not after ORDER BY (which would be a syntax error).
+        Assert.Contains("@pt AND T.RDB$PACKAGE_NAME IS NULL  ORDER BY N", result);
+        Assert.True(result.IndexOf("RDB$PACKAGE_NAME") < result.IndexOf("ORDER BY"));
+    }
+
+    [Fact]
+    public void InsertBeforeOrderBy_NoOrderBy_Appends()
+    {
+        var sql = "SELECT X FROM T WHERE A = @name";
+        var result = FirebirdDdlReader.InsertBeforeOrderBy(sql, " AND RDB$PACKAGE_NAME IS NULL ");
+        Assert.Equal("SELECT X FROM T WHERE A = @name AND RDB$PACKAGE_NAME IS NULL ", result);
+    }
+
+    [Fact]
+    public void InsertBeforeOrderBy_EmptyClause_ReturnsUnchanged()
+    {
+        var sql = "SELECT X FROM T WHERE A = @name ORDER BY N";
+        Assert.Equal(sql, FirebirdDdlReader.InsertBeforeOrderBy(sql, string.Empty));
     }
 
     [Theory]

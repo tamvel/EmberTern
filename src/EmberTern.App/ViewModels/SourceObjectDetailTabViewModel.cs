@@ -124,7 +124,7 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
     /// with an editable name field; subclasses seed an initial template + ClearDirty.</summary>
     public bool IsNew { get; init; }
 
-    public bool CanUseEasyMode => true;
+    public virtual bool CanUseEasyMode => true;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSourceMode))]

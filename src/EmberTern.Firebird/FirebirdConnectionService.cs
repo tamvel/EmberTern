@@ -212,7 +212,8 @@ public sealed class FirebirdConnectionService : IDisposable
     public async Task<IReadOnlyList<string?>> ExecuteAdminBatchAsync(
         IReadOnlyList<string> statements,
         CancellationToken cancellationToken = default,
-        IProgress<(int Index, string? Error)>? progress = null)
+        IProgress<(int Index, string? Error)>? progress = null,
+        FbTransactionOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(statements);
         if (statements.Count == 0)
@@ -242,7 +243,13 @@ public sealed class FirebirdConnectionService : IDisposable
             FbTransaction? tx = null;
             try
             {
-                tx = (FbTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+                // Honour the caller's explicit TPB (Developer Mode = WAIT + lock timeout;
+                // Standard = NOWAIT) so recompile waits for an in-use object instead of
+                // failing immediately. Falls back to the driver default when unspecified
+                // (e.g. SET STATISTICS callers that pass none).
+                tx = (FbTransaction)(options is null
+                    ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
+                    : await connection.BeginTransactionAsync(options).ConfigureAwait(false));
                 await using var cmd = connection.CreateCommand();
                 cmd.CommandText = statements[i];
                 cmd.CommandTimeout = 0;

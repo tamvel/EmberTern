@@ -48,7 +48,9 @@ public sealed class FirebirdDdlExecutor
         IReadOnlyList<string> statements,
         CancellationToken cancellationToken = default,
         IProgress<(int Index, string? Error)>? progress = null)
-        => _connectionService.ExecuteAdminBatchAsync(statements, cancellationToken, progress);
+        // Apply the Developer-Mode-aware DDL TPB (WAIT + lock timeout in Dev Mode, else
+        // NOWAIT) so recompile honours the connection's mode instead of the driver default.
+        => _connectionService.ExecuteAdminBatchAsync(statements, cancellationToken, progress, BuildDdlTransactionOptions());
 
     /// <summary>
     /// Splits <paramref name="sql"/> on top-level semicolons, then runs the whole

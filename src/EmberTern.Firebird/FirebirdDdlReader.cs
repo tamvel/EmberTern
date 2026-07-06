@@ -337,12 +337,14 @@ public sealed class FirebirdDdlReader
         var connection = LaneConnection();
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
         var tx = _transactionService?.ActiveTransaction;
+        var serverMajor = ParseServerMajor(connection.ServerVersion);
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var body = await ReadBlobAsync(connection, tx,
-                "SELECT RDB$PROCEDURE_SOURCE FROM RDB$PROCEDURES WHERE RDB$PROCEDURE_NAME = @name",
+                "SELECT RDB$PROCEDURE_SOURCE FROM RDB$PROCEDURES WHERE RDB$PROCEDURE_NAME = @name" +
+                StandalonePackageFilter(serverMajor),
                 obj.Name, fallback, cancellationToken).ConfigureAwait(false);
             return string.IsNullOrWhiteSpace(body) ? string.Empty : body.Trim();
         }
@@ -444,8 +446,8 @@ public sealed class FirebirdDdlReader
         var sb = new StringBuilder();
         sb.Append("CREATE OR ALTER PROCEDURE ").Append(Quote(name));
 
-        var inputs = await ReadProcedureParamsAsync(connection, tx, name, paramType: 0, ct).ConfigureAwait(false);
-        var outputs = await ReadProcedureParamsAsync(connection, tx, name, paramType: 1, ct).ConfigureAwait(false);
+        var inputs = await ReadProcedureParamsAsync(connection, tx, name, paramType: 0, serverMajor, ct).ConfigureAwait(false);
+        var outputs = await ReadProcedureParamsAsync(connection, tx, name, paramType: 1, serverMajor, ct).ConfigureAwait(false);
 
         if (inputs.Count > 0)
         {
@@ -461,7 +463,8 @@ public sealed class FirebirdDdlReader
         sb.AppendLine("AS");
 
         var source = await ReadBlobAsync(connection, tx,
-            "SELECT RDB$PROCEDURE_SOURCE FROM RDB$PROCEDURES WHERE RDB$PROCEDURE_NAME = @name",
+            "SELECT RDB$PROCEDURE_SOURCE FROM RDB$PROCEDURES WHERE RDB$PROCEDURE_NAME = @name" +
+            StandalonePackageFilter(serverMajor),
             name, fallback, ct).ConfigureAwait(false);
 
         if (string.IsNullOrWhiteSpace(source))
@@ -571,7 +574,7 @@ public sealed class FirebirdDdlReader
     private static async Task<string> BuildTriggerDdlAsync(FbConnection connection, FbTransaction? tx, string name, Encoding fallback, CancellationToken ct)
     {
         string? relation = null;
-        short? triggerType = null;
+        long? triggerType = null;   // RDB$TRIGGER_TYPE is BIGINT — DB-level/DDL triggers carry values > short.
         short? sequence = null;
         short? inactive = null;
 
@@ -586,7 +589,7 @@ public sealed class FirebirdDdlReader
             if (await reader.ReadAsync(ct).ConfigureAwait(false))
             {
                 relation = reader.IsDBNull(0) ? null : reader.GetString(0);
-                triggerType = SafeShort(reader, 1);
+                triggerType = reader.IsDBNull(1) ? null : Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
                 sequence = SafeShort(reader, 2);
                 inactive = SafeShort(reader, 3);
             }
@@ -598,28 +601,32 @@ public sealed class FirebirdDdlReader
 
         var sb = new StringBuilder();
         sb.Append("CREATE OR ALTER TRIGGER ").Append(Quote(name));
-        if (inactive == 1) sb.Append(" INACTIVE");
 
-        if (!string.IsNullOrEmpty(relation))
+        var dbEvent = DescribeDatabaseTriggerEvent(triggerType);
+        if (dbEvent is not null)
         {
-            sb.Append(" FOR ").Append(Quote(relation));
+            // Database-level trigger (ON CONNECT / ON DISCONNECT / ON TRANSACTION …):
+            // no FOR clause, no BEFORE/AFTER — "[INACTIVE] ON <event> [POSITION n]".
+            sb.AppendLine();
+            if (inactive == 1) sb.Append("INACTIVE ");
+            sb.Append(dbEvent);
+            if (sequence is > 0) sb.Append(" POSITION ").Append(sequence.Value);
         }
-
-        // Trigger type encodes timing + event(s); use shorthand for the common cases,
-        // fall back to a numeric comment when the encoding is non-standard.
-        var header = DescribeTriggerType(triggerType);
-        if (!string.IsNullOrEmpty(header))
+        else
         {
-            sb.Append(' ').Append(header);
-        }
-        else if (triggerType.HasValue)
-        {
-            sb.Append(" /* trigger type ").Append(triggerType.Value).Append(" */");
-        }
-
-        if (sequence is > 0)
-        {
-            sb.Append(" POSITION ").Append(sequence.Value);
+            // Relation (table/view) trigger. Firebird's grammar is: FOR <table> FIRST,
+            // then "[ACTIVE|INACTIVE] {BEFORE|AFTER} <events> [POSITION n]". Emitting
+            // INACTIVE before FOR (the old order) produced "… INACTIVE FOR STANMAG …"
+            // → -104 "Token unknown … FOR".
+            if (!string.IsNullOrEmpty(relation)) sb.Append(" FOR ").Append(Quote(relation));
+            sb.AppendLine();
+            if (inactive == 1) sb.Append("INACTIVE ");
+            // Trigger type encodes timing + event(s); shorthand for the common cases,
+            // numeric-comment fallback for a non-standard encoding.
+            var timing = triggerType is >= 0 and < 8192 ? DescribeTriggerType((short)triggerType.Value) : null;
+            if (!string.IsNullOrEmpty(timing)) sb.Append(timing);
+            else if (triggerType.HasValue) sb.Append("/* trigger type ").Append(triggerType.Value).Append(" */");
+            if (sequence is > 0) sb.Append(" POSITION ").Append(sequence.Value);
         }
 
         sb.AppendLine();
@@ -628,6 +635,19 @@ public sealed class FirebirdDdlReader
         sb.AppendLine(string.IsNullOrWhiteSpace(body) ? "BEGIN\n  /* trigger body unavailable */\nEND" : body);
         return sb.ToString();
     }
+
+    // Maps a database-level trigger's RDB$TRIGGER_TYPE (8192-8196) to its ON-event clause.
+    // Returns null for relation triggers (< 8192) and DDL triggers (other encodings) —
+    // relation triggers are described by DescribeTriggerType instead.
+    internal static string? DescribeDatabaseTriggerEvent(long? triggerType) => triggerType switch
+    {
+        8192 => "ON CONNECT",
+        8193 => "ON DISCONNECT",
+        8194 => "ON TRANSACTION START",
+        8195 => "ON TRANSACTION COMMIT",
+        8196 => "ON TRANSACTION ROLLBACK",
+        _ => null,
+    };
 
     // -- Functions ------------------------------------------------------------
 
@@ -674,12 +694,14 @@ public sealed class FirebirdDdlReader
         var connection = LaneConnection();
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
         var tx = _transactionService?.ActiveTransaction;
+        var serverMajor = ParseServerMajor(connection.ServerVersion);
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var body = await ReadBlobAsync(connection, tx,
-                "SELECT RDB$FUNCTION_SOURCE FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name",
+                "SELECT RDB$FUNCTION_SOURCE FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name" +
+                StandalonePackageFilter(serverMajor),
                 obj.Name, fallback, cancellationToken).ConfigureAwait(false);
             return string.IsNullOrWhiteSpace(body) ? string.Empty : body.Trim();
         }
@@ -708,7 +730,8 @@ public sealed class FirebirdDdlReader
         await using (var cmd = connection.CreateCommand())
         {
             cmd.Transaction = tx;
-            cmd.CommandText = "SELECT RDB$RETURN_ARGUMENT, RDB$DETERMINISTIC_FLAG FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name";
+            cmd.CommandText = "SELECT RDB$RETURN_ARGUMENT, RDB$DETERMINISTIC_FLAG FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name" +
+                StandalonePackageFilter(serverMajor);
             cmd.CommandTimeout = 0;
             cmd.Parameters.AddWithValue("@name", name);
             await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -719,10 +742,11 @@ public sealed class FirebirdDdlReader
             }
         }
 
-        var (inputs, returnType) = await ReadFunctionArgsAsync(connection, tx, name, returnArgPos, ct).ConfigureAwait(false);
+        var (inputs, returnType) = await ReadFunctionArgsAsync(connection, tx, name, returnArgPos, serverMajor, ct).ConfigureAwait(false);
 
         var source = await ReadBlobAsync(connection, tx,
-            "SELECT RDB$FUNCTION_SOURCE FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name",
+            "SELECT RDB$FUNCTION_SOURCE FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name" +
+            StandalonePackageFilter(serverMajor),
             name, fallback, ct).ConfigureAwait(false);
 
         var sb = new StringBuilder();
@@ -754,7 +778,7 @@ public sealed class FirebirdDdlReader
     // formatted type alone. Mirrors ReadProcedureParamsAsync — the type resolves to the
     // underlying field type (a domain argument shows its resolved type, same as procs).
     private static async Task<(System.Collections.Generic.List<string> Inputs, string ReturnType)> ReadFunctionArgsAsync(
-        FbConnection connection, FbTransaction? tx, string funcName, int returnArgPos, CancellationToken ct)
+        FbConnection connection, FbTransaction? tx, string funcName, int returnArgPos, int serverMajor, CancellationToken ct)
     {
         var inputs = new System.Collections.Generic.List<string>();
         var returnType = string.Empty;
@@ -768,6 +792,7 @@ public sealed class FirebirdDdlReader
             "FROM RDB$FUNCTION_ARGUMENTS fa " +
             "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = fa.RDB$FIELD_SOURCE " +
             "WHERE fa.RDB$FUNCTION_NAME = @name " +
+            StandalonePackageFilter(serverMajor, "fa.") +
             "ORDER BY fa.RDB$ARGUMENT_POSITION";
         cmd.Parameters.AddWithValue("@name", funcName);
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -1197,7 +1222,7 @@ public sealed class FirebirdDdlReader
     }
 
     private static async Task<System.Collections.Generic.List<string>> ReadProcedureParamsAsync(
-        FbConnection connection, FbTransaction? tx, string procName, short paramType, CancellationToken ct)
+        FbConnection connection, FbTransaction? tx, string procName, short paramType, int serverMajor, CancellationToken ct)
     {
         var rows = new System.Collections.Generic.List<string>();
         await using var cmd = connection.CreateCommand();
@@ -1206,10 +1231,11 @@ public sealed class FirebirdDdlReader
             "SELECT TRIM(pp.RDB$PARAMETER_NAME), " +
             "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
             "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, f.RDB$CHARACTER_LENGTH, " +
-            "       COALESCE(pp.RDB$NULL_FLAG, f.RDB$NULL_FLAG) " +
+            "       COALESCE(pp.RDB$NULL_FLAG, f.RDB$NULL_FLAG), pp.RDB$DEFAULT_SOURCE " +
             "FROM RDB$PROCEDURE_PARAMETERS pp " +
             "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = pp.RDB$FIELD_SOURCE " +
             "WHERE pp.RDB$PROCEDURE_NAME = @name AND pp.RDB$PARAMETER_TYPE = @pt " +
+            StandalonePackageFilter(serverMajor, "pp.") +
             "ORDER BY pp.RDB$PARAMETER_NUMBER";
         cmd.Parameters.AddWithValue("@name", procName);
         cmd.Parameters.AddWithValue("@pt", paramType);
@@ -1221,12 +1247,35 @@ public sealed class FirebirdDdlReader
                 SafeShort(reader, 1), SafeShort(reader, 2), SafeShort(reader, 3),
                 SafeShort(reader, 4), SafeShort(reader, 5), SafeShort(reader, 6));
             var nf = SafeShort(reader, 7);
+            // RDB$DEFAULT_SOURCE keeps the leading token as written ("= 1" or "DEFAULT 1");
+            // strip it so we re-emit exactly one "= value" (only valid on input params).
+            var def = FirebirdTableDetailReader.StripDefaultPrefix(SafeString(reader, 8));
             var sb = new StringBuilder();
             sb.Append(Quote(pn)).Append(' ').Append(type);
             if (nf == 1) sb.Append(" NOT NULL");
+            if (paramType == 0 && !string.IsNullOrWhiteSpace(def)) sb.Append(" = ").Append(def.Trim());
             rows.Add(sb.ToString());
         }
         return rows;
+    }
+
+    // FB3+ packaged procedures/functions live in the same catalog tables as standalone
+    // ones, keyed by the same RDB$*_NAME (and RDB$*_PARAMETERS/ARGUMENTS carry the same
+    // RDB$PACKAGE_NAME column). A by-name read for a STANDALONE routine must exclude
+    // packaged rows or a packaged namesake doubles/mismatches the result — e.g. a doubled
+    // argument list "A, A, B, B" → -901 "duplicate specification". The column is FB3+ only,
+    // so the filter is gated on the server major (there's nothing to exclude on 2.5).
+    // Insert this before any ORDER BY (via InsertBeforeOrderBy) so the WHERE stays valid.
+    // Leading + trailing space so it drops cleanly between a WHERE clause and a trailing
+    // "ORDER BY …", or appends to a WHERE-terminated query.
+    internal static string StandalonePackageFilter(int serverMajor, string alias = "")
+        => serverMajor >= 3 ? $" AND {alias}RDB$PACKAGE_NAME IS NULL " : string.Empty;
+
+    internal static string InsertBeforeOrderBy(string sql, string clause)
+    {
+        if (clause.Length == 0) return sql;
+        int idx = sql.IndexOf(" ORDER BY", StringComparison.OrdinalIgnoreCase);
+        return idx < 0 ? sql + clause : sql.Insert(idx, clause);
     }
 
     internal static int ParseServerMajor(string? serverVersion)

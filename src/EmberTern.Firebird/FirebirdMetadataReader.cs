@@ -36,8 +36,8 @@ public sealed class FirebirdMetadataReader
         MetadataObjectKind kind,
         CancellationToken cancellationToken = default)
     {
-        var sql = SqlFor(kind);
         var connection = LaneConnection();
+        var sql = SqlFor(kind, FirebirdDdlReader.ParseServerMajor(connection.ServerVersion));
 
         // Readers never open their own transaction. When the user has a working tx
         // active we attach to it; otherwise the managed driver runs the SELECT in
@@ -119,8 +119,8 @@ public sealed class FirebirdMetadataReader
         MetadataObjectKind kind,
         CancellationToken cancellationToken = default)
     {
-        var sql = CountSqlFor(kind);
         var connection = LaneConnection();
+        var sql = CountSqlFor(kind, FirebirdDdlReader.ParseServerMajor(connection.ServerVersion));
         // Capture the lock once — see ListAsync for why re-evaluating LaneLock() at
         // Release can leak a semaphore.
         var commandLock = LaneLock();
@@ -157,7 +157,22 @@ public sealed class FirebirdMetadataReader
     // named), and LoadGroupAsync overwrites Count with the real list size on expand
     // anyway, so any hair-thin edge (null/empty names) self-corrects.
     // Internal so tests can assert the shape without a live connection.
-    internal static string CountSqlFor(MetadataObjectKind kind) => kind switch
+    // See SqlFor for why packaged routines are excluded on FB3+ (avoids counting a
+    // packaged namesake as a top-level standalone procedure/function).
+    internal static string CountSqlFor(MetadataObjectKind kind) => CountSqlFor(kind, 0);
+
+    internal static string CountSqlFor(MetadataObjectKind kind, int serverMajor)
+    {
+        if (serverMajor >= 3 && kind == MetadataObjectKind.Procedure)
+            return "SELECT COUNT(*) FROM RDB$PROCEDURES " +
+                   "WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 AND RDB$PACKAGE_NAME IS NULL";
+        if (serverMajor >= 3 && kind == MetadataObjectKind.Function)
+            return "SELECT COUNT(*) FROM RDB$FUNCTIONS " +
+                   "WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 AND RDB$PACKAGE_NAME IS NULL";
+        return CountSqlForBase(kind);
+    }
+
+    private static string CountSqlForBase(MetadataObjectKind kind) => kind switch
     {
         MetadataObjectKind.Table =>
             "SELECT COUNT(*) FROM RDB$RELATIONS WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 AND RDB$VIEW_BLR IS NULL",
@@ -328,8 +343,30 @@ public sealed class FirebirdMetadataReader
             || name.StartsWith("SEC$", StringComparison.OrdinalIgnoreCase);
     }
 
+    // FB3+ stores packaged procedures/functions in the SAME catalog tables as standalone
+    // ones, keyed by the same RDB$*_NAME. Without excluding packaged rows, a packaged
+    // routine that shares a name with a standalone one leaks into the top-level
+    // Functions/Procedures nodes (a visible duplicate) AND its args merge into the
+    // standalone one's reconstruction (→ -901 "duplicate specification"). RDB$PACKAGE_NAME
+    // is FB3+ only, so the filter is gated on the server major (packages don't exist on 2.5,
+    // so there's nothing to exclude there anyway).
+    internal static string SqlFor(MetadataObjectKind kind) => SqlFor(kind, 0);
+
+    internal static string SqlFor(MetadataObjectKind kind, int serverMajor)
+    {
+        if (serverMajor >= 3 && kind == MetadataObjectKind.Procedure)
+            return "SELECT TRIM(RDB$PROCEDURE_NAME) FROM RDB$PROCEDURES " +
+                   "WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 AND RDB$PACKAGE_NAME IS NULL " +
+                   "ORDER BY RDB$PROCEDURE_NAME";
+        if (serverMajor >= 3 && kind == MetadataObjectKind.Function)
+            return "SELECT TRIM(RDB$FUNCTION_NAME) FROM RDB$FUNCTIONS " +
+                   "WHERE COALESCE(RDB$SYSTEM_FLAG, 0) = 0 AND RDB$PACKAGE_NAME IS NULL " +
+                   "ORDER BY RDB$FUNCTION_NAME";
+        return SqlForBase(kind);
+    }
+
     // Internal so tests can assert the SQL shape and FB-compat (no LIST(), no FB3-only syntax).
-    internal static string SqlFor(MetadataObjectKind kind) => kind switch
+    private static string SqlForBase(MetadataObjectKind kind) => kind switch
     {
         MetadataObjectKind.Table =>
             "SELECT TRIM(RDB$RELATION_NAME) FROM RDB$RELATIONS " +
