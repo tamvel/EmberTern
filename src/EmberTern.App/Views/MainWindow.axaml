@@ -196,6 +196,17 @@
             <controls:SvgIcon Data="{StaticResource Icon.Search}"
                               Foreground="{DynamicResource AccentBrush}" />
           </Button>
+          <!-- Export DDL of the active object to a portable .sql file. Contextual: the
+               separator + button hide together unless a DDL-bearing object tab is active. -->
+          <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}"
+                  IsVisible="{Binding CanExportDdl}" />
+          <Button Classes="icon"
+                  IsVisible="{Binding CanExportDdl}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarExportDdlTooltip}"
+                  Command="{Binding ExportDdlCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.Save}"
+                              Foreground="{DynamicResource AccentBrush}" />
+          </Button>
           <!-- Table-creation section sits AFTER all connection-related buttons.
                Icon ▦＋ mirrors the metadata tree's Table glyph with a plus —
                visually rhymes with the sidebar where new tables will appear. -->

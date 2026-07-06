@@ -10,6 +10,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform;
+using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -468,6 +469,7 @@ public partial class MainWindow : Window
             _currentVm.UserEditDialogRequested -= OnUserEditRequested;
             _currentVm.NewRoleDialogRequested -= OnNewRoleRequested;
             _currentVm.ClipboardWriteRequested -= OnClipboardWriteRequested;
+            _currentVm.SaveFileRequested -= OnSaveFileRequested;
             _currentVm.AddConnectionRequested -= OnAddConnectionRequested;
             _currentVm.BatchResultsRequested -= OnBatchResultsRequested;
             _currentVm.GlobalSearchRequested -= OnGlobalSearchRequested;
@@ -486,6 +488,7 @@ public partial class MainWindow : Window
             _currentVm.UserEditDialogRequested += OnUserEditRequested;
             _currentVm.NewRoleDialogRequested += OnNewRoleRequested;
             _currentVm.ClipboardWriteRequested += OnClipboardWriteRequested;
+            _currentVm.SaveFileRequested += OnSaveFileRequested;
             _currentVm.AddConnectionRequested += OnAddConnectionRequested;
             _currentVm.BatchResultsRequested += OnBatchResultsRequested;
             _currentVm.GlobalSearchRequested += OnGlobalSearchRequested;
@@ -540,6 +543,29 @@ public partial class MainWindow : Window
         {
             await clipboard.SetTextAsync(text);
         }
+    }
+
+    // VM → View Save-file picker for DDL export. Returns the chosen absolute path, or null on
+    // cancel; the VM builds the script and writes the file (UTF-8 no BOM). Avalonia's
+    // StorageProvider stays here in the view.
+    private async Task<string?> OnSaveFileRequested(SaveFileRequest request)
+    {
+        var picker = StorageProvider;
+        if (picker is null) return null;
+
+        var file = await picker.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = request.Title,
+            SuggestedFileName = request.SuggestedFileName,
+            DefaultExtension = request.Extension.TrimStart('.'),
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType(request.FilterName) { Patterns = new[] { "*" + request.Extension } },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        return file?.Path.LocalPath;
     }
 
     // Selection sets the working connection when a connection row is picked — so the titlebar

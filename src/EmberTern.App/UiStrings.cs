@@ -1433,6 +1433,13 @@ internal static class UiStrings
 
     // Global Search (Etap 3 — Search Results)
     public const string ToolbarGlobalSearchTooltip = "Global Search (Ctrl+Shift+F)";
+
+    // Export DDL to .sql (portable object script — structure + comments, no grants).
+    public const string ToolbarExportDdlTooltip = "Export DDL to .sql";
+    public const string ExportDdlDialogTitle = "Export DDL to SQL file";
+    public const string ExportDdlFilterName = "SQL scripts";
+    public const string ExportDdlSucceededFormat = "Exported \"{0}\" to {1}.";
+    public const string ExportDdlFailedFormat = "Export of \"{0}\" failed: {1}";
     public const string GlobalSearchDialogTitle = "Global Search";
     public const string GlobalSearchTermLabel = "Search for";
     public const string GlobalSearchTermWatermark = "text to find in metadata…";

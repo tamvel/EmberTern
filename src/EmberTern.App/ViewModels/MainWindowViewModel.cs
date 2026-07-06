@@ -51,6 +51,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdTableDetailReader _tableDetailReader;
     private readonly FirebirdDataEditor _dataEditor;
     private readonly FirebirdDdlExecutor _ddlExecutor;
+    private readonly MetadataExportService _metadataExportService;
     // Performance Analysis (Phase 1): auto-available after execution (Option B) — the
     // panel builds the report from the LAST data-lane run (plan re-read on view, no
     // re-execution). Plan + timings only; no MON$/trace/advisor yet.
@@ -146,6 +147,9 @@ public partial class MainWindowViewModel : ViewModelBase
         _ddlReader = new FirebirdDdlReader(_service, _metadataTransactionService);
         _securityReader = new FirebirdSecurityReader(_service, _metadataTransactionService);
         _tableDetailReader = new FirebirdTableDetailReader(_service, _metadataTransactionService, _transactionService);
+        // The single authority for a complete portable object script (structure + COMMENT ON,
+        // no grants) — used by both the Export button and the read-only DDL tab.
+        _metadataExportService = new MetadataExportService(_ddlReader, _tableDetailReader);
         _dataEditor = new FirebirdDataEditor(_service, _transactionService);
         // Snippet metadata loaders wired to the TableDetail reader (metadata lane).
         _snippetContextBuilder = new SnippetContextBuilder(
@@ -295,6 +299,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsGlobalSearchTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveGlobalSearch))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
+    [NotifyPropertyChangedFor(nameof(CanExportDdl))]
+    [NotifyCanExecuteChangedFor(nameof(ExportDdlCommand))]
     [NotifyPropertyChangedFor(nameof(ShowEditorToolbar))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
@@ -2260,6 +2266,12 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public event Func<string, Task>? ClipboardWriteRequested;
+
+    // Asks the view to open a Save-file picker for the DDL export. The view returns the
+    // chosen absolute path, or null when the user cancels. The VM (not the view) builds the
+    // script and writes the file, so the Avalonia StorageProvider stays in the view and the
+    // portable-DDL policy + file write stay here.
+    public event Func<SaveFileRequest, Task<string?>>? SaveFileRequested;
 
     // Asks the view to open the New Connection dialog. When folderId is non-null,
     // the resulting connection is slotted into that folder; otherwise it lands at
@@ -4626,6 +4638,91 @@ public partial class MainWindowViewModel : ViewModelBase
                         && string.Equals(t.ObjectName, name, StringComparison.Ordinal))
             .ToList();
         foreach (var tab in doomed) CloseTab(tab);
+    }
+
+    // ─── Export DDL to .sql ────────────────────────────────────────────────
+
+    /// <summary>
+    /// The active tab's object (kind, name) when it is a REAL, existing, DDL-bearing object
+    /// — else null. Excludes non-object tabs (Query / Security / Trace / Session / Search /
+    /// New Table) and in-progress New objects (a New View/Procedure/… has a placeholder name
+    /// but no catalog object yet). This is the single gate for the Export button.
+    /// </summary>
+    private (MetadataObjectKind Kind, string Name)? ActiveExportableObject
+    {
+        get
+        {
+            var tab = SelectedWorkspaceTab;
+            if (tab?.ObjectKind is not { } kind || string.IsNullOrEmpty(tab.ObjectName))
+                return null;
+
+            var isNew = tab.Kind switch
+            {
+                WorkspaceTabKind.ViewDetail => tab.ViewDetail?.IsNew ?? false,
+                WorkspaceTabKind.ProcedureDetail => tab.ProcedureDetail?.IsNew ?? false,
+                WorkspaceTabKind.TriggerDetail => tab.TriggerDetail?.IsNew ?? false,
+                WorkspaceTabKind.FunctionDetail => tab.FunctionDetail?.IsNew ?? false,
+                WorkspaceTabKind.PackageDetail => tab.PackageDetail?.IsNew ?? false,
+                WorkspaceTabKind.DomainDetail => tab.DomainDetail?.IsNew ?? false,
+                WorkspaceTabKind.GeneratorDetail => tab.GeneratorDetail?.IsNew ?? false,
+                WorkspaceTabKind.ExceptionDetail => tab.ExceptionDetail?.IsNew ?? false,
+                _ => false,
+            };
+            if (isNew) return null;
+
+            var isDdlBearing = tab.Kind is WorkspaceTabKind.Ddl
+                or WorkspaceTabKind.TableDetail or WorkspaceTabKind.ViewDetail or WorkspaceTabKind.ProcedureDetail
+                or WorkspaceTabKind.TriggerDetail or WorkspaceTabKind.FunctionDetail or WorkspaceTabKind.PackageDetail
+                or WorkspaceTabKind.DomainDetail or WorkspaceTabKind.GeneratorDetail or WorkspaceTabKind.ExceptionDetail
+                or WorkspaceTabKind.IndexDetail;
+            return isDdlBearing ? (kind, tab.ObjectName!) : null;
+        }
+    }
+
+    /// <summary>Drives the Export toolbar button's visibility/enablement.</summary>
+    public bool CanExportDdl => ActiveExportableObject is not null;
+
+    // Export the active object's complete portable DDL to a .sql file. Regenerates from the
+    // DB via MetadataExportService (never the cached tab text) so the file is always the
+    // complete, comment-inclusive, grant-free script. Written UTF-8 WITHOUT BOM (a BOM breaks
+    // isql / IBExpert on the first statement).
+    [RelayCommand(CanExecute = nameof(CanExportDdl))]
+    private async Task ExportDdlAsync()
+    {
+        if (ActiveExportableObject is not { } target || SaveFileRequested is not { } requestSave)
+            return;
+
+        var obj = new MetadataObject(target.Name, target.Kind);
+        var path = await requestSave(new SaveFileRequest(
+            UiStrings.ExportDdlDialogTitle, $"{target.Name}.sql", UiStrings.ExportDdlFilterName, ".sql"))
+            .ConfigureAwait(true);
+        if (string.IsNullOrEmpty(path))
+            return; // user cancelled
+
+        string script;
+        try
+        {
+            script = await _metadataExportService.BuildObjectScriptAsync(obj).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
+        {
+            AddMessage(MessageSeverity.Error, string.Format(CultureInfo.CurrentCulture, UiStrings.ExportDdlFailedFormat, target.Name, ex.Message));
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+
+        try
+        {
+            await SqlFileWriter.WriteAsync(path, script).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            AddMessage(MessageSeverity.Error, string.Format(CultureInfo.CurrentCulture, UiStrings.ExportDdlFailedFormat, target.Name, ex.Message));
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+
+        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.ExportDdlSucceededFormat, target.Name, path));
     }
 
     // F5 / Ctrl+Enter — the single Execute. The lane is chosen automatically from the
