@@ -3265,15 +3265,8 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        // Close the tab for this generator, then refresh the tree so it disappears.
-        foreach (var t in WorkspaceTabs)
-        {
-            if (t.Kind == WorkspaceTabKind.GeneratorDetail && ReferenceEquals(t.GeneratorDetail, detail))
-            {
-                CloseTab(t);
-                break;
-            }
-        }
+        // Close this object's tab(s) via the single authority, then refresh the tree.
+        CloseTabsForObject(MetadataObjectKind.Generator, detail.GeneratorName);
         await Metadata.RefreshAsync().ConfigureAwait(true);
     }
 
@@ -3307,15 +3300,8 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        // Close the tab for this index, then refresh the tree so it disappears.
-        foreach (var t in WorkspaceTabs)
-        {
-            if (t.Kind == WorkspaceTabKind.IndexDetail && ReferenceEquals(t.IndexDetail, detail))
-            {
-                CloseTab(t);
-                break;
-            }
-        }
+        // Close this object's tab(s) via the single authority, then refresh the tree.
+        CloseTabsForObject(MetadataObjectKind.Index, detail.IndexName);
         await Metadata.RefreshAsync().ConfigureAwait(true);
     }
 
@@ -3376,15 +3362,8 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        // Close the tab for this domain, then refresh the tree so it disappears.
-        foreach (var t in WorkspaceTabs)
-        {
-            if (t.Kind == WorkspaceTabKind.DomainDetail && ReferenceEquals(t.DomainDetail, detail))
-            {
-                CloseTab(t);
-                break;
-            }
-        }
+        // Close this object's tab(s) via the single authority, then refresh the tree.
+        CloseTabsForObject(MetadataObjectKind.Domain, detail.DomainName);
         await Metadata.RefreshAsync().ConfigureAwait(true);
     }
 
@@ -3425,15 +3404,8 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        // Close the tab for this package, then refresh the tree so it disappears.
-        foreach (var t in WorkspaceTabs)
-        {
-            if (t.Kind == WorkspaceTabKind.PackageDetail && ReferenceEquals(t.PackageDetail, detail))
-            {
-                CloseTab(t);
-                break;
-            }
-        }
+        // Close this object's tab(s) via the single authority, then refresh the tree.
+        CloseTabsForObject(MetadataObjectKind.Package, detail.PackageName);
         await Metadata.RefreshAsync().ConfigureAwait(true);
     }
 
@@ -3685,15 +3657,8 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        // Close the tab for this exception, then refresh the tree so it disappears.
-        foreach (var t in WorkspaceTabs)
-        {
-            if (t.Kind == WorkspaceTabKind.ExceptionDetail && ReferenceEquals(t.ExceptionDetail, detail))
-            {
-                CloseTab(t);
-                break;
-            }
-        }
+        // Close this object's tab(s) via the single authority, then refresh the tree.
+        CloseTabsForObject(MetadataObjectKind.Exception, detail.ExceptionName);
         await Metadata.RefreshAsync().ConfigureAwait(true);
     }
 
@@ -4633,15 +4598,30 @@ public partial class MainWindowViewModel : ViewModelBase
     };
 
     /// <summary>
-    /// Closes every workspace tab (DDL or TableDetail) keyed on the given
-    /// (kind, name). Internal so tests can drive it without standing up the
-    /// DROP path. Tab-close semantics match the user clicking ×.
+    /// The single authority for closing every workspace tab that represents a given
+    /// object (kind, name) after the object is dropped from within EmberTern. Covers
+    /// the read-only DDL tab plus every object Detail tab kind — the same kind-set the
+    /// open/focus dedup in <see cref="OnOpenDdlRequested"/> uses, so a tab that could be
+    /// opened for an object can also be closed for it. Internal so tests can drive it
+    /// without standing up the DROP path. Tab-close semantics match the user clicking ×.
+    /// (This handles ONLY deletions performed inside EmberTern; external/other-session
+    /// deletes are deliberately out of scope for this sprint.)
     /// </summary>
     internal void CloseTabsForObject(MetadataObjectKind kind, string name)
     {
         // Snapshot — CloseTab mutates WorkspaceTabs.
         var doomed = WorkspaceTabs
-            .Where(t => t.Kind is WorkspaceTabKind.Ddl or WorkspaceTabKind.TableDetail
+            .Where(t => t.Kind is WorkspaceTabKind.Ddl
+                             or WorkspaceTabKind.TableDetail
+                             or WorkspaceTabKind.ViewDetail
+                             or WorkspaceTabKind.ProcedureDetail
+                             or WorkspaceTabKind.TriggerDetail
+                             or WorkspaceTabKind.FunctionDetail
+                             or WorkspaceTabKind.GeneratorDetail
+                             or WorkspaceTabKind.DomainDetail
+                             or WorkspaceTabKind.PackageDetail
+                             or WorkspaceTabKind.ExceptionDetail
+                             or WorkspaceTabKind.IndexDetail
                         && t.ObjectKind == kind
                         && string.Equals(t.ObjectName, name, StringComparison.Ordinal))
             .ToList();
