@@ -60,6 +60,10 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdSessionReader _sessionReader;
     private readonly FirebirdCatalogReader _catalogReader;
     private readonly PerformanceAnalyzer _performanceAnalyzer;
+    // Script Executor: splits a script via the driver's FbScript (no custom parser) and runs
+    // it as ONE data-lane transaction (no autocommit in Manual mode).
+    private readonly FirebirdScriptParser _scriptParser = new();
+    private readonly FirebirdScriptExecutor _scriptExecutor;
     private long? _dataAttachmentId;
     private bool _performanceTabActive;
     private const int PerformanceBottomTabIndex = 3; // Results=0, Messages=1, Output=2, Performance=3
@@ -177,6 +181,8 @@ public partial class MainWindowViewModel : ViewModelBase
         // Catalog (indexes/selectivity/cardinality) for the advisor — read on the metadata lane
         // for the profiled query's tables when the Performance panel builds (Phase 3a).
         _catalogReader = new FirebirdCatalogReader(_service, _metadataTransactionService);
+        // Script Executor runs on the DATA lane (co-location, gotcha #122) as the working tx.
+        _scriptExecutor = new FirebirdScriptExecutor(_service, _transactionService);
         _performanceAnalyzer = new PerformanceAnalyzer();
         // The SQL Editor gets its OWN Performance context (its own captured run). Procedure/
         // Function detail tabs each get their own via the factory — no shared global panel.
@@ -298,6 +304,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveSessionManager))]
     [NotifyPropertyChangedFor(nameof(IsGlobalSearchTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveGlobalSearch))]
+    [NotifyPropertyChangedFor(nameof(IsScriptExecutorTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveScriptExecutor))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(CanExportDdl))]
     [NotifyCanExecuteChangedFor(nameof(ExportDdlCommand))]
@@ -388,6 +396,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsSessionManagerTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SessionManager };
     public SessionManagerTabViewModel? ActiveSessionManager
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SessionManager } t ? t.SessionManager : null;
+
+    public bool IsScriptExecutorTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ScriptExecutor };
+    public ScriptExecutorTabViewModel? ActiveScriptExecutor
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ScriptExecutor } t ? t.ScriptExecutor : null;
 
     public bool IsGlobalSearchTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GlobalSearch };
     public GlobalSearchTabViewModel? ActiveGlobalSearch
@@ -1539,7 +1551,7 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var tab in WorkspaceTabs)
         {
             // The Security Manager and Activity Monitor are live tools, not persisted.
-            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch) continue;
+            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch or WorkspaceTabKind.ScriptExecutor) continue;
 
             if (tab.Kind == WorkspaceTabKind.Query)
             {
@@ -1990,6 +2002,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 _ = monitor.DisposeAsync(); // stop live trace sessions on disconnect (best-effort)
             else if (t.Kind == WorkspaceTabKind.SessionManager && t.SessionManager is { } sm)
                 _ = sm.DisposeAsync(); // stop the MON$ poll timer on disconnect (best-effort)
+            else if (t.Kind == WorkspaceTabKind.ScriptExecutor && t.ScriptExecutor is { } se)
+                se.Detach(); // unsubscribe from the transaction-state event
         }
         WorkspaceTabs.Clear();
         _tabActivationHistory.Clear();
@@ -3530,6 +3544,31 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectTab(newTab);
     }
 
+    // ---- Script Executor (run a multi-statement script in one transaction) ----
+
+    public bool CanOpenScriptExecutor => _service.IsConnected;
+
+    [RelayCommand(CanExecute = nameof(CanOpenScriptExecutor))]
+    private void OpenScriptExecutor()
+    {
+        // Near-singleton per connection: focus the existing script tab if one is open.
+        foreach (var tab in WorkspaceTabs)
+        {
+            if (tab.Kind == WorkspaceTabKind.ScriptExecutor)
+            {
+                SelectTab(tab);
+                return;
+            }
+        }
+
+        var script = new ScriptExecutorTabViewModel(_scriptParser, _scriptExecutor, _transactionService);
+        script.CopyToClipboardRequested += text => ClipboardWriteRequested?.Invoke(text);
+
+        var newTab = WorkspaceTabViewModel.CreateScriptExecutor(this, script, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(newTab);
+        SelectTab(newTab);
+    }
+
     // ---- Global Search (metadata names + source bodies) ----
 
     public bool CanOpenGlobalSearch => _service.IsConnected;
@@ -4180,6 +4219,8 @@ public partial class MainWindowViewModel : ViewModelBase
             _ = monitor.DisposeAsync(); // stop the live trace session (best-effort)
         else if (tab.Kind == WorkspaceTabKind.SessionManager && tab.SessionManager is { } sm)
             _ = sm.DisposeAsync(); // stop the MON$ poll timer (best-effort)
+        else if (tab.Kind == WorkspaceTabKind.ScriptExecutor && tab.ScriptExecutor is { } se)
+            se.Detach(); // unsubscribe from the transaction-state event
 
         if (wasSelected && WorkspaceTabs.Count > 0)
         {
@@ -5482,6 +5523,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OpenSessionManagerCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanOpenGlobalSearch));
         OpenGlobalSearchCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanOpenScriptExecutor));
+        OpenScriptExecutorCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

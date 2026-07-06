@@ -93,6 +93,43 @@ internal static class UiStrings
     public const string BatchResultsCopyAll = "Copy All";
     public const string BatchResultsCopyFailed = "Copy Failed";
     public const string BatchResultsCancel = "Cancel";
+
+    // ─── Script Executor ──────────────────────────────────────────────────────
+    public const string ScriptExecutorTabTitle = "Script Executor";
+    public const string ToolbarScriptExecutorTooltip = "Script Executor (migrations & multi-object DDL)";
+    public const string ScriptRun = "Run";
+    public const string ScriptRunTooltip = "Run the whole script in one transaction (F5)";
+    public const string ScriptStopTooltip = "Stop after the current statement";
+    public const string ScriptCommit = "Commit";
+    public const string ScriptCommitTooltip = "Commit the open script transaction";
+    public const string ScriptRollback = "Rollback";
+    public const string ScriptRollbackTooltip = "Roll back the open script transaction";
+    public const string ScriptTransactionLabel = "Transaction:";
+    public const string ScriptModeManual = "Manual (review, then commit)";
+    public const string ScriptModeAutoCommit = "Auto-commit on success";
+    public const string ScriptStopOnError = "Stop on error";
+    public const string ScriptTransactionOpenMarker = "● Transaction open — review, then Commit or Rollback";
+    // Result grid column headers.
+    public const string ScriptColumnLine = "#";
+    public const string ScriptColumnStatement = "Statement";
+    public const string ScriptColumnType = "Type";
+    public const string ScriptColumnResult = "Result";
+    public const string ScriptColumnRows = "Rows";
+    public const string ScriptColumnDuration = "Duration";
+    public const string ScriptColumnError = "Error";
+    // Status line.
+    public const string ScriptStatusReady = "Ready. Paste or type a script, then Run.";
+    public const string ScriptStatusRunning = "Running…";
+    public const string ScriptStatusNothingToRun = "Nothing to run — the script has no statements.";
+    public const string ScriptStatusCancelled = "Cancelled. The transaction is still open — Commit or Rollback.";
+    public const string ScriptStatusCommitted = "Committed.";
+    public const string ScriptStatusRolledBack = "Rolled back.";
+    public const string ScriptStatusParseErrorFormat = "Could not parse the script: {0}";
+    public const string ScriptStatusDisallowed =
+        "The script contains transaction-control or session statements (COMMIT / ROLLBACK / SET TRANSACTION / CONNECT / SET NAMES …) that can't run under a managed script transaction. Remove them and try again.";
+    public const string ScriptStatusManualSummaryFormat =
+        "{0} succeeded, {1} failed in {2}. Transaction open — Commit or Rollback.";
+    public const string ScriptStatusAutoSummaryFormat = "{0} {1} succeeded, {2} failed in {3}.";
     public const string BatchResultsClose = "Close";
     // Preparation phase — the dialog opens here immediately so feedback is instant while
     // the object list + per-object SQL are still being built (Batch Operations UX sprint).

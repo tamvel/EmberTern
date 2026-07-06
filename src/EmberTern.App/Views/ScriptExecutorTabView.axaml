@@ -1,0 +1,170 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:EmberTern.App"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:ae="using:AvaloniaEdit"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="640"
+             x:Class="EmberTern.App.Views.ScriptExecutorTabView"
+             x:DataType="vm:ScriptExecutorTabViewModel"
+             Background="{DynamicResource BackgroundBrush}"
+             Foreground="{DynamicResource ForegroundBrush}">
+
+  <Grid RowDefinitions="Auto,*,4,240">
+
+    <!-- Toolbar: Run / Stop · transaction mode + stop-on-error · Commit / Rollback -->
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="10,8">
+      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+
+        <Button Classes="primary" Command="{Binding RunCommand}"
+                ToolTip.Tip="{x:Static app:UiStrings.ScriptRunTooltip}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <controls:SvgIcon Data="{StaticResource Icon.Play}" Width="14" Height="14"
+                              Foreground="{DynamicResource OnAccentBrush}" />
+            <TextBlock Text="{x:Static app:UiStrings.ScriptRun}" />
+          </StackPanel>
+        </Button>
+
+        <Button Classes="icon" Command="{Binding StopCommand}"
+                IsVisible="{Binding IsRunning}"
+                ToolTip.Tip="{x:Static app:UiStrings.ScriptStopTooltip}">
+          <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}" />
+        </Button>
+
+        <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+
+        <TextBlock Text="{x:Static app:UiStrings.ScriptTransactionLabel}"
+                   VerticalAlignment="Center" Foreground="{DynamicResource SubtleForegroundBrush}" />
+        <ComboBox SelectedIndex="{Binding TransactionModeIndex, Mode=TwoWay}" MinWidth="200"
+                  VerticalAlignment="Center">
+          <ComboBoxItem Content="{x:Static app:UiStrings.ScriptModeManual}" />
+          <ComboBoxItem Content="{x:Static app:UiStrings.ScriptModeAutoCommit}" />
+        </ComboBox>
+        <CheckBox Content="{x:Static app:UiStrings.ScriptStopOnError}"
+                  IsChecked="{Binding StopOnError, Mode=TwoWay}" VerticalAlignment="Center" />
+
+        <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+
+        <Button Classes="flat" Command="{Binding CommitScriptCommand}"
+                ToolTip.Tip="{x:Static app:UiStrings.ScriptCommitTooltip}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
+                              Foreground="{DynamicResource SuccessIconBrush}" />
+            <TextBlock Text="{x:Static app:UiStrings.ScriptCommit}" />
+          </StackPanel>
+        </Button>
+        <Button Classes="flat" Command="{Binding RollbackScriptCommand}"
+                ToolTip.Tip="{x:Static app:UiStrings.ScriptRollbackTooltip}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <controls:SvgIcon Data="{StaticResource Icon.Undo}" Width="14" Height="14"
+                              Foreground="{DynamicResource DangerIconBrush}" />
+            <TextBlock Text="{x:Static app:UiStrings.ScriptRollback}" />
+          </StackPanel>
+        </Button>
+
+        <TextBlock Text="{x:Static app:UiStrings.ScriptTransactionOpenMarker}"
+                   Margin="6,0,0,0" VerticalAlignment="Center"
+                   Foreground="{DynamicResource WarningBrush}"
+                   IsVisible="{Binding TransactionOpen}" />
+      </StackPanel>
+    </Border>
+
+    <!-- Script editor (reuses SqlEditorBehavior for highlighting/autocomplete/find-replace). -->
+    <ae:TextEditor Grid.Row="1" x:Name="ScriptEditor"
+                   ShowLineNumbers="True"
+                   FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                   FontSize="13"
+                   HorizontalScrollBarVisibility="Auto"
+                   VerticalScrollBarVisibility="Auto"
+                   Background="{DynamicResource BackgroundBrush}"
+                   Foreground="{DynamicResource ForegroundBrush}" />
+
+    <GridSplitter Grid.Row="2" ResizeDirection="Rows"
+                  HorizontalAlignment="Stretch" Height="4"
+                  Background="{DynamicResource BorderBrush}" />
+
+    <!-- Results -->
+    <Grid Grid.Row="3" RowDefinitions="Auto,*">
+      <Border Grid.Row="0"
+              Background="{DynamicResource PanelBrush}"
+              BorderBrush="{DynamicResource BorderBrush}"
+              BorderThickness="0,1,0,0"
+              Padding="10,6">
+        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*">
+          <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.BatchResultsFilterLabel}"
+                     VerticalAlignment="Center" Margin="0,0,6,0"
+                     Foreground="{DynamicResource SubtleForegroundBrush}" />
+          <ComboBox Grid.Column="1" SelectedIndex="{Binding SelectedFilterIndex, Mode=TwoWay}"
+                    MinWidth="110" VerticalAlignment="Center">
+            <ComboBoxItem Content="{x:Static app:UiStrings.BatchResultsFilterAll}" />
+            <ComboBoxItem Content="{x:Static app:UiStrings.BatchResultsFilterSuccess}" />
+            <ComboBoxItem Content="{x:Static app:UiStrings.BatchResultsFilterFailed}" />
+          </ComboBox>
+          <Button Grid.Column="2" Classes="flat" Margin="8,0,0,0"
+                  Content="{x:Static app:UiStrings.BatchResultsCopyAll}"
+                  Command="{Binding CopyAllCommand}" IsEnabled="{Binding HasResults}" />
+          <Button Grid.Column="3" Classes="flat"
+                  Content="{x:Static app:UiStrings.BatchResultsCopyFailed}"
+                  Command="{Binding CopyFailedCommand}" IsEnabled="{Binding HasResults}" />
+          <TextBlock Grid.Column="4" Text="{Binding StatusText}"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                     Margin="12,0,0,0"
+                     Classes.error="{Binding HasError}">
+            <TextBlock.Styles>
+              <Style Selector="TextBlock.error">
+                <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
+              </Style>
+            </TextBlock.Styles>
+          </TextBlock>
+        </Grid>
+      </Border>
+
+      <DataGrid Grid.Row="1" x:Name="ResultsGrid"
+                ItemsSource="{Binding Rows}"
+                IsReadOnly="True"
+                CanUserSortColumns="False"
+                CanUserResizeColumns="True"
+                GridLinesVisibility="Horizontal"
+                DoubleTapped="OnResultsDoubleTapped">
+        <DataGrid.Styles>
+          <Style Selector="TextBlock.result-ok">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessIconBrush}" />
+          </Style>
+          <Style Selector="TextBlock.result-failed">
+            <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
+          </Style>
+        </DataGrid.Styles>
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnLine}"
+                              Binding="{Binding Line}" Width="46" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnStatement}"
+                              Binding="{Binding Statement}" Width="2*" MinWidth="220"
+                              FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnType}"
+                              Binding="{Binding TypeText}" Width="140" />
+          <DataGridTemplateColumn Header="{x:Static app:UiStrings.ScriptColumnResult}" Width="80">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="vm:ScriptResultRowViewModel">
+                <TextBlock Text="{Binding Result}" VerticalAlignment="Center" Margin="8,0"
+                           Classes.result-failed="{Binding IsFailed}"
+                           Classes.result-ok="{Binding !IsFailed}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnRows}"
+                              Binding="{Binding RowsText}" Width="70" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnDuration}"
+                              Binding="{Binding Duration}" Width="90" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnError}"
+                              Binding="{Binding Error}" Width="2*" MinWidth="160" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </Grid>
+  </Grid>
+</UserControl>
