@@ -37,6 +37,15 @@
           <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}" />
         </Button>
 
+        <!-- Live elapsed timer (shared ExecutionTimer) — shown while the script runs. -->
+        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+                    IsVisible="{Binding ExecutionTimer.IsRunning}">
+          <TextBlock Text="{x:Static app:UiStrings.ExecutionElapsedLabel}" FontSize="11"
+                     Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding ExecutionTimer.ElapsedText}" FontSize="11" FontFamily="Consolas,Menlo,monospace"
+                     Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" />
+        </StackPanel>
+
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <TextBlock Text="{x:Static app:UiStrings.ScriptTransactionLabel}"

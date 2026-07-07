@@ -843,12 +843,25 @@ public partial class MainWindowViewModel : ViewModelBase
         RebuildResultView();
     }
 
+    /// <summary>Shared live execution timer — ticks while the SQL Editor, Execute Procedure, or
+    /// Execute Function is running (all three run through this VM). Started/stopped automatically
+    /// (SQL Editor: <see cref="OnIsExecutingChanged"/>; proc/func: <see cref="RunExecutableWithMetricsAsync"/>).</summary>
+    public ExecutionTimer ExecutionTimer { get; } = new();
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExecute))]
     [NotifyPropertyChangedFor(nameof(ShowExecuteButton))]
     [NotifyPropertyChangedFor(nameof(ShowCancelButton))]
     [NotifyCanExecuteChangedFor(nameof(ExecuteQueryCommand))]
     private bool _isExecuting;
+
+    // Drive the live elapsed timer off IsExecuting so every SQL Editor exit path (success, error,
+    // cancel, finally) starts/stops it with no scattering.
+    partial void OnIsExecutingChanged(bool value)
+    {
+        if (value) ExecutionTimer.Start();
+        else ExecutionTimer.Stop();
+    }
 
     [ObservableProperty]
     private string _queryText = string.Empty;
@@ -3890,6 +3903,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task<ProcedureExecOutcome> RunExecutableWithMetricsAsync(
         string sql, IReadOnlyList<QueryParameter> parameters, string executedViaMessage)
     {
+        ExecutionTimer.Start(); // proc/func have no IsExecuting flag — drive the live timer directly
         try
         {
             var (result, reads) = await ExecuteWithMetricsAsync(sql, parameters, CancellationToken.None).ConfigureAwait(true);
@@ -3903,6 +3917,10 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (InvalidOperationException ex)
         {
             return new ProcedureExecOutcome(null, ex.Message);
+        }
+        finally
+        {
+            ExecutionTimer.Stop();
         }
     }
 

@@ -783,6 +783,15 @@
                   <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
+              <!-- Live elapsed timer — shown while any SQL Editor / Execute Procedure / Execute
+                   Function run is in progress; the final "N ms" is shown by the metrics display. -->
+              <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Margin="6,0,0,0"
+                          IsVisible="{Binding ExecutionTimer.IsRunning}">
+                <TextBlock Text="{x:Static app:UiStrings.ExecutionElapsedLabel}" FontSize="11"
+                           Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ExecutionTimer.ElapsedText}" FontSize="11" FontFamily="Consolas,Menlo,monospace"
+                           Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" />
+              </StackPanel>
               <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
                       Command="{Binding ActiveTableDetail.CompileCommand}" IsVisible="{Binding ShowStructureCompileTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />

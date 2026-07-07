@@ -59,6 +59,17 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(RollbackScriptCommand))]
     [ObservableProperty] private bool _isRunning;
 
+    /// <summary>Live elapsed timer for the running script — the SAME shared mechanism the SQL Editor
+    /// and Execute Procedure/Function use. Driven off <see cref="IsRunning"/> so every exit path
+    /// (finally, "nothing to run", <c>Fail</c>) stops it with no scattering.</summary>
+    public ExecutionTimer ExecutionTimer { get; } = new();
+
+    partial void OnIsRunningChanged(bool value)
+    {
+        if (value) ExecutionTimer.Start();
+        else ExecutionTimer.Stop();
+    }
+
     // True after a Manual run left the transaction open — drives the Commit/Rollback buttons.
     // Cleared when the transaction settles (here or via the SQL Editor's transaction bar).
     [NotifyCanExecuteChangedFor(nameof(CommitScriptCommand))]

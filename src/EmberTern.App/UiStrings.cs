@@ -376,6 +376,8 @@ internal static class UiStrings
     public const string ResultsEmptyHint = "Run a query to see results.";
     public const string MessagesEmptyHint = "No messages yet.";
     public const string ExecutingStatus = "Executing query…";
+    // Live execution-timer indicator (SQL Editor / Execute Procedure/Function / Script Executor).
+    public const string ExecutionElapsedLabel = "Elapsed";
     public const string NoConnectionMessage = "Connect to a database first.";
     public const string QueryCancelledMessage = "Query cancelled.";
     public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
