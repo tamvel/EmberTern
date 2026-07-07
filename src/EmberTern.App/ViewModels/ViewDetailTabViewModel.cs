@@ -666,6 +666,10 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
     /// New View tab, and reopens the real view when a name is known.</summary>
     public event Action<string?>? ViewCreated;
 
+    /// <summary>Raised after a successful Compile of an existing view — the owner offers to
+    /// recompile its dependents (Part 2).</summary>
+    public event Action? CompiledExistingObject;
+
     public bool CanCompile => _ddlExecutor is not null;
 
     /// <summary>
@@ -711,6 +715,7 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         // Existing view: fully refresh itself (#2) — source, fields, dependencies,
         // data preview, DDL, description all re-read from the live catalog.
         await RefreshAsync(cancellationToken).ConfigureAwait(true);
+        CompiledExistingObject?.Invoke();
     }
 
     /// <summary>

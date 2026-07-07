@@ -334,6 +334,19 @@ public partial class ExecuteProcedureDialogViewModel : ObservableObject
         string? connectionId = null,
         string objectKind = "Procedure",
         ParameterHistoryStore? historyStore = null)
+        : this(inputs.Select(p => (p.Name, p.TypeText)), objectName, connectionId, objectKind, historyStore)
+    {
+    }
+
+    // Lightweight (name + type) overload — used by Smart SQL Parameters (F5 on a statement with
+    // :name / @name placeholders), where the params come from a scanner + catalog/Unknown typing
+    // rather than a full ProcedureParamRowViewModel.
+    public ExecuteProcedureDialogViewModel(
+        IEnumerable<(string Name, string TypeText)> inputs,
+        string? objectName = null,
+        string? connectionId = null,
+        string objectKind = "Procedure",
+        ParameterHistoryStore? historyStore = null)
     {
         _objectName = objectName;
         _connectionId = connectionId;

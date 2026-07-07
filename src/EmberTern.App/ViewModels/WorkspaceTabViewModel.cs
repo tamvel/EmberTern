@@ -24,6 +24,7 @@ public enum WorkspaceTabKind
     TraceMonitor,
     SessionManager,
     GlobalSearch,
+    ScriptExecutor,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -308,6 +309,23 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             GlobalSearch = search,
         };
 
+    // The Script Executor is a tools tab (like the monitors): opened from the toolbar,
+    // near-singleton per connection, not persisted.
+    public static WorkspaceTabViewModel CreateScriptExecutor(
+        MainWindowViewModel owner, ScriptExecutorTabViewModel script, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.ScriptExecutor,
+            BaseTitle = UiStrings.ScriptExecutorTabTitle,
+            IsClosable = true,
+            ObjectName = string.Empty,
+            ConnectionProfileId = connectionProfileId,
+            Icon = string.Empty,
+            IconResourceKey = "AccentBrush",
+            IconGeometryKey = "Icon.FileText",
+            ScriptExecutor = script,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -334,6 +352,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public TraceMonitorTabViewModel? TraceMonitor { get; private init; }
     public SessionManagerTabViewModel? SessionManager { get; private init; }
     public GlobalSearchTabViewModel? GlobalSearch { get; private init; }
+    public ScriptExecutorTabViewModel? ScriptExecutor { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]

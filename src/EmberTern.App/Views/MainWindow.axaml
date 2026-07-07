@@ -196,6 +196,13 @@
             <controls:SvgIcon Data="{StaticResource Icon.Search}"
                               Foreground="{DynamicResource AccentBrush}" />
           </Button>
+          <!-- Script Executor: run a multi-statement / migration script in one transaction. -->
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarScriptExecutorTooltip}"
+                  Command="{Binding OpenScriptExecutorCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.FileText}"
+                              Foreground="{DynamicResource AccentBrush}" />
+          </Button>
           <!-- Export DDL of the active object to a portable .sql file. Contextual: the
                separator + button hide together unless a DDL-bearing object tab is active. -->
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}"
@@ -1094,6 +1101,9 @@
               <views:GlobalSearchTabView x:Name="GlobalSearchView"
                                          DataContext="{Binding ActiveGlobalSearch}"
                                          IsVisible="{Binding DataContext.IsGlobalSearchTabActive, ElementName=RootWindow}" />
+              <views:ScriptExecutorTabView x:Name="ScriptExecutorView"
+                                           DataContext="{Binding ActiveScriptExecutor}"
+                                           IsVisible="{Binding DataContext.IsScriptExecutorTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query

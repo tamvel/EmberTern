@@ -60,6 +60,10 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FirebirdSessionReader _sessionReader;
     private readonly FirebirdCatalogReader _catalogReader;
     private readonly PerformanceAnalyzer _performanceAnalyzer;
+    // Script Executor: splits a script via the driver's FbScript (no custom parser) and runs
+    // it as ONE data-lane transaction (no autocommit in Manual mode).
+    private readonly FirebirdScriptParser _scriptParser = new();
+    private readonly FirebirdScriptExecutor _scriptExecutor;
     private long? _dataAttachmentId;
     private bool _performanceTabActive;
     private const int PerformanceBottomTabIndex = 3; // Results=0, Messages=1, Output=2, Performance=3
@@ -177,6 +181,8 @@ public partial class MainWindowViewModel : ViewModelBase
         // Catalog (indexes/selectivity/cardinality) for the advisor — read on the metadata lane
         // for the profiled query's tables when the Performance panel builds (Phase 3a).
         _catalogReader = new FirebirdCatalogReader(_service, _metadataTransactionService);
+        // Script Executor runs on the DATA lane (co-location, gotcha #122) as the working tx.
+        _scriptExecutor = new FirebirdScriptExecutor(_service, _transactionService);
         _performanceAnalyzer = new PerformanceAnalyzer();
         // The SQL Editor gets its OWN Performance context (its own captured run). Procedure/
         // Function detail tabs each get their own via the factory — no shared global panel.
@@ -298,6 +304,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveSessionManager))]
     [NotifyPropertyChangedFor(nameof(IsGlobalSearchTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveGlobalSearch))]
+    [NotifyPropertyChangedFor(nameof(IsScriptExecutorTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveScriptExecutor))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(CanExportDdl))]
     [NotifyCanExecuteChangedFor(nameof(ExportDdlCommand))]
@@ -388,6 +396,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsSessionManagerTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SessionManager };
     public SessionManagerTabViewModel? ActiveSessionManager
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.SessionManager } t ? t.SessionManager : null;
+
+    public bool IsScriptExecutorTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ScriptExecutor };
+    public ScriptExecutorTabViewModel? ActiveScriptExecutor
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ScriptExecutor } t ? t.ScriptExecutor : null;
 
     public bool IsGlobalSearchTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GlobalSearch };
     public GlobalSearchTabViewModel? ActiveGlobalSearch
@@ -1539,7 +1551,7 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var tab in WorkspaceTabs)
         {
             // The Security Manager and Activity Monitor are live tools, not persisted.
-            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch) continue;
+            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch or WorkspaceTabKind.ScriptExecutor) continue;
 
             if (tab.Kind == WorkspaceTabKind.Query)
             {
@@ -1990,6 +2002,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 _ = monitor.DisposeAsync(); // stop live trace sessions on disconnect (best-effort)
             else if (t.Kind == WorkspaceTabKind.SessionManager && t.SessionManager is { } sm)
                 _ = sm.DisposeAsync(); // stop the MON$ poll timer on disconnect (best-effort)
+            else if (t.Kind == WorkspaceTabKind.ScriptExecutor && t.ScriptExecutor is { } se)
+                se.Detach(); // unsubscribe from the transaction-state event
         }
         WorkspaceTabs.Clear();
         _tabActivationHistory.Clear();
@@ -3227,6 +3241,7 @@ public partial class MainWindowViewModel : ViewModelBase
             _ddlExecutor);
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
         // Restore the remembered mode (existing views only — New View sets Easy after).
         if (detail.CanUseEasyMode) detail.EasyMode = ViewEasyModePreference;
         detail.PropertyChanged += OnViewDetailPropertyChanged;
@@ -3394,6 +3409,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.DeleteRequested += OnPackageDeleteRequested;
+        detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
         return detail;
     }
 
@@ -3526,6 +3542,31 @@ public partial class MainWindowViewModel : ViewModelBase
         manager.AnalyzeInPerformanceRequested += OnSessionAnalyzeInPerformance;
 
         var newTab = WorkspaceTabViewModel.CreateSessionManager(this, manager, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(newTab);
+        SelectTab(newTab);
+    }
+
+    // ---- Script Executor (run a multi-statement script in one transaction) ----
+
+    public bool CanOpenScriptExecutor => _service.IsConnected;
+
+    [RelayCommand(CanExecute = nameof(CanOpenScriptExecutor))]
+    private void OpenScriptExecutor()
+    {
+        // Near-singleton per connection: focus the existing script tab if one is open.
+        foreach (var tab in WorkspaceTabs)
+        {
+            if (tab.Kind == WorkspaceTabKind.ScriptExecutor)
+            {
+                SelectTab(tab);
+                return;
+            }
+        }
+
+        var script = new ScriptExecutorTabViewModel(_scriptParser, _scriptExecutor, _transactionService);
+        script.CopyToClipboardRequested += text => ClipboardWriteRequested?.Invoke(text);
+
+        var newTab = WorkspaceTabViewModel.CreateScriptExecutor(this, script, _service.ActiveProfile?.Id);
         WorkspaceTabs.Add(newTab);
         SelectTab(newTab);
     }
@@ -3692,6 +3733,7 @@ public partial class MainWindowViewModel : ViewModelBase
             _ddlExecutor);
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
         detail.RunExecuteRequested = RunProcedureExecuteAsync;
         // Its OWN Performance context — analyzes only this procedure tab's Execute.
         detail.PerformanceContext = CreatePerformanceContext();
@@ -3745,6 +3787,7 @@ public partial class MainWindowViewModel : ViewModelBase
             _ddlExecutor);
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
         // Lazy column loader for the Variables grid's merged Domain/Column picker.
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadTriggerListsAsync(detail);
@@ -3792,6 +3835,7 @@ public partial class MainWindowViewModel : ViewModelBase
             _ddlExecutor);
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
         detail.RunExecuteRequested = RunFunctionExecuteAsync;
         // Its OWN Performance context — analyzes only this function tab's Execute.
         detail.PerformanceContext = CreatePerformanceContext();
@@ -4180,6 +4224,8 @@ public partial class MainWindowViewModel : ViewModelBase
             _ = monitor.DisposeAsync(); // stop the live trace session (best-effort)
         else if (tab.Kind == WorkspaceTabKind.SessionManager && tab.SessionManager is { } sm)
             _ = sm.DisposeAsync(); // stop the MON$ poll timer (best-effort)
+        else if (tab.Kind == WorkspaceTabKind.ScriptExecutor && tab.ScriptExecutor is { } se)
+            se.Detach(); // unsubscribe from the transaction-state event
 
         if (wasSelected && WorkspaceTabs.Count > 0)
         {
@@ -4491,27 +4537,35 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task<(List<(string, string, string)> Steps, List<BatchOperationResult> PreFailures)>
         BuildRecompileStepsAsync(MetadataObjectKind kind, BatchResultsViewModel vm, CancellationToken ct)
     {
-        var preFailures = new List<BatchOperationResult>();
         var noun = KindNoun(kind) + "s";
-
         vm.ReportPreparation(string.Format(CultureInfo.CurrentCulture, UiStrings.BatchPreparingListFormat, noun));
         var listSw = System.Diagnostics.Stopwatch.StartNew();
         var objs = await _metadataReader.ListAsync(kind, ct).ConfigureAwait(true);
         BatchTrace.LogListEnumerate(kind.ToString(), objs.Count, listSw.ElapsedMilliseconds);
+        return await BuildRecompileStepsForObjectsAsync(objs, noun, vm, ct).ConfigureAwait(true);
+    }
 
+    // Builds recompile steps for a SPECIFIC set of objects, fetching each by ITS OWN kind —
+    // reused by "Recompile all/group" (a uniform-kind list) and "Recompile dependents" (a
+    // mixed-kind list). Per-object source-fetch failures become failed rows; Package emits two
+    // steps (header + body).
+    private async Task<(List<(string, string, string)> Steps, List<BatchOperationResult> PreFailures)>
+        BuildRecompileStepsForObjectsAsync(IReadOnlyList<MetadataObject> objects, string noun, BatchResultsViewModel vm, CancellationToken ct)
+    {
+        var preFailures = new List<BatchOperationResult>();
         var op = UiStrings.BatchOpRecompile;
         var steps = new List<(string, string, string)>();
         var fetchSw = System.Diagnostics.Stopwatch.StartNew();
         var i = 0;
-        foreach (var o in objs)
+        foreach (var o in objects)
         {
             ct.ThrowIfCancellationRequested();
             i++;
-            vm.ReportPreparation(i, objs.Count, string.Format(
-                CultureInfo.CurrentCulture, UiStrings.BatchPreparingLoadFormat, noun, i, objs.Count));
+            vm.ReportPreparation(i, objects.Count, string.Format(
+                CultureInfo.CurrentCulture, UiStrings.BatchPreparingLoadFormat, noun, i, objects.Count));
             try
             {
-                switch (kind)
+                switch (o.Kind)
                 {
                     case MetadataObjectKind.Procedure:
                         steps.Add((o.Name, op, await _ddlReader.FetchProcedureSourceAsync(o, ct).ConfigureAwait(true)));
@@ -4521,6 +4575,9 @@ public partial class MainWindowViewModel : ViewModelBase
                         break;
                     case MetadataObjectKind.Trigger:
                         steps.Add((o.Name, op, await _ddlReader.FetchTriggerSourceAsync(o, ct).ConfigureAwait(true)));
+                        break;
+                    case MetadataObjectKind.View:
+                        steps.Add((o.Name, op, await _ddlReader.FetchViewSourceAsync(o, ct).ConfigureAwait(true)));
                         break;
                     case MetadataObjectKind.Package:
                         steps.Add((o.Name, UiStrings.BatchOpRecompileHeader, await _ddlReader.FetchPackageHeaderSourceAsync(o, ct).ConfigureAwait(true)));
@@ -4533,9 +4590,89 @@ public partial class MainWindowViewModel : ViewModelBase
                 preFailures.Add(new BatchOperationResult(o.Name, op, false, ex.Message));
             }
         }
-        BatchTrace.LogSourceFetch(kind.ToString(), steps.Count, preFailures.Count, fetchSw.ElapsedMilliseconds);
+        BatchTrace.LogSourceFetch(noun, steps.Count, preFailures.Count, fetchSw.ElapsedMilliseconds);
         return (steps, preFailures);
     }
+
+    // ─── Recompile Dependents (Part 2) — offered after a successful Compile, never automatic ──
+    /// <summary>View shows the checklist dialog and returns the selection (null on Skip/Cancel).</summary>
+    public event Func<RecompileDependentsRequest, Task<RecompileDependentsResult?>>? RecompileDependentsRequested;
+
+    // Session-scoped "don't ask again" — set when the user checks that box in the dialog.
+    private bool _suppressRecompileOffer;
+
+    // Raised by a source-object editor after a successful Compile of an EXISTING object.
+    private async Task OfferRecompileDependentsAsync(MetadataObject compiled)
+    {
+        if (_suppressRecompileOffer) return;
+        if (RecompileDependentsRequested is not { } ask) return;
+
+        IReadOnlyList<DependencyInfo> dependents;
+        try
+        {
+            dependents = await GetDependentsAsync(compiled, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
+        {
+            return; // the compile already succeeded — never block on a failed dependents probe
+        }
+
+        var candidates = RecompilableDependents(dependents, compiled);
+        if (candidates.Count == 0) return;
+
+        var result = await ask(new RecompileDependentsRequest(compiled, candidates)).ConfigureAwait(true);
+        if (result is null) return; // skipped / cancelled
+        if (result.DontAskAgain) _suppressRecompileOffer = true;
+        if (result.Selected.Count == 0) return;
+
+        await RunBatchWithReportAsync(
+            string.Format(CultureInfo.CurrentCulture, UiStrings.RecompileDependentsBatchTitleFormat, compiled.Name),
+            async (vm, ct) =>
+            {
+                var (steps, pre) = await BuildRecompileStepsForObjectsAsync(result.Selected, "dependents", vm, ct).ConfigureAwait(true);
+                return new BatchPlan(steps, pre);
+            },
+            refreshAfter: false).ConfigureAwait(true);
+    }
+
+    // Routes to the right dependency reader by kind; returns the "depended on by" list.
+    private async Task<IReadOnlyList<DependencyInfo>> GetDependentsAsync(MetadataObject compiled, CancellationToken ct)
+    {
+        var empty = (IReadOnlyList<DependencyInfo>)Array.Empty<DependencyInfo>();
+        var (_, dependedOnBy) = compiled.Kind switch
+        {
+            MetadataObjectKind.Procedure => await _tableDetailReader.GetProcedureDependenciesAsync(compiled.Name, ct).ConfigureAwait(true),
+            MetadataObjectKind.Function => await _tableDetailReader.GetFunctionDependenciesAsync(compiled.Name, ct).ConfigureAwait(true),
+            MetadataObjectKind.Trigger => await _tableDetailReader.GetTriggerDependenciesAsync(compiled.Name, ct).ConfigureAwait(true),
+            MetadataObjectKind.Package => await _tableDetailReader.GetPackageDependenciesAsync(compiled.Name, ct).ConfigureAwait(true),
+            MetadataObjectKind.View => await _tableDetailReader.GetDependenciesAsync(compiled.Name, ct).ConfigureAwait(true),
+            _ => (empty, empty),
+        };
+        return dependedOnBy;
+    }
+
+    // Pure: filters a "depended on by" list to the RECOMPILABLE kinds
+    // (Procedure/Function/Trigger/Package/View), maps to MetadataObject, de-dupes, and drops a
+    // self-dependency on the object just compiled. Testable without a database.
+    internal static IReadOnlyList<MetadataObject> RecompilableDependents(
+        IReadOnlyList<DependencyInfo> dependents, MetadataObject compiled)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<MetadataObject>();
+        foreach (var d in dependents)
+        {
+            if (string.IsNullOrEmpty(d.ObjectName)) continue;
+            if (TableDetailTabViewModel.MapObjectTypeToKind(d.ObjectType) is not { } kind) continue;
+            if (!IsRecompilableKind(kind)) continue;
+            if (kind == compiled.Kind && string.Equals(d.ObjectName, compiled.Name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (seen.Add(kind + "|" + d.ObjectName)) result.Add(new MetadataObject(d.ObjectName, kind));
+        }
+        return result;
+    }
+
+    internal static bool IsRecompilableKind(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.Procedure or MetadataObjectKind.Function
+            or MetadataObjectKind.Trigger or MetadataObjectKind.Package or MetadataObjectKind.View;
 
     // ─── Connection-node (database-wide) bulk ops ─────────────────────────────
     // Recompute selectivity statistics for every index (SET STATISTICS INDEX).
@@ -4730,6 +4867,58 @@ public partial class MainWindowViewModel : ViewModelBase
     // Data lane (connection #1, data profile); DDL/DCL (CREATE/ALTER/DROP/COMMENT/
     // GRANT/…) on the Metadata lane (connection #2, metadata profile). Ambiguous input
     // falls back to Data — the safest lane. There is no manual lane override by design.
+    // ─── Smart SQL parameters (Part 3) ────────────────────────────────────────
+    /// <summary>The view shows the reused Execute dialog and returns the ordered bound values
+    /// (null on Cancel). VM stays free of Avalonia dialog types.</summary>
+    public event Func<SmartParametersRequest, Task<IReadOnlyList<object?>?>>? SmartParametersRequested;
+
+    // Types each scanned parameter: catalog types for an EXECUTE PROCEDURE call (positional, only
+    // when the count matches), otherwise "Unknown" — never a guessed type (the user's rule).
+    private async Task<IReadOnlyList<(string Name, string TypeText)>> BuildSmartParamSpecsAsync(
+        string sql, IReadOnlyList<string> names)
+    {
+        var procName = SqlParameterScanner.TryExtractExecuteProcedureName(sql);
+        if (procName is not null)
+        {
+            try
+            {
+                var catalog = await _tableDetailReader
+                    .GetProcedureParametersAsync(procName, 0, CancellationToken.None) // 0 = input params
+                    .ConfigureAwait(true);
+                if (catalog.Count == names.Count)
+                {
+                    return names.Select((n, idx) => (n, catalog[idx].Type)).ToList();
+                }
+            }
+            catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
+            {
+                // fall through to Unknown — never guess
+            }
+        }
+        return names.Select(n => (n, UiStrings.SmartParamUnknownType)).ToList();
+    }
+
+    internal static IReadOnlyList<QueryParameter> BuildQueryParameters(
+        IReadOnlyList<string> names, IReadOnlyList<object?> values)
+    {
+        var list = new List<QueryParameter>(names.Count);
+        for (int i = 0; i < names.Count && i < values.Count; i++)
+        {
+            list.Add(new QueryParameter("@" + names[i], values[i]));
+        }
+        return list;
+    }
+
+    // Deterministic per-statement history key (FNV-1a over the trimmed SQL) so re-running the same
+    // ad-hoc query recalls its last values across sessions (string.GetHashCode isn't stable in .NET Core).
+    internal static string SmartParamsHistoryKey(string sql)
+    {
+        const ulong offset = 14695981039346656037UL, prime = 1099511628211UL;
+        ulong hash = offset;
+        foreach (var ch in (sql ?? string.Empty).Trim()) { hash ^= ch; hash *= prime; }
+        return hash.ToString("x16", CultureInfo.InvariantCulture);
+    }
+
     [RelayCommand(CanExecute = nameof(CanExecute))]
     public Task ExecuteQueryAsync() => RunExecuteAsync();
 
@@ -4754,6 +4943,25 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        // Smart SQL parameters (Part 3): if the statement has :name / @name placeholders (and is
+        // NOT an EXECUTE BLOCK, whose :vars are locals), collect their values first via the reused
+        // Execute dialog, then run the rewritten (@name) SQL with bound parameters. Cancelling the
+        // dialog aborts the run.
+        var executeSql = sql;
+        IReadOnlyList<QueryParameter>? parameters = null;
+        if (SmartParametersRequested is { } askParams && !SqlParameterScanner.IsExecuteBlock(sql))
+        {
+            var (rewritten, names) = SqlParameterScanner.RewriteToDriverMarkers(sql);
+            if (names.Count > 0)
+            {
+                var specs = await BuildSmartParamSpecsAsync(sql, names).ConfigureAwait(true);
+                var values = await askParams(new SmartParametersRequest(specs, SmartParamsHistoryKey(sql))).ConfigureAwait(true);
+                if (values is null) return; // user cancelled the parameter dialog
+                parameters = BuildQueryParameters(names, values);
+                executeSql = rewritten;
+            }
+        }
+
         IsExecuting = true;
         QueryStatsText = UiStrings.ExecutingStatus;
         ClearError();
@@ -4771,14 +4979,16 @@ public partial class MainWindowViewModel : ViewModelBase
             IReadOnlyList<PerTableReadRow>? reads = null;
             if (metadata)
             {
-                result = await _metadataExecutor.ExecuteAsync(sql, _executionCts.Token).ConfigureAwait(true);
+                result = parameters is null
+                    ? await _metadataExecutor.ExecuteAsync(executeSql, _executionCts.Token).ConfigureAwait(true)
+                    : await _metadataExecutor.ExecuteAsync(executeSql, parameters, _executionCts.Token).ConfigureAwait(true);
             }
             else
             {
-                (result, reads) = await ExecuteWithMetricsAsync(sql, null, _executionCts.Token).ConfigureAwait(true);
+                (result, reads) = await ExecuteWithMetricsAsync(executeSql, parameters, _executionCts.Token).ConfigureAwait(true);
                 // Performance panel (Option B): remember THIS SQL Editor run so its own panel can
                 // analyze it on view — no re-execution, and no leaking into proc/func contexts.
-                SqlEditorPerformance.Record(sql, result, reads);
+                SqlEditorPerformance.Record(executeSql, result, reads);
             }
 
             CurrentResult = result;
@@ -5482,6 +5692,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OpenSessionManagerCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanOpenGlobalSearch));
         OpenGlobalSearchCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanOpenScriptExecutor));
+        OpenScriptExecutorCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection
