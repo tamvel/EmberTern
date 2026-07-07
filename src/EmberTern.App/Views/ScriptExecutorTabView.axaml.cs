@@ -1,15 +1,19 @@
 using System;
 using System.ComponentModel;
+using System.IO;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.Completion;
+using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
 
 namespace EmberTern.App.Views;
@@ -57,13 +61,71 @@ public partial class ScriptExecutorTabView : UserControl
         {
             _currentVm.PropertyChanged -= OnVmPropertyChanged;
             _currentVm.NavigateToStatementRequested -= OnNavigateToStatement;
+            _currentVm.OpenRequested -= OnOpenRequested;
+            _currentVm.SaveRequested -= OnSaveRequested;
         }
         _currentVm = DataContext as ScriptExecutorTabViewModel;
         if (_currentVm is not null)
         {
             _currentVm.PropertyChanged += OnVmPropertyChanged;
             _currentVm.NavigateToStatementRequested += OnNavigateToStatement;
+            _currentVm.OpenRequested += OnOpenRequested;
+            _currentVm.SaveRequested += OnSaveRequested;
             PushScript();
+        }
+    }
+
+    private static readonly FilePickerFileType SqlFileType =
+        new("SQL scripts") { Patterns = new[] { "*.sql" } };
+
+    // Open a .sql into the editor. .NET's default reader handles BOM'd or no-BOM UTF-8.
+    private async Task OnOpenRequested()
+    {
+        if (_currentVm is null) return;
+        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
+        if (storage is null) return;
+        try
+        {
+            var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = UiStrings.ScriptOpenTooltip,
+                AllowMultiple = false,
+                FileTypeFilter = new[] { SqlFileType, FilePickerFileTypes.All },
+            });
+            if (files.Count == 0) return;
+            var path = files[0].Path.LocalPath;
+            var text = await File.ReadAllTextAsync(path).ConfigureAwait(true);
+            _currentVm.LoadScript(text, Path.GetFileName(path));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _currentVm.ReportFileError(ex.Message);
+        }
+    }
+
+    // Save the script as UTF-8 without a BOM (gotcha #178 — isql/IBExpert choke on a BOM).
+    private async Task OnSaveRequested()
+    {
+        if (_currentVm is null) return;
+        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
+        if (storage is null) return;
+        try
+        {
+            var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = UiStrings.ScriptSaveTooltip,
+                SuggestedFileName = "script.sql",
+                DefaultExtension = "sql",
+                FileTypeChoices = new[] { SqlFileType, FilePickerFileTypes.All },
+            });
+            if (file is null) return;
+            var path = file.Path.LocalPath;
+            await SqlFileWriter.WriteAsync(path, _currentVm.ScriptText).ConfigureAwait(true);
+            _currentVm.ReportFileSaved(Path.GetFileName(path));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _currentVm.ReportFileError(ex.Message);
         }
     }
 

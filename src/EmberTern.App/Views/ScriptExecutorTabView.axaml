@@ -68,6 +68,17 @@
           </StackPanel>
         </Button>
 
+        <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+
+        <Button Classes="icon" Command="{Binding OpenScriptCommand}"
+                ToolTip.Tip="{x:Static app:UiStrings.ScriptOpenTooltip}">
+          <controls:SvgIcon Data="{StaticResource Icon.Folder}" Foreground="{DynamicResource AccentBrush}" />
+        </Button>
+        <Button Classes="icon" Command="{Binding SaveScriptCommand}"
+                ToolTip.Tip="{x:Static app:UiStrings.ScriptSaveTooltip}">
+          <controls:SvgIcon Data="{StaticResource Icon.Save}" Foreground="{DynamicResource AccentBrush}" />
+        </Button>
+
         <TextBlock Text="{x:Static app:UiStrings.ScriptTransactionOpenMarker}"
                    Margin="6,0,0,0" VerticalAlignment="Center"
                    Foreground="{DynamicResource WarningBrush}"

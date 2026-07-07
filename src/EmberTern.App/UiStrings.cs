@@ -108,6 +108,11 @@ internal static class UiStrings
     public const string ScriptModeManual = "Manual (review, then commit)";
     public const string ScriptModeAutoCommit = "Auto-commit on success";
     public const string ScriptStopOnError = "Stop on error";
+    public const string ScriptOpenTooltip = "Open a .sql script…";
+    public const string ScriptSaveTooltip = "Save the script to a .sql file…";
+    public const string ScriptStatusOpenedFormat = "Opened {0}.";
+    public const string ScriptStatusSavedFormat = "Saved {0}.";
+    public const string ScriptStatusFileErrorFormat = "File error: {0}";
     public const string ScriptTransactionOpenMarker = "● Transaction open — review, then Commit or Rollback";
     // Result grid column headers.
     public const string ScriptColumnLine = "#";

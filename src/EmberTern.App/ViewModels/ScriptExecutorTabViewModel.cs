@@ -223,6 +223,39 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
     [RelayCommand]
     private void CopyFailed() => CopyToClipboardRequested?.Invoke(BuildClipboard(failedOnly: true));
 
+    // ─── Open / Save .sql ─────────────────────────────────────────────────────
+    // The view owns the file picker + IO (StorageProvider + SqlFileWriter, UTF-8 no-BOM);
+    // the VM just triggers it and receives the result via LoadScript / ReportFileSaved /
+    // ReportFileError. Keeps the VM free of Avalonia storage types.
+    public event Func<Task>? OpenRequested;
+    public event Func<Task>? SaveRequested;
+
+    [RelayCommand]
+    private void OpenScript() => _ = OpenRequested?.Invoke();
+
+    [RelayCommand]
+    private void SaveScript() => _ = SaveRequested?.Invoke();
+
+    /// <summary>Loads opened file text into the editor (via ScriptText → the view pushes it).</summary>
+    public void LoadScript(string text, string fileName)
+    {
+        ScriptText = text ?? string.Empty;
+        HasError = false;
+        StatusText = string.Format(CultureInfo.CurrentCulture, UiStrings.ScriptStatusOpenedFormat, fileName);
+    }
+
+    public void ReportFileSaved(string fileName)
+    {
+        HasError = false;
+        StatusText = string.Format(CultureInfo.CurrentCulture, UiStrings.ScriptStatusSavedFormat, fileName);
+    }
+
+    public void ReportFileError(string message)
+    {
+        HasError = true;
+        StatusText = string.Format(CultureInfo.CurrentCulture, UiStrings.ScriptStatusFileErrorFormat, message);
+    }
+
     // ─── Statement navigation ─────────────────────────────────────────────────
     public void NavigateToStatement(ScriptResultRowViewModel row)
     {
