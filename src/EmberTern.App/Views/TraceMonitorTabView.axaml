@@ -127,9 +127,24 @@
           </Button.Flyout>
         </Button>
 
+        <!-- Free-text search over the visible rows — full SQL, object/routine name, error message,
+             session identity (user/role/process/host) and the ids (tx/attachment/pid). Grouped with
+             the quick chips + funnel as the one "filter" zone; distinct from the funnel (structured). -->
+        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4"
+                Height="26" Padding="6,0,4,0" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <controls:SvgIcon Data="{StaticResource Icon.Search}" Width="13" Height="13"
+                              Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
+            <TextBox Width="160" BorderThickness="0" Background="Transparent" Padding="0" MinHeight="0"
+                     VerticalAlignment="Center" VerticalContentAlignment="Center"
+                     PlaceholderText="{x:Static app:UiStrings.TraceFilterWatermark}"
+                     Text="{Binding FilterText}" />
+          </StackPanel>
+        </Border>
+
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
-        <!-- Compact icon toggles -->
+        <!-- Compact icon toggles (view behaviour, not filtering) -->
         <ToggleButton Classes="icon" IsChecked="{Binding HideSelfActivity}" ToolTip.Tip="{x:Static app:UiStrings.TraceHideSelfTip}">
           <controls:SvgIcon Data="{StaticResource Icon.EyeOff}" />
         </ToggleButton>
@@ -138,15 +153,12 @@
         </ToggleButton>
         <ToggleButton Classes="icon" IsChecked="{Binding ShowOnlySelected}" IsVisible="{Binding IsLensOpen}"
                       ToolTip.Tip="{x:Static app:UiStrings.TraceShowOnlySelectedTip}">
-          <controls:SvgIcon Data="{StaticResource Icon.Filter}" />
+          <controls:SvgIcon Data="{StaticResource Icon.Crosshair}" />
         </ToggleButton>
         <ToggleButton Classes="icon" IsChecked="{Binding IncludeFunctions}"
                       ToolTip.Tip="{x:Static app:UiStrings.TraceIncludeFunctionsTip}">
           <controls:SvgIcon Data="{StaticResource Icon.Function}" />
         </ToggleButton>
-
-        <TextBox Width="150" PlaceholderText="{x:Static app:UiStrings.TraceFilterWatermark}"
-                 Text="{Binding FilterText}" Margin="4,0,0,0" />
 
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                    Foreground="{DynamicResource SubtleForegroundBrush}" Margin="8,0,0,0" />

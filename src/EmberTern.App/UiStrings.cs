@@ -1287,7 +1287,7 @@ internal static class UiStrings
     public const string TraceHideSelf = "Hide EmberTern's own activity";
     public const string TraceFollowTail = "Follow tail";
     public const string TraceShowOnlySelected = "Show only selected";
-    public const string TraceFilterWatermark = "Filter…";
+    public const string TraceFilterWatermark = "Search rows…";
     public const string TraceColSeq = "#";
     public const string TraceColTime = "Time";
     public const string TraceColDelta = "Δ ms";

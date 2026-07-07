@@ -94,14 +94,50 @@ public class TraceMonitorVmTests
     }
 
     [Fact]
-    public void FilterText_Narrows_ButNeverHidesErrors()
+    public void FilterText_SearchesRows_AndAppliesToErrorsToo()
     {
         var vm = NewVm();
         vm.Ingest(new[] { Ev(TraceEventKind.Statement, sql: "SELECT FROM CUSTOMERS"), Ev(TraceEventKind.Statement, sql: "SELECT FROM ORDERS"), Error() });
+
+        // Free-text search is now a real search: it applies to error rows too (unlike the structured
+        // quick chip / event-kind funnel, which never hide errors). RebuildRows() bypasses the debounce.
         vm.FilterText = "CUSTOMERS";
-        // the CUSTOMERS statement matches; the error row is always kept; ORDERS is filtered out.
-        Assert.Equal(2, vm.Rows.Count);
-        Assert.Contains(vm.Rows, r => r.IsError);
+        vm.RebuildRows();
+        Assert.Single(vm.Rows);                 // only the CUSTOMERS statement — the error is hidden
+        Assert.DoesNotContain(vm.Rows, r => r.IsError);
+
+        // The error IS reachable by searching its message (broadened matching).
+        vm.FilterText = "boom";
+        vm.RebuildRows();
+        Assert.Single(vm.Rows);
+        Assert.True(vm.Rows[0].IsError);
+    }
+
+    [Theory]
+    [InlineData("customers", true)]   // full SQL, case-insensitive
+    [InlineData("BROKEN", false)]     // not in this event's SQL
+    [InlineData("42", true)]          // attachment id (numeric)
+    [InlineData("7", true)]           // transaction id (numeric)
+    [InlineData("ADMIN", true)]       // user name
+    [InlineData("nothing", false)]
+    public void MatchesFilter_SearchesAllVisibleFields(string filter, bool expected)
+    {
+        var e = new TraceEvent
+        {
+            Id = 1, Sequence = 1, Kind = TraceEventKind.Statement, StartTime = T0,
+            Sql = "SELECT * FROM CUSTOMERS", TransactionId = 7, AttachmentId = 42, UserName = "ADMIN",
+        };
+        Assert.Equal(expected, TraceMonitorTabViewModel.MatchesFilter(e, filter));
+    }
+
+    [Fact]
+    public void MatchesFilter_MatchesErrorTextAndObjectName_EmptyFilterMatchesAll()
+    {
+        var err = new TraceEvent { Id = 2, Sequence = 2, Kind = TraceEventKind.Statement, StartTime = T0, ErrorText = "violation of PRIMARY KEY" };
+        var proc = new TraceEvent { Id = 3, Sequence = 3, Kind = TraceEventKind.Procedure, StartTime = T0, ObjectName = "SP_POST_ORDER" };
+        Assert.True(TraceMonitorTabViewModel.MatchesFilter(err, "primary key"));
+        Assert.True(TraceMonitorTabViewModel.MatchesFilter(proc, "post_order"));
+        Assert.True(TraceMonitorTabViewModel.MatchesFilter(err, string.Empty)); // empty filter never narrows
     }
 
     [Fact]

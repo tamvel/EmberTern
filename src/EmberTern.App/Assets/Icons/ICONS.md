@@ -49,6 +49,7 @@ Disabled state is conveyed by button `Opacity`, not a separate color.
 | `Icon.Save` | Actions/save.svg | Save (reserved — no button yet) | — |
 | `Icon.X` | Actions/x.svg | Close / dismiss (non-window) | Tab-strip close + Close-tab toolbar (Neutral) |
 | `Icon.Copy` | Actions/copy.svg | Copy / duplicate | Connection toolbar — Copy Connection (Neutral) |
+| `Icon.Crosshair` | Actions/crosshair.svg (geometry-only) | Focus on selection | Activity Monitor — "Show only selected" toggle (distinct from the funnel `Icon.Filter`) |
 | `Icon.Eraser` | Actions/eraser.svg | Clear editor text | SQL editor toolbar (Neutral) |
 | `Icon.Braces` | Actions/braces.svg | Format SQL (`{ }` code) | SQL editor toolbar (Neutral) |
 | `Icon.Hammer` | Actions/hammer.svg | Compile / build DDL | Pola + New Table toolbar — accent **primary** CTA button (OnAccent) |

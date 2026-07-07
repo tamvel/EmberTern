@@ -48,6 +48,9 @@
   <!-- Copy (Lucide copy): front rounded-rect (x8 y8 14×14 rx2 → authored as M…Z)
        + the back document path (verbatim Lucide). -->
   <StreamGeometry x:Key="Icon.Copy">M10 8 H20 A2 2 0 0 1 22 10 V20 A2 2 0 0 1 20 22 H10 A2 2 0 0 1 8 20 V10 A2 2 0 0 1 10 8 Z M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2</StreamGeometry>
+  <!-- Crosshair (Lucide crosshair): "focus the grid on the selected item" — distinct from the
+       funnel (Icon.Filter), which is the structured event filter. -->
+  <StreamGeometry x:Key="Icon.Crosshair">M2 12 A10 10 0 1 1 22 12 A10 10 0 1 1 2 12 Z M22 12 L18 12 M6 12 L2 12 M12 6 L12 2 M12 22 L12 18</StreamGeometry>
   <!-- Eraser (Lucide eraser): the 2nd Lucide path's relative "m5.082 11.09" is
        re-anchored to absolute "M5.082 11.09" so concatenation doesn't shift it
        relative to the 1st figure's endpoint (see gotcha on multi-path icons). -->

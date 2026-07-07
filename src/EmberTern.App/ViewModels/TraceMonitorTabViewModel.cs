@@ -35,6 +35,11 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     private readonly object _pendingGate = new();
     private DispatcherTimer? _pump;
 
+    /// <summary>Coalesces text-filter keystrokes (~350 ms, same UX as the sidebar filter) so a
+    /// full clear+refilter of the ≤50k-row master list doesn't run on every keypress.</summary>
+    private const int FilterDebounceMs = 350;
+    private DispatcherTimer? _filterDebounce;
+
     private long? _lastBandTx = long.MinValue;
     private int _bandCounter;
     private Func<TraceEvent, bool>? _lensPredicate; // set when a lens item is selected
@@ -281,13 +286,17 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
         }
     }
 
-    // hide-self + text filter (errors are never hidden by the quick filter) + show-only-selected
+    // hide-self + free-text search + quick chip + show-only-selected + event-kind funnel.
+    // NOTE the deliberate asymmetry: the STRUCTURED filters (quick chip / event-kind funnel) never
+    // hide errors (safety — you can't lose an error by filtering by kind), but the FREE-TEXT box IS
+    // applied to errors: an explicit text search is user intent to find specific text (incl. error
+    // messages), so a non-matching error is hidden when the search box is non-empty.
     internal bool RowPasses(TraceEventRowViewModel r)
     {
         if (HideSelfActivity && r.IsSelfActivity) return false;
         if (QuickFilter == TraceQuickFilter.Errors && !r.IsError) return false;
         if (QuickFilter == TraceQuickFilter.Slow && !r.IsSlow) return false;
-        if (!r.IsError && FilterText.Length > 0 && !MatchesText(r)) return false;
+        if (FilterText.Length > 0 && !MatchesFilter(r.Event, FilterText)) return false;
         if (ShowOnlySelected && _lensPredicate is { } pred && !pred(r.Event)) return false;
         if (!r.IsError && !EventKindPasses(r)) return false; // event-type/operation flyout (errors always shown)
         return true;
@@ -340,13 +349,34 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
         ShowOpSelect = ShowOpInsert = ShowOpUpdate = ShowOpDelete = ShowOpExecute = ShowOpDdl = ShowOpOther = true;
     }
 
-    private bool MatchesText(TraceEventRowViewModel r)
+    /// <summary>Free-text match over every field a user can see or reasonably search — full SQL,
+    /// object/routine name, operation label, error message, session identity (user / role / process
+    /// / host), and the numeric ids (transaction / attachment / process). Case-insensitive for text;
+    /// numeric ids match by their invariant string. Pure — unit-tested.</summary>
+    internal static bool MatchesFilter(TraceEvent e, string filter)
     {
-        var f = FilterText;
-        return r.ObjectText.Contains(f, StringComparison.OrdinalIgnoreCase)
-            || r.KindLabel.Contains(f, StringComparison.OrdinalIgnoreCase)
-            || (r.TransactionId?.ToString(CultureInfo.InvariantCulture).Contains(f, StringComparison.Ordinal) ?? false);
+        if (string.IsNullOrEmpty(filter)) return true;
+        return ContainsText(e.Sql, filter)
+            || ContainsText(e.ObjectName, filter)
+            || ContainsText(TraceEventRowViewModel.DisplayLabelFor(e), filter)
+            || ContainsText(e.ErrorText, filter)
+            || ContainsText(e.UserName, filter)
+            || ContainsText(e.RoleName, filter)
+            || ContainsText(e.ProcessName, filter)
+            || ContainsText(e.RemoteAddress, filter)
+            || ContainsNum(e.TransactionId, filter)
+            || ContainsNum(e.AttachmentId, filter)
+            || ContainsNum(e.ClientProcessId, filter);
     }
+
+    private static bool ContainsText(string? s, string filter) =>
+        s is not null && s.Contains(filter, StringComparison.OrdinalIgnoreCase);
+
+    private static bool ContainsNum(long? n, string filter) =>
+        n is { } v && v.ToString(CultureInfo.InvariantCulture).Contains(filter, StringComparison.Ordinal);
+
+    private static bool ContainsNum(int? n, string filter) =>
+        n is { } v && v.ToString(CultureInfo.InvariantCulture).Contains(filter, StringComparison.Ordinal);
 
     internal void RebuildRows()
     {
@@ -415,7 +445,23 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     }
 
     partial void OnShowOnlySelectedChanged(bool value) => RebuildRows();
-    partial void OnFilterTextChanged(string value) => RebuildRows();
+    partial void OnFilterTextChanged(string value) => ScheduleFilter();
+
+    // Debounced re-filter — restart a one-shot ~350 ms timer on each keystroke, refilter when it settles.
+    private void ScheduleFilter()
+    {
+        _filterDebounce ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FilterDebounceMs) };
+        _filterDebounce.Tick -= OnFilterDebounceTick;
+        _filterDebounce.Tick += OnFilterDebounceTick;
+        _filterDebounce.Stop();
+        _filterDebounce.Start();
+    }
+
+    private void OnFilterDebounceTick(object? sender, EventArgs e)
+    {
+        _filterDebounce?.Stop();
+        RebuildRows();
+    }
 
     partial void OnQuickFilterChanged(TraceQuickFilter value)
     {
@@ -588,6 +634,7 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     public async ValueTask DisposeAsync()
     {
         _pump?.Stop();
+        _filterDebounce?.Stop();
         _service.EventsReceived -= OnServiceEvents;
         _service.StateChanged -= OnServiceStateChanged;
         await _service.DisposeAsync().ConfigureAwait(false);
