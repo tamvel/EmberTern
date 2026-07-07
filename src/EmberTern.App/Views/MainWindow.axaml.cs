@@ -694,6 +694,31 @@ public partial class MainWindow : Window
     {
         if (sender is not ListBox list) return;
         var point = e.GetCurrentPoint(list);
+
+        // Right-click must not collapse a selection that a context-menu action reads. Every sidebar
+        // context menu binds to the clicked row's OWN DataContext, so the only selection-dependent
+        // action is the trigger-group "Selected" bulk op, which acts on the leaf multi-selection.
+        // Without this, right-clicking the Triggers group (a different row than the selected leaves)
+        // makes the ListBox select the group → SetSelectedTriggers([]) → the op sees 0 (or 1, when a
+        // selected leaf is right-clicked) triggers. Preserve the selection when right-clicking a row
+        // already in it, or the trigger group while triggers are selected. The ContextMenu still
+        // opens (it fires on release/RightTapped, after this PointerPressed). See gotcha #16/#99.
+        if (point.Properties.IsRightButtonPressed)
+        {
+            var clickedRow = (list.InputHitTest(point.Position) as Visual)
+                ?.FindAncestorOfType<ListBoxItem>(includeSelf: true)?.DataContext as SidebarRow;
+            var rowIsSelected = clickedRow is not null && list.SelectedItems?.Contains(clickedRow) == true;
+            var triggerGroupWithSelection =
+                clickedRow?.Node is MetadataNodeViewModel { IsTriggerGroup: true }
+                && _currentVm?.Metadata.HasSelectedTriggers == true;
+            if (rowIsSelected || triggerGroupWithSelection)
+                e.Handled = true;
+            // Refresh the clicked node's selection-dependent menu items ("Activate/Deactivate
+            // selected (N)" + single-op hiding) to the CURRENT multi-selection before the menu opens.
+            (clickedRow?.Node as MetadataNodeViewModel)?.NotifySelectionDependentMenuItems();
+            return;
+        }
+
         if (!point.Properties.IsLeftButtonPressed) return;
 
         var vm = FindRowVmAtPointer(list, point.Position);

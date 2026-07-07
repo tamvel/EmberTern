@@ -20,6 +20,13 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="10,8">
+      <DockPanel LastChildFill="True">
+        <!-- Live elapsed timer (shared ExecutionTimer) — RIGHT-ALIGNED status element (docked
+             right, outside the button StackPanel) so it never shifts the toolbar buttons. -->
+        <TextBlock DockPanel.Dock="Right" Text="{Binding ExecutionTimer.ElapsedDisplay}" FontSize="11"
+                   FontFamily="Consolas,Menlo,monospace" Margin="8,0,4,0" VerticalAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   IsVisible="{Binding ExecutionTimer.IsRunning}" />
       <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
 
         <Button Classes="primary" Command="{Binding RunCommand}"
@@ -36,12 +43,6 @@
                 ToolTip.Tip="{x:Static app:UiStrings.ScriptStopTooltip}">
           <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}" />
         </Button>
-
-        <!-- Live elapsed timer (shared ExecutionTimer) — one cohesive "Elapsed: mm:ss.f". -->
-        <TextBlock Text="{Binding ExecutionTimer.ElapsedDisplay}" FontSize="11"
-                   FontFamily="Consolas,Menlo,monospace" VerticalAlignment="Center"
-                   Foreground="{DynamicResource SubtleForegroundBrush}"
-                   IsVisible="{Binding ExecutionTimer.IsRunning}" />
 
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
@@ -90,6 +91,7 @@
                    Foreground="{DynamicResource WarningBrush}"
                    IsVisible="{Binding TransactionOpen}" />
       </StackPanel>
+      </DockPanel>
     </Border>
 
     <!-- Script editor (reuses SqlEditorBehavior for highlighting/autocomplete/find-replace). -->

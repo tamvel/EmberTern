@@ -61,7 +61,8 @@ public partial class MetadataNodeViewModel : ViewModelBase
     public bool IsGroup { get; private init; }
     public bool IsPlaceholder { get; private init; }
     public MetadataObjectKind Kind { get; private init; }
-    public MetadataObject? Object { get; private init; }
+    // private set (not init) so SetActiveState can flip a trigger/index leaf's active state in place.
+    public MetadataObject? Object { get; private set; }
     public string Icon { get; private init; } = string.Empty;
     // Resource key (e.g. "IconColor_Table") into the theme dictionary. The XAML side
     // looks it up via IconBrushConverter, which re-evaluates on theme toggle. Keeping
@@ -190,19 +191,36 @@ public partial class MetadataNodeViewModel : ViewModelBase
     public bool IsTriggerGroup => IsGroup && Kind == MetadataObjectKind.Trigger;
     // Procedure leaf → Execute.
     public bool IsProcedureLeaf => IsActionable && Kind == MetadataObjectKind.Procedure;
-    // Trigger leaf → single activate/deactivate (show only the applicable one).
+    // Trigger leaf → single activate/deactivate (show only the applicable one). Both hide while a
+    // multi-trigger selection is active — the leaf menu then offers the "Selected (N)" bulk ops
+    // instead (see below), so the user never scrolls back to the Triggers group header for them.
     public bool IsTriggerLeaf => IsActionable && Kind == MetadataObjectKind.Trigger;
-    public bool ShowActivate => IsTriggerLeaf && Object?.IsActive == false;
-    public bool ShowDeactivate => IsTriggerLeaf && Object?.IsActive == true;
+    public bool ShowActivate => IsTriggerLeaf && Object?.IsActive == false && !IsMultiTriggerSelected;
+    public bool ShowDeactivate => IsTriggerLeaf && Object?.IsActive == true && !IsMultiTriggerSelected;
+
+    // A multi-trigger selection is active AND this is one of the trigger leaves → the leaf's context
+    // menu shows "Activate/Deactivate selected (N)" and hides the single-object ops (Edit/Delete/Copy
+    // + single Activate/Deactivate), which are ambiguous with >1 selected. Count comes from the owner
+    // (which holds the sidebar multi-selection); NotifySelectionDependentMenuItems() re-reads it just
+    // before the menu opens (called from the right-click handler on the clicked node).
+    private bool IsMultiTriggerSelected => IsTriggerLeaf && _owner.SelectedTriggerCount > 1;
+    public bool ShowSelectedTriggerOps => IsMultiTriggerSelected;
+    public string ActivateSelectedTriggersLabel =>
+        string.Format(UiStrings.MetadataContextActivateSelectedFormat, _owner.SelectedTriggerCount);
+    public string DeactivateSelectedTriggersLabel =>
+        string.Format(UiStrings.MetadataContextDeactivateSelectedFormat, _owner.SelectedTriggerCount);
 
     // Deletable schema leaf (Role/User delete via Security Manager; SystemTable read-only).
-    public bool CanDeleteLeaf => IsActionable && Kind is MetadataObjectKind.Table
+    public bool CanDeleteLeaf => IsActionable && !IsMultiTriggerSelected && Kind is MetadataObjectKind.Table
         or MetadataObjectKind.View or MetadataObjectKind.Procedure or MetadataObjectKind.Trigger
         or MetadataObjectKind.Function or MetadataObjectKind.Package or MetadataObjectKind.Generator
         or MetadataObjectKind.Domain or MetadataObjectKind.Exception or MetadataObjectKind.Index;
 
+    // Copy Name — hidden for a trigger leaf while a multi-selection is active (which object?).
+    public bool ShowCopyNameLeaf => IsActionable && !IsMultiTriggerSelected;
+
     // Leaf "open/edit" label: Role/User → Security Manager; SystemTable → read-only Open; else Edit.
-    public bool CanEditLeaf => IsActionable;
+    public bool CanEditLeaf => IsActionable && !IsMultiTriggerSelected;
     public string ContextEditLabel => IsSecurityLeaf
         ? UiStrings.MetadataContextOpenSecurity
         : Kind == MetadataObjectKind.SystemTable ? UiStrings.MetadataContextOpen
@@ -356,6 +374,39 @@ public partial class MetadataNodeViewModel : ViewModelBase
     // null, so the menu item silently did nothing). Same command instance → CanExecute gating works.
     public IRelayCommand ActivateSelectedTriggersCommand => _owner.ActivateSelectedTriggersCommand;
     public IRelayCommand DeactivateSelectedTriggersCommand => _owner.DeactivateSelectedTriggersCommand;
+
+    /// <summary>Re-reads the owner's multi-selection count into the selection-dependent menu items.
+    /// Called from the sidebar right-click handler on the node whose context menu is about to open, so
+    /// "Activate/Deactivate selected (N)" and the single-op hiding reflect the CURRENT selection at
+    /// open time (the count lives on the owner, which these plain getters read live).</summary>
+    /// <summary>Flip this leaf's trigger/index active state IN PLACE — no collection change, so the
+    /// sidebar row updates without a reproject (scroll + selection + expansion survive). No-op when
+    /// the state already matches or there's no object. Only IsActive-derived display changes (dim +
+    /// "(inactive)" suffix + the single Activate/Deactivate menu items); icon and name are unchanged.</summary>
+    internal void SetActiveState(bool active)
+    {
+        if (Object is not { } obj || obj.IsActive == active)
+        {
+            return;
+        }
+        Object = obj with { IsActive = active };
+        OnPropertyChanged(nameof(IsInactive));
+        OnPropertyChanged(nameof(DisplayLabel));
+        OnPropertyChanged(nameof(ShowActivate));
+        OnPropertyChanged(nameof(ShowDeactivate));
+    }
+
+    internal void NotifySelectionDependentMenuItems()
+    {
+        OnPropertyChanged(nameof(ShowSelectedTriggerOps));
+        OnPropertyChanged(nameof(ActivateSelectedTriggersLabel));
+        OnPropertyChanged(nameof(DeactivateSelectedTriggersLabel));
+        OnPropertyChanged(nameof(ShowActivate));
+        OnPropertyChanged(nameof(ShowDeactivate));
+        OnPropertyChanged(nameof(CanEditLeaf));
+        OnPropertyChanged(nameof(CanDeleteLeaf));
+        OnPropertyChanged(nameof(ShowCopyNameLeaf));
+    }
 
     // Proc/func/trigger/package group → recompile every object of that kind.
     [RelayCommand]

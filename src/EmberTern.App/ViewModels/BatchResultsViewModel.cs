@@ -39,6 +39,12 @@ public partial class BatchResultsViewModel : ViewModelBase
     /// <summary>The filtered rows the DataGrid binds to (All / Success / Failed).</summary>
     public ObservableCollection<BatchResultRowViewModel> VisibleRows { get; }
 
+    /// <summary>Names of the objects whose step SUCCEEDED — used to reflect a bulk trigger
+    /// activate/deactivate in the tree in place (only the ones that actually changed). Complete by
+    /// the time the modal batch dialog closes (all marshaled Progress results have been applied).</summary>
+    public IReadOnlyList<string> SuccessfulObjects =>
+        _all.Where(r => !r.IsFailed).Select(r => r.Object).ToList();
+
     /// <summary>Token the executor observes; cancelled by the Cancel command / dialog close.</summary>
     public CancellationToken CancellationToken => _cts.Token;
 

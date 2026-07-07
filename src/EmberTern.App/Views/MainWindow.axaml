@@ -521,16 +521,13 @@
                                 Command="{Binding RecompileAllCommand}"
                                 IsVisible="{Binding IsRecompilableGroup}" />
                       <Separator IsVisible="{Binding IsTriggerGroup}" />
-                      <!-- Trigger-group bulk ops, grouped by action → scope. "Selected" acts on the
-                           sidebar multi-selection (Ctrl/Shift-click); it lives on the explorer VM
-                           (which owns the selection), so it binds via the window DataContext and
-                           disables when nothing is selected. -->
+                      <!-- Trigger-GROUP bulk ops: Visible (current filter set) or All. The "Selected"
+                           scope moved onto the selected trigger leaves (see below) so the user doesn't
+                           scroll back to this header to act on a multi-selection. -->
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
                                 IsVisible="{Binding IsTriggerGroup}">
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
                                   Command="{Binding ActivateVisibleCommand}" />
-                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeSelected}"
-                                  Command="{Binding ActivateSelectedTriggersCommand}" />
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
                                   Command="{Binding ActivateAllCommand}" />
                       </MenuItem>
@@ -538,11 +535,19 @@
                                 IsVisible="{Binding IsTriggerGroup}">
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
                                   Command="{Binding DeactivateVisibleCommand}" />
-                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeSelected}"
-                                  Command="{Binding DeactivateSelectedTriggersCommand}" />
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
                                   Command="{Binding DeactivateAllCommand}" />
                       </MenuItem>
+                      <!-- Trigger-LEAF multi-select bulk ops — visible only when >1 trigger is
+                           selected (Ctrl/Shift-click). Commands are forwarded from the explorer VM
+                           (which owns the selection) via the node VM so they resolve inside the
+                           ContextMenu's popup namescope (gotcha #180). -->
+                      <MenuItem Header="{Binding ActivateSelectedTriggersLabel}"
+                                Command="{Binding ActivateSelectedTriggersCommand}"
+                                IsVisible="{Binding ShowSelectedTriggerOps}" />
+                      <MenuItem Header="{Binding DeactivateSelectedTriggersLabel}"
+                                Command="{Binding DeactivateSelectedTriggersCommand}"
+                                IsVisible="{Binding ShowSelectedTriggerOps}" />
                       <MenuItem Header="{Binding ContextEditLabel}"
                                 Command="{Binding OpenDdlCommand}"
                                 IsVisible="{Binding CanEditLeaf}" />
@@ -559,10 +564,10 @@
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDelete}"
                                 Command="{Binding DeleteCommand}"
                                 IsVisible="{Binding CanDeleteLeaf}" />
-                      <Separator IsVisible="{Binding IsActionable}" />
+                      <Separator IsVisible="{Binding ShowCopyNameLeaf}" />
                       <MenuItem Header="{Binding ContextCopyNameLabel}"
                                 Command="{Binding CopyNameCommand}"
-                                IsVisible="{Binding IsActionable}" />
+                                IsVisible="{Binding ShowCopyNameLeaf}" />
                     </ContextMenu>
                   </Border.ContextMenu>
                   <StackPanel Orientation="Horizontal" Spacing="5">
@@ -734,6 +739,15 @@
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,0,0,1"
                   IsVisible="{Binding ShowEditorToolbar}">
+            <DockPanel LastChildFill="True">
+              <!-- Live elapsed timer — a RIGHT-ALIGNED status element (docked right, outside the
+                   button StackPanel) so appearing/updating never shifts the toolbar icons. One
+                   cohesive "Elapsed: mm:ss.f" while any SQL Editor / Execute Procedure / Execute
+                   Function run is in progress; the final "N ms" is shown by the metrics display. -->
+              <TextBlock DockPanel.Dock="Right" Text="{Binding ExecutionTimer.ElapsedDisplay}"
+                         FontSize="11" FontFamily="Consolas,Menlo,monospace" Margin="8,0,14,0"
+                         VerticalAlignment="Center" Foreground="{DynamicResource SubtleForegroundBrush}"
+                         IsVisible="{Binding ExecutionTimer.IsRunning}" />
             <StackPanel Orientation="Horizontal" Spacing="6" Margin="10,4" VerticalAlignment="Center">
 
               <!-- ── SECTION 1 · Mode toggle (Table Grid-Edit / View+Procedure Easy) ── -->
@@ -788,13 +802,6 @@
                   <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <!-- Live elapsed timer — one cohesive "Elapsed: mm:ss.f" while any SQL Editor /
-                   Execute Procedure / Execute Function run is in progress; the final "N ms" is
-                   shown by the metrics display. -->
-              <TextBlock Text="{Binding ExecutionTimer.ElapsedDisplay}" FontSize="11"
-                         FontFamily="Consolas,Menlo,monospace" Margin="8,0,0,0" VerticalAlignment="Center"
-                         Foreground="{DynamicResource SubtleForegroundBrush}"
-                         IsVisible="{Binding ExecutionTimer.IsRunning}" />
               <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
                       Command="{Binding ActiveTableDetail.CompileCommand}" IsVisible="{Binding ShowStructureCompileTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
@@ -1042,6 +1049,7 @@
                 <controls:SvgIcon Data="{StaticResource Icon.X}" />
               </Button>
             </StackPanel>
+            </DockPanel>
           </Border>
 
           <!-- Editor area: SQL editor for Query tabs, DDL editor for DDL tabs.

@@ -49,11 +49,14 @@ internal static class UiStrings
     public const string MetadataContextExecuteProcedure = "Execute procedure";
     public const string MetadataContextActivate = "Activate";
     public const string MetadataContextDeactivate = "Deactivate";
-    // Trigger-group Activate/Deactivate submenus are scoped by these. "Selected" acts on the
-    // sidebar multi-selection (Ctrl/Shift-click); it sits between Visible and All.
+    // Trigger-group Activate/Deactivate submenus are scoped by these — Visible (current filter set)
+    // or All. ("Selected" moved onto the selected trigger leaves — see the *SelectedFormat below.)
     public const string MetadataContextScopeVisible = "Visible";
-    public const string MetadataContextScopeSelected = "Selected";
     public const string MetadataContextScopeAll = "All";
+    // Shown directly on a selected trigger leaf's context menu when >1 trigger is multi-selected, so
+    // the bulk op is reachable without scrolling back to the Triggers group header. {0} = count.
+    public const string MetadataContextActivateSelectedFormat = "Activate selected ({0})";
+    public const string MetadataContextDeactivateSelectedFormat = "Deactivate selected ({0})";
     public const string MetadataContextRecompileAllFormat = "Recompile all {0}s";
     public const string MetadataInactiveSuffix = " (inactive)";
     // Generic delete (all deletable kinds) — {0}=kind noun, {1}=object name.

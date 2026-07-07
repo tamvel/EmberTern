@@ -172,6 +172,39 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     // Bulk trigger activate/deactivate over the visible (filtered) set or all.
     public event Action<TriggerBulkRequest>? BulkSetActiveRequested;
 
+    /// <summary>Reflect a trigger activate/deactivate in the tree WITHOUT a full <see cref="RefreshAsync"/>
+    /// — flip the matching LOADED trigger leaves in place. No collection change → no reproject, so the
+    /// sidebar keeps its scroll position, selection, and expanded groups (the whole point: single/batch
+    /// trigger ops no longer make the tree jump). <paramref name="names"/> null = every loaded trigger
+    /// leaf (scope All); otherwise only the named ones (case-insensitive). Unloaded groups have no leaf
+    /// nodes yet → nothing to update (they fetch fresh state on first expand). The schema is unchanged
+    /// (same triggers, only active flags), so the name cache and filter are left intact.</summary>
+    internal void ApplyTriggerActiveStateInPlace(IEnumerable<string>? names, bool active)
+    {
+        var set = names is null ? null : new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+        foreach (var connection in Connections)
+        {
+            if (!connection.IsConnected)
+            {
+                continue;
+            }
+            foreach (var group in connection.Children)
+            {
+                if (!group.IsGroup || group.Kind != MetadataObjectKind.Trigger)
+                {
+                    continue;
+                }
+                foreach (var leaf in group.AllLeaves)
+                {
+                    if (leaf.Object is { } o && (set is null || set.Contains(o.Name)))
+                    {
+                        leaf.SetActiveState(active);
+                    }
+                }
+            }
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(CanRefresh))]
     public async Task RefreshAsync()
     {

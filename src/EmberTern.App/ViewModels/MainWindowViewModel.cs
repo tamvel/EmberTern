@@ -4394,7 +4394,7 @@ public partial class MainWindowViewModel : ViewModelBase
     // what removes the pre-sprint 10–15s "app looks busy, nothing shown" gap: preparation
     // (especially recompile's one-source-fetch-per-object loop) now happens with the dialog
     // already on screen.
-    private async Task RunBatchWithReportAsync(
+    private async Task<BatchResultsViewModel> RunBatchWithReportAsync(
         string title,
         Func<BatchResultsViewModel, CancellationToken, Task<BatchPlan>> prepareAsync,
         bool refreshAfter)
@@ -4473,6 +4473,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         vm.RequestCancel();                       // dialog closed → stop any remaining work
         await execTask.ConfigureAwait(true);
+        return vm;
     }
 
     // Single trigger activate/deactivate (from a trigger leaf).
@@ -4492,7 +4493,9 @@ public partial class MainWindowViewModel : ViewModelBase
             SelectedBottomTabIndex = 1;
             return;
         }
-        await Metadata.RefreshAsync().ConfigureAwait(true);
+        // Targeted in-place flip — NOT a full RefreshAsync (which would reproject the whole tree and
+        // lose scroll/selection). The DDL succeeded, so the state is now `activate`.
+        Metadata.ApplyTriggerActiveStateInPlace(new[] { obj.Name }, activate);
     }
 
     // Bulk trigger activate/deactivate over the visible (filtered) set or ALL. The reader
@@ -4522,7 +4525,16 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         var title = req.Activate ? UiStrings.BatchTitleActivateTriggers : UiStrings.BatchTitleDeactivateTriggers;
-        await RunBatchWithReportAsync(title, (vm, ct) => BuildTriggerBulkPlanAsync(req, vm, ct), refreshAfter: true).ConfigureAwait(true);
+        // refreshAfter:false — a full RefreshAsync reprojects the whole tree and loses scroll/selection
+        // (the reported jump). Instead reflect the change IN PLACE afterwards (no reproject → keeps
+        // scroll/selection/expansion) for EVERY trigger whose step succeeded. Using SuccessfulObjects
+        // (not req.Names) is correct under partial-failure AND cancel (only actually-changed triggers
+        // flip) — the results are all applied by the time the modal batch dialog closes. (NB: don't
+        // gate this on report.CancellationToken — RunBatchWithReportAsync always RequestCancel()s as
+        // cleanup, so that token is always cancelled here.)
+        var report = await RunBatchWithReportAsync(
+            title, (vm, ct) => BuildTriggerBulkPlanAsync(req, vm, ct), refreshAfter: false).ConfigureAwait(true);
+        Metadata.ApplyTriggerActiveStateInPlace(report.SuccessfulObjects, req.Activate);
     }
 
     private async Task<BatchPlan> BuildTriggerBulkPlanAsync(TriggerBulkRequest req, BatchResultsViewModel vm, CancellationToken ct)

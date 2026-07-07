@@ -160,31 +160,135 @@ public class TriggerBulkSelectionTests
     }
 
     [Fact]
-    public void GroupNode_ForwardsSelectedCommand_SingleTrigger_RaisesRequest()
+    public void TriggerLeaf_ForwardsSelectedCommand_IsOwnerInstance_AndGates()
     {
-        // Regression pin for the live bug: the trigger-group ContextMenu binds the "Selected" items
-        // to the GROUP NODE's command (DataContext inheritance), NOT the explorer VM via ElementName
-        // (which can't cross the ContextMenu's popup namescope → the command was null → clicking did
-        // nothing, even for one selected trigger). The node must forward the owner's command.
+        // Regression pin for gotcha #180, now on the LEAF: the "Selected" ContextMenu items moved
+        // onto the trigger leaves, and they bind the forwarded owner command by DataContext
+        // inheritance (an ElementName binding can't cross the ContextMenu's popup namescope → the
+        // command resolved to null → clicking did nothing). The leaf must expose the SAME command
+        // instance so its HasSelectedTriggers gating works.
+        using var h = new Harness();
+        var m = h.Main.Metadata;
+        var leaf = MetadataNodeViewModel.CreateLeaf(m, Trig("TR_ONE", false));
+
+        Assert.Same(m.ActivateSelectedTriggersCommand, leaf.ActivateSelectedTriggersCommand);
+        Assert.Same(m.DeactivateSelectedTriggersCommand, leaf.DeactivateSelectedTriggersCommand);
+        Assert.False(leaf.ActivateSelectedTriggersCommand.CanExecute(null)); // nothing selected
+
+        m.SetSelectedTriggers(new[] { Row(MetadataNodeViewModel.CreateLeaf(m, Trig("TR_ONE", false))) });
+        Assert.True(leaf.ActivateSelectedTriggersCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void TriggerLeaf_ForwardsSelectedCommand_MultiTrigger_NamesAll()
+    {
+        // Regression pin for Problem B ("Deactivate acts on only one"): the leaf's forwarded "Selected"
+        // command must carry EVERY selected trigger, not just one. The live bug was the view collapsing
+        // the multi-selection on right-click (Problem A) so _selectedTriggers held 0 or 1 by the time
+        // the command ran; with the selection preserved, all three are named.
         using var h = new Harness();
         var m = h.Main.Metadata;
         TriggerBulkRequest? req = null;
         m.BulkSetActiveRequested += r => req = r;
 
-        var group = MetadataNodeViewModel.CreateGroup(m, MetadataObjectKind.Trigger);
-        Assert.Same(m.ActivateSelectedTriggersCommand, group.ActivateSelectedTriggersCommand);
-        Assert.False(group.ActivateSelectedTriggersCommand.CanExecute(null)); // nothing selected
+        var leaf = MetadataNodeViewModel.CreateLeaf(m, Trig("TR_TARGET", true));
+        m.SetSelectedTriggers(new[]
+        {
+            Row(MetadataNodeViewModel.CreateLeaf(m, Trig("TR_A", true))),
+            Row(MetadataNodeViewModel.CreateLeaf(m, Trig("TR_B", true))),
+            Row(MetadataNodeViewModel.CreateLeaf(m, Trig("TR_C", true))),
+        });
 
-        // Select exactly ONE trigger — the case the user reported as broken.
-        m.SetSelectedTriggers(new[] { Row(MetadataNodeViewModel.CreateLeaf(m, Trig("TR_ONE", false))) });
-
-        Assert.True(group.ActivateSelectedTriggersCommand.CanExecute(null));
-        group.ActivateSelectedTriggersCommand.Execute(null);
+        Assert.True(leaf.DeactivateSelectedTriggersCommand.CanExecute(null));
+        leaf.DeactivateSelectedTriggersCommand.Execute(null);
 
         Assert.NotNull(req);
         Assert.Equal(BatchOperationScope.Selected, req!.Scope);
-        Assert.True(req.Activate);
-        Assert.Equal(new[] { "TR_ONE" }, req.Names);
+        Assert.Equal(new[] { "TR_A", "TR_B", "TR_C" }, req.Names);
+    }
+
+    [Fact]
+    public void TriggerLeaf_MultiSelection_ShowsSelectedOpsWithCount_AndHidesSingleOps()
+    {
+        // The "Selected" bulk op moved onto the selected trigger leaves: with >1 trigger selected,
+        // any trigger leaf's context menu offers "Activate/Deactivate selected (N)" and hides the
+        // single-object ops (so it's reachable without scrolling back to the Triggers group header).
+        using var h = new Harness();
+        var m = h.Main.Metadata;
+        var leaf = MetadataNodeViewModel.CreateLeaf(m, Trig("TR_TARGET", true)); // active trigger leaf
+
+        // No multi-selection → single ops visible, Selected ops hidden.
+        Assert.False(leaf.ShowSelectedTriggerOps);
+        Assert.True(leaf.ShowDeactivate); // active → single Deactivate shown
+        Assert.True(leaf.CanEditLeaf);
+        Assert.True(leaf.CanDeleteLeaf);
+        Assert.True(leaf.ShowCopyNameLeaf);
+
+        // >1 trigger selected → Selected ops (with the count) visible, single ops hidden.
+        m.SetSelectedTriggers(new[]
+        {
+            Row(MetadataNodeViewModel.CreateLeaf(m, Trig("TR_A", true))),
+            Row(MetadataNodeViewModel.CreateLeaf(m, Trig("TR_B", true))),
+            Row(MetadataNodeViewModel.CreateLeaf(m, Trig("TR_C", true))),
+        });
+        Assert.True(leaf.ShowSelectedTriggerOps);
+        Assert.Contains("3", leaf.ActivateSelectedTriggersLabel);
+        Assert.Contains("3", leaf.DeactivateSelectedTriggersLabel);
+        Assert.False(leaf.ShowActivate);
+        Assert.False(leaf.ShowDeactivate);
+        Assert.False(leaf.CanEditLeaf);
+        Assert.False(leaf.CanDeleteLeaf);
+        Assert.False(leaf.ShowCopyNameLeaf);
+
+        // Back to a single selection → single ops return, Selected ops hidden.
+        m.SetSelectedTriggers(new[] { Row(MetadataNodeViewModel.CreateLeaf(m, Trig("TR_A", true))) });
+        Assert.False(leaf.ShowSelectedTriggerOps);
+        Assert.True(leaf.ShowDeactivate);
+        Assert.True(leaf.CanEditLeaf);
+    }
+
+    [Fact]
+    public void SetActiveState_FlipsLeafInPlace_UpdatingInactiveDisplayAndSingleOps()
+    {
+        // The targeted in-place flip that replaces RefreshAsync after a single/batch activate-deactivate
+        // (no collection change → the tree doesn't reproject → scroll/selection survive). Only the
+        // IsActive-derived display changes; the object identity/name stay.
+        using var h = new Harness();
+        var m = h.Main.Metadata;
+        var leaf = MetadataNodeViewModel.CreateLeaf(m, Trig("TR_X", true)); // active
+
+        Assert.False(leaf.IsInactive);
+        Assert.True(leaf.ShowDeactivate);
+        Assert.DoesNotContain("(inactive)", leaf.DisplayLabel);
+
+        leaf.SetActiveState(false);
+        Assert.True(leaf.IsInactive);
+        Assert.Contains("(inactive)", leaf.DisplayLabel);
+        Assert.True(leaf.ShowActivate);
+        Assert.False(leaf.ShowDeactivate);
+        Assert.Equal("TR_X", leaf.Object!.Name); // identity preserved
+
+        leaf.SetActiveState(false); // idempotent no-op
+        Assert.True(leaf.IsInactive);
+
+        leaf.SetActiveState(true); // back to active
+        Assert.False(leaf.IsInactive);
+        Assert.True(leaf.ShowDeactivate);
+    }
+
+    [Fact]
+    public void BatchResults_SuccessfulObjects_ReturnsOnlyNonFailedNames()
+    {
+        // The batch trigger flip relies on SuccessfulObjects to reflect ONLY the actually-changed
+        // triggers in the tree (regression: the batch flip was gated on an always-true Cancellation
+        // token → nothing updated). This pins the source list.
+        var b = new BatchResultsViewModel("t");
+        b.Begin(3);
+        b.AddResult(new BatchOperationResult("TR_A", "op", Success: true, Error: null));
+        b.AddResult(new BatchOperationResult("TR_B", "op", Success: false, Error: "boom"));
+        b.AddResult(new BatchOperationResult("TR_C", "op", Success: true, Error: null));
+
+        Assert.Equal(new[] { "TR_A", "TR_C" }, b.SuccessfulObjects);
     }
 
     private static SidebarRow Row(MetadataNodeViewModel node) => new(node, depth: 2, isExpandable: false, isExpanded: false);
