@@ -399,6 +399,11 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
     /// reopens the real object.</summary>
     public event Action<string?>? ObjectCreated;
 
+    /// <summary>Raised after a successful Compile of an EXISTING object — the owner offers to
+    /// recompile its dependents (Part 2). Not raised in the New flow (a new object has no
+    /// dependents yet; ObjectCreated fires instead).</summary>
+    public event Action? CompiledExistingObject;
+
     public bool CanCompile => DdlExecutor is not null;
 
     /// <summary>Reassembles the active mode's content (Easy → from the structured model;
@@ -446,6 +451,7 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
         }
 
         await RefreshAsync(cancellationToken).ConfigureAwait(true);
+        CompiledExistingObject?.Invoke();
     }
 
     // ─── Revert (discard uncompiled edits, reload from DB) ────────────────

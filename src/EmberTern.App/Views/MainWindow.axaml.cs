@@ -473,6 +473,7 @@ public partial class MainWindow : Window
             _currentVm.AddConnectionRequested -= OnAddConnectionRequested;
             _currentVm.BatchResultsRequested -= OnBatchResultsRequested;
             _currentVm.GlobalSearchRequested -= OnGlobalSearchRequested;
+            _currentVm.RecompileDependentsRequested -= OnRecompileDependentsRequested;
             _currentVm.SelectedQueryTextProvider = null;
             _currentVm.ReplaceSelectedOrAllText = null;
         }
@@ -492,6 +493,7 @@ public partial class MainWindow : Window
             _currentVm.AddConnectionRequested += OnAddConnectionRequested;
             _currentVm.BatchResultsRequested += OnBatchResultsRequested;
             _currentVm.GlobalSearchRequested += OnGlobalSearchRequested;
+            _currentVm.RecompileDependentsRequested += OnRecompileDependentsRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
 
@@ -567,6 +569,12 @@ public partial class MainWindow : Window
 
         return file?.Path.LocalPath;
     }
+
+    // Post-compile "Recompile dependents?" checklist. Returns the user's selection (null on
+    // Skip/Cancel); the VM runs the recompile through the batch pipeline. StorageProvider /
+    // dialogs stay in the view.
+    private Task<RecompileDependentsResult?> OnRecompileDependentsRequested(RecompileDependentsRequest request)
+        => RecompileDependentsDialog.ShowAsync(this, new RecompileDependentsDialogViewModel(request));
 
     // Selection sets the working connection when a connection row is picked — so the titlebar
     // Edit/Copy/Delete/Connect commands act on it. Picking a category/leaf leaves the last

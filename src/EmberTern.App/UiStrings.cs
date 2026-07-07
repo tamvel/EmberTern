@@ -113,6 +113,18 @@ internal static class UiStrings
     public const string ScriptStatusOpenedFormat = "Opened {0}.";
     public const string ScriptStatusSavedFormat = "Saved {0}.";
     public const string ScriptStatusFileErrorFormat = "File error: {0}";
+
+    // ─── Recompile Dependents (Part 2) ────────────────────────────────────────
+    public const string RecompileDependentsTitle = "Recompile dependents";
+    public const string RecompileDependentsHeaderFormat = "Recompile objects that depend on {0}?";
+    public const string RecompileDependentsHint =
+        "This change may affect the objects below. Nothing is recompiled unless you choose to.";
+    public const string RecompileDependentsSelectAll = "Select all";
+    public const string RecompileDependentsSelectNone = "Select none";
+    public const string RecompileDependentsDontAskAgain = "Don't ask again this session";
+    public const string RecompileDependentsRecompile = "Recompile selected";
+    public const string RecompileDependentsSkip = "Skip";
+    public const string RecompileDependentsBatchTitleFormat = "Recompile dependents of {0}";
     public const string ScriptTransactionOpenMarker = "● Transaction open — review, then Commit or Rollback";
     // Result grid column headers.
     public const string ScriptColumnLine = "#";
