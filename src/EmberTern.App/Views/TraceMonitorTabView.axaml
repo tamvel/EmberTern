@@ -128,14 +128,16 @@
         </Button>
 
         <!-- Free-text search over the visible rows — full SQL, object/routine name, error message,
-             session identity (user/role/process/host) and the ids (tx/attachment/pid). Grouped with
-             the quick chips + funnel as the one "filter" zone; distinct from the funnel (structured). -->
-        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4"
-                Height="26" Padding="6,0,4,0" VerticalAlignment="Center">
-          <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-            <controls:SvgIcon Data="{StaticResource Icon.Search}" Width="13" Height="13"
+             session identity (user/role/process/host) and the ids (tx/attachment/pid). A FILLED
+             search field (BackgroundBrush contrasts the ElevatedPanel toolbar) so it reads clearly
+             as a text input, not another segmented button group. Grouped with the quick chips +
+             funnel as the one "filter" zone; distinct from the funnel (structured). -->
+        <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1" CornerRadius="4" Height="26" Padding="7,0,6,0" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+            <controls:SvgIcon Data="{StaticResource Icon.Search}" Width="14" Height="14"
                               Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
-            <TextBox Width="160" BorderThickness="0" Background="Transparent" Padding="0" MinHeight="0"
+            <TextBox Width="200" BorderThickness="0" Background="Transparent" Padding="0" MinHeight="0"
                      VerticalAlignment="Center" VerticalContentAlignment="Center"
                      PlaceholderText="{x:Static app:UiStrings.TraceFilterWatermark}"
                      Text="{Binding FilterText}" />

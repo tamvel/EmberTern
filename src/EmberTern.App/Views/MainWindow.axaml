@@ -530,7 +530,7 @@
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
                                   Command="{Binding ActivateVisibleCommand}" />
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeSelected}"
-                                  Command="{Binding DataContext.Metadata.ActivateSelectedTriggersCommand, ElementName=RootWindow}" />
+                                  Command="{Binding ActivateSelectedTriggersCommand}" />
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
                                   Command="{Binding ActivateAllCommand}" />
                       </MenuItem>
@@ -539,7 +539,7 @@
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
                                   Command="{Binding DeactivateVisibleCommand}" />
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeSelected}"
-                                  Command="{Binding DataContext.Metadata.DeactivateSelectedTriggersCommand, ElementName=RootWindow}" />
+                                  Command="{Binding DeactivateSelectedTriggersCommand}" />
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
                                   Command="{Binding DeactivateAllCommand}" />
                       </MenuItem>
@@ -788,15 +788,13 @@
                   <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <!-- Live elapsed timer — shown while any SQL Editor / Execute Procedure / Execute
-                   Function run is in progress; the final "N ms" is shown by the metrics display. -->
-              <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Margin="6,0,0,0"
-                          IsVisible="{Binding ExecutionTimer.IsRunning}">
-                <TextBlock Text="{x:Static app:UiStrings.ExecutionElapsedLabel}" FontSize="11"
-                           Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding ExecutionTimer.ElapsedText}" FontSize="11" FontFamily="Consolas,Menlo,monospace"
-                           Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" />
-              </StackPanel>
+              <!-- Live elapsed timer — one cohesive "Elapsed: mm:ss.f" while any SQL Editor /
+                   Execute Procedure / Execute Function run is in progress; the final "N ms" is
+                   shown by the metrics display. -->
+              <TextBlock Text="{Binding ExecutionTimer.ElapsedDisplay}" FontSize="11"
+                         FontFamily="Consolas,Menlo,monospace" Margin="8,0,0,0" VerticalAlignment="Center"
+                         Foreground="{DynamicResource SubtleForegroundBrush}"
+                         IsVisible="{Binding ExecutionTimer.IsRunning}" />
               <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
                       Command="{Binding ActiveTableDetail.CompileCommand}" IsVisible="{Binding ShowStructureCompileTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />

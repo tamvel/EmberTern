@@ -350,6 +350,13 @@ public partial class MetadataNodeViewModel : ViewModelBase
         _owner.RequestBulkSetActive(new TriggerBulkRequest(Kind, activate, scope, names));
     }
 
+    // "Selected" bulk ops act on the sidebar multi-selection, which the explorer VM owns. Expose its
+    // commands here so the trigger-group ContextMenu can bind by DataContext inheritance — an
+    // ElementName binding can't cross the ContextMenu's separate popup namescope (it resolves to
+    // null, so the menu item silently did nothing). Same command instance → CanExecute gating works.
+    public IRelayCommand ActivateSelectedTriggersCommand => _owner.ActivateSelectedTriggersCommand;
+    public IRelayCommand DeactivateSelectedTriggersCommand => _owner.DeactivateSelectedTriggersCommand;
+
     // Proc/func/trigger/package group → recompile every object of that kind.
     [RelayCommand]
     private void RecompileAll()

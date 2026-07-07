@@ -159,6 +159,34 @@ public class TriggerBulkSelectionTests
         Assert.Equal(new[] { "TR_A", "TR_B" }, req.Names);
     }
 
+    [Fact]
+    public void GroupNode_ForwardsSelectedCommand_SingleTrigger_RaisesRequest()
+    {
+        // Regression pin for the live bug: the trigger-group ContextMenu binds the "Selected" items
+        // to the GROUP NODE's command (DataContext inheritance), NOT the explorer VM via ElementName
+        // (which can't cross the ContextMenu's popup namescope → the command was null → clicking did
+        // nothing, even for one selected trigger). The node must forward the owner's command.
+        using var h = new Harness();
+        var m = h.Main.Metadata;
+        TriggerBulkRequest? req = null;
+        m.BulkSetActiveRequested += r => req = r;
+
+        var group = MetadataNodeViewModel.CreateGroup(m, MetadataObjectKind.Trigger);
+        Assert.Same(m.ActivateSelectedTriggersCommand, group.ActivateSelectedTriggersCommand);
+        Assert.False(group.ActivateSelectedTriggersCommand.CanExecute(null)); // nothing selected
+
+        // Select exactly ONE trigger — the case the user reported as broken.
+        m.SetSelectedTriggers(new[] { Row(MetadataNodeViewModel.CreateLeaf(m, Trig("TR_ONE", false))) });
+
+        Assert.True(group.ActivateSelectedTriggersCommand.CanExecute(null));
+        group.ActivateSelectedTriggersCommand.Execute(null);
+
+        Assert.NotNull(req);
+        Assert.Equal(BatchOperationScope.Selected, req!.Scope);
+        Assert.True(req.Activate);
+        Assert.Equal(new[] { "TR_ONE" }, req.Names);
+    }
+
     private static SidebarRow Row(MetadataNodeViewModel node) => new(node, depth: 2, isExpandable: false, isExpanded: false);
 
     private sealed class Harness : IDisposable

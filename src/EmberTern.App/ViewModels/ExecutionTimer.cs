@@ -21,10 +21,20 @@ public sealed partial class ExecutionTimer : ObservableObject
     private DispatcherTimer? _timer;
 
     /// <summary>True while an execution is in progress — drives the indicator's visibility.</summary>
-    [ObservableProperty] private bool _isRunning;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ElapsedDisplay))]
+    private bool _isRunning;
 
     /// <summary>Live elapsed time (mm:ss.f), updated ~10×/s while running; empty when idle.</summary>
-    [ObservableProperty] private string _elapsedText = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ElapsedDisplay))]
+    private string _elapsedText = string.Empty;
+
+    /// <summary>The single cohesive label shown in the toolbar — "Elapsed: mm:ss.f" while running,
+    /// empty when idle. One binding target so the label + time never drift apart visually.</summary>
+    public string ElapsedDisplay => IsRunning
+        ? string.Format(CultureInfo.InvariantCulture, UiStrings.ExecutionElapsedFormat, ElapsedText)
+        : string.Empty;
 
     /// <summary>Starts (or restarts) the live timer at the exact moment execution begins.
     /// Idempotent — a second Start restarts from zero.</summary>

@@ -383,7 +383,8 @@ internal static class UiStrings
     public const string MessagesEmptyHint = "No messages yet.";
     public const string ExecutingStatus = "Executing query…";
     // Live execution-timer indicator (SQL Editor / Execute Procedure/Function / Script Executor).
-    public const string ExecutionElapsedLabel = "Elapsed";
+    // One cohesive label — {0} = mm:ss.f elapsed.
+    public const string ExecutionElapsedFormat = "Elapsed: {0}";
     public const string NoConnectionMessage = "Connect to a database first.";
     public const string QueryCancelledMessage = "Query cancelled.";
     public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
