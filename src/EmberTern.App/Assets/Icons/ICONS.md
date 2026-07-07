@@ -60,7 +60,7 @@ Disabled state is conveyed by button `Opacity`, not a separate color.
 | `Icon.Unplug` | Connection/unplug.svg | Disconnect | Connection toolbar (Neutral) |
 | `Icon.RotateCw` | Transactions/rotate-cw.svg | Reconnect | Connection toolbar (Neutral) |
 | `Icon.RefreshCw` | Transactions/refresh-cw.svg | Refresh metadata | Connection toolbar (Info) |
-| `Icon.ThemeToggle` | Navigation/moon.svg | Toggle Light/Dark | Titlebar theme toggle (Neutral) |
+| `Icon.Moon` / `Icon.Sun` | Navigation/moon.svg, sun.svg | Toggle Light/Dark | Titlebar theme toggle — action-aware (Sun in Dark, Moon in Light) via ThemeToggleIconConverter |
 | `Icon.PanelLeft` | Navigation/panel-left.svg | Collapse/expand sidebar | Titlebar sidebar toggle (Neutral) |
 | `Icon.PanelRight` | Navigation/panel-right.svg | Toggle Saved Queries panel | SQL editor toolbar (Neutral) |
 | `Icon.ChevronFirst` | Navigation/chevron-first.svg | First page | SQL results pagination (Neutral) |

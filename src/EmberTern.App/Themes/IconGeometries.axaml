@@ -115,7 +115,10 @@
   <StreamGeometry x:Key="Icon.RefreshCw">M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M3 21v-5h5</StreamGeometry>
 
   <!-- Navigation / appearance -->
-  <StreamGeometry x:Key="Icon.ThemeToggle">M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z</StreamGeometry>
+  <!-- Theme toggle glyphs — the icon shows the ACTION: Moon (switch to dark, shown in Light) /
+       Sun (switch to light, shown in Dark). Selected reactively by ThemeToggleIconConverter. -->
+  <StreamGeometry x:Key="Icon.Moon">M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Sun">M8 12 A4 4 0 1 1 16 12 A4 4 0 1 1 8 12 Z M12 2 v2 M12 20 v2 M4.93 4.93 l1.41 1.41 M17.66 17.66 l1.41 1.41 M2 12 h2 M20 12 h2 M6.34 17.66 l-1.41 1.41 M19.07 4.93 l-1.41 1.41</StreamGeometry>
   <!-- Panel-left / panel-right (Lucide): rounded-rect (x3 y3 18×18 rx2) + a vertical
        divider at x9 / x15. Drive the sidebar collapse + Saved-Queries-panel toggles. -->
   <StreamGeometry x:Key="Icon.PanelLeft">M5 3 H19 A2 2 0 0 1 21 5 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V5 A2 2 0 0 1 5 3 Z M9 3 V21</StreamGeometry>

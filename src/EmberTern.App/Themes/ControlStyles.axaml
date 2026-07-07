@@ -160,6 +160,14 @@
     <Setter Property="Cursor" Value="Hand" />
   </Style>
 
+  <!-- Text inside a primary button reads on the accent fill (white), matching the icon glyph. The
+       button's Foreground inheritance is otherwise overridden by the global TextBlock style (which
+       sets the dark ForegroundBrush) — that made the Execute label too dark on the blue button in
+       Light theme. A local Foreground on a child TextBlock (e.g. the subtle Execute hint) still wins. -->
+  <Style Selector="Button.primary TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentMutedBrush}" />

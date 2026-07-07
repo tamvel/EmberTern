@@ -282,7 +282,10 @@
                 Click="OnThemeToggleClick"
                 VerticalAlignment="Center"
                 Margin="0,0,6,0">
-          <controls:SvgIcon Data="{StaticResource Icon.ThemeToggle}" />
+          <!-- Icon shows the ACTION: Sun in Dark (→ switch to Light), Moon in Light (→ switch to
+               Dark). Bound to ActualThemeVariant so it updates the moment the theme changes. -->
+          <controls:SvgIcon Data="{Binding ActualThemeVariant, ElementName=RootWindow,
+                                   Converter={x:Static app:ThemeToggleIconConverter.Instance}}" />
         </Button>
 
         <!-- Window controls -->
