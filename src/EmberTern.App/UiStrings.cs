@@ -49,9 +49,10 @@ internal static class UiStrings
     public const string MetadataContextExecuteProcedure = "Execute procedure";
     public const string MetadataContextActivate = "Activate";
     public const string MetadataContextDeactivate = "Deactivate";
-    // Trigger-group Activate/Deactivate submenus are scoped by these. Structured so a
-    // "Selected" scope drops in between Visible and All if multi-select ever lands.
+    // Trigger-group Activate/Deactivate submenus are scoped by these. "Selected" acts on the
+    // sidebar multi-selection (Ctrl/Shift-click); it sits between Visible and All.
     public const string MetadataContextScopeVisible = "Visible";
+    public const string MetadataContextScopeSelected = "Selected";
     public const string MetadataContextScopeAll = "All";
     public const string MetadataContextRecompileAllFormat = "Recompile all {0}s";
     public const string MetadataInactiveSuffix = " (inactive)";
@@ -75,6 +76,11 @@ internal static class UiStrings
     public const string BatchOpRecomputeStatistics = "Recompute statistics";
     public const string BatchTitleActivateTriggers = "Activate triggers";
     public const string BatchTitleDeactivateTriggers = "Deactivate triggers";
+    // "Selected" scope confirmation — {0} = number of selected triggers.
+    public const string BatchConfirmActivateSelectedTitle = "Activate selected triggers";
+    public const string BatchConfirmActivateSelectedFormat = "Activate {0} selected trigger(s)?";
+    public const string BatchConfirmDeactivateSelectedTitle = "Deactivate selected triggers";
+    public const string BatchConfirmDeactivateSelectedFormat = "Deactivate {0} selected trigger(s)?";
     public const string BatchTitleRecompileFormat = "Recompile {0}s";
     public const string BatchTitleRecompileAll = "Recompile all objects";
     public const string BatchTitleRecomputeStatistics = "Recompute index statistics";

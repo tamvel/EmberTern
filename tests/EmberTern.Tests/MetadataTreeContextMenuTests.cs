@@ -415,16 +415,16 @@ public class MetadataTreeContextMenuTests
 
         group.DeactivateVisibleCommand.Execute(null);
         Assert.NotNull(req);
-        Assert.True(req!.VisibleOnly);
+        Assert.Equal(BatchOperationScope.Visible, req!.Scope);
         Assert.False(req.Activate);
-        Assert.Equal(new[] { "TR_KON" }, req.VisibleNames);
+        Assert.Equal(new[] { "TR_KON" }, req.Names);
 
         req = null;
         group.ActivateAllCommand.Execute(null);
         Assert.NotNull(req);
-        Assert.False(req!.VisibleOnly);
+        Assert.Equal(BatchOperationScope.All, req!.Scope);
         Assert.True(req.Activate);
-        Assert.Empty(req.VisibleNames);
+        Assert.Empty(req.Names);
     }
 
     // ─── ShowEditorToolbar (no tab → hidden) ──────────────────────────────

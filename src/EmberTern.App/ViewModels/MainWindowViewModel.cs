@@ -4502,6 +4502,25 @@ public partial class MainWindowViewModel : ViewModelBase
     private async void OnBulkSetActiveRequested(TriggerBulkRequest req)
     {
         if (req.Kind != MetadataObjectKind.Trigger) return;
+
+        // "Selected" is a user-picked subset (possibly large or accidental) → show the count and
+        // confirm before running. "All"/"Visible" keep their existing behaviour (no pre-confirm —
+        // the live batch dialog shows the count as it runs), so those paths are unaffected.
+        if (req.Scope == BatchOperationScope.Selected)
+        {
+            var confirmed = await RequestConfirmAsync(new ConfirmRequest
+            {
+                Title = req.Activate ? UiStrings.BatchConfirmActivateSelectedTitle : UiStrings.BatchConfirmDeactivateSelectedTitle,
+                Message = string.Format(CultureInfo.CurrentCulture,
+                    req.Activate ? UiStrings.BatchConfirmActivateSelectedFormat : UiStrings.BatchConfirmDeactivateSelectedFormat,
+                    req.Names.Count),
+                ConfirmLabel = req.Activate ? UiStrings.BatchOpActivate : UiStrings.BatchOpDeactivate,
+                CancelLabel = UiStrings.DialogCancel,
+                IsDestructive = false,
+            }).ConfigureAwait(true);
+            if (!confirmed) return;
+        }
+
         var title = req.Activate ? UiStrings.BatchTitleActivateTriggers : UiStrings.BatchTitleDeactivateTriggers;
         await RunBatchWithReportAsync(title, (vm, ct) => BuildTriggerBulkPlanAsync(req, vm, ct), refreshAfter: true).ConfigureAwait(true);
     }
@@ -4514,22 +4533,31 @@ public partial class MainWindowViewModel : ViewModelBase
         BatchTrace.LogListEnumerate("Trigger", triggers.Count, sw.ElapsedMilliseconds);
 
         vm.ReportPreparation(UiStrings.BatchPreparingBuildList);
-        IEnumerable<MetadataObject> scope = triggers;
-        if (req.VisibleOnly)
-        {
-            var set = new HashSet<string>(req.VisibleNames, StringComparer.OrdinalIgnoreCase);
-            scope = triggers.Where(t => set.Contains(t.Name));
-        }
+        var targets = ResolveTriggerBulkTargets(triggers, req.Scope, req.Names, req.Activate);
 
         var op = req.Activate ? UiStrings.BatchOpActivate : UiStrings.BatchOpDeactivate;
-        var steps = scope
-            .Where(t => t.IsActive != req.Activate) // skip already-in-state
+        var steps = targets
             .Select(t => (t.Name, op, req.Activate
                 ? DdlGenerator.BuildAlterTriggerActive(t.Name)
                 : DdlGenerator.BuildAlterTriggerInactive(t.Name)))
             .ToList<(string, string, string)>();
 
         return new BatchPlan(steps, Array.Empty<BatchOperationResult>());
+    }
+
+    /// <summary>Pure: the trigger objects a bulk op should touch — scope filter (All = every trigger;
+    /// Visible/Selected = only those in <paramref name="names"/>, case-insensitive) then skip any
+    /// already in the target state. Same logic for All/Visible as before "Selected" was added.</summary>
+    internal static IReadOnlyList<MetadataObject> ResolveTriggerBulkTargets(
+        IReadOnlyList<MetadataObject> allTriggers, BatchOperationScope scope, IReadOnlyList<string> names, bool activate)
+    {
+        IEnumerable<MetadataObject> scoped = allTriggers;
+        if (scope != BatchOperationScope.All)
+        {
+            var set = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+            scoped = allTriggers.Where(t => set.Contains(t.Name));
+        }
+        return scoped.Where(t => t.IsActive != activate).ToList(); // skip already-in-state
     }
 
     // Recompile every object of a kind (Procedure/Function/Trigger/Package) by re-running

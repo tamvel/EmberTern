@@ -340,7 +340,7 @@
                    Classes="sidebar-list"
                    Background="Transparent"
                    BorderThickness="0"
-                   SelectionMode="Single"
+                   SelectionMode="Multiple"
                    SelectionChanged="OnSidebarListSelectionChanged">
             <ListBox.ItemsPanel>
               <ItemsPanelTemplate>
@@ -521,13 +521,16 @@
                                 Command="{Binding RecompileAllCommand}"
                                 IsVisible="{Binding IsRecompilableGroup}" />
                       <Separator IsVisible="{Binding IsTriggerGroup}" />
-                      <!-- Trigger-group bulk ops, grouped by action → scope. The "Selected"
-                           scope (between Visible and All) is intentionally left for a future
-                           multi-select feature; the submenu shape already accommodates it. -->
+                      <!-- Trigger-group bulk ops, grouped by action → scope. "Selected" acts on the
+                           sidebar multi-selection (Ctrl/Shift-click); it lives on the explorer VM
+                           (which owns the selection), so it binds via the window DataContext and
+                           disables when nothing is selected. -->
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
                                 IsVisible="{Binding IsTriggerGroup}">
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
                                   Command="{Binding ActivateVisibleCommand}" />
+                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeSelected}"
+                                  Command="{Binding DataContext.Metadata.ActivateSelectedTriggersCommand, ElementName=RootWindow}" />
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
                                   Command="{Binding ActivateAllCommand}" />
                       </MenuItem>
@@ -535,6 +538,8 @@
                                 IsVisible="{Binding IsTriggerGroup}">
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
                                   Command="{Binding DeactivateVisibleCommand}" />
+                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeSelected}"
+                                  Command="{Binding DataContext.Metadata.DeactivateSelectedTriggersCommand, ElementName=RootWindow}" />
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
                                   Command="{Binding DeactivateAllCommand}" />
                       </MenuItem>

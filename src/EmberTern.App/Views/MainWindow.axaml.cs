@@ -597,11 +597,15 @@ public partial class MainWindow : Window
     // connection selected (what those commands want).
     private void OnSidebarListSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (_currentVm is null) return;
-        if (sender is ListBox list && list.SelectedItem is SidebarRow { Node: ConnectionNodeViewModel cn })
+        if (_currentVm is null || sender is not ListBox list) return;
+        // Titlebar Edit/Copy/Delete/Connect still act on the (last) selected connection.
+        if (list.SelectedItem is SidebarRow { Node: ConnectionNodeViewModel cn })
         {
             _currentVm.Metadata.SelectedConnection = cn;
         }
+        // Feed the multi-selection to the VM so the "Selected" trigger bulk ops know their target.
+        _currentVm.Metadata.SetSelectedTriggers(
+            list.SelectedItems?.OfType<SidebarRow>() ?? Enumerable.Empty<SidebarRow>());
     }
 
     // Chevron click → flip the row's underlying node expansion (the controller splices).

@@ -310,6 +310,50 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     internal void RequestSetObjectActive(MetadataObject obj, bool activate) => SetObjectActiveRequested?.Invoke(obj, activate);
     internal void RequestBulkSetActive(TriggerBulkRequest request) => BulkSetActiveRequested?.Invoke(request);
 
+    // ── Multi-select trigger bulk ("Selected" scope) ──────────────────────────────────────────
+    // The sidebar ListBox is the source of the multi-selection; the view pushes it here on every
+    // SelectionChanged. Held on this singleton so the Selected commands + their count are available
+    // no matter which node's context menu is open. Not persisted (a rebuild/filter clears it).
+    private IReadOnlyList<MetadataObject> _selectedTriggers = Array.Empty<MetadataObject>();
+
+    /// <summary>How many trigger leaves are currently multi-selected — the count shown in the
+    /// "Activate/Deactivate selected" confirmation and used to gate those commands.</summary>
+    public int SelectedTriggerCount => _selectedTriggers.Count;
+    public bool HasSelectedTriggers => _selectedTriggers.Count > 0;
+
+    /// <summary>Called by the view on every sidebar selection change with the selected rows.</summary>
+    internal void SetSelectedTriggers(IEnumerable<SidebarRow> selectedRows)
+    {
+        _selectedTriggers = ExtractSelectedTriggers(selectedRows);
+        OnPropertyChanged(nameof(SelectedTriggerCount));
+        OnPropertyChanged(nameof(HasSelectedTriggers));
+        ActivateSelectedTriggersCommand.NotifyCanExecuteChanged();
+        DeactivateSelectedTriggersCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Pure: the distinct trigger <see cref="MetadataObject"/>s among the selected rows
+    /// (connection / folder / category / placeholder / non-trigger leaves are ignored).</summary>
+    internal static IReadOnlyList<MetadataObject> ExtractSelectedTriggers(IEnumerable<SidebarRow> rows)
+        => rows.Select(r => r.Node)
+               .OfType<MetadataNodeViewModel>()
+               .Where(n => n.IsTriggerLeaf && n.Object is not null)
+               .Select(n => n.Object!)
+               .ToList();
+
+    [RelayCommand(CanExecute = nameof(HasSelectedTriggers))]
+    private void ActivateSelectedTriggers() => RequestSelectedTriggerBulk(activate: true);
+
+    [RelayCommand(CanExecute = nameof(HasSelectedTriggers))]
+    private void DeactivateSelectedTriggers() => RequestSelectedTriggerBulk(activate: false);
+
+    private void RequestSelectedTriggerBulk(bool activate)
+    {
+        var names = _selectedTriggers.Select(t => t.Name).ToList();
+        if (names.Count == 0) return;
+        RequestBulkSetActive(new TriggerBulkRequest(
+            MetadataObjectKind.Trigger, activate, BatchOperationScope.Selected, names));
+    }
+
     [RelayCommand(CanExecute = nameof(HasSelectedConnection))]
     private void EditSelected() => SelectedConnection?.EditCommand.Execute(null);
 
@@ -546,15 +590,21 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     }
 }
 
+/// <summary>The set of objects a bulk activate/deactivate applies to: every object of the kind
+/// (<see cref="All"/>), the current filter result (<see cref="Visible"/>), or the user's manual
+/// multi-selection (<see cref="Selected"/>).</summary>
+public enum BatchOperationScope { All, Visible, Selected }
+
 /// <summary>
-/// A bulk activate/deactivate request raised from a trigger category node.
-/// <paramref name="VisibleOnly"/> = act on the current filter result (names carried in
-/// <paramref name="VisibleNames"/>); otherwise act on ALL objects of the kind (the owner
-/// resolves the full set from the reader). Only <see cref="MetadataObjectKind.Trigger"/>
-/// is used today, but the shape is kind-agnostic.
+/// A bulk activate/deactivate request raised from a trigger category node (All/Visible) or from
+/// the sidebar multi-selection (Selected). <paramref name="Scope"/> chooses the target set;
+/// <paramref name="Names"/> carries the explicit object names for <see cref="BatchOperationScope.Visible"/>
+/// and <see cref="BatchOperationScope.Selected"/> (empty for <see cref="BatchOperationScope.All"/>,
+/// which the owner resolves from the reader). Only <see cref="MetadataObjectKind.Trigger"/> is used
+/// today, but the shape is kind-agnostic.
 /// </summary>
 public sealed record TriggerBulkRequest(
     MetadataObjectKind Kind,
     bool Activate,
-    bool VisibleOnly,
-    IReadOnlyList<string> VisibleNames);
+    BatchOperationScope Scope,
+    IReadOnlyList<string> Names);

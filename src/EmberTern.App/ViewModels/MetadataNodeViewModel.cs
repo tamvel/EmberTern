@@ -329,12 +329,13 @@ public partial class MetadataNodeViewModel : ViewModelBase
     }
 
     // Trigger group → bulk activate/deactivate over the VISIBLE (current filter) set or ALL.
-    [RelayCommand] private void ActivateVisible() => RequestTriggerBulk(activate: true, visibleOnly: true);
-    [RelayCommand] private void DeactivateVisible() => RequestTriggerBulk(activate: false, visibleOnly: true);
-    [RelayCommand] private void ActivateAll() => RequestTriggerBulk(activate: true, visibleOnly: false);
-    [RelayCommand] private void DeactivateAll() => RequestTriggerBulk(activate: false, visibleOnly: false);
+    // ("Selected" scope lives on the explorer VM — it owns the sidebar multi-selection.)
+    [RelayCommand] private void ActivateVisible() => RequestTriggerBulk(activate: true, scope: BatchOperationScope.Visible);
+    [RelayCommand] private void DeactivateVisible() => RequestTriggerBulk(activate: false, scope: BatchOperationScope.Visible);
+    [RelayCommand] private void ActivateAll() => RequestTriggerBulk(activate: true, scope: BatchOperationScope.All);
+    [RelayCommand] private void DeactivateAll() => RequestTriggerBulk(activate: false, scope: BatchOperationScope.All);
 
-    private void RequestTriggerBulk(bool activate, bool visibleOnly)
+    private void RequestTriggerBulk(bool activate, BatchOperationScope scope)
     {
         if (!IsTriggerGroup)
         {
@@ -342,11 +343,11 @@ public partial class MetadataNodeViewModel : ViewModelBase
         }
         // "Visible" = the current filter result = the displayed Children. "All" is
         // resolved owner-side from the reader (Children may not be loaded/expanded).
-        var names = visibleOnly
+        var names = scope == BatchOperationScope.Visible
             ? Children.Where(c => c.IsActionable && c.Object is not null)
                       .Select(c => c.Object!.Name).ToList()
             : new List<string>();
-        _owner.RequestBulkSetActive(new TriggerBulkRequest(Kind, activate, visibleOnly, names));
+        _owner.RequestBulkSetActive(new TriggerBulkRequest(Kind, activate, scope, names));
     }
 
     // Proc/func/trigger/package group → recompile every object of that kind.
