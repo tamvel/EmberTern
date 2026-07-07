@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using EmberTern.App;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Query;
 using EmberTern.Core.Trace;
 using EmberTern.Firebird;
 using Xunit;
@@ -555,5 +557,76 @@ public class TraceMonitorVmTests
         Assert.Contains(UiStrings.TraceColSeq, lines[0]);
         Assert.Contains("SELECT 1", lines[1]);
         Assert.Contains("P", lines[2]);
+    }
+
+    // ─── Conditional grid filter (shared FilterPanelViewModel over TraceEvent columns) ───────────
+
+    [Fact]
+    public void ProjectRow_MapsCellsToFilterColumns()
+    {
+        var e = Ev(TraceEventKind.Trigger, tx: 42, att: 7, obj: "TR_X", durMs: 250);
+        var cells = TraceMonitorTabViewModel.ProjectRow(new TraceEventRowViewModel(e, "b"));
+        Assert.Equal("Trigger", cells[1]);   // Event = kind name
+        Assert.Equal("TR_X", cells[3]);       // Object (ObjectName when no SQL)
+        Assert.Equal(250L, cells[4]);         // Duration ms
+        Assert.Equal(42L, cells[7]);          // Tx
+        Assert.Equal(7L, cells[8]);           // Session (attachment)
+    }
+
+    [Fact]
+    public async Task GridFilter_Duration_GreaterThan_NarrowsRows()
+    {
+        var vm = NewVm();
+        vm.Ingest(new[]
+        {
+            Ev(TraceEventKind.Statement, sql: "SELECT 1", durMs: 5),
+            Ev(TraceEventKind.Statement, sql: "SELECT 2", durMs: 250),
+            Ev(TraceEventKind.Statement, sql: "SELECT 3", durMs: 500),
+        });
+        Assert.Equal(3, vm.Rows.Count);
+
+        await vm.GridFilterPanel.ApplyFromCellAsync(4, GridFilterOperator.GreaterThan, "100"); // Duration > 100
+        Assert.Equal(2, vm.Rows.Count);
+        Assert.True(vm.GridFilterPanel.IsFilterActive);
+
+        await vm.GridFilterPanel.ClearCommand.ExecuteAsync(null);
+        Assert.Equal(3, vm.Rows.Count);
+        Assert.False(vm.GridFilterPanel.IsFilterActive);
+    }
+
+    [Fact]
+    public async Task GridFilter_Event_Equals_And_Object_Contains()
+    {
+        var vm = NewVm();
+        vm.Ingest(new[]
+        {
+            Ev(TraceEventKind.Statement, sql: "UPDATE NAGL SET X = 1"),
+            Ev(TraceEventKind.Trigger, obj: "TR_NAGL"),
+            Ev(TraceEventKind.Procedure, obj: "SP_OTHER"),
+        });
+
+        await vm.GridFilterPanel.ApplyFromCellAsync(1, GridFilterOperator.Equals, "Trigger"); // Event = Trigger
+        Assert.Single(vm.Rows);
+        Assert.Equal(TraceEventKind.Trigger, vm.Rows[0].Event.Kind);
+
+        await vm.GridFilterPanel.ClearCommand.ExecuteAsync(null);
+        await vm.GridFilterPanel.ApplyFromCellAsync(3, GridFilterOperator.Contains, "NAGL"); // Object contains NAGL
+        Assert.Equal(2, vm.Rows.Count); // the UPDATE and the TR_NAGL trigger
+    }
+
+    [Fact]
+    public async Task GridFilter_AppliesToErrors_LikeFreeTextSearch()
+    {
+        // An explicit conditional filter is a deliberate query, so (like the free-text search) it
+        // filters ALL rows including errors — an error that doesn't match is hidden.
+        var vm = NewVm();
+        vm.Ingest(new[]
+        {
+            Ev(TraceEventKind.Statement, sql: "SELECT 1", durMs: 300),
+            Error(), // Duration 0
+        });
+        await vm.GridFilterPanel.ApplyFromCellAsync(4, GridFilterOperator.GreaterThan, "100"); // Duration > 100
+        Assert.Single(vm.Rows);            // the error (dur 0) is filtered out
+        Assert.False(vm.Rows[0].IsError);
     }
 }

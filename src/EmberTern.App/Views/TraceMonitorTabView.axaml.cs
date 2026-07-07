@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Query;
 
 namespace EmberTern.App.Views;
 
@@ -25,16 +26,19 @@ public partial class TraceMonitorTabView : UserControl
     private double _detailHeight = DefaultDetailHeight;
     private bool _detailMaximized;
 
-    // Right-clicked cell, captured for the copy context menu.
+    // Right-clicked cell, captured for the copy + filter-from-cell context menus.
     private TraceEventRowViewModel? _copyRow;
     private string? _copyHeader;
+    private DataGridColumn? _clickedColumn;
 
     public TraceMonitorTabView()
     {
         InitializeComponent();
         _detailSql = this.FindControl<TextEditor>("DetailSqlEditor");
-        _gridAreaRow = RootGrid.RowDefinitions[1];
-        _detailRow = RootGrid.RowDefinitions[3];
+        // Rows: 0 toolbar · 1 conditional-filter panel · 2 grid area · 3 splitter · 4 detail.
+        _gridAreaRow = RootGrid.RowDefinitions[2];
+        _detailRow = RootGrid.RowDefinitions[4];
+        StampFilterColumnTags();
         // Follow-tail auto-pauses when the user scrolls up, and re-arms at the bottom —
         // standard log/trace-viewer behaviour. The grid's inner ScrollViewer bubbles here.
         EventsGrid.AddHandler(ScrollViewer.ScrollChangedEvent, OnGridScrollChanged);
@@ -52,6 +56,7 @@ public partial class TraceMonitorTabView : UserControl
 
         _copyRow = e.Row?.DataContext as TraceEventRowViewModel;
         _copyHeader = e.Column?.Header?.ToString();
+        _clickedColumn = e.Column;
         if (_copyRow is not null) grid.SelectedItem = _copyRow; // right-click selects (drives the detail too)
     }
 
@@ -60,6 +65,55 @@ public partial class TraceMonitorTabView : UserControl
     private void OnCopyRowWithHeadersClick(object? sender, RoutedEventArgs e) => _vm?.CopyRowWithHeaders(_copyRow);
     private void OnCopyAllWithHeadersClick(object? sender, RoutedEventArgs e) => _vm?.CopyAllWithHeaders();
     private void OnCopySqlClick(object? sender, RoutedEventArgs e) => _vm?.CopyRowSql(_copyRow);
+
+    // ---- filter-from-cell context menu (adds a condition to the shared grid filter) ----
+
+    // Map each filterable grid column to its filter-column index (Column.Tag, boxed int — robust to
+    // reorder, like the result grids). Non-filterable columns (# / gutter) get no Tag → the verbs
+    // no-op on them. Done once; the columns are static.
+    private void StampFilterColumnTags()
+    {
+        foreach (var col in EventsGrid.Columns)
+        {
+            int? idx = col.Header?.ToString() switch
+            {
+                UiStrings.TraceColTime => 0,
+                UiStrings.TraceColEvent => 1,
+                UiStrings.TraceColDuration => 4,
+                UiStrings.TraceColObject => 3,
+                UiStrings.TraceColRows => 5,
+                UiStrings.TraceColReads => 6,
+                UiStrings.TraceColTx => 7,
+                _ => (int?)null,
+            };
+            if (idx is { } i) col.Tag = i;
+        }
+    }
+
+    // Resolve the right-clicked cell into a filter context: the filter-column index (from Tag), the
+    // projected cell value (round-trip-formatted), null-ness, and the column category.
+    private GridCellFilterContext? ResolveClickedCell()
+    {
+        if (_copyRow is null || _clickedColumn?.Tag is not int idx) return null;
+        var cols = TraceMonitorTabViewModel.FilterColumns;
+        if (idx < 0 || idx >= cols.Count) return null;
+        var cell = TraceMonitorTabViewModel.ProjectRow(_copyRow)[idx];
+        bool isNull = cell is null;
+        string? value = isNull ? null : GridCellFilter.FormatCellValue(cell!);
+        return new GridCellFilterContext(idx, value, isNull, cols[idx].Category);
+    }
+
+    private void ApplyTriple((int ColumnIndex, GridFilterOperator Op, string? Value) t)
+        => _ = _vm?.GridFilterPanel.ApplyFromCellAsync(t.ColumnIndex, t.Op, t.Value);
+
+    private void OnFilterByValueClick(object? sender, RoutedEventArgs e)
+    { if (ResolveClickedCell() is { } c) ApplyTriple(GridCellFilter.FilterByValue(c)); }
+
+    private void OnExcludeValueClick(object? sender, RoutedEventArgs e)
+    { if (ResolveClickedCell() is { } c) ApplyTriple(GridCellFilter.ExcludeValue(c)); }
+
+    private void OnFilterContainsClick(object? sender, RoutedEventArgs e)
+    { if (ResolveClickedCell() is { } c && GridCellFilter.Contains(c) is { } t) ApplyTriple(t); }
 
     // ---- detail panel maximize / restore ----
 

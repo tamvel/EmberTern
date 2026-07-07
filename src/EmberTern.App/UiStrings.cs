@@ -1321,6 +1321,7 @@ internal static class UiStrings
     public const string TraceJumpLatest = "Jump to latest";
     // Event filter flyout (display-level; distinct from the source-level Include-Functions capture toggle)
     public const string TraceFilterEventsTip = "Filter events by type and operation";
+    public const string TraceGridFilterTip = "Filter rows by column conditions (Duration > 100, Object contains …)";
     public const string TraceFilterSectionTypes = "Event types";
     public const string TraceFilterSectionOperations = "Operations (statements)";
     public const string TraceFilterStatements = "Statements";

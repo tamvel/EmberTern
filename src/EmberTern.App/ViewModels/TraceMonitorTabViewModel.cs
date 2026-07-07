@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.Core.Query;
 using EmberTern.Core.Trace;
 using EmberTern.Firebird;
 
@@ -52,6 +53,67 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
         _resolveSelfIds = resolveSelfIds;
         _service.EventsReceived += OnServiceEvents;
         _service.StateChanged += OnServiceStateChanged;
+
+        // Conditional grid filter — the SAME shared panel every data grid uses (Add condition ·
+        // operators · per-column). AM's grid is materialized (_all rows), so we apply client-side:
+        // ApplyGridFilterAsync sets the filter and RebuildRows() re-runs the whole pipeline. Column
+        // set is fixed (the trace columns), so SetColumns runs once here.
+        GridFilterPanel = new FilterPanelViewModel { ApplyRequested = ApplyGridFilterAsync };
+        GridFilterPanel.SetColumns(FilterColumns);
+    }
+
+    // ─── Conditional grid filter (shared FilterPanelViewModel over the TraceEvent columns) ───────
+    // Fixed column set the "Add condition" rows pick from, mapping to ProjectRow's object?[] cells.
+    // A parallel QueryColumn list (same names + CLR types) feeds GridFilterEvaluator so AM reuses the
+    // exact filter engine every result grid uses (operators, categories, Firebird semantics).
+    internal static readonly IReadOnlyList<GridColumnRef> FilterColumns = new[]
+    {
+        new GridColumnRef(0, "Time", typeof(DateTime)),
+        new GridColumnRef(1, "Event", typeof(string)),
+        new GridColumnRef(2, "Operation", typeof(string)),
+        new GridColumnRef(3, "Object", typeof(string)),
+        new GridColumnRef(4, "Duration", typeof(long)),
+        new GridColumnRef(5, "Rows", typeof(long)),
+        new GridColumnRef(6, "Reads", typeof(long)),
+        new GridColumnRef(7, "Tx", typeof(long)),
+        new GridColumnRef(8, "Session", typeof(long)),
+        new GridColumnRef(9, "User", typeof(string)),
+        new GridColumnRef(10, "Error", typeof(string)),
+    };
+    private static readonly IReadOnlyList<QueryColumn> FilterQueryColumns =
+        FilterColumns.Select(c => new QueryColumn(c.Name, c.ClrType)).ToList();
+
+    public FilterPanelViewModel GridFilterPanel { get; }
+    private GridFilter _gridFilter = GridFilter.Empty;
+
+    private Task ApplyGridFilterAsync(GridFilter filter)
+    {
+        _gridFilter = filter;
+        RebuildRows();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Project a row into the object?[] cells aligned with <see cref="FilterColumns"/> for
+    /// the shared <see cref="GridFilterEvaluator"/>. Derived values reuse the row VM's cached
+    /// Operation. Nullable numerics/strings stay null so IS NULL / comparison-vs-NULL work.</summary>
+    internal static object?[] ProjectRow(TraceEventRowViewModel r)
+    {
+        var e = r.Event;
+        return new object?[]
+        {
+            e.StartTime.DateTime,                                        // Time
+            e.Kind.ToString(),                                           // Event  (e.g. "Trigger")
+            r.Operation == TraceSqlOperation.None                        // Operation (e.g. "UPDATE")
+                ? string.Empty : TraceSqlOperationClassifier.Label(r.Operation),
+            e.Sql ?? e.ObjectName,                                       // Object
+            e.Duration is { } d ? (long)d.TotalMilliseconds : null,      // Duration (ms)
+            e.RowsFetched,                                               // Rows
+            e.Reads,                                                     // Reads
+            e.TransactionId,                                             // Tx
+            e.AttachmentId,                                              // Session
+            e.UserName,                                                  // User
+            e.ErrorText,                                                 // Error
+        };
     }
 
     /// <summary>The filtered chronological display (bound to the grid).</summary>
@@ -297,6 +359,9 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
         if (QuickFilter == TraceQuickFilter.Errors && !r.IsError) return false;
         if (QuickFilter == TraceQuickFilter.Slow && !r.IsSlow) return false;
         if (FilterText.Length > 0 && !MatchesFilter(r.Event, FilterText)) return false;
+        // Conditional grid filter ("Add condition") — an explicit user query, so (like the free-text
+        // search) it applies to ALL rows including errors. Reuses the shared GridFilterEvaluator.
+        if (!_gridFilter.IsEmpty && !GridFilterEvaluator.Matches(ProjectRow(r), _gridFilter, FilterQueryColumns)) return false;
         if (ShowOnlySelected && _lensPredicate is { } pred && !pred(r.Event)) return false;
         if (!r.IsError && !EventKindPasses(r)) return false; // event-type/operation flyout (errors always shown)
         return true;

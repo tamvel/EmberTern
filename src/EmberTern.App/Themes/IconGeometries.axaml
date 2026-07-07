@@ -34,6 +34,8 @@
   <StreamGeometry x:Key="Icon.ListX">M11 12H3M16 6H3M16 18H3M19 10l-4 4M15 10l4 4</StreamGeometry>
   <!-- Filter (Lucide funnel): data-grid filter toggle. -->
   <StreamGeometry x:Key="Icon.Filter">M22 3H2l8 9.46V19l4 2v-8.54L22 3z</StreamGeometry>
+  <!-- Lucide list-filter — the conditional "Add condition" grid filter (distinct from the funnel). -->
+  <StreamGeometry x:Key="Icon.ListFilter">M3 6h18 M7 12h10 M10 18h4</StreamGeometry>
   <!-- Script Executor: a document with text lines (Lucide file-text style, hand-authored
        in the same rounded-corner idiom as Icon.TablePlus). -->
   <StreamGeometry x:Key="Icon.FileText">M7 2 H15 A2 2 0 0 1 17 4 V20 A2 2 0 0 1 15 22 H7 A2 2 0 0 1 5 20 V4 A2 2 0 0 1 7 2 Z M8.5 8 H13.5 M8.5 12 H13.5 M8.5 16 H12</StreamGeometry>

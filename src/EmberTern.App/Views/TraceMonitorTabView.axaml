@@ -3,6 +3,7 @@
              xmlns:app="using:EmberTern.App"
              xmlns:vm="using:EmberTern.App.ViewModels"
              xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:views="using:EmberTern.App.Views"
              xmlns:behaviors="using:EmberTern.App.Behaviors"
              xmlns:ae="using:AvaloniaEdit"
              x:Class="EmberTern.App.Views.TraceMonitorTabView"
@@ -50,7 +51,7 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid x:Name="RootGrid" RowDefinitions="Auto,*,4,240">
+  <Grid x:Name="RootGrid" RowDefinitions="Auto,Auto,*,4,240">
 
     <!-- ① Session bar -->
     <Border Grid.Row="0" Background="{DynamicResource ElevatedPanelBrush}"
@@ -144,6 +145,17 @@
           </StackPanel>
         </Border>
 
+        <!-- Conditional grid filter ("Add condition"): the shared FilterPanelView opens below the
+             toolbar. Distinct icon (list-filter) from the structured funnel; a ToggleButton so the
+             "on" look tracks panel visibility, with the active-filter dot when a filter is applied. -->
+        <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TraceGridFilterTip}"
+                      IsChecked="{Binding GridFilterPanel.IsPanelOpen, Mode=TwoWay}">
+          <Panel>
+            <controls:SvgIcon Data="{StaticResource Icon.ListFilter}" />
+            <Border Classes="filter-active-dot" IsVisible="{Binding GridFilterPanel.IsFilterActive}" />
+          </Panel>
+        </ToggleButton>
+
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <!-- Compact icon toggles (view behaviour, not filtering) -->
@@ -167,8 +179,11 @@
       </StackPanel>
     </Border>
 
+    <!-- Conditional grid filter panel (shared) — self-hides via IsPanelOpen. -->
+    <views:FilterPanelView Grid.Row="1" DataContext="{Binding GridFilterPanel}" />
+
     <!-- ② Lens rail (optional) + chronological grid -->
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*">
 
       <Border Grid.Column="0" Width="290" IsVisible="{Binding IsLensOpen}"
               Background="{DynamicResource PanelBrush}"
@@ -217,6 +232,13 @@
               <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}" Click="OnCopyRowWithHeadersClick" />
               <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}" Click="OnCopyAllWithHeadersClick" />
               <MenuItem Header="{x:Static app:UiStrings.TraceDetailCopySql}" Click="OnCopySqlClick" />
+              <Separator />
+              <!-- Filter-from-cell verbs → add a condition to the shared grid filter (gotcha #99:
+                   the clicked cell is resolved via CellPointerPressed). No-op on non-filterable
+                   columns (# / gutter, which carry no filter-column Tag). -->
+              <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Click="OnFilterByValueClick" />
+              <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnExcludeValueClick" />
+              <MenuItem Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnFilterContainsClick" />
             </ContextMenu>
           </DataGrid.ContextMenu>
           <DataGrid.Columns>
@@ -307,12 +329,12 @@
     </Grid>
 
     <!-- Double-tap the splitter to maximize/restore the detail panel (mirrors the SQL editor). -->
-    <GridSplitter Grid.Row="2" ResizeDirection="Rows" HorizontalAlignment="Stretch"
+    <GridSplitter Grid.Row="3" ResizeDirection="Rows" HorizontalAlignment="Stretch"
                   Background="{DynamicResource BorderBrush}"
                   DoubleTapped="OnDetailSplitterDoubleTapped" />
 
     <!-- ③ Detail panel -->
-    <Border Grid.Row="3" Background="{DynamicResource PanelBrush}"
+    <Border Grid.Row="4" Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="10,8">
       <Grid RowDefinitions="*">
         <TextBlock Text="{x:Static app:UiStrings.TraceDetailNoSelection}"
