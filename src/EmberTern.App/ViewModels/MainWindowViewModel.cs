@@ -4867,6 +4867,58 @@ public partial class MainWindowViewModel : ViewModelBase
     // Data lane (connection #1, data profile); DDL/DCL (CREATE/ALTER/DROP/COMMENT/
     // GRANT/…) on the Metadata lane (connection #2, metadata profile). Ambiguous input
     // falls back to Data — the safest lane. There is no manual lane override by design.
+    // ─── Smart SQL parameters (Part 3) ────────────────────────────────────────
+    /// <summary>The view shows the reused Execute dialog and returns the ordered bound values
+    /// (null on Cancel). VM stays free of Avalonia dialog types.</summary>
+    public event Func<SmartParametersRequest, Task<IReadOnlyList<object?>?>>? SmartParametersRequested;
+
+    // Types each scanned parameter: catalog types for an EXECUTE PROCEDURE call (positional, only
+    // when the count matches), otherwise "Unknown" — never a guessed type (the user's rule).
+    private async Task<IReadOnlyList<(string Name, string TypeText)>> BuildSmartParamSpecsAsync(
+        string sql, IReadOnlyList<string> names)
+    {
+        var procName = SqlParameterScanner.TryExtractExecuteProcedureName(sql);
+        if (procName is not null)
+        {
+            try
+            {
+                var catalog = await _tableDetailReader
+                    .GetProcedureParametersAsync(procName, 0, CancellationToken.None) // 0 = input params
+                    .ConfigureAwait(true);
+                if (catalog.Count == names.Count)
+                {
+                    return names.Select((n, idx) => (n, catalog[idx].Type)).ToList();
+                }
+            }
+            catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
+            {
+                // fall through to Unknown — never guess
+            }
+        }
+        return names.Select(n => (n, UiStrings.SmartParamUnknownType)).ToList();
+    }
+
+    internal static IReadOnlyList<QueryParameter> BuildQueryParameters(
+        IReadOnlyList<string> names, IReadOnlyList<object?> values)
+    {
+        var list = new List<QueryParameter>(names.Count);
+        for (int i = 0; i < names.Count && i < values.Count; i++)
+        {
+            list.Add(new QueryParameter("@" + names[i], values[i]));
+        }
+        return list;
+    }
+
+    // Deterministic per-statement history key (FNV-1a over the trimmed SQL) so re-running the same
+    // ad-hoc query recalls its last values across sessions (string.GetHashCode isn't stable in .NET Core).
+    internal static string SmartParamsHistoryKey(string sql)
+    {
+        const ulong offset = 14695981039346656037UL, prime = 1099511628211UL;
+        ulong hash = offset;
+        foreach (var ch in (sql ?? string.Empty).Trim()) { hash ^= ch; hash *= prime; }
+        return hash.ToString("x16", CultureInfo.InvariantCulture);
+    }
+
     [RelayCommand(CanExecute = nameof(CanExecute))]
     public Task ExecuteQueryAsync() => RunExecuteAsync();
 
@@ -4891,6 +4943,25 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        // Smart SQL parameters (Part 3): if the statement has :name / @name placeholders (and is
+        // NOT an EXECUTE BLOCK, whose :vars are locals), collect their values first via the reused
+        // Execute dialog, then run the rewritten (@name) SQL with bound parameters. Cancelling the
+        // dialog aborts the run.
+        var executeSql = sql;
+        IReadOnlyList<QueryParameter>? parameters = null;
+        if (SmartParametersRequested is { } askParams && !SqlParameterScanner.IsExecuteBlock(sql))
+        {
+            var (rewritten, names) = SqlParameterScanner.RewriteToDriverMarkers(sql);
+            if (names.Count > 0)
+            {
+                var specs = await BuildSmartParamSpecsAsync(sql, names).ConfigureAwait(true);
+                var values = await askParams(new SmartParametersRequest(specs, SmartParamsHistoryKey(sql))).ConfigureAwait(true);
+                if (values is null) return; // user cancelled the parameter dialog
+                parameters = BuildQueryParameters(names, values);
+                executeSql = rewritten;
+            }
+        }
+
         IsExecuting = true;
         QueryStatsText = UiStrings.ExecutingStatus;
         ClearError();
@@ -4908,14 +4979,16 @@ public partial class MainWindowViewModel : ViewModelBase
             IReadOnlyList<PerTableReadRow>? reads = null;
             if (metadata)
             {
-                result = await _metadataExecutor.ExecuteAsync(sql, _executionCts.Token).ConfigureAwait(true);
+                result = parameters is null
+                    ? await _metadataExecutor.ExecuteAsync(executeSql, _executionCts.Token).ConfigureAwait(true)
+                    : await _metadataExecutor.ExecuteAsync(executeSql, parameters, _executionCts.Token).ConfigureAwait(true);
             }
             else
             {
-                (result, reads) = await ExecuteWithMetricsAsync(sql, null, _executionCts.Token).ConfigureAwait(true);
+                (result, reads) = await ExecuteWithMetricsAsync(executeSql, parameters, _executionCts.Token).ConfigureAwait(true);
                 // Performance panel (Option B): remember THIS SQL Editor run so its own panel can
                 // analyze it on view — no re-execution, and no leaking into proc/func contexts.
-                SqlEditorPerformance.Record(sql, result, reads);
+                SqlEditorPerformance.Record(executeSql, result, reads);
             }
 
             CurrentResult = result;

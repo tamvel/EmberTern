@@ -474,6 +474,7 @@ public partial class MainWindow : Window
             _currentVm.BatchResultsRequested -= OnBatchResultsRequested;
             _currentVm.GlobalSearchRequested -= OnGlobalSearchRequested;
             _currentVm.RecompileDependentsRequested -= OnRecompileDependentsRequested;
+            _currentVm.SmartParametersRequested -= OnSmartParametersRequested;
             _currentVm.SelectedQueryTextProvider = null;
             _currentVm.ReplaceSelectedOrAllText = null;
         }
@@ -494,6 +495,7 @@ public partial class MainWindow : Window
             _currentVm.BatchResultsRequested += OnBatchResultsRequested;
             _currentVm.GlobalSearchRequested += OnGlobalSearchRequested;
             _currentVm.RecompileDependentsRequested += OnRecompileDependentsRequested;
+            _currentVm.SmartParametersRequested += OnSmartParametersRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
 
@@ -575,6 +577,20 @@ public partial class MainWindow : Window
     // dialogs stay in the view.
     private Task<RecompileDependentsResult?> OnRecompileDependentsRequested(RecompileDependentsRequest request)
         => RecompileDependentsDialog.ShowAsync(this, new RecompileDependentsDialogViewModel(request));
+
+    // Smart SQL parameters: F5 on a statement with :name / @name placeholders → reuse the Execute
+    // dialog (typed from the catalog for EXECUTE PROCEDURE, else "Unknown") + the value history,
+    // keyed per-statement. Returns the ordered bound values (null on Cancel).
+    private Task<IReadOnlyList<object?>?> OnSmartParametersRequested(SmartParametersRequest request)
+    {
+        var vm = new ExecuteProcedureDialogViewModel(
+            request.Params,
+            request.HistoryKey,
+            _currentVm?.Service.ActiveProfile?.Id,
+            "AdHocSql",
+            _currentVm?.ParameterHistory);
+        return ExecuteProcedureDialog.ShowAsync(this, vm);
+    }
 
     // Selection sets the working connection when a connection row is picked — so the titlebar
     // Edit/Copy/Delete/Connect commands act on it. Picking a category/leaf leaves the last

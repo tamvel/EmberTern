@@ -125,6 +125,11 @@ internal static class UiStrings
     public const string RecompileDependentsRecompile = "Recompile selected";
     public const string RecompileDependentsSkip = "Skip";
     public const string RecompileDependentsBatchTitleFormat = "Recompile dependents of {0}";
+
+    // ─── Smart SQL Parameters (Part 3) ────────────────────────────────────────
+    // Shown in the parameter dialog's Type column when the type can't be resolved from the
+    // catalog — we show "Unknown", never a guessed type (a plain text input is used).
+    public const string SmartParamUnknownType = "Unknown";
     public const string ScriptTransactionOpenMarker = "● Transaction open — review, then Commit or Rollback";
     // Result grid column headers.
     public const string ScriptColumnLine = "#";
