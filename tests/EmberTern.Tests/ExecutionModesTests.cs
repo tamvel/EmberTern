@@ -1,5 +1,7 @@
 using System;
+using System.Globalization;
 using System.IO;
+using EmberTern.App;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Query;
@@ -19,6 +21,10 @@ public class ExecutionModesTests
     {
         Assert.Equal(5000, ExecutionDefaults.PreviewLimit);
         Assert.Equal(1_000_000L, ExecutionDefaults.FullSafetyCeiling);
+        Assert.Equal(250_000L, ExecutionDefaults.FullSoftThreshold);
+        // The soft threshold must sit strictly below the hard ceiling — else a normal-sized result
+        // would prompt, or the prompt could never fire before the hard stop.
+        Assert.True(ExecutionDefaults.FullSoftThreshold < ExecutionDefaults.FullSafetyCeiling);
     }
 
     [Fact]
@@ -28,8 +34,17 @@ public class ExecutionModesTests
         Assert.Equal(ExecutionIntent.Preview, req.Intent);
         Assert.Equal(ExecutionDefaults.PreviewLimit, req.PreviewLimit);
         Assert.Equal(ExecutionDefaults.FullSafetyCeiling, req.FullSafetyCeiling);
+        Assert.Equal(ExecutionDefaults.FullSoftThreshold, req.SoftThreshold);
         Assert.Null(req.Parameters);
     }
+
+    [Theory]
+    [InlineData(MainWindowViewModel.LoadAllKeepChoiceId, true)]   // explicit "Keep loading"
+    [InlineData(MainWindowViewModel.LoadAllStopChoiceId, false)]  // "Stop here"
+    [InlineData(null, false)]                                     // dismissed (Esc / X) → stop
+    [InlineData("something-else", false)]                         // anything unexpected → stop
+    public void ShouldKeepLoading_OnlyTrueForExplicitKeep(string? choiceId, bool expected)
+        => Assert.Equal(expected, MainWindowViewModel.ShouldKeepLoading(choiceId));
 
     [Fact]
     public void QueryResult_TruncatedAndCeiling_AreIndependentFlags()
@@ -78,10 +93,17 @@ public class ExecutionModesTests
         using var h = new Harness();
         h.Main.CurrentResult = Result(5000, truncated: true);
 
-        Assert.Equal("5000+ rows (preview)", h.Main.ResultRecordInfo);
+        // Culture-robust: the count is thousands-separated per the current culture, so compare
+        // against the same format rather than a hardcoded separator.
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, UiStrings.RecordCountPreviewFormat, 5000),
+            h.Main.ResultRecordInfo);
+        Assert.Contains("(preview)", h.Main.ResultRecordInfo);
 
         h.Main.SetResultSelectedRow(2); // 3rd record on page 1
-        Assert.Equal("Record 3 of 5000+ (preview)", h.Main.ResultRecordInfo);
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, UiStrings.RecordPositionPreviewFormat, 3, 5000),
+            h.Main.ResultRecordInfo);
     }
 
     [Fact]

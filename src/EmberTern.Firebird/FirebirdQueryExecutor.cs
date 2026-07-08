@@ -30,25 +30,36 @@ public sealed class FirebirdQueryExecutor
     public int RowLimit { get; init; } = DefaultRowLimit;
 
     public Task<QueryResult> ExecuteAsync(string sql, CancellationToken cancellationToken = default)
-        => ExecuteCoreAsync(new ExecutionRequest { Sql = sql, PreviewLimit = RowLimit }, null, cancellationToken);
+        => ExecuteCoreAsync(new ExecutionRequest { Sql = sql, PreviewLimit = RowLimit }, null, null, cancellationToken);
 
     /// <summary>Executes a parameterized statement — used by Execute Procedure so
     /// input values are bound (never embedded as SQL literals). Parameter names in
     /// <paramref name="sql"/> must match <see cref="QueryParameter.Name"/> (e.g.
     /// <c>@p0</c>). A null <see cref="QueryParameter.Value"/> binds SQL NULL.</summary>
     public Task<QueryResult> ExecuteAsync(string sql, IReadOnlyList<QueryParameter> parameters, CancellationToken cancellationToken = default)
-        => ExecuteCoreAsync(new ExecutionRequest { Sql = sql, Parameters = parameters, PreviewLimit = RowLimit }, null, cancellationToken);
+        => ExecuteCoreAsync(new ExecutionRequest { Sql = sql, Parameters = parameters, PreviewLimit = RowLimit }, null, null, cancellationToken);
 
     /// <summary>The streaming entry point. Preview stops at <see cref="ExecutionRequest.PreviewLimit"/>
     /// (→ <see cref="QueryResult.Truncated"/>); Full streams every row up to the hard
     /// <see cref="ExecutionRequest.FullSafetyCeiling"/> (→ <see cref="QueryResult.CeilingHit"/>),
     /// reporting <paramref name="progress"/> (rows read so far) as it goes so a long load can show a
-    /// live counter. Cancellation throws <see cref="OperationCanceledException"/> — the caller keeps
-    /// whatever it had before (Load-all does not replace the grid on cancel).</summary>
-    public Task<QueryResult> ExecuteAsync(ExecutionRequest request, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
-        => ExecuteCoreAsync(request, progress, cancellationToken);
+    /// live counter. When <paramref name="onSoftThreshold"/> is supplied (Full), it is invoked ONCE
+    /// the first time <see cref="ExecutionRequest.SoftThreshold"/> rows have been read and more remain;
+    /// returning <c>false</c> stops the load and keeps the partial (flagged <see cref="QueryResult.Truncated"/>),
+    /// <c>true</c> continues to the hard ceiling. Cancellation throws <see cref="OperationCanceledException"/>
+    /// — the caller keeps whatever it had before (Load-all does not replace the grid on cancel).</summary>
+    public Task<QueryResult> ExecuteAsync(
+        ExecutionRequest request,
+        IProgress<long>? progress = null,
+        Func<long, Task<bool>>? onSoftThreshold = null,
+        CancellationToken cancellationToken = default)
+        => ExecuteCoreAsync(request, progress, onSoftThreshold, cancellationToken);
 
-    private async Task<QueryResult> ExecuteCoreAsync(ExecutionRequest request, IProgress<long>? progress, CancellationToken cancellationToken)
+    private async Task<QueryResult> ExecuteCoreAsync(
+        ExecutionRequest request,
+        IProgress<long>? progress,
+        Func<long, Task<bool>>? onSoftThreshold,
+        CancellationToken cancellationToken)
     {
         var sql = request.Sql;
         var parameters = request.Parameters;
@@ -131,6 +142,7 @@ public sealed class FirebirdQueryExecutor
             long produced = 0;
             var truncated = false;
             var ceilingHit = false;
+            var softAsked = false;
 
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -139,6 +151,20 @@ public sealed class FirebirdQueryExecutor
                     if (request.Intent == ExecutionIntent.Preview) truncated = true;
                     else ceilingHit = true;
                     break;
+                }
+
+                // Smart soft threshold (Full): once SoftThreshold rows are read and more remain,
+                // ask once whether to keep loading. "Stop here" keeps the partial (Truncated → the
+                // notice bar reappears offering Load-all again).
+                if (onSoftThreshold is not null && !softAsked && produced >= request.SoftThreshold)
+                {
+                    softAsked = true;
+                    var keepLoading = await onSoftThreshold(produced).ConfigureAwait(false);
+                    if (!keepLoading)
+                    {
+                        truncated = true;
+                        break;
+                    }
                 }
 
                 if (!discard)

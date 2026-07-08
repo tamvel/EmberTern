@@ -3033,15 +3033,16 @@ public partial class MainWindowViewModel : ViewModelBase
     // are best-effort — any MON$ failure degrades to a null delta (RecordsAffected fallback).
     private Task<(QueryResult Result, IReadOnlyList<PerTableReadRow>? Reads)> ExecuteWithMetricsAsync(
         string sql, IReadOnlyList<QueryParameter>? parameters, CancellationToken cancellationToken)
-        => ExecuteWithMetricsAsync(new ExecutionRequest { Sql = sql, Parameters = parameters }, null, cancellationToken);
+        => ExecuteWithMetricsAsync(new ExecutionRequest { Sql = sql, Parameters = parameters }, null, null, cancellationToken);
 
     // Streaming-aware overload: runs the request (Preview or Full) through the executor with the
-    // before/after MON$ read delta, reporting streamed progress for a Full load's live counter.
+    // before/after MON$ read delta, reporting streamed progress for a Full load's live counter and
+    // routing the Full soft-threshold "keep loading?" decision (onSoftThreshold).
     private async Task<(QueryResult Result, IReadOnlyList<PerTableReadRow>? Reads)> ExecuteWithMetricsAsync(
-        ExecutionRequest request, IProgress<long>? progress, CancellationToken cancellationToken)
+        ExecutionRequest request, IProgress<long>? progress, Func<long, Task<bool>>? onSoftThreshold, CancellationToken cancellationToken)
     {
         var before = await TrySnapshotReadsAsync().ConfigureAwait(true);
-        var result = await _executor.ExecuteAsync(request, progress, cancellationToken).ConfigureAwait(true);
+        var result = await _executor.ExecuteAsync(request, progress, onSoftThreshold, cancellationToken).ConfigureAwait(true);
         IReadOnlyList<PerTableReadRow>? reads = null;
         if (before is not null)
         {
@@ -5101,11 +5102,13 @@ public partial class MainWindowViewModel : ViewModelBase
             }
             else
             {
-                // Full reports streamed progress so the status shows a live "Loading… N rows" counter.
+                // Full reports streamed progress (live "Loading… N rows" counter) + the soft-threshold
+                // "keep loading?" prompt; Preview needs neither.
                 var progress = intent == ExecutionIntent.Full ? MakeLoadProgress() : null;
+                var onSoft = intent == ExecutionIntent.Full ? MakeSoftThresholdCallback() : null;
                 (result, reads) = await ExecuteWithMetricsAsync(
                     new ExecutionRequest { Sql = executeSql, Intent = intent, Parameters = parameters },
-                    progress, _executionCts.Token).ConfigureAwait(true);
+                    progress, onSoft, _executionCts.Token).ConfigureAwait(true);
                 // Remember this statement so the notice bar's [Load all rows] can re-run it as Full.
                 _lastResultSql = executeSql;
                 _lastResultParameters = parameters;
@@ -5187,6 +5190,45 @@ public partial class MainWindowViewModel : ViewModelBase
     private IProgress<long> MakeLoadProgress()
         => new Progress<long>(n => QueryStatsText = string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsLoadingFormat, n));
 
+    // Soft-threshold choice ids (returned by the "keep loading?" dialog; wording can change freely).
+    internal const string LoadAllKeepChoiceId = "keep";
+    internal const string LoadAllStopChoiceId = "stop";
+
+    // Pure decision (Etap 2): ONLY an explicit "Keep loading" continues the Full read. "Stop here",
+    // Esc, or dismissing the dialog → stop and keep the partial (the safe, non-destructive default).
+    internal static bool ShouldKeepLoading(string? choiceId) => choiceId == LoadAllKeepChoiceId;
+
+    // The Full soft-threshold callback: invoked by the streaming executor (possibly off the UI thread)
+    // once SoftThreshold rows are read and more remain. Marshals the modal "keep loading?" prompt onto
+    // the UI thread via a TaskCompletionSource so the executor can await the user's decision regardless
+    // of which thread its read loop is running on.
+    private Func<long, Task<bool>> MakeSoftThresholdCallback()
+        => loaded =>
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            Dispatcher.UIThread.Post(async () =>
+            {
+                try { tcs.SetResult(await PromptKeepLoadingAsync(loaded).ConfigureAwait(true)); }
+                catch (Exception ex) { tcs.SetException(ex); }
+            });
+            return tcs.Task;
+        };
+
+    private async Task<bool> PromptKeepLoadingAsync(long loaded)
+    {
+        var id = await RequestChoiceAsync(new ChoiceRequest
+        {
+            Title = UiStrings.LoadAllThresholdTitle,
+            Message = string.Format(CultureInfo.CurrentCulture, UiStrings.LoadAllThresholdMessageFormat, loaded),
+            Options = new[]
+            {
+                new ChoiceOption { Id = LoadAllKeepChoiceId, Label = UiStrings.LoadAllThresholdKeep, IsDefault = true },
+                new ChoiceOption { Id = LoadAllStopChoiceId, Label = UiStrings.LoadAllThresholdStop, IsCancel = true },
+            },
+        }).ConfigureAwait(true);
+        return ShouldKeepLoading(id);
+    }
+
     public bool CanLoadAllRows =>
         !IsExecuting && _service.IsConnected && _lastResultSql is not null
         && CurrentResult is { Truncated: true };
@@ -5213,7 +5255,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var (result, reads) = await ExecuteWithMetricsAsync(
                 new ExecutionRequest { Sql = _lastResultSql, Intent = ExecutionIntent.Full, Parameters = _lastResultParameters },
-                MakeLoadProgress(), _executionCts.Token).ConfigureAwait(true);
+                MakeLoadProgress(), MakeSoftThresholdCallback(), _executionCts.Token).ConfigureAwait(true);
             SqlEditorPerformance.Record(_lastResultSql, result, reads);
 
             ApplyFullResult(result); // replaces the preview, keeping the client-side view state

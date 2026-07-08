@@ -14,5 +14,9 @@ public sealed record ExecutionRequest
     public ExecutionIntent Intent { get; init; } = ExecutionIntent.Preview;
     public int PreviewLimit { get; init; } = ExecutionDefaults.PreviewLimit;
     public long FullSafetyCeiling { get; init; } = ExecutionDefaults.FullSafetyCeiling;
+
+    /// <summary>Row count at which a Full load pauses to ask "keep loading?" (Etap 2). Only consulted
+    /// when the caller supplies a soft-threshold callback (Full); ignored for Preview.</summary>
+    public long SoftThreshold { get; init; } = ExecutionDefaults.FullSoftThreshold;
     public IReadOnlyList<QueryParameter>? Parameters { get; init; }
 }

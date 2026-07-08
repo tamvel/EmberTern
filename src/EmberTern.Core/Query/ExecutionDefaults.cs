@@ -14,7 +14,12 @@ public static class ExecutionDefaults
     public const int PreviewLimit = 5000;
 
     /// <summary>Full stops after this many rows as a hard memory backstop and flags the result
-    /// <see cref="QueryResult.CeilingHit"/>. The <i>smart soft threshold</i> (a mid-stream
-    /// "keep loading?" prompt) lands in a later etap and sits below this hard ceiling.</summary>
+    /// <see cref="QueryResult.CeilingHit"/>.</summary>
     public const long FullSafetyCeiling = 1_000_000;
+
+    /// <summary>Smart soft threshold (Etap 2): while a Full load streams, once this many rows are
+    /// read AND more remain, the user is asked once whether to keep loading the whole result into
+    /// memory (a mid-stream "keep loading? / stop here" prompt). Sits below <see cref="FullSafetyCeiling"/>,
+    /// so a normal-sized result never prompts and only a genuinely large one does.</summary>
+    public const long FullSoftThreshold = 250_000;
 }

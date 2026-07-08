@@ -394,14 +394,21 @@ internal static class UiStrings
     public const string NoConnectionMessage = "Connect to a database first.";
     public const string QueryCancelledMessage = "Query cancelled.";
     public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
-    // Truncated-Preview notice bar — loud + actionable (A.6). {0} = rows loaded so far.
-    public const string ResultsTruncatedFormat = "Showing the first {0} rows — the full result is larger.";
+    // Truncated-Preview notice bar — loud + actionable (A.6). {0} = rows loaded so far
+    // (thousands-separated — these strings front large full reads).
+    public const string ResultsTruncatedFormat = "Showing the first {0:N0} rows — the full result is larger.";
     // Full hit the hard safety ceiling. {0} = ceiling row count.
-    public const string ResultsCeilingFormat = "Stopped at {0} rows — a safety limit, not the end of the result. Narrow the query to see the rest.";
+    public const string ResultsCeilingFormat = "Stopped at {0:N0} rows — a safety limit, not the end of the result. Narrow the query to see the rest.";
     // Live counter shown in the status area while a Full / Load-all read streams. {0} = rows so far.
-    public const string ResultsLoadingFormat = "Loading… {0} rows";
+    public const string ResultsLoadingFormat = "Loading… {0:N0} rows";
     public const string ToolbarLoadAllRows = "Load all rows";
-    public const string RowsFetchedFormat = "{0} rows in {1} ms";
+    // Smart soft-threshold prompt (Etap 2) — asked once mid-stream when a Full load crosses the soft
+    // threshold and more rows remain. {0} = rows loaded so far.
+    public const string LoadAllThresholdTitle = "Large result";
+    public const string LoadAllThresholdMessageFormat = "Loaded {0:N0} rows so far and there's more. Keep loading the whole result into memory?";
+    public const string LoadAllThresholdKeep = "Keep loading";
+    public const string LoadAllThresholdStop = "Stop here";
+    public const string RowsFetchedFormat = "{0:N0} rows in {1} ms";
     public const string MessagesCopyAll = "Copy all";
     public const string MessagesClear = "Clear messages";
     // {0} = current page, {1} = total pages, {2} = total rows in the result set.
@@ -412,9 +419,10 @@ internal static class UiStrings
     // Shown when the grid has rows but none is selected. {0} = total row count.
     public const string RecordCountFormat = "{0} rows";
     // Preview variants — the true total is unknown (only the first N were loaded), so "N+" + a
-    // "(preview)" marker makes the fragment unmissable even away from the notice bar.
-    public const string RecordPositionPreviewFormat = "Record {0} of {1}+ (preview)";
-    public const string RecordCountPreviewFormat = "{0}+ rows (preview)";
+    // "(preview)" marker makes the fragment unmissable even away from the notice bar. Thousands-
+    // separated (preview counts can be large, e.g. a 250,000-row soft-stop).
+    public const string RecordPositionPreviewFormat = "Record {0:N0} of {1:N0}+ (preview)";
+    public const string RecordCountPreviewFormat = "{0:N0}+ rows (preview)";
 
     // ── Grid filtering + aggregation (shared across all data grids) ──
     // Operator labels (filter condition rows).
