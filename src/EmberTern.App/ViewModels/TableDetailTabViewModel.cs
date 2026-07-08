@@ -7,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Export;
+using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
 using EmberTern.Firebird;
@@ -1563,16 +1565,7 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         // idempotent: returns instantly when LoadAsync has already completed.
         await EnsureLoadedAsync(cancellationToken).ConfigureAwait(true);
 
-        string? orderBy = null;
-        if (!string.IsNullOrEmpty(SortColumn))
-        {
-            var escaped = SortColumn.Replace("\"", "\"\"");
-            orderBy = string.Format(
-                System.Globalization.CultureInfo.InvariantCulture,
-                "\"{0}\" {1}",
-                escaped,
-                SortDescending ? "DESC" : "ASC");
-        }
+        var orderBy = BuildDataOrderBy();
 
         try
         {
@@ -1589,6 +1582,45 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
             DataError = ex.Message;
             DataResultVersionTag = System.Guid.NewGuid().ToString("N");
         }
+    }
+
+    // The current data-grid ORDER BY (a quoted column + ASC/DESC), or null when unsorted. Shared by
+    // the page reload and the export re-fetch so an export matches exactly what the grid shows.
+    private string? BuildDataOrderBy()
+    {
+        if (string.IsNullOrEmpty(SortColumn)) return null;
+        var escaped = SortColumn.Replace("\"", "\"\"");
+        return string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "\"{0}\" {1}",
+            escaped,
+            SortDescending ? "DESC" : "ASC");
+    }
+
+    public bool CanExportData => _reader is not null && DataResult is { HasResultSet: true };
+
+    /// <summary>Builds the shared-framework export source for the Dane grid (server-paged):
+    /// <see cref="ExportScope.CurrentView"/> = the current page; <see cref="ExportScope.AllRows"/>
+    /// re-fetches the whole table page-by-page with the current filter + order. The AllRows estimate
+    /// is the bounded COUNT probe (approximate when it hit the cap).</summary>
+    public IExportDataSource? BuildDataExportSource()
+    {
+        if (_reader is not { } reader || DataResult is not { HasResultSet: true } result) return null;
+
+        var columns = result.Columns.Select(c => new ExportColumn(c.Name, c.ClrType)).ToList();
+        var allEstimate = LastKnownRowCount is { } count
+            ? (count >= RowCountCap ? RowEstimate.Approximate(count) : RowEstimate.Exact(count))
+            : RowEstimate.Unknown;
+        var orderBy = BuildDataOrderBy();
+        var filter = _dataSqlFilter;
+
+        return new ServerPagedExportSource(
+            columns,
+            result.Rows,
+            allEstimate,
+            async (page, size, ct) => (await reader.GetDataPreviewAsync(TableName, page, size, orderBy, filter, ct).ConfigureAwait(false)).Rows,
+            ServerPagedExportSource.DefaultFetchPageSize,
+            TableName);
     }
 
     // ─── Pagination commands ──────────────────────────────────────────────

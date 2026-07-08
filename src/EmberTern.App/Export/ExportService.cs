@@ -3,6 +3,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using EmberTern.Core.Export;
+using EmberTern.Export.Office;
 
 namespace EmberTern.App.Export;
 
@@ -53,6 +54,7 @@ public sealed class ExportService
 
     private static IExporter ResolveExporter(ExportRequest request) => request.Format switch
     {
+        ExportFormat.Xlsx => new XlsxExporter(request.IncludeHeader),
         ExportFormat.Csv or ExportFormat.Text =>
             new DelimitedTextExporter(request.Delimited
                 ?? throw new InvalidOperationException("Delimited options are required for CSV/Text export.")),

@@ -326,6 +326,11 @@
                     IsChecked="{Binding DataAggregationBar.IsBarOpen, Mode=TwoWay}">
               <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
             </ToggleButton>
+            <!-- Export the view data via the shared Export Framework (default = all rows). -->
+            <Button Classes="icon" Click="OnViewDataExportClick" IsEnabled="{Binding CanExportData}"
+                    ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}">
+              <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="14" Height="14" />
+            </Button>
           </StackPanel>
 
           <views:FilterPanelView Grid.Row="1" DataContext="{Binding DataFilterPanel}" />
@@ -361,6 +366,8 @@
                 <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnViewDataExcludeValueClick" />
                 <MenuItem x:Name="ViewDataFilterContainsItem"
                           Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnViewDataFilterContainsClick" />
+                <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Click="OnViewDataExportClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>

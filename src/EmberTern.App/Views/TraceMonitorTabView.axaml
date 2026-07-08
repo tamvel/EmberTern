@@ -173,6 +173,11 @@
                       ToolTip.Tip="{x:Static app:UiStrings.TraceIncludeFunctionsTip}">
           <controls:SvgIcon Data="{StaticResource Icon.Function}" />
         </ToggleButton>
+        <!-- Export the trace grid via the shared Export Framework (default = the filtered view). -->
+        <Button Classes="icon" Click="OnExportClick" IsEnabled="{Binding CanExport}"
+                ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}">
+          <controls:SvgIcon Data="{StaticResource Icon.Download}" />
+        </Button>
 
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                    Foreground="{DynamicResource SubtleForegroundBrush}" Margin="8,0,0,0" />
@@ -232,6 +237,7 @@
               <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}" Click="OnCopyRowWithHeadersClick" />
               <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}" Click="OnCopyAllWithHeadersClick" />
               <MenuItem Header="{x:Static app:UiStrings.TraceDetailCopySql}" Click="OnCopySqlClick" />
+              <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Click="OnExportClick" />
               <Separator />
               <!-- Filter-from-cell verbs → add a condition to the shared grid filter (gotcha #99:
                    the clicked cell is resolved via CellPointerPressed). No-op on non-filterable

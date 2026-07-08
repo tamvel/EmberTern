@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The one place a NuGet dependency is allowed for export: the binary XLSX writer.
+       Core stays zero-dep; this project references Core and implements IExporter. -->
+  <ItemGroup>
+    <ProjectReference Include="..\EmberTern.Core\EmberTern.Core.csproj" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EmberTern.Tests" />
+  </ItemGroup>
+</Project>

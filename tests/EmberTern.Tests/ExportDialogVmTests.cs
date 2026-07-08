@@ -36,16 +36,25 @@ public class ExportDialogVmTests
 
     // ── format-driven disclosure + defaults ─────────────────────────────────
     [Fact]
-    public void Ctor_DefaultsToCsv_WithExcelFriendlyOptions()
+    public void Ctor_DefaultsToExcel_WithFileOnlyOptions()
     {
         var vm = new ExportDialogViewModel(Source(), ExportScope.AllRows);
-        Assert.Equal(ExportFormat.Csv, vm.SelectedFormat);
+        Assert.Equal(ExportFormat.Xlsx, vm.SelectedFormat); // headline format is the default
+        Assert.True(vm.IsFormatXlsx);
+        Assert.False(vm.ShowDelimitedOptions);              // XLSX: no delimiter / encoding / culture
+        Assert.False(vm.ShowEncodingOption);
+        Assert.True(vm.IncludeHeader);
+    }
+
+    [Fact]
+    public void SwitchToCsv_ShowsDelimitedOptions_WithExcelFriendlyDefaults()
+    {
+        var vm = new ExportDialogViewModel(Source(), ExportScope.AllRows) { SelectedFormat = ExportFormat.Csv };
         Assert.True(vm.IsFormatCsv);
         Assert.True(vm.ShowDelimitedOptions);
         Assert.True(vm.ShowEncodingOption);
         Assert.Equal(';', vm.SelectedDelimiterOption.Value);
         Assert.True(vm.UseBom);
-        Assert.True(vm.IncludeHeader);
     }
 
     [Fact]
@@ -131,10 +140,10 @@ public class ExportDialogVmTests
     }
 
     [Fact]
-    public async Task ExportToFile_WritesFile_ReturnsOutcomeWithPath()
+    public async Task ExportToFile_Csv_WritesFile_ReturnsOutcomeWithPath()
     {
         var path = Path.Combine(Path.GetTempPath(), "embertern-export-vm-" + Guid.NewGuid().ToString("N") + ".csv");
-        var vm = new ExportDialogViewModel(Source(), ExportScope.AllRows); // Csv default
+        var vm = new ExportDialogViewModel(Source(), ExportScope.AllRows) { SelectedFormat = ExportFormat.Csv };
         vm.RequestSavePath = _ => Task.FromResult<string?>(path);
         bool closed = false;
         vm.RequestClose += () => closed = true;
@@ -149,6 +158,28 @@ public class ExportDialogVmTests
             Assert.True(closed);
             Assert.True(File.Exists(path));
             Assert.Contains("Name;Value", await File.ReadAllTextAsync(path));
+        }
+        finally { TryDelete(path); }
+    }
+
+    [Fact]
+    public async Task ExportToFile_Xlsx_IsTheDefault_AndWritesAnXlsxFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "embertern-export-vm-" + Guid.NewGuid().ToString("N") + ".xlsx");
+        var vm = new ExportDialogViewModel(Source(), ExportScope.AllRows); // default = Xlsx
+        vm.RequestSavePath = _ => Task.FromResult<string?>(path);
+
+        try
+        {
+            await vm.ExportCommand.ExecuteAsync(null);
+
+            Assert.NotNull(vm.Result);
+            Assert.Equal(ExportFormat.Xlsx, vm.Result!.Format);
+            Assert.Equal(1, vm.Result.RowCount);
+            Assert.True(File.Exists(path));
+            // Valid OOXML package = a ZIP → starts with "PK".
+            var head = await File.ReadAllBytesAsync(path);
+            Assert.True(head.Length > 2 && head[0] == (byte)'P' && head[1] == (byte)'K');
         }
         finally { TryDelete(path); }
     }

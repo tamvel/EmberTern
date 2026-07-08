@@ -1546,9 +1546,11 @@ internal static class UiStrings
     public const string ExportResultsTooltip = "Export results…";
     public const string ExportAllRowsButton = "Export all…";
     public const string ExportFormatLabel = "Format";
+    public const string ExportFormatExcel = "Excel (.xlsx)";
     public const string ExportFormatCsv = "CSV (.csv)";
     public const string ExportFormatText = "Text (.txt)";
     public const string ExportFormatClipboard = "Clipboard";
+    public const string ExportExcelFilterName = "Excel workbooks";
     public const string ExportScopeLabel = "Rows to export";
     public const string ExportScopeCurrentView = "Visible rows";
     public const string ExportScopeAllRows = "All rows";

@@ -36,6 +36,9 @@
         <StackPanel Spacing="6">
           <TextBlock Text="{x:Static app:UiStrings.ExportFormatLabel}" Classes="field-label" />
           <RadioButton GroupName="ExportFormat"
+                       Content="{x:Static app:UiStrings.ExportFormatExcel}"
+                       IsChecked="{Binding IsFormatXlsx, Mode=TwoWay}" />
+          <RadioButton GroupName="ExportFormat"
                        Content="{x:Static app:UiStrings.ExportFormatCsv}"
                        IsChecked="{Binding IsFormatCsv, Mode=TwoWay}" />
           <RadioButton GroupName="ExportFormat"

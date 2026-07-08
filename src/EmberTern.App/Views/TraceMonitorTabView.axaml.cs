@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Export;
 using EmberTern.Core.Query;
 
 namespace EmberTern.App.Views;
@@ -65,6 +66,11 @@ public partial class TraceMonitorTabView : UserControl
     private void OnCopyRowWithHeadersClick(object? sender, RoutedEventArgs e) => _vm?.CopyRowWithHeaders(_copyRow);
     private void OnCopyAllWithHeadersClick(object? sender, RoutedEventArgs e) => _vm?.CopyAllWithHeaders();
     private void OnCopySqlClick(object? sender, RoutedEventArgs e) => _vm?.CopyRowSql(_copyRow);
+
+    // Export the trace grid through the shared Export Framework. Default scope = the filtered view
+    // (what the user narrowed the trace to is usually what they want to export).
+    private async void OnExportClick(object? sender, RoutedEventArgs e)
+        => await ExportDialog.LaunchAsync(this, _vm?.BuildExportSource(), ExportScope.CurrentView);
 
     // ---- filter-from-cell context menu (adds a condition to the shared grid filter) ----
 

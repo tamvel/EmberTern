@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using EmberTern.App;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Export;
 using EmberTern.Core.Query;
 using EmberTern.Core.Trace;
 using EmberTern.Firebird;
@@ -48,6 +49,31 @@ public class TraceMonitorVmTests
 
     private static TraceEvent Error()
         => Ev(TraceEventKind.Statement, sql: "SELECT * FROM BROKEN") with { Severity = TraceEventSeverity.Error, ErrorText = "boom" };
+
+    // ── Export (shared Export Framework) ──────────────────────────────────────
+    [Fact]
+    public void BuildExportSource_ProjectsBuffer_WithFullFieldSet()
+    {
+        var vm = NewVm();
+        vm.Ingest(new[] { Ev(TraceEventKind.Statement, sql: "SELECT 1"), Ev(TraceEventKind.Procedure, obj: "P") });
+
+        var source = vm.BuildExportSource();
+        Assert.NotNull(source);
+        // Exports the FULL field set (incl. Session / User / Error), richer than the visible grid.
+        Assert.Equal(TraceMonitorTabViewModel.FilterColumns.Count, source!.Columns.Count);
+        Assert.True(source.Capabilities.Supports(ExportScope.CurrentView));
+        Assert.True(source.Capabilities.Supports(ExportScope.AllRows));
+        Assert.Equal(RowEstimate.Exact(2), source.Capabilities.EstimateFor(ExportScope.AllRows));
+        Assert.True(vm.CanExport); // buffer non-empty → can export
+    }
+
+    [Fact]
+    public void BuildExportSource_NullWhenBufferEmpty()
+    {
+        var vm = NewVm();
+        Assert.False(vm.CanExport);
+        Assert.Null(vm.BuildExportSource());
+    }
 
     [Fact]
     public void Ingest_AddsRows_ChronologicalOrder()

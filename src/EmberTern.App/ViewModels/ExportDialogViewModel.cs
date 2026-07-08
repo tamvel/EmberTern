@@ -73,8 +73,15 @@ public sealed partial class ExportDialogViewModel : ViewModelBase
     public IReadOnlyList<DelimiterOption> DelimiterOptions => _delimiterOptions;
 
     // ── Format (radio group) ───────────────────────────────────────────────
+    // Default to Excel — the headline "snapshot" format (per the frozen B.8 mockup).
     [ObservableProperty]
-    private ExportFormat _selectedFormat = ExportFormat.Csv;
+    private ExportFormat _selectedFormat = ExportFormat.Xlsx;
+
+    public bool IsFormatXlsx
+    {
+        get => SelectedFormat == ExportFormat.Xlsx;
+        set { if (value) SelectedFormat = ExportFormat.Xlsx; }
+    }
 
     public bool IsFormatCsv
     {
@@ -96,6 +103,7 @@ public sealed partial class ExportDialogViewModel : ViewModelBase
 
     partial void OnSelectedFormatChanged(ExportFormat value)
     {
+        OnPropertyChanged(nameof(IsFormatXlsx));
         OnPropertyChanged(nameof(IsFormatCsv));
         OnPropertyChanged(nameof(IsFormatText));
         OnPropertyChanged(nameof(IsFormatClipboard));
@@ -170,7 +178,7 @@ public sealed partial class ExportDialogViewModel : ViewModelBase
 
         string? path = null;
         Encoding? encoding = null;
-        if (SelectedFormat is ExportFormat.Csv or ExportFormat.Text)
+        if (SelectedFormat != ExportFormat.Clipboard) // Excel / CSV / Text → a file
         {
             if (RequestSavePath is not { } askPath) return;
             var ext = FileExtension;
@@ -240,11 +248,19 @@ public sealed partial class ExportDialogViewModel : ViewModelBase
         RequestClose?.Invoke();
     }
 
-    private string FileExtension => SelectedFormat == ExportFormat.Text ? ".txt" : ".csv";
+    private string FileExtension => SelectedFormat switch
+    {
+        ExportFormat.Xlsx => ".xlsx",
+        ExportFormat.Text => ".txt",
+        _ => ".csv",
+    };
 
-    private string FileFilterName => SelectedFormat == ExportFormat.Text
-        ? UiStrings.ExportTextFilterName
-        : UiStrings.ExportCsvFilterName;
+    private string FileFilterName => SelectedFormat switch
+    {
+        ExportFormat.Xlsx => UiStrings.ExportExcelFilterName,
+        ExportFormat.Text => UiStrings.ExportTextFilterName,
+        _ => UiStrings.ExportCsvFilterName,
+    };
 
     private Encoding BuildEncoding()
         => UseBom ? new UTF8Encoding(encoderShouldEmitUTF8Identifier: true) : SqlFileWriter.Utf8NoBom;

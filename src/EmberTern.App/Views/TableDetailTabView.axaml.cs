@@ -20,6 +20,7 @@ using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.Converters;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
 
@@ -474,6 +475,11 @@ public partial class TableDetailTabView : UserControl
         var (col, op, val) = GridCellFilter.FilterByValue(ctx);
         _ = _currentVm.DataFilterPanel.ApplyFromCellAsync(col, op, val);
     }
+
+    // Export the table data through the shared Export Framework. Default scope = all rows (the
+    // "snapshot the whole table" intent); the dialog lets the user switch to the current page.
+    private async void OnDataExportClick(object? sender, RoutedEventArgs e)
+        => await ExportDialog.LaunchAsync(this, _currentVm?.BuildDataExportSource(), ExportScope.AllRows);
 
     private void OnDataExcludeValueClick(object? sender, RoutedEventArgs e)
     {

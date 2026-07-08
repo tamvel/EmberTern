@@ -29,10 +29,12 @@ public enum ExportScope
 }
 
 /// <summary>The serialization + destination, chosen as one thing (there is no separate File/Clipboard
-/// destination control — the format determines it): CSV / Text write a file, Clipboard copies text.
-/// Excel and the SQL-Script family are added in later etaps.</summary>
+/// destination control — the format determines it): Excel / CSV / Text write a file, Clipboard copies
+/// text. The SQL-Script family is added in a later etap.</summary>
 public enum ExportFormat
 {
+    /// <summary>Excel workbook (.xlsx) — the headline format; typed cells; file-only (never clipboard).</summary>
+    Xlsx,
     Csv,
     Text,
     Clipboard,

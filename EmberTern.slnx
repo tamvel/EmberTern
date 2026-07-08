@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/EmberTern.App/EmberTern.App.csproj" />
     <Project Path="src/EmberTern.Core/EmberTern.Core.csproj" />
+    <Project Path="src/EmberTern.Export.Office/EmberTern.Export.Office.csproj" />
     <Project Path="src/EmberTern.Firebird/EmberTern.Firebird.csproj" />
   </Folder>
   <Folder Name="/tests/">

@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Export;
+using EmberTern.Core.Export;
 using EmberTern.Core.Query;
 using EmberTern.Core.Trace;
 using EmberTern.Firebird;
@@ -631,6 +633,23 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
         if (r is null) return;
         var sql = RowSql(r.Event);
         if (sql.Length > 0) CopyToClipboardRequested?.Invoke(sql);
+    }
+
+    public bool CanExport => _all.Count > 0;
+
+    /// <summary>Builds the shared-framework export source for the trace grid (materialized ring
+    /// buffer, no re-fetch). Reuses the exact column set + row projection the conditional filter uses
+    /// — the full field set (incl. Session / User / Error), richer than the visible grid columns.
+    /// <see cref="ExportScope.CurrentView"/> = the filtered display; <see cref="ExportScope.AllRows"/>
+    /// = the whole buffer; <see cref="ExportScope.SelectedRows"/> = the selected row (if any).</summary>
+    public IExportDataSource? BuildExportSource()
+    {
+        if (_all.Count == 0) return null;
+        var columns = FilterColumns.Select(c => new ExportColumn(c.Name, c.ClrType)).ToList();
+        IReadOnlyList<object?[]> currentView = Rows.Select(ProjectRow).ToList();
+        IReadOnlyList<object?[]> allRows = _all.Select(ProjectRow).ToList();
+        IReadOnlyList<object?[]>? selected = SelectedRow is { } row ? new[] { ProjectRow(row) } : null;
+        return new RowBufferExportSource(columns, currentView, allRows, selected, "activity_monitor");
     }
 
     // Header + row share the same column set as the grid (gutter excluded) so a paste lines up.

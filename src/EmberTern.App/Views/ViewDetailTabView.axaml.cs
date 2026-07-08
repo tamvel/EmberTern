@@ -16,6 +16,7 @@ using AvaloniaEdit.Highlighting;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Export;
 using EmberTern.Core.Query;
 using EmberTern.Core.Sql.Templates;
 
@@ -288,6 +289,10 @@ public partial class ViewDetailTabView : UserControl
         var (col, op, val) = GridCellFilter.FilterByValue(ctx);
         _ = _currentVm.DataFilterPanel.ApplyFromCellAsync(col, op, val);
     }
+
+    // Export the view data through the shared Export Framework (default = all rows).
+    private async void OnViewDataExportClick(object? sender, RoutedEventArgs e)
+        => await ExportDialog.LaunchAsync(this, _currentVm?.BuildDataExportSource(), ExportScope.AllRows);
 
     private void OnViewDataExcludeValueClick(object? sender, RoutedEventArgs e)
     {

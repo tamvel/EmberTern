@@ -1,9 +1,11 @@
 using System;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Export;
 
@@ -75,5 +77,17 @@ public partial class ExportDialog : Window
     {
         var dlg = new ExportDialog { DataContext = viewModel };
         return dlg.ShowDialog<ExportOutcome?>(owner);
+    }
+
+    /// <summary>Convenience for host views (Activity Monitor, Table/View Data): resolve the owning
+    /// window from any control in the tree and open the shared Export dialog for the given source.
+    /// Returns the outcome, or null when the source is null / no owner window / the user cancelled.</summary>
+    public static Task<ExportOutcome?> LaunchAsync(Visual host, IExportDataSource? source, ExportScope defaultScope)
+    {
+        if (source is null || host.FindAncestorOfType<Window>() is not { } owner)
+        {
+            return Task.FromResult<ExportOutcome?>(null);
+        }
+        return ShowAsync(owner, new ExportDialogViewModel(source, defaultScope));
     }
 }

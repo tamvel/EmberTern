@@ -33,10 +33,13 @@ public interface IExporter
         CancellationToken cancellationToken);
 }
 
-/// <summary>The export destination as a <see cref="TextWriter"/>. A file sink wraps a
-/// <c>StreamWriter</c> (encoding/BOM chosen per format); a string sink collects text for the
-/// clipboard. Disposing flushes/closes.</summary>
+/// <summary>The export destination, offering both a text and a binary surface (per the design's
+/// "TextWriter / Stream" sink). Text exporters (CSV/TXT/Clipboard) write to <see cref="Writer"/>;
+/// binary exporters (XLSX) write to <see cref="Stream"/>. A file sink supports both; a string/clipboard
+/// sink is text-only and throws on <see cref="Stream"/> (XLSX is file-only, never clipboard). A given
+/// export uses exactly one surface. Disposing flushes/closes.</summary>
 public interface IExportSink : IAsyncDisposable
 {
     TextWriter Writer { get; }
+    Stream Stream { get; }
 }
