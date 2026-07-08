@@ -74,6 +74,13 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly SqlTemplateRegistry _templateRegistry = SqlTemplateCatalog.CreateRegistry();
     private SnippetContextBuilder? _snippetContextBuilder;
     private CancellationTokenSource? _executionCts;
+    // The SQL (+ bound params) of the last data-lane result-set run, so "Load all rows" can re-run
+    // exactly THAT statement as Full — never whatever is now in the editor.
+    private string? _lastResultSql;
+    private IReadOnlyList<QueryParameter>? _lastResultParameters;
+    // Set immediately before assigning a Load-all Full result so OnCurrentResultChanged keeps the
+    // client-side view state (filter/sort/aggregation) instead of resetting it.
+    private bool _preserveViewStateOnNextResult;
     private TransactionState _previousTransactionState = TransactionState.Idle;
     private TransactionState _previousMetadataTransactionState = TransactionState.Idle;
     // Set just before a Commit/Rollback settles a lane, read by OnTransactionStateChanged
@@ -604,8 +611,10 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasCurrentResult))]
     [NotifyPropertyChangedFor(nameof(ShowResultsEmptyHint))]
-    [NotifyPropertyChangedFor(nameof(ShowTruncatedBanner))]
-    [NotifyPropertyChangedFor(nameof(TruncatedBannerText))]
+    [NotifyPropertyChangedFor(nameof(ShowResultsNotice))]
+    [NotifyPropertyChangedFor(nameof(ResultsNoticeText))]
+    [NotifyPropertyChangedFor(nameof(ShowLoadAllButton))]
+    [NotifyCanExecuteChangedFor(nameof(LoadAllRowsCommand))]
     private string _currentResultVersionTag = string.Empty;
 
     // ── Results grid: client-side paging + 3-state sort ───────────────────
@@ -664,12 +673,21 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             int total = _sortedRows.Count;
             if (total == 0) return string.Empty;
+            // A truncated Preview loaded only the first N; the true total is unknown → "N+ (preview)"
+            // so the fragment is unmissable even away from the notice bar.
+            bool preview = CurrentResult is { Truncated: true };
             if (_selectedResultRowInPage >= 0)
             {
                 int global = (_resultPage - 1) * ResultPageSize + _selectedResultRowInPage + 1;
-                return string.Format(CultureInfo.CurrentCulture, UiStrings.RecordPositionFormat, global, total);
+                return string.Format(
+                    CultureInfo.CurrentCulture,
+                    preview ? UiStrings.RecordPositionPreviewFormat : UiStrings.RecordPositionFormat,
+                    global, total);
             }
-            return string.Format(CultureInfo.CurrentCulture, UiStrings.RecordCountFormat, total);
+            return string.Format(
+                CultureInfo.CurrentCulture,
+                preview ? UiStrings.RecordCountPreviewFormat : UiStrings.RecordCountFormat,
+                total);
         }
     }
 
@@ -718,6 +736,17 @@ public partial class MainWindowViewModel : ViewModelBase
     // at the new columns, then recompute the view.
     partial void OnCurrentResultChanged(QueryResult? value)
     {
+        // "Load all rows" replaces the truncated preview with the full set of the SAME query
+        // and identical columns — keep the client-side view state (filter/sort/aggregation) the
+        // user set on the preview and just re-slice over the larger row set. Re-pointing the
+        // panels at columns would clear the filter conditions, so skip it on this path.
+        if (_preserveViewStateOnNextResult)
+        {
+            _preserveViewStateOnNextResult = false;
+            RebuildResultView();
+            return;
+        }
+
         _resultFilter = GridFilter.Empty;
         _resultSortColumn = null;
         _resultSortDescending = false;
@@ -852,7 +881,11 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(CanExecute))]
     [NotifyPropertyChangedFor(nameof(ShowExecuteButton))]
     [NotifyPropertyChangedFor(nameof(ShowCancelButton))]
+    [NotifyPropertyChangedFor(nameof(ShowResultsNotice))]
+    [NotifyPropertyChangedFor(nameof(ShowLoadAllButton))]
     [NotifyCanExecuteChangedFor(nameof(ExecuteQueryCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExecuteQueryFullCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LoadAllRowsCommand))]
     private bool _isExecuting;
 
     // Drive the live elapsed timer off IsExecuting so every SQL Editor exit path (success, error,
@@ -921,10 +954,26 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasCurrentResult => CurrentResult is { HasResultSet: true };
     public bool ShowResultsEmptyHint => !HasCurrentResult;
-    public bool ShowTruncatedBanner => CurrentResult is { Truncated: true };
-    public string TruncatedBannerText => CurrentResult is { } r
-        ? string.Format(UiStrings.ResultsTruncatedFormat, r.Rows.Count)
-        : string.Empty;
+
+    // ── Truncated-Preview / ceiling notice bar (A.6) ──────────────────────────
+    // A loud, actionable notice pinned above the results grid. Hidden while a run is
+    // in flight (the status text + timer + Cancel carry "loading" feedback instead).
+    //   Preview hit its limit → "Showing the first N rows…" + a working [Load all rows].
+    //   Full hit the hard ceiling → a plain safety-limit message, no action (nothing more
+    //   to safely load; the smart soft threshold + refined messaging are Etap 2).
+    public bool ShowResultsNotice =>
+        !IsExecuting && CurrentResult is { Truncated: true } or { CeilingHit: true };
+
+    public string ResultsNoticeText => CurrentResult switch
+    {
+        { Truncated: true } r => string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsTruncatedFormat, r.Rows.Count),
+        { CeilingHit: true } r => string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsCeilingFormat, r.Rows.Count),
+        _ => string.Empty,
+    };
+
+    // [Load all rows] appears only for a truncated Preview (a ceiling-hit Full has nothing
+    // more to safely load). Hidden while executing so it can't be clicked mid-load.
+    public bool ShowLoadAllButton => !IsExecuting && CurrentResult is { Truncated: true };
 
     public bool HasMessages => Messages.Count > 0;
     public bool ShowMessagesEmptyHint => !HasMessages;
@@ -2982,13 +3031,17 @@ public partial class MainWindowViewModel : ViewModelBase
     // (RunProcedure/FunctionExecuteAsync) so every place a statement runs surfaces the same
     // diagnostics. The execution error propagates (QueryExecutionException); the snapshots
     // are best-effort — any MON$ failure degrades to a null delta (RecordsAffected fallback).
-    private async Task<(QueryResult Result, IReadOnlyList<PerTableReadRow>? Reads)> ExecuteWithMetricsAsync(
+    private Task<(QueryResult Result, IReadOnlyList<PerTableReadRow>? Reads)> ExecuteWithMetricsAsync(
         string sql, IReadOnlyList<QueryParameter>? parameters, CancellationToken cancellationToken)
+        => ExecuteWithMetricsAsync(new ExecutionRequest { Sql = sql, Parameters = parameters }, null, cancellationToken);
+
+    // Streaming-aware overload: runs the request (Preview or Full) through the executor with the
+    // before/after MON$ read delta, reporting streamed progress for a Full load's live counter.
+    private async Task<(QueryResult Result, IReadOnlyList<PerTableReadRow>? Reads)> ExecuteWithMetricsAsync(
+        ExecutionRequest request, IProgress<long>? progress, CancellationToken cancellationToken)
     {
         var before = await TrySnapshotReadsAsync().ConfigureAwait(true);
-        var result = parameters is null
-            ? await _executor.ExecuteAsync(sql, cancellationToken).ConfigureAwait(true)
-            : await _executor.ExecuteAsync(sql, parameters, cancellationToken).ConfigureAwait(true);
+        var result = await _executor.ExecuteAsync(request, progress, cancellationToken).ConfigureAwait(true);
         IReadOnlyList<PerTableReadRow>? reads = null;
         if (before is not null)
         {
@@ -4978,9 +5031,14 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand(CanExecute = nameof(CanExecute))]
-    public Task ExecuteQueryAsync() => RunExecuteAsync();
+    public Task ExecuteQueryAsync() => RunExecuteAsync(ExecutionIntent.Preview);
 
-    private async Task RunExecuteAsync()
+    // Shift+F5 — direct Full from a cold start (a quiet power path; the primary, intended route
+    // to a full read remains the truncated-Preview notice bar's [Load all rows]).
+    [RelayCommand(CanExecute = nameof(CanExecute))]
+    public Task ExecuteQueryFullAsync() => RunExecuteAsync(ExecutionIntent.Full);
+
+    private async Task RunExecuteAsync(ExecutionIntent intent)
     {
         // If the user has highlighted a fragment in the editor, execute only that;
         // otherwise execute the whole editor content (legacy behaviour).
@@ -5043,7 +5101,14 @@ public partial class MainWindowViewModel : ViewModelBase
             }
             else
             {
-                (result, reads) = await ExecuteWithMetricsAsync(executeSql, parameters, _executionCts.Token).ConfigureAwait(true);
+                // Full reports streamed progress so the status shows a live "Loading… N rows" counter.
+                var progress = intent == ExecutionIntent.Full ? MakeLoadProgress() : null;
+                (result, reads) = await ExecuteWithMetricsAsync(
+                    new ExecutionRequest { Sql = executeSql, Intent = intent, Parameters = parameters },
+                    progress, _executionCts.Token).ConfigureAwait(true);
+                // Remember this statement so the notice bar's [Load all rows] can re-run it as Full.
+                _lastResultSql = executeSql;
+                _lastResultParameters = parameters;
                 // Performance panel (Option B): remember THIS SQL Editor run so its own panel can
                 // analyze it on view — no re-execution, and no leaking into proc/func contexts.
                 SqlEditorPerformance.Record(executeSql, result, reads);
@@ -5057,9 +5122,9 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 QueryStatsText = string.Format(UiStrings.RowsFetchedFormat, result.Rows.Count, ms);
                 AddMessage(MessageSeverity.Info, QueryStatsText);
-                if (result.Truncated)
+                if (result.Truncated || result.CeilingHit)
                 {
-                    AddMessage(MessageSeverity.Warning, TruncatedBannerText);
+                    AddMessage(MessageSeverity.Warning, ResultsNoticeText);
                 }
                 // Keep the Performance tab in view when the user is watching it (so the
                 // panel updates and the next run re-captures reads); otherwise show Results.
@@ -5106,6 +5171,83 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [RelayCommand]
     private void CancelQuery() => _executionCts?.Cancel();
+
+    // Swap the truncated preview for the full result WITHOUT resetting the client-side view
+    // state (filter/sort/aggregation) — the columns are identical and it's the same query.
+    // Internal so the preserve-view-state behaviour is unit-testable without a live executor.
+    internal void ApplyFullResult(QueryResult result)
+    {
+        _preserveViewStateOnNextResult = true;
+        CurrentResult = result;
+        CurrentResultVersionTag = Guid.NewGuid().ToString("N");
+    }
+
+    // A Full load's live "Loading… N rows" counter. Created on the UI thread → Progress<T>
+    // marshals its callbacks back here, so QueryStatsText is written on the UI thread.
+    private IProgress<long> MakeLoadProgress()
+        => new Progress<long>(n => QueryStatsText = string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsLoadingFormat, n));
+
+    public bool CanLoadAllRows =>
+        !IsExecuting && _service.IsConnected && _lastResultSql is not null
+        && CurrentResult is { Truncated: true };
+
+    // Truncated-Preview bar action: re-run the SAME statement that produced the current preview
+    // as Full, streaming the whole result into the grid (progress counter + Cancel), guarded by
+    // the hard FullSafetyCeiling. Client-side view state (filter/sort/aggregation) is preserved.
+    [RelayCommand(CanExecute = nameof(CanLoadAllRows))]
+    private async Task LoadAllRows()
+    {
+        if (_lastResultSql is null || IsExecuting) return;
+        if (!_service.IsConnected)
+        {
+            AddMessage(MessageSeverity.Error, UiStrings.NoConnectionMessage);
+            SelectedBottomTabIndex = 1;
+            return;
+        }
+
+        IsExecuting = true;
+        ClearError();
+        _executionCts = new CancellationTokenSource();
+        QueryStatsText = string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsLoadingFormat, 0);
+        try
+        {
+            var (result, reads) = await ExecuteWithMetricsAsync(
+                new ExecutionRequest { Sql = _lastResultSql, Intent = ExecutionIntent.Full, Parameters = _lastResultParameters },
+                MakeLoadProgress(), _executionCts.Token).ConfigureAwait(true);
+            SqlEditorPerformance.Record(_lastResultSql, result, reads);
+
+            ApplyFullResult(result); // replaces the preview, keeping the client-side view state
+
+            var ms = (long)result.Elapsed.TotalMilliseconds;
+            QueryStatsText = string.Format(UiStrings.RowsFetchedFormat, result.Rows.Count, ms);
+            AddMessage(MessageSeverity.Info, QueryStatsText);
+            if (result.CeilingHit)
+            {
+                AddMessage(MessageSeverity.Warning, ResultsNoticeText);
+            }
+            // Aggregation lines were computed over the preview; recompute over the full set.
+            await ResultAggregationBar.RecomputeAllAsync().ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // Leave CurrentResult (the preview) untouched — the notice bar reappears so the
+            // user can retry. No half-loaded state.
+            QueryStatsText = UiStrings.QueryCancelledMessage;
+            AddMessage(MessageSeverity.Warning, UiStrings.QueryCancelledMessage);
+        }
+        catch (QueryExecutionException ex)
+        {
+            QueryStatsText = string.Empty;
+            AddMessage(MessageSeverity.Error, ex.Message);
+            SelectedBottomTabIndex = 1;
+        }
+        finally
+        {
+            _executionCts?.Dispose();
+            _executionCts = null;
+            IsExecuting = false;
+        }
+    }
 
     // "Executed via Data profile (Read Committed)." / "Executed via Metadata profile
     // (Read Write Table Stability)." — surfaced in the Messages log on every execute.

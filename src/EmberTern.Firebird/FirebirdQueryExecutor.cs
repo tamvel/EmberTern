@@ -10,7 +10,11 @@ namespace EmberTern.Firebird;
 
 public sealed class FirebirdQueryExecutor
 {
-    public const int DefaultRowLimit = 5000;
+    public const int DefaultRowLimit = ExecutionDefaults.PreviewLimit;
+
+    // Report streamed progress this often during a Full read (so the "Loading… N rows"
+    // counter ticks without flooding the UI thread on a multi-million-row load).
+    private const int ProgressReportEvery = 2000;
 
     private readonly FirebirdConnectionService _connectionService;
     private readonly TransactionService? _transactionService;
@@ -21,20 +25,33 @@ public sealed class FirebirdQueryExecutor
         _transactionService = transactionService;
     }
 
+    /// <summary>Preview row cap used by the legacy string overloads (F5 / proc / func / script).
+    /// Full uses <see cref="ExecutionRequest.FullSafetyCeiling"/> instead.</summary>
     public int RowLimit { get; init; } = DefaultRowLimit;
 
     public Task<QueryResult> ExecuteAsync(string sql, CancellationToken cancellationToken = default)
-        => ExecuteCoreAsync(sql, null, cancellationToken);
+        => ExecuteCoreAsync(new ExecutionRequest { Sql = sql, PreviewLimit = RowLimit }, null, cancellationToken);
 
     /// <summary>Executes a parameterized statement — used by Execute Procedure so
     /// input values are bound (never embedded as SQL literals). Parameter names in
     /// <paramref name="sql"/> must match <see cref="QueryParameter.Name"/> (e.g.
     /// <c>@p0</c>). A null <see cref="QueryParameter.Value"/> binds SQL NULL.</summary>
     public Task<QueryResult> ExecuteAsync(string sql, IReadOnlyList<QueryParameter> parameters, CancellationToken cancellationToken = default)
-        => ExecuteCoreAsync(sql, parameters, cancellationToken);
+        => ExecuteCoreAsync(new ExecutionRequest { Sql = sql, Parameters = parameters, PreviewLimit = RowLimit }, null, cancellationToken);
 
-    private async Task<QueryResult> ExecuteCoreAsync(string sql, IReadOnlyList<QueryParameter>? parameters, CancellationToken cancellationToken)
+    /// <summary>The streaming entry point. Preview stops at <see cref="ExecutionRequest.PreviewLimit"/>
+    /// (→ <see cref="QueryResult.Truncated"/>); Full streams every row up to the hard
+    /// <see cref="ExecutionRequest.FullSafetyCeiling"/> (→ <see cref="QueryResult.CeilingHit"/>),
+    /// reporting <paramref name="progress"/> (rows read so far) as it goes so a long load can show a
+    /// live counter. Cancellation throws <see cref="OperationCanceledException"/> — the caller keeps
+    /// whatever it had before (Load-all does not replace the grid on cancel).</summary>
+    public Task<QueryResult> ExecuteAsync(ExecutionRequest request, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+        => ExecuteCoreAsync(request, progress, cancellationToken);
+
+    private async Task<QueryResult> ExecuteCoreAsync(ExecutionRequest request, IProgress<long>? progress, CancellationToken cancellationToken)
     {
+        var sql = request.Sql;
+        var parameters = request.Parameters;
         if (string.IsNullOrWhiteSpace(sql))
         {
             throw new QueryExecutionException("Query is empty.");
@@ -101,27 +118,49 @@ public sealed class FirebirdQueryExecutor
                 columns[i] = new QueryColumn(reader.GetName(i), reader.GetFieldType(i));
             }
 
+            // Preview stops at PreviewLimit (→ Truncated); Full streams to the hard
+            // FullSafetyCeiling (→ CeilingHit). Benchmark counts but discards rows (reserved;
+            // no UI path yet). The cap is checked when a (cap+1)th row is available, so we read
+            // exactly `cap` rows and know there is more.
+            long cap = request.Intent == ExecutionIntent.Preview
+                ? request.PreviewLimit
+                : request.FullSafetyCeiling;
+            bool discard = request.Intent == ExecutionIntent.Benchmark;
+
             var rows = new List<object?[]>();
+            long produced = 0;
             var truncated = false;
+            var ceilingHit = false;
 
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (rows.Count >= RowLimit)
+                if (produced >= cap)
                 {
-                    truncated = true;
+                    if (request.Intent == ExecutionIntent.Preview) truncated = true;
+                    else ceilingHit = true;
                     break;
                 }
 
-                var row = new object?[reader.FieldCount];
-                for (int i = 0; i < reader.FieldCount; i++)
+                if (!discard)
                 {
-                    row[i] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                    var row = new object?[reader.FieldCount];
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        row[i] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                    }
+                    rows.Add(row);
                 }
-                rows.Add(row);
+
+                produced++;
+                if (progress is not null && produced % ProgressReportEvery == 0)
+                {
+                    progress.Report(produced);
+                }
             }
 
             sw.Stop();
             _transactionService?.NotifyStatementExecuted();
+            progress?.Report(produced);
 
             return new QueryResult
             {
@@ -129,6 +168,7 @@ public sealed class FirebirdQueryExecutor
                 Rows = rows,
                 Elapsed = sw.Elapsed,
                 Truncated = truncated,
+                CeilingHit = ceilingHit,
             };
         }
         catch (OperationCanceledException)

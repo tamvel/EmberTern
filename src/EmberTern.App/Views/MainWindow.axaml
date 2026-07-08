@@ -28,6 +28,7 @@
   <Window.KeyBindings>
     <KeyBinding Gesture="F5" Command="{Binding ExecuteQueryCommand}" />
     <KeyBinding Gesture="Ctrl+Enter" Command="{Binding ExecuteQueryCommand}" />
+    <KeyBinding Gesture="Shift+F5" Command="{Binding ExecuteQueryFullCommand}" />
     <KeyBinding Gesture="Alt+F" Command="{Binding FormatSqlCommand}" />
   </Window.KeyBindings>
 
@@ -788,6 +789,7 @@
 
               <!-- ── SECTION 2 · Main actions (Execute / Compile / Commit / Rollback) ── -->
               <Button Classes="primary" Padding="10,4"
+                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarExecuteTooltip}"
                       Command="{Binding ExecuteQueryCommand}" IsVisible="{Binding ShowExecuteButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource OnAccentBrush}"
@@ -1328,13 +1330,29 @@
               <!-- Rows: truncated banner · pagination+filter/agg toggles · filter panel ·
                    aggregation bar · grid(+empty hint). -->
               <Grid Background="{DynamicResource BackgroundBrush}" RowDefinitions="Auto,Auto,Auto,Auto,*">
+                <!-- Truncated-Preview / ceiling notice bar (A.6): loud + actionable. Warning
+                     accent, plain-language message, and a working [Load all rows] for a
+                     truncated preview (hidden for a ceiling-hit Full — nothing more to load). -->
                 <Border Grid.Row="0"
                         Background="{DynamicResource ElevatedPanelBrush}"
+                        BorderBrush="{DynamicResource WarningBrush}"
+                        BorderThickness="0,0,0,2"
                         Padding="12,6"
-                        IsVisible="{Binding ShowTruncatedBanner}">
-                  <TextBlock Text="{Binding TruncatedBannerText}"
-                             Classes="subtle"
-                             FontSize="11" />
+                        IsVisible="{Binding ShowResultsNotice}">
+                  <DockPanel LastChildFill="True">
+                    <Button DockPanel.Dock="Right" Classes="flat" Padding="10,3"
+                            Command="{Binding LoadAllRowsCommand}"
+                            IsVisible="{Binding ShowLoadAllButton}"
+                            Content="{x:Static app:UiStrings.ToolbarLoadAllRows}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                      <controls:SvgIcon Data="{StaticResource Icon.Exception}"
+                                        Foreground="{DynamicResource WarningBrush}"
+                                        Width="15" Height="15" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding ResultsNoticeText}"
+                                 FontSize="12" VerticalAlignment="Center"
+                                 Foreground="{DynamicResource ForegroundBrush}" />
+                    </StackPanel>
+                  </DockPanel>
                 </Border>
                 <!-- Pagination bar — reuses the same first/prev/next/last icon
                      strings as the Table Data View. Client-side paging over the

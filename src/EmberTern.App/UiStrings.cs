@@ -344,6 +344,9 @@ internal static class UiStrings
     public const string ToolbarExecute = "Execute";
     public const string ToolbarCancel = "Cancel";
     public const string ToolbarExecuteHint = "F5";
+    // Tooltip on the single Execute button — surfaces the Shift+F5 full-read power path (Variant A+D:
+    // one button, no split-button, no second Execute button).
+    public const string ToolbarExecuteTooltip = "Execute  ·  F5 preview  ·  Shift+F5 all rows";
     public const string ToolbarClearEditor = "Clear";
     public const string ToolbarClearEditorIcon = "🗑";
     public const string ToolbarClearEditorTooltip = "Clear editor content";
@@ -391,7 +394,13 @@ internal static class UiStrings
     public const string NoConnectionMessage = "Connect to a database first.";
     public const string QueryCancelledMessage = "Query cancelled.";
     public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
-    public const string ResultsTruncatedFormat = "Results limited to {0} rows.";
+    // Truncated-Preview notice bar — loud + actionable (A.6). {0} = rows loaded so far.
+    public const string ResultsTruncatedFormat = "Showing the first {0} rows — the full result is larger.";
+    // Full hit the hard safety ceiling. {0} = ceiling row count.
+    public const string ResultsCeilingFormat = "Stopped at {0} rows — a safety limit, not the end of the result. Narrow the query to see the rest.";
+    // Live counter shown in the status area while a Full / Load-all read streams. {0} = rows so far.
+    public const string ResultsLoadingFormat = "Loading… {0} rows";
+    public const string ToolbarLoadAllRows = "Load all rows";
     public const string RowsFetchedFormat = "{0} rows in {1} ms";
     public const string MessagesCopyAll = "Copy all";
     public const string MessagesClear = "Clear messages";
@@ -402,6 +411,10 @@ internal static class UiStrings
     public const string RecordPositionFormat = "Record {0} of {1}";
     // Shown when the grid has rows but none is selected. {0} = total row count.
     public const string RecordCountFormat = "{0} rows";
+    // Preview variants — the true total is unknown (only the first N were loaded), so "N+" + a
+    // "(preview)" marker makes the fragment unmissable even away from the notice bar.
+    public const string RecordPositionPreviewFormat = "Record {0} of {1}+ (preview)";
+    public const string RecordCountPreviewFormat = "{0}+ rows (preview)";
 
     // ── Grid filtering + aggregation (shared across all data grids) ──
     // Operator labels (filter condition rows).
