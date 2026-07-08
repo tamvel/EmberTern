@@ -1,0 +1,133 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EmberTern.App"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.ExportDialog"
+        x:DataType="vm:ExportDialogViewModel"
+        Title="{x:Static app:UiStrings.ExportDialogTitle}"
+        Width="440"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Header -->
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="20,16">
+      <TextBlock Text="{x:Static app:UiStrings.ExportDialogTitle}" Classes="h1" />
+    </Border>
+
+    <!-- Body: options (while configuring) OR progress (while exporting) -->
+    <Panel Grid.Row="1">
+
+      <!-- Options -->
+      <StackPanel Margin="20,18" Spacing="16" IsVisible="{Binding IsConfiguring}">
+
+        <!-- Format -->
+        <StackPanel Spacing="6">
+          <TextBlock Text="{x:Static app:UiStrings.ExportFormatLabel}" Classes="field-label" />
+          <RadioButton GroupName="ExportFormat"
+                       Content="{x:Static app:UiStrings.ExportFormatCsv}"
+                       IsChecked="{Binding IsFormatCsv, Mode=TwoWay}" />
+          <RadioButton GroupName="ExportFormat"
+                       Content="{x:Static app:UiStrings.ExportFormatText}"
+                       IsChecked="{Binding IsFormatText, Mode=TwoWay}" />
+          <RadioButton GroupName="ExportFormat"
+                       Content="{x:Static app:UiStrings.ExportFormatClipboard}"
+                       IsChecked="{Binding IsFormatClipboard, Mode=TwoWay}" />
+        </StackPanel>
+
+        <!-- Scope -->
+        <StackPanel Spacing="6">
+          <TextBlock Text="{x:Static app:UiStrings.ExportScopeLabel}" Classes="field-label" />
+          <ItemsControl ItemsSource="{Binding ScopeOptions}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ExportScopeOptionViewModel">
+                <RadioButton GroupName="ExportScope"
+                             Margin="0,2,0,0"
+                             Content="{Binding Label}"
+                             IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- Options -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="{x:Static app:UiStrings.ExportOptionsLabel}" Classes="field-label" />
+
+          <!-- Delimiter + encoding + culture (CSV / Text only) -->
+          <StackPanel Spacing="8" IsVisible="{Binding ShowDelimitedOptions}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{x:Static app:UiStrings.ExportDelimiterLabel}"
+                         VerticalAlignment="Center"
+                         Foreground="{DynamicResource SubtleForegroundBrush}"
+                         FontSize="12" Width="80" />
+              <ComboBox MinWidth="180"
+                        ItemsSource="{Binding DelimiterOptions}"
+                        SelectedItem="{Binding SelectedDelimiterOption, Mode=TwoWay}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DelimiterOption">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </StackPanel>
+            <CheckBox Content="{x:Static app:UiStrings.ExportEncodingUtf8Bom}"
+                      IsChecked="{Binding UseBom, Mode=TwoWay}"
+                      IsVisible="{Binding ShowEncodingOption}" />
+            <CheckBox Content="{x:Static app:UiStrings.ExportCultureInvariant}"
+                      IsChecked="{Binding UseInvariantCulture, Mode=TwoWay}" />
+          </StackPanel>
+
+          <CheckBox Content="{x:Static app:UiStrings.ExportIncludeHeader}"
+                    IsChecked="{Binding IncludeHeader, Mode=TwoWay}" />
+        </StackPanel>
+
+        <!-- Error (stays in the options view so the user can retry) -->
+        <TextBlock Text="{Binding ErrorMessage}"
+                   IsVisible="{Binding HasError}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource ErrorBrush}"
+                   FontSize="12" />
+      </StackPanel>
+
+      <!-- Progress -->
+      <StackPanel Margin="20,28" Spacing="14" IsVisible="{Binding IsExporting}"
+                  VerticalAlignment="Center">
+        <ProgressBar IsIndeterminate="True" />
+        <TextBlock Text="{Binding ProgressText}"
+                   HorizontalAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}" />
+      </StackPanel>
+    </Panel>
+
+    <!-- Footer -->
+    <Border Grid.Row="2"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="20,12">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Classes="flat"
+                Content="{x:Static app:UiStrings.DialogCancel}"
+                Command="{Binding CancelCommand}" />
+        <Button Classes="primary"
+                Content="{x:Static app:UiStrings.ExportButton}"
+                Command="{Binding ExportCommand}"
+                IsVisible="{Binding IsConfiguring}"
+                IsDefault="True" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>

@@ -21,6 +21,7 @@ using EmberTern.App.Completion;
 using EmberTern.App.Controls;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
 using EmberTern.Core.Settings;
@@ -470,6 +471,7 @@ public partial class MainWindow : Window
             _currentVm.NewRoleDialogRequested -= OnNewRoleRequested;
             _currentVm.ClipboardWriteRequested -= OnClipboardWriteRequested;
             _currentVm.SaveFileRequested -= OnSaveFileRequested;
+            _currentVm.ExportRequested -= OnExportRequested;
             _currentVm.AddConnectionRequested -= OnAddConnectionRequested;
             _currentVm.BatchResultsRequested -= OnBatchResultsRequested;
             _currentVm.GlobalSearchRequested -= OnGlobalSearchRequested;
@@ -491,6 +493,7 @@ public partial class MainWindow : Window
             _currentVm.NewRoleDialogRequested += OnNewRoleRequested;
             _currentVm.ClipboardWriteRequested += OnClipboardWriteRequested;
             _currentVm.SaveFileRequested += OnSaveFileRequested;
+            _currentVm.ExportRequested += OnExportRequested;
             _currentVm.AddConnectionRequested += OnAddConnectionRequested;
             _currentVm.BatchResultsRequested += OnBatchResultsRequested;
             _currentVm.GlobalSearchRequested += OnGlobalSearchRequested;
@@ -571,6 +574,12 @@ public partial class MainWindow : Window
 
         return file?.Path.LocalPath;
     }
+
+    // VM → View: open the shared Export dialog for a grid's data source. The dialog owns its own
+    // StorageProvider / Clipboard; returns the completed outcome (or null on cancel), which the VM
+    // reports to the Messages log.
+    private Task<ExportOutcome?> OnExportRequested(ExportDialogRequest request)
+        => ExportDialog.ShowAsync(this, new ExportDialogViewModel(request.Source, request.DefaultScope));
 
     // Post-compile "Recompile dependents?" checklist. Returns the user's selection (null on
     // Skip/Cancel); the VM runs the recompile through the batch pipeline. StorageProvider /

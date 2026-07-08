@@ -9,9 +9,11 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Diagnostics;
+using EmberTern.App.Export;
 using EmberTern.App.Security;
 using EmberTern.App.Sql;
 using EmberTern.Core.Connections;
+using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Performance;
 using EmberTern.Core.Query;
@@ -614,7 +616,9 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ShowResultsNotice))]
     [NotifyPropertyChangedFor(nameof(ResultsNoticeText))]
     [NotifyPropertyChangedFor(nameof(ShowLoadAllButton))]
+    [NotifyPropertyChangedFor(nameof(CanExportResults))]
     [NotifyCanExecuteChangedFor(nameof(LoadAllRowsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportResultsCommand))]
     private string _currentResultVersionTag = string.Empty;
 
     // ── Results grid: client-side paging + 3-state sort ───────────────────
@@ -2348,6 +2352,11 @@ public partial class MainWindowViewModel : ViewModelBase
     // script and writes the file, so the Avalonia StorageProvider stays in the view and the
     // portable-DDL policy + file write stay here.
     public event Func<SaveFileRequest, Task<string?>>? SaveFileRequested;
+
+    // Asks the view to open the shared Export dialog for a grid's data source. The view builds the
+    // dialog (its own StorageProvider / Clipboard) and returns the completed ExportOutcome, or null
+    // on cancel. The VM reports the outcome to the Messages log.
+    public event Func<ExportDialogRequest, Task<ExportOutcome?>>? ExportRequested;
 
     // Asks the view to open the New Connection dialog. When folderId is non-null,
     // the resulting connection is slotted into that folder; otherwise it lands at
@@ -4972,6 +4981,51 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.ExportDdlSucceededFormat, target.Name, path));
+    }
+
+    // ── Data export (Export Framework, Etap 3) ────────────────────────────────
+    // The SQL results grid's Export entry points (banner "Export all…", results toolbar icon,
+    // right-click "Export…") all open the shared Export dialog with an AllRows default scope
+    // ("completeness"); the dialog lets the user switch to the visible-rows view.
+    public bool CanExportResults => HasCurrentResult;
+
+    [RelayCommand(CanExecute = nameof(CanExportResults))]
+    private Task ExportResultsAsync() => OpenExportDialogAsync(ExportScope.AllRows);
+
+    // Builds the SQL-results data source from current state: the filtered/sorted view (CurrentView),
+    // the complete materialized rows, the truncated flag, and — for a truncated preview — a Full
+    // streaming re-fetch of the same query so "All rows" is complete without materializing it here.
+    internal QueryResultExportSource? BuildResultsExportSource()
+    {
+        if (CurrentResult is not { HasResultSet: true } r) return null;
+
+        var currentView = _sortedRows.ToList();       // stable snapshot of the filtered + sorted view
+        // The grid holds an incomplete set when the preview was truncated OR a Full run hit the safety
+        // ceiling — in both cases "All rows" must re-fetch the whole query (streaming past the ceiling).
+        var isPartial = r.Truncated || r.CeilingHit;
+        Func<CancellationToken, IAsyncEnumerable<object?[]>>? streamAll = null;
+        if (_lastResultSql is { } sql)
+        {
+            var parameters = _lastResultParameters;
+            streamAll = ct => _executor.StreamAsync(
+                new ExecutionRequest { Sql = sql, Intent = ExecutionIntent.Full, Parameters = parameters }, ct);
+        }
+
+        return new QueryResultExportSource(
+            r.Columns, currentView, r.Rows, isPartial, streamAll, UiStrings.ExportDefaultFileName);
+    }
+
+    private async Task OpenExportDialogAsync(ExportScope defaultScope)
+    {
+        if (BuildResultsExportSource() is not { } source || ExportRequested is not { } raise) return;
+
+        var outcome = await raise(new ExportDialogRequest(source, defaultScope)).ConfigureAwait(true);
+        if (outcome is null) return; // cancelled
+
+        var message = outcome.Format == ExportFormat.Clipboard
+            ? string.Format(CultureInfo.CurrentCulture, UiStrings.ExportCopiedFormat, outcome.RowCount)
+            : string.Format(CultureInfo.CurrentCulture, UiStrings.ExportSavedFormat, outcome.RowCount, outcome.FilePath);
+        AddMessage(MessageSeverity.Info, message);
     }
 
     // F5 / Ctrl+Enter — the single Execute. The lane is chosen automatically from the

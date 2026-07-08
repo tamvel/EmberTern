@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using EmberTern.Core.Query;
@@ -54,6 +56,123 @@ public sealed class FirebirdQueryExecutor
         Func<long, Task<bool>>? onSoftThreshold = null,
         CancellationToken cancellationToken = default)
         => ExecuteCoreAsync(request, progress, onSoftThreshold, cancellationToken);
+
+    /// <summary>
+    /// Streams every row of the statement one at a time (<see cref="IAsyncEnumerable{T}"/>) instead of
+    /// materializing a <see cref="QueryResult"/> — the export path (a truncated preview's "All rows")
+    /// consumes this straight into the file/clipboard writer, so there is no second buffer and it is
+    /// <b>not</b> bounded by <see cref="ExecutionRequest.FullSafetyCeiling"/> (that ceiling is a grid-memory
+    /// backstop; an export streams to disk and may legitimately exceed it). Runs on this executor's lane,
+    /// attaches to the working transaction if one is active (so it reflects the user's uncommitted edits —
+    /// the desired "current snapshot"), and holds <see cref="FirebirdConnectionService.CommandLock"/> for the
+    /// whole enumeration (FbConnection is single-threaded). <see cref="OperationCanceledException"/> propagates
+    /// on cancel; Firebird errors surface as <see cref="QueryExecutionException"/>.
+    /// </summary>
+    public IAsyncEnumerable<object?[]> StreamAsync(ExecutionRequest request, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Sql))
+        {
+            throw new QueryExecutionException("Query is empty.");
+        }
+        return StreamIterator(request, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<object?[]> StreamIterator(
+        ExecutionRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (_transactionService is { IsActive: false })
+        {
+            try
+            {
+                await _transactionService.BeginTransactionAsync().ConfigureAwait(false);
+            }
+            catch (TransactionFailedException ex)
+            {
+                throw new QueryExecutionException(ex.Message, ex);
+            }
+        }
+
+        var commandLock = _transactionService?.CommandLock ?? _connectionService.CommandLock;
+        FbConnection connection;
+        try
+        {
+            connection = _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new QueryExecutionException(ex.Message, ex);
+        }
+
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = request.Sql;
+            cmd.CommandTimeout = 0;
+            if (_transactionService?.ActiveTransaction is { } tx)
+            {
+                cmd.Transaction = tx;
+            }
+            if (request.Parameters is { Count: > 0 })
+            {
+                foreach (var p in request.Parameters)
+                {
+                    cmd.Parameters.AddWithValue(p.Name, p.Value ?? DBNull.Value);
+                }
+            }
+
+            // Open the reader in a try/catch so a prepare/execute FbException is wrapped; the `yield`
+            // below stays OUTSIDE any catch (C# forbids yield inside try-with-catch), and per-row
+            // ReadAsync gets its own catch for the rare mid-stream error.
+            DbDataReader reader;
+            try
+            {
+                reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (FbException ex)
+            {
+                throw new QueryExecutionException(FormatFbError(ex), ex);
+            }
+
+            await using (reader.ConfigureAwait(false))
+            {
+                if (reader.FieldCount == 0)
+                {
+                    yield break;
+                }
+
+                int fieldCount = reader.FieldCount;
+                while (true)
+                {
+                    bool hasRow;
+                    try
+                    {
+                        hasRow = await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (FbException ex)
+                    {
+                        throw new QueryExecutionException(FormatFbError(ex), ex);
+                    }
+
+                    if (!hasRow) break;
+
+                    var row = new object?[fieldCount];
+                    for (int i = 0; i < fieldCount; i++)
+                    {
+                        row[i] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                    }
+                    yield return row;
+                }
+
+                _transactionService?.NotifyStatementExecuted();
+            }
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
 
     private async Task<QueryResult> ExecuteCoreAsync(
         ExecutionRequest request,

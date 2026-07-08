@@ -1538,6 +1538,41 @@ internal static class UiStrings
     public const string ExportDdlFilterName = "SQL scripts";
     public const string ExportDdlSucceededFormat = "Exported \"{0}\" to {1}.";
     public const string ExportDdlFailedFormat = "Export of \"{0}\" failed: {1}";
+
+    // Data export (Export Framework) — the shared Export dialog + its entry points on the SQL
+    // results grid (banner "Export all…", toolbar icon, right-click "Export…").
+    public const string ExportDialogTitle = "Export";
+    public const string ExportResultsMenuItem = "Export…";
+    public const string ExportResultsTooltip = "Export results…";
+    public const string ExportAllRowsButton = "Export all…";
+    public const string ExportFormatLabel = "Format";
+    public const string ExportFormatCsv = "CSV (.csv)";
+    public const string ExportFormatText = "Text (.txt)";
+    public const string ExportFormatClipboard = "Clipboard";
+    public const string ExportScopeLabel = "Rows to export";
+    public const string ExportScopeCurrentView = "Visible rows";
+    public const string ExportScopeAllRows = "All rows";
+    public const string ExportScopeSelected = "Selected";
+    public const string ExportScopeCountFormat = "({0:N0})";
+    public const string ExportScopeCountApproxFormat = "(~{0:N0})";
+    public const string ExportOptionsLabel = "Options";
+    public const string ExportDelimiterLabel = "Delimiter";
+    public const string ExportDelimiterSemicolon = "Semicolon ( ; )";
+    public const string ExportDelimiterComma = "Comma ( , )";
+    public const string ExportDelimiterPipe = "Pipe ( | )";
+    public const string ExportDelimiterTab = "Tab";
+    public const string ExportEncodingUtf8Bom = "UTF-8 with BOM (Excel)";
+    public const string ExportIncludeHeader = "Include header row";
+    public const string ExportCultureInvariant = "Use invariant number / date format";
+    public const string ExportButton = "Export";
+    public const string ExportPreparing = "Preparing…";
+    public const string ExportProgressFormat = "Exporting… {0:N0} rows";
+    public const string ExportErrorFormat = "Export failed: {0}";
+    public const string ExportCsvFilterName = "CSV files";
+    public const string ExportTextFilterName = "Text files";
+    public const string ExportDefaultFileName = "query_result";
+    public const string ExportSavedFormat = "Exported {0:N0} rows to {1}.";
+    public const string ExportCopiedFormat = "Copied {0:N0} rows to the clipboard.";
     public const string GlobalSearchDialogTitle = "Global Search";
     public const string GlobalSearchTermLabel = "Search for";
     public const string GlobalSearchTermWatermark = "text to find in metadata…";

@@ -1340,10 +1340,17 @@
                         Padding="12,6"
                         IsVisible="{Binding ShowResultsNotice}">
                   <DockPanel LastChildFill="True">
-                    <Button DockPanel.Dock="Right" Classes="flat" Padding="10,3"
-                            Command="{Binding LoadAllRowsCommand}"
-                            IsVisible="{Binding ShowLoadAllButton}"
-                            Content="{x:Static app:UiStrings.ToolbarLoadAllRows}" />
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                      <Button Classes="flat" Padding="10,3"
+                              Command="{Binding LoadAllRowsCommand}"
+                              IsVisible="{Binding ShowLoadAllButton}"
+                              Content="{x:Static app:UiStrings.ToolbarLoadAllRows}" />
+                      <!-- Export all… — opens the shared Export dialog (Scope pre-selected to All rows).
+                           Shown for both the truncated-preview and ceiling-hit bars (A.6). -->
+                      <Button Classes="flat" Padding="10,3"
+                              Command="{Binding ExportResultsCommand}"
+                              Content="{x:Static app:UiStrings.ExportAllRowsButton}" />
+                    </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                       <controls:SvgIcon Data="{StaticResource Icon.Exception}"
                                         Foreground="{DynamicResource WarningBrush}"
@@ -1409,6 +1416,12 @@
                             IsChecked="{Binding ResultAggregationBar.IsBarOpen, Mode=TwoWay}">
                       <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
                     </ToggleButton>
+                    <!-- Export the results (opens the shared Export dialog, default Scope = All rows). -->
+                    <Button Classes="icon"
+                            ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}"
+                            Command="{Binding ExportResultsCommand}">
+                      <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="14" Height="14" />
+                    </Button>
                   </StackPanel>
                 </Border>
                 <views:FilterPanelView Grid.Row="2" DataContext="{Binding ResultFilterPanel}" />
@@ -1444,6 +1457,8 @@
                       <Separator />
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}"
                                 Click="OnCopyAllWithHeadersClick" />
+                      <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}"
+                                Command="{Binding ExportResultsCommand}" />
                       <Separator />
                       <MenuItem Header="{x:Static app:UiStrings.FilterByValue}"
                                 Click="OnResultFilterByValueClick" />
