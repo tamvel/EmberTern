@@ -703,6 +703,7 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(ShowEmptyState));
         OnPropertyChanged(nameof(EmptyStateText));
+        OnPropertyChanged(nameof(CanExport)); // export gate derives from _all.Count — must refresh on every buffer change
     }
 
     private void NotifyCommands()

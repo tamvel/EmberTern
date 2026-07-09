@@ -75,6 +75,25 @@ public class TraceMonitorVmTests
         Assert.Null(vm.BuildExportSource());
     }
 
+    // Regression: the Export button binds CanExport, which MUST raise PropertyChanged when the
+    // buffer fills (else the button latches at ctor-time false) — same class as the Table/View bug.
+    [Fact]
+    public void CanExport_NotifiesWhenBufferFillsAndClears()
+    {
+        var vm = NewVm();
+        Assert.False(vm.CanExport);
+        var notes = 0;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(TraceMonitorTabViewModel.CanExport)) notes++; };
+
+        vm.Ingest(new[] { Ev(TraceEventKind.Statement, sql: "SELECT 1") });
+        Assert.True(vm.CanExport);
+        Assert.True(notes >= 1);
+
+        vm.ClearCommand.Execute(null);
+        Assert.False(vm.CanExport);
+        Assert.True(notes >= 2);
+    }
+
     // Bug 3 regression: the export's Object cell must be the CLEANED presentation the user sees
     // (separator lines stripped), not the raw trace-parser SQL.
     [Fact]
