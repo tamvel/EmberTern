@@ -361,6 +361,11 @@
                     IsChecked="{Binding ExecAggregationBar.IsBarOpen, Mode=TwoWay}">
               <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
             </ToggleButton>
+            <!-- Export the procedure result via the shared Export Framework (default = all rows). -->
+            <Button Classes="icon" Click="OnProcExportClick" IsEnabled="{Binding CanExportExecResult}"
+                    ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}">
+              <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="14" Height="14" />
+            </Button>
           </StackPanel>
 
           <views:FilterPanelView Grid.Row="1" DataContext="{Binding ExecFilterPanel}" />
@@ -387,6 +392,8 @@
                 <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnProcExcludeValueClick" />
                 <MenuItem x:Name="ProcFilterContainsItem"
                           Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnProcFilterContainsClick" />
+                <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Click="OnProcExportClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>

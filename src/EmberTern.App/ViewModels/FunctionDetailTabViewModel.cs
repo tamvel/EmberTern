@@ -7,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Export;
+using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Performance;
 using EmberTern.Core.Query;
@@ -367,11 +369,13 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasExecResult))]
     [NotifyPropertyChangedFor(nameof(ShowExecError))]
+    [NotifyPropertyChangedFor(nameof(CanExportExecResult))]
     private QueryResult? _execResult;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasExecResult))]
     [NotifyPropertyChangedFor(nameof(ShowExecError))]
+    [NotifyPropertyChangedFor(nameof(CanExportExecResult))]
     private string _execError = string.Empty;
 
     [ObservableProperty]
@@ -379,6 +383,18 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
 
     public bool HasExecResult => ExecResult is { HasResultSet: true } && string.IsNullOrEmpty(ExecError);
     public bool ShowExecError => !string.IsNullOrEmpty(ExecError);
+
+    public bool CanExportExecResult => HasExecResult;
+
+    /// <summary>Export source for the Execute-Function result grid — the SAME materialized model as
+    /// the SQL Editor results (CurrentView = filtered/displayed; AllRows = the full result). No
+    /// re-fetch (re-running the function could repeat side effects).</summary>
+    public IExportDataSource? BuildExecResultExportSource()
+    {
+        if (ExecResult is not { HasResultSet: true } result) return null;
+        return new QueryResultExportSource(
+            result.Columns, _execRows, _execAllRows, isPartial: false, streamAll: null, FunctionName + "_result");
+    }
 
     /// <summary>This function tab's OWN Performance context (its captured run + panel). Set by
     /// the owning MainWindowViewModel factory. Never shared with the SQL Editor or another tab.</summary>

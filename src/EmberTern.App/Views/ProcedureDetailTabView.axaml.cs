@@ -19,6 +19,7 @@ using AvaloniaEdit.Highlighting;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Templates;
@@ -389,6 +390,10 @@ public partial class ProcedureDetailTabView : UserControl
         var (col, op, val) = GridCellFilter.FilterByValue(ctx);
         _ = _currentVm.ExecFilterPanel.ApplyFromCellAsync(col, op, val);
     }
+
+    // Export the procedure-execution result through the shared Export Framework (default = all rows).
+    private async void OnProcExportClick(object? sender, RoutedEventArgs e)
+        => await ExportDialog.LaunchAsync(this, _currentVm?.BuildExecResultExportSource(), ExportScope.AllRows);
 
     private void OnProcExcludeValueClick(object? sender, RoutedEventArgs e)
     {

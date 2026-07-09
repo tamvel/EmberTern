@@ -189,6 +189,79 @@ public class ExportConsumersTests
         Assert.Null(vm.BuildDataExportSource());
     }
 
+    // Bug 1 regression: the Export button's IsEnabled binds CanExportData, which MUST raise
+    // PropertyChanged when the data preview arrives (else the button stays disabled forever).
+    [Fact]
+    public void TableDetail_CanExportData_NotifiesWhenDataResultArrives()
+    {
+        using var svc = new FirebirdConnectionService();
+        var vm = new TableDetailTabViewModel("T", new FirebirdTableDetailReader(svc), null);
+        Assert.False(vm.CanExportData);
+        var notified = false;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(TableDetailTabViewModel.CanExportData)) notified = true; };
+
+        vm.DataResult = DataQueryResult(2);
+
+        Assert.True(notified);
+        Assert.True(vm.CanExportData);
+    }
+
+    [Fact]
+    public void ViewDetail_CanExportData_NotifiesWhenDataResultArrives()
+    {
+        using var svc = new FirebirdConnectionService();
+        var vm = new ViewDetailTabViewModel("V", new FirebirdTableDetailReader(svc), null, null);
+        var notified = false;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ViewDetailTabViewModel.CanExportData)) notified = true; };
+
+        vm.DataResult = DataQueryResult(2);
+
+        Assert.True(notified);
+        Assert.True(vm.CanExportData);
+    }
+
+    // ── Procedure / Function exec-result export (Bug 2) ──────────────────────
+    [Fact]
+    public void Procedure_BuildExecResultExportSource_MapsResult()
+    {
+        var vm = new ProcedureDetailTabViewModel("SP_X") { ExecResult = DataQueryResult(3) };
+        Assert.True(vm.CanExportExecResult);
+
+        var src = vm.BuildExecResultExportSource();
+        Assert.NotNull(src);
+        Assert.Equal(new[] { "A", "B" }, src!.Columns.Select(c => c.Name));
+        Assert.Equal(RowEstimate.Exact(3), src.Capabilities.EstimateFor(ExportScope.AllRows));
+        Assert.Equal(RowEstimate.Exact(3), src.Capabilities.EstimateFor(ExportScope.CurrentView));
+    }
+
+    [Fact]
+    public void Procedure_NoResult_CannotExport()
+    {
+        var vm = new ProcedureDetailTabViewModel("SP_X");
+        Assert.False(vm.CanExportExecResult);
+        Assert.Null(vm.BuildExecResultExportSource());
+    }
+
+    [Fact]
+    public void Function_BuildExecResultExportSource_MapsResult()
+    {
+        var vm = new FunctionDetailTabViewModel("FN_X") { ExecResult = DataQueryResult(2) };
+        Assert.True(vm.CanExportExecResult);
+
+        var src = vm.BuildExecResultExportSource();
+        Assert.NotNull(src);
+        Assert.Equal(new[] { "A", "B" }, src!.Columns.Select(c => c.Name));
+        Assert.Equal(RowEstimate.Exact(2), src.Capabilities.EstimateFor(ExportScope.AllRows));
+    }
+
+    [Fact]
+    public void Function_NoResult_CannotExport()
+    {
+        var vm = new FunctionDetailTabViewModel("FN_X");
+        Assert.False(vm.CanExportExecResult);
+        Assert.Null(vm.BuildExecResultExportSource());
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
     private static QueryResult DataQueryResult(int rows) => new()
     {

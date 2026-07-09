@@ -107,7 +107,7 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
             e.Kind.ToString(),                                           // Event  (e.g. "Trigger")
             r.Operation == TraceSqlOperation.None                        // Operation (e.g. "UPDATE")
                 ? string.Empty : TraceSqlOperationClassifier.Label(r.Operation),
-            e.Sql ?? e.ObjectName,                                       // Object
+            r.ObjectExportText,                                          // Object — cleaned (no separators), matches the grid
             e.Duration is { } d ? (long)d.TotalMilliseconds : null,      // Duration (ms)
             e.RowsFetched,                                               // Rows
             e.Reads,                                                     // Reads

@@ -468,6 +468,7 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
     [NotifyPropertyChangedFor(nameof(HasDataResult))]
     [NotifyPropertyChangedFor(nameof(ShowDataError))]
     [NotifyPropertyChangedFor(nameof(DataPreviewHint))]
+    [NotifyPropertyChangedFor(nameof(CanExportData))]
     private QueryResult? _dataResult;
 
     [ObservableProperty]

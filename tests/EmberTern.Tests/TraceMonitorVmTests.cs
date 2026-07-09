@@ -75,6 +75,20 @@ public class TraceMonitorVmTests
         Assert.Null(vm.BuildExportSource());
     }
 
+    // Bug 3 regression: the export's Object cell must be the CLEANED presentation the user sees
+    // (separator lines stripped), not the raw trace-parser SQL.
+    [Fact]
+    public void ProjectRow_ObjectCell_UsesCleanedSql_NotRawSeparators()
+    {
+        var vm = NewVm();
+        var rawSql = "SELECT 1\n-------------------------------------------\nFROM RDB$DATABASE";
+        vm.Ingest(new[] { Ev(TraceEventKind.Statement, sql: rawSql) });
+
+        var objectCell = (string?)TraceMonitorTabViewModel.ProjectRow(vm.Rows[0])[3]; // Object column (index 3)
+        Assert.DoesNotContain("-----", objectCell);
+        Assert.Equal(TraceEventRowViewModel.CleanSql(rawSql), objectCell);
+    }
+
     [Fact]
     public void Ingest_AddsRows_ChronologicalOrder()
     {

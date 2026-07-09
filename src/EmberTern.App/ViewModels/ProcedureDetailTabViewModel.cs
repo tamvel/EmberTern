@@ -8,6 +8,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Export;
+using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Performance;
 using EmberTern.Core.Query;
@@ -412,11 +414,13 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasExecResult))]
     [NotifyPropertyChangedFor(nameof(ShowExecError))]
+    [NotifyPropertyChangedFor(nameof(CanExportExecResult))]
     private QueryResult? _execResult;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasExecResult))]
     [NotifyPropertyChangedFor(nameof(ShowExecError))]
+    [NotifyPropertyChangedFor(nameof(CanExportExecResult))]
     private string _execError = string.Empty;
 
     // Bumped on each result-set change / page change so the code-behind rebuilds
@@ -426,6 +430,19 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
 
     public bool HasExecResult => ExecResult is { HasResultSet: true } && string.IsNullOrEmpty(ExecError);
     public bool ShowExecError => !string.IsNullOrEmpty(ExecError);
+
+    public bool CanExportExecResult => HasExecResult;
+
+    /// <summary>Export source for the Execute-Procedure result grid — the SAME materialized model as
+    /// the SQL Editor results (CurrentView = the filtered/displayed rows; AllRows = the full result).
+    /// No re-fetch: re-running a procedure would repeat its side effects, so "All rows" is the
+    /// materialized set that was returned, not a re-execution.</summary>
+    public IExportDataSource? BuildExecResultExportSource()
+    {
+        if (ExecResult is not { HasResultSet: true } result) return null;
+        return new QueryResultExportSource(
+            result.Columns, _execRows, _execAllRows, isPartial: false, streamAll: null, ProcedureName + "_result");
+    }
 
     /// <summary>This procedure tab's OWN Performance context (its captured run + panel). Set by
     /// the owning MainWindowViewModel factory. Never shared with the SQL Editor or another tab.</summary>

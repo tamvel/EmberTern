@@ -74,6 +74,16 @@ public sealed partial class TraceEventRowViewModel : ObservableObject
             ? Elide(Event.Sql)
             : Event.ObjectName ?? string.Empty;
 
+    /// <summary>The Object value for EXPORT / filtering — the SAME cleaned presentation the grid shows
+    /// (separators stripped via <see cref="CleanSql"/>, error message for errors, routine name for
+    /// routines) but WITHOUT the grid-width elision, so an export carries the full statement text, not a
+    /// truncated "…" and never the raw parser model with its separator lines.</summary>
+    public string ObjectExportText => IsError && !string.IsNullOrWhiteSpace(Event.ErrorText)
+        ? ShortErrorMessage(Event.ErrorText!)
+        : Event.Kind == TraceEventKind.Statement
+            ? CleanSql(Event.Sql)
+            : Event.ObjectName ?? string.Empty;
+
     /// <summary>First status-vector line of the error, stripped of its leading "&lt;gdscode&gt; : "
     /// prefix and elided — e.g. "Input parameter mismatch for procedure …".</summary>
     internal static string ShortErrorMessage(string errorText)
@@ -157,8 +167,9 @@ public sealed partial class TraceEventRowViewModel : ObservableObject
     private bool _isHighlighted;
 
     /// <summary>Strips the technical trace separator lines (rows of "-----") from captured SQL,
-    /// preserving line structure — a presentation cleaner. The raw SQL on the event is left
-    /// untouched (detail/export stay faithful); only what we show / copy / open is cleaned.</summary>
+    /// preserving line structure — a presentation cleaner. The raw SQL on the <see cref="TraceEvent"/>
+    /// is left untouched; everything the user works with — grid, copy, export, filter — goes through
+    /// this cleaned form so it matches what's on screen (not the raw parser model).</summary>
     internal static string CleanSql(string? sql)
     {
         if (string.IsNullOrWhiteSpace(sql)) return string.Empty;
