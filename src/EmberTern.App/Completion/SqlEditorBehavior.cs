@@ -25,7 +25,7 @@ internal static class SqlEditorBehavior
         var completion = new SqlCompletionController(
             editor,
             vm.EnumerateLoadedObjects,
-            dotTableResolver: vm.ResolveDotTable,
+            knownTablesProvider: vm.EnumerateTableLikeNames,
             cachedColumnsProvider: vm.TryGetCachedColumns,
             ensureColumnsAsync: t => vm.EnsureColumnsAsync(t),
             contextTableProvider: contextTableProvider);

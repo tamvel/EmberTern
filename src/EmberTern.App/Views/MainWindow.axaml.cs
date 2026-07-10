@@ -126,7 +126,7 @@ public partial class MainWindow : Window
             _completion = new SqlCompletionController(
                 _editor,
                 GetCompletionObjects,
-                dotTableResolver: ResolveDotTable,
+                knownTablesProvider: GetKnownTables,
                 cachedColumnsProvider: GetCachedColumns,
                 ensureColumnsAsync: EnsureColumnsAsync);
             Completion.OccurrenceHighlighter.Attach(_editor);
@@ -1142,10 +1142,11 @@ public partial class MainWindow : Window
     private System.Collections.Generic.IReadOnlyList<MetadataObject> GetCompletionObjects()
         => _currentVm?.EnumerateLoadedObjects() ?? System.Array.Empty<MetadataObject>();
 
-    // Dot autocomplete plumbing — pure resolve on the VM, fetched columns
-    // cached there too. Controller just funnels them into the popup.
-    private string? ResolveDotTable(string text, int caret)
-        => _currentVm?.ResolveDotTable(text, caret);
+    // Dot autocomplete plumbing — the known table/view names for qualifier
+    // resolution (the controller resolves against them + its cached alias map),
+    // and the fetched columns cached on the VM. Controller funnels them into the popup.
+    private System.Collections.Generic.IReadOnlyCollection<string> GetKnownTables()
+        => _currentVm?.EnumerateTableLikeNames() ?? System.Array.Empty<string>();
 
     private System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>? GetCachedColumns(string tableName)
         => _currentVm?.TryGetCachedColumns(tableName);

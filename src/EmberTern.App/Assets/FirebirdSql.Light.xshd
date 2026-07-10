@@ -1,23 +1,28 @@
 <?xml version="1.0"?>
 <!--
-  Light-theme variant of the Firebird SQL highlighter. Palette borrowed from
-  VS Code's "Light+" theme: darker, more saturated foregrounds that read
-  cleanly on the editor's near-white background (BackgroundColor #F3F3F3).
+  Light-theme variant of the Firebird SQL highlighter. Etap 1 lexical-palette pass
+  (editor-architecture.md §9.5): the previous Light+ palette ran three roles into the
+  same green/teal mid-tone (Comment, Number, DataType), which is why some elements were
+  hard to tell apart on the near-white background (BackgroundColor #F3F3F3). The three
+  "cool" roles are now spaced across a green → teal → blue gradient so they differ in
+  BOTH hue and lightness, and the harsh pure-blue DML keyword is softened. All foregrounds
+  stay dark enough to read (~WCAG AA-ish). Exact hex is tunable with visual verification.
 
-  Categories and rule ordering mirror FirebirdSql.xshd 1:1 — only colors
-  differ — so toggling themes doesn't surface or hide categories.
+  Categories and rule ordering mirror FirebirdSql.xshd 1:1 — only colors differ (dark
+  theme is unchanged) — so toggling themes doesn't surface or hide categories. The
+  <Keywords> blocks are pinned against FirebirdSyntax by FirebirdSyntaxTests.
 -->
 <SyntaxDefinition name="Firebird SQL Light" extensions=".sql"
                   xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
 
-  <Color name="Comment"          foreground="#008000" />
+  <Color name="Comment"          foreground="#3F6B1F" />
   <Color name="String"           foreground="#A31515" />
-  <Color name="Number"           foreground="#098658" />
-  <Color name="DmlKeyword"       foreground="#0000FF" fontWeight="bold" />
-  <Color name="StatementKeyword" foreground="#AF00DB" fontWeight="bold" />
-  <Color name="DataType"         foreground="#267F99" />
-  <Color name="Function"         foreground="#795E26" />
-  <Color name="Operator"         foreground="#666666" />
+  <Color name="Number"           foreground="#0B6A5C" />
+  <Color name="DmlKeyword"       foreground="#0033B3" fontWeight="bold" />
+  <Color name="StatementKeyword" foreground="#9018A8" fontWeight="bold" />
+  <Color name="DataType"         foreground="#1D6FA3" />
+  <Color name="Function"         foreground="#7A5C1E" />
+  <Color name="Operator"         foreground="#4D4D4D" />
 
   <RuleSet ignoreCase="true">
 

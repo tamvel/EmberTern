@@ -113,4 +113,34 @@ public class TraceSqlInlinerTests
         Assert.Equal(string.Empty, TraceSqlInliner.Inline(null, new[] { P(0, "integer", "1") }));
         Assert.Equal(string.Empty, TraceSqlInliner.Inline(string.Empty, new[] { P(0, "integer", "1") }));
     }
+
+    // §0 (Etap 1 lexer migration): only the positional '?' markers are substituted — named
+    // ':name' / '@name' parameters and everything else pass through byte-for-byte.
+    [Fact]
+    public void Inline_NamedParameters_AreNeverSubstituted()
+    {
+        // One positional '?' (count matches the one supplied value); :d and @e stay verbatim.
+        var sql = "SELECT * FROM T WHERE a = ? AND b = :d AND c = @e";
+        var result = TraceSqlInliner.Inline(sql, new[] { P(0, "integer", "1") });
+        Assert.Equal("SELECT * FROM T WHERE a = 1 AND b = :d AND c = @e", result);
+    }
+
+    [Fact]
+    public void Inline_QuestionMarkInsideQuotedIdentifier_IsNotSubstituted()
+    {
+        // The '?' inside the "we?rd" quoted identifier is data; only the trailing bound '?' is a param.
+        var sql = "SELECT \"we?rd\" FROM T WHERE X = ?";
+        var result = TraceSqlInliner.Inline(sql, new[] { P(0, "integer", "9") });
+        Assert.Equal("SELECT \"we?rd\" FROM T WHERE X = 9", result);
+    }
+
+    [Fact]
+    public void Inline_CountMismatch_PreservesLiteralsCommentsAndParamsVerbatim()
+    {
+        // Count mismatch (two params, one real '?') → faithful source, nothing altered anywhere,
+        // including the '?' inside the string literal and the block comment.
+        var sql = "SELECT '? in string' /* ? in comment */, :n, @m FROM T WHERE X = ?";
+        var result = TraceSqlInliner.Inline(sql, new[] { P(0, "integer", "1"), P(1, "integer", "2") });
+        Assert.Equal(sql, result);
+    }
 }

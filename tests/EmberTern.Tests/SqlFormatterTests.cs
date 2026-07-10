@@ -275,9 +275,14 @@ public class SqlFormatterTests
     }
 
     [Fact]
-    public void NoStructuralKeywords_StaysOnOneLine()
+    public void UnrecognisedFragment_IsPreservedVerbatim()
     {
-        Assert.Equal("a, b, c", SqlFormatter.Format("a , b , c"));
+        // Etap 3 (AST formatter): a bare comma-list is not a statement the parser recognises, so it
+        // becomes a RawStatement and is emitted VERBATIM — the §0 Paramount Law (never reshape SQL we
+        // can't classify). The old flat-token formatter re-spaced it to "a, b, c"; the AST formatter
+        // deliberately does not touch an unrecognised fragment. Recognised statements still format
+        // fully (covered by every other test here).
+        Assert.Equal("a , b , c", SqlFormatter.Format("a , b , c"));
     }
 
     [Fact]

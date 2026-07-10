@@ -3106,21 +3106,13 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Pure resolution: given the editor text + caret, returns the table that
-    /// should be queried for columns at the dot, or null when the qualifier
-    /// can't be mapped. Aliases come from FROM/JOIN scanning of the editor text;
-    /// table-name qualifiers (e.g. <c>NAGL.</c>) match against the loaded
-    /// metadata category names. Doesn't touch the database — column data is
-    /// fetched separately via <see cref="EnsureColumnsAsync"/>.
+    /// The dot-completion qualifier resolution moved to the editor's
+    /// <c>SqlCompletionController</c> in Etap 0 (design §7/§15): it resolves
+    /// against the per-editor cached alias map, off the keystroke, rather than
+    /// re-scanning the whole document here on every dot. This VM only exposes the
+    /// inputs — <see cref="EnumerateTableLikeNames"/> (known names) and the
+    /// column cache below.
     /// </summary>
-    internal string? ResolveDotTable(string text, int caretOffset)
-    {
-        var dot = SqlCompletionContext.GetDotContext(text, caretOffset);
-        if (dot is null) return null;
-        var tables = EnumerateTableLikeNames();
-        return SqlAliasResolver.ResolveTableForQualifier(text, dot.Value.Qualifier, tables);
-    }
-
     internal IReadOnlyList<ColumnSpec>? TryGetCachedColumns(string tableName)
         => _columnCache.TryGetValue(tableName, out var cols) ? cols : null;
 

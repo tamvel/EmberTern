@@ -1,63 +1,259 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using EmberTern.Core.Sql.Language;
+using EmberTern.Core.Sql.Language.Ast;
 
 namespace EmberTern.Core.Sql;
 
-// Minimal SQL formatter — pure string processing, no external deps.
-//
-// Rules:
-//   - Lowercase recognised SQL keywords; preserve everything else verbatim
-//     (string literals, quoted identifiers, comments, non-keyword identifiers).
-//   - Break a new line before each clause keyword: SELECT / FROM / WHERE /
-//     HAVING / GROUP BY / ORDER BY and any JOIN form (LEFT/RIGHT/INNER/OUTER/
-//     CROSS/FULL + JOIN).
-//   - AND / OR start a new line indented two spaces (sub-conjunction inside a
-//     WHERE / HAVING / ON clause).
-//
-// Anything inside string literals ('...'), quoted identifiers ("..."), line
-// comments (-- ...) or block comments (/* ... */) is treated as opaque text:
-// no lowercase, no line breaks.
+/// <summary>
+/// The AST-based SQL/PSQL formatter — Etap 3 of the editor rebuild. It fully replaced the old
+/// flat-token, heuristic formatter (the previous implementation and its own tokenizer/keyword
+/// hashsets are gone; there is only one formatter and it is this class).
+/// <para>
+/// <b>Architecture (approved Variant A).</b> The <em>statement-level</em> decisions are driven
+/// entirely by the parse tree, not by re-scanning heuristics: <see cref="SqlParser"/> tells us the
+/// statement boundaries and the kind of each statement, so there is no more <c>IsPsql</c> /
+/// <c>FindBodyStart</c> guessing and no separate keyword-classification tokenizer (the old O1
+/// <c>SqlFormatter.Tokenize</c> is gone — this formatter rides the single <see cref="SqlLexer"/>).
+/// Within a statement — which at the current "statement skeleton" AST depth is a flat token list —
+/// the interior is laid out by a structure-aware token emitter reusing the proven, test-pinned
+/// layout rules (clause breaks, JOIN/ON, AND/OR, view header, column/IN-list wrapping, and the
+/// CASE-safe BEGIN/END PSQL block structuring). Deeper clause / expression / PSQL-body AST nodes
+/// are a later etap; the formatter does not need them to format the skeleton correctly.
+/// </para>
+/// <para>
+/// <b>§0 (Paramount Law) — never lose information.</b> A statement the parser could not classify is
+/// a <see cref="RawStatement"/> and is emitted <b>verbatim</b> (byte-for-byte from its source span),
+/// never reformatted or "cleaned up". Comments (line and block) are preserved from the lexer's
+/// trivia and never dropped, moved unexpectedly, or altered. String literals, quoted identifiers and
+/// numbers pass through untouched. Only whitespace and letter-case of unquoted words change.
+/// </para>
+/// <para>
+/// <b>Deterministic + idempotent</b> (design principle #7): the same input always yields the same
+/// output, and <c>Format(Format(x)) == Format(x)</c>. Indentation comes purely from the AST /
+/// BEGIN-END structure and line breaks purely from clause keywords + <c>;</c> — never from the input
+/// whitespace — so re-formatting reproduces the output exactly.
+/// </para>
+/// <para>
+/// <b>Default style</b> (design §6): one opinionated IBExpert-inspired layout, lowercase-all
+/// (matching the "lowercase all" preset ERP users prefer). A configurable style profile is deferred
+/// to the future application configurator; the single default lives in the constants below.
+/// </para>
+/// <para>Pure — no Avalonia, no Firebird driver — and offline unit-testable.</para>
+/// </summary>
 public static class SqlFormatter
 {
-    private const string ConjunctionIndent = "  ";
+    // ── Default style (§6 — single opinionated default; config panel deferred) ────────────────
+    private const string ConjunctionIndent = "  ";   // AND/OR sub-conjunction indent
+    private const string ViewColumnIndent = "    ";   // CREATE VIEW column list indent
+    private const int MaxLineWidth = 120;             // long-line wrap threshold (SELECT cols / IN list)
+    private const int PsqlIndentSize = 2;             // spaces per PSQL nesting level
 
-    // Indent for a CREATE [OR ALTER] VIEW column list — IBExpert puts each output
-    // column on its own line indented four spaces under the view name.
-    private const string ViewColumnIndent = "    ";
+    /// <summary>Formats a SQL/PSQL script with the default style.</summary>
+    public static string Format(string? sql)
+    {
+        if (string.IsNullOrEmpty(sql)) return sql ?? string.Empty;
+        return Format(SqlParser.Parse(sql!).Root);
+    }
 
-    // Wrap threshold. Lines longer than this trigger a post-emit wrap pass that
-    // packs SELECT column lists / IN (...) value lists onto multiple lines, with
-    // continuation lines aligned IBExpert-style:
-    //   - SELECT continuation indents to column 7 (under the first column).
-    //   - IN continuation indents to one past the opening '('.
-    // Both pack multiple items per line up to MaxLineWidth.
-    private const int MaxLineWidth = 120;
+    /// <summary>Formats an already-parsed script. Never throws; never loses information (§0).</summary>
+    public static string Format(SqlScript root)
+    {
+        if (root is null) throw new ArgumentNullException(nameof(root));
+
+        var parts = new List<string>();
+        foreach (var stmt in root.Statements)
+        {
+            var text = FormatStatement(root.Text, stmt);
+            if (text.Length > 0) parts.Add(text);
+        }
+
+        AppendTrailingComments(root, parts); // trailing comments (on EOF) — never lose (§0)
+
+        var joined = string.Join("\n", parts);
+        return WrapLongLines(joined);
+    }
+
+    // ── Statement dispatch (100% AST-driven) ──────────────────────────────────────────────────
+
+    private static string FormatStatement(string source, SqlStatement stmt) => stmt switch
+    {
+        // §0 safety valve: unrecognised or empty statements are reproduced verbatim.
+        RawStatement or EmptyStatement => VerbatimStatement(source, stmt),
+
+        // PSQL definitions (CREATE/ALTER/RECREATE PROCEDURE/TRIGGER/FUNCTION/PACKAGE) and EXECUTE
+        // BLOCK: the header up to the body's AS is kept verbatim (already well-formed), the body is
+        // block-structured.
+        DdlStatement { IsPsqlDefinition: true } => FormatWithHeaderAndBody(source, stmt),
+        ExecuteBlockStatement => FormatWithHeaderAndBody(source, stmt),
+
+        // A bare/DECLARE-led anonymous block (the body editor's text) — no header, whole body.
+        AnonymousBlockStatement => FormatPsqlBody(Flatten(stmt.Tokens), header: null),
+
+        // Everything else — all DML plus non-PSQL DDL, COMMENT, SET, GRANT/REVOKE, DECLARE,
+        // EXECUTE PROCEDURE/STATEMENT — through the clause-break SQL emitter (which also handles the
+        // CREATE VIEW header case internally, exactly as before).
+        _ => Emit(Flatten(stmt.Tokens)),
+    };
+
+    // Verbatim source span, prefixed by any leading comments (which live in the first token's trivia
+    // and are therefore outside the span). Never reformatted (§0).
+    private static string VerbatimStatement(string source, SqlStatement stmt)
+    {
+        var verbatim = source.Substring(stmt.Start, stmt.Length);
+        var comments = LeadingComments(stmt);
+        return comments.Length == 0 ? verbatim : comments + "\n" + verbatim;
+    }
+
+    // Renders the leading comments of a statement's first token, each on its own line, or "".
+    private static string LeadingComments(SqlStatement stmt)
+    {
+        if (stmt.Tokens.Count == 0) return string.Empty;
+        StringBuilder? sb = null;
+        foreach (var tr in stmt.Tokens[0].LeadingTrivia)
+        {
+            if (tr.Kind is TriviaKind.LineComment or TriviaKind.BlockComment)
+            {
+                sb ??= new StringBuilder();
+                if (sb.Length > 0) sb.Append('\n');
+                sb.Append(tr.Kind == TriviaKind.LineComment ? tr.Text.TrimEnd() : tr.Text);
+            }
+        }
+        return sb?.ToString() ?? string.Empty;
+    }
+
+    private static void AppendTrailingComments(SqlScript root, List<string> parts)
+    {
+        if (root.Tokens.Count == 0) return;
+        var eof = root.Tokens[root.Tokens.Count - 1];
+        if (eof.Kind != TokenKind.EndOfFile) return;
+        foreach (var tr in eof.LeadingTrivia)
+        {
+            if (tr.Kind == TriviaKind.LineComment) parts.Add(tr.Text.TrimEnd());
+            else if (tr.Kind == TriviaKind.BlockComment) parts.Add(tr.Text);
+        }
+    }
+
+    // PSQL definition / EXECUTE BLOCK: keep the header (through the body-opening AS) verbatim, then
+    // block-structure the body. The AS is found over tokens at paren depth 0 (so CAST(x AS y) and a
+    // param-list AS are skipped). No top-level AS ⇒ format the whole thing as a body.
+    private static string FormatWithHeaderAndBody(string source, SqlStatement stmt)
+    {
+        int asIndex = FindTopLevelAs(stmt.Tokens);
+        if (asIndex < 0)
+        {
+            return FormatPsqlBody(Flatten(stmt.Tokens), header: null);
+        }
+
+        var asTok = stmt.Tokens[asIndex];
+        string header = source.Substring(stmt.Start, asTok.End - stmt.Start).TrimEnd();
+
+        var bodyTokens = new List<SqlToken>(stmt.Tokens.Count - asIndex - 1);
+        for (int k = asIndex + 1; k < stmt.Tokens.Count; k++) bodyTokens.Add(stmt.Tokens[k]);
+
+        return FormatPsqlBody(Flatten(bodyTokens), header);
+    }
+
+    private static int FindTopLevelAs(IReadOnlyList<SqlToken> tokens)
+    {
+        int depth = 0;
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            if (t.Kind == TokenKind.LParen) depth++;
+            else if (t.Kind == TokenKind.RParen) { if (depth > 0) depth--; }
+            else if (depth == 0 && t.Kind == TokenKind.Keyword
+                     && string.Equals(t.Text, "AS", StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
+    }
+
+    // ── Format token stream (lexer tokens → the emitter's flat model, comments materialised) ────
+    //
+    // The interior emitters below operate on a simple flat stream (word / number / string /
+    // quoted-ident / comment / punctuation) matching the shape the proven layout logic expects. This
+    // is produced from the single SqlLexer's tokens: comments come from each token's leading trivia
+    // (so they are never lost — §0), whitespace is dropped (the formatter re-emits its own), and a
+    // per-token BlankBefore flag records an author blank line (≥2 newlines) for PSQL layout.
+
+    private enum FKind { Word, Number, String, QuotedIdent, LineComment, BlockComment, Punctuation }
+
+    private readonly record struct FToken(FKind Kind, string Text, bool BlankBefore)
+    {
+        public bool IsComment => Kind is FKind.LineComment or FKind.BlockComment;
+    }
+
+    private static List<FToken> Flatten(IReadOnlyList<SqlToken> tokens)
+    {
+        var list = new List<FToken>(tokens.Count);
+        foreach (var t in tokens)
+        {
+            int newlineRun = 0;
+            foreach (var tr in t.LeadingTrivia)
+            {
+                switch (tr.Kind)
+                {
+                    case TriviaKind.Whitespace:
+                        newlineRun += CountNewlines(tr.Text);
+                        break;
+                    case TriviaKind.LineComment:
+                        list.Add(new FToken(FKind.LineComment, tr.Text.TrimEnd(), newlineRun >= 2));
+                        newlineRun = 0;
+                        break;
+                    case TriviaKind.BlockComment:
+                        list.Add(new FToken(FKind.BlockComment, tr.Text, newlineRun >= 2));
+                        newlineRun = 0;
+                        break;
+                }
+            }
+            list.Add(MapToken(t, newlineRun >= 2));
+        }
+        return list;
+    }
+
+    private static FToken MapToken(SqlToken t, bool blankBefore) => t.Kind switch
+    {
+        TokenKind.Keyword or TokenKind.Identifier => new FToken(FKind.Word, t.Text, blankBefore),
+        TokenKind.QuotedIdentifier => new FToken(FKind.QuotedIdent, t.Text, blankBefore),
+        TokenKind.StringLiteral => new FToken(FKind.String, t.Text, blankBefore),
+        TokenKind.Number => new FToken(FKind.Number, t.Text, blankBefore),
+        // Named parameters (:name / @name) behave like an identifier for spacing + lowercasing;
+        // a positional '?' is punctuation.
+        TokenKind.Parameter => t.Text == "?"
+            ? new FToken(FKind.Punctuation, "?", blankBefore)
+            : new FToken(FKind.Word, t.Text, blankBefore),
+        _ => new FToken(FKind.Punctuation, t.Text, blankBefore), // Comma/Dot/Semicolon/(/)/Operator/Unknown
+    };
+
+    private static int CountNewlines(string s)
+    {
+        int n = 0;
+        foreach (var c in s) if (c == '\n') n++;
+        return n;
+    }
+
+    // ── Keyword / structural policy sets (formatting style, not the lexical catalog) ────────────
+    //
+    // These decide the LAYOUT (which keyword breaks a line, keeps a space before "("). They are the
+    // formatter's own style policy — distinct from FirebirdSyntax (which classifies keyword vs
+    // identifier for the lexer). Kept identical to the proven formatter so output is unchanged.
 
     private static readonly HashSet<string> TopLevelSingle = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "SELECT", "FROM", "WHERE", "HAVING",
-    };
+    { "SELECT", "FROM", "WHERE", "HAVING" };
 
-    // First word of a two-word top-level phrase → required second word.
     private static readonly Dictionary<string, string> TopLevelTwo = new(StringComparer.OrdinalIgnoreCase)
-    {
-        { "GROUP", "BY" },
-        { "ORDER", "BY" },
-    };
+    { { "GROUP", "BY" }, { "ORDER", "BY" } };
 
-    // Modifiers that can precede JOIN (one or two of them, e.g. LEFT OUTER JOIN).
     private static readonly HashSet<string> JoinModifiers = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "LEFT", "RIGHT", "INNER", "OUTER", "CROSS", "FULL",
-    };
+    { "LEFT", "RIGHT", "INNER", "OUTER", "CROSS", "FULL" };
 
     private static readonly HashSet<string> Conjunctions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "AND", "OR",
-    };
+    { "AND", "OR" };
 
-    // Keywords lowercased but not line-broken.
+    // Lowercased but not line-broken; keep a space before a following "(" (so "in (", "values (",
+    // "if (" stay spaced while function/type/identifier calls glue).
     private static readonly HashSet<string> OtherKeywords = new(StringComparer.OrdinalIgnoreCase)
     {
         "ON", "AS", "IN", "IS", "NOT", "NULL", "LIKE", "BETWEEN", "EXISTS",
@@ -69,29 +265,460 @@ public static class SqlFormatter
         "BLOCK", "TRUE", "FALSE", "PRIMARY", "KEY", "FOREIGN", "REFERENCES",
         "UNIQUE", "CHECK", "DEFAULT", "CONSTRAINT", "FETCH", "FIRST", "ROWS",
         "ONLY", "ROW", "USING", "PLAN",
-        // PSQL control/keywords — lowercased + (critically) NOT glued to a following
-        // "(" like a function call, so "if (…)", "while (…)" keep their space.
         "IF", "WHILE", "DO", "FOR", "SUSPEND", "EXIT", "LEAVE", "STATEMENT",
         "VARIABLE", "CURSOR", "OPEN", "CLOSE", "INTO", "RETURN", "RETURNS",
     };
 
-    private static readonly string[] MultiCharOps =
-    {
-        "<=", ">=", "<>", "!=", "||", "::",
-    };
+    private static bool IsStyleKeyword(string word)
+        => TopLevelSingle.Contains(word)
+        || TopLevelTwo.ContainsKey(word)
+        || Conjunctions.Contains(word)
+        || JoinModifiers.Contains(word)
+        || OtherKeywords.Contains(word)
+        || string.Equals(word, "JOIN", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(word, "BY", StringComparison.OrdinalIgnoreCase);
 
-    public static string Format(string sql)
-    {
-        if (string.IsNullOrEmpty(sql)) return sql;
+    // ── DML / generic SQL emitter (clause breaks + view header) ────────────────────────────────
 
-        var tokens = Tokenize(sql);
-        if (IsPsql(tokens))
+    private static string Emit(List<FToken> meaningful)
+    {
+        var sb = new StringBuilder();
+        FToken? prev = null;
+
+        for (int i = 0; i < meaningful.Count; i++)
         {
-            return FormatPsql(sql, tokens);
+            var t = meaningful[i];
+
+            var viewConsumed = TryEmitViewHeader(meaningful, i, sb, ref prev);
+            if (viewConsumed > 0) { i += viewConsumed - 1; continue; }
+
+            var phrase = MatchStructuralPhrase(meaningful, i);
+            if (phrase.Length > 0)
+            {
+                if (sb.Length > 0)
+                {
+                    TrimTrailingSpaces(sb);
+                    if (sb.Length > 0 && sb[sb.Length - 1] != '\n') sb.Append('\n');
+                    if (phrase.Kind == PhraseKind.Conjunction) sb.Append(ConjunctionIndent);
+                }
+                for (int k = 0; k < phrase.Length; k++)
+                {
+                    if (k > 0) sb.Append(' ');
+                    sb.Append(meaningful[i + k].Text.ToLowerInvariant());
+                }
+                prev = meaningful[i + phrase.Length - 1];
+                i += phrase.Length - 1;
+                continue;
+            }
+
+            if (NeedsSpaceBefore(prev, t, sb)) sb.Append(' ');
+            sb.Append(MaybeLowercase(t));
+            prev = t;
+
+            // A line comment runs to end-of-line — force a newline so following tokens are not
+            // commented out (semantics-preserving; keeps the comment's position).
+            if (t.Kind == FKind.LineComment)
+            {
+                sb.Append('\n');
+                prev = null;
+            }
         }
-        var emitted = Emit(tokens);
-        return WrapLongLines(emitted);
+
+        return sb.ToString();
     }
+
+    private enum PhraseKind { None, TopLevel, Conjunction }
+    private readonly record struct Phrase(PhraseKind Kind, int Length);
+
+    private static Phrase MatchStructuralPhrase(List<FToken> tokens, int i)
+    {
+        var t = tokens[i];
+        if (t.Kind != FKind.Word) return new Phrase(PhraseKind.None, 0);
+
+        if (Conjunctions.Contains(t.Text))
+        {
+            // "OR ALTER" (CREATE OR ALTER …) is a DDL phrase, not a boolean OR — must not break.
+            if (string.Equals(t.Text, "OR", StringComparison.OrdinalIgnoreCase)
+                && i + 1 < tokens.Count
+                && tokens[i + 1].Kind == FKind.Word
+                && string.Equals(tokens[i + 1].Text, "ALTER", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Phrase(PhraseKind.None, 0);
+            }
+            return new Phrase(PhraseKind.Conjunction, 1);
+        }
+
+        if (TopLevelTwo.TryGetValue(t.Text, out var second)
+            && i + 1 < tokens.Count
+            && tokens[i + 1].Kind == FKind.Word
+            && string.Equals(tokens[i + 1].Text, second, StringComparison.OrdinalIgnoreCase))
+        {
+            return new Phrase(PhraseKind.TopLevel, 2);
+        }
+
+        // JOIN with optional modifiers (LEFT, LEFT OUTER, …).
+        if (JoinModifiers.Contains(t.Text)
+            || string.Equals(t.Text, "JOIN", StringComparison.OrdinalIgnoreCase))
+        {
+            int k = i;
+            while (k < tokens.Count && tokens[k].Kind == FKind.Word && JoinModifiers.Contains(tokens[k].Text)) k++;
+            if (k < tokens.Count && tokens[k].Kind == FKind.Word
+                && string.Equals(tokens[k].Text, "JOIN", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Phrase(PhraseKind.TopLevel, k - i + 1);
+            }
+        }
+
+        if (TopLevelSingle.Contains(t.Text)) return new Phrase(PhraseKind.TopLevel, 1);
+
+        return new Phrase(PhraseKind.None, 0);
+    }
+
+    // Emits a CREATE [OR ALTER] VIEW header (name + column list one-per-line + AS on its own line).
+    // Returns the number of tokens consumed, or 0 when token i is not a view header.
+    private static int TryEmitViewHeader(List<FToken> tokens, int i, StringBuilder sb, ref FToken? prev)
+    {
+        var t = tokens[i];
+        if (t.Kind != FKind.Word || !string.Equals(t.Text, "VIEW", StringComparison.OrdinalIgnoreCase))
+            return 0;
+        if (i + 1 >= tokens.Count) return 0;
+        var nameTok = tokens[i + 1];
+        if (nameTok.Kind != FKind.Word && nameTok.Kind != FKind.QuotedIdent) return 0;
+
+        if (NeedsSpaceBefore(prev, t, sb)) sb.Append(' ');
+        sb.Append("view ");
+        sb.Append(MaybeLowercase(nameTok));
+        int j = i + 2;
+        prev = nameTok;
+
+        // Optional column list: "(" col ["," col]* ")".
+        if (j < tokens.Count && tokens[j] is { Kind: FKind.Punctuation, Text: "(" })
+        {
+            sb.Append(" (");
+            j++;
+            int depth = 1;
+            bool needIndent = true;
+            FToken? colPrev = null;
+            while (j < tokens.Count && depth > 0)
+            {
+                var ct = tokens[j];
+                if (ct.Kind == FKind.Punctuation && ct.Text == "(")
+                {
+                    if (needIndent) { sb.Append('\n').Append(ViewColumnIndent); needIndent = false; }
+                    depth++;
+                    sb.Append('(');
+                }
+                else if (ct.Kind == FKind.Punctuation && ct.Text == ")")
+                {
+                    depth--;
+                    sb.Append(')');
+                    colPrev = ct;
+                    j++;
+                    if (depth == 0) break;
+                    continue;
+                }
+                else if (depth == 1 && ct.Kind == FKind.Punctuation && ct.Text == ",")
+                {
+                    TrimTrailingSpaces(sb);
+                    sb.Append(',');
+                    needIndent = true;
+                }
+                else
+                {
+                    if (needIndent) { sb.Append('\n').Append(ViewColumnIndent); needIndent = false; }
+                    else if (NeedsSpaceBefore(colPrev, ct, sb)) sb.Append(' ');
+                    sb.Append(MaybeLowercase(ct));
+                }
+                colPrev = ct;
+                j++;
+            }
+            prev = j > 0 ? tokens[j - 1] : prev;
+        }
+
+        // Optional AS on its own line (the view-body separator).
+        if (j < tokens.Count && tokens[j].Kind == FKind.Word
+            && string.Equals(tokens[j].Text, "AS", StringComparison.OrdinalIgnoreCase))
+        {
+            TrimTrailingSpaces(sb);
+            sb.Append('\n').Append("as");
+            prev = tokens[j];
+            j++;
+        }
+
+        return j - i;
+    }
+
+    private static string MaybeLowercase(FToken t)
+        // Lowercase words (keywords + identifiers + named parameters). Strings, quoted identifiers,
+        // comments and numbers pass through verbatim.
+        => t.Kind == FKind.Word ? t.Text.ToLowerInvariant() : t.Text;
+
+    private static bool NeedsSpaceBefore(FToken? prev, FToken t, StringBuilder sb)
+    {
+        if (sb.Length == 0) return false;
+        char last = sb[sb.Length - 1];
+        if (last == '\n' || last == ' ') return false;
+        if (last == '(' || last == '.' || last == ':') return false;
+
+        if (t.Kind == FKind.Punctuation)
+        {
+            var p = t.Text;
+            if (p == "," || p == ";" || p == ")" || p == "." || p == "::") return false;
+            // Function call: no space between an identifier/function/type name and "(".
+            if (p == "("
+                && prev is { } pv
+                && (pv.Kind == FKind.Word || pv.Kind == FKind.QuotedIdent)
+                && !(pv.Kind == FKind.Word && IsStyleKeyword(pv.Text)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void TrimTrailingSpaces(StringBuilder sb)
+    {
+        while (sb.Length > 0 && sb[sb.Length - 1] == ' ') sb.Length--;
+    }
+
+    // ── PSQL body emitter (block-structured; CASE-safe) ────────────────────────────────────────
+    //
+    // Reuses Emit for every leaf statement (so spacing / lowercasing / :var gluing / SELECT clause
+    // breaks are identical to DML mode) and adds only BEGIN/END indentation + control-flow layout.
+    // A statement is collected up to its top-level ';', so a CASE…END (which has no ';') is consumed
+    // WHOLE inside a statement and never mistaken for a block END.
+
+    private static string FormatPsqlBody(List<FToken> body, string? header)
+    {
+        var lines = new List<string>();
+        int i = 0;
+        while (i < body.Count)
+        {
+            int before = i;
+            EmitPsqlUnit(body, ref i, 0, lines);
+            if (i == before) i++; // never stall on an unexpected token
+        }
+
+        var bodyStr = string.Join("\n", lines);
+        return string.IsNullOrEmpty(header) ? bodyStr : header + "\n" + bodyStr;
+    }
+
+    // Emits one PSQL "unit" (a leaf statement, or a compound: BEGIN block / IF / WHILE / FOR / local
+    // subprogram) at <paramref name="indent"/>; advances i.
+    private static void EmitPsqlUnit(List<FToken> sig, ref int i, int indent, List<string> lines)
+    {
+        while (i < sig.Count && sig[i].IsComment)
+        {
+            MaybeBlankLine(lines, sig[i].BlankBefore);
+            AddPsqlLine(lines, indent, sig[i].Text);
+            i++;
+        }
+        if (i >= sig.Count) return;
+        if (IsWordTok(sig[i], "END")) return; // belongs to the enclosing BEGIN loop
+        MaybeBlankLine(lines, sig[i].BlankBefore);
+
+        var t = sig[i];
+        if (t.Kind == FKind.Word)
+        {
+            var up = t.Text.ToUpperInvariant();
+            if (up == "BEGIN")
+            {
+                AddPsqlLine(lines, indent, "begin");
+                i++;
+                while (i < sig.Count && !IsWordTok(sig[i], "END"))
+                {
+                    int before = i;
+                    EmitPsqlUnit(sig, ref i, indent + 1, lines);
+                    if (i == before) i++;
+                }
+                if (i < sig.Count && IsWordTok(sig[i], "END"))
+                {
+                    MaybeBlankLine(lines, sig[i].BlankBefore);
+                    i++;
+                    var end = "end";
+                    if (i < sig.Count && IsPunctTok(sig[i], ";")) { end = "end;"; i++; }
+                    AddPsqlLine(lines, indent, end);
+                }
+                return;
+            }
+            if (up == "IF")
+            {
+                AddPsqlEmit(lines, indent, CollectUntilWord(sig, ref i, "THEN"));
+                EmitPsqlBranch(sig, ref i, indent, lines);
+                while (i < sig.Count && sig[i].IsComment) { MaybeBlankLine(lines, sig[i].BlankBefore); AddPsqlLine(lines, indent, sig[i].Text); i++; }
+                if (i < sig.Count && IsWordTok(sig[i], "ELSE"))
+                {
+                    i++;
+                    AddPsqlLine(lines, indent, "else");
+                    EmitPsqlBranch(sig, ref i, indent, lines);
+                }
+                return;
+            }
+            if (up == "WHILE" || up == "FOR")
+            {
+                AddPsqlEmit(lines, indent, CollectUntilWord(sig, ref i, "DO"));
+                EmitPsqlBranch(sig, ref i, indent, lines);
+                return;
+            }
+            if (up == "DECLARE"
+                && i + 1 < sig.Count && sig[i + 1].Kind == FKind.Word
+                && (sig[i + 1].Text.Equals("PROCEDURE", StringComparison.OrdinalIgnoreCase)
+                    || sig[i + 1].Text.Equals("FUNCTION", StringComparison.OrdinalIgnoreCase)))
+            {
+                AddPsqlEmit(lines, indent, CollectUntilWordExclusive(sig, ref i, "BEGIN"));
+                int before = i;
+                EmitPsqlUnit(sig, ref i, indent, lines); // the subprogram's BEGIN…END
+                if (i == before) i++;
+                return;
+            }
+            // A packaged subprogram DEFINITION — a bare FUNCTION/PROCEDURE WITH a body, as found in a
+            // PACKAGE BODY (gotcha #152). Emit the header up to the body BEGIN, then recurse for the
+            // BEGIN…END block so the enclosing package-body loop stops only at the package's OWN END.
+            if ((up == "FUNCTION" || up == "PROCEDURE") && IsSubprogramDefinition(sig, i))
+            {
+                AddPsqlEmit(lines, indent, CollectUntilWordExclusive(sig, ref i, "BEGIN"));
+                int before = i;
+                EmitPsqlUnit(sig, ref i, indent, lines); // the subprogram's BEGIN…END
+                if (i == before) i++;
+                return;
+            }
+        }
+
+        AddPsqlEmit(lines, indent, CollectPsqlStatement(sig, ref i));
+    }
+
+    private static void EmitPsqlBranch(List<FToken> sig, ref int i, int indent, List<string> lines)
+    {
+        while (i < sig.Count && sig[i].IsComment) { AddPsqlLine(lines, indent + 1, sig[i].Text); i++; }
+        if (i < sig.Count && IsWordTok(sig[i], "BEGIN"))
+        {
+            EmitPsqlUnit(sig, ref i, indent, lines); // block aligned under the header
+        }
+        else
+        {
+            int before = i;
+            EmitPsqlUnit(sig, ref i, indent + 1, lines); // single statement indented
+            if (i == before) i++;
+        }
+    }
+
+    private static void MaybeBlankLine(List<string> lines, bool hadBlank)
+    {
+        if (hadBlank && lines.Count > 0 && lines[lines.Count - 1].Length != 0)
+            lines.Add(string.Empty);
+    }
+
+    private static List<FToken> CollectUntilWord(List<FToken> sig, ref int i, string word)
+    {
+        var list = new List<FToken>();
+        while (i < sig.Count)
+        {
+            var t = sig[i];
+            list.Add(t); i++;
+            if (t.Kind == FKind.Word && t.Text.Equals(word, StringComparison.OrdinalIgnoreCase)) break;
+        }
+        return list;
+    }
+
+    private static List<FToken> CollectUntilWordExclusive(List<FToken> sig, ref int i, string word)
+    {
+        var list = new List<FToken>();
+        while (i < sig.Count)
+        {
+            var t = sig[i];
+            if (t.Kind == FKind.Word && t.Text.Equals(word, StringComparison.OrdinalIgnoreCase)) break;
+            list.Add(t); i++;
+        }
+        return list;
+    }
+
+    // True when a leading FUNCTION/PROCEDURE begins a packaged subprogram DEFINITION (has an
+    // AS … BEGIN … END body) vs a package-header forward declaration (… ; — no AS/body).
+    private static bool IsSubprogramDefinition(List<FToken> sig, int i)
+    {
+        if (i + 1 >= sig.Count || sig[i + 1].Kind != FKind.Word) return false; // need a name
+        int depth = 0;
+        for (int k = i + 1; k < sig.Count; k++)
+        {
+            var t = sig[k];
+            if (t.Kind == FKind.Punctuation && t.Text == "(") { depth++; continue; }
+            if (t.Kind == FKind.Punctuation && t.Text == ")") { if (depth > 0) depth--; continue; }
+            if (depth != 0) continue;
+            if (t.Kind == FKind.Punctuation && t.Text == ";") return false; // forward declaration
+            if (t.Kind == FKind.Word)
+            {
+                if (t.Text.Equals("AS", StringComparison.OrdinalIgnoreCase)) return true;   // has a body
+                if (t.Text.Equals("END", StringComparison.OrdinalIgnoreCase)) return false;
+            }
+        }
+        return false;
+    }
+
+    // Collects one statement up to and INCLUDING its terminating top-level ';'. A CASE…END has no
+    // ';' so it is collected whole (the END is NOT a block END).
+    private static List<FToken> CollectPsqlStatement(List<FToken> sig, ref int i)
+    {
+        var list = new List<FToken>();
+        while (i < sig.Count)
+        {
+            var t = sig[i];
+            list.Add(t); i++;
+            if (t.Kind == FKind.Punctuation && t.Text == ";") break;
+        }
+        return list;
+    }
+
+    private static void AddPsqlEmit(List<string> lines, int indent, List<FToken> stmt)
+    {
+        if (stmt.Count == 0) return;
+
+        // SELECT … INTO :vars (PSQL singleton select) — put the INTO clause on its own line.
+        if (IsWordTok(stmt[0], "SELECT"))
+        {
+            int into = FindTopLevelWord(stmt, "INTO");
+            if (into > 0)
+            {
+                EmitPsqlLines(lines, indent, Emit(stmt.GetRange(0, into)));
+                EmitPsqlLines(lines, indent, Emit(stmt.GetRange(into, stmt.Count - into)));
+                return;
+            }
+        }
+
+        EmitPsqlLines(lines, indent, Emit(stmt));
+    }
+
+    private static void EmitPsqlLines(List<string> lines, int indent, string emitted)
+    {
+        var prefix = new string(' ', indent * PsqlIndentSize);
+        foreach (var ln in emitted.TrimEnd('\n').Split('\n'))
+        {
+            lines.Add(ln.Length == 0 ? string.Empty : prefix + ln);
+        }
+    }
+
+    private static int FindTopLevelWord(List<FToken> tokens, string word)
+    {
+        int depth = 0;
+        for (int k = 0; k < tokens.Count; k++)
+        {
+            var t = tokens[k];
+            if (t.Kind == FKind.Punctuation && t.Text == "(") depth++;
+            else if (t.Kind == FKind.Punctuation && t.Text == ")") { if (depth > 0) depth--; }
+            else if (depth == 0 && t.Kind == FKind.Word && t.Text.Equals(word, StringComparison.OrdinalIgnoreCase))
+                return k;
+        }
+        return -1;
+    }
+
+    private static void AddPsqlLine(List<string> lines, int indent, string text)
+        => lines.Add(new string(' ', indent * PsqlIndentSize) + text);
+
+    private static bool IsWordTok(FToken t, string w)
+        => t.Kind == FKind.Word && t.Text.Equals(w, StringComparison.OrdinalIgnoreCase);
+    private static bool IsPunctTok(FToken t, string p) => t.Kind == FKind.Punctuation && t.Text == p;
+
+    // ── Long-line wrapping (IBExpert style, 120-char threshold) ────────────────────────────────
 
     private static string WrapLongLines(string sql)
     {
@@ -109,15 +736,12 @@ public static class SqlFormatter
     {
         if (line.Length <= MaxLineWidth) return line;
 
-        // SELECT column list — produced by Emit as "select <cols>" on a single line
-        // (FROM, WHERE, etc. are already on subsequent lines via the structural break).
         if (line.StartsWith("select ", StringComparison.Ordinal))
         {
             var wrapped = TryWrapSelectColumns(line);
             if (wrapped is not null) return wrapped;
         }
 
-        // IN (...) value list — match " in (" outside strings/quoted idents.
         var inWrapped = TryWrapInList(line);
         if (inWrapped is not null) return inWrapped;
 
@@ -126,22 +750,10 @@ public static class SqlFormatter
 
     private static string? TryWrapSelectColumns(string line)
     {
-        // Determine the "select " (or "select distinct " / "select all ") header.
-        // The continuation indent matches the header length so wrapped columns sit
-        // directly under the first column.
-        string head;
-        if (line.StartsWith("select distinct ", StringComparison.Ordinal))
-        {
-            head = "select distinct ";
-        }
-        else if (line.StartsWith("select all ", StringComparison.Ordinal))
-        {
-            head = "select all ";
-        }
-        else
-        {
-            head = "select ";
-        }
+        string head =
+            line.StartsWith("select distinct ", StringComparison.Ordinal) ? "select distinct " :
+            line.StartsWith("select all ", StringComparison.Ordinal) ? "select all " :
+            "select ";
 
         var body = line.Substring(head.Length);
         var parts = SplitByTopLevelComma(body);
@@ -159,15 +771,11 @@ public static class SqlFormatter
         if (parenClose < 0) return null;
 
         var inner = line.Substring(parenOpen + 1, parenClose - parenOpen - 1);
-        // Don't wrap subqueries — only literal/expression value lists.
-        if (LooksLikeSubquery(inner)) return null;
+        if (LooksLikeSubquery(inner)) return null; // subqueries handled by the structural break
 
         var parts = SplitByTopLevelComma(inner);
         if (parts.Count < 2) return null;
 
-        // Head includes everything up to and including the opening "(", so the first
-        // value sits flush against the paren. Continuation lines align to one char
-        // past "(". Tail (")" plus anything after) stays inline with the last value.
         var head = line.Substring(0, parenOpen + 1);
         var tail = line.Substring(parenClose);
         var continuation = new string(' ', parenOpen + 1);
@@ -175,15 +783,7 @@ public static class SqlFormatter
         return PackWithContinuation(parts, head, continuation, tail);
     }
 
-    // Emits parts as a comma-separated list, starting with `head` on the first line
-    // and wrapping at MaxLineWidth onto continuation lines indented with
-    // `continuationIndent`. `tail` (if any) is appended after the last part with no
-    // separator — used for the inline ")" of an IN wrap.
-    private static string PackWithContinuation(
-        List<string> parts,
-        string head,
-        string continuationIndent,
-        string? tail)
+    private static string PackWithContinuation(List<string> parts, string head, string continuationIndent, string? tail)
     {
         var sb = new StringBuilder();
         sb.Append(head);
@@ -196,7 +796,6 @@ public static class SqlFormatter
             if (i < parts.Count - 1) seg += ",";
 
             bool isFirst = i == 0;
-            // Sticky-on-line-start so the wrap only fires between items.
             int needed = (isFirst || atLineStart) ? seg.Length : 1 + seg.Length;
 
             if (!isFirst && !atLineStart && curLen + needed > MaxLineWidth)
@@ -217,8 +816,6 @@ public static class SqlFormatter
         return sb.ToString();
     }
 
-    // Locate the "(" that opens an IN (...) value list. Returns the position of the
-    // paren or -1. Skips matches inside strings / quoted identifiers.
     private static int FindInOpeningParen(string s)
     {
         int i = 0;
@@ -227,9 +824,6 @@ public static class SqlFormatter
             char c = s[i];
             if (c == '\'') { i = SkipString(s, i); continue; }
             if (c == '"') { i = SkipQuotedIdent(s, i); continue; }
-            // Match " in (" — keyword boundary on the left is a space, on the right
-            // a literal "(". Sufficient because Emit always inserts " in (" with a
-            // single space (no tabs in our output).
             if (i + 4 < s.Length
                 && s[i] == ' '
                 && (s[i + 1] == 'i' || s[i + 1] == 'I')
@@ -254,11 +848,7 @@ public static class SqlFormatter
             if (c == '\'') { i = SkipString(s, i); continue; }
             if (c == '"') { i = SkipQuotedIdent(s, i); continue; }
             if (c == '(') depth++;
-            else if (c == ')')
-            {
-                depth--;
-                if (depth == 0) return i;
-            }
+            else if (c == ')') { depth--; if (depth == 0) return i; }
             i++;
         }
         return -1;
@@ -266,12 +856,9 @@ public static class SqlFormatter
 
     private static bool LooksLikeSubquery(string inner)
     {
-        // After Emit, a subquery starts with "select " (lowercased keyword + space).
-        // Skip leading whitespace defensively.
         int i = 0;
         while (i < inner.Length && char.IsWhiteSpace(inner[i])) i++;
-        return inner.Length - i >= 7
-            && string.CompareOrdinal(inner, i, "select ", 0, 7) == 0;
+        return inner.Length - i >= 7 && string.CompareOrdinal(inner, i, "select ", 0, 7) == 0;
     }
 
     private static List<string> SplitByTopLevelComma(string s)
@@ -300,8 +887,7 @@ public static class SqlFormatter
 
     private static int SkipString(string s, int i)
     {
-        // Caller has confirmed s[i] == '\''.
-        i++;
+        i++; // caller confirmed s[i] == '\''
         while (i < s.Length)
         {
             if (s[i] == '\'')
@@ -316,753 +902,8 @@ public static class SqlFormatter
 
     private static int SkipQuotedIdent(string s, int i)
     {
-        // Caller has confirmed s[i] == '"'.
-        i++;
+        i++; // caller confirmed s[i] == '"'
         while (i < s.Length && s[i] != '"') i++;
         return i < s.Length ? i + 1 : i;
     }
-
-    private enum TokenKind
-    {
-        Word,
-        Number,
-        String,
-        QuotedIdent,
-        LineComment,
-        BlockComment,
-        Punctuation,
-        Whitespace,
-        Newline,
-    }
-
-    private readonly record struct Token(TokenKind Kind, string Text);
-
-    private static List<Token> Tokenize(string s)
-    {
-        var result = new List<Token>();
-        int i = 0;
-        while (i < s.Length)
-        {
-            char c = s[i];
-
-            if (c == '\r' || c == '\n')
-            {
-                int start = i;
-                if (c == '\r' && i + 1 < s.Length && s[i + 1] == '\n') i++;
-                i++;
-                result.Add(new Token(TokenKind.Newline, s.Substring(start, i - start)));
-                continue;
-            }
-            if (char.IsWhiteSpace(c))
-            {
-                int start = i;
-                while (i < s.Length && char.IsWhiteSpace(s[i]) && s[i] != '\r' && s[i] != '\n') i++;
-                result.Add(new Token(TokenKind.Whitespace, s.Substring(start, i - start)));
-                continue;
-            }
-            if (c == '-' && i + 1 < s.Length && s[i + 1] == '-')
-            {
-                int start = i;
-                while (i < s.Length && s[i] != '\r' && s[i] != '\n') i++;
-                result.Add(new Token(TokenKind.LineComment, s.Substring(start, i - start)));
-                continue;
-            }
-            if (c == '/' && i + 1 < s.Length && s[i + 1] == '*')
-            {
-                int start = i;
-                i += 2;
-                while (i + 1 < s.Length && !(s[i] == '*' && s[i + 1] == '/')) i++;
-                if (i + 1 < s.Length) i += 2;
-                else i = s.Length;
-                result.Add(new Token(TokenKind.BlockComment, s.Substring(start, i - start)));
-                continue;
-            }
-            if (c == '\'')
-            {
-                int start = i++;
-                while (i < s.Length)
-                {
-                    if (s[i] == '\'')
-                    {
-                        // Doubled '' is an escaped quote inside the literal.
-                        if (i + 1 < s.Length && s[i + 1] == '\'') { i += 2; continue; }
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
-                result.Add(new Token(TokenKind.String, s.Substring(start, i - start)));
-                continue;
-            }
-            if (c == '"')
-            {
-                int start = i++;
-                while (i < s.Length && s[i] != '"') i++;
-                if (i < s.Length) i++;
-                result.Add(new Token(TokenKind.QuotedIdent, s.Substring(start, i - start)));
-                continue;
-            }
-            if (char.IsLetter(c) || c == '_')
-            {
-                int start = i;
-                while (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] == '_' || s[i] == '$')) i++;
-                result.Add(new Token(TokenKind.Word, s.Substring(start, i - start)));
-                continue;
-            }
-            if (char.IsDigit(c))
-            {
-                int start = i;
-                while (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] == '.')) i++;
-                result.Add(new Token(TokenKind.Number, s.Substring(start, i - start)));
-                continue;
-            }
-
-            // Try multi-char operators before falling back to single-char punctuation.
-            var multi = MatchMultiCharOp(s, i);
-            if (multi is not null)
-            {
-                result.Add(new Token(TokenKind.Punctuation, multi));
-                i += multi.Length;
-                continue;
-            }
-
-            result.Add(new Token(TokenKind.Punctuation, s[i].ToString()));
-            i++;
-        }
-        return result;
-    }
-
-    private static string? MatchMultiCharOp(string s, int i)
-    {
-        foreach (var op in MultiCharOps)
-        {
-            if (i + op.Length <= s.Length
-                && string.CompareOrdinal(s, i, op, 0, op.Length) == 0)
-            {
-                return op;
-            }
-        }
-        return null;
-    }
-
-    private static string Emit(List<Token> tokens)
-    {
-        // Drop the source whitespace — we re-emit our own.
-        var meaningful = new List<Token>(tokens.Count);
-        foreach (var t in tokens)
-        {
-            if (t.Kind == TokenKind.Whitespace || t.Kind == TokenKind.Newline) continue;
-            meaningful.Add(t);
-        }
-
-        var sb = new StringBuilder();
-        Token? prev = null;
-
-        for (int i = 0; i < meaningful.Count; i++)
-        {
-            var t = meaningful[i];
-
-            // CREATE [OR ALTER] VIEW <name> [(col, col, …)] AS — format the header
-            // IBExpert-style: name + space + "(", each column on its own indented
-            // line, ")" glued to the last column, then "as" on its own line.
-            var viewConsumed = TryEmitViewHeader(meaningful, i, sb, ref prev);
-            if (viewConsumed > 0)
-            {
-                i += viewConsumed - 1;
-                continue;
-            }
-
-            var phrase = MatchStructuralPhrase(meaningful, i);
-            if (phrase.Length > 0)
-            {
-                if (sb.Length > 0)
-                {
-                    TrimTrailingSpaces(sb);
-                    if (sb.Length > 0 && sb[sb.Length - 1] != '\n') sb.Append('\n');
-                    if (phrase.Kind == PhraseKind.Conjunction) sb.Append(ConjunctionIndent);
-                }
-                for (int k = 0; k < phrase.Length; k++)
-                {
-                    if (k > 0) sb.Append(' ');
-                    sb.Append(meaningful[i + k].Text.ToLowerInvariant());
-                }
-                prev = meaningful[i + phrase.Length - 1];
-                i += phrase.Length - 1;
-                continue;
-            }
-
-            if (NeedsSpaceBefore(prev, t, sb))
-            {
-                sb.Append(' ');
-            }
-            sb.Append(MaybeLowercase(t));
-            prev = t;
-
-            // A line comment runs to end-of-line — force a newline after it so the
-            // tokens that followed it on the source line don't get commented out
-            // (semantics-preserving; also keeps the comment's position). Block
-            // comments are self-delimiting and stay inline.
-            if (t.Kind == TokenKind.LineComment)
-            {
-                sb.Append('\n');
-                prev = null;
-            }
-        }
-
-        return sb.ToString();
-    }
-
-    // Emits a CREATE [OR ALTER] VIEW header when token `i` is the VIEW keyword
-    // followed by an identifier. Returns the number of tokens consumed (name +
-    // optional column list + optional AS), or 0 when token `i` is not a view
-    // header. Pure structural formatting — strings / quoted identifiers / comments
-    // are still passed through MaybeLowercase (which only touches Word tokens).
-    private static int TryEmitViewHeader(List<Token> tokens, int i, StringBuilder sb, ref Token? prev)
-    {
-        var t = tokens[i];
-        if (t.Kind != TokenKind.Word || !string.Equals(t.Text, "VIEW", StringComparison.OrdinalIgnoreCase))
-            return 0;
-        if (i + 1 >= tokens.Count) return 0;
-        var nameTok = tokens[i + 1];
-        if (nameTok.Kind != TokenKind.Word && nameTok.Kind != TokenKind.QuotedIdent) return 0;
-
-        if (NeedsSpaceBefore(prev, t, sb)) sb.Append(' ');
-        sb.Append("view ");
-        sb.Append(MaybeLowercase(nameTok));
-        int j = i + 2;
-        prev = nameTok;
-
-        // Optional column list: "(" col ["," col]* ")".
-        if (j < tokens.Count && tokens[j] is { Kind: TokenKind.Punctuation, Text: "(" })
-        {
-            sb.Append(" (");
-            j++;
-            int depth = 1;
-            bool needIndent = true;
-            Token? colPrev = null;
-            while (j < tokens.Count && depth > 0)
-            {
-                var ct = tokens[j];
-                if (ct.Kind == TokenKind.Punctuation && ct.Text == "(")
-                {
-                    if (needIndent) { sb.Append('\n').Append(ViewColumnIndent); needIndent = false; }
-                    depth++;
-                    sb.Append('(');
-                }
-                else if (ct.Kind == TokenKind.Punctuation && ct.Text == ")")
-                {
-                    depth--;
-                    sb.Append(')');
-                    colPrev = ct;
-                    j++;
-                    if (depth == 0) break;
-                    continue;
-                }
-                else if (depth == 1 && ct.Kind == TokenKind.Punctuation && ct.Text == ",")
-                {
-                    TrimTrailingSpaces(sb);
-                    sb.Append(',');
-                    needIndent = true;
-                }
-                else
-                {
-                    if (needIndent) { sb.Append('\n').Append(ViewColumnIndent); needIndent = false; }
-                    else if (NeedsSpaceBefore(colPrev, ct, sb)) sb.Append(' ');
-                    sb.Append(MaybeLowercase(ct));
-                }
-                colPrev = ct;
-                j++;
-            }
-            prev = j > 0 ? tokens[j - 1] : prev;
-        }
-
-        // Optional AS on its own line (the view-body separator). Column-alias AS
-        // (e.g. "x.id as foo") is untouched — it never follows the view header.
-        if (j < tokens.Count
-            && tokens[j].Kind == TokenKind.Word
-            && string.Equals(tokens[j].Text, "AS", StringComparison.OrdinalIgnoreCase))
-        {
-            TrimTrailingSpaces(sb);
-            sb.Append('\n').Append("as");
-            prev = tokens[j];
-            j++;
-        }
-
-        return j - i;
-    }
-
-    private enum PhraseKind { None, TopLevel, Conjunction }
-    private readonly record struct Phrase(PhraseKind Kind, int Length);
-
-    private static Phrase MatchStructuralPhrase(List<Token> tokens, int i)
-    {
-        var t = tokens[i];
-        if (t.Kind != TokenKind.Word) return new Phrase(PhraseKind.None, 0);
-
-        if (Conjunctions.Contains(t.Text))
-        {
-            // "OR ALTER" (as in CREATE OR ALTER VIEW/PROCEDURE/TRIGGER) is a DDL
-            // phrase, not a boolean OR — it must NOT break onto its own indented
-            // line. Without this guard the OR-conjunction rule turned
-            // "create or alter view …" into "create\n  or alter view …".
-            if (string.Equals(t.Text, "OR", StringComparison.OrdinalIgnoreCase)
-                && i + 1 < tokens.Count
-                && tokens[i + 1].Kind == TokenKind.Word
-                && string.Equals(tokens[i + 1].Text, "ALTER", StringComparison.OrdinalIgnoreCase))
-            {
-                return new Phrase(PhraseKind.None, 0);
-            }
-            return new Phrase(PhraseKind.Conjunction, 1);
-        }
-
-        if (TopLevelTwo.TryGetValue(t.Text, out var second))
-        {
-            if (i + 1 < tokens.Count
-                && tokens[i + 1].Kind == TokenKind.Word
-                && string.Equals(tokens[i + 1].Text, second, StringComparison.OrdinalIgnoreCase))
-            {
-                return new Phrase(PhraseKind.TopLevel, 2);
-            }
-        }
-
-        // JOIN with optional modifiers (LEFT, LEFT OUTER, etc.).
-        if (JoinModifiers.Contains(t.Text)
-            || string.Equals(t.Text, "JOIN", StringComparison.OrdinalIgnoreCase))
-        {
-            int k = i;
-            while (k < tokens.Count
-                && tokens[k].Kind == TokenKind.Word
-                && JoinModifiers.Contains(tokens[k].Text))
-            {
-                k++;
-            }
-            if (k < tokens.Count
-                && tokens[k].Kind == TokenKind.Word
-                && string.Equals(tokens[k].Text, "JOIN", StringComparison.OrdinalIgnoreCase))
-            {
-                return new Phrase(PhraseKind.TopLevel, k - i + 1);
-            }
-        }
-
-        if (TopLevelSingle.Contains(t.Text)) return new Phrase(PhraseKind.TopLevel, 1);
-
-        return new Phrase(PhraseKind.None, 0);
-    }
-
-    private static string MaybeLowercase(Token t)
-    {
-        // Lowercase every word — keywords AND identifiers (table/column/alias/
-        // function names). Strings ('...'), quoted identifiers ("..."), and
-        // comments are NOT Word tokens, so they pass through untouched.
-        // This matches IBExpert's "lowercase all" formatting preset, which the
-        // user prefers for daily ERP work.
-        return t.Kind == TokenKind.Word ? t.Text.ToLowerInvariant() : t.Text;
-    }
-
-    private static bool IsKeyword(string word)
-        => TopLevelSingle.Contains(word)
-        || TopLevelTwo.ContainsKey(word)
-        || Conjunctions.Contains(word)
-        || JoinModifiers.Contains(word)
-        || OtherKeywords.Contains(word)
-        || string.Equals(word, "JOIN", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(word, "BY", StringComparison.OrdinalIgnoreCase);
-
-    private static bool NeedsSpaceBefore(Token? prev, Token t, StringBuilder sb)
-    {
-        if (sb.Length == 0) return false;
-        char last = sb[sb.Length - 1];
-        if (last == '\n' || last == ' ') return false;
-        if (last == '(' || last == '.' || last == ':') return false;
-
-        if (t.Kind == TokenKind.Punctuation)
-        {
-            var p = t.Text;
-            if (p == "," || p == ";" || p == ")" || p == "." || p == "::") return false;
-            // Function call: no space between identifier and the opening paren.
-            if (p == "("
-                && prev is { } pv
-                && (pv.Kind == TokenKind.Word || pv.Kind == TokenKind.QuotedIdent)
-                && !(pv.Kind == TokenKind.Word && IsKeyword(pv.Text)))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static void TrimTrailingSpaces(StringBuilder sb)
-    {
-        while (sb.Length > 0 && sb[sb.Length - 1] == ' ') sb.Length--;
-    }
-
-    // ─── PSQL (procedures / triggers / functions / EXECUTE BLOCK) ──────────
-    //
-    // One formatter, two modes. Plain SQL/DML → Emit (clause breaks). PSQL → a
-    // recursive, block-structured layout that REUSES Emit for every leaf statement
-    // (so spacing / lowercasing / :var gluing / SELECT clause breaks are identical
-    // to the SQL editor) and adds only BEGIN/END indentation + control-flow layout.
-    //
-    // CASE … END safety: a statement is collected up to its top-level ';', so a
-    // CASE…END (which has no ';') is consumed WHOLE inside the statement and handed
-    // to Emit as inline text — the BEGIN/END block loop never sees a CASE's END.
-    //
-    // Idempotency: indentation comes purely from BEGIN/END/IF/WHILE/FOR structure
-    // and statement breaks purely from ';' — never from existing whitespace — so
-    // re-formatting the output reproduces it.
-
-    private const int PsqlIndentSize = 2;
-
-    private static bool IsPsql(List<Token> tokens)
-    {
-        // A top-level BEGIN is a definitive PSQL signal (BEGIN never appears in DML).
-        foreach (var t in tokens)
-        {
-            if (t.Kind == TokenKind.Word && t.Text.Equals("BEGIN", StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        // Header-only object with no visible BEGIN (rare) — check the leading words.
-        int j = 0;
-        var w0 = NextSignificantWordUpper(tokens, ref j);
-        if (w0 is "CREATE" or "RECREATE" or "ALTER")
-        {
-            var w1 = NextSignificantWordUpper(tokens, ref j);
-            if (w1 == "OR") w1 = NextSignificantWordUpper(tokens, ref j);
-            if (w1 == "ALTER") w1 = NextSignificantWordUpper(tokens, ref j);
-            return w1 is "PROCEDURE" or "TRIGGER" or "FUNCTION" or "PACKAGE";
-        }
-        if (w0 == "EXECUTE")
-        {
-            return NextSignificantWordUpper(tokens, ref j) == "BLOCK";
-        }
-        return false;
-    }
-
-    private static string? NextSignificantWordUpper(List<Token> tokens, ref int j)
-    {
-        while (j < tokens.Count)
-        {
-            var t = tokens[j++];
-            if (t.Kind == TokenKind.Word) return t.Text.ToUpperInvariant();
-            if (t.Kind is TokenKind.Whitespace or TokenKind.Newline
-                or TokenKind.LineComment or TokenKind.BlockComment) continue;
-            return null; // a non-word significant token before any word
-        }
-        return null;
-    }
-
-    private static string FormatPsql(string sql, List<Token> tokens)
-    {
-        // Keep a CREATE … AS header verbatim (it's already well-formed when generated
-        // by DdlGenerator); structure only the body after the top-level AS.
-        int bodyStart = FindBodyStart(sql);
-        string header = bodyStart > 0 ? sql.Substring(0, bodyStart).TrimEnd() : string.Empty;
-        var bodyTokens = bodyStart > 0 ? Tokenize(sql.Substring(bodyStart)) : tokens;
-
-        // Significant tokens (comments kept) + a parallel flag marking where the
-        // author left a blank line (≥2 newlines) before the token. Those logical
-        // separators are re-emitted (collapsed to a single blank line) so the
-        // formatter normalizes structure without flattening readability.
-        var sig = new List<Token>(bodyTokens.Count);
-        var blank = new List<bool>(bodyTokens.Count);
-        int newlines = 0;
-        foreach (var t in bodyTokens)
-        {
-            if (t.Kind == TokenKind.Newline) { newlines++; continue; }
-            if (t.Kind == TokenKind.Whitespace) continue;
-            sig.Add(t);
-            blank.Add(newlines >= 2);
-            newlines = 0;
-        }
-
-        var lines = new List<string>();
-        int i = 0;
-        while (i < sig.Count)
-        {
-            int before = i;
-            EmitPsqlUnit(sig, blank, ref i, 0, lines);
-            if (i == before) i++; // never stall on an unexpected token
-        }
-
-        var body = string.Join("\n", lines);
-        var result = header.Length > 0 ? header + "\n" + body : body;
-        return WrapLongLines(result);
-    }
-
-    // Returns the index in <paramref name="sql"/> just past the top-level AS that
-    // separates a CREATE … header from its PSQL body, or 0 when there's no header.
-    private static int FindBodyStart(string sql)
-    {
-        int i = 0;
-        var first = ReadWordRaw(sql, ref i);
-        if (!(first.Equals("CREATE", StringComparison.OrdinalIgnoreCase)
-              || first.Equals("RECREATE", StringComparison.OrdinalIgnoreCase)
-              || first.Equals("ALTER", StringComparison.OrdinalIgnoreCase)))
-            return 0;
-
-        int depth = 0;
-        int k = 0;
-        while (k < sql.Length)
-        {
-            char c = sql[k];
-            if (c == '\'') { k = SkipString(sql, k); continue; }
-            if (c == '"') { k = SkipQuotedIdent(sql, k); continue; }
-            if (c == '-' && k + 1 < sql.Length && sql[k + 1] == '-')
-            { while (k < sql.Length && sql[k] != '\n') k++; continue; }
-            if (c == '/' && k + 1 < sql.Length && sql[k + 1] == '*')
-            { k += 2; while (k + 1 < sql.Length && !(sql[k] == '*' && sql[k + 1] == '/')) k++; k = k + 1 < sql.Length ? k + 2 : sql.Length; continue; }
-            if (c == '(') { depth++; k++; continue; }
-            if (c == ')') { if (depth > 0) depth--; k++; continue; }
-            if (char.IsLetter(c) || c == '_')
-            {
-                int s = k;
-                while (k < sql.Length && (char.IsLetterOrDigit(sql[k]) || sql[k] == '_' || sql[k] == '$')) k++;
-                if (depth == 0 && k - s == 2
-                    && string.Compare(sql, s, "AS", 0, 2, StringComparison.OrdinalIgnoreCase) == 0)
-                    return k;
-                continue;
-            }
-            k++;
-        }
-        return 0;
-    }
-
-    private static string ReadWordRaw(string s, ref int i)
-    {
-        while (i < s.Length && char.IsWhiteSpace(s[i])) i++;
-        int start = i;
-        while (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] == '_' || s[i] == '$')) i++;
-        return s.Substring(start, i - start);
-    }
-
-    // Emits one PSQL "unit" (a leaf statement, or a compound: BEGIN block / IF /
-    // WHILE / FOR / local subprogram) at <paramref name="indent"/>; advances i.
-    private static void EmitPsqlUnit(List<Token> sig, List<bool> blank, ref int i, int indent, List<string> lines)
-    {
-        while (i < sig.Count && IsCommentTok(sig[i]))
-        {
-            MaybeBlankLine(lines, blank[i]);
-            AddPsqlLine(lines, indent, sig[i].Text);
-            i++;
-        }
-        if (i >= sig.Count) return;
-        if (IsWordTok(sig[i], "END")) return; // belongs to the enclosing BEGIN loop
-        MaybeBlankLine(lines, blank[i]);
-
-        var t = sig[i];
-        if (t.Kind == TokenKind.Word)
-        {
-            var up = t.Text.ToUpperInvariant();
-            if (up == "BEGIN")
-            {
-                AddPsqlLine(lines, indent, "begin");
-                i++;
-                while (i < sig.Count && !IsWordTok(sig[i], "END"))
-                {
-                    int before = i;
-                    EmitPsqlUnit(sig, blank, ref i, indent + 1, lines);
-                    if (i == before) i++;
-                }
-                if (i < sig.Count && IsWordTok(sig[i], "END"))
-                {
-                    MaybeBlankLine(lines, blank[i]);
-                    i++;
-                    var end = "end";
-                    if (i < sig.Count && IsPunctTok(sig[i], ";")) { end = "end;"; i++; }
-                    AddPsqlLine(lines, indent, end);
-                }
-                return;
-            }
-            if (up == "IF")
-            {
-                AddPsqlEmit(lines, indent, CollectUntilWord(sig, ref i, "THEN"));
-                EmitPsqlBranch(sig, blank, ref i, indent, lines);
-                while (i < sig.Count && IsCommentTok(sig[i])) { MaybeBlankLine(lines, blank[i]); AddPsqlLine(lines, indent, sig[i].Text); i++; }
-                if (i < sig.Count && IsWordTok(sig[i], "ELSE"))
-                {
-                    i++;
-                    AddPsqlLine(lines, indent, "else");
-                    EmitPsqlBranch(sig, blank, ref i, indent, lines);
-                }
-                return;
-            }
-            if (up == "WHILE" || up == "FOR")
-            {
-                AddPsqlEmit(lines, indent, CollectUntilWord(sig, ref i, "DO"));
-                EmitPsqlBranch(sig, blank, ref i, indent, lines);
-                return;
-            }
-            if (up == "DECLARE"
-                && i + 1 < sig.Count && sig[i + 1].Kind == TokenKind.Word
-                && (sig[i + 1].Text.Equals("PROCEDURE", StringComparison.OrdinalIgnoreCase)
-                    || sig[i + 1].Text.Equals("FUNCTION", StringComparison.OrdinalIgnoreCase)))
-            {
-                AddPsqlEmit(lines, indent, CollectUntilWordExclusive(sig, ref i, "BEGIN"));
-                int before = i;
-                EmitPsqlUnit(sig, blank, ref i, indent, lines); // the subprogram's BEGIN…END
-                if (i == before) i++;
-                return;
-            }
-            // Packaged subprogram DEFINITION — a bare FUNCTION/PROCEDURE WITH a body
-            // (FUNCTION name(...) [RETURNS …] AS [DECLARE …;]* BEGIN … END), as found in a
-            // PACKAGE BODY. Emit the header up to the body BEGIN, then recurse for the
-            // BEGIN…END block, so the enclosing package-body BEGIN loop stops only at the
-            // package's OWN END — never at a subprogram's END (which previously truncated
-            // the body and dropped the trailing ENDs → invalid PSQL). A header-only forward
-            // declaration (FUNCTION/PROCEDURE … ; — no AS/body, as in a PACKAGE header)
-            // falls through to the statement path below. (gotcha #152)
-            if ((up == "FUNCTION" || up == "PROCEDURE") && IsSubprogramDefinition(sig, i))
-            {
-                AddPsqlEmit(lines, indent, CollectUntilWordExclusive(sig, ref i, "BEGIN"));
-                int before = i;
-                EmitPsqlUnit(sig, blank, ref i, indent, lines); // the subprogram's BEGIN…END
-                if (i == before) i++;
-                return;
-            }
-        }
-
-        AddPsqlEmit(lines, indent, CollectPsqlStatement(sig, ref i));
-    }
-
-    private static void EmitPsqlBranch(List<Token> sig, List<bool> blank, ref int i, int indent, List<string> lines)
-    {
-        while (i < sig.Count && IsCommentTok(sig[i])) { AddPsqlLine(lines, indent + 1, sig[i].Text); i++; }
-        if (i < sig.Count && IsWordTok(sig[i], "BEGIN"))
-        {
-            EmitPsqlUnit(sig, blank, ref i, indent, lines); // block aligned under the header
-        }
-        else
-        {
-            int before = i;
-            EmitPsqlUnit(sig, blank, ref i, indent + 1, lines); // single statement indented
-            if (i == before) i++;
-        }
-    }
-
-    // Re-emit an author blank line (collapsed to one) before a unit — but never as
-    // the first output line and never two in a row.
-    private static void MaybeBlankLine(List<string> lines, bool hadBlank)
-    {
-        if (hadBlank && lines.Count > 0 && lines[lines.Count - 1].Length != 0)
-            lines.Add(string.Empty);
-    }
-
-    // Collects tokens up to and INCLUDING the next Word == <paramref name="word"/>.
-    private static List<Token> CollectUntilWord(List<Token> sig, ref int i, string word)
-    {
-        var list = new List<Token>();
-        while (i < sig.Count)
-        {
-            var t = sig[i];
-            list.Add(t); i++;
-            if (t.Kind == TokenKind.Word && t.Text.Equals(word, StringComparison.OrdinalIgnoreCase)) break;
-        }
-        return list;
-    }
-
-    // Collects tokens up to (NOT including) the next Word == <paramref name="word"/>.
-    private static List<Token> CollectUntilWordExclusive(List<Token> sig, ref int i, string word)
-    {
-        var list = new List<Token>();
-        while (i < sig.Count)
-        {
-            var t = sig[i];
-            if (t.Kind == TokenKind.Word && t.Text.Equals(word, StringComparison.OrdinalIgnoreCase)) break;
-            list.Add(t); i++;
-        }
-        return list;
-    }
-
-    // True when a leading FUNCTION/PROCEDURE token begins a packaged subprogram
-    // DEFINITION (it has an AS … BEGIN … END body), vs a package-header forward
-    // declaration (FUNCTION/PROCEDURE name(...) [RETURNS …] ; — no AS, no body).
-    // Scans at paren depth 0 from just after the keyword: a top-level AS ⇒ definition
-    // (keyed on AS, NOT BEGIN, because a body may have a DECLARE section whose ';'
-    // precedes BEGIN at depth 0); a top-level ';' before any AS ⇒ forward declaration.
-    private static bool IsSubprogramDefinition(List<Token> sig, int i)
-    {
-        if (i + 1 >= sig.Count || sig[i + 1].Kind != TokenKind.Word) return false; // need a name
-        int depth = 0;
-        for (int k = i + 1; k < sig.Count; k++)
-        {
-            var t = sig[k];
-            if (t.Kind == TokenKind.Punctuation && t.Text == "(") { depth++; continue; }
-            if (t.Kind == TokenKind.Punctuation && t.Text == ")") { if (depth > 0) depth--; continue; }
-            if (depth != 0) continue;
-            if (t.Kind == TokenKind.Punctuation && t.Text == ";") return false; // forward declaration
-            if (t.Kind == TokenKind.Word)
-            {
-                if (t.Text.Equals("AS", StringComparison.OrdinalIgnoreCase)) return true; // has a body
-                if (t.Text.Equals("END", StringComparison.OrdinalIgnoreCase)) return false;
-            }
-        }
-        return false;
-    }
-
-    // Collects one statement up to and INCLUDING its terminating top-level ';'. A
-    // CASE…END has no ';' so it is collected whole (the END is NOT a block END).
-    private static List<Token> CollectPsqlStatement(List<Token> sig, ref int i)
-    {
-        var list = new List<Token>();
-        while (i < sig.Count)
-        {
-            var t = sig[i];
-            list.Add(t); i++;
-            if (t.Kind == TokenKind.Punctuation && t.Text == ";") break;
-        }
-        return list;
-    }
-
-    private static void AddPsqlEmit(List<string> lines, int indent, List<Token> stmt)
-    {
-        if (stmt.Count == 0) return;
-
-        // SELECT … INTO :vars (PSQL singleton select) — put the INTO clause on its
-        // own line, IBExpert-style. Only when the statement starts with SELECT, so
-        // INSERT INTO is unaffected; the INTO must be top-level (not in a subquery).
-        if (IsWordTok(stmt[0], "SELECT"))
-        {
-            int into = FindTopLevelWord(stmt, "INTO");
-            if (into > 0)
-            {
-                EmitPsqlLines(lines, indent, Emit(stmt.GetRange(0, into)));
-                EmitPsqlLines(lines, indent, Emit(stmt.GetRange(into, stmt.Count - into)));
-                return;
-            }
-        }
-
-        EmitPsqlLines(lines, indent, Emit(stmt));
-    }
-
-    private static void EmitPsqlLines(List<string> lines, int indent, string emitted)
-    {
-        var prefix = new string(' ', indent * PsqlIndentSize);
-        foreach (var ln in emitted.TrimEnd('\n').Split('\n'))
-        {
-            lines.Add(ln.Length == 0 ? string.Empty : prefix + ln);
-        }
-    }
-
-    private static int FindTopLevelWord(List<Token> tokens, string word)
-    {
-        int depth = 0;
-        for (int k = 0; k < tokens.Count; k++)
-        {
-            var t = tokens[k];
-            if (t.Kind == TokenKind.Punctuation && t.Text == "(") depth++;
-            else if (t.Kind == TokenKind.Punctuation && t.Text == ")") { if (depth > 0) depth--; }
-            else if (depth == 0 && t.Kind == TokenKind.Word && t.Text.Equals(word, StringComparison.OrdinalIgnoreCase))
-                return k;
-        }
-        return -1;
-    }
-
-    private static void AddPsqlLine(List<string> lines, int indent, string text)
-        => lines.Add(new string(' ', indent * PsqlIndentSize) + text);
-
-    private static bool IsWordTok(Token t, string w)
-        => t.Kind == TokenKind.Word && t.Text.Equals(w, StringComparison.OrdinalIgnoreCase);
-    private static bool IsPunctTok(Token t, string p) => t.Kind == TokenKind.Punctuation && t.Text == p;
-    private static bool IsCommentTok(Token t) => t.Kind is TokenKind.LineComment or TokenKind.BlockComment;
 }
