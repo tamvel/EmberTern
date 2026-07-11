@@ -1,27 +1,31 @@
 # EmberTern — SQL/PSQL Editor Architecture & Modernization
 
-> **STATUS: APPROVED (frozen 2026-07-09).**
-> The user reviewed the analysis and accepted the direction with the modifications recorded
-> in §14. This is now the **binding design** for the editor front-end. Per the
-> staged-implementation contract: later etaps EXTEND this design and never silently change
-> it — if an etap reveals a frozen decision must change, **STOP and consult the user before
-> altering the doc or the code.**
+> **STATUS: APPROVED (frozen 2026-07-09).** This is the binding design for the editor
+> front-end. Per the staged-implementation contract: later work EXTENDS this design and never
+> silently changes it — if implementation reveals a frozen decision must change, **STOP and
+> consult the user before altering this doc or the code.**
 >
-> **Progress: Etap 0 (IntelliSense responsiveness) COMPLETE** (2026-07-09, §16),
-> **Etap 1 (Lexer + `FirebirdSyntax` catalog + light-palette fix) COMPLETE** (2026-07-09,
-> §18), **Etap 2 (Parser + AST) COMPLETE** (2026-07-10, §19) — error-tolerant
-> statement-level recursive descent at the user-chosen "statement skeleton" depth (every §5.4
-> statement is its own typed node; interiors kept verbatim), the `RawStatement` safety valve,
-> the 3 consumers re-expressed as AST queries, and outlier **O5**
-> (`FirebirdDdlExecutor.SplitStatements`) migrated onto the parser's boundaries behind a §0
-> byte-identity corpus-diff gate — and **Etap 3 (Formatter, AST-based) COMPLETE** (2026-07-10,
-> §20) — the AST-driven `SqlFormatter` (statement dispatch from the parse tree; interior
-> layout reusing the proven, test-pinned logic on the single lexer's tokens; `RawStatement`
-> verbatim per §0; deterministic + idempotent), retiring the old heuristic formatter (O1 dead)
-> behind the full existing test suite + new §0/idempotency gates, plus the one small
-> formatter-driven AST refinement (`AnonymousBlockStatement`). **The next session begins Etap 4
-> (Semantic Model).** Item 13 (Quick Info / object documentation) is an APPROVED requirement
-> (§8A) scheduled for Etaps 4–6.
+> **This document describes the CURRENT architecture and design decisions only.** The
+> etap-by-etap "as-built" narrative (what was tried, what broke, how each milestone actually
+> shipped) lives in
+> **[`docs/history/14-editor-language-frontend-history.md`](../history/14-editor-language-frontend-history.md)**
+> — read it for the "why/how we got here" story. For exactly what's done, what's in flight, and
+> what to do next, see **`CLAUDE.md`**'s "Current state" and "Editor Architecture — current
+> direction" sections — this doc doesn't duplicate that (it would go stale the moment the next
+> session ships something). This split happened during the 2026-07-11 Documentation Cleanup
+> Sprint; nothing below was reworded, only the historical/status material was moved out.
+>
+> **One-paragraph status (detail in `CLAUDE.md`):** Etaps 0–6 are complete — one shared
+> Lexer → Parser → AST → Semantic Model in `EmberTern.Core.Sql.Language`, with Completion,
+> Signature Help, Snippets, Navigation (Ctrl+hover/Ctrl+Click, Peek Definition, safe local
+> rename, find references), semantic highlighting, and Quick Info all built as *clients* of that
+> one model. After Etap 6 the user reviewed the result against IBExpert, **endorsed the
+> architecture**, and filed a UX Polish Phase backlog (P1–P9); most of it is done, with formatter
+> polish (P8) and two small items (P5d, P2c) explicitly deferred. **Etap 7 (diagnostics, folding,
+> breadcrumbs, bracket-matching) does not start until the user formally closes the UX Polish
+> Phase.**
+
+---
 
 The SQL/PSQL editor is the single most-used surface in EmberTern and the most important
 element of the whole application. Its quality shapes the product's reception more than most
@@ -78,6 +82,12 @@ This is a multi-year foundation, built incrementally so each etap ships user val
 ---
 
 ## 2. Current-state assessment (grounded in the code)
+
+> **This is the ORIGINAL pre-rebuild assessment (2026-07-09) — the problems that
+> motivated §1's thesis and the roadmap in §12. Kept verbatim for context on *why* this
+> architecture exists; do not read §2.2's problem list as "still true today" — Etaps 0–6
+> (see §15 / `CLAUDE.md`) fixed almost everything in it. §2.1 ("what's worth keeping")
+> is still accurate; it describes what the new front-end was built on top of.**
 
 ### 2.1 What exists (and is worth keeping)
 - **AvaloniaEdit `TextEditor`** as the editing surface — the right choice; keep it. Gives
@@ -267,7 +277,7 @@ PACKAGE|DOMAIN|EXCEPTION|GENERATOR|INDEX|TABLE`, and PSQL bodies (`BEGIN/END`, `
   and "unknown column/table" diagnostics. **Fixes** the current alias resolver's
   subquery-blindness (gotcha #18) with real nested scopes.
 
-### 5.6 Formatter — `Core.Sql.SqlFormatter` (Etap 3; see §20 for the as-built)
+### 5.6 Formatter — `Core.Sql.SqlFormatter` (Etap 3; as-built record in the history file)
 - Walks the AST and pretty-prints per a **style profile**. No token special-cases. Handles
   every §5.4 construct by node type. `RawStatement` prints verbatim (§0).
 - `string Format(SqlScript root, FormatOptions options)`.
@@ -415,10 +425,13 @@ identifier under the caret to a symbol + its metadata), and the Ctrl-hover surfa
 Data comes from the metadata readers already wired into the Semantic Model — no parallel
 fetch path, no new "documentation store".
 
-**Roadmap:** delivered across **Etap 4** (Semantic Model — resolve identifier → symbol +
-metadata), **Etap 5** (reuse the Signature/metadata plumbing for the completion detail
-pane), and **Etap 6** (the Ctrl-hover tooltip surface). It is NOT part of Etaps 0–3. §0
-applies (read-only feature — it never modifies code, so it cannot lose information).
+**Roadmap (revised 2026-07-10):** the Semantic Model foundation (resolve identifier → symbol +
+metadata) landed in **Etap 4**, but the entire Quick-Info *feature* — the Quick Info Engine (§5.12),
+the Ctrl-hover tooltip surface, and the completion-list detail pane — is delivered **wholly in
+Etap 6**. It is explicitly **NOT part of Etaps 0–5** (user decision — see the history file's Etap 5 record): Etap 5 is code-writing
+assistance only and adds no new symbol-info surface (the completion list keeps its existing `: TYPE`
+display unchanged). §0 applies (read-only feature — it never modifies code, so it cannot lose
+information).
 
 ---
 
@@ -534,16 +547,16 @@ Rationale for the change from the draft: **the Lexer is too important a foundati
   Introduce `EditorLanguageService` (debounced/async/cancellable); stop per-keystroke
   whole-document tokenizing; move alias resolution off the keystroke; Ctrl+Space immediate;
   reasonable non-aggressive auto-popup defaults. **Delivers**: the lag is gone.
-- **Etap 1 — Lexer. ✅ DONE (2026-07-09, §18).** One Firebird-aware lexer + the single
+- **Etap 1 — Lexer. ✅ DONE (2026-07-09; as-built in the history file).** One Firebird-aware lexer + the single
   `FirebirdSyntax` keyword catalog; folded outliers O2/O3/O4 (O1 deferred → Etap 3, O5 → Etap 2
   per audit §4); **regenerated the light-theme lexical palette for contrast**. **Delivered**:
   P8 (dedup) + a light-theme improvement.
-- **Etap 2 — Parser + AST. ✅ DONE (2026-07-10, §19).** Error-tolerant recursive descent;
-  grammar per §5.4 at the approved "statement skeleton" depth (§19); `RawStatement` safety valve.
+- **Etap 2 — Parser + AST. ✅ DONE (2026-07-10; as-built in the history file).** Error-tolerant recursive descent;
+  grammar per §5.4 at the approved "statement skeleton" depth (history file); `RawStatement` safety valve.
   **Delivered**: a cached tree (`SqlScript`); `SqlStatementClassifier` + `SqlParameterScanner`
   re-expressed as AST queries; outlier O5 (`FirebirdDdlExecutor.SplitStatements`) migrated onto
   the parser's boundaries behind a §0 corpus-diff gate.
-- **Etap 3 — Formatter (AST-based). ✅ DONE (2026-07-10, §20).** Retired the old heuristic
+- **Etap 3 — Formatter (AST-based). ✅ DONE (2026-07-10; as-built in the history file).** Retired the old heuristic
   `SqlFormatter` → rewrote it AST-based **under the same name** (transitional `SqlFormatterV2`
   consolidated away; old impl deleted); IBExpert-inspired default;
   deterministic/idempotent; parity gate = all existing formatter tests (byte-for-byte) + new
@@ -552,13 +565,19 @@ Rationale for the change from the draft: **the Lexer is too important a foundati
 - **Etap 4 — Semantic Model.** Bind AST ↔ metadata + local scope; nested scopes. **Delivers**:
   the foundation for completion/navigation/diagnostics/semantic-color, and for Quick Info (§8A —
   resolve identifier → symbol + metadata).
-- **Etap 5 — Completion Engine + Snippet Engine + Signature Help.** Context/scope-aware
-  completion; smart completion + live templates; broad Parameter Info (§8); the completion-list
-  **Quick Info detail pane** (§8A) reusing the signature/metadata plumbing. **Delivers**: P3 + P4
-  (+ P9 completion-pane half).
-- **Etap 6 — Navigation + Semantic highlighting.** Ctrl+hover/underline/cursor/tooltip (the tooltip
-  carries the **Quick Info** model, §8A), go-to-def, peek, local find-refs/rename; the semantic
-  color layer (§9) + `EditorPalette`. **Delivers**: P5 (semantic) + P6 + P9 (hover half).
+- **Etap 5 — Completion Engine + Snippet Engine + Signature Help. ✅ DONE (2026-07-10; as-built in the history file).**
+  Context/scope-aware completion (engine-driven, wired into the controller at M5); broad Parameter
+  Info (§8, M6/M7); keyword live templates with Tab-stops (M8). **Code-writing assistance only** — NO
+  Quick Info of any form (user decision 2026-07-10 — history file); the completion list keeps its existing
+  `: TYPE` display but adds no new symbol-info surface. **Delivered**: P3 + P4. Milestone breakdown
+  milestone breakdown & as-built record in the history file.
+- **Etap 6 — Navigation + Semantic highlighting + Quick Info. ✅ DONE — M1–M5 (2026-07-10/11,
+  the history file's Etap 6 records).** Ctrl+hover/underline/cursor/tooltip, go-to-def, peek, local find-refs/rename; the semantic
+  color layer (§9); **and the whole Quick Info feature** — the Quick Info Engine (§5.12), the Ctrl-hover
+  tooltip, AND the completion-list detail pane (§8A, moved here in full from Etap 5). Milestones: **M1
+  Quick Info Engine (Core) ✅ · M2 Navigation Engine (Core) ✅ · M3 Semantic highlighting (Core
+  classifier + App painter) ✅ · M4 Ctrl+hover/click go-to-def + tooltip (App `NavigationController` + `QuickInfoView`) ✅ · M5 Quick Info detail pane
+  + Peek + local find-refs/rename (F2 rename / Alt+F12 peek) ✅.** **Delivers**: P5 (semantic) + P6 + P9 (all of it).
 - **Etap 7 — Diagnostics + editor niceties.** Squiggles + Quick Fixes; folding, breadcrumbs,
   bracket/BEGIN-END matching, format-selection/on-paste. **Delivers**: P7.
 - **Final cleanup etap (after Etap 7).** Purge any remaining transitional names (`V2`/`NewX`/`Temp`/…
@@ -648,349 +667,93 @@ etap) to shrink the parser zoo.
 
 ---
 
-## 15. Etap 0 — scope (COMPLETE — shipped 2026-07-09; see §16 for the record)
-
-> **STATUS: DONE.** This section is the original ready-to-start scope, kept for the record;
-> the as-built result is in §16.
-
-Etap 0 was **App-layer only, no AST, no Core grammar changes, no behavior change to results** —
-purely making IntelliSense responsive.
-
-**Goal:** eliminate the typing lag and the over-eager popup; Ctrl+Space instant.
-
-**Concrete work:**
-1. Add **`EditorLanguageService`** (App, per-editor, created in `SqlEditorBehavior.Attach`) that
-   owns a debounce timer (≈300 ms idle) + a `CancellationTokenSource` and runs the
-   heavy work (currently `SqlAliasResolver.ParseAliases`) **off the keystroke, in the background,
-   cancellable**, caching the latest result. Marshal back to the UI thread.
-2. Rework **`SqlCompletionController.OnTextEntered`** so it does **no whole-document work**:
-   - decide whether to open the window from the few chars before the caret (via the AvaloniaEdit
-     `Document`, not `_editor.Text`);
-   - pull alias/dot context from the **cached** `EditorLanguageService` result, not a fresh
-     `ParseAliases(wholeDocument)`;
-   - keep dot (`.`) and Ctrl+Space as immediate triggers; make identifier auto-trigger idle-based
-     and non-aggressive (reasonable default; not eager at 3 chars mid-burst).
-3. **Ctrl+Space** always shows completion immediately from cached state (re-scan just the current
-   line if the cache is stale).
-4. Reasonable non-aggressive defaults for auto-popup delay (a settings-backed value + full-disable
-   is deferred to the app configurator — leave a clearly-named constant/field so it's trivial to
-   wire later).
-5. **No AST yet** — Etap 0 reuses `SqlAliasResolver` / `SqlCompletionContext` as-is, just moved
-   behind the async service. Do NOT start the Lexer/Parser here.
-
-**Acceptance:** typing in a large procedure body is smooth (no per-keystroke whole-document
-tokenize); popup is not eager; Ctrl+Space instant; existing completion behavior otherwise
-unchanged; build 0/0; smoke clean. **§0 holds trivially** (Etap 0 doesn't generate/modify code).
-
-**Out of scope for Etap 0:** the Lexer, Parser, AST, formatter, semantic model, highlighting,
-navigation — all later etaps.
-
 ---
 
-## 16. Etap 0 — completion record (shipped 2026-07-09)
+## 15. Current status & remaining work
 
-**Result:** build 0/0 · tests 2823 (main) + 10 (headless probe) green · 8 s smoke clean (no
-`FATAL`, no early exit). App-layer only; no AST, no Core grammar; §0 holds trivially (nothing
-generates/modifies code). The typing lag and over-eager popup are gone; Ctrl+Space is instant.
+*(Renumbered from the old §15–§29, which were per-etap "as-built" completion records — those
+now live, verbatim, in
+[`docs/history/14-editor-language-frontend-history.md`](../history/14-editor-language-frontend-history.md).
+This section is the compact, kept-current summary of what's done and what's left; extend it in
+place rather than appending new dated blocks — that's what the history file is for.)*
 
-**Delivered (files):**
-- **`EditorLanguageService`** (new, `App/Completion`) — per-editor; subscribes to `TextChanged`;
-  debounces `ParseDebounce` = 300 ms; runs `SqlAliasResolver.ParseAliases` off-thread (`Task.Run`
-  + `CancellationTokenSource`, superseded results dropped) and resumes on the UI thread
-  (`ConfigureAwait(true)`); caches the alias map with a monotonic change-version.
-  `EnsureFreshAliases()` = synchronous fallback used **only** on deliberate triggers.
-- **`CaretContext`** (new, `App/Completion`) — bounded backward scan over the AvaloniaEdit
-  `ITextSource` for the current word / dot context, returning **document-absolute** offsets.
-  Removes whole-`_editor.Text` materialization from the keystroke path (§15.5). Mirrors the Core
-  helpers exactly (reuses `SqlCompletionContext.IsIdentifierChar`); an **equivalence test**
-  (`CaretContextTests`, via `StringTextSource`) pins that the Document scan == the Core string
-  scan so the move can't drift.
-- **`SqlCompletionController`** (reworked) — `OnTextEntered` does no document-wide work; a typed
-  `.` and Ctrl+Space stay **immediate**; the identifier auto-popup is **idle-debounced**
-  (`AutoPopupDelay` = 250 ms, a clearly-named settable property — the wire-in point for the future
-  configurable delay/disable, §7.4); dot qualifiers resolve against the cached alias map + a
-  `knownTablesProvider`; Ctrl+Space always yields a non-empty list from cache (never a dead empty
-  list). `Detach` disposes the service + timer.
-- **Call sites** — `SqlEditorBehavior.Attach` / `MainWindow` now pass
-  `knownTablesProvider: EnumerateTableLikeNames` (was `dotTableResolver`); dead
-  `MainWindowViewModel.ResolveDotTable` + `MainWindow.ResolveDotTable` removed.
-- **Core (one small, approved reuse-refactor — NOT a rewrite, changes no §14 decision):** added
-  the pure `SqlAliasResolver.ResolveTableForQualifier(IReadOnlyDictionary<string,string> aliases,
-  qualifier, knownTables)` overload and had the existing `(sql,…)` overload **delegate** to it, so
-  the cached path reuses the exact tested resolution instead of duplicating it in App. Existing
-  tests stay green; +5 new tests.
+### 15.1 Etaps 0–6 — complete
 
-**Consciously deferred (NOT Etap 0):** keyword-list unification → **Etap 1** (Lexer); Item 13
-rich Quick Info → **Etaps 4–6** (§8A) — the *responsiveness* half of Item 13 (Ctrl+Space always
-works, never a dead empty list) shipped now, the *documentation* half needs the Semantic Model.
+| Etap | Delivered | History detail |
+|---|---|---|
+| 0 — IntelliSense responsiveness | Debounced/async/cancellable parsing; no more per-keystroke whole-document tokenizing; Ctrl+Space always immediate. | §16 of the history file |
+| 1 — Lexer | `SqlLexer` (Firebird-aware, lossless) + the single `FirebirdSyntax` keyword catalog; folded 3 of 4 outlier scanners onto it; regenerated the light-theme lexical palette for contrast. | §18 |
+| 2 — Parser + AST | Error-tolerant recursive descent at the "statement skeleton" depth (§5.4); `RawStatement` verbatim safety valve; the old DDL statement splitter migrated onto the parser's boundaries behind a byte-identity diff gate. | §19 |
+| 3 — Formatter (AST-based) | Retired the old flat-token `SqlFormatter`; rewrote it as an AST-dispatching formatter under the same name; deterministic + idempotent; the old formatter's full test suite kept green byte-for-byte as the parity gate. | §20 |
+| 4 — Semantic Model | `SemanticModel` binds the AST to meaning (scope tree + symbols + resolved references); the two-phase Query binder resolves a column qualifier against a FROM alias that appears later in the statement text. | §21 |
+| 5 — Completion + Signature Help + Snippets | Context/scope-aware completion wired into the editor controller; broad parameter info (§8); keyword live templates with Tab-stops. | §23, §24 |
+| 6 — Navigation + Semantic highlighting + Quick Info | Ctrl+hover/underline/cursor/tooltip, go-to-definition, Peek Definition, local find-references/rename; the semantic color layer (§9); the full Quick Info feature (engine, hover tooltip, completion detail pane). | §25, §26, §27 |
 
-**Gotcha (per keystroke, avoid whole-`Text`):** never read `_editor.Text` on `TextEntered` — it
-materializes the whole document every keystroke. Use `CaretContext` over `_editor.Document`
-(bounded backward scan, absolute offsets) and move any whole-document analysis into the
-debounced `EditorLanguageService`.
+### 15.2 UX Polish Phase — opened after the Etap 6 review
 
----
+After Etap 6 the user ran a practical review (EmberTern vs. IBExpert) and — while explicitly
+endorsing the architecture — filed a UX polish backlog. **This is refinement, not new
+architecture, and not Etap 7.**
 
-## 17. Etap 1 — scope (COMPLETE — shipped 2026-07-09; see §18 for the record)
+**Done**: P1 (dot-completion resolves correctly at the end of a statement — the underlying fix,
+`Scope`/`SemanticModel` offset lookups now inclusive at a span's end, is gotcha #198 and also
+fixed several other end-of-text edge cases for free), P2 (completion list redesigned — per-kind
+icon, rich column facts via a shared `Symbol`, lighter font), P3 (Ctrl+Space on a fully-typed,
+resolved identifier now shows its Quick Info facts instead of an empty re-list), P4 (dragging the
+completion list's own scrollbar no longer dismisses it — gotcha #199), P5 (semantic highlighting
+is now consistent across all 12 statement kinds — the one gap was `CREATE TRIGGER`'s `FOR <table>`
+target not being recorded as a schema-object reference), P6 (double-click in an INSERT/VALUES
+list shows a popup naming which target column the clicked value maps to), P7 (PSQL live-template
+snippets trigger correctly inside a bare `BEGIN…END` body and an ad-hoc `EXECUTE BLOCK`), P9 (a
+conservative, contrast-computed theme pass fixed the two specifically-reported low-contrast
+cases — the dark DML keyword color and the light built-in-function color).
 
-> **STATUS: DONE.** This section is the original ready-to-start scope, kept for the record;
-> the as-built result is in §18.
+**Deferred, not started (in priority order for whenever polish resumes):**
+- **P8 — formatter polish.** The largest remaining item. `EXECUTE BLOCK` / `FOR SELECT` / `INTO`
+  layout, and — the headline goal — real max-line-width wrapping for long `INSERT`/`VALUES`/
+  `SELECT`/function-call lines (no more horizontal scrolling of hundreds of characters). Likely
+  needs the parser deepened for INSERT/VALUES/SELECT-list clauses (deferred from Etap 3's
+  "statement skeleton" depth on purpose — build grammar depth only when a concrete feature needs
+  it). Its own large package.
+- **P5d — a plain-hover info cue.** A dwell-delayed, info-only Quick Info tooltip on plain hover
+  (no Ctrl held); the underline + hand-cursor affordance stays Ctrl-only per §9.4. Small and
+  implementable, but it's a live-tuning UX addition (dwell delay, noise) the design defers to
+  interactive judgment rather than shipping blind.
+- **P2c — bold the typed fragment in each completion row.** Re-confirmed not cleanly doable on
+  AvaloniaEdit 12.0.0: `CompletionList` exposes no per-item matched-range to a custom `Content`.
+  Needs either a custom `CompletionListBox` item template or a controller-side re-render of every
+  visible row on each filter keystroke (fragile). Do it only when it can be done without a hack.
 
-> **Read first:** [etap1-tokenization-audit.md](etap1-tokenization-audit.md) — the code-grounded
-> audit of every current tokenizer / scanner / keyword list / highlighting asset, the dependency
-> map, and the REPLACE/KEEP/ADAPTER/DEFER disposition per component. Its §4 scanner-scope
-> decision is **APPROVED (2026-07-09)**: Etap 1 folds outliers **O2/O3/O4** + creates the lexer +
-> `FirebirdSyntax` + unifies the keyword catalog + fixes the light palette; **O1
-> `SqlFormatter.Tokenize` is deferred to Etap 3** (dies with the AST formatter rewrite) and **O5
-> `FirebirdDdlExecutor.SplitStatements` to Etap 2** (needs the parser's statement boundaries). Its
-> §6 is the concrete execution order.
+### 15.3 Post-polish bug-fix sprint (2026-07-11) — status
 
-Start here without re-analyzing. Etap 1 introduces the **first piece of the real front-end: one
-Firebird-aware Lexer + the single `FirebirdSyntax` keyword catalog** — and takes an early,
-standalone **light-theme lexical-palette** win. **Still no parser/AST** (that is Etap 2).
+A short stabilization sprint ran immediately after the UX Polish Phase review, fixing five
+diagnosed issues in packages. **Etap 7 stays blocked until this sprint's items are fully closed.**
 
-**Goal:** kill the duplication (P8) — 4 outlier scanners + 3 keyword lists collapse to one lexer
-+ one catalog — and fix the muddy light-theme lexical colors (§9.1/§9.5), all without changing
-any feature's behavior yet.
+- **Packages 1–3 — done, verified** (completion-list initial filtering, a `VisualLinesInvalidException`
+  crash on double-click, Semantic Model staleness after late metadata loads, a highlighting-delay
+  fix, and a new-tab focus fix). Full detail + the resulting gotchas (#200, #201, #202) are in the
+  history file.
+- **Package 4 — edits complete, verification NOT confirmed.** A light-theme completion-popup
+  background style and a dark-theme comment-contrast tweak were made, but the build/test/smoke
+  verification pass was interrupted by a transient build-tool outage and was never re-run. **Next
+  action: re-run build + test + smoke before treating this as done.**
+- **Package 5 — diagnosed, not started (Quick Info richness).** `QuickInfoEngine` already renders
+  a rich card when it has rich data; the data is thin because `AppMetadataSnapshot.GetColumns` /
+  `ColumnSpec` / `FirebirdMetadataReader.ColumnsSql` only carry Name/Type/Domain/Nullable (kept
+  lean deliberately for the completion hot path). **Concrete next-session plan:** extend
+  `ColumnSpec` + `ColumnsSql` with the PK/FK correlated subqueries + `RDB$DEFAULT_SOURCE` /
+  `RDB$DESCRIPTION` / `RDB$COMPUTED_SOURCE` / `RDB$IDENTITY_TYPE` (FB-version-gate identity —
+  it's FB3+, gotcha #146, exactly like `FirebirdTableDetailReader.FieldsSql` already does), map
+  them in `AppMetadataSnapshot.GetColumns`, and verify against `Lab/EmberTern_Lab.fdb`. Consider
+  reusing `FirebirdTableDetailReader.GetFieldsAsync` (already returns the full `FieldInfo`) rather
+  than duplicating the SQL, or a separate on-demand rich-column fetch so the completion column
+  cache stays lean. The completion row's `: TYPE : DOMAIN` display is unaffected — only the
+  Ctrl-hover card and the detail pane gain the extra facts.
 
-**Concrete work (per §5.1, §4.2#6, §9.5):**
-1. `Core.Sql.Language.SqlLexer` — text → immutable token stream (`SqlToken`: one `TokenKind` enum
-   for the whole app, span + attached trivia). Firebird-aware: `''`-escaped strings, `"…"` quoted
-   identifiers, `--` and `/* */` comments, `:name`/`?`/`@name` params, operators, numbers, dialect
-   quirks. `IReadOnlyList<SqlToken> Tokenize(string)` (incremental variant later). Fold in the
-   `SqlScanHelpers` primitives.
-2. `Core.Sql.Language.FirebirdSyntax` — the single keyword catalog (keywords by category, types,
-   built-in functions) that drives the lexer, completion, and the highlighting palette. **One
-   source of truth** — `SqlKeywords.All`, `SqlFormatter`'s hashsets, and the two XSHD keyword
-   lists become derived from it (or are replaced), not hand-maintained parallel lists.
-3. Migrate the four outlier scanners onto the lexer **progressively** (`SqlFormatter.Tokenize`,
-   `SqlAliasResolver.Tokenize`, `SqlStatementClassifier`'s private scanner, `TraceSqlInliner`) —
-   proving the lexer covers their needs. Keep old code until each consumer is verified, then retire
-   it (coexistence, R5). **§0:** any consumer that reproduces text (formatter, inliner) must remain
-   byte-for-byte identical — old-vs-new corpus diff before switching.
-4. **Light-theme lexical palette** — regenerate/clean the light-theme XSHD colors for contrast
-   (adjacent roles differ in hue AND lightness; WCAG-AA-ish), an early light-theme improvement
-   before the semantic layer (Etap 6) exists. Dark theme unchanged unless a role is clearly muddy.
+### 15.4 Where the gotchas from this work live
 
-**Acceptance:** the lexer tokenizes the Lab DB + real ERP SQL corpus correctly; each migrated
-consumer keeps identical behavior (pinned by its existing tests + a corpus diff); the light theme
-is visibly clearer with distinguishable roles; build 0/0; smoke clean. **§0 holds** (no code
-generation/modification changes; the formatter/inliner outputs are diffed for byte-identity).
-
-**Out of scope for Etap 1:** the Parser, AST, semantic model, formatter rewrite, completion
-engine, navigation, Quick Info — all later etaps.
-
----
-
-## 18. Etap 1 — completion record (shipped 2026-07-09)
-
-**Result:** build 0/0 · tests 2902 (main) + 10 (headless probe) green (+79 new) · smoke clean
-(app alive 9 s, exit 0, no `FATAL`). Core-layer only (one App asset touched: the light XSHD
-palette). **§0 holds** — the two highest-risk text reproducers (O1 `SqlFormatter`, O5
-`FirebirdDdlExecutor.SplitStatements`) were left untouched (deferred to Etaps 3/2 per audit §4);
-the one text reproducer migrated (O4 `TraceSqlInliner`) reconstructs by copying source spans
-between the `?` markers, so its passthrough is byte-identical by construction. The three
-divergent keyword lists collapsed to one source of truth; the muddy light theme is de-clustered.
-
-**Delivered (new — `EmberTern.Core.Sql.Language`):**
-- **`FirebirdSyntax`** — the single keyword catalog. Four highlight-category arrays
-  (Dml/Statement/DataType/Function) transcribed 1:1 from the XSHD blocks + the completion
-  vocabulary; a static ctor unions them into a case-insensitive catalog, asserting the four
-  highlight categories are disjoint. Drives the lexer (`IsKeyword`), completion
-  (`CompletionKeywords`), and highlighting (`KeywordsInCategory`).
-- **`SqlLexer`** + **`SqlToken`** / **`TokenKind`** (one enum for the whole app) / **`SqlTrivia`**
-  — the Firebird-aware lexer: `''`/`""` escapes, `--` + `/* */` comments as attached leading
-  trivia, `?`/`:name`/`@name` parameters, `$` identifiers, hex/exponent numbers, multi-char
-  operators. **Lossless** (round-trip pinned): concatenating each token's leading-trivia text +
-  `Text` reproduces the source byte-for-byte — the parser/formatter foundation. Keyword vs
-  identifier is decided by the `FirebirdSyntax` catalog.
-
-**Migrated (internals re-pointed onto the lexer; public APIs + behaviour unchanged):**
-- **O2 `SqlAliasResolver`** — its private tokenizer now projects the lexer stream onto the
-  resolver's Word/Comma/Dot/LParen/RParen/Other shape; the proven `ParseAliases` walk is
-  untouched. (All 24 resolver tests green.)
-- **O3 `SqlStatementClassifier`** — reads the leading word from the lexer; deleted its byte-copy
-  of `SqlScanHelpers.SkipTrivia`. (All classifier tests green.)
-- **O4 `TraceSqlInliner`** — §0-critical; rebuilds by copying source spans between the positional
-  `?` tokens (named `:name`/`@name` never substituted). Byte-identical passthrough. (+3 defensive
-  tests.)
-- **K1 `SqlKeywords.All`** — now a thin ADAPTER over `FirebirdSyntax.CompletionKeywords` (the
-  exact historical set preserved; completion behaviour unchanged).
-
-**Light-theme lexical palette (§9.5):** the three "cool" roles that were near-identical
-green/teal mid-tones (Comment/Number/DataType) are re-spaced across a green→teal→blue gradient
-(differ in hue AND lightness), and the harsh pure-blue DML keyword is softened. Only the 8
-`<Color>` values in `FirebirdSql.Light.xshd` changed — the keyword blocks are unchanged and are
-now **pinned against `FirebirdSyntax`** by a drift-guard test (reads both XSHD files, asserts
-each `<Keywords>` block equals the matching catalog category and that light == dark). Dark theme
-unchanged.
-
-**Deferred (per audit §4, unchanged):** O1 `SqlFormatter.Tokenize` + its keyword hashsets → Etap 3
-(dies with the AST formatter); O5 `FirebirdDdlExecutor.SplitStatements` → Etap 2 (needs the
-parser's real statement boundaries). `SqlScanHelpers` KEPT as-is (its many Core consumers ride
-it); it folds into the lexer opportunistically later.
-
-**Tests:** `SqlLexerTests` (round-trip corpus + span-contiguity + every lexical shape),
-`FirebirdSyntaxTests` (catalog invariants + the XSHD drift guard), + the migrated consumers'
-existing suites (all green, proving behaviour preservation).
-
----
-
-## 19. Etap 2 — completion record (shipped 2026-07-10)
-
-**Result:** build 0/0 · tests 3058 (main) + 10 (headless probe) green · 9 s smoke clean (app alive,
-no `FATAL`). Core-layer only (plus the `FirebirdDdlExecutor` O5 delegator). **§0 holds** — the
-round-trip is machine-checked, and O5 was migrated only after a differential corpus diff proved it
-byte-for-byte identical to the legacy splitter.
-
-**Approved depth (user decision 2026-07-10): "statement skeleton".** The user chose a complete,
-stable AST *foundation* over a partial deep parser: every §5.4 statement is its own typed node from
-the start, but a statement's interior is kept verbatim (in `SqlStatement.Tokens`) where deeper
-analysis isn't needed yet. Later etaps deepen individual nodes (clauses, expressions, PSQL bodies)
-without rebuilding the foundation — the natural growth path for Etap 3 (Formatter) / Etap 4
-(Semantic Model) / onward. This best fits Never-Lose-Information and minimises regression risk.
-
-**Delivered (new — `EmberTern.Core.Sql.Language.Ast` + `…Language`):**
-- **`SqlNode`** (abstract base) — absolute span + ordered `Children` + `NodeAt(offset)` (deepest
-  containing node) + `Descendants<T>()`. Immutable; holds no source string.
-- **`SqlScript`** (root) — the ordered `Statements` + the complete lossless token stream + the
-  original `Text`. **`ToSourceString()` reconstructs the input byte-for-byte** — the §0 round-trip
-  invariant, guaranteed by the token stream and therefore **independent of grammar depth** (a
-  `RawStatement` or a shallowly-modelled statement round-trips identically). This decoupling is the
-  load-bearing design idea: the tree is a structural *overlay* on a lossless token stream.
-- **`SqlStatement`** (abstract) + **`StatementKind`** + **17 concrete statement node types** — one
-  per §5.4 kind: `SelectStatement`, `InsertStatement`, `UpdateStatement`, `UpdateOrInsertStatement`,
-  `DeleteStatement`, `MergeStatement`, `ExecuteBlockStatement`, `ExecuteProcedureStatement`
-  (→ `ProcedureName`), `ExecuteStatementStatement`, `DdlStatement` (→ `Verb`, `ObjectKind`,
-  `ObjectName`, `IsPsqlDefinition`), `CommentStatement`, `SetStatement` (→ `Target`),
-  `GrantStatement`, `RevokeStatement`, `DeclareStatement`, `EmptyStatement`, and the `RawStatement`
-  safety valve. Each holds its significant `Tokens` (incl. a trailing `;` when consumed).
-- **`SqlParser`** — error-tolerant recursive descent. Never throws, never returns null; every byte
-  lands in exactly one statement, and an unrecognised statement becomes a `RawStatement` (not an
-  error). It owns the one **statement-boundary authority**: the segmentation mirrors the
-  long-standing PSQL-aware splitter exactly (plain → next top-level `;`; a `CREATE/ALTER/RECREATE`
-  of a `PROCEDURE/TRIGGER/FUNCTION/PACKAGE` kept whole through the `END` closing its outermost
-  `BEGIN`; CASE-aware; string/comment-safe because those are already opaque tokens/trivia).
-- **`Diagnostic` / `DiagnosticSeverity` / `ParseResult`** — the recovery-diagnostics channel
-  (infrastructure). Deliberately empty at statement-segmentation depth (there are no "recoverable
-  errors" — unknown ⇒ `RawStatement`, the §0 valve); real diagnostics arrive with clause/PSQL
-  parsing (later etaps) and user-facing squiggles are Etap 7.
-
-**Consumers re-expressed as AST queries (the "proof the tree works"):**
-- **`SqlStatementClassifier.Classify`** now parses and maps the first statement's node type to a
-  lane (Data / Metadata / Ambiguous). Behaviour identical (its pinned tests pass unchanged).
-- **`SqlParameterScanner`** — `IsExecuteBlock` / `TryExtractExecuteProcedureName` read the first
-  statement node; `Scan` is now a filter over the lexer's `Parameter` tokens (byte-identical
-  because `SqlScanHelpers.IsIdentifierChar` == the lexer's identifier-part set). `RewriteToDriverMarkers`
-  is unchanged (rides `Scan`). Pinned tests pass unchanged.
-
-**O5 migrated (audit §4/§5, §0-critical):** the DDL splitter now rides the parser. New Core
-**`SqlStatementSplitter.Split(sql)`** = `SqlParser.Parse(sql).Root.Statements` sliced by span +
-the exact legacy post-processing (trim, strip one trailing `;`, drop empties);
-**`FirebirdDdlExecutor.SplitStatements`** is a one-line delegator and its ~200 lines of char
-scanners are deleted. The switch was gated on **`SqlStatementSplitterDiffTests`** — a permanent
-differential test that runs a ~45-case corpus (the long-standing pinned splitter cases + generated
-DDL shapes + pathological/unterminated inputs) through both an **inlined copy of the legacy
-algorithm** and the parser-backed splitter and asserts they are byte-identical.
-
-**Tests:** `SqlParserTests` (round-trip §0 invariant + never-throws over a corpus, classification
-into the taxonomy, multi-statement segmentation, PSQL-kept-whole, DDL/Execute/Set fact extraction,
-`RawStatement`/`EmptyStatement`, `NodeAt`/`Descendants`), `SqlStatementSplitterDiffTests` (the §0
-byte-identity gate), + the migrated consumers' existing suites (all green, proving behaviour
-preservation).
-
-**Deferred by design (the growth path, not gaps):** deeper per-node grammar — DML clauses
-(WITH/SELECT-list/FROM/JOIN/WHERE/…), PSQL body blocks (BEGIN/END, IF/WHILE/FOR/CASE/DECLARE/…),
-and expressions — is added in later etaps, driven by what the formatter (Etap 3) and Semantic Model
-(Etap 4) need; statement nodes are leaves for now and gain `Children` then. `EXECUTE BLOCK` with a
-DECLARE section before its `BEGIN` follows the legacy boundary (it is not a "PSQL definition" for
-segmentation, so its pre-`BEGIN` `;` splits it) — a documented, never-triggered-in-O5 edge kept for
-§0 byte-identity; a later etap that models EXECUTE BLOCK deeply will re-validate O5.
-
----
-
-## 20. Etap 3 — completion record (shipped 2026-07-10)
-
-**Result:** build 0/0 · tests 3213 (main) + 10 (headless probe) green · 9 s smoke clean (app alive,
-no `FATAL`). Core-layer only (Core.Sql + Core.Sql.Language + the two test suites). **§0 holds** — the
-existing formatter suite passes **byte-for-byte** (the old expected outputs = the old-vs-new parity
-proof for every tested case), and new machine-checked tests prove no significant token or comment is
-ever lost/added/reordered/mangled over a broad corpus.
-
-**Approved approach (Variant A, user decision 2026-07-10):** AST *statement dispatch* + token-level
-interior, reusing the proven test-pinned layout logic. The user explicitly chose NOT to deepen the
-parser in Etap 3 (no clause/PSQL-body child nodes) — that stays the natural growth path for later
-etaps. What the AST buys now: the statement-level decisions are 100% parse-tree-driven (the old
-`IsPsql` / `FindBodyStart` heuristics and the separate keyword-classification tokenizer are gone).
-
-**Delivered:**
-- **`EmberTern.Core.Sql.SqlFormatter`** — the single AST-based formatter (the old heuristic
-  implementation was deleted and this rewrite carries the plain name — no facade, no `V2`; it was
-  landed transiently as `SqlFormatterV2` during the migration and consolidated once the old class was
-  gone, per the naming policy in §14 decision #15). `Format(string)` /
-  `Format(SqlScript)`. Walks `SqlScript.Statements` and dispatches by node kind:
-  `RawStatement`/`EmptyStatement` → **verbatim** (source span + any leading comments — §0);
-  `DdlStatement{IsPsqlDefinition}` + `ExecuteBlockStatement` → header verbatim through the body's
-  top-level `AS`, body block-structured; `AnonymousBlockStatement` → PSQL body (the procedure-body
-  editor's bare `BEGIN…END`); everything else (all DML + non-PSQL DDL + COMMENT/SET/GRANT/REVOKE/
-  DECLARE/EXECUTE PROCEDURE/STATEMENT) → the clause-break SQL emitter (which still handles the
-  CREATE VIEW header + long-line wrapping internally). Trailing comments (on EOF) are appended so
-  nothing is lost. Deterministic + idempotent (indent from structure, breaks from clause keywords +
-  `;`, never from input whitespace).
-- **Interior reuse over the single lexer.** The proven emit + PSQL-block algorithms (clause/JOIN/ON/
-  AND-OR breaks, view header, SELECT-column / IN-list wrapping, CASE-safe BEGIN/END structuring,
-  blank-line preservation, `SELECT … INTO` split, gotcha-#152 package bodies) were ported onto a
-  small flat "format token" stream produced from `SqlLexer` tokens — comments come from the lexer's
-  **leading trivia** (never a separate comment tokenizer), whitespace is dropped, a `BlankBefore`
-  flag carries author blank lines for PSQL. This is the **O1 death**: `SqlFormatter.Tokenize` and its
-  keyword hashsets are gone; the formatter rides the one `SqlLexer`.
-- **Stable public API.** `SqlFormatter.Format(string)` is unchanged, so the ~6 App call sites (editor
-  Alt+F, EditorSearch, the object detail views, the trace SQL preview) and the regression suite need
-  no edits. The old flat-token/heuristic algorithm is deleted; there is exactly one formatter class.
-- **One small, formatter-driven AST refinement (sanctioned):** `AnonymousBlockStatement` +
-  `StatementKind.AnonymousBlock`. The parser now classifies a bare `BEGIN…END` (and a `DECLARE`-led
-  body that contains a `BEGIN`) as an anonymous block instead of a `RawStatement`, so formatting a
-  procedure/function/trigger **body editor** (gotcha #114 — the stored body has no CREATE header)
-  produces a structured block rather than a verbatim fallback. **Segmentation/spans are unchanged**,
-  so the O5 splitter (which slices by span, not kind) is unaffected — pinned by the still-green
-  `SqlStatementSplitterDiffTests`; `SqlStatementClassifier`/`SqlParameterScanner` have safe defaults
-  for the new kind.
-
-**Style policy vs lexical catalog.** The formatter keeps its own small *style* sets (which keyword
-breaks a line / keeps a space before `(`) — that is layout policy, legitimately the formatter's, and
-kept identical to the shipped style so output is byte-for-byte unchanged. The *lexical* "what is a
-keyword" question is the single `FirebirdSyntax` catalog's job (via the lexer's token kinds). So O1's
-K2 hashsets are not "moved into FirebirdSyntax"; the lexical part died (the lexer classifies), the
-layout part stayed as style. Note that a couple of style words (`OPEN`/`CLOSE`) aren't FirebirdSyntax
-keywords and lex as identifiers — the keep-space rule is independent of the lexer's classification, so
-this is correct.
-
-**One deliberate behavior change (§0-correct):** an **unrecognised fragment** (e.g. a bare
-`a , b , c` comma-list — not a statement) is now a `RawStatement` and is emitted **verbatim**, where
-the old flat-token formatter re-spaced it. This is the Paramount Law in action (never reshape SQL we
-can't classify). Recognised statements still format fully. Exactly one existing test changed
-(`SqlFormatterTests.NoStructuralKeywords_StaysOnOneLine` → `UnrecognisedFragment_IsPreservedVerbatim`).
-
-**Tests:** existing `SqlFormatterTests` + `PsqlFormatterTests` kept green byte-for-byte (the parity
-gate); new **`SqlFormatterInvariantsTests`** — a broad corpus (every statement kind + comments + incomplete +
-erroneous + unusual + multi-statement) driving **idempotency** (`Format(Format(x)) == Format(x)`),
-**§0 token-preservation** (identical normalised significant-token sequence in↔out), **§0
-comment-preservation** (every comment survives in order), **never-throws**, plus statement-kind spot
-assertions, the RawStatement/anonymous-block/trailing-comment cases, and the facade delegation.
-`SqlStatementSplitterDiffTests` (the O5 §0 byte-identity gate) unchanged and green.
-
-**Known limitations / deferred (the growth path, not gaps):** interior layout is still token-level
-(no deeper clause/PSQL-body AST nodes yet) — so, e.g., `UPDATE … SET …` does not break `SET` onto its
-own line, and long `INSERT … VALUES` isn't value-wrapped. Those are deeper-clause improvements for
-later etaps (Etap 4+ deepen nodes "driven by what the formatter needs", §19). A configurable style
-profile (`FormatOptions`) is deferred to the future application configurator (§6) — Etap 3 ships the
-single opinionated default as constants. The pain cases named in §5.6 that ARE improved now: EXECUTE
-BLOCK (header kept + body block-structured), bare/DECLARE-led PSQL bodies (structured, not verbatim),
-IF/JOIN/WHERE-AND-OR (unchanged good behavior, now dispatched from the AST).
-
----
-
-*End of frozen design. Etaps 0 (§16), 1 (§18), 2 (§19) and 3 (§20) complete; next session: implement
-Etap 4 (Semantic Model) per §12 — bind the AST to the connection's metadata cache + local scope
-(aliases/PSQL vars/params/NEW/OLD/cursors, nested scopes), the foundation for completion / navigation
-/ diagnostics / semantic highlighting and for Quick Info (§8A).*
+Gotchas #189 through #202 (all introduced during the editor rebuild) are catalogued, with full
+text, in **[`docs/gotchas.md`](../gotchas.md)** under "SQL lexing, parsing, formatting &
+scanning" and "Never lose information / correctness-over-convenience". The ~6 most load-bearing
+ones (the §0 round-trip guarantee, the end-of-span-inclusive lookup rule, the no-transitional-names
+rule) are also in `CLAUDE.md`'s short "Live gotchas" list.
