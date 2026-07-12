@@ -179,25 +179,65 @@ noted.
 - **Active branch (pre-cleanup-sprint): `feat/editor-language-frontend`** — holds uncommitted
   Etaps 3–6 of the editor-language-front-end rebuild plus the follow-on UX Polish Phase and a
   post-polish bug-fix sprint. Not yet merged to `master`.
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: last known green
-  count ≈ 3401 main + 13 headless-probe tests (run the `ConnectionExpandBindingProbe` headless
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: green
+  count ≈ 3410 main + 16 headless-probe tests (run the `ConnectionExpandBindingProbe` headless
   class as its own `dotnet test` partition — it intermittently hangs alongside the rest of the
-  suite; both partitions pass independently).
-- **Functional development is PAUSED.** This session ran a **Documentation Cleanup Sprint**
-  (see `docs/history/README.md` for what moved where) — no feature work happened. Per explicit
-  instruction: **do not start Etap 7, P8 (formatter polish), or any new feature** until the user
-  says so.
+  suite; both partitions pass independently). Smoke: clean (app launches).
+- **QA rule (2026-07-12, user directive):** a package is NOT "fixed" on green build/tests/smoke
+  alone. If a fix can't be verified **visually in the running app**, report it as "implementation
+  done — awaits user confirmation", never "fixed". Trace flows to ground truth, don't guess.
+- **Parameter Helper — DONE + UNIFIED (gotchas #206–#210).** One `ParameterHelper` (App/Completion,
+  OverlayLayer-hosted, source of truth = `SignatureHelpEngine`) shows the parameter list of whatever
+  call/DML site the caret is at — **INSERT / UPDATE OR INSERT / EXECUTE PROCEDURE / function** — with
+  the active parameter a solid accent pill and IN/OUT for routine params. Both triggers feed it: a
+  **double-click** on a value (`NavigationController` → `SqlCompletionController.TryShowParameterHelperAt`)
+  and **typing** an argument list (`(`/`,`/`)` / Ctrl+Shift+Space) — the old M7 `OverloadInsightWindow`
+  is gone. Lifetime is **context-driven**, not offset-driven (#210): on each caret move it re-queries
+  the engine and stays open while still the same site (kind+target), following the active argument,
+  closing only on a real context change / Escape / detach. The journey (all fixed): wrong offset (caret
+  vs pointer, #206), columns not warmed (#204), bare `Popup`/`PopupRoot` invisible on the desktop →
+  OverlayLayer (#209). Engine: `SignatureHelpEngine` now treats `StatementKind.UpdateOrInsert` like
+  `Insert`. All temporary `EditorDiagnostics` instrumentation removed (code clean). The other custom
+  popups (hover tooltip, Quick Info, Peek, rename) still use the bare-Popup pattern — migrate to
+  OverlayLayer if they show the same invisibility symptom.
+- **Multi-statement root cause FOUND & FIXED (gotcha #208):** the user's real problem was that several
+  statements in one editor **separated only by newlines (no `;`)** collapsed into ONE parser statement
+  (`ScanPlain` ends only at a top-level `;`), so only the first was analysed (coloured/nav/Quick Info).
+  Fix: a **lenient** parse for the READ-ONLY semantic model only — `SqlParser.Parse(text, lenient:true)`
+  wired into `SemanticModel.Build(string)` — that also splits at top-level statement-start keywords with
+  continuation guards (`WITH…SELECT`, `INSERT…SELECT`, `…UNION SELECT`, `CREATE VIEW…AS`, `MERGE…WHEN`).
+  The strict `;`-only `Parse` (executor boundary authority, gotcha #192) is untouched. Pinned by
+  `SemanticModelTests.MultipleStatements_WithoutSemicolons_*`. **User-confirmed fixed live** (all objects
+  across every statement now colour/navigate).
+- **UX Polish — QA Fix Sprint (2026-07-12).** (1) **Light-theme popup blend — fixed & verifiable:**
+  style `aecc|CompletionListBox` (the earlier `aecc|CompletionList` Background was a no-op — that
+  control's template never paints its Background). (2) **Double-click INSERT/VALUES helper —
+  root-caused & fixed (awaits visual confirm):** the decision→popup flow is proven correct by
+  `InsertHelper_DoubleClick_OpensPopup_*`; the live miss was the OFFSET — `OnDoubleTapped` used
+  `_editor.CaretOffset` (not reliably on the clicked value when the gesture fires) instead of the
+  POINTER offset (now `OffsetAt(e.GetPosition(...))`, gotcha #206). Also added warm-then-retry so
+  the helper works when the target columns aren't cached. (3) **View / selectable-proc in FROM not
+  coloured — PROVEN not the binder and not the highlighter (gotcha #207):** three probes show the
+  binder resolves them given metadata, the highlighter paints the object colour when resolved
+  (`SemanticHighlighter.PaintedBrushAt`), and `TextView.Redraw()` genuinely re-runs the colorizer.
+  "Ctrl+Click works" is misleading — it has a name-based fallback, so the symptom set (no colour +
+  no hover + no Quick Info, yet Ctrl+Click opens it) means the MODEL didn't resolve the object =
+  metadata-not-in-snapshot-at-build-time (gotcha #205). Every link of the rebuild chain
+  (`DataContextChanged`→`OnDataContextChanged`→`ObjectsChanged`→`NotifyMetadataChanged`→debounce→
+  `RefreshModelWithMetadata`→repaint) is re-verified, but the live failure could NOT be reproduced
+  headlessly → **awaits user confirmation**; if it persists on a clean rebuild, add runtime tracing
+  of the snapshot object-count at model build.
+- **Functional development is otherwise PAUSED.** Per explicit instruction: **do not start Etap 7,
+  P8 (formatter polish), or any new feature** until the user says so.
 - **What's next, when development resumes** (in the editor-language-front-end work — see
   `docs/design/editor-architecture.md` for full detail):
-  1. Re-run build/test/smoke to verify **Package 4** of the post-polish bug-fix sprint (a
-     light-theme completion-popup background fix + a dark-comment contrast fix) — the edits are
-     complete but verification was interrupted by a transient build-tool outage and was never
-     confirmed.
-  2. **Package 5** (Quick Info richness) is diagnosed but not started: `ColumnSpec` +
+  1. **Package 5** (Quick Info richness) is diagnosed but not started: `ColumnSpec` +
      `FirebirdMetadataReader.ColumnsSql` need PK/FK/default/description/computed/identity columns
      added (FB-version-gate identity per gotcha #146) so the Ctrl-hover/detail-pane Quick Info
      card can show more than type/domain/nullability. Concrete plan is in the design doc.
-  3. Once the UX Polish Phase is formally closed by the user (remaining backlog: **P8** formatter
+     (Note: `ColumnSpec.cs` / `FirebirdMetadataReader.cs` show as modified in the working tree but
+     the rich fields are NOT yet added — the columns query still returns the 4-field `ColumnSpec`.)
+  2. Once the UX Polish Phase is formally closed by the user (remaining backlog: **P8** formatter
      polish — its own large package, likely needs the parser deepened; **P5d** a plain-hover
      info cue; **P2c** bold the typed completion-fragment — no clean AvaloniaEdit 12.0.0 path yet)
      — only then does Etap 7 (diagnostics, folding, breadcrumbs, bracket-matching) start.

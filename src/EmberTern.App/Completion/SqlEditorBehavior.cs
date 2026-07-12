@@ -1,8 +1,5 @@
-using Avalonia.Input;
-using Avalonia.Interactivity;
 using AvaloniaEdit;
 using EmberTern.App.ViewModels;
-using EmberTern.Core.Sql;
 
 namespace EmberTern.App.Completion;
 
@@ -24,11 +21,33 @@ internal static class SqlEditorBehavior
     {
         var completion = new SqlCompletionController(
             editor,
-            vm.EnumerateLoadedObjects,
-            knownTablesProvider: vm.EnumerateTableLikeNames,
-            cachedColumnsProvider: vm.TryGetCachedColumns,
+            metadataSnapshot: vm.CreateMetadataSnapshot,
             ensureColumnsAsync: t => vm.EnsureColumnsAsync(t),
-            contextTableProvider: contextTableProvider);
+            contextTableProvider: contextTableProvider,
+            ensureRoutineParamsAsync: t => vm.EnsureRoutineParametersAsync(t),
+            // Rebuild the semantic model when a metadata category finishes loading, so objects loaded
+            // after the editor opened (views / selectable procedures used in FROM) begin resolving for
+            // highlight / Ctrl-nav / Quick Info. Scoped to the editor's visual-tree lifetime inside the
+            // controller, so this subscription to the long-lived Metadata singleton is leak-free.
+            subscribeMetadataChanged: h => vm.Metadata.ObjectsChanged += h,
+            unsubscribeMetadataChanged: h => vm.Metadata.ObjectsChanged -= h);
+
+        // Semantic highlighting (Etap 6): colour identifiers by resolved role, fed by the same
+        // cached semantic model the completion controller owns (one background parse per editor).
+        SemanticHighlighter.Attach(editor, completion);
+
+        // Navigation (Etap 6 / M4): Ctrl+hover (underline + hand cursor + Quick Info tooltip) and
+        // Ctrl+Click go-to-definition, driven by the same cached model. Owns the Ctrl+Click gesture;
+        // a name-based open is the fallback for editors the model can't fully resolve (e.g. a
+        // body-only Easy-mode trigger editor whose CREATE header isn't in the text).
+        NavigationController.Attach(
+            editor,
+            () => completion.Model,
+            (name, kind) => vm.TryOpenSchemaObject(name, kind),
+            word => vm.TryOpenDdlForWord(word),
+            (name, kind) => vm.FetchObjectDefinitionAsync(name, kind),
+            // Double-click on a value → the unified Parameter Helper (owned by the completion controller).
+            showParameterHelper: offset => completion.TryShowParameterHelperAt(offset));
 
         // Select-an-identifier → box all its occurrences in this editor.
         OccurrenceHighlighter.Attach(editor);
@@ -36,34 +55,9 @@ internal static class SqlEditorBehavior
         // Find (Ctrl+F) / Replace (Ctrl+H) + right-click menu — one shared installer.
         EditorSearch.Install(editor);
 
-        // Double-click on an identifier → open the object (same as the SQL Editor).
-        editor.DoubleTapped += (_, e) =>
-        {
-            if (TryOpenWord(editor, vm)) e.Handled = true;
-        };
-
-        // Ctrl+Click → open the object. Tunneled so it runs before the editor's own
-        // pointer handling; only acts when the word resolves to a loaded object.
-        editor.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
-        {
-            var props = e.GetCurrentPoint(editor).Properties;
-            if (props.IsLeftButtonPressed
-                && (e.KeyModifiers & KeyModifiers.Control) == KeyModifiers.Control
-                && TryOpenWord(editor, vm))
-            {
-                e.Handled = true;
-            }
-        }, RoutingStrategies.Tunnel);
+        // Double-click (INSERT/VALUES helper + name-based open) is owned by NavigationController — one
+        // handler, no duplicate here (§10 / P6).
 
         return completion;
-    }
-
-    private static bool TryOpenWord(TextEditor editor, MainWindowViewModel vm)
-    {
-        var text = editor.Text;
-        if (string.IsNullOrEmpty(text)) return false;
-        var word = SqlCompletionContext.GetWordAt(text, editor.CaretOffset);
-        if (string.IsNullOrEmpty(word.Text)) return false;
-        return vm.TryOpenDdlForWord(word.Text);
     }
 }

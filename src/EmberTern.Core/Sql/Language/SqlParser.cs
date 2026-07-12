@@ -37,7 +37,17 @@ public static class SqlParser
     private static readonly IReadOnlyList<Diagnostic> NoDiagnostics = Array.Empty<Diagnostic>();
 
     /// <summary>Parses <paramref name="text"/> into a <see cref="SqlScript"/>. Never throws.</summary>
-    public static ParseResult Parse(string text)
+    public static ParseResult Parse(string text) => Parse(text, lenient: false);
+
+    /// <summary>Parses <paramref name="text"/> into a <see cref="SqlScript"/>. Never throws.</summary>
+    /// <param name="lenient">When <c>true</c>, a plain statement ALSO ends at a top-level statement-start
+    /// keyword (<c>SELECT/INSERT/UPDATE/DELETE/MERGE/EXECUTE/CREATE/…</c>) even without a separating
+    /// <c>;</c> — so an editor script whose statements are only newline-separated is analysed
+    /// per-statement instead of collapsing into one. This is for the <b>read-only semantic model
+    /// only</b> (a mis-split degrades IntelliSense, never data — §0): the strict, <c>;</c>-only
+    /// segmentation the DDL/script executors ride (<see cref="SqlStatementSplitter"/>, gotcha #192)
+    /// is <see cref="Parse(string)"/> and is left byte-identical.</param>
+    public static ParseResult Parse(string text, bool lenient)
     {
         if (text is null) throw new ArgumentNullException(nameof(text));
 
@@ -60,7 +70,7 @@ public static class SqlParser
 
             (int endIdxExcl, int endChar) = IsPsqlDefinitionStart(sig, startIdx)
                 ? ScanPsql(sig, startIdx, n)
-                : ScanPlain(sig, startIdx, n);
+                : lenient ? ScanPlainLenient(sig, startIdx, n) : ScanPlain(sig, startIdx, n);
 
             var slice = sig.GetRange(startIdx, endIdxExcl - startIdx);
             statements.Add(Classify(slice, startChar, endChar - startChar));
@@ -90,6 +100,102 @@ public static class SqlParser
             i++;
         }
         return (sig.Count, n);
+    }
+
+    // Lenient plain-statement scan (semantic model only): ends at the next top-level ';' OR at a
+    // top-level statement-start keyword that begins a NEW statement even though no ';' separated them
+    // (the "several statements, no semicolons, one editor" case). Paren + BEGIN/CASE/END depth aware,
+    // so a subquery SELECT / a function-call arg / an EXECUTE BLOCK body is never mistaken for a new
+    // statement. The strict ScanPlain above is left untouched (it is the executor boundary authority).
+    private static (int EndIdxExcl, int EndChar) ScanPlainLenient(IReadOnlyList<SqlToken> sig, int start, int n)
+    {
+        int i = start, depth = 0;
+        // Context for the continuation guards: whether a later top-level SELECT is THIS statement's own
+        // source (INSERT … SELECT), and whether we are inside a MERGE (whose WHEN … THEN
+        // INSERT/UPDATE/DELETE are continuations, not new statements).
+        var lead = KeywordUpperAt(sig, start);
+        bool insertAwaitingSource = lead == "INSERT";
+        bool withAwaitingMain = lead == "WITH";
+        bool isMerge = lead == "MERGE";
+        SqlToken? prev = null;
+        while (i < sig.Count)
+        {
+            var t = sig[i];
+            if (t.Kind == TokenKind.Semicolon && depth == 0) return (i + 1, t.End);
+            if (t.Kind == TokenKind.LParen) { depth++; prev = t; i++; continue; }
+            if (t.Kind == TokenKind.RParen) { if (depth > 0) depth--; prev = t; i++; continue; }
+            if (Kw(t, "BEGIN") || Kw(t, "CASE")) { depth++; prev = t; i++; continue; }
+            if (Kw(t, "END")) { if (depth > 0) depth--; prev = t; i++; continue; }
+
+            if (depth == 0 && i > start && t.Kind == TokenKind.Keyword
+                && IsLenientStatementStart(t, prev, isMerge, ref insertAwaitingSource, ref withAwaitingMain))
+            {
+                return (i, t.Start); // a new top-level statement begins here — end this one before it
+            }
+
+            if (insertAwaitingSource && Kw(t, "VALUES")) insertAwaitingSource = false;
+            prev = t;
+            i++;
+        }
+        return (sig.Count, n);
+    }
+
+    // True when the depth-0 keyword <paramref name="t"/> (not the statement's own first token) begins a
+    // NEW top-level statement rather than continuing the current one. Conservative — the ambiguous SET
+    // (UPDATE … SET) is deliberately NOT a boundary, and the known continuations are suppressed.
+    private static bool IsLenientStatementStart(
+        SqlToken t, SqlToken? prev, bool isMerge, ref bool insertAwaitingSource, ref bool withAwaitingMain)
+    {
+        switch (t.Text.ToUpperInvariant())
+        {
+            case "SELECT":
+            case "WITH":
+                // Not a new statement when it is: the main query of a WITH … CTE list (the SELECT after
+                // the last CTE's ')'), the source of an INSERT (INSERT … SELECT), the right side of a
+                // set operation (UNION/EXCEPT/INTERSECT SELECT), or a CREATE VIEW … AS SELECT.
+                if (withAwaitingMain) { withAwaitingMain = false; return false; }
+                if (insertAwaitingSource) { insertAwaitingSource = false; return false; }
+                if (IsPrevKeyword(prev, "UNION", "EXCEPT", "INTERSECT", "AS")) return false;
+                return true;
+
+            case "INSERT":
+            case "UPDATE":
+            case "DELETE":
+                // MERGE … WHEN [NOT] MATCHED THEN INSERT/UPDATE/DELETE, and UPDATE OR INSERT, are
+                // continuations of the current statement, not new statements.
+                if (isMerge) return false;
+                if (IsPrevKeyword(prev, "OR", "THEN", "MATCHED")) return false;
+                return true;
+
+            case "EXECUTE":
+            case "MERGE":
+            case "CREATE":
+            case "ALTER":
+            case "DROP":
+            case "RECREATE":
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    private static bool IsPrevKeyword(SqlToken? prev, params string[] keywords)
+    {
+        if (prev is null || prev.Kind != TokenKind.Keyword) return false;
+        var u = prev.Text.ToUpperInvariant();
+        foreach (var k in keywords)
+        {
+            if (u == k) return true;
+        }
+        return false;
+    }
+
+    // The upper-cased text of the word token at <paramref name="index"/> (keyword/identifier), else null.
+    private static string? KeywordUpperAt(IReadOnlyList<SqlToken> sig, int index)
+    {
+        var t = At(sig, index);
+        return t.Kind is TokenKind.Keyword or TokenKind.Identifier ? t.Text.ToUpperInvariant() : null;
     }
 
     // PSQL definition: one statement, body semicolons included. Phase 1 (before AS): skip balanced

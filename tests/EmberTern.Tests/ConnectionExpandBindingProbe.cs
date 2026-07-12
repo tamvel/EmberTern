@@ -19,6 +19,8 @@ using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Sql.Language.Semantics;
+using EmberTern.Core.Sql.Language.Signatures;
 using EmberTern.Firebird;
 using Xunit;
 using Xunit.Abstractions;
@@ -573,6 +575,458 @@ public sealed class ConnectionExpandBindingProbe
                 Assert.True(EditorSearch.IsInsideEditor(inner), "inner text view should be inside-editor");
             Assert.False(EditorSearch.IsInsideEditor(outside), "sibling TextBox is not inside-editor");
             Assert.False(EditorSearch.IsInsideEditor(null), "null is not inside-editor");
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Etap 5 / M1 — proves the editor's language service builds + caches a SemanticModel from a
+    // captured metadata snapshot (the factory → AppMetadataSnapshot → SemanticModel wiring), and
+    // that it resolves a simple aliased query. The alias-map path is unchanged (M5 switches
+    // completion to the model); this only pins the M1 glue.
+    [Fact]
+    public async System.Threading.Tasks.Task EditorLanguageService_BuildsAndCachesSemanticModel()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 300, Height = 120 };
+            var window = new Window { Width = 400, Height = 300, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // An immutable App snapshot (the real M1 provider) with one table + column.
+            var objects = new[] { new MetadataObject("T", MetadataObjectKind.Table) };
+            var columnCache = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase)
+            {
+                ["T"] = new[] { new ColumnSpec("X", "INTEGER") },
+            };
+            var snapshot = AppMetadataSnapshot.Build(objects, columnCache);
+
+            using var svc = new EditorLanguageService(editor, () => snapshot);
+            const string sql = "select k.x from t k";
+            editor.Text = sql;
+            Dispatcher.UIThread.RunJobs();
+
+            // Deliberate-trigger sync path (mirrors what Ctrl+Space/dot use in M5).
+            svc.EnsureFreshModel();
+
+            log.AppendLine($"[1] model built = {svc.Model is not null}, fresh = {svc.ModelFresh}");
+            Assert.NotNull(svc.Model);
+            Assert.True(svc.ModelFresh);
+
+            var model = svc.Model!;
+            // Qualifier "k" (SELECT list, before FROM) resolves to the table reference.
+            var qualifier = model.ReferenceAt(sql.IndexOf("k.", System.StringComparison.Ordinal));
+            log.AppendLine($"[2] qualifier resolved = {qualifier?.IsResolved}, symbol = {qualifier?.Symbol?.GetType().Name}");
+            Assert.NotNull(qualifier);
+            var tref = Assert.IsType<TableReferenceSymbol>(qualifier!.Symbol);
+            Assert.Equal("T", tref.TargetName);
+
+            // Column "x" resolves against the snapshot's T.X.
+            var col = model.ResolveAt(sql.IndexOf(".x", System.StringComparison.Ordinal) + 1);
+            log.AppendLine($"[3] column symbol = {col?.GetType().Name} {col?.Name}");
+            Assert.IsType<ColumnSymbol>(col);
+            Assert.Equal("X", col!.Name);
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Etap 6 / M3 — proves the semantic highlighter attaches to the editor, colorizes a resolved
+    // query without throwing, and that the theme brush tokens it needs (the new editor tokens + the
+    // reused per-kind IconColor_* palette) resolve from the real App resources. Catches a mistyped
+    // resource key or a ColorizeLine offset bug that a build can't.
+    [Fact]
+    public async System.Threading.Tasks.Task SemanticHighlighter_AttachesAndColorizesWithoutThrowing()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 400, Height = 200 };
+            var window = new Window { Width = 500, Height = 320, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var objects = new[] { new MetadataObject("T", MetadataObjectKind.Table) };
+            var columnCache = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase)
+            {
+                ["T"] = new[] { new ColumnSpec("X", "INTEGER") },
+            };
+            var snapshot = AppMetadataSnapshot.Build(objects, columnCache);
+
+            using var svc = new EditorLanguageService(editor, () => snapshot);
+            var hl = SemanticHighlighter.Attach(editor, () => svc.Model); // internal test overload
+
+            const string sql = "select k.x from t k";
+            editor.Text = sql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel(); // build the model synchronously (deliberate-trigger path)
+
+            Assert.NotNull(svc.Model);
+            Assert.Contains(editor.TextArea.TextView.LineTransformers, t => ReferenceEquals(t, hl));
+
+            // Force layout/redraw so the transformer's ColorizeLine runs over the visible line.
+            editor.TextArea.TextView.Redraw();
+            editor.Measure(new Size(400, 200));
+            editor.Arrange(new Rect(0, 0, 400, 200));
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            log.AppendLine("[1] colorize ran without throwing");
+
+            // The brush tokens the highlighter resolves must exist in both classes it uses.
+            var theme = editor.ActualThemeVariant;
+            foreach (var key in new[] { "EditorColumnBrush", "EditorLocalBrush", "IconColor_Table", "IconColor_Procedure" })
+            {
+                var ok = Application.Current!.Resources.TryGetResource(key, theme, out var v) && v is IBrush;
+                log.AppendLine($"[token] {key} = {ok}");
+                Assert.True(ok, $"theme brush '{key}' did not resolve");
+            }
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Etap 6 / M4 — proves the navigation controller attaches to the editor without throwing, that
+    // its underline renderer is registered, that the AccentBrush it paints resolves from the real App
+    // resources, and — the behavioural bit — that Ctrl+Click at a resolved table offset dispatches to
+    // the schema-object open callback with the mapped kind. The pointer/cursor/tooltip UX itself is
+    // manual visual verification (design §25 / §9.5); this pins the plumbing a build can't.
+    [Fact]
+    public async System.Threading.Tasks.Task NavigationController_AttachesAndDispatchesGoToDefinition()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 400, Height = 200 };
+            var window = new Window { Width = 500, Height = 320, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var objects = new[] { new MetadataObject("T", MetadataObjectKind.Table) };
+            var columnCache = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase)
+            {
+                ["T"] = new[] { new ColumnSpec("X", "INTEGER") },
+            };
+            var snapshot = AppMetadataSnapshot.Build(objects, columnCache);
+
+            using var svc = new EditorLanguageService(editor, () => snapshot);
+
+            (string Name, MetadataObjectKind Kind)? opened = null;
+            string? openedByName = null;
+            var nav = NavigationController.Attach(
+                editor,
+                () => svc.Model,
+                (name, kind) => { opened = (name, kind); return true; },
+                word => { openedByName = word; return true; });
+
+            const string sql = "select k.x from t k";
+            editor.Text = sql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel();
+            Assert.NotNull(svc.Model);
+
+            // The underline renderer is registered on the text view.
+            Assert.Contains(editor.TextArea.TextView.BackgroundRenderers, r => r.GetType().Name == "UnderlineRenderer");
+            log.AppendLine("[1] underline renderer registered");
+
+            // The accent brush the underline paints must resolve in the current theme.
+            var theme = editor.ActualThemeVariant;
+            var accentOk = Application.Current!.Resources.TryGetResource("AccentBrush", theme, out var v) && v is IBrush;
+            Assert.True(accentOk, "AccentBrush did not resolve");
+            log.AppendLine("[2] AccentBrush resolves");
+
+            // Ctrl+Click on the table name "t" (offset 16 in "select k.x from t k") → open schema
+            // object "T" as a Table (the authoritative kind comes from loaded metadata in production).
+            int tOffset = sql.IndexOf(" t ", System.StringComparison.Ordinal) + 1;
+            var navigated = nav.NavigateForTest(tOffset);
+            Assert.True(navigated, "expected navigation at the table offset");
+            Assert.NotNull(opened);
+            Assert.Equal("T", opened!.Value.Name);
+            Assert.Equal(MetadataObjectKind.Table, opened.Value.Kind);
+            Assert.Null(openedByName); // resolved via the model, not the name fallback
+            log.AppendLine($"[3] go-to-def dispatched: {opened.Value.Name}/{opened.Value.Kind}");
+
+            // M5 — the reference-highlight renderer is registered.
+            Assert.Contains(editor.TextArea.TextView.BackgroundRenderers, r => r.GetType().Name == "ReferenceHighlightRenderer");
+            log.AppendLine("[4] reference-highlight renderer registered");
+
+            // M5 — local find references: the alias `k` occurs twice (declaration + qualifier).
+            int kOffset = sql.IndexOf("k.", System.StringComparison.Ordinal);
+            Assert.True(nav.ReferencesForTest(kOffset).Count >= 2, "expected >= 2 alias occurrences");
+            // A schema object / column has no local-reference highlight (calm — not boxed).
+            Assert.Empty(nav.ReferencesForTest(tOffset));
+            log.AppendLine("[5] local find-references highlights only locals");
+
+            // M5 — safe local rename: renaming a database object is refused (§0).
+            Assert.False(nav.TryRenameForTest(tOffset, "renamed"), "a table must not be locally renamed");
+            Assert.Equal(sql, editor.Text);
+            // Renaming the alias rewrites every occurrence atomically.
+            Assert.True(nav.TryRenameForTest(kOffset, "m"), "expected the alias rename to apply");
+            Assert.Equal("select m.x from t m", editor.Text);
+            log.AppendLine("[6] safe local rename applied; DB object rename refused");
+
+            nav.Detach();
+            Assert.DoesNotContain(editor.TextArea.TextView.BackgroundRenderers, r => r.GetType().Name == "UnderlineRenderer");
+            log.AppendLine("[7] detach removed the renderer");
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Etap 6 UX-polish regression pin — the "FROM view / FROM proc(…) don't resolve" report. A view /
+    // selectable procedure used in FROM only resolves once its metadata category has loaded, which (on
+    // connect) happens AFTER the model was first built (categories prefetch sequentially; Views /
+    // Procedures load last). The fix is: when metadata grows, rebuild the model against a FRESH
+    // snapshot. This pins that exact contract — RefreshModelWithMetadata (what the ObjectsChanged →
+    // NotifyMetadataChanged path ultimately invokes) picks up a view/proc that was absent at first
+    // build and resolves it as a schema object — end to end through the real EditorLanguageService.
+    [Fact]
+    public async System.Threading.Tasks.Task EditorModel_RebuildsAgainstGrownMetadata_ResolvesViewAndProc()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 300, Height = 120 };
+            var window = new Window { Width = 400, Height = 300, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var emptyCols = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase);
+
+            // The snapshot the editor sees, swappable to simulate a category loading AFTER first build.
+            ISqlMetadataProvider snapshot = AppMetadataSnapshot.Build(Array.Empty<MetadataObject>(), emptyCols);
+
+            using var svc = new EditorLanguageService(editor, () => snapshot);
+            const string sql = "select * from myview";
+            editor.Text = sql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel();
+
+            int viewOffset = sql.IndexOf("myview", System.StringComparison.Ordinal) + 3;
+
+            // Before the Views category loads: the FROM name is bound only as an unresolved table
+            // reference (Target == null) — NOT a navigable schema object, so it gets the low-chroma
+            // "local" treatment, no Ctrl-nav, no object Quick Info (exactly the reported symptom).
+            var before = svc.Model!.ReferenceAt(viewOffset);
+            log.AppendLine($"[1] before load: symbol={before?.Symbol?.GetType().Name ?? "null"}");
+            Assert.True(before?.Symbol is not SchemaObjectSymbol, "view must NOT resolve to a schema object before its category loads");
+
+            // The Views + Procedures categories finish loading — the snapshot now carries them.
+            snapshot = AppMetadataSnapshot.Build(
+                new[]
+                {
+                    new MetadataObject("MYVIEW", MetadataObjectKind.View),
+                    new MetadataObject("MYPROC", MetadataObjectKind.Procedure),
+                },
+                emptyCols);
+
+            // Exactly what the ObjectsChanged → NotifyMetadataChanged (coalesced) path ultimately runs.
+            svc.RefreshModelWithMetadata();
+
+            var afterView = svc.Model!.ReferenceAt(viewOffset);
+            Assert.NotNull(afterView);
+            var viewSym = Assert.IsType<SchemaObjectSymbol>(afterView!.Symbol);
+            Assert.Equal(SymbolKind.View, viewSym.Kind);
+            log.AppendLine($"[2] after load: view resolves as {viewSym.Kind}");
+
+            // A selectable procedure in FROM must resolve the same way after its category loads.
+            const string procSql = "select a, b from myproc(:x)";
+            editor.Text = procSql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel();
+            int procOffset = procSql.IndexOf("myproc", System.StringComparison.Ordinal) + 3;
+            var procRef = svc.Model!.ReferenceAt(procOffset);
+            Assert.NotNull(procRef);
+            var procSym = Assert.IsType<SchemaObjectSymbol>(procRef!.Symbol);
+            Assert.Equal(SymbolKind.Procedure, procSym.Kind);
+            log.AppendLine($"[3] selectable proc resolves as {procSym.Kind}");
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // The unified Parameter Helper (design §28) across the constructs it must cover: INSERT (cached +
+    // warm-then-retry + context-driven lifetime), UPDATE OR INSERT (same as INSERT), and EXECUTE
+    // PROCEDURE (routine params warmed on a miss). Drives ParameterHelper.ShowAt directly (the same call
+    // both the double-click and the typing triggers make) and asserts the overlay card opens / stays /
+    // closes by semantic context.
+    [Fact]
+    public async System.Threading.Tasks.Task ParameterHelper_InsertUpdateOrInsertProcedure()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+
+        await session.Dispatch(async () =>
+        {
+            var editor = new TextEditor { Width = 500, Height = 200 };
+            var window = new Window { Width = 600, Height = 320, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            editor.Measure(new Size(500, 200));
+            editor.Arrange(new Rect(0, 0, 500, 200));
+            Dispatcher.UIThread.RunJobs();
+
+            var emptyCols = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase);
+            var cols = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase)
+            {
+                ["T"] = new[] { new ColumnSpec("A", "INTEGER"), new ColumnSpec("B", "VARCHAR(10)") },
+            };
+            ISqlMetadataProvider snap = AppMetadataSnapshot.Build(new[] { new MetadataObject("T", MetadataObjectKind.Table) }, cols);
+
+            // ── (1) INSERT, columns cached → opens; CONTEXT-driven lifetime ──────────────────────────
+            using (var svc = new EditorLanguageService(editor, () => snap))
+            {
+                var helper = ParameterHelper.Attach(editor, () => svc.Model);
+                const string sql = "insert into t (a, b) values (1, 2)";
+                editor.Text = sql; Dispatcher.UIThread.RunJobs(); svc.EnsureFreshModel();
+                int v2 = sql.IndexOf(", 2)", System.StringComparison.Ordinal) + 2; // on the "2"
+
+                Assert.True(helper.ShowAt(v2), "a VALUES value is a parameter site");
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(helper.IsOpen, "INSERT Parameter Helper opens at a VALUES value");
+                editor.CaretOffset = v2 + 1; Dispatcher.UIThread.RunJobs();
+                Assert.True(helper.IsOpen, "stays open on a caret jitter inside the same argument");
+                editor.CaretOffset = sql.IndexOf("(1", System.StringComparison.Ordinal) + 1; Dispatcher.UIThread.RunJobs();
+                Assert.True(helper.IsOpen, "stays open when moving to another argument of the same INSERT");
+                editor.CaretOffset = 0; Dispatcher.UIThread.RunJobs();
+                Assert.False(helper.IsOpen, "closes when the caret leaves the INSERT context");
+                helper.Detach();
+            }
+
+            // ── (2) UPDATE OR INSERT → behaves exactly like INSERT ───────────────────────────────────
+            using (var svc = new EditorLanguageService(editor, () => snap))
+            {
+                var helper = ParameterHelper.Attach(editor, () => svc.Model);
+                const string sql = "update or insert into t (a, b) values (1, 2)";
+                editor.Text = sql; Dispatcher.UIThread.RunJobs(); svc.EnsureFreshModel();
+                int v2 = sql.IndexOf(", 2)", System.StringComparison.Ordinal) + 2;
+                Assert.True(helper.ShowAt(v2), "UPDATE OR INSERT is a parameter site");
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(helper.IsOpen, "UPDATE OR INSERT Parameter Helper opens like INSERT");
+                helper.Detach();
+            }
+
+            // ── (3) EXECUTE PROCEDURE → routine params, WARMED on a miss ─────────────────────────────
+            var procParams = new[]
+            {
+                new RoutineParameterMetadata("A", "INTEGER", ParameterDirection.Input),
+                new RoutineParameterMetadata("B", "VARCHAR(10)", ParameterDirection.Input),
+            };
+            var warmedProcs = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<RoutineParameterMetadata>>(
+                System.StringComparer.OrdinalIgnoreCase);
+            ISqlMetadataProvider ProcSnap() => AppMetadataSnapshot.Build(
+                new[] { new MetadataObject("P", MetadataObjectKind.Procedure) }, emptyCols, warmedProcs);
+
+            using (var svc = new EditorLanguageService(editor, ProcSnap))
+            {
+                var helper = ParameterHelper.Attach(editor, () => svc.Model, (label, kind) =>
+                {
+                    warmedProcs[label] = procParams;      // simulate the App warming the routine's params
+                    svc.RefreshModelWithMetadata();
+                    return System.Threading.Tasks.Task.FromResult(svc.Model);
+                });
+                const string sql = "execute procedure p(1, 2)";
+                editor.Text = sql; Dispatcher.UIThread.RunJobs(); svc.EnsureFreshModel();
+                int arg = sql.IndexOf("p(", System.StringComparison.Ordinal) + 2; // on the "1"
+
+                // Params not cached yet → the engine reports a known routine with 0 params; the helper
+                // warms them, rebuilds, and shows the list.
+                Assert.True(helper.ShowAt(arg), "an EXECUTE PROCEDURE argument is a parameter site");
+                for (var i = 0; i < 5; i++) { await System.Threading.Tasks.Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+                Assert.True(helper.IsOpen, "EXECUTE PROCEDURE Parameter Helper opens after warming routine params");
+                helper.Detach();
+            }
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // QA Fix Sprint — PROOF for the "view/proc coloured like a plain identifier" report. Builds the
+    // model WITH the view in metadata (so it resolves — both a SchemaObject and an implicit
+    // TableReference occurrence overlap on the bare name), attaches the REAL SemanticHighlighter, and
+    // asserts the brush it paints on the view name is the per-kind OBJECT brush (IconColor_View), not
+    // the low-chroma "local" brush. If this passes, the highlighter/classifier/brush-mapping are
+    // correct and a live "no colour" is a model-resolution (metadata-not-loaded) issue, NOT a paint
+    // bug — the exact distinction the QA sprint asked to prove before touching the binder.
+    [Fact]
+    public async System.Threading.Tasks.Task SemanticHighlighter_BareFromView_PaintsObjectColour_NotLocal()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 400, Height = 120 };
+            var window = new Window { Width = 500, Height = 240, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var emptyCols = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase);
+            ISqlMetadataProvider snap = AppMetadataSnapshot.Build(
+                new[]
+                {
+                    new MetadataObject("MYVIEW", MetadataObjectKind.View),
+                    new MetadataObject("MYPROC", MetadataObjectKind.Procedure),
+                },
+                emptyCols);
+
+            using var svc = new EditorLanguageService(editor, () => snap);
+            var hl = SemanticHighlighter.Attach(editor, () => svc.Model); // internal test overload
+
+            const string sql = "select * from myview";
+            editor.Text = sql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel();
+
+            var theme = editor.ActualThemeVariant;
+            IBrush Res(string key)
+            {
+                Assert.True(Application.Current!.Resources.TryGetResource(key, theme, out var v) && v is IBrush,
+                    $"brush '{key}' must resolve");
+                return (IBrush)v!;
+            }
+            var viewBrush = Res("IconColor_View");
+            var localBrush = Res("EditorLocalBrush");
+
+            int viewOffset = sql.IndexOf("myview", System.StringComparison.Ordinal) + 2;
+            var painted = hl.PaintedBrushAt(viewOffset);
+            log.AppendLine($"[1] view painted brush == IconColor_View: {ReferenceEquals(painted, viewBrush)}; ==Local: {ReferenceEquals(painted, localBrush)}");
+            Assert.Same(viewBrush, painted);
+            Assert.NotSame(localBrush, painted);
+
+            // Selectable procedure in FROM → its own object colour too.
+            const string procSql = "select a from myproc(:x)";
+            editor.Text = procSql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel();
+            int procOffset = procSql.IndexOf("myproc", System.StringComparison.Ordinal) + 2;
+            var procPainted = hl.PaintedBrushAt(procOffset);
+            log.AppendLine($"[2] proc painted brush == IconColor_Procedure: {ReferenceEquals(procPainted, Res("IconColor_Procedure"))}");
+            Assert.Same(Res("IconColor_Procedure"), procPainted);
 
             window.Close();
         }, CancellationToken.None);

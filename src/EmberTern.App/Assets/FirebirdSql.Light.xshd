@@ -21,7 +21,7 @@
   <Color name="DmlKeyword"       foreground="#0033B3" fontWeight="bold" />
   <Color name="StatementKeyword" foreground="#9018A8" fontWeight="bold" />
   <Color name="DataType"         foreground="#1D6FA3" />
-  <Color name="Function"         foreground="#7A5C1E" />
+  <Color name="Function"         foreground="#8C6600" />
   <Color name="Operator"         foreground="#4D4D4D" />
 
   <RuleSet ignoreCase="true">

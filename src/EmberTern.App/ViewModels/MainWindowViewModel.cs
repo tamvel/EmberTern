@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Completion;
 using EmberTern.App.Diagnostics;
 using EmberTern.App.Export;
 using EmberTern.App.Security;
@@ -21,6 +22,7 @@ using EmberTern.Core.Search;
 using EmberTern.Core.Security;
 using EmberTern.Core.Settings;
 using EmberTern.Core.Sql;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Sql.Templates;
 using EmberTern.Core.Workspace;
 using EmberTern.Firebird;
@@ -3140,6 +3142,69 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    // Routine parameters (procedures + functions), keyed by name; cleared on disconnect alongside
+    // the column cache. Feeds the editor's Signature Help (Etap 5 / M6) via the metadata snapshot.
+    private readonly Dictionary<string, IReadOnlyList<RoutineParameterMetadata>> _routineParameterCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Synchronous cache read for the signature-help snapshot (M6). Null when not loaded.</summary>
+    internal IReadOnlyList<RoutineParameterMetadata>? TryGetCachedRoutineParameters(string routineName)
+        => _routineParameterCache.TryGetValue(routineName, out var ps) ? ps : null;
+
+    /// <summary>
+    /// Loads (and caches) a procedure's or function's parameters from Firebird — inputs and outputs
+    /// for a procedure, the argument list for a function (all input). Safe to call repeatedly.
+    /// Returns an empty list when no connection is active, the routine isn't a loaded proc/function,
+    /// or the read fails. Mirror of <see cref="EnsureColumnsAsync"/>; the editor warms this on a
+    /// signature-help cache miss, then rebuilds the snapshot.
+    /// </summary>
+    internal async Task<IReadOnlyList<RoutineParameterMetadata>> EnsureRoutineParametersAsync(
+        string routineName, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(routineName)) return Array.Empty<RoutineParameterMetadata>();
+        if (_routineParameterCache.TryGetValue(routineName, out var cached)) return cached;
+        if (!_service.IsConnected) return Array.Empty<RoutineParameterMetadata>();
+
+        var obj = TryResolveLoadedObject(routineName);
+        if (obj is null) return Array.Empty<RoutineParameterMetadata>();
+
+        try
+        {
+            var list = new List<RoutineParameterMetadata>();
+            if (obj.Kind == MetadataObjectKind.Procedure)
+            {
+                var inputs = await _tableDetailReader.GetProcedureParametersAsync(routineName, 0, ct).ConfigureAwait(true);
+                var outputs = await _tableDetailReader.GetProcedureParametersAsync(routineName, 1, ct).ConfigureAwait(true);
+                foreach (var p in inputs) list.Add(ToRoutineParam(p, ParameterDirection.Input));
+                foreach (var p in outputs) list.Add(ToRoutineParam(p, ParameterDirection.Output));
+            }
+            else if (obj.Kind == MetadataObjectKind.Function)
+            {
+                var sig = await _tableDetailReader.GetFunctionSignatureAsync(routineName, ct).ConfigureAwait(true);
+                foreach (var a in sig.Arguments) list.Add(ToRoutineParam(a, ParameterDirection.Input));
+            }
+            else
+            {
+                return Array.Empty<RoutineParameterMetadata>();
+            }
+
+            _routineParameterCache[routineName] = list;
+            return list;
+        }
+        catch (MetadataReadException)
+        {
+            return Array.Empty<RoutineParameterMetadata>();
+        }
+    }
+
+    private static RoutineParameterMetadata ToRoutineParam(ProcedureParameterInfo p, ParameterDirection direction)
+        => new(p.Name, p.Type, direction)
+        {
+            Nullable = !p.NotNull,
+            DefaultValue = p.DefaultValue,
+            Description = p.Description,
+        };
+
     /// <summary>
     /// Collects already-loaded schema-object leaves from the active connection's
     /// metadata tree. Returned in the order metadata categories were realized; the
@@ -3174,6 +3239,15 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         return list;
     }
+
+    /// <summary>
+    /// Builds an immutable <see cref="ISqlMetadataProvider"/> snapshot of the active connection's
+    /// loaded objects + currently-cached columns, for the editor's semantic model (Etap 5 / M1,
+    /// design §22.1). Must be called on the UI thread — it reads the metadata tree and the column
+    /// cache; the returned snapshot is detached and safe to consume off-thread.
+    /// </summary>
+    internal ISqlMetadataProvider CreateMetadataSnapshot()
+        => AppMetadataSnapshot.Build(EnumerateLoadedObjects(), _columnCache, _routineParameterCache);
 
     /// <summary>
     /// Pure name-based lookup over a list of loaded metadata objects. Case-insensitive;
@@ -3216,6 +3290,46 @@ public partial class MainWindowViewModel : ViewModelBase
         if (obj is null) return false;
         OnOpenDdlRequested(obj);
         return true;
+    }
+
+    /// <summary>
+    /// Ctrl+Click go-to-definition (Etap 6 / M4) for a schema object the Navigation Engine resolved
+    /// from the semantic model. Prefers the <b>authoritative kind</b> from loaded metadata — so a
+    /// column of a view (which the engine reports as a Table owner) still opens as a View — and only
+    /// falls back to <paramref name="fallbackKind"/> when the object isn't in the loaded set. Returns
+    /// false only for an empty name.
+    /// </summary>
+    public bool TryOpenSchemaObject(string? name, MetadataObjectKind fallbackKind)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        var obj = TryResolveLoadedObject(name) ?? new MetadataObject(name, fallbackKind);
+        OnOpenDdlRequested(obj);
+        return true;
+    }
+
+    /// <summary>
+    /// Fetches an object's reconstructed DDL/source for Peek Definition (Etap 6 / M5) — a read-only,
+    /// no-tab inline preview in the editor. Resolves the object's authoritative kind from loaded
+    /// metadata (so it's reconstructed correctly), falling back to <paramref name="fallbackKind"/>
+    /// when the object isn't loaded. Best-effort: returns null on any failure so a peek never
+    /// crashes the editor. Read-only — §0 holds by construction.
+    /// </summary>
+    internal async Task<string?> FetchObjectDefinitionAsync(string name, MetadataObjectKind fallbackKind)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        var obj = TryResolveLoadedObject(name) ?? new MetadataObject(name, fallbackKind);
+        try
+        {
+            return await _ddlReader.FetchDdlAsync(obj).ConfigureAwait(true);
+        }
+        catch (MetadataReadException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     // Kinds that open in the rich TableDetail view instead of a plain DDL tab.
@@ -5030,6 +5144,11 @@ public partial class MainWindowViewModel : ViewModelBase
     /// (null on Cancel). VM stays free of Avalonia dialog types.</summary>
     public event Func<SmartParametersRequest, Task<IReadOnlyList<object?>?>>? SmartParametersRequested;
 
+    /// <summary>Raised when the user creates a new query (the Saved Queries "+" / New query) so the
+    /// view can move keyboard focus straight into the SQL editor — the user can type immediately
+    /// without an extra click. The view marshals + focuses; the VM stays free of Avalonia types.</summary>
+    public event Action? EditorFocusRequested;
+
     // Types each scanned parameter: catalog types for an EXECUTE PROCEDURE call (positional, only
     // when the count matches), otherwise "Unknown" — never a guessed type (the user's rule).
     private async Task<IReadOnlyList<(string Name, string TypeText)>> BuildSmartParamSpecsAsync(
@@ -5619,6 +5738,8 @@ public partial class MainWindowViewModel : ViewModelBase
         var sq = new SavedQueryViewModel(Guid.NewGuid().ToString("N"), name, string.Empty, this);
         SavedQueries.Add(sq);
         SelectedSavedQuery = sq;
+        // Land the cursor in the editor so the user can start typing the new query immediately.
+        EditorFocusRequested?.Invoke();
     }
 
     public bool CanCreateSavedQuery => HasActiveWorkspace;
@@ -5929,10 +6050,11 @@ public partial class MainWindowViewModel : ViewModelBase
             LoadWorkspaceFor(newProfileId);
         }
 
-        // Column cache belongs to the previous schema — drop it on any switch
-        // so that "X.column" against a same-named table in another DB doesn't
-        // surface stale columns.
+        // Column + routine-parameter caches belong to the previous schema — drop
+        // them on any switch so that "X.column" / a routine signature against a
+        // same-named object in another DB doesn't surface stale metadata.
         _columnCache.Clear();
+        _routineParameterCache.Clear();
 
         UpdateStatusFromConnection();
         OnPropertyChanged(nameof(IsConnected));

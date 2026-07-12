@@ -451,6 +451,130 @@ caret-rect/popup-placement helper must guard `VisualLinesValid`, optionally `Ens
 but throws `InvalidOperationException` if called mid-Measure — catch it and fall back), and only then read
 `VisualLines`. `GetVisualPosition` does not throw on invalid lines but returns garbage, so guard there too.
 
+203. **AvaloniaEdit's `CompletionList` control template is JUST the inner `CompletionListBox` — the
+`CompletionList` never paints its own `Background`, so styling `aecc|CompletionList` Background is a
+VISUAL NO-OP.** (Verified against the 12.0.0 `CompletionList.xaml`: the `ControlTemplate` is a lone
+`<cc:CompletionListBox Name="PART_ListBox">` with no `Border`/`Panel` binding `{TemplateBinding
+Background}`.) The visible surface is the `CompletionListBox`, a Fluent `ListBox` (`BasedOn` the ListBox
+theme), which paints the Fluent *default* ListBox background — near-white in the Light theme, so the popup
+blends into the `#F3F3F3` editor. This is exactly why the "give the completion popup an elevated
+background" fix "didn't work". Fix: style **`aecc|CompletionListBox`** (Background `ElevatedPanelBrush` +
+`BorderBrush`/thickness), not `CompletionList`. An application-level `Style` setter outranks the Fluent
+ListBox `ControlTheme`'s default, so it wins. **Rule:** before styling a third-party templated control,
+confirm which part actually renders the surface — a `Background` on a control whose template never binds it
+paints nothing.
+
+204. **The double-click INSERT/VALUES column helper (P6) silently does nothing on a fresh editor because
+the signature engine needs the target table's COLUMNS, which aren't cached yet.**
+`SignatureHelpEngine.GetSignature` builds an INSERT signature from `meta.GetColumns(table)`; with no cached
+columns it returns `null` (not an empty-param signature), so `NavigationController.IsInsertHelperSignature`
+is false and the popup never appears — while the app no longer crashes (gotcha #201), it shows nothing.
+Columns are lazy per-table and NOT warmed by the double-click path (unlike dot-completion and typed
+signature help, which already do the warm-then-rebuild dance). Fix: added
+`SignatureHelpEngine.TryGetInsertTargetTable` (returns the target table even when columns are absent) +
+`SqlCompletionController.WarmColumnsAndRebuildAsync`, and the double-click handler now warms the columns,
+rebuilds the shared model, and retries the signature before giving up. **Rule:** any editor feature that
+consumes lazily-loaded metadata must warm-then-retry on a cache miss, not treat "not cached yet" as "not
+applicable".
+
+205. **A metadata-changed subscription routed through an attach-time hook that internally guards on a
+possibly-null field can LATCH "subscribed" while actually subscribing nothing — permanently dropping the
+signal.** `SqlCompletionController.SubscribeMetadataChanged` set `_metadataSubscribed = true` and called the
+injected `subscribeMetadataChanged` lambda; the main window's lambda was `h => { if (_currentVm is not null)
+_currentVm.Metadata.ObjectsChanged += h; }`. If `_currentVm` was still null when the editor attached, the
+`+=` was skipped but the latch flag was set anyway, so the `ObjectsChanged → rebuild-model` handler was
+never attached and never retried. Because categories prefetch sequentially (Tables first, Views/Procedures
+LAST), the model was built with only the early categories and never rebuilt when the late ones loaded →
+"tables resolve, views/selectable-procs in FROM don't (no colour/Ctrl-nav/Quick Info)" even though the
+binder resolves them perfectly given the metadata (pinned by `EditorModel_RebuildsAgainstGrownMetadata` +
+`SemanticHighlightConsistencyTests`). Fix: wire the metadata event to the STABLE VM in
+`OnDataContextChanged` (where the VM is guaranteed non-null and outlives the window), via the new public
+`SqlCompletionController.NotifyMetadataChanged()` — not through the attach-time hook. **Rule:** subscribe a
+long-lived signal to a lifecycle where the target is guaranteed present; never let a "did I subscribe?" flag
+be set independently of whether the subscription actually happened (same family as #187/#179 — the value is
+right but nothing tells the consumer to re-read it).
+
+
+206. **The double-click INSERT/VALUES helper must derive its offset from the POINTER position, not
+`_editor.CaretOffset` — on a real double-tap the caret is not reliably at the clicked value when
+`DoubleTapped` fires.** The P6 helper read `_editor.CaretOffset` in `OnDoubleTapped`, assuming "the
+double-tap has already placed the caret in the word". In practice the caret can still be at the previous
+single-click position when the gesture bubbles, so `SignatureHelpEngine.GetSignature` ran at a stale
+offset (often not an INSERT position) → no signature → no popup — the helper "never appears" even though
+the whole decision→popup path is correct (proven headlessly by driving `TryHandleDoubleClick(offset)` with
+a known-good offset: the popup opens for both cached and warm-then-retry cases). Fix: `int offset =
+OffsetAt(e.GetPosition(_editor)) ?? _editor.CaretOffset;` (the same pointer→offset mapping Ctrl+hover uses).
+The `DoubleTapped` event itself DOES fire (the earlier crash proved the handler ran), so `handledEventsToo`
+is unnecessary. **Rule:** for a pointer-driven editor feature, resolve the document offset from the
+pointer, never assume the caret has already moved to match the gesture.
+
+207. **"Ctrl+Click opens the object" does NOT prove the semantic model resolved it — `NavigationController`
+falls back to a NAME-based open (`_openByName` → loaded metadata) when the model can't resolve.** So a
+report of "Ctrl+Click works but the name isn't coloured / no Ctrl-hover / no Quick Info" for a view or
+selectable procedure in FROM is the fingerprint of a model that did NOT resolve the object (only the
+name-fallback fired) — NOT a highlighter bug. Proven for this project by three headless probes:
+`EditorModel_RebuildsAgainstGrownMetadata` (binder resolves view+proc given metadata),
+`SemanticHighlighter_BareFromView_PaintsObjectColour_NotLocal` (a resolved bare-name `FROM view` is painted
+`IconColor_View`, beating the overlapping implicit-table-reference "local" brush), and the AvaloniaEdit
+`TextView.Redraw()` behaviour (`ClearVisualLines()`+`InvalidateMeasure()` → the colorizing transformer
+re-runs, so the `ModelUpdated`→repaint IS effective). Conclusion: binder, classifier, brush-mapping, and
+repaint are all correct; a live "view/proc coloured like a plain identifier" is a **metadata-not-reaching-
+the-model** timing issue (see #205), never the highlighter. **Rule:** when a feature has a silent
+name-based fallback, don't treat "the fallback-capable action works" as evidence the primary (model) path
+ran — instrument the primary path (or a probe) before blaming a downstream consumer.
+
+
+208. **Statements separated only by newlines (no `;`) collapse into ONE statement — so only the first is
+semantically analysed (coloured / Ctrl-nav / Quick Info); the rest read as plain text.** The parser's
+`ScanPlain` ends a plain statement at the next top-level `;`; with none, it runs to EOF, and `Classify`
+types the whole document by its FIRST keyword (e.g. a script beginning `EXECUTE PROCEDURE …` becomes one
+`ExecuteProcedureStatement`), so the binder only resolves that first statement's objects. Proven by
+runtime instrumentation (`[HL] parserStatements=1` for a 4-statement no-`;` document) and a unit test.
+The `;`-only segmentation is the executor boundary authority (shared via `SqlStatementSplitter`, gotcha
+#192) and MUST stay byte-identical — do NOT change `SqlParser.Parse` for this. Fix: a **lenient** parse
+used by the READ-ONLY semantic model only (`SqlParser.Parse(text, lenient:true)` → `SemanticModel.Build`)
+that also ends a plain statement at a top-level statement-start keyword
+(`SELECT/INSERT/UPDATE/DELETE/MERGE/EXECUTE/CREATE/ALTER/DROP/RECREATE/WITH`), paren+BEGIN/CASE/END-depth
+aware, with continuation guards so it never false-splits `WITH cte AS (…) SELECT`, `INSERT … SELECT`,
+`… UNION SELECT`, `CREATE VIEW … AS SELECT`, or `MERGE … WHEN … THEN INSERT/UPDATE`. Safe because a
+mis-split in a read-only model only weakens IntelliSense, never corrupts code (§0) — unlike the executor,
+where a mis-split would corrupt execution. **Rule:** don't assume one editor buffer = one statement; and
+when a boundary heuristic is too risky for execution, apply it only to the read-only analysis layer.
+
+
+209. **A bare `new Popup { PlacementTarget = editor } + ((ISetLogicalParent)popup).SetParent(editor) +
+IsOpen = true` can be INVISIBLE on the real desktop even though `IsOpen=True`, the child is laid out
+(non-zero Bounds), `IsVisible=True` and `Opacity=1`.** Runtime instrumentation proved it: the INSERT/VALUES
+helper popup opened with `childBounds=0,0,205.6,358.4`, `childVisible=True`, `childOpacity=1`, and stayed
+open ~1–2 s — yet nothing appeared on screen. The separate `PopupRoot` (its own top-level) is the failure
+surface: on desktop it can render off-screen / behind / clipped despite every "is it open/visible" signal
+being true, and headless tests can't catch it (no real window compositor). Fix: host anchored editor
+content in the editor's **`OverlayLayer`** (`OverlayLayer.GetOverlayLayer(editor)`, a `Canvas` — position
+the card with `Canvas.SetLeft/SetTop` in overlay coordinates via `editor.TranslatePoint(caretPoint,
+overlay)`, and clamp it inside `overlay.Bounds`). The overlay renders IN the window, on top, no PopupRoot —
+the same reliable in-window layer AvaloniaEdit's completion uses. **Rule:** for editor-anchored popovers,
+prefer the OverlayLayer; treat a bare `Popup` whose only tree link is `SetParent` as unreliable, and verify
+visibility on the real desktop (log `IsOpen`/`Bounds`/`IsVisible`), not just in a headless test. The other
+custom popups (hover tooltip, Quick Info, Peek, rename) still use the bare-Popup pattern — migrate them if
+they show the same symptom.
+
+
+210. **A signature-help-style popover's lifetime must be CONTEXT-driven (re-query the engine on caret
+move), NOT tied to a raw `CaretOffset` — AvaloniaEdit nudges the caret 1–2 chars after a double-click's
+word selection.** The INSERT/VALUES helper opened correctly but vanished ~70 ms later: the double-click
+selects a word and AvaloniaEdit settles the caret to the token boundary (`armedAt=375 → caretMoved=377`),
+and an offset-equality dismiss (`caret != armedOffset → close`) killed the helper even though the user was
+still in the same VALUES argument. Runtime logging proved it: `reason=caret-moved` on every single
+dismissal, never a real context change. Fix: on each caret move, call
+`SignatureHelpEngine.GetSignature(model, caret)` again and keep the helper open while it is still an INSERT
+signature for the SAME target table (`Label`) — rebuilding the card to follow the active argument — and
+close only when the context genuinely changes (leaves the INSERT value/column region → engine returns
+null/other kind, another statement/table, Escape, editor detach). This is how VS/Rider/IBExpert drive
+parameter info and is immune to editor caret jitter. Pinned by
+`ConnectionExpandBindingProbe.InsertHelper_DoubleClick_OpensPopup_CachedAndWarmed` (caret jitter + argument
+change keep it open; leaving the context closes it). **Rule:** anchor an editor popover to a *semantic
+context* re-evaluated from the model, never to a captured caret offset.
+
 
 ## MVVM / CommunityToolkit patterns
 

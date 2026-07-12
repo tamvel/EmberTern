@@ -51,8 +51,10 @@ internal sealed class OccurrenceHighlighter : IBackgroundRenderer
         int viewEnd = textView.VisualLines[^1].LastDocumentLine.EndOffset;
 
         var fill = ResolveBrush("OccurrenceHighlightBrush");
-        var outline = ResolveBrush("AccentBrush");
-        var pen = outline is null ? null : new Pen(outline, 1);
+        // Solid GOLD border (not the blue AccentBrush) so a boxed occurrence is high-contrast and never
+        // reads as the blue text selection — user feedback that the old faint amber blended with Dark.
+        var outline = ResolveBrush("OccurrenceHighlightBorderBrush") ?? ResolveBrush("AccentBrush");
+        var pen = outline is null ? null : new Pen(outline, 1.4);
         if (fill is null && pen is null) return;
 
         int i = Math.Max(0, viewStart);

@@ -1,5 +1,22 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:aecc="using:AvaloniaEdit.CodeCompletion">
+
+  <!-- Autocomplete popup: give it an ELEVATED background + border so it reads as a floating panel
+       ABOVE the editor. AvaloniaEdit's default leaves it the same colour as the editor surface, which
+       in the Light theme made the popup indistinguishable from the code behind it.
+       IMPORTANT: AvaloniaEdit's CompletionList control template is *only* the inner CompletionListBox
+       (a Fluent ListBox via BasedOn) — the CompletionList itself never paints its own Background, so
+       styling `aecc|CompletionList` Background is a visual no-op (the earlier attempt that "didn't
+       work"). The visible surface is the CompletionListBox, which otherwise paints the Fluent default
+       ListBox background (near-white in Light → blends with the editor). So style the LIST BOX.
+       Elevated panel + border in both themes; item selection/hover colours come from the ListBoxItem
+       overrides below. (Included after AvaloniaEdit's theme in App.axaml, so these setters win.) -->
+  <Style Selector="aecc|CompletionListBox">
+    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
 
   <Style Selector="Window">
     <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />

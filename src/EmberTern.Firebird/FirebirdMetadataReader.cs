@@ -241,8 +241,11 @@ public sealed class FirebirdMetadataReader
                 var fieldScale = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3);
                 var fieldPrecision = reader.IsDBNull(4) ? (int?)null : reader.GetInt32(4);
                 var subType = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
+                var fieldSource = reader.IsDBNull(6) ? null : reader.GetString(6);
+                var notNull = !reader.IsDBNull(7) && reader.GetInt32(7) == 1;
                 var type = FirebirdTableDetailReader.FormatFieldType(fieldType, fieldLength, fieldScale, fieldPrecision, subType);
-                columns.Add(new ColumnSpec(name, type));
+                var domain = FirebirdTableDetailReader.NormalizeDomain(fieldSource);
+                columns.Add(new ColumnSpec(name, type, domain, notNull));
             }
             return columns;
         }
@@ -320,12 +323,17 @@ public sealed class FirebirdMetadataReader
         "ORDER BY f.RDB$FIELD_NAME";
 
     // Joins RDB$RELATION_FIELDS to RDB$FIELDS so the autocomplete dropdown can
-    // render "COLUMN : TYPE". Same mapping logic as the TableDetail Fields tab.
+    // render "COLUMN : TYPE : DOMAIN". Same mapping logic as the TableDetail Fields
+    // tab. RDB$FIELD_SOURCE is the (possibly anonymous) domain; the column's own
+    // RDB$NULL_FLAG overrides the domain's for nullability. No PK/FK join here — the
+    // completion column read is on the hot path and must stay light (P2).
     internal const string ColumnsSql =
         "SELECT TRIM(rf.RDB$FIELD_NAME), " +
         "       ft.RDB$FIELD_TYPE, ft.RDB$FIELD_LENGTH, " +
         "       ft.RDB$FIELD_SCALE, ft.RDB$FIELD_PRECISION, " +
-        "       ft.RDB$FIELD_SUB_TYPE " +
+        "       ft.RDB$FIELD_SUB_TYPE, " +
+        "       rf.RDB$FIELD_SOURCE, " +
+        "       COALESCE(rf.RDB$NULL_FLAG, ft.RDB$NULL_FLAG) " +
         "FROM RDB$RELATION_FIELDS rf " +
         "JOIN RDB$FIELDS ft ON ft.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE " +
         "WHERE rf.RDB$RELATION_NAME = @name " +

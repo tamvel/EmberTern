@@ -161,6 +161,12 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     public event Action<MetadataObject>? OpenDdlRequested;
     public event Action<string>? CopyNameRequested;
     public event Action<string>? StatusReported;
+    // Raised whenever the loaded object set grows/changes — a category finished loading (prefetch on
+    // connect, a user expand, or a refresh). The editor's language service listens (coalesced) and
+    // rebuilds its semantic model so newly-loaded objects (notably views + selectable procedures used
+    // in FROM) start resolving for highlight / Ctrl-nav / Quick Info. Fires on the UI thread
+    // (LoadGroupAsync runs there).
+    public event Action? ObjectsChanged;
     // Tree object-lifecycle dispatch. The owner (MainWindowViewModel) REUSES its existing
     // New*/detail-editor/DROP/Execute flows — these are just the tree's entry points.
     public event Action<MetadataObjectKind>? NewObjectRequested;
@@ -306,6 +312,9 @@ public partial class MetadataExplorerViewModel : ViewModelBase
             group.SetLeaves(objects.Select(obj => MetadataNodeViewModel.CreateLeaf(this, obj)));
             group.Count = objects.Count;
             group.MarkLoaded();
+            // The loaded object set grew — let open editors refresh their semantic model so this
+            // category's objects (e.g. views / procedures referenced in FROM) begin resolving.
+            ObjectsChanged?.Invoke();
             sw.Stop();
             Diagnostics.PerfTrace.LogGroupLoad(group.Kind.ToString(), objects.Count, sw.ElapsedMilliseconds);
 

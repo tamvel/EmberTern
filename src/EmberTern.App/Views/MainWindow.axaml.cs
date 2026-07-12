@@ -122,13 +122,31 @@ public partial class MainWindow : Window
         if (_editor is not null)
         {
             _editor.TextChanged += OnEditorTextChanged;
-            _editor.DoubleTapped += OnSqlEditorDoubleTapped;
+            // Double-click (INSERT/VALUES helper + name-based open) is owned by NavigationController.
             _completion = new SqlCompletionController(
                 _editor,
-                GetCompletionObjects,
-                knownTablesProvider: GetKnownTables,
-                cachedColumnsProvider: GetCachedColumns,
-                ensureColumnsAsync: EnsureColumnsAsync);
+                metadataSnapshot: CreateMetadataSnapshot,
+                ensureColumnsAsync: EnsureColumnsAsync,
+                ensureRoutineParamsAsync: EnsureRoutineParametersAsync);
+            // Rebuild the model when a metadata category finishes loading so late-loaded objects
+            // (views / selectable procedures in FROM) resolve. The metadata event is wired to the
+            // STABLE VM in OnDataContextChanged (below) — NOT via the controller's attach-time hook,
+            // which silently latched "subscribed" even when _currentVm was still null at attach time,
+            // permanently dropping the ObjectsChanged handler and leaving views/procs (which prefetch
+            // last) unresolved. The VM outlives this window, so subscribe-once there is leak-free.
+            // Semantic highlighting (Etap 6): colour identifiers by resolved role, driven by the
+            // completion controller's cached semantic model.
+            Completion.SemanticHighlighter.Attach(_editor, _completion);
+            // Navigation (Etap 6 / M4): Ctrl+hover affordance + Ctrl+Click go-to-definition, sharing
+            // the same cached model. Callbacks delegate to the current VM (null-safe before connect).
+            Completion.NavigationController.Attach(
+                _editor,
+                () => _completion?.Model,
+                (name, kind) => _currentVm?.TryOpenSchemaObject(name, kind) ?? false,
+                word => _currentVm?.TryOpenDdlForWord(word) ?? false,
+                (name, kind) => _currentVm?.FetchObjectDefinitionAsync(name, kind) ?? Task.FromResult<string?>(null),
+                // Double-click on a value → the unified Parameter Helper (owned by the completion controller).
+                showParameterHelper: offset => _completion?.TryShowParameterHelperAt(offset) ?? false);
             Completion.OccurrenceHighlighter.Attach(_editor);
             Completion.EditorSearch.Install(_editor);
         }
@@ -459,6 +477,12 @@ public partial class MainWindow : Window
         }
     }
 
+    // A metadata category finished loading — rebuild the main SQL editor's semantic model against a
+    // fresh snapshot so newly-loaded objects (notably views + selectable procedures referenced in
+    // FROM) begin resolving. The controller coalesces the burst of per-category signals into one
+    // rebuild. Wired to the stable VM in OnDataContextChanged (never dropped).
+    private void OnMainEditorMetadataChanged() => _completion?.NotifyMetadataChanged();
+
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_currentVm is not null)
@@ -477,8 +501,10 @@ public partial class MainWindow : Window
             _currentVm.GlobalSearchRequested -= OnGlobalSearchRequested;
             _currentVm.RecompileDependentsRequested -= OnRecompileDependentsRequested;
             _currentVm.SmartParametersRequested -= OnSmartParametersRequested;
+            _currentVm.EditorFocusRequested -= OnEditorFocusRequested;
             _currentVm.SelectedQueryTextProvider = null;
             _currentVm.ReplaceSelectedOrAllText = null;
+            _currentVm.Metadata.ObjectsChanged -= OnMainEditorMetadataChanged;
         }
 
         _currentVm = DataContext as MainWindowViewModel;
@@ -499,8 +525,13 @@ public partial class MainWindow : Window
             _currentVm.GlobalSearchRequested += OnGlobalSearchRequested;
             _currentVm.RecompileDependentsRequested += OnRecompileDependentsRequested;
             _currentVm.SmartParametersRequested += OnSmartParametersRequested;
+            _currentVm.EditorFocusRequested += OnEditorFocusRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
+            // Late-loaded metadata (a category finishing prefetch/expand/refresh) → rebuild the SQL
+            // editor's semantic model so views / selectable procedures used in FROM start resolving
+            // (colour + Ctrl-nav + Quick Info). Tied to the stable VM here, so it can never be dropped.
+            _currentVm.Metadata.ObjectsChanged += OnMainEditorMetadataChanged;
 
             // Metadata-object drop target on the main SQL editor (once — the VM is stable here).
             if (!_snippetDropAttached && _editor is not null)
@@ -1107,27 +1138,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // Double-click on a word in the SQL editor: if the word matches a loaded metadata
-    // object, open its DDL tab (same path as the metadata-tree double-click). If not,
-    // leave the editor's default word-select behaviour in place.
-    private void OnSqlEditorDoubleTapped(object? sender, TappedEventArgs e)
-    {
-        if (_currentVm is null || _editor is null) return;
-        var text = _editor.Text;
-        if (string.IsNullOrEmpty(text)) return;
-
-        var word = SqlCompletionContext.GetWordAt(text, _editor.CaretOffset);
-        if (word.IsEmpty) return;
-
-        if (_currentVm.TryOpenDdlForWord(word.Text))
-        {
-            // Mark handled so AvaloniaEdit doesn't keep the word-selection live in the
-            // SQL editor — focus is moving to the DDL tab and any lingering selection
-            // there is just noise.
-            e.Handled = true;
-        }
-    }
-
     private void OnEditorTextChanged(object? sender, EventArgs e)
     {
         if (_currentVm is not null && _editor is not null)
@@ -1136,24 +1146,32 @@ public partial class MainWindow : Window
         }
     }
 
-    // Source for the SQL editor's autocomplete: keywords always + objects from
-    // the active connection's loaded metadata categories. Lives on the VM so the
-    // controller (UI-side) can stay free of cross-VM traversal.
-    private System.Collections.Generic.IReadOnlyList<MetadataObject> GetCompletionObjects()
-        => _currentVm?.EnumerateLoadedObjects() ?? System.Array.Empty<MetadataObject>();
+    // Move keyboard focus into the SQL editor (New query → type immediately). Posted so it runs after
+    // the new query's (empty) text has been pushed into the editor and layout has settled. Focus the
+    // TextArea — the TextEditor delegates keyboard input there.
+    private void OnEditorFocusRequested()
+    {
+        if (_editor is null) return;
+        Dispatcher.UIThread.Post(() => _editor.TextArea.Focus(), DispatcherPriority.Background);
+    }
 
-    // Dot autocomplete plumbing — the known table/view names for qualifier
-    // resolution (the controller resolves against them + its cached alias map),
-    // and the fetched columns cached on the VM. Controller funnels them into the popup.
-    private System.Collections.Generic.IReadOnlyCollection<string> GetKnownTables()
-        => _currentVm?.EnumerateTableLikeNames() ?? System.Array.Empty<string>();
-
-    private System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>? GetCachedColumns(string tableName)
-        => _currentVm?.TryGetCachedColumns(tableName);
-
+    // Dot autocomplete plumbing — warms (and caches) an uncached table's columns
+    // for the controller's dot completion. Object/keyword/alias resolution now runs
+    // in the Core CompletionEngine against the semantic model (M5); the controller
+    // no longer pulls the object/known-table/cached-column lists directly.
     private Task<System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>> EnsureColumnsAsync(string tableName)
         => _currentVm?.EnsureColumnsAsync(tableName)
            ?? Task.FromResult<System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>>(System.Array.Empty<EmberTern.Core.Metadata.ColumnSpec>());
+
+    // Warms a routine's parameters for the editor's Signature Help (Etap 5 / M7).
+    private Task EnsureRoutineParametersAsync(string routineName)
+        => _currentVm?.EnsureRoutineParametersAsync(routineName) ?? Task.CompletedTask;
+
+    // Immutable metadata snapshot for the SQL editor's semantic model (Etap 5 / M1).
+    // Built on the UI thread; consumed off-thread. Empty provider when no VM/connection.
+    private EmberTern.Core.Sql.Language.Semantics.ISqlMetadataProvider CreateMetadataSnapshot()
+        => _currentVm?.CreateMetadataSnapshot()
+           ?? EmberTern.Core.Sql.Language.Semantics.EmptyMetadataProvider.Instance;
 
     // Returns the currently-selected text in the SQL editor, or null when nothing
     // is selected. Used by the VM to scope Execute / Format SQL to the selection.
