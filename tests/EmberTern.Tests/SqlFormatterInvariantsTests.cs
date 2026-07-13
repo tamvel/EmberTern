@@ -123,8 +123,9 @@ public class SqlFormatterInvariantsTests
     [Fact]
     public void Insert_LowercasesAndSpaces()
     {
+        // §P8 INSERT layout: "insert into t (…)" then "values (…)" on its own line; short lists inline.
         Assert.Equal(
-            "insert into t(a, b) values (1, 'X')",
+            "insert into t (a, b)\nvalues (1, 'X')",
             SqlFormatter.Format("INSERT INTO T (A, B) VALUES (1, 'X')"));
     }
 

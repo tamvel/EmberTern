@@ -739,18 +739,35 @@ cases — the dark DML keyword color and the light built-in-function color).
 
   **§F Shared list builder — DONE (2026-07-13).** One token-level mechanism replaces the per-kind
   comma-list emitters: `SplitTopLevelCommas` (nesting-aware, splits a token range at top-level commas)
-  + `MatchParen` + `FormatParenList` (inline `(a, b, c)` or one-item-per-line indented, `)` glued to
-  the last item), with each item's CONTENT rendered by `Emit` — so spacing, lowercasing, function-call
-  gluing, and nested parens are identical to every other emitted SQL, and there is no parallel item
-  renderer. The break decision (usually width) stays with each caller. **Consolidation:** the CREATE
-  VIEW column list (first consumer) was migrated onto it and its bespoke ~40-line character loop
-  deleted; output stays byte-identical (all pinned view tests green). The token-level splitter is
+  + `MatchParen` + `FormatBrokenList` (view: one item per line) / `FormatAdaptiveList` (inline or
+  packed-to-width), with each item's CONTENT rendered by `Emit` — so spacing, lowercasing,
+  function-call gluing, and nested parens are identical to every other emitted SQL, and there is no
+  parallel item renderer. The break decision (usually width) stays with each caller. **Consolidation:**
+  the CREATE VIEW column list (first consumer) was migrated onto it and its bespoke ~40-line character
+  loop deleted; output stays byte-identical (all pinned view tests green). The token-level splitter is
   comma-safe inside quoted identifiers for free — the old string-level `SplitByTopLevelComma` needs an
   explicit quote-skip. INSERT / VALUES / UPDATE OR INSERT / EXECUTE BLOCK lists ride this builder in
   the following steps; the string-level long-line wrapping scanners (`SplitByTopLevelComma`,
   `FindInOpeningParen`, `FindMatchingClose`, `SkipString`, `SkipQuotedIdent`) become retirement
   candidates once the long-line-wrapping step moves to the token level. Pinned by
   `SqlFormatterListBuilderTests`. Build 0/0; full suite 3548 main + 23 probe green.
+
+  **INSERT layout — DONE (2026-07-13).** `InsertStatement` formats IBExpert-standard (chosen by the
+  user over an INTO-on-its-own-line variant — INSERT INTO stays one construct, like FOR SELECT /
+  UPDATE OR INSERT / NEXT VALUE FOR): `insert into <target> (cols)` on one line, `values (…)` /
+  `select …` / `default values` on its own line, `returning …` on its own, `;` glued. `FormatInsert`
+  parses the skeleton by token scan (`FindInsertListOrSource` → target / column-list / source) and
+  composes the shared `FormatAdaptiveList` for the two lists + `Emit` for the target and any
+  INSERT…SELECT query — no bespoke list loop. The lists are **adaptive** (user directive): inline while
+  they fit MaxLineWidth, else packed multiple-items-per-line aligned under the opening paren
+  (readability-driven, not one-item-per-line). **Consolidation:** the adaptive-reflow packer
+  `PackWithContinuation` gained a `startColumn` parameter and is now the ONE packing algorithm shared
+  by the token-level list builder AND the string-level SELECT/IN wrapping — a single reflow, two entry
+  points. Unrecognised INSERT shapes fall back to the generic emitter (the §0 net guarantees no loss).
+  Pinned by `SqlFormatterInsertTests`. Build 0/0; full suite 3557 main + 23 probe green. **Open
+  consolidation (flagged):** INSERT inside a PSQL body still routes through the PSQL emitter's
+  per-statement `Emit`, not `FormatInsert` — unifying statement formatting across the top level and
+  PSQL bodies is a larger change deferred to a later step.
 - **P5d — a plain-hover info cue.** A dwell-delayed, info-only Quick Info tooltip on plain hover
   (no Ctrl held); the underline + hand-cursor affordance stays Ctrl-only per §9.4. Small and
   implementable, but it's a live-tuning UX addition (dwell delay, noise) the design defers to

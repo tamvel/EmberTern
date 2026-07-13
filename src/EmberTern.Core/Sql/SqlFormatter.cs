@@ -103,6 +103,11 @@ public static class SqlFormatter
         // A bare/DECLARE-led anonymous block (the body editor's text) — no header, whole body.
         AnonymousBlockStatement => FormatPsqlBody(Flatten(stmt.Tokens), header: null),
 
+        // INSERT — "insert into <target> (cols)" then "values (...)" / "select …" on its own line,
+        // with the column and value lists laid out by the shared adaptive list builder (§F). Anything
+        // it doesn't recognise falls back to the generic emitter (safe; §0 net covers it either way).
+        InsertStatement => FormatInsert(stmt),
+
         // Everything else — all DML plus non-PSQL DDL, COMMENT, SET, GRANT/REVOKE, DECLARE,
         // EXECUTE PROCEDURE/STATEMENT — through the clause-break SQL emitter (which also handles the
         // CREATE VIEW header case internally, exactly as before).
@@ -415,7 +420,7 @@ public static class SqlFormatter
         {
             int close = MatchParen(tokens, j);
             var items = SplitTopLevelCommas(tokens, j + 1, close);
-            sb.Append(' ').Append(FormatParenList(items, breakItems: true, ViewColumnIndent));
+            sb.Append(' ').Append(FormatBrokenList(items, ViewColumnIndent));
             prev = close < tokens.Count ? tokens[close] : nameTok;
             j = close < tokens.Count ? close + 1 : tokens.Count;
         }
@@ -484,23 +489,125 @@ public static class SqlFormatter
         return items;
     }
 
-    // Renders "( item, item, … )" from the split item ranges. Inline when <paramref name="breakItems"/>
-    // is false; otherwise one item per line indented by <paramref name="itemIndent"/> with the closing
-    // ')' glued to the last item (the shipped CREATE VIEW style). Each item is rendered by Emit.
-    private static string FormatParenList(List<List<FToken>> items, bool breakItems, string itemIndent)
+    // Renders each item's tokens to its formatted string via Emit — the ONE item renderer shared by
+    // both list layouts (so spacing/lowercasing/nesting is identical to plain SQL, no parallel path).
+    private static List<string> RenderListItems(List<List<FToken>> items)
     {
-        var sb = new StringBuilder();
-        sb.Append('(');
-        for (int k = 0; k < items.Count; k++)
+        var rendered = new List<string>(items.Count);
+        foreach (var it in items) rendered.Add(Emit(it).Trim());
+        return rendered;
+    }
+
+    // One item per line, indented by <paramref name="itemIndent"/>, ')' glued to the last item — the
+    // shipped CREATE VIEW column-list style (always vertical, regardless of width).
+    private static string FormatBrokenList(List<List<FToken>> items, string itemIndent)
+    {
+        var rendered = RenderListItems(items);
+        var sb = new StringBuilder("(");
+        for (int k = 0; k < rendered.Count; k++)
         {
-            var item = Emit(items[k]).Trim();
-            if (breakItems) sb.Append('\n').Append(itemIndent);
-            else if (k > 0) sb.Append(' ');
-            sb.Append(item);
-            if (k < items.Count - 1) sb.Append(',');
+            sb.Append('\n').Append(itemIndent).Append(rendered[k]);
+            if (k < rendered.Count - 1) sb.Append(',');
         }
-        sb.Append(')');
+        return sb.Append(')').ToString();
+    }
+
+    // Adaptive layout: inline "(a, b, c)" when it fits at <paramref name="openColumn"/>, else the items
+    // packed across lines up to the width limit with the continuation aligned under the first item —
+    // multiple items per line while they fit (length/readability-driven wrap, NOT one item per line).
+    // The shared reflow for INSERT / VALUES / UPDATE OR INSERT / EXECUTE BLOCK / FOR SELECT lists.
+    private static string FormatAdaptiveList(List<List<FToken>> items, int openColumn)
+    {
+        var rendered = RenderListItems(items);
+        var inline = "(" + string.Join(", ", rendered) + ")";
+        if (rendered.Count <= 1 || openColumn + inline.Length <= MaxLineWidth) return inline;
+        var indent = new string(' ', openColumn + 1);
+        return PackWithContinuation(rendered, head: "(", continuationIndent: indent, tail: ")", startColumn: openColumn);
+    }
+
+    // ── INSERT layout (§P8) — composes the shared list builder + Emit, no bespoke list loop ─────
+    //
+    // "insert into <target> (cols)" on one line, then "values (…)" (or "select …" / "default values")
+    // on its own line, RETURNING on its own line, ';' glued. The column and value lists ride the shared
+    // adaptive builder (inline while they fit, else packed to width). INSERT … SELECT reuses Emit for
+    // the query. Any shape it doesn't recognise falls back to the generic emitter — the §0 safety net
+    // guarantees no loss regardless, so this only needs to get the COMMON shapes pretty.
+    private static string FormatInsert(SqlStatement stmt)
+    {
+        var tokens = Flatten(stmt.Tokens);
+        int n = tokens.Count;
+        if (n < 2 || !IsWordTok(tokens[0], "INSERT") || !IsWordTok(tokens[1], "INTO"))
+            return Emit(tokens);
+
+        bool semi = IsPunctTok(tokens[n - 1], ";");
+        int end = semi ? n - 1 : n;
+
+        int boundary = FindInsertListOrSource(tokens, 2, end);
+        if (boundary < 0) return Emit(tokens); // no column list and no known source → generic
+
+        var sb = new StringBuilder("insert into ");
+        sb.Append(Emit(tokens.GetRange(2, boundary - 2)).Trim());
+        int j = boundary;
+
+        // Optional column list, on the same line as the target.
+        if (j < end && IsPunctTok(tokens[j], "("))
+        {
+            int close = MatchParen(tokens, j);
+            var cols = SplitTopLevelCommas(tokens, j + 1, Math.Min(close, end));
+            int openColumn = sb.Length + 1; // where '(' lands after the joining space
+            sb.Append(' ').Append(FormatAdaptiveList(cols, openColumn));
+            j = close < end ? close + 1 : end;
+        }
+
+        // Source clause, on its own line.
+        if (j < end && IsWordTok(tokens[j], "VALUES") && j + 1 < end && IsPunctTok(tokens[j + 1], "("))
+        {
+            int vOpen = j + 1;
+            int close = MatchParen(tokens, vOpen);
+            var vals = SplitTopLevelCommas(tokens, vOpen + 1, Math.Min(close, end));
+            const string head = "values ";
+            sb.Append('\n').Append(head).Append(FormatAdaptiveList(vals, head.Length));
+            j = close < end ? close + 1 : end;
+        }
+        else if (j < end)
+        {
+            // INSERT … SELECT / WITH / DEFAULT VALUES — the query/body reuses the clause-break emitter.
+            sb.Append('\n').Append(Emit(tokens.GetRange(j, end - j)));
+            j = end;
+        }
+
+        // RETURNING (after VALUES) or any unhandled tail — its own line, never dropped.
+        if (j < end && IsWordTok(tokens[j], "RETURNING"))
+        {
+            sb.Append('\n').Append(Emit(tokens.GetRange(j, end - j)));
+            j = end;
+        }
+        else if (j < end)
+        {
+            sb.Append('\n').Append(Emit(tokens.GetRange(j, end - j)));
+            j = end;
+        }
+
+        if (semi) sb.Append(';');
         return sb.ToString();
+    }
+
+    // The first depth-0 '(' (the column list) or source keyword (VALUES/SELECT/WITH/DEFAULT) in
+    // [start, end) — the boundary that ends the INSERT target. -1 when neither is present (⇒ generic).
+    private static int FindInsertListOrSource(List<FToken> tokens, int start, int end)
+    {
+        for (int k = start; k < end; k++)
+        {
+            var t = tokens[k];
+            if (t.Kind == FKind.Punctuation && t.Text == "(") return k;
+            if (t.Kind == FKind.Word
+                && (t.Text.Equals("VALUES", StringComparison.OrdinalIgnoreCase)
+                    || t.Text.Equals("SELECT", StringComparison.OrdinalIgnoreCase)
+                    || t.Text.Equals("WITH", StringComparison.OrdinalIgnoreCase)
+                    || t.Text.Equals("DEFAULT", StringComparison.OrdinalIgnoreCase)))
+                return k;
+        }
+        return -1;
     }
 
     private static string MaybeLowercase(FToken t)
@@ -917,11 +1024,19 @@ public static class SqlFormatter
         return PackWithContinuation(parts, head, continuation, tail);
     }
 
-    private static string PackWithContinuation(List<string> parts, string head, string continuationIndent, string? tail)
+    // Packs pre-rendered items onto lines up to MaxLineWidth, wrapping to a continuation indent aligned
+    // under the first item — the ONE adaptive-reflow algorithm for every list the formatter wraps: the
+    // string-level SELECT-column and IN-list wrapping (startColumn 0, head = the line prefix) AND the
+    // token-level paren-list builder (startColumn = where '(' sits, head = "("). "Adaptive": as many
+    // items per line as fit; a new line only when the next item would overflow (readability, not
+    // one-item-per-line). <paramref name="startColumn"/> is the column at which <paramref name="head"/>
+    // begins on the line, so the first line's budget is correct even when the list is not at column 0.
+    private static string PackWithContinuation(
+        List<string> parts, string head, string continuationIndent, string? tail, int startColumn = 0)
     {
         var sb = new StringBuilder();
         sb.Append(head);
-        int curLen = head.Length;
+        int curLen = startColumn + head.Length;
         bool atLineStart = false;
 
         for (int i = 0; i < parts.Count; i++)

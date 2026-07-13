@@ -252,15 +252,23 @@ noted.
     `docs/design/editor-architecture.md` §15.2, gotcha #212. Pinned by `SqlFormatterSafetyTests`.
     Build 0/0, 3542 main + 23 probe green.
   - **Krok F (shared list builder) — DONE.** ONE token-level mechanism (`SplitTopLevelCommas` +
-    `MatchParen` + `FormatParenList`, item content rendered by `Emit`) now lays out every
-    "( item, item, … )" comma list. The CREATE VIEW column list — first consumer — was migrated onto
-    it and its **bespoke ~40-line character loop was deleted** (net simplification, not addition).
-    Byte-identical view output (all pinned view tests green); the token-level splitter is comma-safe
-    inside quoted identifiers for free (the old string loop needed explicit quote-skipping). INSERT /
-    VALUES / UPDATE OR INSERT / EXECUTE BLOCK ride this builder in the next steps. Pinned by
-    `SqlFormatterListBuilderTests`. Build 0/0, 3548 main + 23 probe green.
-- **What's next:** continue P8 in order (next: **INSERT layout** — `INSERT INTO` with `INTO` on a new
-  line + column/values lists via the shared builder). Do NOT start Etap 7
+    `MatchParen` + `FormatBrokenList`/`FormatAdaptiveList`, item content rendered by `Emit`) now lays
+    out every "( item, item, … )" comma list. The CREATE VIEW column list — first consumer — was
+    migrated onto it and its **bespoke ~40-line character loop was deleted** (net simplification).
+    Byte-identical view output; the token-level splitter is comma-safe inside quoted identifiers for
+    free. Pinned by `SqlFormatterListBuilderTests`. Build 0/0, 3548 main + 23 probe green.
+  - **Krok INSERT (layout) — DONE.** `InsertStatement` now formats as IBExpert-standard: `insert into
+    <target> (cols)` on one line, `values (…)` / `select …` / `default values` on its own line,
+    `returning …` on its own, `;` glued. Column & value lists ride the shared **adaptive** builder —
+    inline while they fit 120 chars, else packed multiple-per-line aligned under the opening paren
+    (readability-driven, NOT one-per-line, per user directive). INSERT…SELECT reuses `Emit`.
+    **Simplification:** the adaptive-reflow packer `PackWithContinuation` was generalized with a
+    `startColumn` param and is now the ONE packing algorithm shared by the token-level list builder AND
+    the string-level SELECT/IN wrapping. Pinned by `SqlFormatterInsertTests`. Build 0/0, 3557 main + 23
+    probe green. (Note: INSERT inside a PSQL body still routes through the PSQL emitter's `Emit`, not
+    `FormatInsert` — a future consolidation flagged in the design doc.)
+- **What's next:** continue P8 in order (next: **UPDATE OR INSERT layout** — same builder; the
+  `UpdateOrInsertStatement` currently uses the generic emitter). Do NOT start Etap 7
   (diagnostics, folding, breadcrumbs, bracket-matching) until the user formally closes the UX Polish
   Phase. Also deferred: **P5d** a plain-hover info cue; **P2c** bold the typed completion-fragment
   (no clean AvaloniaEdit 12.0.0 path yet).
