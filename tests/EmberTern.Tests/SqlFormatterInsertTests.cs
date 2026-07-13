@@ -135,6 +135,38 @@ public class SqlFormatterInsertTests
         Assert.Equal(once, SqlFormatter.Format(once));
     }
 
+    // ── PSQL delegation: an INSERT/UOI inside a body formats like one at the top level ───────────
+
+    [Fact]
+    public void Insert_InsideExecuteBlock_FormatsLikeTopLevel()
+    {
+        // The PSQL body emitter delegates the INSERT to the same FormatInsertFamily used at the top
+        // level, so the "values (…)" clause breaks onto its own line (indented by the block) instead of
+        // staying inline. One implementation, not two.
+        var outp = SqlFormatter.Format("EXECUTE BLOCK AS BEGIN INSERT INTO T (A, B) VALUES (1, 2); END");
+        var lines = outp.Split('\n');
+        Assert.Contains("  insert into t (a, b)", lines);
+        Assert.Contains("  values (1, 2);", lines);
+    }
+
+    [Fact]
+    public void UpdateOrInsert_InsideProcedureBody_FormatsLikeTopLevel()
+    {
+        var outp = SqlFormatter.Format(
+            "CREATE PROCEDURE P AS BEGIN UPDATE OR INSERT INTO T (A) VALUES (1) MATCHING (A); END");
+        var lines = outp.Split('\n');
+        Assert.Contains("  update or insert into t (a)", lines);
+        Assert.Contains("  values (1)", lines);
+        Assert.Contains("  matching (a);", lines);
+    }
+
+    [Fact]
+    public void InsertInsideBody_IsIdempotent()
+    {
+        var once = SqlFormatter.Format("EXECUTE BLOCK AS BEGIN INSERT INTO T (A, B) VALUES (1, 2); END");
+        Assert.Equal(once, SqlFormatter.Format(once));
+    }
+
     // The ordered significant-token + comment sequence (words upper-cased since the formatter
     // lowercases them; everything else exact) — the §0 quantity the formatter must preserve.
     private static List<string> Lexemes(string sql)

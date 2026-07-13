@@ -774,6 +774,20 @@ cases — the dark DML keyword color and the light built-in-function color).
   `List<FToken>` (not the AST node) is deliberate — it lets the PSQL body emitter delegate to the same
   formatter (next). Pinned by the UPDATE OR INSERT cases in `SqlFormatterInsertTests`. Build 0/0; full
   suite 3561 main + 23 probe green.
+
+  **PSQL leaf-statement unification — DONE (2026-07-13, user-requested).** The PSQL body emitter no
+  longer carries its own INSERT/UPDATE/SELECT formatting. `AddPsqlEmit` now delegates each leaf
+  statement to a shared `FormatLeafStatement`, which routes INSERT / UPDATE OR INSERT to the SAME
+  `FormatInsertFamily` used at the top level (the only PSQL-specific case kept is SELECT … INTO :vars —
+  the INTO clause on its own line; everything else → the generic `Emit`). Result: an INSERT / UPDATE OR
+  INSERT inside a procedure, trigger, or EXECUTE BLOCK lays out identically to one at the top level (the
+  divergence the user noticed while reviewing INSERT-in-EXECUTE-BLOCK is gone). The architectural split
+  is now clean: **the PSQL emitter owns only block STRUCTURE** (BEGIN/END, IF/WHILE/FOR indentation) and
+  the uniform per-line indent (`EmitPsqlLines`), which preserves each statement formatter's internal
+  alignment; the STATEMENTS themselves are formatted in exactly one place. Low blast radius (no pinned
+  PSQL test contained an INSERT/UOI leaf; plain UPDATE and SELECT…INTO paths unchanged). Pinned by the
+  "inside body / EXECUTE BLOCK" cases in `SqlFormatterInsertTests`. Build 0/0; full suite 3564 main + 23
+  probe green.
 - **P5d — a plain-hover info cue.** A dwell-delayed, info-only Quick Info tooltip on plain hover
   (no Ctrl held); the underline + hand-cursor affordance stays Ctrl-only per §9.4. Small and
   implementable, but it's a live-tuning UX addition (dwell delay, noise) the design defers to

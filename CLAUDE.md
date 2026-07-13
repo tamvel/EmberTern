@@ -271,9 +271,18 @@ noted.
     (headerLen 4) — they differ only by the leading verb and the `matching (…)` clause (its own line,
     via the shared adaptive builder). One formatter, two statement kinds. Pinned by the UPDATE OR INSERT
     cases in `SqlFormatterInsertTests`. Build 0/0, 3561 main + 23 probe green.
-- **What's next:** PSQL leaf-statement unification (make the PSQL body emitter delegate INSERT/UOI to
-  the same `FormatInsertFamily`, removing the parallel formatting world — user-requested), then the
-  remaining P8 steps (long-line wrapping, EXECUTE BLOCK, FOR SELECT). Do NOT start Etap 7
+  - **PSQL leaf-statement unification — DONE (user-requested).** The PSQL body emitter no longer has its
+    own INSERT/UPDATE/SELECT formatting: `AddPsqlEmit` now delegates each leaf statement to a shared
+    `FormatLeafStatement`, which routes INSERT/UPDATE OR INSERT to the same `FormatInsertFamily` used at
+    the top level (SELECT…INTO keeps its PSQL-specific INTO-on-own-line split; everything else → generic
+    `Emit`). So an INSERT/UOI inside a procedure, trigger, or EXECUTE BLOCK now lays out identically to
+    one at the top level — the divergence the user noticed is gone. The PSQL emitter owns only block
+    STRUCTURE (BEGIN/END, IF/WHILE/FOR indentation); statements are formatted once. Pinned by the
+    "inside body" cases in `SqlFormatterInsertTests`. Build 0/0, 3564 main + 23 probe green.
+- **What's next:** remaining P8 steps — **long-line wrapping** (move SELECT/IN wrapping to the token
+  level via the shared builder + packer, then delete the string-level scanners `SplitByTopLevelComma`/
+  `FindInOpeningParen`/`FindMatchingClose`/`SkipString`/`SkipQuotedIdent`), then EXECUTE BLOCK header,
+  then FOR SELECT. Do NOT start Etap 7
   (diagnostics, folding, breadcrumbs, bracket-matching) until the user formally closes the UX Polish
   Phase. Also deferred: **P5d** a plain-hover info cue; **P2c** bold the typed completion-fragment
   (no clean AvaloniaEdit 12.0.0 path yet).

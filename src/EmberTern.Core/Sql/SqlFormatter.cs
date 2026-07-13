@@ -850,20 +850,32 @@ public static class SqlFormatter
     private static void AddPsqlEmit(List<string> lines, int indent, List<FToken> stmt)
     {
         if (stmt.Count == 0) return;
+        EmitPsqlLines(lines, indent, FormatLeafStatement(stmt));
+    }
 
-        // SELECT … INTO :vars (PSQL singleton select) — put the INTO clause on its own line.
+    // Formats ONE leaf statement of a PSQL body by delegating to the SAME statement formatters used at
+    // the top level — so an INSERT / UPDATE OR INSERT inside a procedure, trigger, or EXECUTE BLOCK
+    // lays out identically to one at the top level. There is no parallel PSQL formatting of these
+    // statements: the PSQL emitter owns only the block STRUCTURE (BEGIN/END, IF/WHILE/FOR indentation);
+    // the statements themselves are formatted once, here. The only PSQL-specific case is SELECT … INTO
+    // :vars (the singleton-select INTO clause on its own line); everything else is the generic
+    // clause-break emitter. The uniform per-line indent applied by EmitPsqlLines preserves each
+    // formatter's internal alignment.
+    private static string FormatLeafStatement(List<FToken> stmt)
+    {
+        if (IsWordTok(stmt[0], "INSERT")) return FormatInsertFamily(stmt, 2);
+        if (IsWordTok(stmt[0], "UPDATE") && stmt.Count > 1 && IsWordTok(stmt[1], "OR"))
+            return FormatInsertFamily(stmt, 4);
+
+        // SELECT … INTO :vars (PSQL singleton select) — the INTO clause on its own line.
         if (IsWordTok(stmt[0], "SELECT"))
         {
             int into = FindTopLevelWord(stmt, "INTO");
             if (into > 0)
-            {
-                EmitPsqlLines(lines, indent, Emit(stmt.GetRange(0, into)));
-                EmitPsqlLines(lines, indent, Emit(stmt.GetRange(into, stmt.Count - into)));
-                return;
-            }
+                return Emit(stmt.GetRange(0, into)) + "\n" + Emit(stmt.GetRange(into, stmt.Count - into));
         }
 
-        EmitPsqlLines(lines, indent, Emit(stmt));
+        return Emit(stmt);
     }
 
     private static void EmitPsqlLines(List<string> lines, int indent, string emitted)
