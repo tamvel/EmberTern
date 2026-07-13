@@ -236,18 +236,25 @@ noted.
   hover first. Full detail: `docs/design/editor-architecture.md` §15.2/§15.3, gotcha #211 (this
   also generalizes/supersedes the earlier per-character warm-then-retry hacks — there is now one
   metadata cache + one generic warm pipeline). Build 0/0, tests 3449/3449 green.
-- **§0 PRIORITY-ZERO finding, not yet fixed:** the PSQL formatter (`SqlFormatter.EmitPsqlUnit`) can
-  silently DROP a stray/unmatched `END` token from malformed or mid-edit PSQL instead of preserving
-  it — a live violation of the Paramount Law (Architecture rule #11). Root cause + proposed fix:
-  `docs/design/editor-architecture.md` §15.2, gotcha #212. **Must be fixed before any P8 layout
-  work lands** (P8 depends on the same emitter).
-- **What's next, when development resumes** (in the editor-language-front-end work — see
-  `docs/design/editor-architecture.md` for full detail):
-  1. Fix the §0 formatter data-loss finding above.
-  2. Once the UX Polish Phase is formally closed by the user (remaining backlog: **P8** formatter
-     polish — its own large package, likely needs the parser deepened; **P5d** a plain-hover
-     info cue; **P2c** bold the typed completion-fragment — no clean AvaloniaEdit 12.0.0 path yet)
-     — only then does Etap 7 (diagnostics, folding, breadcrumbs, bracket-matching) start.
+- **P8 IN PROGRESS — Formatter Polish (started 2026-07-13).** Scope + order agreed with the user:
+  **Krok 0 Formatter Safety (§0) → F shared list builder → INSERT layout → UPDATE OR INSERT layout →
+  long-line wrapping → EXECUTE BLOCK → FOR SELECT**, each its own commit with full build + tests +
+  round-trip/idempotency. Standing directives for P8: never add a formatter workaround/special-case
+  where a small parser/AST deepening is cleaner ("build grammar depth only when a concrete feature
+  needs it"); after each step, remove any now-redundant historical workaround rather than leaving
+  compatibility layers; report + justify architectural changes per step.
+  - **Krok 0 (Formatter Safety) — DONE.** The formatter can no longer lose a token on malformed/
+    incomplete input (§0 guarantee). Two layers: each PSQL emitter anti-stall guard now emits the
+    unplaced token verbatim (`EmitStrayToken`) instead of silently skipping; and a checked invariant
+    wraps `SqlFormatter.Format` — per statement, if the output's lexeme sequence ≠ the input tokens'
+    it keeps the statement verbatim, and a script-level backstop returns the input unchanged if the
+    whole result still differs. Also fixed a leading-comment drop before `CREATE PROCEDURE`. Detail:
+    `docs/design/editor-architecture.md` §15.2, gotcha #212. Pinned by `SqlFormatterSafetyTests`.
+    Build 0/0, 3542 main + 23 probe green.
+- **What's next:** continue P8 in order (next: **F — shared list builder**). Do NOT start Etap 7
+  (diagnostics, folding, breadcrumbs, bracket-matching) until the user formally closes the UX Polish
+  Phase. Also deferred: **P5d** a plain-hover info cue; **P2c** bold the typed completion-fragment
+  (no clean AvaloniaEdit 12.0.0 path yet).
 - **One flagged inconsistency found during this cleanup sprint, worth a two-minute check next
   time that area is touched:** the 2026-06-18 Transaction Architecture Audit left "R2 — the
   procedure-lock after Execute → Rollback → Compile" marked **OPEN**, pending a live `MON$` dump

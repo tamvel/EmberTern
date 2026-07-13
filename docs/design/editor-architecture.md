@@ -715,26 +715,28 @@ cases — the dark DML keyword color and the light built-in-function color).
   needs the parser deepened for INSERT/VALUES/SELECT-list clauses (deferred from Etap 3's
   "statement skeleton" depth on purpose — build grammar depth only when a concrete feature needs
   it). Its own large package.
-  **§0 PRIORITY-ZERO finding (2026-07-13, not yet fixed):** the PSQL body emitter can silently
-  DROP a token on malformed/incomplete input — a live §0 (Paramount Law) violation, found while
-  scoping P8, must be fixed before any of P8's cosmetic layout work. Root cause: in
-  `SqlFormatter.EmitPsqlUnit`, a stray/unmatched `END` (one with no corresponding open `BEGIN` in
-  the current recursion) hits the guard `if (IsWordTok(sig[i], "END")) return;` — correct when the
-  caller IS an open-BEGIN loop (which then consumes the `END` itself as the block close), but the
-  SAME guard fires from `FormatPsqlBody`'s own top-level loop and `EmitPsqlUnit`'s BEGIN-block loop
-  when there is no enclosing block to consume it. Both callers guard against infinite-looping on a
-  stalled `i` with `if (i == before) i++;` — which advances past the token WITHOUT ever appending it
-  to `lines`. Net effect: an extra/unmatched `END` (e.g. mid-edit, a temporarily unbalanced
-  `BEGIN…END`, or a copy-pasted partial block) vanishes from the formatted output instead of being
-  preserved. Proposed fix (not yet implemented — pending user approval): give `EmitPsqlUnit` an
-  explicit "am I inside an open block" context (a bool/depth parameter) rather than relying on the
-  caller's loop shape to infer it; only return-without-consuming when that context says a real
-  enclosing `BEGIN` loop will consume the token, and everywhere else (genuinely top-level, or a
-  branch/subprogram call site with no open block) fall through to a verbatim-emit-and-consume path
-  (the same "don't understand it, reproduce it 1:1" contract `RawStatement` already uses at the
-  statement level) so the stray token is never silently discarded. Needs a differential/round-trip
-  test asserting the formatter's output, token-for-token, is a superset of every non-whitespace
-  input token even on deliberately malformed PSQL.
+  **§0 Krok 0 — Formatter Safety — DONE (2026-07-13).** The PSQL body emitter could silently DROP a
+  token on malformed/incomplete input (a live §0 violation, found while scoping P8) — e.g. a
+  stray/unmatched `END` hitting `SqlFormatter.EmitPsqlUnit`'s `if (IsWordTok(sig[i],"END")) return;`
+  guard while called from a context with no enclosing `BEGIN` to consume it, whereupon the callers'
+  anti-stall `if (i == before) i++;` advanced past the token without appending it. Fixed in two
+  layers: **(a)** each stall guard now calls `EmitStrayToken` — emit the unplaced token verbatim and
+  advance — so the emitter is lossless by construction (token-level analogue of `RawStatement`'s
+  statement-level "reproduce 1:1" contract); **(b)** a **checked invariant** now wraps the formatter
+  (`Format(SqlScript)`): after formatting each statement, its output is compared lexeme-for-lexeme to
+  its input tokens and, on any mismatch, the statement is kept **verbatim** (leave the fragment
+  unchanged); a script-level backstop returns the **input unchanged** if the whole result still
+  differs by one lexeme (also covers the string-level long-line wrapping stage — refuse). A "lexeme"
+  is a significant token (words case-insensitive since the formatter lowercases; everything else
+  exact) plus every comment (trailing-trimmed); for well-formed input the sequences are always
+  identical, so the guard never rejects valid code — it fires only on a genuine loss. Also fixed a
+  related leading-comment drop (`FormatWithHeaderAndBody` lost a comment before `CREATE PROCEDURE`).
+  §0 is now a guarantee, not a hope: the formatter either reproduces every lexeme or leaves the
+  fragment/document unchanged, even for input it cannot model. Pinned by `SqlFormatterSafetyTests`
+  (adversarial malformed corpus — lexeme-preservation + no-throw + idempotency), gotcha #212. Build
+  0/0; full suite 3542 main + 23 probe green. The remaining P8 layout items (INSERT / UPDATE OR
+  INSERT / EXECUTE BLOCK / FOR SELECT / long-line wrapping / shared list builder) are the cosmetic
+  work now unblocked.
 - **P5d — a plain-hover info cue.** A dwell-delayed, info-only Quick Info tooltip on plain hover
   (no Ctrl held); the underline + hand-cursor affordance stays Ctrl-only per §9.4. Small and
   implementable, but it's a live-tuning UX addition (dwell delay, noise) the design defers to

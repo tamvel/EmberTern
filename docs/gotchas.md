@@ -602,19 +602,28 @@ each call site again.
 
 212. **A "never stall" loop guard (`if (i == before) i++;`) that advances an index without ever emitting
 the skipped token is a silent §0 (Paramount Law) violation, not a harmless safety net.** Found while
-scoping P8 (formatter polish), not yet fixed. `SqlFormatter.EmitPsqlUnit` returns without consuming `i`
-when it sees a stray `END` (`if (IsWordTok(sig[i], "END")) return;`) — correct ONLY when the caller is an
-open-`BEGIN` loop that will itself consume that `END` as the block close. `FormatPsqlBody`'s own top-level
-loop and `EmitPsqlUnit`'s BEGIN-block loop both call `EmitPsqlUnit` and, seeing no progress, fall back to
-`if (i == before) i++;` to avoid an infinite loop — which discards the token instead of emitting it
-verbatim. Net effect: malformed/incomplete PSQL with an extra/unmatched `END` (a very ordinary mid-edit
-state) has that `END` silently vanish from the formatted output — real user-typed text disappearing, the
-exact class of bug §0 exists to prevent. **Rule: an anti-stall guard that skips a token must ALSO emit it
-(verbatim, unformatted) — "don't loop forever" and "don't drop the token" are two separate obligations, and
-a fix for one must not silently reintroduce the other.** Proposed fix (design doc §15.2, not yet
-implemented): give the emitter explicit context on whether an enclosing open block will consume a stray
-`END`; every other case falls through to a verbatim emit-and-consume, mirroring `RawStatement`'s
-statement-level "don't understand it → reproduce it 1:1" contract at the token level.
+scoping P8; **fixed in P8 Krok 0 (Formatter Safety), 2026-07-13.** `SqlFormatter.EmitPsqlUnit` returns
+without consuming `i` when it sees a stray `END` (`if (IsWordTok(sig[i], "END")) return;`) — correct ONLY
+when the caller is an open-`BEGIN` loop that will itself consume that `END` as the block close.
+`FormatPsqlBody`'s own top-level loop and `EmitPsqlUnit`'s BEGIN-block loop both call `EmitPsqlUnit` and,
+seeing no progress, fell back to `if (i == before) i++;` to avoid an infinite loop — which discarded the
+token instead of emitting it verbatim. Net effect: malformed/incomplete PSQL with an extra/unmatched `END`
+(a very ordinary mid-edit state) had that `END` silently vanish from the formatted output — real user-typed
+text disappearing, the exact class of bug §0 exists to prevent. **Rule: an anti-stall guard that skips a
+token must ALSO emit it (verbatim, unformatted) — "don't loop forever" and "don't drop the token" are two
+separate obligations, and a fix for one must not silently reintroduce the other.** The fix has two layers:
+(a) each stall guard now calls `EmitStrayToken` (emit the unplaced token verbatim on its own line, then
+advance) so the emitter is lossless by construction — the same "don't understand it → reproduce it 1:1"
+contract `RawStatement` gives at the statement level, applied at the token level; (b) a **checked
+invariant** wraps the whole formatter: after formatting each statement its output is compared
+lexeme-for-lexeme to its input tokens and, on any mismatch, the statement is kept verbatim, and a
+script-level backstop returns the input unchanged if the final result still differs by even one lexeme
+(covers the string-level long-line wrapping stage). §0 is now a guarantee, not a hope — the formatter
+either reproduces every lexeme or leaves the fragment/document unchanged, even for input it cannot model.
+Pinned by `SqlFormatterSafetyTests` (adversarial malformed corpus: lexeme-preservation + no-throw +
+idempotency). **Rule: a formatter (or any code-rewriter) that re-emits from a model instead of copying the
+source must VERIFY its output preserves the input, and fall back to verbatim when it doesn't — don't trust
+every emit path to be individually perfect.**
 
 
 ## MVVM / CommunityToolkit patterns

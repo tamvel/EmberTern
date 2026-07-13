@@ -66,13 +66,25 @@ public static class SqlFormatter
         foreach (var stmt in root.Statements)
         {
             var text = FormatStatement(root.Text, stmt);
+            // §0 Formatter Safety (per statement): if formatting altered or lost ANY lexeme, keep
+            // the statement verbatim instead — "leave the fragment unchanged" — so one malformed
+            // statement never corrupts, and never blocks formatting of the rest of the script.
+            if (!LexemesPreserved(stmt.Tokens, text))
+            {
+                text = VerbatimStatement(root.Text, stmt);
+            }
             if (text.Length > 0) parts.Add(text);
         }
 
         AppendTrailingComments(root, parts); // trailing comments (on EOF) — never lose (§0)
 
         var joined = string.Join("\n", parts);
-        return WrapLongLines(joined);
+        var result = WrapLongLines(joined);
+
+        // §0 Formatter Safety (absolute backstop): if the whole formatted result still differs from
+        // the input by even one lexeme, refuse — return the input unchanged rather than emit anything
+        // lossy. Covers the string-level long-line wrapping stage and any path not caught above.
+        return LexemesPreserved(root.Text, result) ? result : root.Text;
     }
 
     // ── Statement dispatch (100% AST-driven) ──────────────────────────────────────────────────
@@ -148,6 +160,11 @@ public static class SqlFormatter
 
         var asTok = stmt.Tokens[asIndex];
         string header = source.Substring(stmt.Start, asTok.End - stmt.Start).TrimEnd();
+        // A comment BEFORE the definition keyword lives in the first token's leading trivia — outside
+        // the header span (stmt.Start begins after trivia) — so re-attach it or it is lost (§0). The
+        // no-AS branch above goes through Flatten, which already materialises leading comments.
+        var lead = LeadingComments(stmt);
+        if (lead.Length > 0) header = lead + "\n" + header;
 
         var bodyTokens = new List<SqlToken>(stmt.Tokens.Count - asIndex - 1);
         for (int k = asIndex + 1; k < stmt.Tokens.Count; k++) bodyTokens.Add(stmt.Tokens[k]);
@@ -497,7 +514,7 @@ public static class SqlFormatter
         {
             int before = i;
             EmitPsqlUnit(body, ref i, 0, lines);
-            if (i == before) i++; // never stall on an unexpected token
+            if (i == before) EmitStrayToken(body, ref i, 0, lines); // §0: never skip — emit verbatim
         }
 
         var bodyStr = string.Join("\n", lines);
@@ -530,7 +547,7 @@ public static class SqlFormatter
                 {
                     int before = i;
                     EmitPsqlUnit(sig, ref i, indent + 1, lines);
-                    if (i == before) i++;
+                    if (i == before) EmitStrayToken(sig, ref i, indent + 1, lines);
                 }
                 if (i < sig.Count && IsWordTok(sig[i], "END"))
                 {
@@ -569,7 +586,7 @@ public static class SqlFormatter
                 AddPsqlEmit(lines, indent, CollectUntilWordExclusive(sig, ref i, "BEGIN"));
                 int before = i;
                 EmitPsqlUnit(sig, ref i, indent, lines); // the subprogram's BEGIN…END
-                if (i == before) i++;
+                if (i == before) EmitStrayToken(sig, ref i, indent, lines);
                 return;
             }
             // A packaged subprogram DEFINITION — a bare FUNCTION/PROCEDURE WITH a body, as found in a
@@ -580,7 +597,7 @@ public static class SqlFormatter
                 AddPsqlEmit(lines, indent, CollectUntilWordExclusive(sig, ref i, "BEGIN"));
                 int before = i;
                 EmitPsqlUnit(sig, ref i, indent, lines); // the subprogram's BEGIN…END
-                if (i == before) i++;
+                if (i == before) EmitStrayToken(sig, ref i, indent, lines);
                 return;
             }
         }
@@ -599,7 +616,7 @@ public static class SqlFormatter
         {
             int before = i;
             EmitPsqlUnit(sig, ref i, indent + 1, lines); // single statement indented
-            if (i == before) i++;
+            if (i == before) EmitStrayToken(sig, ref i, indent + 1, lines);
         }
     }
 
@@ -714,9 +731,88 @@ public static class SqlFormatter
     private static void AddPsqlLine(List<string> lines, int indent, string text)
         => lines.Add(new string(' ', indent * PsqlIndentSize) + text);
 
+    // §0 Formatter Safety: a token the block structurer could not place (malformed / incomplete PSQL
+    // — e.g. a stray/unmatched END mid-edit) is emitted VERBATIM on its own line and consumed, never
+    // silently skipped. This makes the emitter lexeme-lossless by construction so the per-statement
+    // safety check (LexemesPreserved) does not have to fall back to a fully-verbatim statement for the
+    // common near-valid case. Words are lowercased like every other word; comments print as-is.
+    private static void EmitStrayToken(List<FToken> sig, ref int i, int indent, List<string> lines)
+    {
+        if (i >= sig.Count) return;
+        var t = sig[i];
+        MaybeBlankLine(lines, t.BlankBefore);
+        AddPsqlLine(lines, indent, t.IsComment ? t.Text : MaybeLowercase(t));
+        i++;
+    }
+
     private static bool IsWordTok(FToken t, string w)
         => t.Kind == FKind.Word && t.Text.Equals(w, StringComparison.OrdinalIgnoreCase);
     private static bool IsPunctTok(FToken t, string p) => t.Kind == FKind.Punctuation && t.Text == p;
+
+    // ── §0 Formatter Safety — lexeme-preservation invariant ─────────────────────────────────────
+    //
+    // The formatter re-emits from a flattened token model rather than by copying the source span, so
+    // (unlike the AST's byte-for-byte token overlay) each emit path is individually responsible for
+    // reproducing every token. To make §0 (never lose the user's code) a CHECKED invariant rather than
+    // a property we merely trust every path to uphold, formatting output is compared to its input, and
+    // on any loss the source is kept verbatim (Format(SqlScript), two levels: per statement + per
+    // script). This turns "the formatter must never drop a token" from a promise into a guarantee that
+    // holds even for malformed / incomplete SQL the parser could not fully model.
+    //
+    // A "lexeme" is a significant token — words (keyword/identifier/parameter) compared
+    // case-insensitively because the formatter lowercases unquoted words; strings, numbers, quoted
+    // identifiers, and punctuation compared exactly — PLUS every comment (compared with the trailing
+    // whitespace trimmed, since the formatter trims line-comment tails). Whitespace is deliberately
+    // NOT compared: re-spacing is the formatter's entire job. For any well-formed input the two
+    // sequences are identical (the formatter changes only whitespace and word case), so this guard
+    // never rejects valid code — it fires only on a genuine loss, which is exactly when it must.
+
+    private enum LexClass { Word, Verbatim, Comment }
+    private readonly record struct Lexeme(LexClass Class, string Text);
+
+    // True when the formatted output reproduces, lexeme-for-lexeme, the input token stream.
+    private static bool LexemesPreserved(IReadOnlyList<SqlToken> input, string formatted)
+        => LexemesEqual(LexemesOf(input), LexemesOf(SqlLexer.Tokenize(formatted)));
+
+    // True when the whole formatted script reproduces, lexeme-for-lexeme, the whole input text.
+    private static bool LexemesPreserved(string input, string formatted)
+        => LexemesEqual(LexemesOf(SqlLexer.Tokenize(input)), LexemesOf(SqlLexer.Tokenize(formatted)));
+
+    private static bool LexemesEqual(List<Lexeme> a, List<Lexeme> b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int k = 0; k < a.Count; k++)
+        {
+            if (a[k] != b[k]) return false;
+        }
+        return true;
+    }
+
+    private static List<Lexeme> LexemesOf(IReadOnlyList<SqlToken> tokens)
+    {
+        var list = new List<Lexeme>(tokens.Count * 2);
+        foreach (var t in tokens)
+        {
+            foreach (var tr in t.LeadingTrivia)
+            {
+                if (tr.Kind is TriviaKind.LineComment or TriviaKind.BlockComment)
+                {
+                    list.Add(new Lexeme(LexClass.Comment, tr.Text.TrimEnd()));
+                }
+            }
+            if (t.Kind == TokenKind.EndOfFile) continue; // sentinel; its trailing comments counted above
+            list.Add(t.Kind switch
+            {
+                // Words are lowercased on output → compare case-insensitively.
+                TokenKind.Keyword or TokenKind.Identifier or TokenKind.Parameter
+                    => new Lexeme(LexClass.Word, t.Text.ToLowerInvariant()),
+                // Strings / numbers / quoted identifiers / commas / dots / semicolons / parens /
+                // operators / unknown pass through untouched → compare exactly.
+                _ => new Lexeme(LexClass.Verbatim, t.Text),
+            });
+        }
+        return list;
+    }
 
     // ── Long-line wrapping (IBExpert style, 120-char threshold) ────────────────────────────────
 
