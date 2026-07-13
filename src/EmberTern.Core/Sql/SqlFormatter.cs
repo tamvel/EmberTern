@@ -78,12 +78,10 @@ public static class SqlFormatter
 
         AppendTrailingComments(root, parts); // trailing comments (on EOF) — never lose (§0)
 
-        var joined = string.Join("\n", parts);
-        var result = WrapLongLines(joined);
+        var result = string.Join("\n", parts);
 
-        // §0 Formatter Safety (absolute backstop): if the whole formatted result still differs from
-        // the input by even one lexeme, refuse — return the input unchanged rather than emit anything
-        // lossy. Covers the string-level long-line wrapping stage and any path not caught above.
+        // §0 Formatter Safety (absolute backstop): if the whole formatted result differs from the input
+        // by even one lexeme, refuse — return the input unchanged rather than emit anything lossy.
         return LexemesPreserved(root.Text, result) ? result : root.Text;
     }
 
@@ -332,6 +330,22 @@ public static class SqlFormatter
                 }
                 prev = meaningful[i + phrase.Length - 1];
                 i += phrase.Length - 1;
+
+                // SELECT column list → laid out by the shared adaptive builder (inline while it fits,
+                // else packed to width). This is the token-level home of long-line wrapping; there is no
+                // separate string post-pass.
+                if (phrase.Kind == PhraseKind.TopLevel && IsWordTok(meaningful[i], "SELECT"))
+                {
+                    i += EmitSelectColumnList(meaningful, i + 1, sb, ref prev);
+                }
+                continue;
+            }
+
+            // IN ( … ) value list → the same adaptive builder; a subquery is left to the clause break.
+            if (IsWordTok(t, "IN") && i + 1 < meaningful.Count && IsPunctTok(meaningful[i + 1], "(")
+                && !StartsSubquery(meaningful, i + 2))
+            {
+                i += EmitInList(meaningful, i, sb, ref prev) - 1;
                 continue;
             }
 
@@ -349,6 +363,55 @@ public static class SqlFormatter
         }
 
         return sb.ToString();
+    }
+
+    // Emits a SELECT column list (adaptive wrap) starting at <paramref name="start"/> (just past
+    // SELECT). Leading DISTINCT/ALL are emitted inline as part of the header; the columns then run to
+    // the first depth-0 clause break and are laid out by the shared bare-list builder, measured from
+    // the current column (so the continuation aligns under the first column). Returns tokens consumed.
+    private static int EmitSelectColumnList(List<FToken> tokens, int start, StringBuilder sb, ref FToken? prev)
+    {
+        int i = start;
+        while (i < tokens.Count && tokens[i].Kind == FKind.Word
+               && (tokens[i].Text.Equals("DISTINCT", StringComparison.OrdinalIgnoreCase)
+                   || tokens[i].Text.Equals("ALL", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (NeedsSpaceBefore(prev, tokens[i], sb)) sb.Append(' ');
+            sb.Append(tokens[i].Text.ToLowerInvariant());
+            prev = tokens[i];
+            i++;
+        }
+
+        int listEnd = FindColumnListEnd(tokens, i);
+        if (listEnd <= i) return i - start; // no columns (defensive)
+
+        if (NeedsSpaceBefore(prev, tokens[i], sb)) sb.Append(' ');
+        int openColumn = CurrentColumn(sb);
+        var items = SplitTopLevelCommas(tokens, i, listEnd);
+        sb.Append(FormatAdaptiveBareList(items, openColumn));
+        prev = tokens[listEnd - 1];
+        return listEnd - start;
+    }
+
+    // Emits "in ( … )" with the value list laid out by the shared adaptive builder, measured from the
+    // '(' column. Returns tokens consumed (IN through the matching ')').
+    private static int EmitInList(List<FToken> tokens, int inIdx, StringBuilder sb, ref FToken? prev)
+    {
+        if (NeedsSpaceBefore(prev, tokens[inIdx], sb)) sb.Append(' ');
+        sb.Append("in");
+        prev = tokens[inIdx];
+
+        int open = inIdx + 1; // '('
+        int close = MatchParen(tokens, open);
+        var items = SplitTopLevelCommas(tokens, open + 1, close);
+
+        if (NeedsSpaceBefore(prev, tokens[open], sb)) sb.Append(' ');
+        int openColumn = CurrentColumn(sb);
+        sb.Append(FormatAdaptiveList(items, openColumn));
+        prev = close < tokens.Count ? tokens[close] : tokens[open];
+
+        int last = close < tokens.Count ? close : tokens.Count - 1;
+        return last - inIdx + 1;
     }
 
     private enum PhraseKind { None, TopLevel, Conjunction }
@@ -517,7 +580,7 @@ public static class SqlFormatter
     // Adaptive layout: inline "(a, b, c)" when it fits at <paramref name="openColumn"/>, else the items
     // packed across lines up to the width limit with the continuation aligned under the first item —
     // multiple items per line while they fit (length/readability-driven wrap, NOT one item per line).
-    // The shared reflow for INSERT / VALUES / UPDATE OR INSERT / EXECUTE BLOCK / FOR SELECT lists.
+    // The shared reflow for parenthesized lists: INSERT / VALUES / UPDATE OR INSERT / MATCHING / IN.
     private static string FormatAdaptiveList(List<List<FToken>> items, int openColumn)
     {
         var rendered = RenderListItems(items);
@@ -526,6 +589,49 @@ public static class SqlFormatter
         var indent = new string(' ', openColumn + 1);
         return PackWithContinuation(rendered, head: "(", continuationIndent: indent, tail: ")", startColumn: openColumn);
     }
+
+    // Adaptive layout for a BARE (unparenthesised) comma list — the SELECT column list. Inline when it
+    // fits at <paramref name="openColumn"/>, else packed with the continuation aligned under the first
+    // item (openColumn spaces). Same packer/threshold as the parenthesised form; no surrounding parens.
+    private static string FormatAdaptiveBareList(List<List<FToken>> items, int openColumn)
+    {
+        var rendered = RenderListItems(items);
+        var inline = string.Join(", ", rendered);
+        if (rendered.Count <= 1 || openColumn + inline.Length <= MaxLineWidth) return inline;
+        var indent = new string(' ', openColumn);
+        return PackWithContinuation(rendered, head: "", continuationIndent: indent, tail: null, startColumn: openColumn);
+    }
+
+    // The current output column (chars since the last newline) — the openColumn a caller passes to the
+    // adaptive builders so wrapping is measured from where the list actually sits on its line.
+    private static int CurrentColumn(StringBuilder sb)
+    {
+        for (int k = sb.Length - 1; k >= 0; k--)
+        {
+            if (sb[k] == '\n') return sb.Length - 1 - k;
+        }
+        return sb.Length;
+    }
+
+    // The end of a SELECT column list: the first depth-0 clause break (FROM/WHERE/GROUP BY/…, a
+    // conjunction, a JOIN) or line comment — paren-aware, so a subquery's inner FROM does not end it.
+    private static int FindColumnListEnd(List<FToken> tokens, int start)
+    {
+        int depth = 0;
+        for (int k = start; k < tokens.Count; k++)
+        {
+            var t = tokens[k];
+            if (t.Kind == FKind.Punctuation && t.Text == "(") { depth++; continue; }
+            if (t.Kind == FKind.Punctuation && t.Text == ")") { if (depth > 0) depth--; continue; }
+            if (depth == 0 && (t.IsComment || MatchStructuralPhrase(tokens, k).Length > 0)) return k;
+        }
+        return tokens.Count;
+    }
+
+    // True when an "IN ( … )" content is a subquery (IN (SELECT …) / IN (WITH …)) — which is left to the
+    // normal clause break, never comma-wrapped as a value list.
+    private static bool StartsSubquery(List<FToken> tokens, int k)
+        => k < tokens.Count && (IsWordTok(tokens[k], "SELECT") || IsWordTok(tokens[k], "WITH"));
 
     // ── INSERT / UPDATE OR INSERT layout (§P8) — composes the shared list builder + Emit ─────────
     //
@@ -987,76 +1093,20 @@ public static class SqlFormatter
         return list;
     }
 
-    // ── Long-line wrapping (IBExpert style, 120-char threshold) ────────────────────────────────
-
-    private static string WrapLongLines(string sql)
-    {
-        var lines = sql.Split('\n');
-        var sb = new StringBuilder(sql.Length);
-        for (int i = 0; i < lines.Length; i++)
-        {
-            if (i > 0) sb.Append('\n');
-            sb.Append(WrapLine(lines[i]));
-        }
-        return sb.ToString();
-    }
-
-    private static string WrapLine(string line)
-    {
-        if (line.Length <= MaxLineWidth) return line;
-
-        if (line.StartsWith("select ", StringComparison.Ordinal))
-        {
-            var wrapped = TryWrapSelectColumns(line);
-            if (wrapped is not null) return wrapped;
-        }
-
-        var inWrapped = TryWrapInList(line);
-        if (inWrapped is not null) return inWrapped;
-
-        return line;
-    }
-
-    private static string? TryWrapSelectColumns(string line)
-    {
-        string head =
-            line.StartsWith("select distinct ", StringComparison.Ordinal) ? "select distinct " :
-            line.StartsWith("select all ", StringComparison.Ordinal) ? "select all " :
-            "select ";
-
-        var body = line.Substring(head.Length);
-        var parts = SplitByTopLevelComma(body);
-        if (parts.Count < 2) return null;
-
-        var continuation = new string(' ', head.Length);
-        return PackWithContinuation(parts, head, continuation, tail: null);
-    }
-
-    private static string? TryWrapInList(string line)
-    {
-        int parenOpen = FindInOpeningParen(line);
-        if (parenOpen < 0) return null;
-        int parenClose = FindMatchingClose(line, parenOpen);
-        if (parenClose < 0) return null;
-
-        var inner = line.Substring(parenOpen + 1, parenClose - parenOpen - 1);
-        if (LooksLikeSubquery(inner)) return null; // subqueries handled by the structural break
-
-        var parts = SplitByTopLevelComma(inner);
-        if (parts.Count < 2) return null;
-
-        var head = line.Substring(0, parenOpen + 1);
-        var tail = line.Substring(parenClose);
-        var continuation = new string(' ', parenOpen + 1);
-
-        return PackWithContinuation(parts, head, continuation, tail);
-    }
+    // ── Long-line wrapping ──────────────────────────────────────────────────────────────────────
+    //
+    // There is ONE long-line wrapping mechanism and it lives at the TOKEN level, inside Emit: a SELECT
+    // column list (EmitSelectColumnList) and an IN ( … ) value list (EmitInList) are laid out by the
+    // shared adaptive list builders (FormatAdaptiveBareList / FormatAdaptiveList), which pack to width
+    // via PackWithContinuation. The former string-level post-pass (WrapLongLines + its own char scanners
+    // — SplitByTopLevelComma / FindInOpeningParen / FindMatchingClose / SkipString / SkipQuotedIdent /
+    // LooksLikeSubquery) is gone: the token stream already carries the structure those scanners had to
+    // re-derive from the rendered text, so it wrapped from precise columns and needed no heuristics.
 
     // Packs pre-rendered items onto lines up to MaxLineWidth, wrapping to a continuation indent aligned
-    // under the first item — the ONE adaptive-reflow algorithm for every list the formatter wraps: the
-    // string-level SELECT-column and IN-list wrapping (startColumn 0, head = the line prefix) AND the
-    // token-level paren-list builder (startColumn = where '(' sits, head = "("). "Adaptive": as many
-    // items per line as fit; a new line only when the next item would overflow (readability, not
+    // under the first item — the ONE adaptive-reflow algorithm for every list the formatter wraps
+    // (SELECT columns via head = "", the parenthesised INSERT/VALUES/IN lists via head = "("). "Adaptive":
+    // as many items per line as fit; a new line only when the next item would overflow (readability, not
     // one-item-per-line). <paramref name="startColumn"/> is the column at which <paramref name="head"/>
     // begins on the line, so the first line's budget is correct even when the list is not at column 0.
     private static string PackWithContinuation(
@@ -1091,96 +1141,5 @@ public static class SqlFormatter
 
         if (tail is not null) sb.Append(tail);
         return sb.ToString();
-    }
-
-    private static int FindInOpeningParen(string s)
-    {
-        int i = 0;
-        while (i < s.Length)
-        {
-            char c = s[i];
-            if (c == '\'') { i = SkipString(s, i); continue; }
-            if (c == '"') { i = SkipQuotedIdent(s, i); continue; }
-            if (i + 4 < s.Length
-                && s[i] == ' '
-                && (s[i + 1] == 'i' || s[i + 1] == 'I')
-                && (s[i + 2] == 'n' || s[i + 2] == 'N')
-                && s[i + 3] == ' '
-                && s[i + 4] == '(')
-            {
-                return i + 4;
-            }
-            i++;
-        }
-        return -1;
-    }
-
-    private static int FindMatchingClose(string s, int openIdx)
-    {
-        int depth = 1;
-        int i = openIdx + 1;
-        while (i < s.Length)
-        {
-            char c = s[i];
-            if (c == '\'') { i = SkipString(s, i); continue; }
-            if (c == '"') { i = SkipQuotedIdent(s, i); continue; }
-            if (c == '(') depth++;
-            else if (c == ')') { depth--; if (depth == 0) return i; }
-            i++;
-        }
-        return -1;
-    }
-
-    private static bool LooksLikeSubquery(string inner)
-    {
-        int i = 0;
-        while (i < inner.Length && char.IsWhiteSpace(inner[i])) i++;
-        return inner.Length - i >= 7 && string.CompareOrdinal(inner, i, "select ", 0, 7) == 0;
-    }
-
-    private static List<string> SplitByTopLevelComma(string s)
-    {
-        var result = new List<string>();
-        int depth = 0;
-        int start = 0;
-        int i = 0;
-        while (i < s.Length)
-        {
-            char c = s[i];
-            if (c == '\'') { i = SkipString(s, i); continue; }
-            if (c == '"') { i = SkipQuotedIdent(s, i); continue; }
-            if (c == '(') { depth++; i++; continue; }
-            if (c == ')') { depth--; i++; continue; }
-            if (c == ',' && depth == 0)
-            {
-                result.Add(s.Substring(start, i - start));
-                start = i + 1;
-            }
-            i++;
-        }
-        result.Add(s.Substring(start));
-        return result;
-    }
-
-    private static int SkipString(string s, int i)
-    {
-        i++; // caller confirmed s[i] == '\''
-        while (i < s.Length)
-        {
-            if (s[i] == '\'')
-            {
-                if (i + 1 < s.Length && s[i + 1] == '\'') { i += 2; continue; }
-                return i + 1;
-            }
-            i++;
-        }
-        return i;
-    }
-
-    private static int SkipQuotedIdent(string s, int i)
-    {
-        i++; // caller confirmed s[i] == '"'
-        while (i < s.Length && s[i] != '"') i++;
-        return i < s.Length ? i + 1 : i;
     }
 }

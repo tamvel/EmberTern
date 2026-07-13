@@ -279,10 +279,18 @@ noted.
     one at the top level — the divergence the user noticed is gone. The PSQL emitter owns only block
     STRUCTURE (BEGIN/END, IF/WHILE/FOR indentation); statements are formatted once. Pinned by the
     "inside body" cases in `SqlFormatterInsertTests`. Build 0/0, 3564 main + 23 probe green.
-- **What's next:** remaining P8 steps — **long-line wrapping** (move SELECT/IN wrapping to the token
-  level via the shared builder + packer, then delete the string-level scanners `SplitByTopLevelComma`/
-  `FindInOpeningParen`/`FindMatchingClose`/`SkipString`/`SkipQuotedIdent`), then EXECUTE BLOCK header,
-  then FOR SELECT. Do NOT start Etap 7
+  - **Krok long-line wrapping — DONE.** There is now exactly ONE long-line wrapping mechanism, at the
+    TOKEN level inside `Emit`: a SELECT column list (`EmitSelectColumnList`) and an `IN ( … )` value list
+    (`EmitInList`) are laid out by the shared adaptive builders (`FormatAdaptiveBareList` /
+    `FormatAdaptiveList`) using precise column positions from the StringBuilder. **The entire string-level
+    post-pass is deleted** — `WrapLongLines`, `WrapLine`, `TryWrapSelectColumns`, `TryWrapInList`,
+    `SplitByTopLevelComma`, `FindInOpeningParen`, `FindMatchingClose`, `SkipString`, `SkipQuotedIdent`,
+    `LooksLikeSubquery` are all gone (~110 lines). Bonus: wrapping is now consistent inside PSQL bodies
+    too (the old post-pass never wrapped indented SELECT lines). Byte-compatible with the old wrapping
+    (all pinned SELECT/IN wrapping tests green). Pinned by `SqlFormatterWrappingTests`. Build 0/0, 3568
+    main + 23 probe green.
+- **What's next:** remaining P8 steps — EXECUTE BLOCK header, then FOR SELECT (its inner SELECT already
+  wraps via `Emit`; the `FOR`/`INTO`/`DO` layout is what's left). Do NOT start Etap 7
   (diagnostics, folding, breadcrumbs, bracket-matching) until the user formally closes the UX Polish
   Phase. Also deferred: **P5d** a plain-hover info cue; **P2c** bold the typed completion-fragment
   (no clean AvaloniaEdit 12.0.0 path yet).

@@ -788,6 +788,23 @@ cases — the dark DML keyword color and the light built-in-function color).
   PSQL test contained an INSERT/UOI leaf; plain UPDATE and SELECT…INTO paths unchanged). Pinned by the
   "inside body / EXECUTE BLOCK" cases in `SqlFormatterInsertTests`. Build 0/0; full suite 3564 main + 23
   probe green.
+
+  **Long-line wrapping — DONE (2026-07-13). There is now ONE wrapping mechanism, at the token level.**
+  A SELECT column list (`EmitSelectColumnList`) and an `IN ( … )` value list (`EmitInList`) are wrapped
+  inside `Emit` by the shared adaptive builders (`FormatAdaptiveBareList` for the bare SELECT list,
+  `FormatAdaptiveList` for the parenthesised IN list), measured from the exact current output column
+  (`CurrentColumn`). The former string-level post-pass — `WrapLongLines` / `WrapLine` /
+  `TryWrapSelectColumns` / `TryWrapInList` and its char scanners (`SplitByTopLevelComma`,
+  `FindInOpeningParen`, `FindMatchingClose`, `SkipString`, `SkipQuotedIdent`, `LooksLikeSubquery`) — is
+  **entirely deleted** (~110 lines). This is the culmination of the §F / INSERT consolidation: the token
+  stream already carries the structure those scanners had to re-derive from rendered text, so wrapping is
+  now driven from precise columns with no heuristics, and there is no second wrapping system. Bonus:
+  wrapping is now consistent inside PSQL bodies (the old post-pass, keyed on lines starting with
+  `"select "`, never wrapped indented body SELECTs; the token-level path does). Output is byte-compatible
+  with the old wrapping — all pinned SELECT/IN wrapping tests in `SqlFormatterTests` stay green. Pinned by
+  `SqlFormatterWrappingTests` (top-level == in-body, INSERT…SELECT wrap, idempotency). The only surviving
+  reflow primitive is `PackWithContinuation` (shared by all the adaptive builders). Build 0/0; full suite
+  3568 main + 23 probe green.
 - **P5d — a plain-hover info cue.** A dwell-delayed, info-only Quick Info tooltip on plain hover
   (no Ctrl held); the underline + hand-cursor affordance stays Ctrl-only per §9.4. Small and
   implementable, but it's a live-tuning UX addition (dwell delay, noise) the design defers to
