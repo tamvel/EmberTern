@@ -400,6 +400,92 @@ public class CompletionEngineTests
         Assert.Contains(items, i => i.Kind == CompletionItemKind.Keyword);
     }
 
+    // ── Unqualified single-table column completion (implicit target, 2026-07-13) ─────────────
+
+    private static FakeMetadata RozliczenieWithColumns() => new FakeMetadata()
+        .Col("ROZLICZENIE", "ID_ROZLICZENIE", "INTEGER")
+        .Col("ROZLICZENIE", "KWOTAWN", "NUMERIC(15,2)");
+
+    [Fact]
+    public void SingleTable_NoAlias_Where_OffersColumnsWithoutQualifier()
+    {
+        // The headline ask: FROM ROZLICZENIE WHERE | offers the table's columns with no alias/dot.
+        const string sql = "select * from rozliczenie where ";
+        var items = Complete(sql, sql.Length, RozliczenieWithColumns());
+        Assert.True(Has(items, "ID_ROZLICZENIE", CompletionItemKind.Column));
+        Assert.True(Has(items, "KWOTAWN", CompletionItemKind.Column));
+    }
+
+    [Fact]
+    public void SingleTable_WithAlias_Where_OffersColumnsWithoutDot()
+    {
+        // The alias is neither required nor the discriminator — a single in-scope table is enough,
+        // even before the user types a qualifier.
+        const string sql = "select * from rozliczenie r where ";
+        var items = Complete(sql, sql.Length, RozliczenieWithColumns());
+        Assert.True(Has(items, "ID_ROZLICZENIE", CompletionItemKind.Column));
+    }
+
+    [Fact]
+    public void SingleTable_Where_PartialColumnPrefix_OffersColumns()
+    {
+        const string sql = "select * from rozliczenie where id_ro";
+        var items = Complete(sql, sql.Length, RozliczenieWithColumns());
+        Assert.True(Has(items, "ID_ROZLICZENIE", CompletionItemKind.Column));
+    }
+
+    [Fact]
+    public void SingleTable_SelectList_OffersColumns()
+    {
+        const string sql = "select  from rozliczenie";
+        var offset = sql.IndexOf("select ", StringComparison.Ordinal) + 7; // caret in the SELECT list
+        var items = Complete(sql, offset, RozliczenieWithColumns());
+        Assert.True(Has(items, "KWOTAWN", CompletionItemKind.Column));
+    }
+
+    [Fact]
+    public void SingleTable_ImplicitColumn_CarriesRichSymbol()
+    {
+        // Same rich ColumnSymbol as the dot path (one source), so the App renders the same facts.
+        const string sql = "select * from rozliczenie where ";
+        var items = Complete(sql, sql.Length, RozliczenieWithColumns());
+        var item = items.First(i => i.InsertText == "ID_ROZLICZENIE" && i.Kind == CompletionItemKind.Column);
+        var col = Assert.IsType<ColumnSymbol>(item.Symbol);
+        Assert.Equal("ROZLICZENIE", col.OwningTable);
+    }
+
+    [Fact]
+    public void TwoTables_DoesNotOfferUnqualifiedColumns()
+    {
+        // 2+ tables in scope → the user must qualify; no ambiguous name dump.
+        var meta = new FakeMetadata()
+            .Col("A", "AID", "INTEGER")
+            .Col("B", "BID", "INTEGER");
+        const string sql = "select * from a, b where ";
+        var items = Complete(sql, sql.Length, meta);
+        Assert.False(Has(items, "AID", CompletionItemKind.Column));
+        Assert.False(Has(items, "BID", CompletionItemKind.Column));
+    }
+
+    [Fact]
+    public void TablePosition_AfterJoin_DoesNotOfferColumns()
+    {
+        // Table position (after JOIN) is not an expression anchor — never offer columns there even
+        // with a single table already in scope.
+        const string sql = "select * from rozliczenie join ";
+        var items = Complete(sql, sql.Length, RozliczenieWithColumns());
+        Assert.False(Has(items, "ID_ROZLICZENIE", CompletionItemKind.Column));
+    }
+
+    [Fact]
+    public void NoTableInScope_DoesNotOfferColumns()
+    {
+        // Expression position but no FROM table → nothing to imply.
+        const string sql = "select  ";
+        var items = Complete(sql, sql.IndexOf("select ", StringComparison.Ordinal) + 7, RozliczenieWithColumns());
+        Assert.False(Has(items, "ID_ROZLICZENIE", CompletionItemKind.Column));
+    }
+
     // ── No duplicate (name, kind) items ──────────────────────────────────────────────────────
 
     [Fact]

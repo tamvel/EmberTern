@@ -57,6 +57,30 @@ internal sealed class EditorLanguageService : IDisposable
     // local scope only (EmptyMetadataProvider). Injected so the service never reads live
     // VM state off-thread (design §22.1).
     private readonly Func<ISqlMetadataProvider>? _metadataSnapshot;
+    // The current generation of the host's loaded-object set (0 when unknown). Lets the model track
+    // whether it was built against an OLDER metadata state: a deliberate refresh rebuilds when the
+    // generation moved even if the text didn't. Without this, a model first built before a category
+    // loaded (prefetch on connect) stayed metadata-blank until a keystroke bumped the text version —
+    // the "IntelliSense dead until I edit after connecting" bug (QA Package 1).
+    private readonly Func<int>? _metadataGeneration;
+    private int CurrentMetadataGeneration => _metadataGeneration?.Invoke() ?? 0;
+    // The metadata generation the cached model was built against.
+    private int _modelMetadataGeneration;
+    // Warms (loads + caches) everything the referenced objects need — columns for table-like objects
+    // and the rich Quick Info detail (description / function return type / trigger header) for all —
+    // returning whether ANY was newly loaded (⇒ a rebuild is warranted). Sprint 1 (point b) + Package 5
+    // (Stage B/C): after each model build the pipeline warms what the CURRENT statement references, then
+    // rebuilds once, so the published model is complete for what's on screen WITHOUT the user first
+    // typing "table.". Metadata stays lazy at the catalog level; only referenced objects are warmed.
+    // Null → no warming (tests / editors without a metadata reader).
+    private readonly Func<IReadOnlyList<string>, CancellationToken, Task<bool>>? _warmReferencedMetadata;
+    // One warm pass in flight at a time; a re-warm requested while a pass runs is coalesced into
+    // _warmRequested and honoured when the current pass finishes. This is what makes the warm converge
+    // when metadata GROWS mid-warm — a category loading during an in-flight warm (prefetch on connect)
+    // triggers a rebuild whose warm must not be dropped, or its newly-resolved objects (generators,
+    // functions, an existing tab's objects racing prefetch) never get their detail warmed.
+    private bool _warmingMetadata;
+    private bool _warmRequested;
 
     private IReadOnlyDictionary<string, string> _aliases = EmptyAliases;
     private SemanticModel? _model;
@@ -69,10 +93,16 @@ internal sealed class EditorLanguageService : IDisposable
     private long _modelVersion = -1;
     private bool _disposed;
 
-    public EditorLanguageService(TextEditor editor, Func<ISqlMetadataProvider>? metadataSnapshot = null)
+    public EditorLanguageService(
+        TextEditor editor,
+        Func<ISqlMetadataProvider>? metadataSnapshot = null,
+        Func<int>? metadataGeneration = null,
+        Func<IReadOnlyList<string>, CancellationToken, Task<bool>>? warmReferencedMetadata = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _metadataSnapshot = metadataSnapshot;
+        _metadataGeneration = metadataGeneration;
+        _warmReferencedMetadata = warmReferencedMetadata;
         _debounce = new DispatcherTimer { Interval = ParseDebounce };
         _debounce.Tick += OnDebounceTick;
         _editor.TextChanged += OnTextChanged;
@@ -87,8 +117,12 @@ internal sealed class EditorLanguageService : IDisposable
     /// <summary>The most recently built semantic model, or null before the first parse.</summary>
     public SemanticModel? Model => _model;
 
-    /// <summary>True when the cached model reflects the current document text.</summary>
-    public bool ModelFresh => _modelVersion == _changeVersion;
+    /// <summary>True when the cached model reflects both the current document text <b>and</b> the
+    /// current metadata generation. The metadata half is what lets a deliberate Ctrl+Space rebuild the
+    /// model after a category loaded (prefetch on connect) without a keystroke — the text-only gate
+    /// previously left the model metadata-blank "until I edit" (QA Package 1).</summary>
+    public bool ModelFresh => _modelVersion == _changeVersion
+                              && _modelMetadataGeneration == CurrentMetadataGeneration;
 
     /// <summary>Raised (on the UI thread) whenever <see cref="Model"/> is (re)built — the signal the
     /// semantic highlighter uses to repaint. Fires on the debounced background reparse, and on the
@@ -124,11 +158,17 @@ internal sealed class EditorLanguageService : IDisposable
     {
         if (_disposed || ModelFresh) return;
         var version = _changeVersion;
+        // Capture the generation BEFORE the snapshot: if a category loads in between, the recorded
+        // generation is at most one behind the snapshot, so the next trigger rebuilds — never ahead,
+        // which would suppress a needed rebuild.
+        var generation = CurrentMetadataGeneration;
         var text = _editor.Text ?? string.Empty;
         var provider = _metadataSnapshot?.Invoke();
         _model = BuildModelSafe(text, provider);
         _modelVersion = version;
+        _modelMetadataGeneration = generation;
         RaiseModelUpdated();
+        BeginWarmReferencedMetadata();
     }
 
     /// <summary>
@@ -144,11 +184,94 @@ internal sealed class EditorLanguageService : IDisposable
     {
         if (_disposed) return;
         var version = _changeVersion;
+        var generation = CurrentMetadataGeneration;
         var text = _editor.Text ?? string.Empty;
         var provider = _metadataSnapshot?.Invoke();
         _model = BuildModelSafe(text, provider);
         _modelVersion = version;
+        _modelMetadataGeneration = generation;
         RaiseModelUpdated();
+        BeginWarmReferencedMetadata();
+    }
+
+    // ── Referenced-metadata warming (Sprint 1 point b + Package 5 Stage B/C) ─────────────────────
+
+    // Fire-and-forget the warm pass after a model build. When a pass is already running (e.g. a
+    // metadata category just loaded and rebuilt the model mid-warm), record a pending re-warm instead
+    // of dropping it — the running pass loops again and picks up the newly-resolved objects. No-op when
+    // no warmer is wired or there is no model.
+    private void BeginWarmReferencedMetadata()
+    {
+        if (_disposed || _warmReferencedMetadata is null || _model is null) return;
+        if (_warmingMetadata) { _warmRequested = true; return; }
+        _ = WarmReferencedMetadataAsync();
+    }
+
+    // Warms everything the current model references — columns for table-like objects AND the rich Quick
+    // Info detail (description / function return type / trigger header) for every referenced object —
+    // then, if anything was newly loaded, rebuilds against the now-complete snapshot. This is the
+    // general form of the dot's warm-then-rebuild: done for ALL referenced objects, proactively, so
+    // no "table." is required to complete the model, and Quick Info / hover show the full facts.
+    // <para>Loops while a re-warm is pending (<see cref="_warmRequested"/>): each rebuild — its own or
+    // one from a category that loaded mid-warm — re-collects the model's referenced objects and warms
+    // any still-uncached. Converges once metadata stops growing and everything is cached (a final pass
+    // warms nothing → no rebuild → exit). UI-thread affinity: resumes on the captured context.</para>
+    private async Task WarmReferencedMetadataAsync()
+    {
+        if (_warmReferencedMetadata is null) return;
+        _warmingMetadata = true;
+        try
+        {
+            do
+            {
+                _warmRequested = false;
+                var model = _model;
+                if (model is null) break;
+                var names = CollectReferencedObjectNames(model);
+                if (names.Count == 0) break;
+
+                var version = _changeVersion;
+                bool loaded = await _warmReferencedMetadata(names, CancellationToken.None).ConfigureAwait(true);
+                // Superseded by a newer edit, or torn down — drop the stale rebuild and stop.
+                if (_disposed || version != _changeVersion) break;
+                if (loaded) RefreshModelWithMetadata(); // rebuild with the warmed metadata in the snapshot
+            }
+            while (_warmRequested); // a category loaded (or the rebuild) requested another pass
+        }
+        catch (Exception)
+        {
+            // Best-effort: a warm failure must never crash or wedge the editor.
+        }
+        finally
+        {
+            _warmingMetadata = false;
+        }
+    }
+
+    // The distinct catalog objects the model references: FROM/JOIN/DML table targets and trigger
+    // NEW/OLD record targets (whose COLUMNS are warmed), plus every resolved schema object — tables,
+    // views, procedures, functions, triggers, sequences (whose DETAIL is warmed). Derived tables
+    // (subqueries) have no catalog identity and are skipped. The App's warmer decides, per kind, what
+    // to load; here we only enumerate the names the current text depends on.
+    private static IReadOnlyList<string> CollectReferencedObjectNames(SemanticModel model)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in model.AllSymbols)
+        {
+            switch (s)
+            {
+                case TableReferenceSymbol { IsDerived: false, TargetName: { Length: > 0 } target }:
+                    set.Add(target);
+                    break;
+                case RecordAliasSymbol { TargetTable: { Length: > 0 } recordTable }:
+                    set.Add(recordTable);
+                    break;
+                case SchemaObjectSymbol { Name: { Length: > 0 } objectName }:
+                    set.Add(objectName);
+                    break;
+            }
+        }
+        return set.Count == 0 ? System.Array.Empty<string>() : new List<string>(set);
     }
 
     /// <summary>Notifies the service that the App's loaded metadata set changed (a category finished
@@ -218,6 +341,7 @@ internal sealed class EditorLanguageService : IDisposable
         _cts = cts;
 
         var version = _changeVersion;
+        var generation = CurrentMetadataGeneration; // capture with the snapshot (UI thread)
         var text = _editor.Text ?? string.Empty;   // one materialization per idle, not per keystroke
         var provider = _metadataSnapshot?.Invoke(); // UI-thread snapshot, consumed off-thread
         try
@@ -234,7 +358,9 @@ internal sealed class EditorLanguageService : IDisposable
             _aliasesVersion = version;
             _model = model;
             _modelVersion = version;
+            _modelMetadataGeneration = generation;
             RaiseModelUpdated();
+            BeginWarmReferencedMetadata();
         }
         catch (OperationCanceledException)
         {

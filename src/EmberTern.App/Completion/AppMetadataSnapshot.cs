@@ -25,17 +25,20 @@ internal sealed class AppMetadataSnapshot : ISqlMetadataProvider
     private readonly IReadOnlyDictionary<string, ObjectMetadata> _byName;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<ColumnSpec>> _columns;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<RoutineParameterMetadata>> _routineParameters;
+    private readonly IReadOnlyDictionary<string, ObjectDetail> _detail;
 
     private AppMetadataSnapshot(
         IReadOnlyList<ObjectMetadata> allObjects,
         IReadOnlyDictionary<string, ObjectMetadata> byName,
         IReadOnlyDictionary<string, IReadOnlyList<ColumnSpec>> columns,
-        IReadOnlyDictionary<string, IReadOnlyList<RoutineParameterMetadata>> routineParameters)
+        IReadOnlyDictionary<string, IReadOnlyList<RoutineParameterMetadata>> routineParameters,
+        IReadOnlyDictionary<string, ObjectDetail> detail)
     {
         _allObjects = allObjects;
         _byName = byName;
         _columns = columns;
         _routineParameters = routineParameters;
+        _detail = detail;
     }
 
     /// <summary>Builds a snapshot from the loaded metadata objects and the current column /
@@ -46,7 +49,8 @@ internal sealed class AppMetadataSnapshot : ISqlMetadataProvider
     public static AppMetadataSnapshot Build(
         IReadOnlyList<MetadataObject> objects,
         IReadOnlyDictionary<string, IReadOnlyList<ColumnSpec>> columnCache,
-        IReadOnlyDictionary<string, IReadOnlyList<RoutineParameterMetadata>>? routineParameterCache = null)
+        IReadOnlyDictionary<string, IReadOnlyList<RoutineParameterMetadata>>? routineParameterCache = null,
+        IReadOnlyDictionary<string, ObjectDetail>? objectDetailCache = null)
     {
         var all = new List<ObjectMetadata>(objects.Count);
         var byName = new Dictionary<string, ObjectMetadata>(StringComparer.OrdinalIgnoreCase);
@@ -63,19 +67,51 @@ internal sealed class AppMetadataSnapshot : ISqlMetadataProvider
         var routines = routineParameterCache is null
             ? EmptyRoutines
             : new Dictionary<string, IReadOnlyList<RoutineParameterMetadata>>(routineParameterCache, StringComparer.OrdinalIgnoreCase);
-        return new AppMetadataSnapshot(all, byName, cols, routines);
+        var detail = objectDetailCache is null
+            ? EmptyDetail
+            : new Dictionary<string, ObjectDetail>(objectDetailCache, StringComparer.OrdinalIgnoreCase);
+        return new AppMetadataSnapshot(all, byName, cols, routines, detail);
     }
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<RoutineParameterMetadata>> EmptyRoutines =
         new Dictionary<string, IReadOnlyList<RoutineParameterMetadata>>();
 
+    private static readonly IReadOnlyDictionary<string, ObjectDetail> EmptyDetail =
+        new Dictionary<string, ObjectDetail>();
+
+    // Merges the warmed rich facts (description / function return type / trigger header) onto the
+    // always-present name+kind, so Quick Info reads one enriched ObjectMetadata from the in-memory
+    // snapshot — never a DB query at display time (Package 5, Stage B/C).
     public ObjectMetadata? FindObject(string name)
-        => name is not null && _byName.TryGetValue(name, out var m) ? m : null;
+    {
+        if (name is null || !_byName.TryGetValue(name, out var m)) return null;
+        return _detail.TryGetValue(name, out var d)
+            ? m with { Description = d.Description, ReturnType = d.ReturnType, Trigger = d.Trigger, Generator = d.Generator }
+            : m;
+    }
 
     public IReadOnlyList<ColumnMetadata> GetColumns(string tableOrView)
         => tableOrView is not null && _columns.TryGetValue(tableOrView, out var c) && c.Count > 0
-            ? c.Select(s => new ColumnMetadata(s.Name, s.Type) { Domain = s.Domain, Nullable = !s.NotNull }).ToList()
+            ? c.Select(ToColumnMetadata).ToList()
             : NoColumns;
+
+    // Maps the enriched ColumnSpec (Package 5, Stage A) onto the semantic ColumnMetadata
+    // the language front-end already renders. Every field the Firebird reader now fills
+    // (default/computed/description + PK/FK/FK-target/identity) flows straight through to
+    // QuickInfoEngine.ForColumn and CompletionEngine — one column model, many consumers.
+    private static ColumnMetadata ToColumnMetadata(ColumnSpec s)
+        => new(s.Name, s.Type)
+        {
+            Domain = s.Domain,
+            Nullable = !s.NotNull,
+            DefaultValue = s.DefaultValue,
+            Description = s.Description,
+            IsPrimaryKey = s.IsPrimaryKey,
+            IsForeignKey = s.IsForeignKey,
+            ForeignKeyTable = s.ForeignKeyTable,
+            IsComputed = s.IsComputed,
+            IsIdentity = s.IsIdentity,
+        };
 
     // Routine parameters from the VM's routine-param cache captured at build time (M6). Lazily
     // warmed by the App on a signature-help miss (the warm-then-rebuild dance, like columns).
@@ -86,3 +122,10 @@ internal sealed class AppMetadataSnapshot : ISqlMetadataProvider
 
     public IReadOnlyList<ObjectMetadata> AllObjects() => _allObjects;
 }
+
+/// <summary>The warmed rich facts for one schema object (Package 5, Stage B/C) — a description, a
+/// function's return type, a trigger's header — kept apart from the always-cheap name+kind so the VM
+/// warms them lazily per referenced object and the snapshot merges them into
+/// <see cref="AppMetadataSnapshot.FindObject"/>. Any field may be <c>null</c> (not applicable / not
+/// present).</summary>
+internal sealed record ObjectDetail(string? Description, string? ReturnType, TriggerDetail? Trigger, GeneratorDetail? Generator = null);

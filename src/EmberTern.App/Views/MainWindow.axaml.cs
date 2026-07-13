@@ -127,7 +127,14 @@ public partial class MainWindow : Window
                 _editor,
                 metadataSnapshot: CreateMetadataSnapshot,
                 ensureColumnsAsync: EnsureColumnsAsync,
-                ensureRoutineParamsAsync: EnsureRoutineParametersAsync);
+                ensureRoutineParamsAsync: EnsureRoutineParametersAsync,
+                // Metadata generation → the model rebuilds on the next deliberate trigger when a
+                // category loads (prefetch on connect), so IntelliSense is live without a keystroke.
+                metadataGeneration: () => _currentVm?.Metadata.ObjectsGeneration ?? 0,
+                // Sprint 1 (point b) + Package 5 (Stage B/C): warm the columns + rich detail of the
+                // objects the current statement references, so completion / Quick Info / hover are
+                // complete on tab open without typing "table.".
+                warmReferencedMetadata: WarmReferencedMetadataAsync);
             // Rebuild the model when a metadata category finishes loading so late-loaded objects
             // (views / selectable procedures in FROM) resolve. The metadata event is wired to the
             // STABLE VM in OnDataContextChanged (below) — NOT via the controller's attach-time hook,
@@ -483,6 +490,17 @@ public partial class MainWindow : Window
     // rebuild. Wired to the stable VM in OnDataContextChanged (never dropped).
     private void OnMainEditorMetadataChanged() => _completion?.NotifyMetadataChanged();
 
+    // Prefetch complete → the main SQL editor rebuilds against the now-complete metadata and warms all
+    // referenced objects (columns + detail + routine parameters), publishing one complete Semantic Model
+    // (Package 5 closure). The authoritative completion step for a document open before connect.
+    private void OnMainEditorMetadataReady() => _completion?.RefreshModelForMetadataReady();
+
+    // Warms the columns + rich Quick Info detail of the objects the SQL editor's current statement
+    // references (Sprint 1 point b + Package 5 Stage B/C). Delegates to the VM; null-safe before connect.
+    private Task<bool> WarmReferencedMetadataAsync(
+        System.Collections.Generic.IReadOnlyList<string> names, System.Threading.CancellationToken ct)
+        => _currentVm?.WarmReferencedAsync(names, ct) ?? Task.FromResult(false);
+
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_currentVm is not null)
@@ -505,6 +523,7 @@ public partial class MainWindow : Window
             _currentVm.SelectedQueryTextProvider = null;
             _currentVm.ReplaceSelectedOrAllText = null;
             _currentVm.Metadata.ObjectsChanged -= OnMainEditorMetadataChanged;
+            _currentVm.Metadata.MetadataReady -= OnMainEditorMetadataReady;
         }
 
         _currentVm = DataContext as MainWindowViewModel;
@@ -532,6 +551,9 @@ public partial class MainWindow : Window
             // editor's semantic model so views / selectable procedures used in FROM start resolving
             // (colour + Ctrl-nav + Quick Info). Tied to the stable VM here, so it can never be dropped.
             _currentVm.Metadata.ObjectsChanged += OnMainEditorMetadataChanged;
+            // Prefetch complete → the definitive rebuild + full warm + publish for the main editor
+            // (Package 5 closure). Tied to the stable VM here so it can never be dropped.
+            _currentVm.Metadata.MetadataReady += OnMainEditorMetadataReady;
 
             // Metadata-object drop target on the main SQL editor (once — the VM is stable here).
             if (!_snippetDropAttached && _editor is not null)

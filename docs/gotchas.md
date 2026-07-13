@@ -576,6 +576,47 @@ change keep it open; leaving the context closes it). **Rule:** anchor an editor 
 context* re-evaluated from the model, never to a captured caret offset.
 
 
+211. **The per-trigger-character metadata "warm-then-retry" hacks (#204's double-click warm, the
+Parameter Helper's `WarmForSignatureAndRebuildAsync`) were symptoms of one missing piece — a generic
+"warm what the model references" pipeline — not independent bugs each needing their own fix.** Package 5
+added that missing piece: `EditorLanguageService.BeginWarmReferencedMetadata()` fires after EVERY model
+build (debounced parse, `EnsureFreshModel`, and `RefreshModelWithMetadata` alike), collects every object
+the just-built model references (`CollectReferencedObjectNames` — FROM/JOIN/DML targets, trigger NEW/OLD
+targets, every resolved schema object), warms columns/routine-params/rich-detail for whichever aren't yet
+cached (`MainWindowViewModel.WarmReferencedAsync`), and — if anything was newly loaded — rebuilds once
+more against the now-complete snapshot, looping while a re-warm is pending (a category loading mid-warm)
+so it converges. `ModelFresh` now gates on a metadata GENERATION as well as the text version, so a
+deliberate Ctrl+Space rebuild after a background category load is never suppressed. Net effect: (a) the
+#205 "latched subscription" class of bug is gone at the root (the model is proactively kept complete, not
+patched per-symptom); (b) the character-specific warmers — dot-completion's column warm, the double-click
+INSERT helper's `WarmColumnsAndRebuildAsync` (#204), and the Parameter Helper's own warm — **still exist**,
+but are now legitimate SYNCHRONOUS top-ups for the one exact site the user is looking at right now (they
+call `EnsureFreshModel()`/`RefreshModelWithMetadata()` synchronously because a keystroke-driven popover
+can't wait for the async background pass), not independent guess-and-retry hacks; they fill the SAME
+caches the general pipeline fills, so a cache hit in one is a cache hit in all. **There is one metadata
+cache + one generic warm pipeline; the synchronous per-feature warms are a deliberate latency
+optimization on top of it, not a parallel workaround.** Rule: when two "different" bugs turn out to have
+the same "metadata wasn't there yet" fingerprint, look for the missing generic mechanism before patching
+each call site again.
+
+
+212. **A "never stall" loop guard (`if (i == before) i++;`) that advances an index without ever emitting
+the skipped token is a silent §0 (Paramount Law) violation, not a harmless safety net.** Found while
+scoping P8 (formatter polish), not yet fixed. `SqlFormatter.EmitPsqlUnit` returns without consuming `i`
+when it sees a stray `END` (`if (IsWordTok(sig[i], "END")) return;`) — correct ONLY when the caller is an
+open-`BEGIN` loop that will itself consume that `END` as the block close. `FormatPsqlBody`'s own top-level
+loop and `EmitPsqlUnit`'s BEGIN-block loop both call `EmitPsqlUnit` and, seeing no progress, fall back to
+`if (i == before) i++;` to avoid an infinite loop — which discards the token instead of emitting it
+verbatim. Net effect: malformed/incomplete PSQL with an extra/unmatched `END` (a very ordinary mid-edit
+state) has that `END` silently vanish from the formatted output — real user-typed text disappearing, the
+exact class of bug §0 exists to prevent. **Rule: an anti-stall guard that skips a token must ALSO emit it
+(verbatim, unformatted) — "don't loop forever" and "don't drop the token" are two separate obligations, and
+a fix for one must not silently reintroduce the other.** Proposed fix (design doc §15.2, not yet
+implemented): give the emitter explicit context on whether an enclosing open block will consume a stray
+`END`; every other case falls through to a verbatim emit-and-consume, mirroring `RawStatement`'s
+statement-level "don't understand it → reproduce it 1:1" contract at the token level.
+
+
 ## MVVM / CommunityToolkit patterns
 
 11. **`ObservableCollection` mutations from non-UI threads break compiled bindings.** `FirebirdConnectionService.ActiveConnectionChanged` fires on whichever thread the async work completed on (`ConfigureAwait(false)` everywhere). Touching `WorkspaceTabs.Add/Clear` from that thread crashes the binding layer for `ItemsControl` consumers. **Rule**: any service-event handler in a VM that mutates ObservableCollection (or properties bound to ItemsControl) must `Dispatcher.UIThread.Post(...)` the work. Scalar OnPropertyChanged is fine (binding layer handles it), but collection-change events go through directly.

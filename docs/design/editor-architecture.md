@@ -715,6 +715,26 @@ cases — the dark DML keyword color and the light built-in-function color).
   needs the parser deepened for INSERT/VALUES/SELECT-list clauses (deferred from Etap 3's
   "statement skeleton" depth on purpose — build grammar depth only when a concrete feature needs
   it). Its own large package.
+  **§0 PRIORITY-ZERO finding (2026-07-13, not yet fixed):** the PSQL body emitter can silently
+  DROP a token on malformed/incomplete input — a live §0 (Paramount Law) violation, found while
+  scoping P8, must be fixed before any of P8's cosmetic layout work. Root cause: in
+  `SqlFormatter.EmitPsqlUnit`, a stray/unmatched `END` (one with no corresponding open `BEGIN` in
+  the current recursion) hits the guard `if (IsWordTok(sig[i], "END")) return;` — correct when the
+  caller IS an open-BEGIN loop (which then consumes the `END` itself as the block close), but the
+  SAME guard fires from `FormatPsqlBody`'s own top-level loop and `EmitPsqlUnit`'s BEGIN-block loop
+  when there is no enclosing block to consume it. Both callers guard against infinite-looping on a
+  stalled `i` with `if (i == before) i++;` — which advances past the token WITHOUT ever appending it
+  to `lines`. Net effect: an extra/unmatched `END` (e.g. mid-edit, a temporarily unbalanced
+  `BEGIN…END`, or a copy-pasted partial block) vanishes from the formatted output instead of being
+  preserved. Proposed fix (not yet implemented — pending user approval): give `EmitPsqlUnit` an
+  explicit "am I inside an open block" context (a bool/depth parameter) rather than relying on the
+  caller's loop shape to infer it; only return-without-consuming when that context says a real
+  enclosing `BEGIN` loop will consume the token, and everywhere else (genuinely top-level, or a
+  branch/subprogram call site with no open block) fall through to a verbatim-emit-and-consume path
+  (the same "don't understand it, reproduce it 1:1" contract `RawStatement` already uses at the
+  statement level) so the stray token is never silently discarded. Needs a differential/round-trip
+  test asserting the formatter's output, token-for-token, is a superset of every non-whitespace
+  input token even on deliberately malformed PSQL.
 - **P5d — a plain-hover info cue.** A dwell-delayed, info-only Quick Info tooltip on plain hover
   (no Ctrl held); the underline + hand-cursor affordance stays Ctrl-only per §9.4. Small and
   implementable, but it's a live-tuning UX addition (dwell delay, noise) the design defers to
@@ -737,18 +757,27 @@ diagnosed issues in packages. **Etap 7 stays blocked until this sprint's items a
   background style and a dark-theme comment-contrast tweak were made, but the build/test/smoke
   verification pass was interrupted by a transient build-tool outage and was never re-run. **Next
   action: re-run build + test + smoke before treating this as done.**
-- **Package 5 — diagnosed, not started (Quick Info richness).** `QuickInfoEngine` already renders
-  a rich card when it has rich data; the data is thin because `AppMetadataSnapshot.GetColumns` /
-  `ColumnSpec` / `FirebirdMetadataReader.ColumnsSql` only carry Name/Type/Domain/Nullable (kept
-  lean deliberately for the completion hot path). **Concrete next-session plan:** extend
-  `ColumnSpec` + `ColumnsSql` with the PK/FK correlated subqueries + `RDB$DEFAULT_SOURCE` /
-  `RDB$DESCRIPTION` / `RDB$COMPUTED_SOURCE` / `RDB$IDENTITY_TYPE` (FB-version-gate identity —
-  it's FB3+, gotcha #146, exactly like `FirebirdTableDetailReader.FieldsSql` already does), map
-  them in `AppMetadataSnapshot.GetColumns`, and verify against `Lab/EmberTern_Lab.fdb`. Consider
-  reusing `FirebirdTableDetailReader.GetFieldsAsync` (already returns the full `FieldInfo`) rather
-  than duplicating the SQL, or a separate on-demand rich-column fetch so the completion column
-  cache stays lean. The completion row's `: TYPE : DOMAIN` display is unaffected — only the
-  Ctrl-hover card and the detail pane gain the extra facts.
+- **Package 5 — DONE (2026-07-13, Quick Info richness).** `ColumnSpec` gained init-only rich fields
+  (`DefaultValue`, `Description`, `IsPrimaryKey`, `IsForeignKey`, `ForeignKeyTable`, `IsComputed`,
+  `IsIdentity`); `FirebirdMetadataReader.ColumnsSqlFor(serverMajor)` (replacing the old constant
+  `ColumnsSql`) carries the PK/FK correlated subqueries + `RDB$DEFAULT_SOURCE` / `RDB$DESCRIPTION` /
+  `RDB$COMPUTED_SOURCE`, with identity FB-version-gated (gotcha #146: `RDB$IDENTITY_TYPE` only on
+  FB3+, a constant `0` on FB2.5). `ObjectMetadata` gained `ReturnType` (functions), `Trigger`
+  (`TriggerDetail`: table/timing/events/position/active), and `Generator` (`GeneratorDetail`:
+  start value + increment — **never** the dynamic current value). `QuickInfoEngine.ForSchemaObject`
+  now renders column/PK/FK counts for tables, parameter in/out counts + return type for
+  routines, and full trigger/generator header facts. Stage B/C wiring: a new proactive metadata-warm
+  pipeline (`EditorLanguageService.BeginWarmReferencedMetadata` → `MainWindowViewModel.WarmReferencedAsync`
+  → `LoadObjectDetailAsync`, cached in `_objectDetailCache`) fires after every model build and warms
+  the rich detail for every object the current statement references — no user action (no "table.",
+  no hover) required first — with `ModelFresh` now gating on a metadata GENERATION as well as text
+  version so a background category load triggers a rebuild without a keystroke (see gotcha #211 for
+  how this generalizes and supersedes the earlier per-character warm hacks). `SemanticBinder` also
+  gained a flat catalog-reference pass (`BindGlobalCatalogReferences`) resolving `NEXT VALUE FOR
+  <sequence>`, `GEN_ID(<sequence>, …)`, and bare function/procedure calls anywhere in a statement —
+  these previously had no reference at all, so Quick Info/hover/colour never reached them. Covered by
+  `ColumnMetadataFlowTests` (new), `MetadataReaderTests`, `QuickInfoEngineTests`, `SemanticModelTests`.
+  Verified: `dotnet build` 0 warnings/errors, `dotnet test` 3449/3449 green.
 
 ### 15.4 Where the gotchas from this work live
 

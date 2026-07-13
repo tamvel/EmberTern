@@ -217,6 +217,7 @@ public sealed class FirebirdMetadataReader
         if (string.IsNullOrEmpty(tableName)) return Array.Empty<ColumnSpec>();
 
         var connection = LaneConnection();
+        var sql = ColumnsSqlFor(FirebirdDdlReader.ParseServerMajor(connection.ServerVersion));
         // Capture the lock once — see ListAsync for why re-evaluating LaneLock() at
         // Release can leak a semaphore.
         var commandLock = LaneLock();
@@ -224,7 +225,7 @@ public sealed class FirebirdMetadataReader
         try
         {
             await using var cmd = connection.CreateCommand();
-            cmd.CommandText = ColumnsSql;
+            cmd.CommandText = sql;
             cmd.CommandTimeout = 0;
             cmd.Transaction = _transactionService?.ActiveTransaction;
             cmd.Parameters.AddWithValue("@name", tableName);
@@ -243,9 +244,28 @@ public sealed class FirebirdMetadataReader
                 var subType = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
                 var fieldSource = reader.IsDBNull(6) ? null : reader.GetString(6);
                 var notNull = !reader.IsDBNull(7) && reader.GetInt32(7) == 1;
+                // Rich-but-optional Quick Info facts (Package 5, Stage A). RDB$DEFAULT_SOURCE /
+                // RDB$DESCRIPTION / RDB$COMPUTED_SOURCE are BLOB SUB_TYPE TEXT — read as strings
+                // like FieldsSql does.
+                var defaultSource = reader.IsDBNull(8) ? null : reader.GetString(8);
+                var description = reader.IsDBNull(9) ? null : reader.GetString(9).Trim();
+                var computedSource = reader.IsDBNull(10) ? null : reader.GetString(10).Trim();
+                var isPk = !reader.IsDBNull(11) && reader.GetInt32(11) > 0;
+                var isFk = !reader.IsDBNull(12) && reader.GetInt32(12) > 0;
+                var fkTable = reader.IsDBNull(13) ? null : reader.GetString(13).Trim();
+                var isIdentity = !reader.IsDBNull(14) && reader.GetInt32(14) == 1;
                 var type = FirebirdTableDetailReader.FormatFieldType(fieldType, fieldLength, fieldScale, fieldPrecision, subType);
                 var domain = FirebirdTableDetailReader.NormalizeDomain(fieldSource);
-                columns.Add(new ColumnSpec(name, type, domain, notNull));
+                columns.Add(new ColumnSpec(name, type, domain, notNull)
+                {
+                    DefaultValue = FirebirdTableDetailReader.StripDefaultPrefix(defaultSource),
+                    Description = string.IsNullOrEmpty(description) ? null : description,
+                    IsComputed = !string.IsNullOrEmpty(computedSource),
+                    IsPrimaryKey = isPk,
+                    IsForeignKey = isFk,
+                    ForeignKeyTable = string.IsNullOrEmpty(fkTable) ? null : fkTable,
+                    IsIdentity = isIdentity,
+                });
             }
             return columns;
         }
@@ -322,22 +342,66 @@ public sealed class FirebirdMetadataReader
         "WHERE COALESCE(f.RDB$SYSTEM_FLAG, 0) = 0 " +
         "ORDER BY f.RDB$FIELD_NAME";
 
-    // Joins RDB$RELATION_FIELDS to RDB$FIELDS so the autocomplete dropdown can
-    // render "COLUMN : TYPE : DOMAIN". Same mapping logic as the TableDetail Fields
-    // tab. RDB$FIELD_SOURCE is the (possibly anonymous) domain; the column's own
-    // RDB$NULL_FLAG overrides the domain's for nullability. No PK/FK join here — the
-    // completion column read is on the hot path and must stay light (P2).
-    internal const string ColumnsSql =
-        "SELECT TRIM(rf.RDB$FIELD_NAME), " +
-        "       ft.RDB$FIELD_TYPE, ft.RDB$FIELD_LENGTH, " +
-        "       ft.RDB$FIELD_SCALE, ft.RDB$FIELD_PRECISION, " +
-        "       ft.RDB$FIELD_SUB_TYPE, " +
-        "       rf.RDB$FIELD_SOURCE, " +
-        "       COALESCE(rf.RDB$NULL_FLAG, ft.RDB$NULL_FLAG) " +
-        "FROM RDB$RELATION_FIELDS rf " +
-        "JOIN RDB$FIELDS ft ON ft.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE " +
-        "WHERE rf.RDB$RELATION_NAME = @name " +
-        "ORDER BY rf.RDB$FIELD_POSITION";
+    // Joins RDB$RELATION_FIELDS to RDB$FIELDS so the autocomplete dropdown can render
+    // "COLUMN : TYPE : DOMAIN", and carries the rich-but-optional Quick Info facts
+    // (Package 5, Stage A): default/computed expressions, description, and the
+    // PK/FK/FK-target/identity classification. RDB$FIELD_SOURCE is the (possibly
+    // anonymous) domain; the column's own RDB$NULL_FLAG overrides the domain's for
+    // nullability.
+    //
+    // The PK/FK-flag + FK-target correlated-subquery fragments are lifted verbatim from
+    // FirebirdTableDetailReader.FieldsSql (one proven source for that shape). Identity
+    // detection uses ONLY RDB$IDENTITY_TYPE — the light editor path deliberately skips
+    // FieldsSql's legacy generator-trigger blob scan (that heavier detection stays in the
+    // Table Detail surface). RDB$IDENTITY_TYPE is FB3+, so the IS_IDENTITY expression is
+    // version-gated (gotcha #146): on FB2.5 it projects a constant 0 rather than
+    // referencing the missing column (which would throw). The projected column set — and
+    // therefore the reader's ordinals — is identical across versions; only the identity
+    // expression differs.
+    //
+    // Columns are cached per table after the first read (MainWindowViewModel._columnCache),
+    // so the added correlated subqueries are a one-time per-table cost on first dot/hover,
+    // not a per-keystroke one.
+    internal static string ColumnsSqlFor(int serverMajor)
+    {
+        var identityExpr = serverMajor >= 3
+            ? "CASE WHEN rf.RDB$IDENTITY_TYPE IS NOT NULL THEN 1 ELSE 0 END"
+            : "CAST(0 AS INTEGER)";
+        return
+            "SELECT TRIM(rf.RDB$FIELD_NAME), " +
+            "       ft.RDB$FIELD_TYPE, ft.RDB$FIELD_LENGTH, " +
+            "       ft.RDB$FIELD_SCALE, ft.RDB$FIELD_PRECISION, " +
+            "       ft.RDB$FIELD_SUB_TYPE, " +
+            "       rf.RDB$FIELD_SOURCE, " +
+            "       COALESCE(rf.RDB$NULL_FLAG, ft.RDB$NULL_FLAG), " +
+            "       rf.RDB$DEFAULT_SOURCE, " +
+            "       rf.RDB$DESCRIPTION, " +
+            "       ft.RDB$COMPUTED_SOURCE, " +
+            "       (SELECT COUNT(*) FROM RDB$INDEX_SEGMENTS s " +
+            "          JOIN RDB$RELATION_CONSTRAINTS rc ON rc.RDB$INDEX_NAME = s.RDB$INDEX_NAME " +
+            "          WHERE rc.RDB$RELATION_NAME = rf.RDB$RELATION_NAME " +
+            "            AND rc.RDB$CONSTRAINT_TYPE = 'PRIMARY KEY' " +
+            "            AND s.RDB$FIELD_NAME = rf.RDB$FIELD_NAME) AS PK_FLAG, " +
+            "       (SELECT COUNT(*) FROM RDB$INDEX_SEGMENTS s " +
+            "          JOIN RDB$RELATION_CONSTRAINTS rc ON rc.RDB$INDEX_NAME = s.RDB$INDEX_NAME " +
+            "          WHERE rc.RDB$RELATION_NAME = rf.RDB$RELATION_NAME " +
+            "            AND rc.RDB$CONSTRAINT_TYPE = 'FOREIGN KEY' " +
+            "            AND s.RDB$FIELD_NAME = rf.RDB$FIELD_NAME) AS FK_FLAG, " +
+            "       (SELECT TRIM(rc_uq.RDB$RELATION_NAME) " +
+            "          FROM RDB$RELATION_CONSTRAINTS rc_fk " +
+            "          JOIN RDB$REF_CONSTRAINTS ref ON ref.RDB$CONSTRAINT_NAME = rc_fk.RDB$CONSTRAINT_NAME " +
+            "          JOIN RDB$RELATION_CONSTRAINTS rc_uq ON rc_uq.RDB$CONSTRAINT_NAME = ref.RDB$CONST_NAME_UQ " +
+            "          JOIN RDB$INDEX_SEGMENTS s ON s.RDB$INDEX_NAME = rc_fk.RDB$INDEX_NAME " +
+            "          WHERE rc_fk.RDB$RELATION_NAME = rf.RDB$RELATION_NAME " +
+            "            AND rc_fk.RDB$CONSTRAINT_TYPE = 'FOREIGN KEY' " +
+            "            AND s.RDB$FIELD_NAME = rf.RDB$FIELD_NAME " +
+            "          ROWS 1) AS FK_TABLE, " +
+            "       " + identityExpr + " AS IS_IDENTITY " +
+            "FROM RDB$RELATION_FIELDS rf " +
+            "JOIN RDB$FIELDS ft ON ft.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE " +
+            "WHERE rf.RDB$RELATION_NAME = @name " +
+            "ORDER BY rf.RDB$FIELD_POSITION";
+    }
 
     // Internal so tests can verify system-name filtering without a live connection.
     internal static bool IsSystemName(string name)

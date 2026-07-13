@@ -3088,6 +3088,12 @@ public partial class MainWindowViewModel : ViewModelBase
     // both cases, and a re-request only costs one tiny round-trip.
     private readonly Dictionary<string, IReadOnlyList<ColumnSpec>> _columnCache =
         new(StringComparer.OrdinalIgnoreCase);
+    // Warmed rich Quick Info detail per object — description / function return type / trigger header
+    // (Package 5, Stage B/C). Populated lazily by WarmReferencedAsync for the objects the current
+    // statement references, fed into the snapshot so Quick Info reads it without a display-time query.
+    // Cleared on disconnect alongside the column cache.
+    private readonly Dictionary<string, Completion.ObjectDetail> _objectDetailCache =
+        new(StringComparer.OrdinalIgnoreCase);
     // Names of tables/views that the metadata categories have surfaced, so the
     // dot autocomplete knows which qualifier looks up real columns vs. is just
     // an unresolved alias. Refreshed each call from the metadata tree — cheap
@@ -3141,6 +3147,118 @@ public partial class MainWindowViewModel : ViewModelBase
             return Array.Empty<ColumnSpec>();
         }
     }
+
+    /// <summary>
+    /// Warms (loads + caches) everything Quick Info / completion needs for the objects
+    /// <paramref name="names"/> the current statement references — <b>columns</b> for table-like
+    /// objects (Sprint 1 / point b) <b>and</b> the rich detail (description, a function's return type,
+    /// a trigger's header — Package 5, Stage B/C). Returns <c>true</c> when at least one thing was newly
+    /// loaded, the signal the editor's language service uses to rebuild the model against the
+    /// now-complete snapshot. Already-cached items are skipped, so this converges (the next call warms
+    /// nothing → <c>false</c>). Best-effort — a failure leaves an item uncached for a later retry.
+    /// Columns stay lazy at the catalog level; only the referenced objects are warmed.
+    /// </summary>
+    internal async Task<bool> WarmReferencedAsync(IReadOnlyList<string> names, CancellationToken ct = default)
+    {
+        if (names is null || names.Count == 0 || !_service.IsConnected) return false;
+        bool loadedAny = false;
+        foreach (var name in names)
+        {
+            if (string.IsNullOrEmpty(name)) continue;
+            var obj = TryResolveLoadedObject(name);
+
+            // Columns for table-like objects. A bare FROM table not yet in the loaded set is still
+            // warmed best-effort (obj is null) so Sprint 1's behaviour is preserved.
+            if ((obj is null || IsTableLikeKind(obj.Kind)) && !_columnCache.ContainsKey(name))
+            {
+                await EnsureColumnsAsync(name, ct).ConfigureAwait(true);
+                if (_columnCache.ContainsKey(name)) loadedAny = true;
+            }
+
+            // Routine parameters for referenced procedures/functions — so Quick Info shows the full
+            // signature and Signature Help / Parameter Helper work WITHOUT the user typing "(". Same
+            // cache the signature-help path fills; the pipeline just fills it proactively now.
+            if (obj is { Kind: MetadataObjectKind.Procedure or MetadataObjectKind.Function }
+                && !_routineParameterCache.ContainsKey(name))
+            {
+                await EnsureRoutineParametersAsync(name, ct).ConfigureAwait(true);
+                if (_routineParameterCache.ContainsKey(name)) loadedAny = true;
+            }
+
+            // Rich detail needs the known kind (which reader to call). Cache the attempt (even a null
+            // result) so a description-less object isn't re-queried forever.
+            if (obj is not null && !_objectDetailCache.ContainsKey(name))
+            {
+                _objectDetailCache[name] = await LoadObjectDetailAsync(obj, ct).ConfigureAwait(true);
+                loadedAny = true;
+            }
+        }
+        return loadedAny;
+    }
+
+    private static bool IsTableLikeKind(MetadataObjectKind kind)
+        => kind is MetadataObjectKind.Table or MetadataObjectKind.View or MetadataObjectKind.SystemTable;
+
+    // Loads the rich Quick Info detail for one object by dispatching to the existing per-kind detail
+    // readers (reuse before create — no new SQL). Best-effort: a read failure yields whatever was
+    // gathered so far, cached so it isn't retried on every model rebuild.
+    private async Task<Completion.ObjectDetail> LoadObjectDetailAsync(MetadataObject obj, CancellationToken ct)
+    {
+        string? description = null;
+        string? returnType = null;
+        Core.Sql.Language.Semantics.TriggerDetail? trigger = null;
+        Core.Sql.Language.Semantics.GeneratorDetail? generator = null;
+        try
+        {
+            switch (obj.Kind)
+            {
+                case MetadataObjectKind.Table:
+                case MetadataObjectKind.View:
+                case MetadataObjectKind.SystemTable:
+                    description = await _tableDetailReader.GetDescriptionAsync(obj.Name, ct).ConfigureAwait(true);
+                    break;
+                case MetadataObjectKind.Procedure:
+                    description = await _tableDetailReader.GetProcedureDescriptionAsync(obj.Name, ct).ConfigureAwait(true);
+                    break;
+                case MetadataObjectKind.Function:
+                    description = await _tableDetailReader.GetFunctionDescriptionAsync(obj.Name, ct).ConfigureAwait(true);
+                    var sig = await _tableDetailReader.GetFunctionSignatureAsync(obj.Name, ct).ConfigureAwait(true);
+                    returnType = sig.ReturnType;
+                    break;
+                case MetadataObjectKind.Trigger:
+                    description = await _tableDetailReader.GetTriggerDescriptionAsync(obj.Name, ct).ConfigureAwait(true);
+                    var h = await _tableDetailReader.GetTriggerHeaderAsync(obj.Name, ct).ConfigureAwait(true);
+                    if (!h.IsDatabaseTrigger)
+                    {
+                        trigger = new Core.Sql.Language.Semantics.TriggerDetail(
+                            NullIfEmpty(h.Table), h.IsBefore, h.FiresInsert, h.FiresUpdate, h.FiresDelete, h.Position, h.Active);
+                    }
+                    break;
+                case MetadataObjectKind.Package:
+                    description = await _tableDetailReader.GetPackageDescriptionAsync(obj.Name, ct).ConfigureAwait(true);
+                    break;
+                case MetadataObjectKind.Generator:
+                    var gi = await _tableDetailReader.GetGeneratorInfoAsync(obj.Name, ct).ConfigureAwait(true);
+                    description = gi.Description;
+                    // Static definition facts only — never gi.CurrentValue (dynamic).
+                    generator = new Core.Sql.Language.Semantics.GeneratorDetail(gi.InitialValue, gi.Increment);
+                    break;
+                case MetadataObjectKind.Domain:
+                    description = (await _tableDetailReader.GetDomainInfoAsync(obj.Name, ct).ConfigureAwait(true)).Description;
+                    break;
+                case MetadataObjectKind.Exception:
+                    description = (await _tableDetailReader.GetExceptionInfoAsync(obj.Name, ct).ConfigureAwait(true)).Description;
+                    break;
+            }
+        }
+        catch (MetadataReadException)
+        {
+            // Best-effort — keep whatever we got.
+        }
+        return new Completion.ObjectDetail(NullIfEmpty(description), NullIfEmpty(returnType), trigger, generator);
+    }
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     // Routine parameters (procedures + functions), keyed by name; cleared on disconnect alongside
     // the column cache. Feeds the editor's Signature Help (Etap 5 / M6) via the metadata snapshot.
@@ -3247,7 +3365,7 @@ public partial class MainWindowViewModel : ViewModelBase
     /// cache; the returned snapshot is detached and safe to consume off-thread.
     /// </summary>
     internal ISqlMetadataProvider CreateMetadataSnapshot()
-        => AppMetadataSnapshot.Build(EnumerateLoadedObjects(), _columnCache, _routineParameterCache);
+        => AppMetadataSnapshot.Build(EnumerateLoadedObjects(), _columnCache, _routineParameterCache, _objectDetailCache);
 
     /// <summary>
     /// Pure name-based lookup over a list of loaded metadata objects. Case-insensitive;
@@ -6055,6 +6173,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // same-named object in another DB doesn't surface stale metadata.
         _columnCache.Clear();
         _routineParameterCache.Clear();
+        _objectDetailCache.Clear();
 
         UpdateStatusFromConnection();
         OnPropertyChanged(nameof(IsConnected));

@@ -532,4 +532,115 @@ public class SemanticModelTests
         var names = m.AllSymbols.OfType<TableReferenceSymbol>().Select(r => r.Name).OrderBy(x => x);
         Assert.Equal(new[] { "A", "B" }, names);
     }
+
+    // ══ Catalog references the structural binder doesn't cover: functions + sequences (QA Package 3) ══
+
+    [Fact]
+    public void FunctionCall_InSelectList_ResolvesAsFunction()
+    {
+        var meta = new FakeMetadata().Object("XXX_RTF2TXT", SymbolKind.Function);
+        const string sql = "select xxx_rtf2txt(:in_text) from rdb$database";
+        var m = Build(sql, meta);
+        var fn = m.ReferenceAt(sql.IndexOf("xxx_rtf2txt", StringComparison.Ordinal) + 3);
+        Assert.NotNull(fn);
+        var sym = Assert.IsType<SchemaObjectSymbol>(fn!.Symbol);
+        Assert.Equal(SymbolKind.Function, sym.Kind);
+    }
+
+    [Fact]
+    public void FunctionCall_InWhereExpression_Resolves()
+    {
+        var meta = new FakeMetadata().Object("MY_FUNC", SymbolKind.Function).Object("T", SymbolKind.Table).Col("T", "X", "INTEGER");
+        const string sql = "select x from t where my_func(x) > 0";
+        var m = Build(sql, meta);
+        var fn = m.ReferenceAt(sql.IndexOf("my_func", StringComparison.Ordinal) + 3);
+        Assert.Equal(SymbolKind.Function, Assert.IsType<SchemaObjectSymbol>(fn!.Symbol).Kind);
+    }
+
+    [Fact]
+    public void NextValueFor_ResolvesSequence()
+    {
+        var meta = new FakeMetadata().Object("GEN_AKCJA_REKRUTACYJNA", SymbolKind.Sequence);
+        const string sql = "select next value for gen_akcja_rekrutacyjna from rdb$database";
+        var m = Build(sql, meta);
+        var seq = m.ReferenceAt(sql.IndexOf("gen_akcja_rekrutacyjna", StringComparison.Ordinal) + 3);
+        Assert.NotNull(seq);
+        Assert.Equal(SymbolKind.Sequence, Assert.IsType<SchemaObjectSymbol>(seq!.Symbol).Kind);
+    }
+
+    [Fact]
+    public void NextValueFor_StandaloneStatement_ResolvesSequence()
+    {
+        // The user's exact case: a bare NEXT VALUE FOR line (no SELECT). The lenient parser absorbs it,
+        // but the flat catalog scan still binds the generator regardless of statement kind.
+        var meta = new FakeMetadata().Object("GEN_X", SymbolKind.Sequence);
+        const string sql = "next value for gen_x";
+        var m = Build(sql, meta);
+        var seq = m.ReferenceAt(sql.IndexOf("gen_x", StringComparison.Ordinal) + 2);
+        Assert.Equal(SymbolKind.Sequence, Assert.IsType<SchemaObjectSymbol>(seq!.Symbol).Kind);
+    }
+
+    [Fact]
+    public void GenId_ResolvesSequence()
+    {
+        var meta = new FakeMetadata().Object("GEN_X", SymbolKind.Sequence).Object("T", SymbolKind.Table).Col("T", "ID", "INTEGER");
+        const string sql = "select gen_id(gen_x, 1) from t";
+        var m = Build(sql, meta);
+        var seq = m.ReferenceAt(sql.IndexOf("gen_x", StringComparison.Ordinal) + 2);
+        Assert.NotNull(seq);
+        Assert.Equal(SymbolKind.Sequence, Assert.IsType<SchemaObjectSymbol>(seq!.Symbol).Kind);
+    }
+
+    [Fact]
+    public void GenId_And_NextValueFor_ResolveTheSameGenerator()
+    {
+        // Both constructs must go through the SAME path — no GEN_ID exception.
+        var meta = new FakeMetadata().Object("MY_GEN", SymbolKind.Sequence);
+        const string sql = "select gen_id(my_gen, 1) from rdb$database\nnext value for my_gen";
+        var m = Build(sql, meta);
+        var g1 = m.ReferenceAt(sql.IndexOf("my_gen", StringComparison.Ordinal) + 2);
+        var g2 = m.ReferenceAt(sql.LastIndexOf("my_gen", StringComparison.Ordinal) + 2);
+        Assert.Equal(SymbolKind.Sequence, Assert.IsType<SchemaObjectSymbol>(g1!.Symbol).Kind);
+        Assert.Equal(SymbolKind.Sequence, Assert.IsType<SchemaObjectSymbol>(g2!.Symbol).Kind);
+    }
+
+    [Fact]
+    public void GenId_BuiltInName_StaysUnresolved()
+    {
+        // GEN_ID itself is a built-in the catalog doesn't carry — only its argument resolves.
+        var meta = new FakeMetadata().Object("GEN_X", SymbolKind.Sequence);
+        const string sql = "select gen_id(gen_x, 1) from rdb$database";
+        var m = Build(sql, meta);
+        var genId = m.ReferenceAt(sql.IndexOf("gen_id", StringComparison.Ordinal) + 1);
+        Assert.True(genId is null || genId.Symbol is not SchemaObjectSymbol);
+    }
+
+    [Fact]
+    public void BuiltInFunction_NotInCatalog_StaysUnresolved()
+    {
+        // High-precision "never guess": a built-in the catalog doesn't carry (MAX/COALESCE/…) must NOT
+        // get a schema-object reference — only known user objects are coloured/navigable.
+        var meta = new FakeMetadata().Object("T", SymbolKind.Table).Col("T", "X", "INTEGER");
+        const string sql = "select max(x), coalesce(x, 0) from t";
+        var m = Build(sql, meta);
+        Assert.Null(m.ReferenceAt(sql.IndexOf("max", StringComparison.Ordinal) + 1));
+        Assert.Null(m.ReferenceAt(sql.IndexOf("coalesce", StringComparison.Ordinal) + 1));
+    }
+
+    [Fact]
+    public void SelectableProcInFrom_NotDoubleReferenced()
+    {
+        // A selectable proc in FROM is already referenced by the structural binder; the flat scan must
+        // not add a second reference for the same occurrence.
+        var meta = new FakeMetadata().Object("MY_PROC", SymbolKind.Procedure);
+        const string sql = "select a from my_proc(:x)";
+        var m = Build(sql, meta);
+        int start = sql.IndexOf("my_proc", StringComparison.Ordinal);
+        // The structural binder already records the bare-name FROM occurrence as BOTH a schema-object
+        // reference and a table reference. The flat catalog scan must add NOTHING more — so there is
+        // still exactly ONE SchemaObject reference here, not a duplicate.
+        var schemaRefs = m.References.Where(r => r.Span.Start == start && r.Role == ReferenceRole.SchemaObject).ToList();
+        Assert.Single(schemaRefs);
+        Assert.Equal(SymbolKind.Procedure, Assert.IsType<SchemaObjectSymbol>(schemaRefs[0].Symbol).Kind);
+    }
 }

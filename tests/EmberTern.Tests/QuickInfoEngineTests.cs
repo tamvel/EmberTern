@@ -28,6 +28,13 @@ public class QuickInfoEngineTests
             return this;
         }
 
+        // Registers a fully-populated ObjectMetadata (return type / trigger header) for the rich facts.
+        public FakeMetadata Rich(ObjectMetadata meta)
+        {
+            _objects[meta.Name] = meta;
+            return this;
+        }
+
         public FakeMetadata Col(string table, ColumnMetadata col)
         {
             if (!_objects.ContainsKey(table)) Object(table, SymbolKind.Table);
@@ -209,6 +216,117 @@ public class QuickInfoEngineTests
         Assert.Equal("Adds an order", qi.Description);
         Assert.Contains(qi.Members, m => m.Text == "ID_KONTRAHENT INTEGER" && m.Group == QuickInfoMemberGroup.Parameter);
         Assert.Contains(qi.Members, m => m.Text == "ID_ORDER INTEGER" && m.Group == QuickInfoMemberGroup.Returns);
+    }
+
+    // ── Rich object facts (Package 5, Stage B/C) ────────────────────────────────────────────────
+
+    [Fact]
+    public void Table_ColumnCounts_AndDescription()
+    {
+        var meta = new FakeMetadata()
+            .Rich(new ObjectMetadata("KONTRAHENT", SymbolKind.Table, "Customers", "SYSDBA"))
+            .Col("KONTRAHENT", new ColumnMetadata("ID", "INTEGER") { IsPrimaryKey = true })
+            .Col("KONTRAHENT", new ColumnMetadata("ID_MIASTO", "INTEGER") { IsForeignKey = true, ForeignKeyTable = "MIASTO" })
+            .Col("KONTRAHENT", new ColumnMetadata("NAZWA", "VARCHAR(50)"));
+        var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Table, "KONTRAHENT"), meta);
+
+        Assert.Equal("Customers", qi.Description);
+        Assert.Equal("SYSDBA", Fact(qi, "Owner"));
+        Assert.Equal("3", Fact(qi, "Columns"));
+        Assert.Equal("1 column", Fact(qi, "Primary key"));
+        Assert.Equal("1", Fact(qi, "Foreign keys"));
+    }
+
+    [Fact]
+    public void Table_NoCounts_WhenColumnsNotWarmed()
+    {
+        // Columns not loaded yet → no misleading "0 columns".
+        var meta = new FakeMetadata().Rich(new ObjectMetadata("T", SymbolKind.Table));
+        var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Table, "T"), meta);
+        Assert.Null(Fact(qi, "Columns"));
+    }
+
+    [Fact]
+    public void Function_ReturnType_AndParameterCount()
+    {
+        var meta = new FakeMetadata()
+            .Rich(new ObjectMetadata("CALC", SymbolKind.Function, "Computes a value") { ReturnType = "NUMERIC(15,2)" })
+            .Param("CALC", new RoutineParameterMetadata("A", "INTEGER", ParameterDirection.Input))
+            .Param("CALC", new RoutineParameterMetadata("B", "INTEGER", ParameterDirection.Input));
+        var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Function, "CALC"), meta);
+
+        Assert.Equal("Computes a value", qi.Description);
+        Assert.Equal("NUMERIC(15,2)", Fact(qi, "Returns"));
+        Assert.Equal("2", Fact(qi, "Parameters"));
+    }
+
+    [Fact]
+    public void Procedure_ParameterCount_InOut()
+    {
+        var meta = new FakeMetadata()
+            .Rich(new ObjectMetadata("ADD_ORDER", SymbolKind.Procedure))
+            .Param("ADD_ORDER", new RoutineParameterMetadata("ID_K", "INTEGER", ParameterDirection.Input))
+            .Param("ADD_ORDER", new RoutineParameterMetadata("ID_O", "INTEGER", ParameterDirection.Output));
+        var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Procedure, "ADD_ORDER"), meta);
+        Assert.Equal("1 in, 1 out", Fact(qi, "Parameters"));
+    }
+
+    [Fact]
+    public void Trigger_HeaderFacts()
+    {
+        var meta = new FakeMetadata().Rich(new ObjectMetadata("TR_AUDIT", SymbolKind.Trigger, "Audit trail")
+        {
+            Trigger = new TriggerDetail("KONTRAHENT", IsBefore: true, FiresInsert: true, FiresUpdate: true, FiresDelete: false, Position: 5, Active: true),
+        });
+        var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Trigger, "TR_AUDIT"), meta);
+
+        Assert.Equal(SymbolKind.Trigger, qi.Kind);
+        Assert.Equal("Audit trail", qi.Description);
+        Assert.Equal("KONTRAHENT", Fact(qi, "Table"));
+        Assert.Equal("BEFORE INSERT OR UPDATE", Fact(qi, "Fires"));
+        Assert.Equal("5", Fact(qi, "Position"));
+        Assert.Equal("Active", Fact(qi, "State"));
+    }
+
+    [Fact]
+    public void Trigger_Inactive_AfterDelete()
+    {
+        var meta = new FakeMetadata().Rich(new ObjectMetadata("TR_X", SymbolKind.Trigger)
+        {
+            Trigger = new TriggerDetail("T", IsBefore: false, FiresInsert: false, FiresUpdate: false, FiresDelete: true, Position: 0, Active: false),
+        });
+        var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Trigger, "TR_X"), meta);
+        Assert.Equal("AFTER DELETE", Fact(qi, "Fires"));
+        Assert.Equal("Inactive", Fact(qi, "State"));
+    }
+
+    [Fact]
+    public void Generator_Description_AndStaticFacts()
+    {
+        var meta = new FakeMetadata().Rich(new ObjectMetadata("GEN_ORDER", SymbolKind.Sequence, "Order numbers")
+        {
+            Generator = new GeneratorDetail(StartValue: 1000, Increment: 10),
+        });
+        var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Sequence, "GEN_ORDER"), meta);
+
+        Assert.Equal(SymbolKind.Sequence, qi.Kind);
+        Assert.Equal("Order numbers", qi.Description);
+        Assert.Equal("10", Fact(qi, "Increment"));
+        Assert.Equal("1000", Fact(qi, "Start"));
+    }
+
+    [Fact]
+    public void Generator_PlainDefault_ShowsDescriptionOnly()
+    {
+        // Increment 1 / start 0 are the defaults → not shown as noise; the description still shows.
+        var meta = new FakeMetadata().Rich(new ObjectMetadata("GEN_X", SymbolKind.Sequence, "A counter")
+        {
+            Generator = new GeneratorDetail(StartValue: 0, Increment: 1),
+        });
+        var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Sequence, "GEN_X"), meta);
+        Assert.Equal("A counter", qi.Description);
+        Assert.Null(Fact(qi, "Increment"));
+        Assert.Null(Fact(qi, "Start"));
     }
 
     // ── Generic objects (domain/exception/generator) — kind + description, no members ──────────

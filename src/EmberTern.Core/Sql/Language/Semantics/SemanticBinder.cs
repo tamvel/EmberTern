@@ -58,7 +58,90 @@ internal sealed partial class SemanticBinder
                 // statement it cannot handle simply contributes no symbols/references. (§4.2 #1.)
             }
         }
+
+        try
+        {
+            BindGlobalCatalogReferences();
+        }
+        catch
+        {
+            // Same error-tolerance contract — a bad token stream must never break the model.
+        }
     }
+
+    // Records the catalog references the structural (scope-based) binders don't cover: a FUNCTION or
+    // stored-procedure CALL (<c>NAME(…)</c>) in any expression, and <c>NEXT VALUE FOR &lt;sequence&gt;</c>.
+    // These appear in every statement kind — SELECT lists, DML expressions, PSQL bodies, and bare
+    // expression statements (<c>SELECT F(:x) FROM RDB$DATABASE</c>, a standalone <c>NEXT VALUE FOR G</c>)
+    // — so ONE flat token scan across all statements covers them uniformly, resolving each name against
+    // the metadata snapshot: only a KNOWN catalog object gets a reference, so a built-in
+    // (<c>MAX</c>/<c>COALESCE</c>/<c>SUBSTRING</c>/…) the catalog doesn't carry stays uncoloured — the
+    // same high-precision "never guess" rule the rest of the binder follows. A token a structural binder
+    // already referenced (e.g. a selectable procedure in <c>FROM</c>) is skipped, so no occurrence is
+    // double-recorded. Read-only; every reference is a plain occurrence, never a definition.
+    private void BindGlobalCatalogReferences()
+    {
+        var referenced = new HashSet<int>();
+        foreach (var r in _references) referenced.Add(r.Span.Start);
+
+        foreach (var stmt in _script.Statements)
+        {
+            var t = stmt.Tokens;
+            for (int i = 0; i < t.Count; i++)
+            {
+                var tok = t[i];
+
+                // NEXT VALUE FOR <sequence>. NEXT/VALUE may lex as identifiers or keywords, so match by
+                // text; the sequence name resolves only when the catalog knows it as a generator.
+                if (IsWordText(tok, "NEXT") && IsWordText(At(t, i + 1), "VALUE") && IsWordText(At(t, i + 2), "FOR")
+                    && IsNameToken(At(t, i + 3)))
+                {
+                    var seqTok = t[i + 3];
+                    if (referenced.Add(seqTok.Start)
+                        && ResolveObject(FoldedName(seqTok)) is { Kind: SymbolKind.Sequence } seq)
+                    {
+                        AddReference(seqTok, seq, ReferenceRole.SchemaObject);
+                    }
+                    i += 3;
+                    continue;
+                }
+
+                // GEN_ID(<sequence>, <increment>) — the FIRST argument is a generator name, exactly like
+                // NEXT VALUE FOR. Resolved through the SAME path (ObjectMetadata → QuickInfoEngine); there
+                // is no GEN_ID special case beyond spotting the argument position. GEN_ID itself is a
+                // built-in the catalog doesn't carry, so it stays uncoloured.
+                if (IsWordText(tok, "GEN_ID") && At(t, i + 1).Kind == TokenKind.LParen && IsNameToken(At(t, i + 2)))
+                {
+                    var genTok = t[i + 2];
+                    if (referenced.Add(genTok.Start)
+                        && ResolveObject(FoldedName(genTok)) is { Kind: SymbolKind.Sequence } seq)
+                    {
+                        AddReference(genTok, seq, ReferenceRole.SchemaObject);
+                    }
+                    i += 2;
+                    continue;
+                }
+
+                // NAME '(' … — a function / selectable-procedure call. The name must be a bare identifier
+                // (not dot-qualified, so a package member isn't mis-resolved to a same-named standalone)
+                // and resolve to a known Function or Procedure.
+                if (IsNameToken(tok) && At(t, i + 1).Kind == TokenKind.LParen
+                    && !(i - 1 >= 0 && t[i - 1].Kind == TokenKind.Dot)
+                    && !referenced.Contains(tok.Start)
+                    && ResolveObject(FoldedName(tok)) is { Kind: SymbolKind.Function or SymbolKind.Procedure } routine)
+                {
+                    AddReference(tok, routine, ReferenceRole.SchemaObject);
+                    referenced.Add(tok.Start);
+                }
+            }
+        }
+    }
+
+    /// <summary>A word token (identifier or keyword) whose text equals <paramref name="text"/>
+    /// (case-insensitive) — for matching multi-word constructs whose words may lex either way.</summary>
+    private static bool IsWordText(SqlToken t, string text)
+        => t.Kind is TokenKind.Identifier or TokenKind.Keyword
+           && string.Equals(t.Text, text, StringComparison.OrdinalIgnoreCase);
 
     private void BindStatement(SqlStatement stmt)
     {

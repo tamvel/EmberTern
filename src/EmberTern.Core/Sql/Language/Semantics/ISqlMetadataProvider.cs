@@ -37,7 +37,10 @@ public interface ISqlMetadataProvider
     IReadOnlyList<ObjectMetadata> AllObjects();
 }
 
-/// <summary>Rich-but-optional metadata about a schema object.</summary>
+/// <summary>Rich-but-optional metadata about a schema object. The positional fields are the always-cheap
+/// essentials (name + kind); the init-only properties are the richer Quick Info facts an implementation
+/// fills when it has warmed them (Package 5) — a description, a function's return type, a trigger's
+/// header. They default to <c>null</c>, so a provider that only knows name+kind is still valid.</summary>
 /// <param name="Name">The object name (catalog-cased).</param>
 /// <param name="Kind">Its kind.</param>
 /// <param name="Description">Comment/description, when known.</param>
@@ -46,7 +49,44 @@ public sealed record ObjectMetadata(
     string Name,
     SymbolKind Kind,
     string? Description = null,
-    string? Owner = null);
+    string? Owner = null)
+{
+    /// <summary>A function's formatted return type (e.g. <c>INTEGER</c>, <c>VARCHAR(50)</c>), else
+    /// <c>null</c>. Meaningful only for <see cref="SymbolKind.Function"/>.</summary>
+    public string? ReturnType { get; init; }
+
+    /// <summary>Header facts for a <see cref="SymbolKind.Trigger"/> (table, timing, events, position,
+    /// active), else <c>null</c>.</summary>
+    public TriggerDetail? Trigger { get; init; }
+
+    /// <summary>Static definition facts for a <see cref="SymbolKind.Sequence"/> (start value +
+    /// increment — never the dynamic current value), else <c>null</c>.</summary>
+    public GeneratorDetail? Generator { get; init; }
+}
+
+/// <summary>Rich-but-optional header facts of a relation trigger, for Quick Info (Package 5, Stage C).
+/// Decoded from the catalog by the host; the language layer only renders it.</summary>
+/// <param name="Table">The table the trigger fires on, or <c>null</c> for a DB-level/DDL trigger.</param>
+/// <param name="IsBefore"><c>true</c> = BEFORE, <c>false</c> = AFTER.</param>
+/// <param name="FiresInsert">Fires on INSERT.</param>
+/// <param name="FiresUpdate">Fires on UPDATE.</param>
+/// <param name="FiresDelete">Fires on DELETE.</param>
+/// <param name="Position">Firing position (RDB$TRIGGER_SEQUENCE).</param>
+/// <param name="Active"><c>true</c> when the trigger is active (not <c>INACTIVE</c>).</param>
+public sealed record TriggerDetail(
+    string? Table,
+    bool IsBefore,
+    bool FiresInsert,
+    bool FiresUpdate,
+    bool FiresDelete,
+    int Position,
+    bool Active);
+
+/// <summary>Rich-but-optional static definition facts of a generator/sequence, for Quick Info
+/// (Package 5). <b>Never</b> the current value (dynamic) — only the creation-time start and increment.</summary>
+/// <param name="StartValue">The sequence's initial value (<c>START WITH</c>); 0 by default / on FB2.5.</param>
+/// <param name="Increment">The step (<c>INCREMENT BY</c>); 1 by default / on FB2.5.</param>
+public sealed record GeneratorDetail(long StartValue, long Increment);
 
 /// <summary>Rich-but-optional metadata about a column. An implementation may fill only
 /// <see cref="Name"/> + <see cref="Type"/> today.</summary>

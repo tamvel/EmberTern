@@ -146,6 +146,12 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         sw.Stop();
         Diagnostics.PerfTrace.LogCategoryLoad(Profile.Name, categories.Count, sw.ElapsedMilliseconds);
 
+        // Prefetch is complete — every category's objects are loaded. Fire the definitive "metadata
+        // ready" event so every open SQL editor does its final rebuild + full warm and publishes one
+        // complete Semantic Model (Package 5 closure). This is the authoritative completion signal, not
+        // the per-category debounce the editor also listens to.
+        metadata.NotifyMetadataReady();
+
         // Re-assert expanded after the categories exist. OnIsConnectedChanged already
         // set IsExpanded=true synchronously; this is a plain idempotent confirmation
         // now that the TreeViewItem→VM binding is sound (see the MainWindow.axaml

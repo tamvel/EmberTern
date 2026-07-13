@@ -75,6 +75,13 @@ internal sealed class SqlCompletionController
     private readonly Action<Action>? _unsubscribeMetadataChanged;
     private readonly Action? _metadataChangedHandler;
     private bool _metadataSubscribed;
+    // Hooks for the definitive "metadata ready" signal (prefetch complete). Distinct from the debounced
+    // metadata-changed hooks above: on this we do the authoritative rebuild + full warm + publish
+    // (Package 5 closure). Same visual-tree-scoped lifetime so the subscription is leak-free.
+    private readonly Action<Action>? _subscribeMetadataReady;
+    private readonly Action<Action>? _unsubscribeMetadataReady;
+    private readonly Action? _metadataReadyHandler;
+    private bool _readySubscribed;
     private readonly DispatcherTimer _autoPopup;
     private CompletionWindow? _window;
     // The unified Parameter Helper (design §28) — the ONE parameter-info surface, driven by
@@ -93,14 +100,18 @@ internal sealed class SqlCompletionController
         Func<string?>? contextTableProvider = null,
         Func<string, Task>? ensureRoutineParamsAsync = null,
         Action<Action>? subscribeMetadataChanged = null,
-        Action<Action>? unsubscribeMetadataChanged = null)
+        Action<Action>? unsubscribeMetadataChanged = null,
+        Func<int>? metadataGeneration = null,
+        Func<IReadOnlyList<string>, System.Threading.CancellationToken, Task<bool>>? warmReferencedMetadata = null,
+        Action<Action>? subscribeMetadataReady = null,
+        Action<Action>? unsubscribeMetadataReady = null)
     {
         _editor = editor;
         _ensureColumnsAsync = ensureColumnsAsync;
         _ensureRoutineParamsAsync = ensureRoutineParamsAsync;
         _contextTableProvider = contextTableProvider;
 
-        _language = new EditorLanguageService(editor, metadataSnapshot);
+        _language = new EditorLanguageService(editor, metadataSnapshot, metadataGeneration, warmReferencedMetadata);
         _parameterHelper = ParameterHelper.Attach(editor, () => _language.Model, WarmForSignatureAndRebuildAsync);
         _autoPopup = new DispatcherTimer();
         _autoPopup.Tick += OnAutoPopupTick;
@@ -114,36 +125,68 @@ internal sealed class SqlCompletionController
         // comment). Subscribe on attach, unsubscribe on detach; if the editor is already attached when
         // we're constructed (the detail views build us from their own OnAttachedToVisualTree), subscribe
         // now — AttachedToVisualTree won't fire again until a detach+reattach cycle.
-        if (subscribeMetadataChanged is not null && unsubscribeMetadataChanged is not null)
+        bool hasChanged = subscribeMetadataChanged is not null && unsubscribeMetadataChanged is not null;
+        bool hasReady = subscribeMetadataReady is not null && unsubscribeMetadataReady is not null;
+        if (hasChanged)
         {
             _subscribeMetadataChanged = subscribeMetadataChanged;
             _unsubscribeMetadataChanged = unsubscribeMetadataChanged;
             _metadataChangedHandler = () => _language.NotifyMetadataChanged();
+        }
+        if (hasReady)
+        {
+            _subscribeMetadataReady = subscribeMetadataReady;
+            _unsubscribeMetadataReady = unsubscribeMetadataReady;
+            // Definitive rebuild + full warm + publish (Package 5 closure).
+            _metadataReadyHandler = () => _language.RefreshModelWithMetadata();
+        }
+        if (hasChanged || hasReady)
+        {
             _editor.AttachedToVisualTree += OnEditorAttachedToVisualTree;
             _editor.DetachedFromVisualTree += OnEditorDetachedFromVisualTree;
-            if (_editor.IsLoaded) SubscribeMetadataChanged();
+            if (_editor.IsLoaded) SubscribeMetadataHooks();
         }
     }
 
-    private void SubscribeMetadataChanged()
+    /// <summary>The definitive "metadata ready" initialization for a host that owns the event lifecycle
+    /// (the main window ties it to its stable VM): rebuild the model against the now-complete metadata,
+    /// warm all referenced objects (columns + detail + routine parameters), and publish one complete
+    /// Semantic Model. Not debounced — this is the authoritative prefetch-complete step (Package 5).</summary>
+    public void RefreshModelForMetadataReady() => _language.RefreshModelWithMetadata();
+
+    private void SubscribeMetadataHooks()
     {
-        if (_metadataSubscribed || _metadataChangedHandler is null) return;
-        _subscribeMetadataChanged!(_metadataChangedHandler);
-        _metadataSubscribed = true;
+        if (!_metadataSubscribed && _metadataChangedHandler is not null)
+        {
+            _subscribeMetadataChanged!(_metadataChangedHandler);
+            _metadataSubscribed = true;
+        }
+        if (!_readySubscribed && _metadataReadyHandler is not null)
+        {
+            _subscribeMetadataReady!(_metadataReadyHandler);
+            _readySubscribed = true;
+        }
     }
 
-    private void UnsubscribeMetadataChanged()
+    private void UnsubscribeMetadataHooks()
     {
-        if (!_metadataSubscribed || _metadataChangedHandler is null) return;
-        _unsubscribeMetadataChanged!(_metadataChangedHandler);
-        _metadataSubscribed = false;
+        if (_metadataSubscribed && _metadataChangedHandler is not null)
+        {
+            _unsubscribeMetadataChanged!(_metadataChangedHandler);
+            _metadataSubscribed = false;
+        }
+        if (_readySubscribed && _metadataReadyHandler is not null)
+        {
+            _unsubscribeMetadataReady!(_metadataReadyHandler);
+            _readySubscribed = false;
+        }
     }
 
     private void OnEditorAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
-        => SubscribeMetadataChanged();
+        => SubscribeMetadataHooks();
 
     private void OnEditorDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
-        => UnsubscribeMetadataChanged();
+        => UnsubscribeMetadataHooks();
 
     /// <summary>The editor's cached semantic model (Etap 6) — shared with the semantic highlighter so
     /// there is exactly one background parse per editor. Null before the first parse.</summary>
@@ -171,7 +214,7 @@ internal sealed class SqlCompletionController
         _editor.TextArea.Caret.PositionChanged -= OnCaretPositionChanged;
         _editor.AttachedToVisualTree -= OnEditorAttachedToVisualTree;
         _editor.DetachedFromVisualTree -= OnEditorDetachedFromVisualTree;
-        UnsubscribeMetadataChanged();
+        UnsubscribeMetadataHooks();
         CancelAutoPopup();
         _autoPopup.Tick -= OnAutoPopupTick;
         _language.Dispose();

@@ -30,7 +30,17 @@ internal static class SqlEditorBehavior
             // highlight / Ctrl-nav / Quick Info. Scoped to the editor's visual-tree lifetime inside the
             // controller, so this subscription to the long-lived Metadata singleton is leak-free.
             subscribeMetadataChanged: h => vm.Metadata.ObjectsChanged += h,
-            unsubscribeMetadataChanged: h => vm.Metadata.ObjectsChanged -= h);
+            unsubscribeMetadataChanged: h => vm.Metadata.ObjectsChanged -= h,
+            // Metadata generation → a deliberate trigger rebuilds the model when a category loaded
+            // after this editor opened, so completion/highlight is live without a keystroke.
+            metadataGeneration: () => vm.Metadata.ObjectsGeneration,
+            // Sprint 1 (point b) + Package 5 (Stage B/C): warm the referenced objects' columns + rich
+            // detail so the model is complete for the text without typing "table." — every SQL surface.
+            warmReferencedMetadata: (names, ct) => vm.WarmReferencedAsync(names, ct),
+            // Package 5 closure: prefetch-complete → definitive rebuild + full warm + publish, scoped to
+            // the editor's visual-tree lifetime (leak-free).
+            subscribeMetadataReady: h => vm.Metadata.MetadataReady += h,
+            unsubscribeMetadataReady: h => vm.Metadata.MetadataReady -= h);
 
         // Semantic highlighting (Etap 6): colour identifiers by resolved role, fed by the same
         // cached semantic model the completion controller owns (one background parse per editor).

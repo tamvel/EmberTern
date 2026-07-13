@@ -19,6 +19,7 @@ using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Sql.Language.QuickInfo;
 using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Sql.Language.Signatures;
 using EmberTern.Firebird;
@@ -867,6 +868,284 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
+    // Sprint 1 (point b) regression pin — the model pipeline warms the columns of the tables the
+    // current statement references and rebuilds, so a BARE column resolves WITHOUT the user first
+    // typing "table." to trigger the dot warm. Column cache starts EMPTY; the injected warm callback
+    // (mirroring MainWindowViewModel.WarmReferencedAsync) loads T's columns; the fire-and-forget pass then
+    // rebuilds the model against the now-complete snapshot. Before this fix, `x` stayed unresolved
+    // until a dot warmed T — the "everything comes alive only after r." symptom.
+    [Fact]
+    public async System.Threading.Tasks.Task EditorModel_WarmsReferencedTableColumns_WithoutDot()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+
+        await session.Dispatch(async () =>
+        {
+            var editor = new TextEditor { Width = 300, Height = 120 };
+            var window = new Window { Width = 400, Height = 300, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // Columns start UNCACHED; the warm callback populates the cache the snapshot reads from.
+            var cols = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase);
+            ISqlMetadataProvider Snap() => AppMetadataSnapshot.Build(new[] { new MetadataObject("T", MetadataObjectKind.Table) }, cols);
+            System.Func<System.Collections.Generic.IReadOnlyList<string>, System.Threading.CancellationToken, System.Threading.Tasks.Task<bool>> warm =
+                (tables, ct) =>
+                {
+                    bool any = false;
+                    foreach (var t in tables)
+                    {
+                        if (!cols.ContainsKey(t)) { cols[t] = new[] { new ColumnSpec("X", "INTEGER") }; any = true; }
+                    }
+                    return System.Threading.Tasks.Task.FromResult(any);
+                };
+
+            using var svc = new EditorLanguageService(editor, Snap, null, warm);
+            const string sql = "select x from t";
+            editor.Text = sql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel(); // builds against the EMPTY column cache, then fires the warm pass
+
+            int xOffset = sql.IndexOf(" x ", System.StringComparison.Ordinal) + 1; // the bare column `x`
+
+            // Let the fire-and-forget warm pass run: it warms T's columns and rebuilds.
+            for (var i = 0; i < 10; i++) { await System.Threading.Tasks.Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+
+            var xref = svc.Model!.ReferenceAt(xOffset);
+            Assert.NotNull(xref);
+            Assert.IsType<ColumnSymbol>(xref!.Symbol); // resolved WITHOUT a dot — the pipeline warmed T
+            Assert.True(cols.ContainsKey("T"), "the referenced table's columns were warmed by the pipeline");
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // Package 5 diagnostic — does the warm pipeline collect + warm a GENERATOR's detail for a
+    // NEXT VALUE FOR reference (a non-table object), and does the description reach Quick Info? This
+    // isolates whether Problem 2 is a data-path bug (collection/warm) or a runtime timing issue.
+    [Fact]
+    public async System.Threading.Tasks.Task EditorModel_WarmsGeneratorDetail_ForNextValueFor()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+
+        await session.Dispatch(async () =>
+        {
+            var editor = new TextEditor { Width = 300, Height = 120 };
+            var window = new Window { Width = 400, Height = 300, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var noCols = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase);
+            var detail = new System.Collections.Generic.Dictionary<string, ObjectDetail>(System.StringComparer.OrdinalIgnoreCase);
+            var objects = new[] { new MetadataObject("GEN_X", MetadataObjectKind.Generator) };
+            ISqlMetadataProvider Snap() => AppMetadataSnapshot.Build(objects, noCols, null, detail);
+
+            var captured = new System.Collections.Generic.List<string>();
+            System.Func<System.Collections.Generic.IReadOnlyList<string>, System.Threading.CancellationToken, System.Threading.Tasks.Task<bool>> warm =
+                (names, ct) =>
+                {
+                    captured.AddRange(names);
+                    bool any = false;
+                    foreach (var n in names)
+                    {
+                        if (!detail.ContainsKey(n)) { detail[n] = new ObjectDetail("The FA generator", null, null); any = true; }
+                    }
+                    return System.Threading.Tasks.Task.FromResult(any);
+                };
+
+            using var svc = new EditorLanguageService(editor, Snap, null, warm);
+            const string sql = "next value for gen_x";
+            editor.Text = sql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel();
+            for (var i = 0; i < 10; i++) { await System.Threading.Tasks.Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+
+            Assert.Contains("GEN_X", captured); // the generator is collected for warming (not just tables)
+            var qi = QuickInfoEngine.GetQuickInfo(svc.Model!, sql.IndexOf("gen_x", System.StringComparison.Ordinal) + 2);
+            Assert.NotNull(qi);
+            Assert.Equal(SymbolKind.Sequence, qi!.Kind);
+            Assert.Equal("The FA generator", qi.Description); // Stage B detail reached Quick Info
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // Package 5 closure pin — the warm pipeline warms ROUTINE PARAMETERS for a referenced procedure, so
+    // its full signature is in the published model WITHOUT the user typing "(" (Signature Help/Quick
+    // Info were the piecemeal, gesture-triggered case). Params start uncached; the warm fills them.
+    [Fact]
+    public async System.Threading.Tasks.Task EditorModel_WarmsRoutineParameters_ForReferencedProcedure()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+
+        await session.Dispatch(async () =>
+        {
+            var editor = new TextEditor { Width = 300, Height = 120 };
+            var window = new Window { Width = 400, Height = 300, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var noCols = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase);
+            var routineParams = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<RoutineParameterMetadata>>(
+                System.StringComparer.OrdinalIgnoreCase);
+            var objects = new[] { new MetadataObject("MY_PROC", MetadataObjectKind.Procedure) };
+            ISqlMetadataProvider Snap() => AppMetadataSnapshot.Build(objects, noCols, routineParams);
+
+            System.Func<System.Collections.Generic.IReadOnlyList<string>, System.Threading.CancellationToken, System.Threading.Tasks.Task<bool>> warm =
+                (names, ct) =>
+                {
+                    bool any = false;
+                    foreach (var n in names)
+                    {
+                        if (!routineParams.ContainsKey(n))
+                        {
+                            routineParams[n] = new[] { new RoutineParameterMetadata("ID_K", "INTEGER", ParameterDirection.Input) };
+                            any = true;
+                        }
+                    }
+                    return System.Threading.Tasks.Task.FromResult(any);
+                };
+
+            using var svc = new EditorLanguageService(editor, Snap, null, warm);
+            const string sql = "execute procedure my_proc";
+            editor.Text = sql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel();
+            for (var i = 0; i < 10; i++) { await System.Threading.Tasks.Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+
+            var qi = QuickInfoEngine.GetQuickInfo(svc.Model!, sql.IndexOf("my_proc", System.StringComparison.Ordinal) + 2);
+            Assert.NotNull(qi);
+            Assert.Equal(SymbolKind.Procedure, qi!.Kind);
+            Assert.Contains(qi.Members, m => m.Text.Contains("ID_K")); // params warmed → shown, no "(" needed
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // Package 5 root-cause pin — an object whose category loads DURING an in-flight warm must still be
+    // warmed. GEN_X is absent from the snapshot when the model is first built (so it isn't collected);
+    // it becomes available during the first warm pass (simulating prefetch loading the Generators
+    // category mid-warm). The warm loop must re-collect after its rebuild and warm GEN_X's detail —
+    // before the fix, the guard dropped the re-warm and GEN_X's description never loaded (the "existing
+    // tab / generator shows only basic info" bug).
+    [Fact]
+    public async System.Threading.Tasks.Task EditorModel_WarmConverges_WhenMetadataGrowsMidWarm()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+
+        await session.Dispatch(async () =>
+        {
+            var editor = new TextEditor { Width = 300, Height = 120 };
+            var window = new Window { Width = 400, Height = 300, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var noCols = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase);
+            var detail = new System.Collections.Generic.Dictionary<string, ObjectDetail>(System.StringComparer.OrdinalIgnoreCase);
+            // GEN_X is NOT present initially — it "loads" during the first warm.
+            var objects = new System.Collections.Generic.List<MetadataObject> { new("T", MetadataObjectKind.Table) };
+            ISqlMetadataProvider Snap() => AppMetadataSnapshot.Build(objects, noCols, null, detail);
+
+            int warmCalls = 0;
+            System.Func<System.Collections.Generic.IReadOnlyList<string>, System.Threading.CancellationToken, System.Threading.Tasks.Task<bool>> warm =
+                (names, ct) =>
+                {
+                    warmCalls++;
+                    if (warmCalls == 1 && !objects.Exists(o => o.Name == "GEN_X"))
+                    {
+                        objects.Add(new MetadataObject("GEN_X", MetadataObjectKind.Generator)); // category loads mid-warm
+                    }
+                    bool any = false;
+                    foreach (var n in names)
+                    {
+                        if (!detail.ContainsKey(n)) { detail[n] = new ObjectDetail($"desc-{n}", null, null); any = true; }
+                    }
+                    return System.Threading.Tasks.Task.FromResult(any);
+                };
+
+            using var svc = new EditorLanguageService(editor, Snap, null, warm);
+            const string sql = "select * from t\nnext value for gen_x";
+            editor.Text = sql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel();
+            for (var i = 0; i < 20; i++) { await System.Threading.Tasks.Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+
+            // GEN_X, which appeared mid-warm, was re-collected and its detail warmed → reaches Quick Info.
+            var qi = QuickInfoEngine.GetQuickInfo(svc.Model!, sql.IndexOf("gen_x", System.StringComparison.Ordinal) + 2);
+            Assert.NotNull(qi);
+            Assert.Equal(SymbolKind.Sequence, qi!.Kind);
+            Assert.Equal("desc-GEN_X", qi.Description);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // QA Package 1 regression pin — "IntelliSense is dead until I edit after connecting". The model's
+    // synchronous deliberate-trigger refresh (EnsureFreshModel, what a Ctrl+Space runs) was gated on the
+    // TEXT version only, so metadata that loaded AFTER the model was first built (prefetch on connect)
+    // never reached a Ctrl+Space unless a keystroke bumped the text version. The fix: the model also
+    // tracks a metadata GENERATION and rebuilds on a deliberate trigger when it moved — no text change.
+    // This drives EnsureFreshModel directly (NOT RefreshModelWithMetadata, which always rebuilds) and
+    // proves the generation bump alone forces the rebuild.
+    [Fact]
+    public async System.Threading.Tasks.Task EditorModel_EnsureFresh_RebuildsWhenMetadataGenerationMoves()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 300, Height = 120 };
+            var window = new Window { Width = 400, Height = 300, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var emptyCols = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase);
+
+            // Simulate connect ordering: the model is first built BEFORE the Views category loads.
+            ISqlMetadataProvider snapshot = AppMetadataSnapshot.Build(Array.Empty<MetadataObject>(), emptyCols);
+            int generation = 0; // the host's ObjectsGeneration
+
+            using var svc = new EditorLanguageService(editor, () => snapshot, () => generation);
+            const string sql = "select * from myview";
+            editor.Text = sql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel();
+
+            int viewOffset = sql.IndexOf("myview", System.StringComparison.Ordinal) + 3;
+            Assert.True(svc.Model!.ReferenceAt(viewOffset)?.Symbol is not SchemaObjectSymbol,
+                "view must NOT resolve before its category loads");
+
+            // Views category loads: snapshot grows AND the generation bumps — but the TEXT is unchanged.
+            snapshot = AppMetadataSnapshot.Build(new[] { new MetadataObject("MYVIEW", MetadataObjectKind.View) }, emptyCols);
+            generation++;
+
+            // The deliberate-trigger path (a Ctrl+Space). Text-version-fresh, but the generation moved,
+            // so the model MUST rebuild — this is the exact call that previously no-op'd and left the
+            // user with dead IntelliSense until a keystroke.
+            svc.EnsureFreshModel();
+
+            var after = svc.Model!.ReferenceAt(viewOffset);
+            var viewSym = Assert.IsType<SchemaObjectSymbol>(after!.Symbol);
+            Assert.Equal(SymbolKind.View, viewSym.Kind);
+            log.AppendLine($"[1] generation bump alone rebuilt the model → view resolves as {viewSym.Kind}");
+
+            // And a second deliberate trigger with NOTHING changed is a genuine no-op (still resolved,
+            // no churn) — the model stays fresh once text + generation match.
+            svc.EnsureFreshModel();
+            Assert.IsType<SchemaObjectSymbol>(svc.Model!.ReferenceAt(viewOffset)!.Symbol);
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
     // The unified Parameter Helper (design §28) across the constructs it must cover: INSERT (cached +
     // warm-then-retry + context-driven lifetime), UPDATE OR INSERT (same as INSERT), and EXECUTE
     // PROCEDURE (routine params warmed on a miss). Drives ParameterHelper.ShowAt directly (the same call
@@ -960,6 +1239,56 @@ public sealed class ConnectionExpandBindingProbe
                 helper.Detach();
             }
 
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // QA Package 2 diagnostic — the UPDATE OR INSERT / INSERT COLUMN-warm path (uncached columns →
+    // warm → retry), which the section-2 test above does NOT cover (it pre-caches columns). This is the
+    // exact path a first double-click on a fresh editor takes. Drives ShowAt with EMPTY columns, a warm
+    // callback that caches them + rebuilds (what the App's WarmForSignatureAndRebuildAsync does), and
+    // asserts the card opens after the warm — for BOTH INSERT and UPDATE OR INSERT, proving the two are
+    // symmetric on the warm path too (or catching the asymmetry if there is one).
+    [Theory]
+    [InlineData("insert into t (a, b) values (1, 2)")]
+    [InlineData("update or insert into t (a, b) values (1, 2)")]
+    public async System.Threading.Tasks.Task ParameterHelper_ColumnWarm_OpensAfterWarm(string sql)
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+
+        await session.Dispatch(async () =>
+        {
+            var editor = new TextEditor { Width = 500, Height = 200 };
+            var window = new Window { Width = 600, Height = 320, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            editor.Measure(new Size(500, 200));
+            editor.Arrange(new Rect(0, 0, 500, 200));
+            Dispatcher.UIThread.RunJobs();
+
+            // Columns start UNCACHED — the warm callback fills them (mirrors EnsureColumnsAsync).
+            var warmedCols = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                System.StringComparer.OrdinalIgnoreCase);
+            ISqlMetadataProvider Snap() => AppMetadataSnapshot.Build(
+                new[] { new MetadataObject("T", MetadataObjectKind.Table) }, warmedCols);
+
+            using var svc = new EditorLanguageService(editor, Snap);
+            var helper = ParameterHelper.Attach(editor, () => svc.Model, (label, kind) =>
+            {
+                warmedCols[label] = new[] { new ColumnSpec("A", "INTEGER"), new ColumnSpec("B", "VARCHAR(10)") };
+                svc.RefreshModelWithMetadata();
+                return System.Threading.Tasks.Task.FromResult(svc.Model);
+            });
+
+            editor.Text = sql; Dispatcher.UIThread.RunJobs(); svc.EnsureFreshModel();
+            int v2 = sql.IndexOf(", 2)", System.StringComparison.Ordinal) + 2; // on the "2"
+
+            // First activation, columns not cached → the engine returns null; the helper must warm the
+            // target table's columns, rebuild, and open — no second trigger needed.
+            Assert.True(helper.ShowAt(v2), "a VALUES value is a parameter site even before columns are cached");
+            for (var i = 0; i < 5; i++) { await System.Threading.Tasks.Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+            Assert.True(helper.IsOpen, "Parameter Helper opens after warming the target columns (first activation)");
+            helper.Detach();
             window.Close();
         }, CancellationToken.None);
     }

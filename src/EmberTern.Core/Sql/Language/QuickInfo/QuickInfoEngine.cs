@@ -75,8 +75,14 @@ public static class QuickInfoEngine
 
     private static QuickInfo ForSchemaObject(SchemaObjectSymbol o, ISqlMetadataProvider metadata)
     {
+        // The rich, warmed facts (description, function return type, trigger header) live on the
+        // snapshot's ObjectMetadata — an in-memory lookup, never a DB query at display time (Package 5).
+        var meta = metadata.FindObject(o.Name);
+        var description = string.IsNullOrEmpty(meta?.Description) ? o.Description : meta!.Description;
+        var owner = string.IsNullOrEmpty(meta?.Owner) ? o.Owner : meta!.Owner;
+
         var facts = new List<QuickInfoFact>();
-        if (!string.IsNullOrEmpty(o.Owner)) facts.Add(new QuickInfoFact("Owner", o.Owner!));
+        if (!string.IsNullOrEmpty(owner)) facts.Add(new QuickInfoFact("Owner", owner!));
 
         var members = new List<QuickInfoMember>();
         switch (o.Kind)
@@ -85,16 +91,99 @@ public static class QuickInfoEngine
             case SymbolKind.View:
             case SymbolKind.SystemTable:
                 AddColumns(members, metadata, o.Name);
+                AddColumnCounts(facts, metadata, o.Name);
                 break;
 
             case SymbolKind.Procedure:
+                AddRoutineParameters(members, metadata, o.Name);
+                AddRoutineCounts(facts, metadata, o.Name, isFunction: false);
+                break;
+
             case SymbolKind.Function:
                 AddRoutineParameters(members, metadata, o.Name);
+                AddRoutineCounts(facts, metadata, o.Name, isFunction: true);
+                if (!string.IsNullOrEmpty(meta?.ReturnType)) facts.Add(new QuickInfoFact("Returns", meta!.ReturnType!));
+                break;
+
+            case SymbolKind.Trigger:
+                AddTriggerFacts(facts, meta?.Trigger);
+                break;
+
+            case SymbolKind.Sequence:
+                AddGeneratorFacts(facts, meta?.Generator);
                 break;
         }
 
-        return new QuickInfo(o.Kind, o.Name, o.Description, facts, members);
+        return new QuickInfo(o.Kind, o.Name, description, facts, members);
     }
+
+    // Table/view summary counts, derived from the already-warmed column list (no new query). Skipped
+    // until the columns are warmed, so a not-yet-loaded table never shows a misleading "0 columns".
+    private static void AddColumnCounts(List<QuickInfoFact> facts, ISqlMetadataProvider metadata, string table)
+    {
+        var cols = metadata.GetColumns(table);
+        if (cols.Count == 0) return;
+        int pk = 0, fk = 0;
+        foreach (var c in cols)
+        {
+            if (c.IsPrimaryKey) pk++;
+            if (c.IsForeignKey) fk++;
+        }
+        facts.Add(new QuickInfoFact("Columns", Num(cols.Count)));
+        if (pk > 0) facts.Add(new QuickInfoFact("Primary key", pk == 1 ? "1 column" : $"{Num(pk)} columns"));
+        if (fk > 0) facts.Add(new QuickInfoFact("Foreign keys", Num(fk)));
+    }
+
+    // Routine parameter summary. Functions count only inputs (the output is the return type, shown
+    // separately); procedures show in/out. Derived from the warmed parameter list — no new query.
+    private static void AddRoutineCounts(List<QuickInfoFact> facts, ISqlMetadataProvider metadata, string routine, bool isFunction)
+    {
+        var ps = metadata.GetRoutineParameters(routine);
+        if (ps.Count == 0) return;
+        int inputs = 0, outputs = 0;
+        foreach (var p in ps)
+        {
+            if (p.Direction == ParameterDirection.Output) outputs++;
+            else inputs++;
+        }
+        if (isFunction)
+        {
+            facts.Add(new QuickInfoFact("Parameters", Num(inputs)));
+        }
+        else
+        {
+            facts.Add(new QuickInfoFact("Parameters", outputs > 0 ? $"{Num(inputs)} in, {Num(outputs)} out" : $"{Num(inputs)} in"));
+        }
+    }
+
+    // Trigger header facts (Package 5, Stage C): table, timing + events, position, active state.
+    private static void AddTriggerFacts(List<QuickInfoFact> facts, TriggerDetail? trigger)
+    {
+        if (trigger is null) return;
+        if (!string.IsNullOrEmpty(trigger.Table)) facts.Add(new QuickInfoFact("Table", trigger.Table!));
+
+        var events = new List<string>(3);
+        if (trigger.FiresInsert) events.Add("INSERT");
+        if (trigger.FiresUpdate) events.Add("UPDATE");
+        if (trigger.FiresDelete) events.Add("DELETE");
+        var timing = trigger.IsBefore ? "BEFORE" : "AFTER";
+        facts.Add(new QuickInfoFact("Fires", events.Count > 0 ? $"{timing} {string.Join(" OR ", events)}" : timing));
+
+        facts.Add(new QuickInfoFact("Position", Num(trigger.Position)));
+        facts.Add(new QuickInfoFact("State", trigger.Active ? "Active" : "Inactive"));
+    }
+
+    // Generator/sequence static facts (Package 5): the defining increment and start value. Shown only
+    // when non-default (increment ≠ 1, start ≠ 0) so a plain generator isn't cluttered with "1"/"0";
+    // the dynamic current value is deliberately never shown (it would be stale the moment it's read).
+    private static void AddGeneratorFacts(List<QuickInfoFact> facts, GeneratorDetail? generator)
+    {
+        if (generator is null) return;
+        if (generator.Increment != 1) facts.Add(new QuickInfoFact("Increment", Num(generator.Increment)));
+        if (generator.StartValue != 0) facts.Add(new QuickInfoFact("Start", Num(generator.StartValue)));
+    }
+
+    private static string Num(long n) => n.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     // ── FROM/JOIN aliases → the underlying table's info ────────────────────────────────────────
 

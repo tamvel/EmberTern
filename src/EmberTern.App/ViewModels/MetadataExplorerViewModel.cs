@@ -167,6 +167,39 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     // in FROM) start resolving for highlight / Ctrl-nav / Quick Info. Fires on the UI thread
     // (LoadGroupAsync runs there).
     public event Action? ObjectsChanged;
+
+    // Monotonic generation of the loaded-object set — bumped every time ObjectsChanged fires (a
+    // category finished loading). The editor reads this to tell whether its cached semantic model
+    // was built against an older metadata state: a deliberate completion trigger (Ctrl+Space) rebuilds
+    // when the generation moved, even if the document text didn't. This closes the "IntelliSense is
+    // dead until I edit" gap — the model's synchronous refresh was previously text-version-gated only,
+    // so metadata that loaded after the model was first built (prefetch on connect) never reached a
+    // Ctrl+Space unless a keystroke bumped the text version. See RaiseObjectsChanged.
+    private int _objectsGeneration;
+
+    /// <summary>The current generation of the loaded-object set (see <see cref="_objectsGeneration"/>).
+    /// Increases whenever a category's objects load. Read by the SQL editor to decide whether a
+    /// metadata-only change should force a semantic-model rebuild on the next deliberate trigger.</summary>
+    public int ObjectsGeneration => _objectsGeneration;
+
+    // Bumps the generation, then raises ObjectsChanged. One entry point so the two can never drift.
+    private void RaiseObjectsChanged()
+    {
+        _objectsGeneration++;
+        ObjectsChanged?.Invoke();
+    }
+
+    /// <summary>Raised ONCE when a connection's background prefetch has finished loading every metadata
+    /// category — the definitive "metadata is complete" lifecycle event (Package 5 closure). Unlike the
+    /// per-category <see cref="ObjectsChanged"/> (which the editor debounces for incremental updates),
+    /// this is the authoritative signal that every open SQL editor should now do its final rebuild +
+    /// full warm (columns + object detail + routine parameters) and publish one complete Semantic Model.
+    /// Fires on the UI thread (prefetch resumes there).</summary>
+    public event Action? MetadataReady;
+
+    /// <summary>Raises <see cref="MetadataReady"/>. Called by the connection node once its prefetch
+    /// loop completes.</summary>
+    internal void NotifyMetadataReady() => MetadataReady?.Invoke();
     // Tree object-lifecycle dispatch. The owner (MainWindowViewModel) REUSES its existing
     // New*/detail-editor/DROP/Execute flows — these are just the tree's entry points.
     public event Action<MetadataObjectKind>? NewObjectRequested;
@@ -312,9 +345,10 @@ public partial class MetadataExplorerViewModel : ViewModelBase
             group.SetLeaves(objects.Select(obj => MetadataNodeViewModel.CreateLeaf(this, obj)));
             group.Count = objects.Count;
             group.MarkLoaded();
-            // The loaded object set grew — let open editors refresh their semantic model so this
-            // category's objects (e.g. views / procedures referenced in FROM) begin resolving.
-            ObjectsChanged?.Invoke();
+            // The loaded object set grew — bump the generation and let open editors refresh their
+            // semantic model so this category's objects (e.g. views / procedures referenced in FROM)
+            // begin resolving.
+            RaiseObjectsChanged();
             sw.Stop();
             Diagnostics.PerfTrace.LogGroupLoad(group.Kind.ToString(), objects.Count, sw.ElapsedMilliseconds);
 

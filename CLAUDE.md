@@ -229,14 +229,21 @@ noted.
   of the snapshot object-count at model build.
 - **Functional development is otherwise PAUSED.** Per explicit instruction: **do not start Etap 7,
   P8 (formatter polish), or any new feature** until the user says so.
+- **Package 5 (Quick Info richness) — DONE (2026-07-13).** `ColumnSpec` carries PK/FK/default/
+  description/computed/identity; `ObjectMetadata` carries a function's return type + trigger/generator
+  header facts; a new proactive warm pipeline (`EditorLanguageService.BeginWarmReferencedMetadata`)
+  fills them for every object the current statement references, without requiring a "table." or a
+  hover first. Full detail: `docs/design/editor-architecture.md` §15.2/§15.3, gotcha #211 (this
+  also generalizes/supersedes the earlier per-character warm-then-retry hacks — there is now one
+  metadata cache + one generic warm pipeline). Build 0/0, tests 3449/3449 green.
+- **§0 PRIORITY-ZERO finding, not yet fixed:** the PSQL formatter (`SqlFormatter.EmitPsqlUnit`) can
+  silently DROP a stray/unmatched `END` token from malformed or mid-edit PSQL instead of preserving
+  it — a live violation of the Paramount Law (Architecture rule #11). Root cause + proposed fix:
+  `docs/design/editor-architecture.md` §15.2, gotcha #212. **Must be fixed before any P8 layout
+  work lands** (P8 depends on the same emitter).
 - **What's next, when development resumes** (in the editor-language-front-end work — see
   `docs/design/editor-architecture.md` for full detail):
-  1. **Package 5** (Quick Info richness) is diagnosed but not started: `ColumnSpec` +
-     `FirebirdMetadataReader.ColumnsSql` need PK/FK/default/description/computed/identity columns
-     added (FB-version-gate identity per gotcha #146) so the Ctrl-hover/detail-pane Quick Info
-     card can show more than type/domain/nullability. Concrete plan is in the design doc.
-     (Note: `ColumnSpec.cs` / `FirebirdMetadataReader.cs` show as modified in the working tree but
-     the rich fields are NOT yet added — the columns query still returns the 4-field `ColumnSpec`.)
+  1. Fix the §0 formatter data-loss finding above.
   2. Once the UX Polish Phase is formally closed by the user (remaining backlog: **P8** formatter
      polish — its own large package, likely needs the parser deepened; **P5d** a plain-hover
      info cue; **P2c** bold the typed completion-fragment — no clean AvaloniaEdit 12.0.0 path yet)

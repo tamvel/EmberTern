@@ -44,6 +44,7 @@ public static class CompletionEngine
         var seen = new HashSet<(string, CompletionItemKind)>(NameKindComparer.Instance);
 
         AddInScopeSymbols(model, offset, items, seen);
+        AddImplicitTableColumns(model, offset, items, seen);
         AddSchemaObjects(model, items, seen);
         AddKeywords(items, seen);
 
@@ -77,28 +78,35 @@ public static class CompletionEngine
         foreach (var c in cols)
         {
             if (string.IsNullOrEmpty(c.Name)) continue;
-            // Carry the rich column as a ColumnSymbol so the App renders the domain in the row and
-            // the full facts in the detail pane from ONE source (P2) — no second lookup, no new model.
-            var sym = new ColumnSymbol(c.Name)
-            {
-                OwningTable = table,
-                DataType = c.Type,
-                Domain = c.Domain,
-                Nullable = c.Nullable,
-                DefaultValue = c.DefaultValue,
-                Description = c.Description,
-                IsPrimaryKey = c.IsPrimaryKey,
-                IsForeignKey = c.IsForeignKey,
-                ForeignKeyTable = c.ForeignKeyTable,
-                IsComputed = c.IsComputed,
-                IsIdentity = c.IsIdentity,
-            };
-            items.Add(new CompletionItem(
-                c.Name, c.Name, CompletionItemKind.Column, PriorityFor(CompletionItemKind.Column), c.Type, sym));
+            items.Add(ToColumnItem(c, table));
         }
         Sort(items);
         result = new CompletionResult(items, isDotContext: true, dotTargetTable: table);
         return true;
+    }
+
+    // Builds one column completion item, carrying the rich column as a ColumnSymbol so the App renders
+    // the domain in the row and the full facts in the detail pane from ONE source (P2 / Package 5) — no
+    // second lookup, no new model. Shared by the dot path (qualifier.col) and the unqualified
+    // single-table path so both surfaces read identically.
+    private static CompletionItem ToColumnItem(ColumnMetadata c, string table)
+    {
+        var sym = new ColumnSymbol(c.Name)
+        {
+            OwningTable = table,
+            DataType = c.Type,
+            Domain = c.Domain,
+            Nullable = c.Nullable,
+            DefaultValue = c.DefaultValue,
+            Description = c.Description,
+            IsPrimaryKey = c.IsPrimaryKey,
+            IsForeignKey = c.IsForeignKey,
+            ForeignKeyTable = c.ForeignKeyTable,
+            IsComputed = c.IsComputed,
+            IsIdentity = c.IsIdentity,
+        };
+        return new CompletionItem(
+            c.Name, c.Name, CompletionItemKind.Column, PriorityFor(CompletionItemKind.Column), c.Type, sym);
     }
 
     // Detects a "qualifier . [prefix]|" caret position from the token stream and returns the folded
@@ -192,6 +200,41 @@ public static class CompletionEngine
             var kind = MapKind(sym.Kind);
             if (kind == CompletionItemKind.Unknown) continue;
             AddItem(items, seen, sym.Name, kind, DetailFor(sym));
+        }
+    }
+
+    // Unqualified column completion — the "implicit target" (user request, 2026-07-13). When the caret
+    // is in an expression/value position AND the current scope has EXACTLY ONE table, offer that
+    // table's columns without requiring an alias/qualifier (`FROM ROZLICZENIE WHERE |` → its columns).
+    // The moment 2+ distinct tables are in scope (JOINs, comma joins, correlated outer tables) we stay
+    // silent: the user must qualify (alias.col), so completion never dumps hundreds of ambiguous names
+    // and multi-table SQL stays explicit. The binder already resolves bare columns the same way
+    // (SemanticBinder.BindBareReference, one-owner rule); this mirrors that for the empty-caret case.
+    // Not offered in table position (FROM/JOIN/…), which IsExpressionAnchor excludes.
+    private static void AddImplicitTableColumns(
+        SemanticModel model, int offset, List<CompletionItem> items, HashSet<(string, CompletionItemKind)> seen)
+    {
+        var prev = PreviousSignificantToken(model.Syntax.Tokens, offset);
+        if (prev is null || !IsExpressionAnchor(prev)) return;
+
+        // Resolve the in-scope tables at the clause keyword (the anchor), not the raw caret: an
+        // explicit-trigger caret sitting in trailing whitespace (`… WHERE |`) is past the statement's
+        // last token, where ScopeAt falls back to the script scope and loses the FROM tables. The
+        // anchor token is always inside the statement span, so it names the right query scope.
+        string? table = null;
+        foreach (var sym in model.SymbolsInScope(prev.Start))
+        {
+            if (sym is not TableReferenceSymbol { IsDerived: false, TargetName: { Length: > 0 } target }) continue;
+            if (table is null) { table = target; continue; }
+            if (!string.Equals(table, target, StringComparison.OrdinalIgnoreCase)) return; // 2+ tables → require qualification
+        }
+        if (table is null) return;
+
+        foreach (var c in model.Metadata.GetColumns(table))
+        {
+            if (string.IsNullOrEmpty(c.Name)) continue;
+            if (!seen.Add((c.Name, CompletionItemKind.Column))) continue;
+            items.Add(ToColumnItem(c, table));
         }
     }
 
