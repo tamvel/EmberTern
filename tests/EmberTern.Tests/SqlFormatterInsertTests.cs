@@ -102,6 +102,39 @@ public class SqlFormatterInsertTests
         Assert.Equal(once, SqlFormatter.Format(once));
     }
 
+    // ── UPDATE OR INSERT — same formatter as INSERT (differs only by verb + MATCHING) ───────────
+
+    [Fact]
+    public void UpdateOrInsert_MatchingClause_OnOwnLine()
+    {
+        Assert.Equal(
+            "update or insert into t (a, b)\nvalues (1, 2)\nmatching (a)",
+            SqlFormatter.Format("UPDATE OR INSERT INTO T (A, B) VALUES (1, 2) MATCHING (A)"));
+    }
+
+    [Fact]
+    public void UpdateOrInsert_WithoutMatching()
+    {
+        Assert.Equal(
+            "update or insert into t (a, b)\nvalues (1, 2)",
+            SqlFormatter.Format("UPDATE OR INSERT INTO T (A, B) VALUES (1, 2)"));
+    }
+
+    [Fact]
+    public void UpdateOrInsert_MatchingAndReturning_EachOnOwnLine()
+    {
+        Assert.Equal(
+            "update or insert into t (a)\nvalues (1)\nmatching (a)\nreturning id",
+            SqlFormatter.Format("UPDATE OR INSERT INTO T (A) VALUES (1) MATCHING (A) RETURNING ID"));
+    }
+
+    [Fact]
+    public void UpdateOrInsert_IsIdempotent()
+    {
+        var once = SqlFormatter.Format("UPDATE OR INSERT INTO T (A, B) VALUES (1, 2) MATCHING (A, B)");
+        Assert.Equal(once, SqlFormatter.Format(once));
+    }
+
     // The ordered significant-token + comment sequence (words upper-cased since the formatter
     // lowercases them; everything else exact) — the §0 quantity the formatter must preserve.
     private static List<string> Lexemes(string sql)

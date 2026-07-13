@@ -103,10 +103,12 @@ public static class SqlFormatter
         // A bare/DECLARE-led anonymous block (the body editor's text) — no header, whole body.
         AnonymousBlockStatement => FormatPsqlBody(Flatten(stmt.Tokens), header: null),
 
-        // INSERT — "insert into <target> (cols)" then "values (...)" / "select …" on its own line,
-        // with the column and value lists laid out by the shared adaptive list builder (§F). Anything
-        // it doesn't recognise falls back to the generic emitter (safe; §0 net covers it either way).
-        InsertStatement => FormatInsert(stmt),
+        // INSERT and UPDATE OR INSERT — "<verb> into <target> (cols)" then "values (…)" / "select …"
+        // and (for UPDATE OR INSERT) "matching (…)" each on its own line, the lists laid out by the
+        // shared adaptive builder (§F). One formatter for both (they differ only by the leading verb +
+        // MATCHING); unrecognised shapes fall back to the generic emitter (safe; §0 net covers it).
+        InsertStatement => FormatInsertFamily(Flatten(stmt.Tokens), headerLen: 2),        // insert into
+        UpdateOrInsertStatement => FormatInsertFamily(Flatten(stmt.Tokens), headerLen: 4), // update or insert into
 
         // Everything else — all DML plus non-PSQL DDL, COMMENT, SET, GRANT/REVOKE, DECLARE,
         // EXECUTE PROCEDURE/STATEMENT — through the clause-break SQL emitter (which also handles the
@@ -525,28 +527,35 @@ public static class SqlFormatter
         return PackWithContinuation(rendered, head: "(", continuationIndent: indent, tail: ")", startColumn: openColumn);
     }
 
-    // ── INSERT layout (§P8) — composes the shared list builder + Emit, no bespoke list loop ─────
+    // ── INSERT / UPDATE OR INSERT layout (§P8) — composes the shared list builder + Emit ─────────
     //
-    // "insert into <target> (cols)" on one line, then "values (…)" (or "select …" / "default values")
-    // on its own line, RETURNING on its own line, ';' glued. The column and value lists ride the shared
-    // adaptive builder (inline while they fit, else packed to width). INSERT … SELECT reuses Emit for
-    // the query. Any shape it doesn't recognise falls back to the generic emitter — the §0 safety net
-    // guarantees no loss regardless, so this only needs to get the COMMON shapes pretty.
-    private static string FormatInsert(SqlStatement stmt)
+    // "<verb> into <target> (cols)" on one line, then "values (…)" (or "select …" / "default values")
+    // on its own line, "matching (…)" (UPDATE OR INSERT) and "returning …" each on their own, ';'
+    // glued. The column / value / matching lists ride the shared adaptive builder (§F: inline while
+    // they fit, else packed to width); INSERT … SELECT reuses Emit for the query. ONE formatter for
+    // both statement kinds — they differ only by the leading verb length (<paramref name="headerLen"/>:
+    // 2 for "insert into", 4 for "update or insert into") and the MATCHING clause. Operates on the flat
+    // token list (not the AST node) so the PSQL body emitter can delegate to it too. Any shape it
+    // doesn't recognise falls back to the generic emitter — the §0 safety net guarantees no loss.
+    private static string FormatInsertFamily(List<FToken> tokens, int headerLen)
     {
-        var tokens = Flatten(stmt.Tokens);
         int n = tokens.Count;
-        if (n < 2 || !IsWordTok(tokens[0], "INSERT") || !IsWordTok(tokens[1], "INTO"))
+        if (n <= headerLen || !IsWordTok(tokens[headerLen - 1], "INTO"))
             return Emit(tokens);
 
         bool semi = IsPunctTok(tokens[n - 1], ";");
         int end = semi ? n - 1 : n;
 
-        int boundary = FindInsertListOrSource(tokens, 2, end);
+        int boundary = FindInsertListOrSource(tokens, headerLen, end);
         if (boundary < 0) return Emit(tokens); // no column list and no known source → generic
 
-        var sb = new StringBuilder("insert into ");
-        sb.Append(Emit(tokens.GetRange(2, boundary - 2)).Trim());
+        var sb = new StringBuilder();
+        for (int h = 0; h < headerLen; h++)
+        {
+            if (h > 0) sb.Append(' ');
+            sb.Append(tokens[h].Text.ToLowerInvariant());
+        }
+        sb.Append(' ').Append(Emit(tokens.GetRange(headerLen, boundary - headerLen)).Trim());
         int j = boundary;
 
         // Optional column list, on the same line as the target.
@@ -576,16 +585,23 @@ public static class SqlFormatter
             j = end;
         }
 
-        // RETURNING (after VALUES) or any unhandled tail — its own line, never dropped.
-        if (j < end && IsWordTok(tokens[j], "RETURNING"))
+        // Trailing clauses, each on its own line: MATCHING (UPDATE OR INSERT) via the shared list
+        // builder; RETURNING / anything else via Emit. Nothing is ever dropped.
+        while (j < end)
         {
-            sb.Append('\n').Append(Emit(tokens.GetRange(j, end - j)));
-            j = end;
-        }
-        else if (j < end)
-        {
-            sb.Append('\n').Append(Emit(tokens.GetRange(j, end - j)));
-            j = end;
+            if (IsWordTok(tokens[j], "MATCHING") && j + 1 < end && IsPunctTok(tokens[j + 1], "("))
+            {
+                int close = MatchParen(tokens, j + 1);
+                var m = SplitTopLevelCommas(tokens, j + 2, Math.Min(close, end));
+                const string head = "matching ";
+                sb.Append('\n').Append(head).Append(FormatAdaptiveList(m, head.Length));
+                j = close < end ? close + 1 : end;
+            }
+            else
+            {
+                sb.Append('\n').Append(Emit(tokens.GetRange(j, end - j)));
+                j = end;
+            }
         }
 
         if (semi) sb.Append(';');

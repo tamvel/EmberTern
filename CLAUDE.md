@@ -265,10 +265,15 @@ noted.
     **Simplification:** the adaptive-reflow packer `PackWithContinuation` was generalized with a
     `startColumn` param and is now the ONE packing algorithm shared by the token-level list builder AND
     the string-level SELECT/IN wrapping. Pinned by `SqlFormatterInsertTests`. Build 0/0, 3557 main + 23
-    probe green. (Note: INSERT inside a PSQL body still routes through the PSQL emitter's `Emit`, not
-    `FormatInsert` — a future consolidation flagged in the design doc.)
-- **What's next:** continue P8 in order (next: **UPDATE OR INSERT layout** — same builder; the
-  `UpdateOrInsertStatement` currently uses the generic emitter). Do NOT start Etap 7
+    probe green.
+  - **Krok UPDATE OR INSERT (layout) — DONE.** `FormatInsert` generalized to `FormatInsertFamily(
+    List<FToken>, headerLen)` handling BOTH `InsertStatement` (headerLen 2) and `UpdateOrInsertStatement`
+    (headerLen 4) — they differ only by the leading verb and the `matching (…)` clause (its own line,
+    via the shared adaptive builder). One formatter, two statement kinds. Pinned by the UPDATE OR INSERT
+    cases in `SqlFormatterInsertTests`. Build 0/0, 3561 main + 23 probe green.
+- **What's next:** PSQL leaf-statement unification (make the PSQL body emitter delegate INSERT/UOI to
+  the same `FormatInsertFamily`, removing the parallel formatting world — user-requested), then the
+  remaining P8 steps (long-line wrapping, EXECUTE BLOCK, FOR SELECT). Do NOT start Etap 7
   (diagnostics, folding, breadcrumbs, bracket-matching) until the user formally closes the UX Polish
   Phase. Also deferred: **P5d** a plain-hover info cue; **P2c** bold the typed completion-fragment
   (no clean AvaloniaEdit 12.0.0 path yet).

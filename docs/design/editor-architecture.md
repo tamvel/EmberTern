@@ -764,10 +764,16 @@ cases — the dark DML keyword color and the light built-in-function color).
   `PackWithContinuation` gained a `startColumn` parameter and is now the ONE packing algorithm shared
   by the token-level list builder AND the string-level SELECT/IN wrapping — a single reflow, two entry
   points. Unrecognised INSERT shapes fall back to the generic emitter (the §0 net guarantees no loss).
-  Pinned by `SqlFormatterInsertTests`. Build 0/0; full suite 3557 main + 23 probe green. **Open
-  consolidation (flagged):** INSERT inside a PSQL body still routes through the PSQL emitter's
-  per-statement `Emit`, not `FormatInsert` — unifying statement formatting across the top level and
-  PSQL bodies is a larger change deferred to a later step.
+  Pinned by `SqlFormatterInsertTests`. Build 0/0; full suite 3557 main + 23 probe green.
+
+  **UPDATE OR INSERT layout — DONE (2026-07-13).** `FormatInsert` was generalized to
+  `FormatInsertFamily(List<FToken> tokens, int headerLen)` handling BOTH `InsertStatement` (headerLen 2,
+  "insert into") and `UpdateOrInsertStatement` (headerLen 4, "update or insert into"); they differ only
+  by the leading verb and the `matching (…)` clause, which is emitted on its own line via the shared
+  adaptive builder. RETURNING and MATCHING are handled by one trailing-clause loop. Taking a flat
+  `List<FToken>` (not the AST node) is deliberate — it lets the PSQL body emitter delegate to the same
+  formatter (next). Pinned by the UPDATE OR INSERT cases in `SqlFormatterInsertTests`. Build 0/0; full
+  suite 3561 main + 23 probe green.
 - **P5d — a plain-hover info cue.** A dwell-delayed, info-only Quick Info tooltip on plain hover
   (no Ctrl held); the underline + hand-cursor affordance stays Ctrl-only per §9.4. Small and
   implementable, but it's a live-tuning UX addition (dwell delay, noise) the design defers to
