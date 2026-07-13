@@ -408,48 +408,16 @@ public static class SqlFormatter
         int j = i + 2;
         prev = nameTok;
 
-        // Optional column list: "(" col ["," col]* ")".
+        // Optional column list — one column per line via the shared paren-list builder (§F). The
+        // per-kind loop this replaced is gone; INSERT / VALUES / UPDATE OR INSERT / EXECUTE BLOCK
+        // ride the same builder.
         if (j < tokens.Count && tokens[j] is { Kind: FKind.Punctuation, Text: "(" })
         {
-            sb.Append(" (");
-            j++;
-            int depth = 1;
-            bool needIndent = true;
-            FToken? colPrev = null;
-            while (j < tokens.Count && depth > 0)
-            {
-                var ct = tokens[j];
-                if (ct.Kind == FKind.Punctuation && ct.Text == "(")
-                {
-                    if (needIndent) { sb.Append('\n').Append(ViewColumnIndent); needIndent = false; }
-                    depth++;
-                    sb.Append('(');
-                }
-                else if (ct.Kind == FKind.Punctuation && ct.Text == ")")
-                {
-                    depth--;
-                    sb.Append(')');
-                    colPrev = ct;
-                    j++;
-                    if (depth == 0) break;
-                    continue;
-                }
-                else if (depth == 1 && ct.Kind == FKind.Punctuation && ct.Text == ",")
-                {
-                    TrimTrailingSpaces(sb);
-                    sb.Append(',');
-                    needIndent = true;
-                }
-                else
-                {
-                    if (needIndent) { sb.Append('\n').Append(ViewColumnIndent); needIndent = false; }
-                    else if (NeedsSpaceBefore(colPrev, ct, sb)) sb.Append(' ');
-                    sb.Append(MaybeLowercase(ct));
-                }
-                colPrev = ct;
-                j++;
-            }
-            prev = j > 0 ? tokens[j - 1] : prev;
+            int close = MatchParen(tokens, j);
+            var items = SplitTopLevelCommas(tokens, j + 1, close);
+            sb.Append(' ').Append(FormatParenList(items, breakItems: true, ViewColumnIndent));
+            prev = close < tokens.Count ? tokens[close] : nameTok;
+            j = close < tokens.Count ? close + 1 : tokens.Count;
         }
 
         // Optional AS on its own line (the view-body separator).
@@ -463,6 +431,76 @@ public static class SqlFormatter
         }
 
         return j - i;
+    }
+
+    // ── Shared parenthesized-list builder (§F) ──────────────────────────────────────────────────
+    //
+    // ONE mechanism for every "( item, item, … )" comma list the formatter lays out — the CREATE VIEW
+    // column list today; INSERT column lists, VALUES lists, UPDATE OR INSERT lists, and EXECUTE BLOCK
+    // parameter lists in the following P8 steps. It replaced the bespoke per-kind emitter each of those
+    // would otherwise grow. Two knobs only: whether to break one-item-per-line, and the item indent
+    // when broken. Item CONTENT is rendered by Emit — so spacing, lowercasing, function-call gluing,
+    // and nested parens are identical to every other place SQL is emitted (no parallel item renderer).
+    // The break decision (usually width-driven) stays with each CALLER, which knows its own context.
+
+    // The FToken index matching the '(' at <paramref name="openIdx"/> (nesting-aware), or
+    // <c>tokens.Count</c> when the list is unterminated (malformed / mid-edit — §0 keeps it lossless).
+    private static int MatchParen(List<FToken> tokens, int openIdx)
+    {
+        int depth = 0;
+        for (int k = openIdx; k < tokens.Count; k++)
+        {
+            if (tokens[k] is { Kind: FKind.Punctuation, Text: "(" }) depth++;
+            else if (tokens[k] is { Kind: FKind.Punctuation, Text: ")" })
+            {
+                if (--depth == 0) return k;
+            }
+        }
+        return tokens.Count;
+    }
+
+    // Splits [start, end) into top-level (nesting-aware) comma-separated item ranges; commas inside
+    // nested parens stay within their item. A trailing/empty segment yields an empty item (preserved
+    // verbatim by the §0 safety net) rather than being dropped.
+    private static List<List<FToken>> SplitTopLevelCommas(List<FToken> tokens, int start, int end)
+    {
+        var items = new List<List<FToken>>();
+        var current = new List<FToken>();
+        int depth = 0;
+        for (int k = start; k < end && k < tokens.Count; k++)
+        {
+            var t = tokens[k];
+            if (t.Kind == FKind.Punctuation && t.Text == "(") depth++;
+            else if (t.Kind == FKind.Punctuation && t.Text == ")") { if (depth > 0) depth--; }
+            if (depth == 0 && t.Kind == FKind.Punctuation && t.Text == ",")
+            {
+                items.Add(current);
+                current = new List<FToken>();
+                continue;
+            }
+            current.Add(t);
+        }
+        items.Add(current);
+        return items;
+    }
+
+    // Renders "( item, item, … )" from the split item ranges. Inline when <paramref name="breakItems"/>
+    // is false; otherwise one item per line indented by <paramref name="itemIndent"/> with the closing
+    // ')' glued to the last item (the shipped CREATE VIEW style). Each item is rendered by Emit.
+    private static string FormatParenList(List<List<FToken>> items, bool breakItems, string itemIndent)
+    {
+        var sb = new StringBuilder();
+        sb.Append('(');
+        for (int k = 0; k < items.Count; k++)
+        {
+            var item = Emit(items[k]).Trim();
+            if (breakItems) sb.Append('\n').Append(itemIndent);
+            else if (k > 0) sb.Append(' ');
+            sb.Append(item);
+            if (k < items.Count - 1) sb.Append(',');
+        }
+        sb.Append(')');
+        return sb.ToString();
     }
 
     private static string MaybeLowercase(FToken t)

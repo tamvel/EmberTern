@@ -735,8 +735,22 @@ cases — the dark DML keyword color and the light built-in-function color).
   fragment/document unchanged, even for input it cannot model. Pinned by `SqlFormatterSafetyTests`
   (adversarial malformed corpus — lexeme-preservation + no-throw + idempotency), gotcha #212. Build
   0/0; full suite 3542 main + 23 probe green. The remaining P8 layout items (INSERT / UPDATE OR
-  INSERT / EXECUTE BLOCK / FOR SELECT / long-line wrapping / shared list builder) are the cosmetic
-  work now unblocked.
+  INSERT / EXECUTE BLOCK / FOR SELECT / long-line wrapping) are the cosmetic work now unblocked.
+
+  **§F Shared list builder — DONE (2026-07-13).** One token-level mechanism replaces the per-kind
+  comma-list emitters: `SplitTopLevelCommas` (nesting-aware, splits a token range at top-level commas)
+  + `MatchParen` + `FormatParenList` (inline `(a, b, c)` or one-item-per-line indented, `)` glued to
+  the last item), with each item's CONTENT rendered by `Emit` — so spacing, lowercasing, function-call
+  gluing, and nested parens are identical to every other emitted SQL, and there is no parallel item
+  renderer. The break decision (usually width) stays with each caller. **Consolidation:** the CREATE
+  VIEW column list (first consumer) was migrated onto it and its bespoke ~40-line character loop
+  deleted; output stays byte-identical (all pinned view tests green). The token-level splitter is
+  comma-safe inside quoted identifiers for free — the old string-level `SplitByTopLevelComma` needs an
+  explicit quote-skip. INSERT / VALUES / UPDATE OR INSERT / EXECUTE BLOCK lists ride this builder in
+  the following steps; the string-level long-line wrapping scanners (`SplitByTopLevelComma`,
+  `FindInOpeningParen`, `FindMatchingClose`, `SkipString`, `SkipQuotedIdent`) become retirement
+  candidates once the long-line-wrapping step moves to the token level. Pinned by
+  `SqlFormatterListBuilderTests`. Build 0/0; full suite 3548 main + 23 probe green.
 - **P5d — a plain-hover info cue.** A dwell-delayed, info-only Quick Info tooltip on plain hover
   (no Ctrl held); the underline + hand-cursor affordance stays Ctrl-only per §9.4. Small and
   implementable, but it's a live-tuning UX addition (dwell delay, noise) the design defers to
