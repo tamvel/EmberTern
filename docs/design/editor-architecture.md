@@ -708,13 +708,15 @@ snippets trigger correctly inside a bare `BEGIN…END` body and an ad-hoc `EXECU
 conservative, contrast-computed theme pass fixed the two specifically-reported low-contrast
 cases — the dark DML keyword color and the light built-in-function color).
 
-**Deferred, not started (in priority order for whenever polish resumes):**
-- **P8 — formatter polish.** The largest remaining item. `EXECUTE BLOCK` / `FOR SELECT` / `INTO`
-  layout, and — the headline goal — real max-line-width wrapping for long `INSERT`/`VALUES`/
-  `SELECT`/function-call lines (no more horizontal scrolling of hundreds of characters). Likely
-  needs the parser deepened for INSERT/VALUES/SELECT-list clauses (deferred from Etap 3's
-  "statement skeleton" depth on purpose — build grammar depth only when a concrete feature needs
-  it). Its own large package.
+**Completed (P8) / deferred (P5d, P2c):**
+- **P8 — formatter polish — DONE + architecturally closed (2026-07-13 → 2026-07-14).** The largest
+  UX-Polish item, delivered in seven steps (Krok 0 Safety → §F list builder → INSERT → UPDATE OR
+  INSERT → long-line wrapping → EXECUTE BLOCK → FOR SELECT), each its own commit with build + tests +
+  idempotency/round-trip. The headline goal — real max-line-width wrapping for long
+  `INSERT`/`VALUES`/`SELECT` lines, no more horizontal scrolling — plus `EXECUTE BLOCK` / `FOR SELECT`
+  / `INTO` layout, all shipped without deepening the parser: the token stream at "statement skeleton"
+  depth already carries the structure the layout needs, read by focused token scans (per the standing
+  directive "build grammar depth only when a concrete feature needs it"). Step-by-step below.
   **§0 Krok 0 — Formatter Safety — DONE (2026-07-13).** The PSQL body emitter could silently DROP a
   token on malformed/incomplete input (a live §0 violation, found while scoping P8) — e.g. a
   stray/unmatched `END` hitting `SqlFormatter.EmitPsqlUnit`'s `if (IsWordTok(sig[i],"END")) return;`
@@ -805,6 +807,57 @@ cases — the dark DML keyword color and the light built-in-function color).
   `SqlFormatterWrappingTests` (top-level == in-body, INSERT…SELECT wrap, idempotency). The only surviving
   reflow primitive is `PackWithContinuation` (shared by all the adaptive builders). Build 0/0; full suite
   3568 main + 23 probe green.
+
+  **EXECUTE BLOCK header — DONE (2026-07-14).** `ExecuteBlockStatement` now formats its header instead of
+  keeping it verbatim: `execute block (params)` (input-parameter list, adaptive) then `returns (cols)` on
+  its own line (adaptive) then `as` on its own line — all lowercased — followed by the block-structured
+  body. The rationale for treating it differently from a CREATE definition (whose header stays verbatim):
+  EXECUTE BLOCK is a *runnable* statement, not persistent DDL, so the lowercase-all executable-statement
+  layout applies. `FormatExecuteBlock(source, stmt)` splits header/body at the top-level `AS` (on
+  `SqlToken`, so a leading comment in trivia is re-attached) and `TryFormatExecuteBlockHeader(flat)` lays
+  the header out, reusing the shared `FormatAdaptiveList` + `Emit` (item content) + `FormatPsqlBody`
+  (body). `TryFormatExecuteBlockHeader` returns null on any shape it doesn't fully recognise (unterminated
+  paren, unexpected leftover header token, mid-header comment) → the caller keeps the header verbatim
+  (never guess, §0). Pinned by `SqlFormatterExecuteBlockAndForSelectTests`. Build 0/0; full suite 3585
+  main + 23 probe green.
+
+  **FOR SELECT — DONE (2026-07-14).** The PSQL `FOR <select|execute statement> INTO <vars> DO <stmt>`
+  loop was the last mangled case: the old shared `WHILE || FOR` path emitted the whole `FOR … DO` header
+  as one clause-broken `Emit` blob, so `for` split from `select` and `into … do` glued onto the `where`
+  line. New `EmitForSelect(sig, ref i, indent, lines)` lays it out as four structural parts — `for` on
+  its own line; the cursor query clause-broken and indented one level (via the shared `Emit`, so its
+  SELECT/FROM/WHERE breaks and long-line wrapping match plain DML); `into <vars>` on its own line at the
+  loop indent; `do` on its own line; then the loop body via the shared `EmitPsqlBranch`. The query, INTO
+  and DO are located at paren depth 0 in a single scan (a subquery in FROM never leaks its clauses out),
+  and malformed input (no top-level DO) falls back to the generic `CollectPsqlStatement` path — lossless
+  (§0). WHILE stays on its own single-line path because its `(cond) do` fits on the header line. Pinned by
+  `SqlFormatterExecuteBlockAndForSelectTests` (multi/single-statement body, FOR EXECUTE STATEMENT,
+  subquery-in-FROM, nested FOR, idempotency, lexeme preservation). Build 0/0; full suite 3585 main + 23
+  probe green.
+
+  **Final architecture close-out — P8 IS ARCHITECTURALLY CLOSED (2026-07-14).** Reviewed on the user's
+  request against four questions. **(1) Historical workarounds left?** None. The string-level wrap
+  scanners are deleted (they survive only in one explanatory comment above the token-level wrapping
+  section); the CREATE VIEW char-loop is gone; the per-character/warm-then-retry hacks are superseded by
+  the one metadata cache + warm pipeline (unrelated to the formatter) and the token-level list builder.
+  **(2) Parallel implementations of the same logic?** None. There is ONE list builder (`SplitTopLevelCommas`
+  + `MatchParen` + `FormatBrokenList` for always-vertical / `FormatAdaptiveList` + `FormatAdaptiveBareList`
+  for inline-or-packed), ONE packing algorithm (`PackWithContinuation`), ONE item renderer
+  (`RenderListItems` → `Emit`), ONE long-line wrapping mechanism (token-level inside `Emit`), and every
+  statement is formatted in exactly ONE place — the top level and the PSQL body share `FormatLeafStatement`
+  → `FormatInsertFamily`/`Emit`; the PSQL emitter owns only block STRUCTURE. **(3) Can it be simplified
+  further?** Marginally and not worth it: several small depth-0 token scans (`FindTopLevelAs`,
+  `FindTopLevelWord`, `FindColumnListEnd`, `FindInsertListOrSource`, the inline scan in `EmitForSelect`)
+  share the paren-depth idiom but each has a distinct stop condition, so a generic predicate scanner would
+  trade clarity for nominal dedup; the two token models (`SqlToken` for header/body split with trivia,
+  `FToken` for emission with comments materialised) are an inherent, documented duality. Every private
+  method is live (no dead code); no transitional names. **(4) Architecturally closed?** Yes. The residual
+  verbatim/generic paths — CREATE definition headers kept verbatim, UPDATE SET not broken per-assignment,
+  MERGE and CASE/expression interiors through the generic `Emit` — are **intentional scope boundaries**
+  (grammar depth deliberately not built until a feature needs it), not debt, and §0 is a checked invariant
+  (per-statement + per-script lexeme preservation) so the formatter can never silently corrupt or lose
+  code. No further P8 work is required; formatter grammar-depth items are available on demand if a later
+  feature needs them.
 - **P5d — a plain-hover info cue.** A dwell-delayed, info-only Quick Info tooltip on plain hover
   (no Ctrl held); the underline + hand-cursor affordance stays Ctrl-only per §9.4. Small and
   implementable, but it's a live-tuning UX addition (dwell delay, noise) the design defers to

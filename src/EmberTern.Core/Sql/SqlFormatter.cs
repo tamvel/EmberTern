@@ -92,11 +92,17 @@ public static class SqlFormatter
         // §0 safety valve: unrecognised or empty statements are reproduced verbatim.
         RawStatement or EmptyStatement => VerbatimStatement(source, stmt),
 
-        // PSQL definitions (CREATE/ALTER/RECREATE PROCEDURE/TRIGGER/FUNCTION/PACKAGE) and EXECUTE
-        // BLOCK: the header up to the body's AS is kept verbatim (already well-formed), the body is
-        // block-structured.
+        // PSQL definitions (CREATE/ALTER/RECREATE PROCEDURE/TRIGGER/FUNCTION/PACKAGE): the header up
+        // to the body's AS is kept verbatim (it is persistent DDL — the user's object definition — so
+        // we do not reshape it), the body is block-structured.
         DdlStatement { IsPsqlDefinition: true } => FormatWithHeaderAndBody(source, stmt),
-        ExecuteBlockStatement => FormatWithHeaderAndBody(source, stmt),
+
+        // EXECUTE BLOCK — a runnable anonymous block, formatted like every other executable statement:
+        // its header (input-parameter list + RETURNS list) is laid out via the shared adaptive builder
+        // and lowercased, then the body is block-structured. Unlike a CREATE definition it is not
+        // persistent DDL, so the lowercase-all layout applies. Unexpected header shapes fall back to the
+        // verbatim-header path (safe; §0).
+        ExecuteBlockStatement => FormatExecuteBlock(source, stmt),
 
         // A bare/DECLARE-led anonymous block (the body editor's text) — no header, whole body.
         AnonymousBlockStatement => FormatPsqlBody(Flatten(stmt.Tokens), header: null),
@@ -175,6 +181,91 @@ public static class SqlFormatter
         for (int k = asIndex + 1; k < stmt.Tokens.Count; k++) bodyTokens.Add(stmt.Tokens[k]);
 
         return FormatPsqlBody(Flatten(bodyTokens), header);
+    }
+
+    // EXECUTE BLOCK: lay out the header — "execute block ( params )" (adaptive list) then
+    // "returns ( cols )" (adaptive list, own line) then "as" on its own line — and block-structure the
+    // body. Reuses the shared adaptive list builder + Emit (item content) + FormatPsqlBody (body), so
+    // there is no parallel layout logic. Any header shape TryFormatExecuteBlockHeader does not fully
+    // recognise falls back to the verbatim-header path — never guess, never lose (§0).
+    private static string FormatExecuteBlock(string source, SqlStatement stmt)
+    {
+        int asIndex = FindTopLevelAs(stmt.Tokens);
+        if (asIndex < 0) return FormatPsqlBody(Flatten(stmt.Tokens), header: null);
+
+        var headerToks = new List<SqlToken>(asIndex);
+        for (int k = 0; k < asIndex; k++) headerToks.Add(stmt.Tokens[k]);
+        string? formattedHeader = TryFormatExecuteBlockHeader(Flatten(headerToks));
+
+        string header;
+        if (formattedHeader is null)
+        {
+            // Safe fallback — keep the header verbatim (the prior behaviour), leading comment re-attached.
+            var asTok = stmt.Tokens[asIndex];
+            header = source.Substring(stmt.Start, asTok.End - stmt.Start).TrimEnd();
+            var lead = LeadingComments(stmt);
+            if (lead.Length > 0) header = lead + "\n" + header;
+        }
+        else
+        {
+            header = formattedHeader;
+        }
+
+        var bodyTokens = new List<SqlToken>(stmt.Tokens.Count - asIndex - 1);
+        for (int k = asIndex + 1; k < stmt.Tokens.Count; k++) bodyTokens.Add(stmt.Tokens[k]);
+        return FormatPsqlBody(Flatten(bodyTokens), header);
+    }
+
+    // Formats the flattened EXECUTE BLOCK header tokens (everything before the body-opening AS) into
+    // "execute block [(params)]\n[returns (cols)]\nas", or null when the shape is not the plain expected
+    // one (so the caller keeps the header verbatim). Leading comments are preserved on their own lines.
+    private static string? TryFormatExecuteBlockHeader(List<FToken> h)
+    {
+        int p = 0;
+        StringBuilder? commentPrefix = null;
+        while (p < h.Count && h[p].IsComment)
+        {
+            commentPrefix ??= new StringBuilder();
+            if (commentPrefix.Length > 0) commentPrefix.Append('\n');
+            commentPrefix.Append(h[p].Text);
+            p++;
+        }
+
+        if (p + 1 >= h.Count || !IsWordTok(h[p], "EXECUTE") || !IsWordTok(h[p + 1], "BLOCK"))
+            return null;
+
+        var sb = new StringBuilder("execute block");
+        int j = p + 2;
+
+        // Optional input-parameter list, on the "execute block" line.
+        if (j < h.Count && IsPunctTok(h[j], "("))
+        {
+            int close = MatchParen(h, j);
+            if (close >= h.Count) return null; // unterminated — let the verbatim path keep it
+            var ps = SplitTopLevelCommas(h, j + 1, close);
+            int openColumn = sb.Length + 1; // where '(' lands after the joining space
+            sb.Append(' ').Append(FormatAdaptiveList(ps, openColumn));
+            j = close + 1;
+        }
+
+        // Optional RETURNS ( … ) on its own line.
+        if (j < h.Count && IsWordTok(h[j], "RETURNS"))
+        {
+            if (j + 1 >= h.Count || !IsPunctTok(h[j + 1], "(")) return null;
+            int open = j + 1;
+            int close = MatchParen(h, open);
+            if (close >= h.Count) return null;
+            var rs = SplitTopLevelCommas(h, open + 1, close);
+            const string head = "returns ";
+            sb.Append('\n').Append(head).Append(FormatAdaptiveList(rs, head.Length));
+            j = close + 1;
+        }
+
+        // Any leftover header token (an unexpected clause or a mid-header comment) → don't guess.
+        if (j != h.Count) return null;
+
+        sb.Append('\n').Append("as");
+        return commentPrefix is null ? sb.ToString() : commentPrefix + "\n" + sb;
     }
 
     private static int FindTopLevelAs(IReadOnlyList<SqlToken> tokens)
@@ -839,10 +930,15 @@ public static class SqlFormatter
                 }
                 return;
             }
-            if (up == "WHILE" || up == "FOR")
+            if (up == "WHILE")
             {
                 AddPsqlEmit(lines, indent, CollectUntilWord(sig, ref i, "DO"));
                 EmitPsqlBranch(sig, ref i, indent, lines);
+                return;
+            }
+            if (up == "FOR")
+            {
+                EmitForSelect(sig, ref i, indent, lines);
                 return;
             }
             if (up == "DECLARE"
@@ -885,6 +981,54 @@ public static class SqlFormatter
             EmitPsqlUnit(sig, ref i, indent + 1, lines); // single statement indented
             if (i == before) EmitStrayToken(sig, ref i, indent + 1, lines);
         }
+    }
+
+    // Lays out a PSQL FOR loop — "FOR &lt;select|execute statement&gt; INTO &lt;vars&gt; DO &lt;statement&gt;" —
+    // as its four structural parts: "for" on its own line; the cursor query clause-broken and indented
+    // one level (via the shared Emit, so its SELECT/FROM/WHERE breaks and long-line wrapping match plain
+    // DML); "into &lt;vars&gt;" on its own line at the loop indent; "do" on its own line; then the loop
+    // body via the shared EmitPsqlBranch. The query, INTO and DO are found at paren depth 0 (a subquery's
+    // inner clauses never leak out). Malformed input (no top-level DO) falls back to the generic
+    // statement path — nothing is lost (§0). This is the ONE place FOR is laid out; the WHILE path
+    // (single-line condition) stays separate because its "(cond) do" fits on the header line.
+    private static void EmitForSelect(List<FToken> sig, ref int i, int indent, List<string> lines)
+    {
+        int depth = 0, intoIdx = -1, doIdx = -1;
+        for (int k = i + 1; k < sig.Count; k++)
+        {
+            var t = sig[k];
+            if (IsPunctTok(t, "(")) depth++;
+            else if (IsPunctTok(t, ")")) { if (depth > 0) depth--; }
+            else if (depth == 0)
+            {
+                if (intoIdx < 0 && IsWordTok(t, "INTO")) intoIdx = k;
+                else if (IsWordTok(t, "DO")) { doIdx = k; break; }
+            }
+        }
+
+        if (doIdx < 0)
+        {
+            // Not a well-formed FOR … DO (mid-edit / malformed) — emit generically, lossless.
+            AddPsqlEmit(lines, indent, CollectPsqlStatement(sig, ref i));
+            return;
+        }
+
+        AddPsqlLine(lines, indent, "for");
+
+        int queryEnd = intoIdx >= 0 ? intoIdx : doIdx;
+        var query = sig.GetRange(i + 1, queryEnd - (i + 1));
+        if (query.Count > 0) EmitPsqlLines(lines, indent + 1, Emit(query));
+
+        if (intoIdx >= 0)
+        {
+            var into = sig.GetRange(intoIdx, doIdx - intoIdx); // "into <vars>", loop indent
+            EmitPsqlLines(lines, indent, Emit(into));
+        }
+
+        AddPsqlLine(lines, indent, "do");
+
+        i = doIdx + 1;
+        EmitPsqlBranch(sig, ref i, indent, lines);
     }
 
     private static void MaybeBlankLine(List<string> lines, bool hadBlank)

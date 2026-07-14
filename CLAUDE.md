@@ -227,8 +227,9 @@ noted.
   `RefreshModelWithMetadata`→repaint) is re-verified, but the live failure could NOT be reproduced
   headlessly → **awaits user confirmation**; if it persists on a clean rebuild, add runtime tracing
   of the snapshot object-count at model build.
-- **Functional development is otherwise PAUSED.** Per explicit instruction: **do not start Etap 7,
-  P8 (formatter polish), or any new feature** until the user says so.
+- **Functional development is otherwise PAUSED.** Per explicit instruction: **do not start Etap 7
+  or any new feature** until the user says so. (P8 formatter polish is now COMPLETE + architecturally
+  closed — see the P8 bullet below.)
 - **Package 5 (Quick Info richness) — DONE (2026-07-13).** `ColumnSpec` carries PK/FK/default/
   description/computed/identity; `ObjectMetadata` carries a function's return type + trigger/generator
   header facts; a new proactive warm pipeline (`EditorLanguageService.BeginWarmReferencedMetadata`)
@@ -236,7 +237,8 @@ noted.
   hover first. Full detail: `docs/design/editor-architecture.md` §15.2/§15.3, gotcha #211 (this
   also generalizes/supersedes the earlier per-character warm-then-retry hacks — there is now one
   metadata cache + one generic warm pipeline). Build 0/0, tests 3449/3449 green.
-- **P8 IN PROGRESS — Formatter Polish (started 2026-07-13).** Scope + order agreed with the user:
+- **P8 DONE — Formatter Polish + architecturally closed (2026-07-13 → 2026-07-14).** Scope + order
+  agreed with the user, all shipped:
   **Krok 0 Formatter Safety (§0) → F shared list builder → INSERT layout → UPDATE OR INSERT layout →
   long-line wrapping → EXECUTE BLOCK → FOR SELECT**, each its own commit with full build + tests +
   round-trip/idempotency. Standing directives for P8: never add a formatter workaround/special-case
@@ -289,11 +291,41 @@ noted.
     too (the old post-pass never wrapped indented SELECT lines). Byte-compatible with the old wrapping
     (all pinned SELECT/IN wrapping tests green). Pinned by `SqlFormatterWrappingTests`. Build 0/0, 3568
     main + 23 probe green.
-- **What's next:** remaining P8 steps — EXECUTE BLOCK header, then FOR SELECT (its inner SELECT already
-  wraps via `Emit`; the `FOR`/`INTO`/`DO` layout is what's left). Do NOT start Etap 7
-  (diagnostics, folding, breadcrumbs, bracket-matching) until the user formally closes the UX Polish
-  Phase. Also deferred: **P5d** a plain-hover info cue; **P2c** bold the typed completion-fragment
-  (no clean AvaloniaEdit 12.0.0 path yet).
+  - **Krok EXECUTE BLOCK (header) — DONE.** `ExecuteBlockStatement` now formats its header instead of
+    keeping it verbatim: `execute block (params)` (adaptive list) / `returns (cols)` on its own line
+    (adaptive list) / `as` on its own line, all lowercased, then the block-structured body — because
+    EXECUTE BLOCK is a *runnable* statement, not persistent DDL (a CREATE definition header stays
+    verbatim by design). `FormatExecuteBlock` + `TryFormatExecuteBlockHeader` reuse the shared adaptive
+    builder + `Emit` (item content) + `FormatPsqlBody`; any header shape not fully recognised falls back
+    to the verbatim-header path (never guess, §0). Pinned by
+    `SqlFormatterExecuteBlockAndForSelectTests`. Build 0/0, 3585 main + 23 probe green.
+  - **Krok FOR SELECT — DONE.** The PSQL `FOR <select|execute statement> INTO <vars> DO <stmt>` loop was
+    previously mangled (`for` split from `select`, `into …` glued onto the `where` line). New
+    `EmitForSelect` lays it out as four structural parts: `for` / the clause-broken cursor query
+    (indented, via the shared `Emit` so its SELECT/FROM/WHERE breaks + long-line wrapping match plain
+    DML) / `into <vars>` at loop indent / `do` / the body via `EmitPsqlBranch`. INTO and DO are found at
+    paren depth 0 (a subquery in FROM never leaks out); malformed input (no top-level DO) falls back to
+    the generic statement path (§0). WHILE stays on its own single-line path. Pinned by
+    `SqlFormatterExecuteBlockAndForSelectTests` (multi/single-stmt body, FOR EXECUTE STATEMENT, subquery,
+    nested FOR, idempotency, lexeme preservation). Build 0/0, 3585 main + 23 probe green.
+  - **Final architecture close-out — P8 IS ARCHITECTURALLY CLOSED.** Audited on the user's request:
+    (a) **no historical workarounds left** — the string-level wrap scanners are deleted (survive only in
+    one explanatory comment), the CREATE VIEW char-loop is gone, all per-character/warm-then-retry hacks
+    superseded; (b) **no parallel implementations** — ONE list builder (`SplitTopLevelCommas` + `MatchParen`
+    + `FormatBrokenList`/`FormatAdaptiveList`/`FormatAdaptiveBareList`), ONE packing algorithm
+    (`PackWithContinuation`), ONE item renderer (`RenderListItems`→`Emit`), ONE long-line wrapping
+    mechanism (token-level), and statements formatted in ONE place (top-level == PSQL body via
+    `FormatLeafStatement`); (c) every private method is live (no dead code), no transitional names
+    (`V2`/`New*`/`Temp`); (d) the residual verbatim paths (CREATE definition headers, UPDATE SET
+    per-assignment, MERGE, CASE/expression interior) are **intentional scope boundaries** — grammar depth
+    not yet built because no feature needs it — not debt. §0 is a checked invariant (per-statement +
+    per-script lexeme preservation), so the formatter either reproduces every lexeme or leaves the
+    fragment/document unchanged.
+- **What's next:** P8 is complete. Do NOT start Etap 7 (diagnostics, folding, breadcrumbs,
+  bracket-matching) until the user formally closes the UX Polish Phase. Still deferred: **P5d** a
+  plain-hover info cue; **P2c** bold the typed completion-fragment (no clean AvaloniaEdit 12.0.0 path
+  yet). Formatter grammar-depth items are available if a concrete feature later needs them (UPDATE SET
+  clause breaks, MERGE layout, CASE interior).
 - **One flagged inconsistency found during this cleanup sprint, worth a two-minute check next
   time that area is touched:** the 2026-06-18 Transaction Architecture Audit left "R2 — the
   procedure-lock after Execute → Rollback → Compile" marked **OPEN**, pending a live `MON$` dump
@@ -327,11 +359,13 @@ Help + Snippets → Navigation + Semantic highlighting + Quick Info (Ctrl+hover,
 Peek Definition, safe local rename, find references).
 
 After Etap 6, the user ran a practical review (vs. IBExpert), **endorsed the architecture**, and
-filed a **UX Polish Phase** backlog (P1–P9). **P1–P7, P9, and P6 are done**; **P8 (formatter
-polish + max-line wrapping), P5d (a plain-hover info cue), and P2c (bold the typed completion
-fragment) are consciously deferred** — see "Current state" above for exactly where things stand
-and what to verify before resuming. **Etap 7 (diagnostics + folding/breadcrumbs/bracket-matching)
-does not start until the user formally closes the UX Polish Phase.**
+filed a **UX Polish Phase** backlog (P1–P9). **P1–P9 are done, including P8 (formatter polish +
+max-line wrapping), which is now COMPLETE and architecturally closed** (§F shared list builder →
+INSERT / UPDATE OR INSERT → long-line wrapping → EXECUTE BLOCK → FOR SELECT, one mechanism each);
+only **P5d (a plain-hover info cue) and P2c (bold the typed completion fragment) remain consciously
+deferred** — see "Current state" above for exactly where things stand. **Etap 7 (diagnostics +
+folding/breadcrumbs/bracket-matching) does not start until the user formally closes the UX Polish
+Phase.**
 
 ## Architecture rules — enforce against drift
 

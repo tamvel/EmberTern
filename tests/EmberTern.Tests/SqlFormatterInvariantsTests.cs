@@ -151,11 +151,14 @@ public class SqlFormatterInvariantsTests
     }
 
     [Fact]
-    public void ExecuteBlock_HeaderKept_BodyStructured()
+    public void ExecuteBlock_HeaderFormatted_BodyStructured()
     {
+        // P8: EXECUTE BLOCK is a runnable statement (not persistent DDL), so — unlike a CREATE
+        // definition header — its header is laid out and lowercased (RETURNS on its own line), then the
+        // body is block-structured. See SqlFormatterExecuteBlockAndForSelectTests for the full layout.
         var outp = SqlFormatter.Format(
             "EXECUTE BLOCK RETURNS (R INTEGER) AS BEGIN R = 1; SUSPEND; END");
-        Assert.StartsWith("EXECUTE BLOCK RETURNS (R INTEGER) AS", outp); // header verbatim
+        Assert.StartsWith("execute block\nreturns (r integer)\nas", outp); // header formatted, lowercased
         Assert.Contains("\nbegin\n", outp);
         Assert.Contains("  r = 1;", outp);
         Assert.Contains("  suspend;", outp);
