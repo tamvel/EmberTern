@@ -186,21 +186,25 @@ noted.
   (Etaps 0–6 + UX Polish incl. P8), the 2026-07-14 **UX & Stabilization Sprint** (transaction/
   attachment model rewrite), **and** a 2026-07-14 **UX Polish follow-up sprint** (below). Not yet
   merged to `master`.
-- **UX Polish follow-up sprint (2026-07-14) — DONE** (4 tasks, separate commits): **(1) trigger
-  context variables** — NEW/OLD/INSERTING/UPDATING/DELETING now get a distinct semantic highlight
-  (new `SemanticHighlightClass.ContextVariable`, coloured like the Function/context-constant palette).
-  Done through the semantic model, not an editor exception: the binder declares the three predicates
-  into the trigger's routine-body scope (`TriggerPredicateSymbol`), so they resolve ONLY inside a
-  CREATE TRIGGER — none are reserved words, so a like-named identifier elsewhere is untouched.
-  **(2) occurrence highlight** retinted from warm gold (→ muddy brown on dark) to a subtle accent-blue
-  wash (theme token `OccurrenceHighlight*`). **(3) formatter WITH/CTE** — new `FormatWith` construct
-  handler (each CTE body indented, `as (` / `)` on own lines, multiple CTEs), plus set operators
-  (UNION [ALL]/INTERSECT/EXCEPT) now break onto their own line via the one `MatchStructuralPhrase`
-  mechanism (top-level AND inside CTE bodies); no parser-depth increase. **(4) Easy-mode DDL casing**
-  — new `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL
-  (regular ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted),
-  kept distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: 3661 main + 23
+- **UX Polish follow-up sprint (2026-07-14) — DONE** (4 tasks + 2 review fixes, separate commits):
+  **(1) trigger context variables** — NEW/OLD/INSERTING/UPDATING/DELETING get a distinct semantic
+  highlight (new `SemanticHighlightClass.ContextVariable`, higher-chroma amber `#E5C07B`). Done
+  through the semantic model, not an editor exception: the binder declares the predicates
+  (`TriggerPredicateSymbol`) into the trigger's routine-body scope, so they resolve ONLY inside a
+  trigger — none are reserved words. **Review fix:** the trigger DETAIL editor edits a body-only
+  `begin…end` (no CREATE TRIGGER header), so `TriggerDetailTabViewModel.BuildAmbientSymbols` now seeds
+  NEW/OLD (bound to the table) + the predicates as **ambient symbols** — the same seam the routine
+  editors use for out-of-text params/vars (gotcha #218). **(2) occurrence highlight** retinted from
+  warm gold (→ muddy brown on dark) to a subtle accent-blue wash (theme token `OccurrenceHighlight*`).
+  **(3) formatter WITH/CTE** — **now AST-modelled**: the parser builds a `WithClause` +
+  `CommonTableExpression` nodes (`Ast/CteNodes.cs`; `SelectStatement.With`), and the formatter
+  *consumes* the AST (no token-level CTE parsing in the formatter). Set operators (UNION [ALL]/
+  INTERSECT/EXCEPT) break onto their own line via the one `MatchStructuralPhrase` mechanism. A CTE
+  query is one statement — no blank line before the main SELECT. **(4) Easy-mode DDL casing** — new
+  `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
+  ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
+  distinct from `SqlFormatter` (which preserves its own casing on existing source).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: 3666 main + 23
   headless-probe (run the `ConnectionExpandBindingProbe` headless class as its own `dotnet test`
   partition — it intermittently hangs alongside the rest of the suite; both partitions pass
   independently). Smoke: clean (app launches). *(Trigger-highlight + occurrence colours are proven by
