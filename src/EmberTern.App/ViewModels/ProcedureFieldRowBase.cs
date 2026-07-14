@@ -204,7 +204,9 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject, ITypeSou
         string core;
         if (!string.IsNullOrWhiteSpace(DomainName))
         {
-            core = DomainName!.Trim();
+            // Generated-DDL identifier style: a picked domain shows UPPERCASE (bare), even if the
+            // catalog stored it lower-case — §0-safe (regular identifiers only; see PresentIdentifier).
+            core = DdlGenerator.PresentIdentifier(DomainName);
         }
         else if (!string.IsNullOrWhiteSpace(TypeOf))
         {
@@ -358,7 +360,7 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject, ITypeSou
     {
         get
         {
-            if (!string.IsNullOrEmpty(DomainName)) return DomainName!;
+            if (!string.IsNullOrEmpty(DomainName)) return DdlGenerator.PresentIdentifier(DomainName);
             if (!string.IsNullOrWhiteSpace(TypeOf)) return ColumnRef.StripColumnPrefix(TypeOf);
             return string.Empty;
         }

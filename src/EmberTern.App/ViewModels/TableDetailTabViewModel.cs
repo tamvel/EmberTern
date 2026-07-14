@@ -318,7 +318,8 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
                 System.StringComparison.OrdinalIgnoreCase);
             if (domainChanged && !string.IsNullOrWhiteSpace(row.DomainName))
             {
-                typeClause = row.DomainName;
+                // Generated-DDL identifier style: present the domain UPPERCASE (bare) — §0-safe.
+                typeClause = EmberTern.Core.Metadata.DdlGenerator.PresentIdentifier(row.DomainName);
             }
             else if (typeChanged
                      && string.IsNullOrWhiteSpace(row.DomainName)

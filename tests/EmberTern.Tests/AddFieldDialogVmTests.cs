@@ -112,7 +112,9 @@ public class AddFieldDialogVmTests
         vm.FieldName = "ID_KRAJ";
         vm.SelectedBasicType = "VARCHAR";
         vm.SelectedDomain = new DomainSpec("T_ID", "INTEGER");
-        Assert.Contains("\"T_ID\"", vm.DdlPreview);
+        // Generated-DDL identifier style: the domain shows UPPERCASE + bare (not quoted).
+        Assert.Contains("T_ID", vm.DdlPreview);
+        Assert.DoesNotContain("\"T_ID\"", vm.DdlPreview);
         Assert.DoesNotContain("VARCHAR", vm.DdlPreview);
     }
 
