@@ -21,9 +21,14 @@ public enum SemanticHighlightClass
     /// <summary>A table/view column — a calm, frequent-use colour (must not shout, §9.2).</summary>
     Column,
 
-    /// <summary>A local scope name — a FROM/JOIN alias, PSQL variable/parameter, cursor, CTE, or a
-    /// NEW/OLD record alias. A distinct low-chroma "local" treatment signalling "not a DB object".</summary>
+    /// <summary>A local scope name — a FROM/JOIN alias, PSQL variable/parameter, cursor, or CTE. A
+    /// distinct low-chroma "local" treatment signalling "not a DB object".</summary>
     Local,
+
+    /// <summary>A trigger context variable — <c>NEW</c> / <c>OLD</c> / <c>INSERTING</c> /
+    /// <c>UPDATING</c> / <c>DELETING</c>. A core language construct of a trigger body, coloured like
+    /// the language's other context variables so it stands out from plain locals and identifiers.</summary>
+    ContextVariable,
 }
 
 /// <summary>The classification of one identifier occurrence for semantic highlighting. Pure value.</summary>
@@ -57,16 +62,21 @@ public static class SemanticHighlightClassifier
         // A schema object referenced by its own name → colour by kind (reuses the tree palette).
         SchemaObjectSymbol o => new SemanticHighlight(SemanticHighlightClass.SchemaObject, o.Kind),
 
-        // FROM/JOIN aliases, PSQL locals, CTEs, cursors, NEW/OLD — the "local scope" treatment.
+        // FROM/JOIN aliases, PSQL locals, CTEs, cursors — the "local scope" treatment.
         TableReferenceSymbol => Local,
         VariableSymbol => Local,
         ParameterSymbol => Local,
         CursorSymbol => Local,
         CteSymbol => Local,
-        RecordAliasSymbol => Local,
+
+        // Trigger context variables (NEW/OLD record aliases + INSERTING/UPDATING/DELETING
+        // predicates) — a core-language treatment, distinct from plain locals.
+        RecordAliasSymbol => ContextVariable,
+        TriggerPredicateSymbol => ContextVariable,
 
         _ => SemanticHighlight.None,
     };
 
     private static readonly SemanticHighlight Local = new(SemanticHighlightClass.Local, SymbolKind.Unknown);
+    private static readonly SemanticHighlight ContextVariable = new(SemanticHighlightClass.ContextVariable, SymbolKind.Unknown);
 }

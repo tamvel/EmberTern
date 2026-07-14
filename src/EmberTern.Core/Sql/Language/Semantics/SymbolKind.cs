@@ -47,6 +47,11 @@ public enum SymbolKind
     /// <summary>A trigger record alias — <c>NEW</c> / <c>OLD</c> — bound to the trigger's table.</summary>
     RecordAlias,
 
+    /// <summary>A trigger boolean context predicate — <c>INSERTING</c> / <c>UPDATING</c> /
+    /// <c>DELETING</c>. Valid only inside a trigger body; carries no target (unlike a record
+    /// alias, it has no columns), it is purely a language construct to be recognised and coloured.</summary>
+    TriggerPredicate,
+
     /// <summary>A symbol whose kind could not be determined.</summary>
     Unknown,
 }

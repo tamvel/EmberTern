@@ -102,13 +102,39 @@ public class SemanticHighlightClassifierTests
         Assert.Equal(SemanticHighlightClass.Local, ClassifyAt(sql, sql.IndexOf("= id", StringComparison.Ordinal) + 2, null).Class);
     }
 
+    // ── Trigger context variables (NEW/OLD/INSERTING/UPDATING/DELETING) → ContextVariable ────────
+
     [Fact]
-    public void RecordAlias_IsLocal()
+    public void RecordAlias_IsContextVariable()
     {
         var meta = new FakeMetadata().Object("KONTRAHENT", SymbolKind.Table).Col("KONTRAHENT", "NAZWA", "VARCHAR(50)");
         const string sql = "create trigger tr for kontrahent before insert as begin if (new.nazwa is null) then exception; end";
         var h = ClassifyAt(sql, sql.IndexOf("new.nazwa", StringComparison.Ordinal), meta);
-        Assert.Equal(SemanticHighlightClass.Local, h.Class);
+        Assert.Equal(SemanticHighlightClass.ContextVariable, h.Class);
+    }
+
+    [Theory]
+    [InlineData("inserting")]
+    [InlineData("updating")]
+    [InlineData("deleting")]
+    public void TriggerPredicate_IsContextVariable(string predicate)
+    {
+        var meta = new FakeMetadata().Object("KONTRAHENT", SymbolKind.Table).Col("KONTRAHENT", "NAZWA", "VARCHAR(50)");
+        string sql = $"create trigger tr for kontrahent before insert or update or delete as begin if ({predicate}) then exception; end";
+        var h = ClassifyAt(sql, sql.IndexOf("(" + predicate, StringComparison.Ordinal) + 1, meta);
+        Assert.Equal(SemanticHighlightClass.ContextVariable, h.Class);
+    }
+
+    [Fact]
+    public void TriggerPredicate_OutsideTrigger_IsNotColoured()
+    {
+        // INSERTING is not a reserved word — used as a bare identifier in a plain procedure body it
+        // must NOT be mistaken for the trigger predicate (no trigger scope declares it there).
+        const string sql = "create procedure p as declare variable inserting integer; begin inserting = 1; end";
+        var model = SemanticModel.Build(sql);
+        var reference = model.ReferenceAt(sql.IndexOf("inserting = 1", StringComparison.Ordinal));
+        // It resolves as a local variable (declared), never as a context variable.
+        Assert.Equal(SemanticHighlightClass.Local, SemanticHighlightClassifier.Classify(reference!).Class);
     }
 
     // ── Nothing to colour ──────────────────────────────────────────────────────────────────────

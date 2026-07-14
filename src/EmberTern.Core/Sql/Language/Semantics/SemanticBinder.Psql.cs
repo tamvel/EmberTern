@@ -131,6 +131,14 @@ internal sealed partial class SemanticBinder
         DeclareRecordAlias(scope, "NEW", table, ddl);
         DeclareRecordAlias(scope, "OLD", table, ddl);
 
+        // INSERTING / UPDATING / DELETING — trigger boolean context predicates. Declared so a bare
+        // occurrence in the body resolves and gets the trigger-construct colour. Only inside a
+        // trigger (never in a procedure/function body), so a like-named identifier elsewhere is
+        // untouched.
+        DeclareTriggerPredicate(scope, "INSERTING", ddl);
+        DeclareTriggerPredicate(scope, "UPDATING", ddl);
+        DeclareTriggerPredicate(scope, "DELETING", ddl);
+
         int asIdx = FindTopLevelKeyword(t, 0, hi, "AS");
         int bodyLo = asIdx < hi ? asIdx + 1 : hi;
         BindRoutineBody(t, bodyLo, hi, scope, ddl);
@@ -145,6 +153,13 @@ internal sealed partial class SemanticBinder
         };
         scope.Declare(rec);
         AddSymbol(rec);
+    }
+
+    private void DeclareTriggerPredicate(Scope scope, string name, SqlStatement stmt)
+    {
+        var pred = new TriggerPredicateSymbol(name) { DeclaringStatement = stmt };
+        scope.Declare(pred);
+        AddSymbol(pred);
     }
 
     // ── EXECUTE BLOCK ────────────────────────────────────────────────────────────────────────
@@ -446,6 +461,9 @@ internal sealed partial class SemanticBinder
                 break;
             case RecordAliasSymbol:
                 AddReference(tok, sym, ReferenceRole.RecordAlias);
+                break;
+            case TriggerPredicateSymbol:
+                AddReference(tok, sym, ReferenceRole.ContextVariable);
                 break;
         }
     }

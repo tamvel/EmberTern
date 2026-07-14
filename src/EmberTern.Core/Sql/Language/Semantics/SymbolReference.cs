@@ -27,6 +27,10 @@ public enum ReferenceRole
     /// <summary>A NEW/OLD record-alias occurrence.</summary>
     RecordAlias,
 
+    /// <summary>A trigger context predicate occurrence — <c>INSERTING</c> / <c>UPDATING</c> /
+    /// <c>DELETING</c>.</summary>
+    ContextVariable,
+
     /// <summary>An occurrence whose role could not be determined.</summary>
     Unknown,
 }

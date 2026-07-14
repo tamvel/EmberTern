@@ -21,8 +21,9 @@ namespace EmberTern.App.Completion;
 /// <para>
 /// Navigable schema objects reuse the metadata tree's per-kind <c>IconColor_*</c> palette (editor
 /// colour == tree icon → teaches "coloured object = navigable"); local names (aliases / PSQL
-/// variables / parameters / cursors / CTEs / NEW-OLD) get a distinct low-chroma
-/// <c>EditorLocalBrush</c>. Columns are deliberately left uncoloured (they fall back to the default
+/// variables / parameters / cursors / CTEs) get a distinct low-chroma <c>EditorLocalBrush</c>, and
+/// trigger context variables (NEW/OLD/INSERTING/UPDATING/DELETING) get the context-variable colour
+/// (<c>EditorContextVariableBrush</c>). Columns are deliberately left uncoloured (they fall back to the default
 /// foreground) so the object accent stays dominant — see <see cref="ResolveBrush"/>. Read-only
 /// paint — §0 holds by construction.
 /// Lexical keywords/strings/numbers are never touched (the classifier only colours resolved
@@ -127,6 +128,13 @@ internal sealed class SemanticHighlighter : DocumentColorizingTransformer
             case SemanticHighlightClass.Local:
                 key = "EditorLocalBrush";
                 priority = 0;
+                break;
+            case SemanticHighlightClass.ContextVariable:
+                // Trigger context variables (NEW/OLD/INSERTING/UPDATING/DELETING) — coloured like the
+                // language's other context variables (the Function/context-constant palette) so they
+                // read as core trigger constructs, not plain locals.
+                key = "EditorContextVariableBrush";
+                priority = 1;
                 break;
             case SemanticHighlightClass.Column:
                 // Columns are intentionally NOT semantically coloured in the editor (user preference,

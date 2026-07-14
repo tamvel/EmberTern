@@ -160,7 +160,9 @@ internal static class QuickInfoView
         {
             SymbolKind.Column => Brush("EditorColumnBrush", theme),
             SymbolKind.TableReference or SymbolKind.Variable or SymbolKind.Parameter
-                or SymbolKind.Cte or SymbolKind.Cursor or SymbolKind.RecordAlias => Brush("EditorLocalBrush", theme),
+                or SymbolKind.Cte or SymbolKind.Cursor => Brush("EditorLocalBrush", theme),
+            // Trigger context variables (NEW/OLD) share the editor's context-variable colour.
+            SymbolKind.RecordAlias or SymbolKind.TriggerPredicate => Brush("EditorContextVariableBrush", theme),
             _ => null,
         };
     }

@@ -172,3 +172,12 @@ public sealed class RecordAliasSymbol : Symbol
     /// <summary>The table whose columns this record alias exposes.</summary>
     public string? TargetTable { get; init; }
 }
+
+/// <summary>A trigger boolean context predicate — <c>INSERTING</c> / <c>UPDATING</c> /
+/// <c>DELETING</c>. Declared into the trigger's routine-body scope so a bare occurrence resolves and
+/// is recognised as a language construct (coloured like the other trigger context variables). It has
+/// no members and no navigation target — unlike <see cref="RecordAliasSymbol"/>.</summary>
+public sealed class TriggerPredicateSymbol : Symbol
+{
+    public TriggerPredicateSymbol(string name) : base(SymbolKind.TriggerPredicate, name) { }
+}
