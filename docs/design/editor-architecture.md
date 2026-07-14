@@ -821,19 +821,45 @@ cases — the dark DML keyword color and the light built-in-function color).
   (never guess, §0). Pinned by `SqlFormatterExecuteBlockAndForSelectTests`. Build 0/0; full suite 3585
   main + 23 probe green.
 
-  **FOR SELECT — DONE (2026-07-14).** The PSQL `FOR <select|execute statement> INTO <vars> DO <stmt>`
-  loop was the last mangled case: the old shared `WHILE || FOR` path emitted the whole `FOR … DO` header
-  as one clause-broken `Emit` blob, so `for` split from `select` and `into … do` glued onto the `where`
-  line. New `EmitForSelect(sig, ref i, indent, lines)` lays it out as four structural parts — `for` on
-  its own line; the cursor query clause-broken and indented one level (via the shared `Emit`, so its
-  SELECT/FROM/WHERE breaks and long-line wrapping match plain DML); `into <vars>` on its own line at the
-  loop indent; `do` on its own line; then the loop body via the shared `EmitPsqlBranch`. The query, INTO
-  and DO are located at paren depth 0 in a single scan (a subquery in FROM never leaks its clauses out),
-  and malformed input (no top-level DO) falls back to the generic `CollectPsqlStatement` path — lossless
-  (§0). WHILE stays on its own single-line path because its `(cond) do` fits on the header line. Pinned by
-  `SqlFormatterExecuteBlockAndForSelectTests` (multi/single-statement body, FOR EXECUTE STATEMENT,
-  subquery-in-FROM, nested FOR, idempotency, lexeme preservation). Build 0/0; full suite 3585 main + 23
-  probe green.
+  **FOR SELECT — DONE (2026-07-14, user-refined).** The PSQL `FOR <select|execute statement> INTO <vars>
+  DO <stmt>` loop was the last mangled case: the old shared `WHILE || FOR` path emitted the whole
+  `FOR … DO` header as one clause-broken `Emit` blob, so `for` split from `select` and `into … do` glued
+  onto the `where` line. `EmitForSelect(sig, ref i, indent, lines)` treats **FOR SELECT as one Firebird
+  construct** (user directive, chosen over a `for`-on-its-own-line variant — like INSERT INTO / UPDATE OR
+  INSERT / EXECUTE BLOCK / EXECUTE PROCEDURE): `for` prefixes the cursor query's first line (NOT split
+  onto its own line, and the query is NOT extra-indented under the loop); the query is formatted by the
+  shared `Emit` (so its SELECT/FROM/WHERE breaks + long-line wrapping match plain DML); then `into <vars>`
+  and `do` each on their own line at the loop indent; then the loop body via the shared `EmitPsqlBranch`.
+  The query, INTO and DO are located at paren depth 0 in a single scan (a subquery in FROM never leaks its
+  clauses out), and malformed input (no top-level DO) falls back to the generic `CollectPsqlStatement`
+  path — lossless (§0). WHILE stays on its own single-line path because its `(cond) do` fits on the header
+  line. Pinned by `SqlFormatterExecuteBlockAndForSelectTests` (multi/single-statement body, FOR EXECUTE
+  STATEMENT, subquery-in-FROM, nested FOR, idempotency, lexeme preservation). Build 0/0; full suite 3585
+  main + 23 probe green.
+
+  **Call-argument-list wrapping (UX follow-up) — DONE (2026-07-14).** A call's argument list now rides the
+  SAME shared adaptive builder (`FormatAdaptiveList` / `PackWithContinuation`) as INSERT / VALUES /
+  MATCHING / SELECT / IN. New `EmitCallArgList` in `Emit` fires on any `name ( … )` where `name` is an
+  identifier / quoted-ident that is not a style keyword — exactly the "glue name to `(`" rule
+  `NeedsSpaceBefore` already uses to detect a call — laying the arguments out inline while they fit their
+  column, else packed under the `(`. This makes **EXECUTE PROCEDURE, function/procedure calls, and every
+  other `identifier ( comma-list )`** wrap instead of sitting on one giant line, with **no per-construct
+  argument formatter** (explicit user directive — no bespoke `FormatExecuteProcedure`; EXECUTE PROCEDURE
+  just routes through `Emit` like every other statement). A subquery argument (`name (SELECT …)`) is left
+  to the clause-break emitter. Two documented edge limits, both idempotent + lossless: (1) a single-item
+  list can't pack, so a lone very-long argument won't wrap; (2) a call nested as another list's item wraps
+  aligned from its own column-0 render (items are rendered in isolation by `RenderListItems`), not its
+  placed column — a deeper "column-aware item renderer" would fix both but isn't needed for the common
+  EXECUTE PROCEDURE / flat-call case. **Assessment of remaining argument/element lists** (per the user's
+  request to keep the language consistent): now on the shared builder — INSERT columns, VALUES, UPDATE OR
+  INSERT, MATCHING, SELECT columns, IN, EXECUTE BLOCK params + RETURNS, CREATE VIEW columns, and all
+  calls. Deliberately NOT yet on it — **UPDATE SET** (assignment list, a distinct `col = expr` shape) and
+  **MERGE … WHEN** (both still on the plain generic `Emit`, no clause breaks); **CREATE TABLE / domain /
+  CTE column lists** now wrap via the same call path when long (a table name followed by `(` is
+  indistinguishable from a call at the flat-token level — acceptable and lossless, though a definition
+  list rather than arguments); **CREATE-definition headers** stay verbatim by design. UPDATE SET / MERGE
+  clause layout are the natural next grammar-depth items if a feature needs them. Pinned by
+  `SqlFormatterCallArgumentTests`. Build 0/0; full suite 3596 main + 23 probe green.
 
   **Final architecture close-out — P8 IS ARCHITECTURALLY CLOSED (2026-07-14).** Reviewed on the user's
   request against four questions. **(1) Historical workarounds left?** None. The string-level wrap

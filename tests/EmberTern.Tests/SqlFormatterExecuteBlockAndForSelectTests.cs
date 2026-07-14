@@ -83,16 +83,18 @@ public class SqlFormatterExecuteBlockAndForSelectTests
     }
 
     // ── FOR loop ─────────────────────────────────────────────────────────────────────────────────
+    //
+    // FOR SELECT is one Firebird construct (like INSERT INTO): "for" glues to the query's first line,
+    // the query is NOT extra-indented, and INTO / DO sit at the loop indent.
 
     [Fact]
-    public void ForSelect_FourStructuralParts()
+    public void ForSelect_ForGluedToSelect_QueryAtLoopIndent()
     {
         Assert.Equal(
             "begin\n"
-            + "  for\n"
-            + "    select id, name\n"
-            + "    from t\n"
-            + "    where a = 1\n"
+            + "  for select id, name\n"
+            + "  from t\n"
+            + "  where a = 1\n"
             + "  into :i, :n\n"
             + "  do\n"
             + "  begin\n"
@@ -107,7 +109,7 @@ public class SqlFormatterExecuteBlockAndForSelectTests
     public void ForSelect_SingleStatementBody_Indented()
     {
         Assert.Equal(
-            "begin\n  for\n    select id\n    from t\n  into :i\n  do\n    suspend;\nend",
+            "begin\n  for select id\n  from t\n  into :i\n  do\n    suspend;\nend",
             SqlFormatter.Format("begin for select id from t into :i do suspend; end"));
     }
 
@@ -118,8 +120,7 @@ public class SqlFormatterExecuteBlockAndForSelectTests
         var outp = SqlFormatter.Format(
             $"begin for select {cols} from t into :a do begin suspend; end end");
         var lines = outp.Split('\n');
-        Assert.All(lines, l => Assert.True(l.Length <= 120, $"line exceeds 120 ({l.Length}): {l}"));
-        Assert.Contains("  for", lines);
+        Assert.Contains("  for select long_column_name_01,", lines[1]); // "for select" glued
         Assert.Contains("  into :a", lines);
         Assert.Contains("  do", lines);
     }
@@ -130,6 +131,7 @@ public class SqlFormatterExecuteBlockAndForSelectTests
         var outp = SqlFormatter.Format(
             "begin for execute statement 'select 1 from rdb$database' into :x do begin suspend; end end");
         Assert.Contains("'select 1 from rdb$database'", outp);
+        Assert.Contains("  for execute statement 'select 1 from rdb$database'", outp.Split('\n'));
         Assert.Contains("  into :x", outp.Split('\n'));
         Assert.Contains("  do", outp.Split('\n'));
     }

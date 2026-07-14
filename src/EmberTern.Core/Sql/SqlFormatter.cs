@@ -440,6 +440,20 @@ public static class SqlFormatter
                 continue;
             }
 
+            // Call argument list — "name ( … )" where name is an identifier/quoted-ident that is not a
+            // style keyword (the same "glue name to (" rule NeedsSpaceBefore uses to recognise a call).
+            // Its arguments ride the SAME shared adaptive builder as every other list — inline while they
+            // fit, else packed under the '(' — so a long EXECUTE PROCEDURE / function call no longer sits
+            // on one giant line. A subquery argument (name (SELECT …)) is left to the clause-break emitter.
+            if ((t.Kind == FKind.Word || t.Kind == FKind.QuotedIdent)
+                && !(t.Kind == FKind.Word && IsStyleKeyword(t.Text))
+                && i + 1 < meaningful.Count && IsPunctTok(meaningful[i + 1], "(")
+                && !StartsSubquery(meaningful, i + 2))
+            {
+                i += EmitCallArgList(meaningful, i, sb, ref prev) - 1;
+                continue;
+            }
+
             if (NeedsSpaceBefore(prev, t, sb)) sb.Append(' ');
             sb.Append(MaybeLowercase(t));
             prev = t;
@@ -503,6 +517,29 @@ public static class SqlFormatter
 
         int last = close < tokens.Count ? close : tokens.Count - 1;
         return last - inIdx + 1;
+    }
+
+    // Emits a call "name ( … )" — the callee name glued to '(', the argument list laid out by the shared
+    // adaptive builder measured from the '(' column (inline while it fits, else packed under it). The ONE
+    // mechanism for every call's arguments: EXECUTE PROCEDURE, function/procedure calls, and any other
+    // "identifier ( comma-list )" — no per-construct arg formatter. Returns tokens consumed (name through
+    // the matching ')').
+    private static int EmitCallArgList(List<FToken> tokens, int nameIdx, StringBuilder sb, ref FToken? prev)
+    {
+        if (NeedsSpaceBefore(prev, tokens[nameIdx], sb)) sb.Append(' ');
+        sb.Append(MaybeLowercase(tokens[nameIdx]));
+        prev = tokens[nameIdx];
+
+        int open = nameIdx + 1; // '(' (glued to the name — no space)
+        int close = MatchParen(tokens, open);
+        var items = SplitTopLevelCommas(tokens, open + 1, close);
+
+        int openColumn = CurrentColumn(sb); // column of '(', since it glues to the name
+        sb.Append(FormatAdaptiveList(items, openColumn));
+        prev = close < tokens.Count ? tokens[close] : tokens[open];
+
+        int last = close < tokens.Count ? close : tokens.Count - 1;
+        return last - nameIdx + 1;
     }
 
     private enum PhraseKind { None, TopLevel, Conjunction }
@@ -983,14 +1020,16 @@ public static class SqlFormatter
         }
     }
 
-    // Lays out a PSQL FOR loop — "FOR &lt;select|execute statement&gt; INTO &lt;vars&gt; DO &lt;statement&gt;" —
-    // as its four structural parts: "for" on its own line; the cursor query clause-broken and indented
-    // one level (via the shared Emit, so its SELECT/FROM/WHERE breaks and long-line wrapping match plain
-    // DML); "into &lt;vars&gt;" on its own line at the loop indent; "do" on its own line; then the loop
-    // body via the shared EmitPsqlBranch. The query, INTO and DO are found at paren depth 0 (a subquery's
-    // inner clauses never leak out). Malformed input (no top-level DO) falls back to the generic
-    // statement path — nothing is lost (§0). This is the ONE place FOR is laid out; the WHILE path
-    // (single-line condition) stays separate because its "(cond) do" fits on the header line.
+    // Lays out a PSQL FOR loop — "FOR &lt;select|execute statement&gt; INTO &lt;vars&gt; DO &lt;statement&gt;".
+    // FOR SELECT is treated as ONE Firebird construct (like INSERT INTO / UPDATE OR INSERT / EXECUTE
+    // BLOCK / EXECUTE PROCEDURE): the "for" keyword prefixes the cursor query's first line — it is NOT
+    // split onto its own line, and the query is NOT extra-indented under the loop. The query is formatted
+    // by the shared Emit (so its SELECT/FROM/WHERE clause breaks + long-line wrapping match plain DML);
+    // then "into &lt;vars&gt;" and "do" each on their own line at the loop indent, and the loop body via
+    // the shared EmitPsqlBranch. The query, INTO and DO are found at paren depth 0 (a subquery's inner
+    // clauses never leak out). Malformed input (no top-level DO) falls back to the generic statement path
+    // — nothing is lost (§0). This is the ONE place FOR is laid out; the WHILE path (single-line
+    // condition) stays separate because its "(cond) do" fits on the header line.
     private static void EmitForSelect(List<FToken> sig, ref int i, int indent, List<string> lines)
     {
         int depth = 0, intoIdx = -1, doIdx = -1;
@@ -1013,11 +1052,12 @@ public static class SqlFormatter
             return;
         }
 
-        AddPsqlLine(lines, indent, "for");
-
         int queryEnd = intoIdx >= 0 ? intoIdx : doIdx;
         var query = sig.GetRange(i + 1, queryEnd - (i + 1));
-        if (query.Count > 0) EmitPsqlLines(lines, indent + 1, Emit(query));
+        // "for" glued to the query as one construct: prefix "for " to the query's first line, whole thing
+        // at the loop indent.
+        string forQuery = query.Count > 0 ? "for " + Emit(query).TrimEnd('\n') : "for";
+        EmitPsqlLines(lines, indent, forQuery);
 
         if (intoIdx >= 0)
         {

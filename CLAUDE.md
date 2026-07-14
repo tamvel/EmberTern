@@ -300,14 +300,24 @@ noted.
     to the verbatim-header path (never guess, §0). Pinned by
     `SqlFormatterExecuteBlockAndForSelectTests`. Build 0/0, 3585 main + 23 probe green.
   - **Krok FOR SELECT — DONE.** The PSQL `FOR <select|execute statement> INTO <vars> DO <stmt>` loop was
-    previously mangled (`for` split from `select`, `into …` glued onto the `where` line). New
-    `EmitForSelect` lays it out as four structural parts: `for` / the clause-broken cursor query
-    (indented, via the shared `Emit` so its SELECT/FROM/WHERE breaks + long-line wrapping match plain
-    DML) / `into <vars>` at loop indent / `do` / the body via `EmitPsqlBranch`. INTO and DO are found at
-    paren depth 0 (a subquery in FROM never leaks out); malformed input (no top-level DO) falls back to
-    the generic statement path (§0). WHILE stays on its own single-line path. Pinned by
-    `SqlFormatterExecuteBlockAndForSelectTests` (multi/single-stmt body, FOR EXECUTE STATEMENT, subquery,
-    nested FOR, idempotency, lexeme preservation). Build 0/0, 3585 main + 23 probe green.
+    previously mangled (`for` split from `select`, `into …` glued onto the `where` line). `EmitForSelect`
+    treats **FOR SELECT as one Firebird construct** (user directive — like INSERT INTO): `for` prefixes
+    the cursor query's first line (NOT split onto its own line, query NOT extra-indented); the query is
+    the shared `Emit` (so its SELECT/FROM/WHERE breaks + long-line wrapping match plain DML); then
+    `into <vars>` and `do` each on their own line at the loop indent; body via `EmitPsqlBranch`. INTO and
+    DO are found at paren depth 0 (a subquery in FROM never leaks out); malformed input (no top-level DO)
+    falls back to the generic statement path (§0). WHILE stays on its own single-line path. Pinned by
+    `SqlFormatterExecuteBlockAndForSelectTests`. Build 0/0, 3585 main + 23 probe green.
+  - **Call-argument-list wrapping (UX follow-up) — DONE.** A call's argument list now rides the SAME
+    shared adaptive builder as INSERT/VALUES/MATCHING/SELECT/IN. New `EmitCallArgList` in `Emit` fires on
+    any `name ( … )` where `name` is an identifier/quoted-ident that is not a style keyword (the glue rule
+    `NeedsSpaceBefore` already uses to detect a call) — so **EXECUTE PROCEDURE, function/procedure calls,
+    and every other call** wrap adaptively under the `(` instead of sitting on one giant line; short lists
+    stay byte-identical. No per-construct formatter (explicit user directive — EXECUTE PROCEDURE just
+    routes through `Emit` like everything else). A subquery argument is left to the clause break. Pinned
+    by `SqlFormatterCallArgumentTests`. Two documented edge limits (both idempotent + lossless): a
+    single-item list can't pack (a lone very-long arg won't wrap), and a call nested as a list item wraps
+    aligned from its own column-0 render, not its placed column. Build 0/0, 3596 main + 23 probe green.
   - **Final architecture close-out — P8 IS ARCHITECTURALLY CLOSED.** Audited on the user's request:
     (a) **no historical workarounds left** — the string-level wrap scanners are deleted (survive only in
     one explanatory comment), the CREATE VIEW char-loop is gone, all per-character/warm-then-retry hacks
@@ -321,11 +331,15 @@ noted.
     not yet built because no feature needs it — not debt. §0 is a checked invariant (per-statement +
     per-script lexeme preservation), so the formatter either reproduces every lexeme or leaves the
     fragment/document unchanged.
-- **What's next:** P8 is complete. Do NOT start Etap 7 (diagnostics, folding, breadcrumbs,
-  bracket-matching) until the user formally closes the UX Polish Phase. Still deferred: **P5d** a
-  plain-hover info cue; **P2c** bold the typed completion-fragment (no clean AvaloniaEdit 12.0.0 path
-  yet). Formatter grammar-depth items are available if a concrete feature later needs them (UPDATE SET
-  clause breaks, MERGE layout, CASE interior).
+- **What's next:** P8 is complete (incl. the two UX follow-ups: FOR SELECT one-construct + shared
+  call-argument wrapping). Do NOT start Etap 7 (diagnostics, folding, breadcrumbs, bracket-matching)
+  until the user formally closes the UX Polish Phase. Still deferred: **P5d** a plain-hover info cue;
+  **P2c** bold the typed completion-fragment (no clean AvaloniaEdit 12.0.0 path yet). Remaining
+  formatter grammar-depth items, available if a concrete feature later needs them: **UPDATE SET**
+  assignment-list breaks and **MERGE … WHEN** layout (the two DML shapes still on the plain generic
+  `Emit`, no clause breaks), CASE/expression interior, and CREATE-definition headers (kept verbatim by
+  design). All other argument/element lists (INSERT/VALUES/MATCHING/SELECT/IN/EXECUTE-BLOCK params +
+  RETURNS/CREATE-VIEW columns/calls) now share the one adaptive builder.
 - **One flagged inconsistency found during this cleanup sprint, worth a two-minute check next
   time that area is touched:** the 2026-06-18 Transaction Architecture Audit left "R2 — the
   procedure-lock after Execute → Rollback → Compile" marked **OPEN**, pending a live `MON$` dump
