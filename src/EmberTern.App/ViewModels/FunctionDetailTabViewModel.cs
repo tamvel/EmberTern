@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Export;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Performance;
 using EmberTern.Core.Query;
 using EmberTern.Core.Sql;
@@ -133,6 +134,22 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
     // ─── Arguments (editable) ─────────────────────────────────────────────
 
     public ObservableCollection<ProcedureParamRowViewModel> Arguments { get; }
+
+    /// <summary>Easy-mode body editor: the body text declares neither the arguments nor the
+    /// variables (they live in the grids), so seed both into the model. See
+    /// <see cref="SourceObjectDetailTabViewModel.BuildAmbientSymbols"/>.</summary>
+    public override IReadOnlyList<Symbol> BuildAmbientSymbols()
+    {
+        var symbols = new List<Symbol>();
+        foreach (var a in Arguments)
+        {
+            var name = a.Name?.Trim();
+            if (string.IsNullOrEmpty(name)) continue;
+            symbols.Add(new ParameterSymbol(name) { Direction = ParameterDirection.Input });
+        }
+        AddVariableSymbols(symbols);
+        return symbols;
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteArgumentCommand))]

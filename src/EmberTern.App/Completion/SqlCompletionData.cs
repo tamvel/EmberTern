@@ -165,12 +165,17 @@ internal sealed class SqlCompletionData : ICompletionData
 
     public void Complete(TextArea textArea, ISegment completionSegment, EventArgs insertionRequestEventArgs)
     {
-        // Case-preserving insert: read what the user already typed in the
-        // completionSegment and shape the inserted text to match (all-lower /
-        // all-upper / verbatim). The catalog stores Firebird names uppercase,
-        // but lowercase-everywhere is the IBExpert default the user works in.
+        // Case-preserving insert: shape the inserted text to match what the user already typed in
+        // the completionSegment (all-lower / all-upper / verbatim). The catalog stores Firebird
+        // names uppercase, but lowercase-everywhere is the IBExpert default the user works in.
+        //
+        // After a qualifier dot ("k.") that segment is EMPTY, so there is nothing to copy — the dot
+        // used to read as the start of a fresh word and the catalog's UPPERCASE won, dropping
+        // ID_KONTRAHENT into an all-lowercase query. So when the prefix carries no letters we fall
+        // back to the user's ACTUAL style in this document rather than the preceding character.
         var typedPrefix = textArea.Document.GetText(completionSegment);
-        var insert = CaseMatcher.Match(typedPrefix, Text);
+        var documentStyle = SqlCaseStyleDetector.Detect(textArea.Document.Text);
+        var insert = CaseMatcher.Match(typedPrefix, Text, documentStyle);
         textArea.Document.Replace(completionSegment, insert);
     }
 

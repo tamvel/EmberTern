@@ -123,21 +123,35 @@ public sealed class SemanticModel
     /// <param name="syntax">The AST.</param>
     /// <param name="metadata">The metadata snapshot, or <c>null</c> to bind local scope only.</param>
     public static SemanticModel Build(SqlScript syntax, ISqlMetadataProvider? metadata = null)
+        => Build(syntax, metadata, ambientSymbols: null);
+
+    /// <summary>Builds the model for an already-parsed script, seeding the root scope with
+    /// <paramref name="ambientSymbols"/> — declarations that exist outside this text (see
+    /// <see cref="SemanticBinder.Bind(SqlScript, ISqlMetadataProvider, IReadOnlyList{Symbol})"/>).</summary>
+    public static SemanticModel Build(
+        SqlScript syntax, ISqlMetadataProvider? metadata, IReadOnlyList<Symbol>? ambientSymbols)
     {
         if (syntax is null) throw new ArgumentNullException(nameof(syntax));
-        return SemanticBinder.Bind(syntax, metadata ?? EmptyMetadataProvider.Instance);
+        return SemanticBinder.Bind(syntax, metadata ?? EmptyMetadataProvider.Instance, ambientSymbols);
     }
 
     /// <summary>Parses <paramref name="sql"/> and builds its semantic model.</summary>
     /// <param name="sql">The script text.</param>
     /// <param name="metadata">The metadata snapshot, or <c>null</c> to bind local scope only.</param>
     public static SemanticModel Build(string sql, ISqlMetadataProvider? metadata = null)
+        => Build(sql, metadata, ambientSymbols: null);
+
+    /// <summary>Parses <paramref name="sql"/> and builds its model, seeding the root scope with
+    /// <paramref name="ambientSymbols"/> (declarations that live outside the text — e.g. an
+    /// Easy-mode routine's parameters and variables, which are held in grids, not in the body).</summary>
+    public static SemanticModel Build(
+        string sql, ISqlMetadataProvider? metadata, IReadOnlyList<Symbol>? ambientSymbols)
     {
         if (sql is null) throw new ArgumentNullException(nameof(sql));
         // Lenient segmentation: analyse every statement even when they are only newline-separated (no
         // ';'). Read-only model, so an over-split can at most weaken IntelliSense, never corrupt code
         // (§0); the executors keep the strict ';'-only Parse. Fixes "only the first statement is
         // coloured / navigable" for a multi-statement editor without semicolons.
-        return Build(SqlParser.Parse(sql, lenient: true).Root, metadata);
+        return Build(SqlParser.Parse(sql, lenient: true).Root, metadata, ambientSymbols);
     }
 }

@@ -104,14 +104,16 @@ internal sealed class SqlCompletionController
         Func<int>? metadataGeneration = null,
         Func<IReadOnlyList<string>, System.Threading.CancellationToken, Task<bool>>? warmReferencedMetadata = null,
         Action<Action>? subscribeMetadataReady = null,
-        Action<Action>? unsubscribeMetadataReady = null)
+        Action<Action>? unsubscribeMetadataReady = null,
+        Func<IReadOnlyList<EmberTern.Core.Sql.Language.Semantics.Symbol>>? ambientSymbols = null)
     {
         _editor = editor;
         _ensureColumnsAsync = ensureColumnsAsync;
         _ensureRoutineParamsAsync = ensureRoutineParamsAsync;
         _contextTableProvider = contextTableProvider;
 
-        _language = new EditorLanguageService(editor, metadataSnapshot, metadataGeneration, warmReferencedMetadata);
+        _language = new EditorLanguageService(
+            editor, metadataSnapshot, metadataGeneration, warmReferencedMetadata, ambientSymbols);
         _parameterHelper = ParameterHelper.Attach(editor, () => _language.Model, WarmForSignatureAndRebuildAsync);
         _autoPopup = new DispatcherTimer();
         _autoPopup.Tick += OnAutoPopupTick;

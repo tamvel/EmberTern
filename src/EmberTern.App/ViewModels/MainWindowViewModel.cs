@@ -892,7 +892,19 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ExecuteQueryCommand))]
     [NotifyCanExecuteChangedFor(nameof(ExecuteQueryFullCommand))]
     [NotifyCanExecuteChangedFor(nameof(LoadAllRowsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CancelQueryCommand))]
     private bool _isExecuting;
+
+    /// <summary>Set the moment Cancel is clicked, cleared when the run unwinds. Without it the
+    /// button looks inert while the server is aborting the statement, so the user clicks again
+    /// and again (the reported symptom). It disables Cancel and switches the status text, so the
+    /// first click visibly registers.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CancelQueryCommand))]
+    private bool _isCancelling;
+
+    /// <summary>Cancel is clickable exactly once per run.</summary>
+    public bool CanCancelQuery => IsExecuting && !IsCancelling;
 
     // Drive the live elapsed timer off IsExecuting so every SQL Editor exit path (success, error,
     // cancel, finally) starts/stops it with no scattering.
@@ -900,7 +912,11 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (value) ExecutionTimer.Start();
         else ExecutionTimer.Stop();
+        if (!value) IsCancelling = false;   // every exit path resets the cancel latch
+        OnPropertyChanged(nameof(CanCancelQuery));
     }
+
+    partial void OnIsCancellingChanged(bool value) => OnPropertyChanged(nameof(CanCancelQuery));
 
     [ObservableProperty]
     private string _queryText = string.Empty;
@@ -5455,8 +5471,22 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
-    private void CancelQuery() => _executionCts?.Cancel();
+    /// <summary>
+    /// Cancels the running statement. Cancelling the CTS is only half the job: it aborts the
+    /// awaiting task but cannot interrupt a statement Firebird is still executing — the executor
+    /// registers <c>FbCommand.Cancel()</c> (fb_cancel_operation) on this token, which is what
+    /// actually stops the server. We also latch <see cref="IsCancelling"/> so the button reports
+    /// that the click landed instead of looking inert (which is why it felt like it needed
+    /// several clicks — the extra clicks were no-ops on an already-cancelled CTS).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanCancelQuery))]
+    private void CancelQuery()
+    {
+        if (_executionCts is not { IsCancellationRequested: false } cts) return;
+        IsCancelling = true;
+        QueryStatsText = UiStrings.CancellingStatus;
+        cts.Cancel();
+    }
 
     // Swap the truncated preview for the full result WITHOUT resetting the client-side view
     // state (filter/sort/aggregation) — the columns are identical and it's the same query.

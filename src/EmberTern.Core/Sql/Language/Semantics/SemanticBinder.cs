@@ -38,8 +38,32 @@ internal sealed partial class SemanticBinder
     }
 
     public static SemanticModel Bind(SqlScript script, ISqlMetadataProvider metadata)
+        => Bind(script, metadata, ambientSymbols: null);
+
+    /// <summary>
+    /// Binds <paramref name="script"/>, first seeding the root scope with
+    /// <paramref name="ambientSymbols"/> — declarations that are real but live OUTSIDE this text.
+    /// <para>The Easy-mode routine editors are the reason this exists: their editor holds only the
+    /// BODY (the text after <c>AS</c>), while the routine's parameters and DECLAREd variables live
+    /// in the surrounding grids. A text-only model therefore cannot see them, so Ctrl+Space offered
+    /// no parameters or locals. Seeding them into the root scope makes them visible to EVERY client
+    /// of the model (completion, Quick Info, navigation, highlighting) at once, with no offset
+    /// translation and no second code path. A real declaration in the text SHADOWS an ambient one
+    /// of the same name, because inner scopes are searched first.</para>
+    /// </summary>
+    public static SemanticModel Bind(
+        SqlScript script, ISqlMetadataProvider metadata, IReadOnlyList<Symbol>? ambientSymbols)
     {
         var binder = new SemanticBinder(script, metadata);
+        if (ambientSymbols is { Count: > 0 })
+        {
+            foreach (var sym in ambientSymbols)
+            {
+                if (sym is null) continue;
+                binder._root.Declare(sym);
+                binder._symbols.Add(sym);
+            }
+        }
         binder.Run();
         return new SemanticModel(script, metadata, binder._root, binder._symbols, binder._references);
     }

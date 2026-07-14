@@ -267,7 +267,7 @@
                  Margin="10,4"
                  FontSize="11"
                  IsVisible="{Binding IsLoading}" />
-      <TextBlock Text="{Binding ErrorMessage}"
+      <SelectableTextBlock Text="{Binding ErrorMessage}"
                  Classes="subtle error"
                  Margin="10,4"
                  FontSize="11"

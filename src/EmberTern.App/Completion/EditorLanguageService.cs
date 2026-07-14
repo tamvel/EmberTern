@@ -93,16 +93,27 @@ internal sealed class EditorLanguageService : IDisposable
     private long _modelVersion = -1;
     private bool _disposed;
 
+    /// <summary>
+    /// Supplies declarations that are real but live OUTSIDE this editor's text. The Easy-mode
+    /// routine editors need it: their editor holds only the BODY, while the parameters and DECLAREd
+    /// variables sit in the surrounding grids — so a text-only model can't see them and Ctrl+Space
+    /// offered no params/locals. Seeded into the model's root scope, they become visible to every
+    /// model client at once. Null (the SQL editor) = nothing ambient, the text is the whole truth.
+    /// </summary>
+    private readonly Func<IReadOnlyList<Symbol>>? _ambientSymbols;
+
     public EditorLanguageService(
         TextEditor editor,
         Func<ISqlMetadataProvider>? metadataSnapshot = null,
         Func<int>? metadataGeneration = null,
-        Func<IReadOnlyList<string>, CancellationToken, Task<bool>>? warmReferencedMetadata = null)
+        Func<IReadOnlyList<string>, CancellationToken, Task<bool>>? warmReferencedMetadata = null,
+        Func<IReadOnlyList<Symbol>>? ambientSymbols = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _metadataSnapshot = metadataSnapshot;
         _metadataGeneration = metadataGeneration;
         _warmReferencedMetadata = warmReferencedMetadata;
+        _ambientSymbols = ambientSymbols;
         _debounce = new DispatcherTimer { Interval = ParseDebounce };
         _debounce.Tick += OnDebounceTick;
         _editor.TextChanged += OnTextChanged;
@@ -164,7 +175,7 @@ internal sealed class EditorLanguageService : IDisposable
         var generation = CurrentMetadataGeneration;
         var text = _editor.Text ?? string.Empty;
         var provider = _metadataSnapshot?.Invoke();
-        _model = BuildModelSafe(text, provider);
+        _model = BuildModelSafe(text, provider, CaptureAmbientSymbols());
         _modelVersion = version;
         _modelMetadataGeneration = generation;
         RaiseModelUpdated();
@@ -187,7 +198,7 @@ internal sealed class EditorLanguageService : IDisposable
         var generation = CurrentMetadataGeneration;
         var text = _editor.Text ?? string.Empty;
         var provider = _metadataSnapshot?.Invoke();
-        _model = BuildModelSafe(text, provider);
+        _model = BuildModelSafe(text, provider, CaptureAmbientSymbols());
         _modelVersion = version;
         _modelMetadataGeneration = generation;
         RaiseModelUpdated();
@@ -344,12 +355,13 @@ internal sealed class EditorLanguageService : IDisposable
         var generation = CurrentMetadataGeneration; // capture with the snapshot (UI thread)
         var text = _editor.Text ?? string.Empty;   // one materialization per idle, not per keystroke
         var provider = _metadataSnapshot?.Invoke(); // UI-thread snapshot, consumed off-thread
+        var ambient = CaptureAmbientSymbols();      // UI-thread snapshot (reads VM grids), same rule
         try
         {
             var (map, model) = await Task.Run(() =>
             {
                 var aliases = SqlAliasResolver.ParseAliases(text);
-                var built = BuildModelSafe(text, provider);
+                var built = BuildModelSafe(text, provider, ambient);
                 return (aliases, built);
             }, cts.Token).ConfigureAwait(true); // resume on the UI thread
             // Drop the result if a newer parse superseded this one or we were cancelled.
@@ -375,16 +387,27 @@ internal sealed class EditorLanguageService : IDisposable
 
     // The parser + binder are error-tolerant (never throw), but a defensive catch keeps
     // any future bug in the language front-end from ever crashing the editor.
-    private static SemanticModel? BuildModelSafe(string text, ISqlMetadataProvider? provider)
+    // ambient MUST be captured on the UI thread by the caller (it reads VM collections) and passed
+    // in — never resolved here, since this also runs on the thread pool.
+    private static SemanticModel? BuildModelSafe(
+        string text, ISqlMetadataProvider? provider, IReadOnlyList<Symbol>? ambient)
     {
         try
         {
-            return SemanticModel.Build(text, provider);
+            return SemanticModel.Build(text, provider, ambient);
         }
         catch
         {
             return null;
         }
+    }
+
+    /// <summary>Snapshot the out-of-text declarations on the UI thread. Never throws — a failing
+    /// provider must only cost IntelliSense richness, never the model.</summary>
+    private IReadOnlyList<Symbol>? CaptureAmbientSymbols()
+    {
+        try { return _ambientSymbols?.Invoke(); }
+        catch { return null; }
     }
 
     public void Dispose()

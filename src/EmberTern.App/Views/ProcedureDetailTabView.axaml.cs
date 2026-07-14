@@ -22,6 +22,7 @@ using EmberTern.App.ViewModels;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Sql.Templates;
 
 namespace EmberTern.App.Views;
@@ -98,10 +99,17 @@ public partial class ProcedureDetailTabView : UserControl
         if (_completionAttached) return;
         if (this.FindAncestorOfType<Window>()?.DataContext is MainWindowViewModel mainVm)
         {
+            // Source mode: the text is the whole CREATE PROCEDURE, so the model already sees the
+            // params + DECLAREs — no ambient symbols. The Easy-mode BODY / cursor / subprogram
+            // editors hold only a fragment, with the params + variables in the grids, so they must
+            // be seeded or Ctrl+Space offers no parameters/locals.
+            Func<IReadOnlyList<Symbol>> ambient = () =>
+                _currentVm?.BuildAmbientSymbols() ?? Array.Empty<Symbol>();
+
             if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm);
-            if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm);
-            if (_cursorEditor is not null) SqlEditorBehavior.Attach(_cursorEditor, mainVm);
-            if (_subprogramEditor is not null) SqlEditorBehavior.Attach(_subprogramEditor, mainVm);
+            if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm, ambientSymbols: ambient);
+            if (_cursorEditor is not null) SqlEditorBehavior.Attach(_cursorEditor, mainVm, ambientSymbols: ambient);
+            if (_subprogramEditor is not null) SqlEditorBehavior.Attach(_subprogramEditor, mainVm, ambientSymbols: ambient);
 
             // Metadata-object drop → snippet flyout, into every editable PSQL editor.
             if (_sqlEditor is not null) SqlSnippetDropTarget.Attach(_sqlEditor, mainVm, SnippetInsertionContext.PsqlBody);
@@ -370,6 +378,20 @@ public partial class ProcedureDetailTabView : UserControl
     // Feeds the "Record N of M" indicator (SelectedIndex is within the page).
     private void OnProcResultSelectionChanged(object? sender, SelectionChangedEventArgs e)
         => _currentVm?.SetExecSelectedRow(_resultGrid?.SelectedIndex ?? -1);
+
+    // Select the row under a right-click on an Easy-Mode collection grid (params /
+    // variables) so the context-menu Remove / Move act on the clicked row — Avalonia's
+    // DataGrid doesn't auto-select on right-click (gotcha #16). Leaves Handled=false so
+    // the ContextMenu still opens; the grid's SelectedItem two-way binding carries the
+    // selection to the VM, which the shared collection commands read.
+    private void OnEasyGridPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not DataGrid grid) return;
+        if (!e.GetCurrentPoint(grid).Properties.IsRightButtonPressed) return;
+        if (e.Source is not Visual v) return;
+        var row = v.FindAncestorOfType<DataGridRow>(includeSelf: true);
+        if (row?.DataContext is { } item) grid.SelectedItem = item;
+    }
 
     // ── Filter-from-cell (Execute Result) ────────────────────────────────────
     private GridCellFilterContext? _execCellCtx;

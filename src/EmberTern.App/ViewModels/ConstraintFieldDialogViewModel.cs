@@ -43,10 +43,12 @@ public partial class ConstraintFieldDialogViewModel : ViewModelBase
     public ConstraintFieldDialogViewModel(
         ConstraintFieldKind kind,
         string tableName,
-        IReadOnlyList<string> fields)
+        IReadOnlyList<string> fields,
+        IReadOnlyList<string>? existingNames = null)
     {
         Kind = kind;
         TableName = tableName ?? string.Empty;
+        _existingNames = existingNames;
         Fields = new ObservableCollection<SelectableFieldViewModel>(
             (fields ?? Array.Empty<string>()).Select(n => new SelectableFieldViewModel(n)));
         Fields.CollectionChanged += OnFieldsCollectionChanged;
@@ -59,6 +61,7 @@ public partial class ConstraintFieldDialogViewModel : ViewModelBase
 
     public ConstraintFieldKind Kind { get; }
     public string TableName { get; }
+    private readonly IReadOnlyList<string>? _existingNames;
     public ObservableCollection<SelectableFieldViewModel> Fields { get; }
 
     public string DialogTitle => Kind == ConstraintFieldKind.PrimaryKey
@@ -151,7 +154,8 @@ public partial class ConstraintFieldDialogViewModel : ViewModelBase
     {
         var t = TableName.Trim().ToUpperInvariant();
         var prefix = Kind == ConstraintFieldKind.PrimaryKey ? "PK_" : "UNQ_";
-        return string.IsNullOrEmpty(t) ? prefix.TrimEnd('_') : prefix + t;
+        var baseName = string.IsNullOrEmpty(t) ? prefix.TrimEnd('_') : prefix + t;
+        return ConstraintNaming.MakeUnique(baseName, _existingNames);
     }
 
     private List<string> SelectedFieldNames()

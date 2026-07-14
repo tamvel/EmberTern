@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Firebird;
 
 namespace EmberTern.App.ViewModels;
@@ -227,6 +228,34 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
     // ─── Variables (editable grid — shared by all routine editors) ────────
 
     public ObservableCollection<ProcedureVariableRowViewModel> Variables { get; }
+
+    /// <summary>
+    /// The routine's declarations as semantic symbols, for the Easy-mode BODY editor. That editor's
+    /// text is only the body — the DECLAREd variables (and, for a procedure/function, the
+    /// parameters) live in the surrounding grids, so a text-only semantic model cannot see them and
+    /// Ctrl+Space offered no params/locals. These are seeded into the model's root scope, which
+    /// makes them visible to every model client (completion, Quick Info, navigation, highlighting).
+    /// <para>Base = the shared Variables grid; routine kinds with parameters override and add them.
+    /// Source mode passes nothing (the text already declares everything).</para>
+    /// </summary>
+    public virtual IReadOnlyList<Symbol> BuildAmbientSymbols()
+    {
+        var symbols = new List<Symbol>();
+        AddVariableSymbols(symbols);
+        return symbols;
+    }
+
+    /// <summary>Appends the Variables grid as <see cref="VariableSymbol"/>s. Blank/duplicate names
+    /// are skipped — a half-typed row must never poison the scope.</summary>
+    protected void AddVariableSymbols(List<Symbol> symbols)
+    {
+        foreach (var v in Variables)
+        {
+            var name = v.Name?.Trim();
+            if (string.IsNullOrEmpty(name)) continue;
+            symbols.Add(new VariableSymbol(name));
+        }
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteVariableCommand))]

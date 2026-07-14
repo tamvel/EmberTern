@@ -40,6 +40,10 @@ public class TraceSqlInlinerTests
     [InlineData("char(3)", "abc", "'abc'")]
     [InlineData("date", "2026-01-01", "'2026-01-01'")]
     [InlineData("timestamp", "2026-01-01 10:30:00", "'2026-01-01 10:30:00'")]
+    // Firebird's trace emits the ISO 'T' separator; the inlined literal must use a space
+    // (Firebird rejects 'T'), so the copied SQL is runnable.
+    [InlineData("timestamp", "1899-12-30T00:00:00", "'1899-12-30 00:00:00'")]
+    [InlineData("timestamp", "2026-01-01T10:30:00.0000", "'2026-01-01 10:30:00.0000'")]
     [InlineData("time", "10:30:00", "'10:30:00'")]
     [InlineData("integer", "42", "42")]
     [InlineData("bigint", "9000000000", "9000000000")]

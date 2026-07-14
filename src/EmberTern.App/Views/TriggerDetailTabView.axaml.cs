@@ -13,6 +13,7 @@ using AvaloniaEdit.Highlighting;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Templates;
 
@@ -70,8 +71,14 @@ public partial class TriggerDetailTabView : UserControl
         {
             // NEW. / OLD. in the trigger body complete the trigger's table columns.
             Func<string?> triggerTable = () => _currentVm?.TableName;
+            // Easy mode holds only the body; the trigger's DECLAREd variables live in the grid, so
+            // seed them into the model or Ctrl+Space offers no locals. Source mode needs nothing.
+            Func<IReadOnlyList<Symbol>> ambient = () =>
+                _currentVm?.BuildAmbientSymbols() ?? Array.Empty<Symbol>();
+
             if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm, triggerTable);
-            if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm, triggerTable);
+            if (_bodyEditor is not null)
+                SqlEditorBehavior.Attach(_bodyEditor, mainVm, triggerTable, ambientSymbols: ambient);
 
             // Metadata-object drop → snippet flyout, into the editable trigger editors.
             if (_sqlEditor is not null) SqlSnippetDropTarget.Attach(_sqlEditor, mainVm, SnippetInsertionContext.PsqlBody);
@@ -159,6 +166,18 @@ public partial class TriggerDetailTabView : UserControl
     {
         if (_suppressSourceSync || _currentVm is null || _sqlEditor is null) return;
         _currentVm.SourceText = _sqlEditor.Text;
+    }
+
+    // Select the row under a right-click on the Variables grid so the context-menu
+    // Remove / Move act on the clicked row (Avalonia DataGrid doesn't auto-select on
+    // right-click, gotcha #16). Handled stays false so the ContextMenu still opens.
+    private void OnEasyGridPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not DataGrid grid) return;
+        if (!e.GetCurrentPoint(grid).Properties.IsRightButtonPressed) return;
+        if (e.Source is not Visual v) return;
+        var row = v.FindAncestorOfType<DataGridRow>(includeSelf: true);
+        if (row?.DataContext is { } item) grid.SelectedItem = item;
     }
 
     private void OnBodyEditorTextChanged(object? sender, EventArgs e)

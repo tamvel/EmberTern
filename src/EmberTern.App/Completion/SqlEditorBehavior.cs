@@ -1,5 +1,8 @@
+using System;
+using System.Collections.Generic;
 using AvaloniaEdit;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Sql.Language.Semantics;
 
 namespace EmberTern.App.Completion;
 
@@ -17,7 +20,15 @@ internal static class SqlEditorBehavior
     /// <param name="contextTableProvider">For a trigger body editor: returns the
     /// trigger's table so <c>NEW.</c> / <c>OLD.</c> complete that table's columns.
     /// Null for ordinary editors (NEW/OLD have no meaning there).</param>
-    public static SqlCompletionController Attach(TextEditor editor, MainWindowViewModel vm, Func<string?>? contextTableProvider = null)
+    /// <param name="ambientSymbols">For an Easy-mode routine BODY editor: the routine's parameters
+    /// and DECLAREd variables, which live in the surrounding grids rather than in the body text —
+    /// without them the model cannot see them and Ctrl+Space offers no params/locals. Null for the
+    /// SQL editor and Source mode, where the text already contains every declaration.</param>
+    public static SqlCompletionController Attach(
+        TextEditor editor,
+        MainWindowViewModel vm,
+        Func<string?>? contextTableProvider = null,
+        Func<IReadOnlyList<Symbol>>? ambientSymbols = null)
     {
         var completion = new SqlCompletionController(
             editor,
@@ -40,7 +51,9 @@ internal static class SqlEditorBehavior
             // Package 5 closure: prefetch-complete → definitive rebuild + full warm + publish, scoped to
             // the editor's visual-tree lifetime (leak-free).
             subscribeMetadataReady: h => vm.Metadata.MetadataReady += h,
-            unsubscribeMetadataReady: h => vm.Metadata.MetadataReady -= h);
+            unsubscribeMetadataReady: h => vm.Metadata.MetadataReady -= h,
+            // Easy-mode routine bodies: seed the model with the params/variables held in the grids.
+            ambientSymbols: ambientSymbols);
 
         // Semantic highlighting (Etap 6): colour identifiers by resolved role, fed by the same
         // cached semantic model the completion controller owns (one background parse per editor).

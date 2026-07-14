@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 using EmberTern.Core.Sql.Language;
 
 namespace EmberTern.Core.Trace;
@@ -21,8 +22,10 @@ namespace EmberTern.Core.Trace;
 /// returns the SQL unchanged. This guards a <c>MaxSQLLength</c>-truncated statement (fewer
 /// <c>?</c> than params) and any other mismatch — the faithful source is shown instead.</item>
 /// <item><c>NULL</c> → <c>NULL</c>; numeric/boolean → verbatim; char/text and date/time/
-/// timestamp → single-quoted (internal <c>'</c> doubled). BLOB/array/unknown are NOT inlined —
-/// the <c>?</c> is left in place (the value stays visible in the detail Parameters list).</item>
+/// timestamp → single-quoted (internal <c>'</c> doubled). A timestamp's ISO <c>T</c> date/time
+/// separator is normalized to a space so the literal is valid Firebird. BLOB/array/unknown are
+/// NOT inlined — the <c>?</c> is left in place (the value stays visible in the detail
+/// Parameters list).</item>
 /// </list>
 /// </para>
 /// </summary>
@@ -76,9 +79,27 @@ public static class TraceSqlInliner
         {
             Category.Numeric => param.Value.Trim(),
             Category.Boolean => param.Value.Trim(),
-            Category.Text or Category.Temporal => "'" + param.Value.Replace("'", "''") + "'",
+            Category.Text => Quote(param.Value),
+            Category.Temporal => Quote(NormalizeTemporal(param.Value)),
             _ => "?", // BLOB / array / unknown — keep the placeholder; the value stays in the Parameters list
         };
+    }
+
+    private static string Quote(string value) => "'" + value.Replace("'", "''") + "'";
+
+    // Firebird's trace captures a TIMESTAMP parameter with the ISO 'T' date/time separator
+    // ("1899-12-30T00:00:00"), but a Firebird datetime LITERAL rejects the 'T' — so an inlined
+    // timestamp pasted back into the editor won't run. Convert that single separator to the space
+    // Firebird expects, making the inlined SQL runnable (the inliner's whole purpose). A value
+    // that's already space-separated, date-only, or time-only doesn't match and is left verbatim.
+    private static readonly Regex IsoTemporalRx =
+        new(@"^(\d{4}-\d{2}-\d{2})T(.+)$", RegexOptions.Compiled);
+
+    private static string NormalizeTemporal(string value)
+    {
+        var v = value.Trim();
+        var m = IsoTemporalRx.Match(v);
+        return m.Success ? m.Groups[1].Value + " " + m.Groups[2].Value : v;
     }
 
     private static Category Classify(string? dataType)

@@ -231,6 +231,12 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
     public bool CanStop => State is TraceSessionState.Running or TraceSessionState.Paused;
     public bool CanPauseResume => State is TraceSessionState.Running or TraceSessionState.Paused;
 
+    /// <summary>The Pause/Resume toggle is ONE button, one command — but its glyph + tooltip must
+    /// reflect the live state, or a paused session still shows a lit "Pause" button (reads as
+    /// "running"). Paused → the button becomes Resume; otherwise it's Pause.</summary>
+    public bool IsPaused => State == TraceSessionState.Paused;
+    public string PauseResumeTooltip => IsPaused ? UiStrings.TraceResume : UiStrings.TracePause;
+
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
     {
@@ -711,6 +717,8 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanStop));
         OnPropertyChanged(nameof(CanPauseResume));
+        OnPropertyChanged(nameof(IsPaused));
+        OnPropertyChanged(nameof(PauseResumeTooltip));
         StartCommand.NotifyCanExecuteChanged();
         StopCommand.NotifyCanExecuteChanged();
         PauseResumeCommand.NotifyCanExecuteChanged();

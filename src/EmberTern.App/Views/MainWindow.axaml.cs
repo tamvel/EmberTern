@@ -1585,18 +1585,37 @@ public partial class MainWindow : Window
     private void OnResultGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
         => _currentVm?.SetResultSelectedRow(_resultGrid?.SelectedIndex ?? -1);
 
-    // ── Filter-from-cell (SQL Results) ────────────────────────────────────────
+    // ── Filter-from-cell + copy-from-cell (SQL Results) ───────────────────────
     private GridCellFilterContext? _resultCellCtx;
+    // The exact object?[] row the user right-clicked. Both the filter menu and the
+    // copy menu resolve their target from the clicked cell, never from the grid's
+    // view coordinates (SelectedIndex / CurrentColumn) — those index the sorted/
+    // filtered/paged view, not CurrentResult.Rows, and CurrentColumn is null on a
+    // fresh right-click. See ResolveResultRowIndex.
+    private object?[]? _resultCellRow;
 
     private void OnResultCellPointerPressed(object? sender, DataGridCellPointerPressedEventArgs e)
     {
         if (_resultGrid is null || _currentVm is null) return;
         if (!e.PointerPressedEventArgs.GetCurrentPoint(_resultGrid).Properties.IsRightButtonPressed) return;
-        // Row selection is handled by OnResultGridPointerPressed; here we only resolve
-        // the clicked cell for the filter menu + enable Contains for text cells.
+        // Row selection is handled by OnResultGridPointerPressed; here we resolve the
+        // clicked cell for the filter menu (Contains gating) AND for the copy menu.
+        _resultCellRow = e.Row?.DataContext as object?[];
         _resultCellCtx = GridCellFilter.Resolve(_resultGrid, e, _currentVm.ResultFilterPanel.Columns);
         if (ResultFilterContainsItem is not null)
             ResultFilterContainsItem.IsEnabled = _resultCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);
+    }
+
+    // Translate the right-clicked row object into its index in CurrentResult.Rows.
+    // PagedResultRows holds the SAME object?[] references (filter/sort/page only
+    // reorder/slice), so a reference lookup is the correct view→data mapping.
+    private int ResolveResultRowIndex(object?[]? rowObject)
+    {
+        var rows = _currentVm?.CurrentResult?.Rows;
+        if (rowObject is null || rows is null) return -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (ReferenceEquals(rows[i], rowObject)) return i;
+        return -1;
     }
 
     private void OnResultFilterByValueClick(object? sender, RoutedEventArgs e)
@@ -1634,9 +1653,13 @@ public partial class MainWindow : Window
 
     private async void InvokeCopy(CopyGridMode mode)
     {
-        if (_currentVm is null || _resultGrid is null) return;
-        var rowIndex = _resultGrid.SelectedIndex;
-        var colIndex = _resultGrid.CurrentColumn?.DisplayIndex ?? 0;
+        if (_currentVm is null) return;
+        // Resolve the TARGET from the right-clicked cell (captured in
+        // OnResultCellPointerPressed), not from the grid's view coordinates:
+        //   row → data index in CurrentResult.Rows (robust to sort/filter/paging);
+        //   column → the cell's boxed data index (robust to column reorder).
+        var rowIndex = ResolveResultRowIndex(_resultCellRow);
+        var colIndex = _resultCellCtx?.ColumnIndex ?? 0;
         await _currentVm.CopyGridAsync(mode, rowIndex, colIndex);
     }
 

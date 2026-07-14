@@ -122,6 +122,14 @@ public sealed class FirebirdQueryExecutor
                 }
             }
 
+            // Cancellation must reach the SERVER, not just this task. A CancellationToken alone
+            // cannot interrupt a round-trip that is blocked while Firebird computes (a heavy
+            // join/aggregate produces no rows for a long time, so no await ever observes the
+            // token) — Cancel then appears dead. FbCommand.Cancel() issues fb_cancel_operation,
+            // which aborts the running statement server-side. Registering it on the token is what
+            // makes Cancel take effect on the FIRST click. (gotcha: cancel-token != query-cancel)
+            using var cancelReg = RegisterServerCancel(cmd, cancellationToken);
+
             // Open the reader in a try/catch so a prepare/execute FbException is wrapped; the `yield`
             // below stays OUTSIDE any catch (C# forbids yield inside try-with-catch), and per-row
             // ReadAsync gets its own catch for the rare mid-stream error.
@@ -228,6 +236,10 @@ public sealed class FirebirdQueryExecutor
                     cmd.Parameters.AddWithValue(p.Name, p.Value ?? DBNull.Value);
                 }
             }
+
+            // See RegisterServerCancel: without this, Cancel cannot interrupt a query that is
+            // still executing server-side (no await observes the token until the first row).
+            using var cancelReg = RegisterServerCancel(cmd, cancellationToken);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
 
@@ -336,6 +348,27 @@ public sealed class FirebirdQueryExecutor
             }
         }
     }
+
+    /// <summary>
+    /// Bridges .NET cancellation to Firebird's own statement cancellation. A
+    /// <see cref="CancellationToken"/> is cooperative: it is only observed at an await that
+    /// actually yields, so it CANNOT interrupt a query still executing on the server (a heavy
+    /// join/aggregate returns no rows for a long time — nothing observes the token, and Cancel
+    /// looks dead no matter how many times it is clicked). <c>FbCommand.Cancel()</c> sends
+    /// <c>fb_cancel_operation</c>, which aborts the running statement server-side; the pending
+    /// ExecuteReader/Read then faults and unwinds normally.
+    /// <para>Returns a registration the caller disposes when the command completes, so the token
+    /// never holds a reference to a disposed command. Best-effort: a Cancel() that races
+    /// completion (or a server that refuses) must never surface as an error.</para>
+    /// </summary>
+    private static CancellationTokenRegistration RegisterServerCancel(FbCommand cmd, CancellationToken ct)
+        => ct.CanBeCanceled
+            ? ct.Register(static state =>
+            {
+                try { ((FbCommand)state!).Cancel(); }
+                catch { /* already finished / not cancellable — the token still unwinds the task */ }
+            }, cmd)
+            : default;
 
     private static string FormatFbError(FbException ex)
     {

@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Export;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Performance;
 using EmberTern.Core.Query;
 using EmberTern.Core.Sql;
@@ -151,6 +152,31 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
 
     public ObservableCollection<ProcedureParamRowViewModel> InputParams { get; }
     public ObservableCollection<ProcedureParamRowViewModel> OutputParams { get; }
+
+    /// <summary>Easy-mode body editor: the body text declares neither the parameters nor the
+    /// variables (they live in the grids), so seed both into the model. See
+    /// <see cref="SourceObjectDetailTabViewModel.BuildAmbientSymbols"/>.</summary>
+    public override IReadOnlyList<Symbol> BuildAmbientSymbols()
+    {
+        var symbols = new List<Symbol>();
+        AddParams(symbols, InputParams, ParameterDirection.Input);
+        AddParams(symbols, OutputParams, ParameterDirection.Output);
+        AddVariableSymbols(symbols);
+        return symbols;
+    }
+
+    private static void AddParams(
+        List<Symbol> symbols,
+        ObservableCollection<ProcedureParamRowViewModel> rows,
+        ParameterDirection direction)
+    {
+        foreach (var p in rows)
+        {
+            var name = p.Name?.Trim();
+            if (string.IsNullOrEmpty(name)) continue;
+            symbols.Add(new ParameterSymbol(name) { Direction = direction });
+        }
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteInputParamCommand))]

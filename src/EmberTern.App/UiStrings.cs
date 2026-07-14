@@ -388,6 +388,7 @@ internal static class UiStrings
     public const string ResultsEmptyHint = "Run a query to see results.";
     public const string MessagesEmptyHint = "No messages yet.";
     public const string ExecutingStatus = "Executing query…";
+    public const string CancellingStatus = "Cancelling…";
     // Live execution-timer indicator (SQL Editor / Execute Procedure/Function / Script Executor).
     // One cohesive label — {0} = mm:ss.f elapsed.
     public const string ExecutionElapsedFormat = "Elapsed: {0}";
@@ -1311,6 +1312,8 @@ internal static class UiStrings
     public const string TraceStart = "Start";
     public const string TraceStop = "Stop";
     public const string TracePauseResume = "Pause / Resume";
+    public const string TracePause = "Pause";
+    public const string TraceResume = "Resume";
     public const string TraceClear = "Clear";
     public const string TraceGroupNone = "Events";
     public const string TraceGroupTransaction = "Transactions";

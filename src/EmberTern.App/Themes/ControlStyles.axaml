@@ -27,7 +27,10 @@
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
   </Style>
 
-  <Style Selector="TextBlock.subtle">
+  <!-- :is(TextBlock) so it also matches SelectableTextBlock (a TextBlock subclass) —
+       error messages use Classes="subtle error" on a SelectableTextBlock so they can be
+       selected/copied. -->
+  <Style Selector=":is(TextBlock).subtle">
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
@@ -385,6 +388,31 @@
     <Setter Property="Margin" Value="1" />
     <Setter Property="StrokeThickness" Value="1" />
     <Setter Property="Stroke" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
+  <!-- A TextBox whose visual frame is supplied by a wrapping Border (embedded search
+       fields, inline editors). The container owns the border; this TextBox is pure
+       text + caret. Suppresses the control's OWN chrome in every state — crucially
+       including :focus, so FluentTheme's blue focus visual doesn't paint a ring
+       inside (and overlapping the text of) the container. FocusAdorner is nulled to
+       kill the keyboard focus rectangle too. Transparent is the only literal allowed
+       (it's "no fill", not a theme color). -->
+  <Style Selector="TextBox.frameless">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+  </Style>
+  <Style Selector="TextBox.frameless /template/ Border#PART_BorderElement">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="TextBox.frameless:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="TextBox.frameless:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
 
   <!-- ListBoxItem selection / hover — same overrides we did for DataGridRow and
