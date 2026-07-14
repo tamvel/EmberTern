@@ -183,12 +183,29 @@ noted.
 ## Current state
 
 - **Active branch: `feat/editor-language-frontend`** — holds the editor-language-front-end rebuild
-  (Etaps 0–6 + UX Polish incl. P8) **and** the 2026-07-14 **UX & Stabilization Sprint**, which turned
-  into a rewrite of the transaction/attachment model. Not yet merged to `master`.
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: 3633 main + 23
+  (Etaps 0–6 + UX Polish incl. P8), the 2026-07-14 **UX & Stabilization Sprint** (transaction/
+  attachment model rewrite), **and** a 2026-07-14 **UX Polish follow-up sprint** (below). Not yet
+  merged to `master`.
+- **UX Polish follow-up sprint (2026-07-14) — DONE** (4 tasks, separate commits): **(1) trigger
+  context variables** — NEW/OLD/INSERTING/UPDATING/DELETING now get a distinct semantic highlight
+  (new `SemanticHighlightClass.ContextVariable`, coloured like the Function/context-constant palette).
+  Done through the semantic model, not an editor exception: the binder declares the three predicates
+  into the trigger's routine-body scope (`TriggerPredicateSymbol`), so they resolve ONLY inside a
+  CREATE TRIGGER — none are reserved words, so a like-named identifier elsewhere is untouched.
+  **(2) occurrence highlight** retinted from warm gold (→ muddy brown on dark) to a subtle accent-blue
+  wash (theme token `OccurrenceHighlight*`). **(3) formatter WITH/CTE** — new `FormatWith` construct
+  handler (each CTE body indented, `as (` / `)` on own lines, multiple CTEs), plus set operators
+  (UNION [ALL]/INTERSECT/EXCEPT) now break onto their own line via the one `MatchStructuralPhrase`
+  mechanism (top-level AND inside CTE bodies); no parser-depth increase. **(4) Easy-mode DDL casing**
+  — new `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL
+  (regular ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted),
+  kept distinct from `SqlFormatter` (which preserves its own casing on existing source).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: 3661 main + 23
   headless-probe (run the `ConnectionExpandBindingProbe` headless class as its own `dotnet test`
   partition — it intermittently hangs alongside the rest of the suite; both partitions pass
-  independently). Smoke: clean (app launches).
+  independently). Smoke: clean (app launches). *(Trigger-highlight + occurrence colours are proven by
+  headless model/classifier tests + chosen per the documented palette; the on-screen appearance awaits
+  the user's visual confirmation per the QA rule.)*
 - **⚠ `FirebirdScriptExecutor` is KNOWN-BROKEN for its primary use case** — it runs the whole script
   in ONE transaction and its docstring claimed mixed DDL+DML migration is "all-or-nothing", which is
   **false** (gotcha #213: a Firebird transaction cannot use an object it created but has not
