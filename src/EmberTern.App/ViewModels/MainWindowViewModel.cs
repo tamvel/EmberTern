@@ -39,15 +39,17 @@ public partial class MainWindowViewModel : ViewModelBase
     private FolderState _folderState = new();
     private readonly FirebirdConnectionService _service;
     // Data lane (connection #1): SQL Editor F5, data preview/edit.
+    // THE user's working transaction — one, on the data attachment. Everything the user runs by
+    // hand lives in it: SQL Editor F5 (queries AND DDL), table-data edits, Execute Procedure,
+    // Script Executor. One Commit, one Rollback.
     private readonly TransactionService _transactionService;
-    // Metadata lane (connection #2): DDL from the structure editor, Shift+F5, metadata
-    // browsing. Falls back to the data lane when the second attachment is unavailable.
-    private readonly TransactionService _metadataTransactionService;
-    // F5 auto-routes to one of these by statement kind (SqlStatementClassifier):
-    // data DML/reads → _executor (data lane); DDL/DCL → _metadataExecutor (metadata
-    // lane). There is no manual lane override (Shift+F5 was removed).
-    private readonly FirebirdQueryExecutor _executor;          // data lane
-    private readonly FirebirdQueryExecutor _metadataExecutor;  // metadata lane
+    // The read-only metadata attachment (#2): catalog reads only, implicit per-command
+    // transactions, owns no transaction. See MetadataLane.
+    private readonly MetadataLane _metadataLane;
+    // The SQL Editor is a classic SQL console: ONE executor, ONE attachment, no routing by
+    // statement kind. (There used to be a second, "metadata" executor that F5 silently routed DDL
+    // to — a hidden second transaction with its own Commit. That is gone.)
+    private readonly FirebirdQueryExecutor _executor;
     private readonly FirebirdMetadataReader _metadataReader;
     private readonly FirebirdMetadataSearchReader _searchReader;
     private readonly FirebirdDdlReader _ddlReader;
@@ -78,6 +80,12 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly SqlTemplateRegistry _templateRegistry = SqlTemplateCatalog.CreateRegistry();
     private SnippetContextBuilder? _snippetContextBuilder;
     private CancellationTokenSource? _executionCts;
+    // True when the OPEN user transaction has run at least one DDL/DCL statement. Uncommitted DDL
+    // is deliberately invisible to the read-only metadata attachment (classic console semantics —
+    // a new object appears in the tree only after Commit), so the tree must be reloaded when this
+    // transaction settles. Cleared on settle. Set from SqlStatementClassifier, which is now a
+    // refresh hint only — it no longer routes execution.
+    private bool _transactionChangedSchema;
     // The SQL (+ bound params) of the last data-lane result-set run, so "Load all rows" can re-run
     // exactly THAT statement as Full — never whatever is now in the editor.
     private string? _lastResultSql;
@@ -86,11 +94,13 @@ public partial class MainWindowViewModel : ViewModelBase
     // client-side view state (filter/sort/aggregation) instead of resetting it.
     private bool _preserveViewStateOnNextResult;
     private TransactionState _previousTransactionState = TransactionState.Idle;
-    private TransactionState _previousMetadataTransactionState = TransactionState.Idle;
-    // Set just before a Commit/Rollback settles a lane, read by OnTransactionStateChanged
-    // to decide whether the post-settle refresh runs (commit → no refresh, rollback →
-    // refresh to revert). See DecidePostTransactionRefresh for why a commit must NOT refresh.
+    // Set just before a Commit/Rollback settles, read by OnTransactionStateChanged to decide
+    // whether the post-settle refresh runs. See DecidePostTransactionRefresh.
     private bool _lastTransactionSettleWasRollback;
+    // Snapshot of _transactionChangedSchema taken at settle time (the flag itself is cleared as
+    // soon as the transaction ends, but the state-changed handler runs afterwards, possibly on
+    // another thread).
+    private bool _settledTransactionChangedSchema;
     // Most-recently-activated-last ordering of open tabs. Drives "return to the tab
     // I came from" when the active tab is closed (e.g. open a table → jump to a
     // procedure from its dependencies → close the procedure → land back on the
@@ -143,25 +153,19 @@ public partial class MainWindowViewModel : ViewModelBase
         _folderState = _folderStore.Load();
         _service = service;
         _transactionService = transactionService;
-        // Metadata working tx is ALWAYS the safe NOWAIT default (TPB profiles are no
-        // longer user-configurable — Developer Mode's WAIT applies only to the DDL
-        // executor path, not this working tx). Degrades to the data lane when the
-        // second attachment is unavailable (fallback) so metadata work still functions.
-        _metadataTransactionService = new TransactionService(
-            _service,
-            ConnectionRole.Metadata,
-            _ => Core.Connections.TransactionProfile.ReadCommitted,
-            fallback: _transactionService);
+        // Catalog reads run on the read-only metadata attachment with implicit per-command
+        // transactions, so browsing never pins objects in — or is blocked by — the user's
+        // working transaction. It owns no transaction of its own (it degrades onto the data
+        // connection if the second attachment can't open; MetadataLane handles that).
+        _metadataLane = new MetadataLane(_service, _transactionService);
         _executor = new FirebirdQueryExecutor(_service, _transactionService);
-        _metadataExecutor = new FirebirdQueryExecutor(_service, _metadataTransactionService);
-        // Browsing (metadata reader, DDL reader, TableDetail structure reads) runs on
-        // the metadata lane so it doesn't pin objects in the data working tx. The
-        // TableDetail reader splits per method: structure → metadata, data preview → data.
-        _metadataReader = new FirebirdMetadataReader(_service, _metadataTransactionService);
-        _searchReader = new FirebirdMetadataSearchReader(_service, _metadataTransactionService);
-        _ddlReader = new FirebirdDdlReader(_service, _metadataTransactionService);
-        _securityReader = new FirebirdSecurityReader(_service, _metadataTransactionService);
-        _tableDetailReader = new FirebirdTableDetailReader(_service, _metadataTransactionService, _transactionService);
+        // The TableDetail reader splits per method: structure → metadata lane, data preview → the
+        // user's transaction on the data lane (so the user sees their own uncommitted rows).
+        _metadataReader = new FirebirdMetadataReader(_service, _metadataLane);
+        _searchReader = new FirebirdMetadataSearchReader(_service, _metadataLane);
+        _ddlReader = new FirebirdDdlReader(_service, _metadataLane);
+        _securityReader = new FirebirdSecurityReader(_service, _metadataLane);
+        _tableDetailReader = new FirebirdTableDetailReader(_service, _metadataLane, _transactionService);
         // The single authority for a complete portable object script (structure + COMMENT ON,
         // no grants) — used by both the Export button and the read-only DDL tab.
         _metadataExportService = new MetadataExportService(_ddlReader, _tableDetailReader);
@@ -172,26 +176,23 @@ public partial class MainWindowViewModel : ViewModelBase
             (name, ct) => _tableDetailReader.GetConstraintsAsync(name, ct),
             (name, type, ct) => _tableDetailReader.GetProcedureParametersAsync(name, type, ct),
             async (name, ct) => await _tableDetailReader.GetFunctionSignatureAsync(name, ct).ConfigureAwait(true));
-        // Krok 1: DDL/Compile executes on the MAIN (data) connection — the same
-        // attachment Execute Procedure / F5 use — so a Compile of a just-executed
-        // object no longer hits "object is in use" (cross-attachment self-block). It
-        // auto-commits with an explicit NOWAIT TPB; the DATA TransactionService is
-        // passed so the executor can require the data working tx to be settled first
-        // (gotcha #89: one FbConnection, one transaction at a time).
+        // Object-editor Compile ONLY — it runs on the dedicated DDL attachment (autonomous,
+        // auto-committed, WAIT-bounded / Developer Mode). It never touches the user's transaction;
+        // the TransactionService is passed only for the degraded-mode guard (no DDL attachment →
+        // it shares the data connection, where one-tx-per-connection applies).
         _ddlExecutor = new FirebirdDdlExecutor(_service, _transactionService);
         // Performance profiling runs on the data lane (same attachment as F5). Plan is
-        // read best-effort; a profiled run executes under the user's manual data tx.
+        // read best-effort; a profiled run executes under the user's transaction.
         _planReader = new FirebirdPlanReader(_service, _transactionService);
         // Per-table reads (Phase 2): stats read on the metadata lane, attachment id on the
-        // data lane — so before/after snapshots stay fresh and never touch the data tx.
-        _perfStatsReader = new FirebirdPerfStatsReader(_service, _metadataTransactionService, _transactionService);
-        // Borrow each lane's working transaction so a MON$/CURRENT_CONNECTION read never runs a
-        // null-transaction command on a connection with a pending local tx (gotcha #173): the id
-        // read hits the DATA lane, which holds a pending working tx after any SQL-Editor execute.
-        _sessionReader = new FirebirdSessionReader(_service, _transactionService, _metadataTransactionService);
+        // data lane — so before/after snapshots stay fresh and never touch the user's tx.
+        _perfStatsReader = new FirebirdPerfStatsReader(_service, _metadataLane, _transactionService);
+        // The data-lane MON$/CURRENT_CONNECTION read must attach to the user's pending transaction
+        // or the driver rejects the command (gotcha #173); the metadata lane uses an implicit tx.
+        _sessionReader = new FirebirdSessionReader(_service, _transactionService, _metadataLane);
         // Catalog (indexes/selectivity/cardinality) for the advisor — read on the metadata lane
         // for the profiled query's tables when the Performance panel builds (Phase 3a).
-        _catalogReader = new FirebirdCatalogReader(_service, _metadataTransactionService);
+        _catalogReader = new FirebirdCatalogReader(_service, _metadataLane);
         // Script Executor runs on the DATA lane (co-location, gotcha #122) as the working tx.
         _scriptExecutor = new FirebirdScriptExecutor(_service, _transactionService);
         _performanceAnalyzer = new PerformanceAnalyzer();
@@ -229,7 +230,6 @@ public partial class MainWindowViewModel : ViewModelBase
         _service.ActiveConnectionChanged += OnActiveConnectionChanged;
         _service.ActiveProfileUpdated += OnActiveProfileUpdated;
         _transactionService.TransactionStateChanged += OnTransactionStateChanged;
-        _metadataTransactionService.TransactionStateChanged += OnTransactionStateChanged;
         ReloadConnections();
         UpdateStatusFromConnection();
     }
@@ -323,7 +323,6 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ShowEditorToolbar))]
     [NotifyPropertyChangedFor(nameof(ShowTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowDataTransactionButtons))]
-    [NotifyPropertyChangedFor(nameof(ShowMetadataTransactionButtons))]
     [NotifyPropertyChangedFor(nameof(ShowQueryPanel))]
     [NotifyPropertyChangedFor(nameof(ActiveDdlText))]
     [NotifyPropertyChangedFor(nameof(ActiveTableDetail))]
@@ -1002,41 +1001,27 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool CanExecute => !IsExecuting;
 
-    // --- Data lane transaction state (SQL Editor F5, data preview/edit) ---
+    // --- THE user transaction. One, on the data attachment. One Commit, one Rollback. ---
+    // (There was a second, "metadata" transaction here, fed by the SQL Editor silently routing DDL
+    //  onto the metadata attachment. Routing is gone, so this is now the whole model.)
     public bool IsTransactionIdle => _transactionService.IsIdle;
     public bool IsTransactionActive => _transactionService.IsActive;
     public bool IsTransactionError => _transactionService.IsError;
     public bool HasExecutedInTransaction => _transactionService.HasExecutedStatements;
-    public string TransactionBarText => BuildTransactionBarText(UiStrings.TransactionDataBarPrefix, _transactionService);
+    public string TransactionBarText => BuildTransactionBarText(_transactionService);
 
-    // --- Metadata lane transaction state (DDL, Shift+F5) ---
-    public bool IsMetadataTransactionIdle => _metadataTransactionService.IsIdle;
-    public bool IsMetadataTransactionActive => _metadataTransactionService.IsActive;
-    public bool IsMetadataTransactionError => _metadataTransactionService.IsError;
-    public bool HasExecutedInMetadataTransaction => _metadataTransactionService.HasExecutedStatements;
-    public string MetadataTransactionBarText => BuildTransactionBarText(UiStrings.TransactionMetadataBarPrefix, _metadataTransactionService);
+    // The Commit/Rollback pair is reachable wherever the user can start a transaction — and stays
+    // visible while one is open, wherever they navigate.
+    public bool ShowDataTransactionButtons
+        => IsQueryTabActive || IsDataTabActive || IsTransactionActive || IsTransactionError;
 
-    // The metadata lane is only shown as a separate group when it has its own
-    // attachment; in degraded mode it aliases the data lane and showing both would
-    // duplicate the same transaction.
-    public bool MetadataLaneIndependent => _service.MetadataIsIndependent;
-
-    // Commit/Rollback button groups appear where their lane is reachable OR active:
-    // Data on the Query / Dane surfaces; Metadata on the structure surfaces (and on the
-    // Query tab once a Shift+F5 metadata tx is open).
-    public bool ShowDataTransactionButtons => IsQueryTabActive || IsDataTabActive || IsTransactionActive || IsTransactionError;
-    public bool ShowMetadataTransactionButtons
-        => MetadataLaneIndependent
-           && (IsTableDetailTabActive || IsNewTableTabActive || IsQueryTabActive
-               || IsMetadataTransactionActive || IsMetadataTransactionError);
-
-    private static string BuildTransactionBarText(string lanePrefix, TransactionService tx) => tx.State switch
+    private static string BuildTransactionBarText(TransactionService tx) => tx.State switch
     {
         TransactionState.Active when tx.HasExecutedStatements
-            => $"{lanePrefix}: {UiStrings.TransactionBarActive} · {string.Format(UiStrings.TransactionStatementCountFormat, tx.StatementCount)}",
-        TransactionState.Active => $"{lanePrefix}: {UiStrings.TransactionBarActive}",
-        TransactionState.Error => $"{lanePrefix}: {UiStrings.TransactionBarError}",
-        _ => $"{lanePrefix}: {UiStrings.TransactionBarInactive}",
+            => $"{UiStrings.TransactionBarActive} · {string.Format(UiStrings.TransactionStatementCountFormat, tx.StatementCount)}",
+        TransactionState.Active => UiStrings.TransactionBarActive,
+        TransactionState.Error => UiStrings.TransactionBarError,
+        _ => UiStrings.TransactionBarInactive,
     };
     public void ReloadConnections()
     {
@@ -2248,8 +2233,7 @@ public partial class MainWindowViewModel : ViewModelBase
         return items;
     }
 
-    private bool AnyTransactionActive
-        => _transactionService.IsActive || _metadataTransactionService.IsActive;
+    private bool AnyTransactionActive => _transactionService.IsActive;
 
     private void AppendActiveTransactionLines(System.Text.StringBuilder sb)
     {
@@ -2257,11 +2241,6 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             sb.AppendLine("  • " + string.Format(CultureInfo.CurrentCulture,
                 UiStrings.UnsavedTransactionDataFormat, _transactionService.StatementCount));
-        }
-        if (_metadataTransactionService.IsActive && _service.MetadataIsIndependent)
-        {
-            sb.AppendLine("  • " + string.Format(CultureInfo.CurrentCulture,
-                UiStrings.UnsavedTransactionMetadataFormat, _metadataTransactionService.StatementCount));
         }
     }
 
@@ -5348,9 +5327,12 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        // Auto-route by statement kind. Ambiguous → Data (read_committed + nowait,
-        // never blocks). See SqlStatementClassifier for the EXECUTE BLOCK reasoning.
-        var metadata = SqlStatementClassifier.Classify(sql) == StatementLane.Metadata;
+        // The SQL Editor is a classic SQL console: EVERY statement — SELECT, DML, DDL, GRANT —
+        // runs on the ONE data attachment inside the ONE user transaction, NOWAIT, settled by the
+        // single Commit / Rollback. No routing by statement kind, no hidden second transaction.
+        // The classifier survives only as a refresh HINT (does this transaction change the schema,
+        // so should the metadata tree be reloaded on Commit?) — it no longer steers execution.
+        var changesSchema = SqlStatementClassifier.Classify(sql) == SqlStatementCategory.Schema;
 
         if (!_service.IsConnected)
         {
@@ -5383,23 +5365,10 @@ public partial class MainWindowViewModel : ViewModelBase
         ClearError();
         _executionCts = new CancellationTokenSource();
 
-        // Always log which lane/profile the auto-router chose, so the user never has to
-        // guess which transaction this statement ran under.
-        AddMessage(MessageSeverity.Info, BuildExecutedViaMessage(metadata));
-
         try
         {
-            // Data-lane runs go through the shared metrics path (before/after MON$ delta →
-            // per-table INSERT/UPDATE/DELETE + reads); metadata/DDL runs don't capture.
             QueryResult result;
             IReadOnlyList<PerTableReadRow>? reads = null;
-            if (metadata)
-            {
-                result = parameters is null
-                    ? await _metadataExecutor.ExecuteAsync(executeSql, _executionCts.Token).ConfigureAwait(true)
-                    : await _metadataExecutor.ExecuteAsync(executeSql, parameters, _executionCts.Token).ConfigureAwait(true);
-            }
-            else
             {
                 // Full reports streamed progress (live "Loading… N rows" counter) + the soft-threshold
                 // "keep loading?" prompt; Preview needs neither.
@@ -5408,6 +5377,10 @@ public partial class MainWindowViewModel : ViewModelBase
                 (result, reads) = await ExecuteWithMetricsAsync(
                     new ExecutionRequest { Sql = executeSql, Intent = intent, Parameters = parameters },
                     progress, onSoft, _executionCts.Token).ConfigureAwait(true);
+                // A DDL/DCL statement in this transaction means the schema changes on Commit — so
+                // the metadata tree must be reloaded then (uncommitted DDL is deliberately NOT
+                // visible to the read-only metadata attachment: classic console semantics).
+                if (changesSchema) _transactionChangedSchema = true;
                 // Remember this statement so the notice bar's [Load all rows] can re-run it as Full.
                 _lastResultSql = executeSql;
                 _lastResultParameters = parameters;
@@ -5604,16 +5577,10 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    // "Executed via Data profile (Read Committed)." / "Executed via Metadata profile
-    // (Read Write Table Stability)." — surfaced in the Messages log on every execute.
-    private string BuildExecutedViaMessage(bool metadata)
-    {
-        var lane = metadata ? UiStrings.TransactionLaneMetadata : UiStrings.TransactionLaneData;
-        var profile = metadata
-            ? (_service.ActiveProfile?.MetadataTransactionProfile ?? Core.Connections.TransactionProfile.ReadCommitted)
-            : (_service.ActiveProfile?.DataTransactionProfile ?? Core.Connections.TransactionProfile.ReadCommitted);
-        return string.Format(UiStrings.ExecutedViaProfileFormat, lane, TransactionProfileCatalog.LabelFor(profile));
-    }
+    // BuildExecutedViaMessage lived here: it logged "Executed via Data/Metadata profile (…)" on
+    // every F5, because the auto-router silently chose an attachment and transaction and the user
+    // would otherwise have had no way to know which. There is one attachment and one transaction
+    // now, so there is nothing to disclose — the message is gone with the routing that needed it.
 
     [RelayCommand(CanExecute = nameof(CanFormatSql))]
     private void FormatSql()
@@ -6000,84 +5967,48 @@ public partial class MainWindowViewModel : ViewModelBase
         return max + 1;
     }
 
-    // ─── Unified Commit / Rollback (single user-facing pair) ─────────────
+    // ─── Commit / Rollback — ONE transaction, one pair of buttons ─────────────
     //
-    // The user sees ONE Commit + ONE Rollback. They never choose a lane: the app
-    // auto-routed each statement to the Data or Metadata lane (SqlStatementClassifier),
-    // so Commit settles every lane that has an open transaction and Rollback reverts
-    // every lane that's active or in error. When both lanes are active, both are
-    // committed / rolled back. The per-lane commands below remain as building blocks
-    // (CommitAll/RollbackAll call CommitLaneAsync/RollbackLaneAsync), and the disconnect
-    // path still rolls back both lanes directly.
+    // There is exactly one user transaction (the data attachment), so there is nothing to route
+    // and nothing to reconcile. This used to be a dual-lane model — Commit had to settle "every
+    // lane that has an open transaction", because F5 silently routed DDL onto a second,
+    // metadata transaction the user never asked for. With routing gone, CanCommitAll /
+    // DecideCommitLanes / DecideRollbackLanes / the per-lane Commit+Rollback command pairs all
+    // collapse into this.
 
-    public bool CanCommitAll
-    {
-        get { var (d, m) = DecideCommitLanes(_transactionService.IsActive, _service.MetadataIsIndependent, _metadataTransactionService.IsActive); return d || m; }
-    }
+    public bool CanCommitAll => _transactionService.IsActive;
 
-    public bool CanRollbackAll
-    {
-        get
-        {
-            var (d, m) = DecideRollbackLanes(
-                _transactionService.IsActive, _transactionService.IsError,
-                _service.MetadataIsIndependent, _metadataTransactionService.IsActive, _metadataTransactionService.IsError);
-            return d || m;
-        }
-    }
-
-    // Pure lane-selection decisions — unit-testable without a live transaction.
-    // Metadata is only its own lane when independent; otherwise it delegates to the
-    // data lane, so acting on it again would be a redundant no-op.
-    internal static (bool data, bool metadata) DecideCommitLanes(bool dataActive, bool metadataIndependent, bool metadataActive)
-        => (dataActive, metadataIndependent && metadataActive);
-
-    internal static (bool data, bool metadata) DecideRollbackLanes(
-        bool dataActive, bool dataError, bool metadataIndependent, bool metadataActive, bool metadataError)
-        => (dataActive || dataError, metadataIndependent && (metadataActive || metadataError));
+    public bool CanRollbackAll => _transactionService.IsActive || _transactionService.IsError;
 
     [RelayCommand(CanExecute = nameof(CanCommitAll))]
-    private async Task CommitAllAsync()
-    {
-        var (commitData, commitMeta) = DecideCommitLanes(
-            _transactionService.IsActive, _service.MetadataIsIndependent, _metadataTransactionService.IsActive);
-        if (commitData) await CommitLaneAsync(_transactionService, UiStrings.TransactionLaneData).ConfigureAwait(true);
-        if (commitMeta) await CommitLaneAsync(_metadataTransactionService, UiStrings.TransactionLaneMetadata).ConfigureAwait(true);
-    }
+    private Task CommitAllAsync() => CommitTransactionAsync();
 
     [RelayCommand(CanExecute = nameof(CanRollbackAll))]
-    private async Task RollbackAllAsync()
+    private Task RollbackAllAsync() => RollbackTransactionAsync();
+
+    [RelayCommand]
+    private Task CommitAsync() => CommitTransactionAsync();
+
+    [RelayCommand]
+    private Task RollbackAsync() => RollbackTransactionAsync();
+
+    private async Task CommitTransactionAsync()
     {
-        var (rollbackData, rollbackMeta) = DecideRollbackLanes(
-            _transactionService.IsActive, _transactionService.IsError,
-            _service.MetadataIsIndependent, _metadataTransactionService.IsActive, _metadataTransactionService.IsError);
-        if (rollbackData) await RollbackLaneAsync(_transactionService, UiStrings.TransactionLaneData).ConfigureAwait(true);
-        if (rollbackMeta) await RollbackLaneAsync(_metadataTransactionService, UiStrings.TransactionLaneMetadata).ConfigureAwait(true);
-    }
+        var tx = _transactionService;
+        var lane = UiStrings.TransactionLaneData;
 
-    // Data lane (SQL Editor F5, data preview/edit).
-    [RelayCommand]
-    private Task CommitAsync() => CommitLaneAsync(_transactionService, UiStrings.TransactionLaneData);
-
-    [RelayCommand]
-    private Task RollbackAsync() => RollbackLaneAsync(_transactionService, UiStrings.TransactionLaneData);
-
-    // Metadata lane (DDL from the structure editor, Shift+F5).
-    [RelayCommand]
-    private Task CommitMetadataAsync() => CommitLaneAsync(_metadataTransactionService, UiStrings.TransactionLaneMetadata);
-
-    [RelayCommand]
-    private Task RollbackMetadataAsync() => RollbackLaneAsync(_metadataTransactionService, UiStrings.TransactionLaneMetadata);
-
-    private async Task CommitLaneAsync(TransactionService tx, string lane)
-    {
         var count = tx.StatementCount;
-        // Commit ⇒ no post-settle refresh (UI already current); see DecidePostTransactionRefresh.
+        // A plain data commit needs NO refresh — the UI is already current, and a blanket reload
+        // here is what caused the post-commit storm (gotcha #119). But a commit that ran DDL DOES:
+        // uncommitted DDL is invisible to the read-only metadata attachment, so this is the moment
+        // the new/changed object actually becomes visible and the tree must be reloaded.
         _lastTransactionSettleWasRollback = false;
-        Diagnostics.RefreshTrace.Log("Commit", $"lane={lane} statements={count} (no post-commit refresh)");
+        _settledTransactionChangedSchema = _transactionChangedSchema;
+        Diagnostics.RefreshTrace.Log("Commit", $"lane={lane} statements={count} schemaChanged={_settledTransactionChangedSchema}");
         try
         {
             await tx.CommitAsync().ConfigureAwait(true);
+            _transactionChangedSchema = false;
             AddMessage(MessageSeverity.Info, string.Format(UiStrings.TransactionLaneCommittedFormat, lane, count));
         }
         catch (TransactionFailedException ex)
@@ -6087,13 +6018,17 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task RollbackLaneAsync(TransactionService tx, string lane)
+    private async Task RollbackTransactionAsync()
     {
+        var tx = _transactionService;
+        var lane = UiStrings.TransactionLaneData;
         var count = tx.StatementCount;
         // Rollback ⇒ post-settle refresh runs to revert the in-memory / optimistic state.
         _lastTransactionSettleWasRollback = true;
+        _settledTransactionChangedSchema = _transactionChangedSchema;
         Diagnostics.RefreshTrace.Log("Rollback", $"lane={lane} statements={count} (refresh to revert)");
         await tx.RollbackAsync().ConfigureAwait(true);
+        _transactionChangedSchema = false;
         AddMessage(MessageSeverity.Info, string.Format(UiStrings.TransactionLaneRolledBackFormat, lane, count));
     }
 
@@ -6214,9 +6149,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataTransactionProfileTooltip));
         OnPropertyChanged(nameof(MetadataTransactionProfileTooltip));
         OnPropertyChanged(nameof(IsDeveloperModeActive));
-        OnPropertyChanged(nameof(MetadataLaneIndependent));
         OnPropertyChanged(nameof(ShowDataTransactionButtons));
-        OnPropertyChanged(nameof(ShowMetadataTransactionButtons));
         OnPropertyChanged(nameof(CanCreateTable));
         NewTableCommand.NotifyCanExecuteChanged();
         // New View shares the same connection-state gate as New Table; without
@@ -6266,25 +6199,26 @@ public partial class MainWindowViewModel : ViewModelBase
         Structure,  // metadata-lane commit/rollback — full structure reload (DDL)
     }
 
-    // Pure decision so it's unit-testable without a live connection.
+    // Pure decision so it's unit-testable without a live connection. Keyed on WHAT THE TRANSACTION
+    // DID, not on which lane it ran on — there is only one lane now.
     //
-    // A COMMIT needs NO refresh: the UI already shows the committed state — the
-    // structure editor calls RefreshStructureAsync when it APPLIES the ALTER (before
-    // the user commits), and data edits paint optimistically. Refreshing after a
-    // commit only opens an extra transaction (TRA_95413 in the trace); on a database
-    // with an ON TRANSACTION COMMIT trigger (e.g. the user's XXX_WS_TRANS_ON_COMMIT
-    // audit trigger → GET_NAGL_WERDYSP → hundreds of BIN_AND/MOD calls) that extra
-    // commit re-fires the trigger — the "massive activity after commit". So commit ⇒ None.
+    // A DML-only COMMIT needs NO refresh: the UI already shows the committed state (data edits
+    // paint optimistically). Refreshing after a commit only opens an extra transaction; on a
+    // database with an ON TRANSACTION COMMIT trigger (e.g. the user's XXX_WS_TRANS_ON_COMMIT audit
+    // trigger → GET_NAGL_WERDYSP → hundreds of BIN_AND/MOD calls) that extra commit re-fires the
+    // trigger — the "massive activity after commit" (gotcha #119). So DML commit ⇒ None.
     //
-    // A ROLLBACK MUST refresh: the in-memory model / optimistic grid writes have to be
-    // reverted to the real (rolled-back) DB state. Metadata rollback → full structure
-    // reload; data rollback → data preview reload. Metadata wins when both settle.
-    internal static PostTransactionRefresh DecidePostTransactionRefresh(bool dataSettled, bool metadataSettled, bool wasRollback)
+    // A DDL transaction changes the schema, so it needs a Structure refresh on EITHER outcome:
+    // committed → the object becomes visible for the first time (uncommitted DDL is invisible to
+    // the read-only metadata attachment); rolled back → it must disappear again.
+    //
+    // A DML ROLLBACK must reload the data preview, to revert the optimistic grid writes.
+    internal static PostTransactionRefresh DecidePostTransactionRefresh(
+        bool settled, bool schemaChanged, bool wasRollback)
     {
-        if (!wasRollback) return PostTransactionRefresh.None;
-        return metadataSettled ? PostTransactionRefresh.Structure
-             : dataSettled ? PostTransactionRefresh.DataOnly
-             : PostTransactionRefresh.None;
+        if (!settled) return PostTransactionRefresh.None;
+        if (schemaChanged) return PostTransactionRefresh.Structure;
+        return wasRollback ? PostTransactionRefresh.DataOnly : PostTransactionRefresh.None;
     }
 
     // Re-entrancy guard so two coalesced settle events can't start two overlapping
@@ -6367,50 +6301,39 @@ public partial class MainWindowViewModel : ViewModelBase
         // marshalled onto the UI thread. Running those off-thread is what broke
         // the DataGrid binding layer and left the grid unresponsive ("UI locked"
         // after reorder+commit, #6).
-        // One handler, both lanes (the data + metadata services share it). In degraded
-        // mode the metadata service delegates to the data one, so we treat it as inert
-        // (Idle) to avoid double-counting the same transaction.
-        var metaIndependent = _service.MetadataIsIndependent;
-
-        var dataCurrent = _transactionService.State;
-        var dataBecameActive = _previousTransactionState != TransactionState.Active && dataCurrent == TransactionState.Active;
+        // ONE transaction now, so one state machine — no lane reconciliation.
+        var current = _transactionService.State;
+        var becameActive = _previousTransactionState != TransactionState.Active && current == TransactionState.Active;
         // Active → Idle means a Commit or Rollback just completed; the on-screen
         // TableDetail tabs may be out of sync with the live catalog (rollback
         // reverts ALTERs fired in the tx; commit confirms them) — refresh each.
-        var dataCommittedOrRolledBack = _previousTransactionState == TransactionState.Active && dataCurrent == TransactionState.Idle;
-        _previousTransactionState = dataCurrent;
-
-        var metaCurrent = metaIndependent ? _metadataTransactionService.State : TransactionState.Idle;
-        var metaBecameActive = _previousMetadataTransactionState != TransactionState.Active && metaCurrent == TransactionState.Active;
-        var metaCommittedOrRolledBack = _previousMetadataTransactionState == TransactionState.Active && metaCurrent == TransactionState.Idle;
-        _previousMetadataTransactionState = metaCurrent;
+        var settled = _previousTransactionState == TransactionState.Active && current == TransactionState.Idle;
+        _previousTransactionState = current;
+        var schemaChanged = _settledTransactionChangedSchema;
 
         void Apply()
         {
-            if (dataBecameActive)
+            if (becameActive)
             {
                 AddMessage(MessageSeverity.Info, string.Format(UiStrings.TransactionLaneStartedFormat, UiStrings.TransactionLaneData));
             }
-            if (metaBecameActive)
-            {
-                AddMessage(MessageSeverity.Info, string.Format(UiStrings.TransactionLaneStartedFormat, UiStrings.TransactionLaneMetadata));
-            }
-            // Route the post-transaction refresh by LANE. A METADATA-lane commit/
-            // rollback may have changed the schema (DDL) → full structure refresh.
-            // A DATA-lane commit/rollback is DML-only (data edits go through the data
-            // lane, DDL through the metadata lane) → the schema is unchanged, so a full
-            // structure reload is wasted work: it re-runs 8 metadata round-trips
-            // (incl. the heavy dependencies query), freezing the UI, and while it tears
-            // down + rebuilds the Fields model it transiently surfaces "Table has no
-            // primary key". A DATA-lane refresh reloads ONLY the data preview, keeping
-            // Fields/PK intact. metaCommitted wins when both coalesce (its full reload
-            // already re-reads the data preview too).
-            var refresh = DecidePostTransactionRefresh(dataCommittedOrRolledBack, metaCommittedOrRolledBack, _lastTransactionSettleWasRollback);
+            // Route the post-transaction refresh by WHAT THE TRANSACTION DID, not by which lane it
+            // ran on (there is only one). A DML-only COMMIT needs no refresh — the UI is already
+            // current, and a blanket structure reload here re-runs 8 metadata round-trips and
+            // re-fires any ON TRANSACTION_COMMIT trigger (the refresh storm, gotcha #119). A
+            // transaction that ran DDL changes the schema, so it needs a structure refresh on
+            // EITHER outcome: on commit the object becomes visible for the first time (uncommitted
+            // DDL is invisible to the read-only metadata attachment), on rollback it disappears.
+            var refresh = DecidePostTransactionRefresh(settled, schemaChanged, _lastTransactionSettleWasRollback);
             RunScopedPostTransactionRefresh(refresh);
-            // Data COMMIT: optimistic in-grid values are now committed (= correct), so no
-            // reload is needed — just clear the per-tab pending-edit flags. (A data
-            // ROLLBACK reloads the edited tabs below, which clears their flags.)
-            if (dataCommittedOrRolledBack && !_lastTransactionSettleWasRollback)
+            // A DDL commit/rollback also changes the object TREE (new/dropped objects), which the
+            // scoped TableDetail refresh above doesn't cover.
+            if (settled && schemaChanged) _ = Metadata.RefreshAsync();
+            if (settled) _settledTransactionChangedSchema = false;
+            // COMMIT: optimistic in-grid values are now committed (= correct), so no reload is
+            // needed — just clear the per-tab pending-edit flags. (A ROLLBACK reloads the edited
+            // tabs below, which clears their flags.)
+            if (settled && !_lastTransactionSettleWasRollback)
             {
                 foreach (var tab in WorkspaceTabs)
                     if (tab.TableDetail is { } committed) committed.HasPendingDataEdits = false;
@@ -6421,26 +6344,16 @@ public partial class MainWindowViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsTransactionError));
             OnPropertyChanged(nameof(HasExecutedInTransaction));
             OnPropertyChanged(nameof(TransactionBarText));
-            OnPropertyChanged(nameof(IsMetadataTransactionIdle));
-            OnPropertyChanged(nameof(IsMetadataTransactionActive));
-            OnPropertyChanged(nameof(IsMetadataTransactionError));
-            OnPropertyChanged(nameof(HasExecutedInMetadataTransaction));
-            OnPropertyChanged(nameof(MetadataTransactionBarText));
             OnPropertyChanged(nameof(ShowDataTransactionButtons));
-            OnPropertyChanged(nameof(ShowMetadataTransactionButtons));
             CommitCommand.NotifyCanExecuteChanged();
             RollbackCommand.NotifyCanExecuteChanged();
-            CommitMetadataCommand.NotifyCanExecuteChanged();
-            RollbackMetadataCommand.NotifyCanExecuteChanged();
-            // Unified pair — enabled state follows whichever lane(s) are active/error.
             OnPropertyChanged(nameof(CanCommitAll));
             OnPropertyChanged(nameof(CanRollbackAll));
             CommitAllCommand.NotifyCanExecuteChanged();
             RollbackAllCommand.NotifyCanExecuteChanged();
 
-            // The Query tab carries the transaction-active marker. It shows when EITHER
-            // lane has executed statements (F5 → data, Shift+F5 → metadata).
-            var anyExecuted = HasExecutedInTransaction || HasExecutedInMetadataTransaction;
+            // The Query tab carries the transaction-active marker.
+            var anyExecuted = HasExecutedInTransaction;
             foreach (var tab in WorkspaceTabs)
             {
                 if (tab.Kind == WorkspaceTabKind.Query)

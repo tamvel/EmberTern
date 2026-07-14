@@ -82,17 +82,18 @@ public class FirebirdSessionReaderTests
     // holds a pending working tx (after any SQL-Editor execute). This pins the lane→service routing
     // (each lane borrows its OWN service; a null service → null tx → fresh implicit MON$ snapshot).
     // The actual driver behaviour is the user's manual smoke, like every DB-path reader.
+    // The lane→service selector is gone: the metadata lane is no longer a TransactionService, so
+    // there is nothing to select between. The metadata lane owns no transaction, so a MON$ read on
+    // it runs in an implicit per-command transaction (a fresh snapshot) — which is exactly what a
+    // monitoring read wants. Pinned here because it is the reason the selector could be deleted.
     [Fact]
-    public void SelectTransactionService_RoutesEachLaneToItsOwnService()
+    public void MetadataLane_OwnsNoTransaction_SoMonReadsGetAFreshImplicitSnapshot()
     {
-        var cs = new FirebirdConnectionService();
-        var data = new TransactionService(cs);
-        var metadata = new TransactionService(cs);
+        using var cs = new FirebirdConnectionService();
+        using var userTx = new TransactionService(cs);
+        var lane = new MetadataLane(cs, userTx);
 
-        Assert.Same(data, FirebirdSessionReader.SelectTransactionService(ConnectionRole.Data, data, metadata));
-        Assert.Same(metadata, FirebirdSessionReader.SelectTransactionService(ConnectionRole.Metadata, data, metadata));
-        // A lane with no working-tx service (the metadata norm) yields null → implicit per-command tx.
-        Assert.Null(FirebirdSessionReader.SelectTransactionService(ConnectionRole.Metadata, data, null));
-        Assert.Null(FirebirdSessionReader.SelectTransactionService(ConnectionRole.Data, null, metadata));
+        // Not connected → not independent → degraded, and the user has no transaction open either.
+        Assert.Null(lane.TransactionForCommand);
     }
 }

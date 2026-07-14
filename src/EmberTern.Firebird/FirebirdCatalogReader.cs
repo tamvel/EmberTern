@@ -39,26 +39,26 @@ public sealed class FirebirdCatalogReader
         "ORDER BY s.RDB$INDEX_NAME, s.RDB$FIELD_POSITION";
 
     private readonly FirebirdConnectionService _connectionService;
-    private readonly TransactionService? _metadataTransactionService;
+    private readonly MetadataLane _metadataLane;
 
     public FirebirdCatalogReader(FirebirdConnectionService connectionService)
-        : this(connectionService, null)
+        : this(connectionService, new MetadataLane(connectionService))
     {
     }
 
     public FirebirdCatalogReader(
         FirebirdConnectionService connectionService,
-        TransactionService? metadataTransactionService)
+        MetadataLane metadataLane)
     {
         _connectionService = connectionService;
-        _metadataTransactionService = metadataTransactionService;
+        _metadataLane = metadataLane;
     }
 
     private FbConnection MetaConnection()
-        => _metadataTransactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+        => _metadataLane.RequireOpenConnection();
     private SemaphoreSlim MetaLock()
-        => _metadataTransactionService?.CommandLock ?? _connectionService.CommandLock;
-    private FbTransaction? MetaTx => _metadataTransactionService?.ActiveTransaction;
+        => _metadataLane.CommandLock;
+    private FbTransaction? MetaTx => _metadataLane.TransactionForCommand;
 
     /// <summary>Captures the catalog for the given tables (typically the ones the profiled
     /// statement touched). Unknown/empty input yields <see cref="CatalogModel.Empty"/>.</summary>

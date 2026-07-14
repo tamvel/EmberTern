@@ -1253,8 +1253,10 @@
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,1,0,0"
                   IsVisible="{Binding IsQueryTabActive}">
+            <!-- ONE transaction, so ONE status chip. (There used to be a second "metadata lane"
+                 chip beside it, because F5 silently routed DDL onto a hidden second transaction.
+                 The SQL Editor is a classic console now: one attachment, one transaction.) -->
             <StackPanel Orientation="Horizontal" Spacing="8" Margin="14,0" VerticalAlignment="Center">
-              <!-- Data lane status -->
               <Ellipse Width="8" Height="8"
                        Fill="{DynamicResource SubtleForegroundBrush}"
                        IsVisible="{Binding IsTransactionIdle}" />
@@ -1268,25 +1270,6 @@
                          Classes="subtle"
                          Classes.error="{Binding IsTransactionError}"
                          VerticalAlignment="Center" />
-              <!-- Metadata lane status (shown only when the metadata attachment is independent) -->
-              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
-                          IsVisible="{Binding MetadataLaneIndependent}">
-                <Border Width="1" Height="12" Margin="0,0"
-                        Background="{DynamicResource BorderBrush}" />
-                <Ellipse Width="8" Height="8"
-                         Fill="{DynamicResource SubtleForegroundBrush}"
-                         IsVisible="{Binding IsMetadataTransactionIdle}" />
-                <Ellipse Width="8" Height="8"
-                         Fill="{DynamicResource TransactionActiveBrush}"
-                         IsVisible="{Binding IsMetadataTransactionActive}" />
-                <Ellipse Width="8" Height="8"
-                         Fill="{DynamicResource ErrorBrush}"
-                         IsVisible="{Binding IsMetadataTransactionError}" />
-                <TextBlock Text="{Binding MetadataTransactionBarText}"
-                           Classes="subtle"
-                           Classes.error="{Binding IsMetadataTransactionError}"
-                           VerticalAlignment="Center" />
-              </StackPanel>
             </StackPanel>
           </Border>
         </Grid>

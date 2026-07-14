@@ -17,27 +17,28 @@ public sealed class FirebirdTableDetailReader
     // dependencies / DDL refresh) run on the METADATA lane; the Dane data preview +
     // row count run on the DATA lane. A single reader instance serves both — each
     // method picks the lane.
-    private readonly TransactionService? _metadataTransactionService;
+    private readonly MetadataLane _metadataLane;
     private readonly TransactionService? _dataTransactionService;
 
     public FirebirdTableDetailReader(FirebirdConnectionService connectionService)
-        : this(connectionService, null, null)
+        : this(connectionService, new MetadataLane(connectionService), null)
     {
     }
 
-    // Back-compat: a single transaction service drives both lanes (tests / legacy).
-    public FirebirdTableDetailReader(FirebirdConnectionService connectionService, TransactionService? transactionService)
-        : this(connectionService, transactionService, transactionService)
+    /// <summary>Convenience for tests / callers that only have the user transaction: the metadata
+    /// lane is derived from it (same connection service, and it owns no transaction of its own).</summary>
+    public FirebirdTableDetailReader(FirebirdConnectionService connectionService, TransactionService transactionService)
+        : this(connectionService, new MetadataLane(connectionService, transactionService), transactionService)
     {
     }
 
     public FirebirdTableDetailReader(
         FirebirdConnectionService connectionService,
-        TransactionService? metadataTransactionService,
+        MetadataLane metadataLane,
         TransactionService? dataTransactionService)
     {
         _connectionService = connectionService;
-        _metadataTransactionService = metadataTransactionService;
+        _metadataLane = metadataLane;
         _dataTransactionService = dataTransactionService;
     }
 
@@ -45,10 +46,10 @@ public sealed class FirebirdTableDetailReader
     // we attach to it; otherwise the managed driver runs the SELECT in an implicit read
     // tx (auto-committed per command). Either way we don't touch the user's tx state.
     private FbConnection MetaConnection()
-        => _metadataTransactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+        => _metadataLane.RequireOpenConnection();
     private SemaphoreSlim MetaLock()
-        => _metadataTransactionService?.CommandLock ?? _connectionService.CommandLock;
-    private FbTransaction? MetaTx => _metadataTransactionService?.ActiveTransaction;
+        => _metadataLane.CommandLock;
+    private FbTransaction? MetaTx => _metadataLane.TransactionForCommand;
 
     private FbConnection DataConnection()
         => _dataTransactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();

@@ -139,9 +139,15 @@ noted.
   → autonomous auto-commit), Source⇄Easy mode for Procedure/Function/Trigger/View, a Revert/
   Discard button with confirmation on every editor, native per-kind workspace persistence.
   *(history: 03, 04, 07, 09)*
-- **Transactions & connection lanes** — one Data + one Metadata `FbConnection` per profile,
-  each with its own working transaction (no autocommit); a per-connection **Developer Mode**
-  toggle controls whether DDL waits for or fails fast against an in-use object. *(history: 05, 13)*
+- **Transactions & connection lanes** — THREE `FbConnection`s per profile, one responsibility each
+  (rewritten 2026-07-14, history 15): **Data** carries everything the user runs by hand (SQL Editor
+  F5 — queries *and* DDL — table-data edits, Execute Procedure, Script Executor) and holds **THE one
+  user working transaction** (auto-begin, never auto-commit, NOWAIT, one Commit / one Rollback);
+  **Metadata** is **read-only** catalog browsing with implicit per-command transactions and owns no
+  transaction (`MetadataLane`); **Ddl** carries object-editor Compile only — autonomous,
+  auto-committed, **WAIT**-bounded, with the per-connection **Developer Mode** toggle setting how
+  long it waits for an object another *session* holds. The SQL Editor is a classic Firebird console:
+  no routing by statement kind, no hidden second transaction. *(history: 05, 13, 15)*
 - **Settings & security** — every user setting (connections, folders, workspace, grid layouts,
   parameter history) lives in one whole-file DPAPI-encrypted `settings.dat`, with a versioned
   container header and forward-compatible schema migration. *(history: 05)*
@@ -176,13 +182,25 @@ noted.
 
 ## Current state
 
-- **Active branch (pre-cleanup-sprint): `feat/editor-language-frontend`** — holds uncommitted
-  Etaps 3–6 of the editor-language-front-end rebuild plus the follow-on UX Polish Phase and a
-  post-polish bug-fix sprint. Not yet merged to `master`.
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: green
-  count ≈ 3410 main + 16 headless-probe tests (run the `ConnectionExpandBindingProbe` headless
-  class as its own `dotnet test` partition — it intermittently hangs alongside the rest of the
-  suite; both partitions pass independently). Smoke: clean (app launches).
+- **Active branch: `feat/editor-language-frontend`** — holds the editor-language-front-end rebuild
+  (Etaps 0–6 + UX Polish incl. P8) **and** the 2026-07-14 **UX & Stabilization Sprint**, which turned
+  into a rewrite of the transaction/attachment model. Not yet merged to `master`.
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: 3633 main + 23
+  headless-probe (run the `ConnectionExpandBindingProbe` headless class as its own `dotnet test`
+  partition — it intermittently hangs alongside the rest of the suite; both partitions pass
+  independently). Smoke: clean (app launches).
+- **⚠ `FirebirdScriptExecutor` is KNOWN-BROKEN for its primary use case** — it runs the whole script
+  in ONE transaction and its docstring claimed mixed DDL+DML migration is "all-or-nothing", which is
+  **false** (gotcha #213: a Firebird transaction cannot use an object it created but has not
+  committed). A deployment script that creates and then populates anything fails at the second
+  statement. It also still carries the last *"Commit or roll back the active transaction…"* guard,
+  and duplicates the classifier (its `FirebirdScriptParser.MapKind` uses the **driver's** statement
+  enum, while Core has the AST-based `SqlStatementClassifier`). **Deferred to a dedicated sprint by
+  user decision** — the Core classification infrastructure was deliberately KEPT, not deleted, as the
+  foundation of that future execution engine. See `docs/history/15-...`.
+- **Verify Firebird behaviour, never infer it.** Three long-standing architectural beliefs were
+  falsified by ~30 lines of probe against the Lab DB this sprint (#213, #214, #215). If a design
+  rests on "Firebird does/doesn't allow X", measure it first.
 - **QA rule (2026-07-12, user directive):** a package is NOT "fixed" on green build/tests/smoke
   alone. If a fix can't be verified **visually in the running app**, report it as "implementation
   done — awaits user confirmation", never "fixed". Trace flows to ground truth, don't guess.
@@ -340,17 +358,14 @@ noted.
   `Emit`, no clause breaks), CASE/expression interior, and CREATE-definition headers (kept verbatim by
   design). All other argument/element lists (INSERT/VALUES/MATCHING/SELECT/IN/EXECUTE-BLOCK params +
   RETURNS/CREATE-VIEW columns/calls) now share the one adaptive builder.
-- **One flagged inconsistency found during this cleanup sprint, worth a two-minute check next
-  time that area is touched:** the 2026-06-18 Transaction Architecture Audit left "R2 — the
-  procedure-lock after Execute → Rollback → Compile" marked **OPEN**, pending a live `MON$` dump
-  (see `docs/history/13-transaction-audit-and-table-designer.md`). The **same day**, the
-  "Single-attachment DDL + Developer Mode" milestone shipped and its root-cause description
-  exactly matches R2's diagnosis (Compile was running DDL on a transient third `FbConnection`
-  attachment instead of the same attachment that ran Execute) — and its fix ("run Compile on the
-  MAIN connection, same attachment as Execute") is precisely the fix R2's own analysis called for.
-  The docs never explicitly closed R2 after that fix shipped. It is very likely already resolved,
-  but nobody re-verified it against the diagnostic evidence the audit asked for — confirm before
-  relying on it as fixed.
+- **R2 (2026-06-18 Transaction Architecture Audit) — CLOSED 2026-07-14, and its premise was wrong.**
+  R2 ("procedure lock after Execute → Rollback → Compile") was left OPEN pending a live `MON$` dump,
+  and the "Single-attachment DDL" fix that followed concluded DDL must be **co-located** on the
+  attachment that executed the object. Measurement (gotcha #214) showed that conclusion was inferred
+  from a **NOWAIT** failure: the cross-attachment lock is transient and a **WAIT** transaction clears
+  it in ~10 ms. DDL now runs on its own dedicated attachment with a WAIT-bounded TPB, the
+  *"Commit or roll back the active transaction before running DDL"* guard is deleted, and the
+  scenario is verified working end-to-end on FB5. See `docs/history/15-...`.
 
 ## Editor Architecture — current direction
 
@@ -463,12 +478,28 @@ for the full explanation, code, and the failure it prevents.
   **local variable once** per acquire/release pair — never re-invoked at `Release()`, or a
   mid-call lane flip leaks one semaphore and over-releases another (survives reconnect; only a
   restart clears it). *(#98, #120)*
-- Firebird holds an object "in use" at the **attachment** level — DDL that alters an object must
-  run on the *same attachment* that executed it, never a fresh/transient connection.
-  *("Single-attachment DDL" fix, `docs/history/13-...`)*
-- To let DDL wait for (rather than fail against) an object another session has in use, the lever
-  is dropping `NOWAIT` (i.e. `WAIT`) — never `write`/`consistency`, which locks whole tables.
-  *(Developer Mode, `docs/history/13-...`)*
+- **DDL ⇒ WAIT with a bounded lock timeout, wherever it runs.** The cross-attachment
+  `object … is in use` is a TRANSIENT metadata-cache lock that bites only **NOWAIT**; a WAIT
+  transaction clears it in ~10 ms. This **supersedes the old "DDL must be co-located on the
+  attachment that executed the object"** conclusion (#122), which was inferred from a NOWAIT failure
+  and forced Compile onto the data connection — which in turn forced the *"Commit or roll back the
+  active transaction before running DDL"* guard. Both are gone: DDL now runs on its own dedicated
+  attachment, independent of every user transaction. Never conclude "Firebird forbids X across
+  attachments" from a NOWAIT failure without re-testing with WAIT. *(#214, supersedes #122;
+  `docs/history/15-...`)*
+- **A Firebird transaction cannot use an object it created but has not committed** —
+  `CREATE TABLE T …; INSERT INTO T …;` in one transaction fails the INSERT with `Table unknown`
+  (-204). Firebird cannot both let a transaction use an object it created *and* keep it rollbackable;
+  `isql`/IBExpert choose the former via `SET AUTODDL ON`. So in EmberTern's console the user must
+  Commit between DDL and dependent DML — that is correct, expected behaviour. Corollary: uncommitted
+  DDL is invisible to other attachments, so an object created in the SQL Editor appears in the
+  metadata tree **only after Commit**. *(#213, `docs/history/15-...`)*
+- **A statement classifier may decide whether to REFRESH the UI; it must never decide WHERE/HOW a
+  statement executes in an interactive console.** The SQL Editor used to auto-route DDL onto a second
+  attachment with a hidden second transaction — making Commit ambiguous and splitting mixed scripts
+  across two transactions. The classifier is kept (it is reusable infrastructure and the foundation
+  of the future Script Executor engine); only the routing was removed. *(#215,
+  `docs/history/15-...`)*
 - After a transaction settles, refresh ONLY the object actually touched — never blanket-refresh
   every open tab (each refresh reruns several implicit-tx catalog reads, which on a DB with an
   `ON TRANSACTION_COMMIT` trigger multiplies into a real storm). *(#119)*

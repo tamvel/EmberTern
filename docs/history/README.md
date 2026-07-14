@@ -40,6 +40,7 @@ file is the fast lookup.
 | [12-search-scripting-export-and-misc.md](12-search-scripting-export-and-misc.md) | Global Search + editor Find/Replace, Firebird routine-reconstruction fixes, Metadata export, Script Executor, Recompile Dependents, Smart SQL Parameters, Export Framework (CSV/XLSX/Clipboard) | 2026-07-05–08 |
 | [13-transaction-audit-and-table-designer.md](13-transaction-audit-and-table-designer.md) | The full Transaction Architecture Audit (R1 fixed, R2 open, R3 resolved), the Table Designer buffered-model restore, single-attachment DDL + Developer Mode | 2026-06-17–18 |
 | [14-editor-language-frontend-history.md](14-editor-language-frontend-history.md) | The editor rebuild's own etap-by-etap "as-built" record (Etap 0–6 completion notes, UX Polish Phase, post-polish bug-fix sprint) — the history half of `docs/design/editor-architecture.md` | 2026-07-09–11 |
+| [15-ux-stabilization-sprint-and-console-refactor.md](15-ux-stabilization-sprint-and-console-refactor.md) | The 11-item UX & Stabilization Sprint, and the transaction/attachment rewrite it turned into: the dedicated **DDL attachment** (WAIT, not co-location — correcting gotcha #122), and the **SQL Editor as a classic Firebird console** (one attachment, one transaction, routing deleted). Also records why `FirebirdScriptExecutor` is known-broken and deferred. **Read before touching transactions, attachments, or the Script Executor.** | 2026-07-14 |
 
 ## Where the gotchas went
 

@@ -5,72 +5,91 @@ using EmberTern.Core.Sql.Language.Ast;
 namespace EmberTern.Core.Sql;
 
 /// <summary>
-/// Which transaction lane a free-text SQL statement should run on. The SQL Editor
-/// uses this to auto-route a single Execute (F5): data operations to the Data lane
-/// (connection #1, data profile), structural operations to the Metadata lane
-/// (connection #2, metadata profile).
-/// <para>
-/// <see cref="Ambiguous"/> is reported when the leading statement can't be classified
-/// confidently (e.g. SET TERM, SET TRANSACTION, an unrecognised keyword, or empty
-/// input). The caller routes Ambiguous to the Data lane — the safest choice
-/// (read_committed + nowait never blocks tables or metadata). The three-valued enum
-/// is kept so callers/tests can distinguish a confident Data verdict from a fallback.
-/// </para>
+/// What a free-text SQL statement DOES: does it touch data, or does it change the schema?
+///
+/// <para><b>This does not decide where a statement runs.</b> It used to: the SQL Editor auto-routed
+/// each F5 by this verdict, sending DDL to a second attachment with its own hidden transaction.
+/// That routing is gone — the SQL Editor is a classic console (one attachment, one transaction,
+/// NOWAIT), so <em>every</em> statement runs in the user's transaction regardless of this verdict.
+/// The classifier survives for one honest purpose: a REFRESH HINT. A transaction that ran
+/// <see cref="Schema"/> statements changes the catalog, so the metadata tree must be reloaded when
+/// it settles (uncommitted DDL is deliberately invisible to the read-only metadata attachment, so
+/// Commit is the moment a new object first appears).</para>
+///
+/// <para><see cref="Ambiguous"/> means the leading statement can't be classified confidently
+/// (SET TERM, SET TRANSACTION, an unrecognised keyword, empty input). It is treated as
+/// "no schema change" — the safe assumption, since a spurious refresh costs a storm of catalog
+/// reads (gotcha #119) while a missed one costs a manual refresh.</para>
 /// </summary>
-public enum StatementLane
+public enum SqlStatementCategory
 {
+    /// <summary>Reads + DML + procedure/block execution.</summary>
     Data,
-    Metadata,
+    /// <summary>DDL + DCL — changes the catalog.</summary>
+    Schema,
     Ambiguous,
 }
 
 /// <summary>
-/// Classifies a free-text SQL statement into a <see cref="StatementLane"/> by the kind of its
+/// Classifies a free-text SQL statement into a <see cref="SqlStatementCategory"/> by the kind of its
 /// leading statement. Re-expressed as an AST query (Etap 2): it parses via <see cref="SqlParser"/>
 /// and inspects the first <see cref="SqlStatement"/> node, rather than carrying its own scanner.
 /// </summary>
 /// <remarks>
-/// Classification is by the FIRST statement only. The query executor sends one command to the
-/// driver per Execute, so a multi-statement script run with a single F5 is already a degenerate
-/// case; we classify by its leading statement.
+/// The WHOLE script is classified, not just its leading statement: if ANY statement changes the
+/// schema the verdict is <see cref="SqlStatementCategory.Schema"/>. A mixed migration script
+/// (<c>CREATE TABLE … ; INSERT … ; SELECT …</c>) does change the catalog, and a first-statement-only
+/// verdict would call that one "Data" and skip the tree reload. (It also USED to decide which
+/// attachment the script ran on, where a first-statement verdict was an outright latent bug — one
+/// more reason routing is gone.)
 /// <para>
-/// EXECUTE BLOCK is classified as Data: Firebird PSQL cannot contain DDL inside a block, and an
-/// EXECUTE BLOCK is a data/result-set construct. The one residual gap — dynamic DDL via
+/// EXECUTE BLOCK is Data: Firebird PSQL cannot contain DDL inside a block, and an EXECUTE BLOCK is
+/// a data/result-set construct. The one residual gap — dynamic DDL via
 /// <c>EXECUTE STATEMENT 'CREATE …'</c> built from a variable — is statically undecidable and
-/// vanishingly rare; it runs harmlessly on the Data lane.
+/// vanishingly rare; it costs at most a missed tree refresh (press Refresh), never a wrong result.
 /// </para>
 /// </remarks>
 public static class SqlStatementClassifier
 {
-    public static StatementLane Classify(string? sql)
+    public static SqlStatementCategory Classify(string? sql)
     {
         if (string.IsNullOrWhiteSpace(sql))
         {
-            return StatementLane.Ambiguous;
+            return SqlStatementCategory.Ambiguous;
         }
 
         var statements = SqlParser.Parse(sql!).Root.Statements;
-        return statements.Count == 0 ? StatementLane.Ambiguous : LaneOf(statements[0]);
+        if (statements.Count == 0) return SqlStatementCategory.Ambiguous;
+
+        // Any schema statement anywhere in the script wins — the catalog changes either way.
+        var verdict = SqlStatementCategory.Ambiguous;
+        foreach (var statement in statements)
+        {
+            var category = CategoryOf(statement);
+            if (category == SqlStatementCategory.Schema) return SqlStatementCategory.Schema;
+            if (category == SqlStatementCategory.Data) verdict = SqlStatementCategory.Data;
+        }
+        return verdict;
     }
 
-    private static StatementLane LaneOf(SqlStatement statement) => statement switch
+    private static SqlStatementCategory CategoryOf(SqlStatement statement) => statement switch
     {
         // Reads + DML + procedure/block/statement execution.
         SelectStatement or InsertStatement or UpdateStatement or UpdateOrInsertStatement
             or DeleteStatement or MergeStatement
             or ExecuteBlockStatement or ExecuteProcedureStatement or ExecuteStatementStatement
-            => StatementLane.Data,
+            => SqlStatementCategory.Data,
 
-        // DDL + DCL (permission structure).
+        // DDL + DCL (permission structure) — both change the catalog.
         DdlStatement or CommentStatement or DeclareStatement or GrantStatement or RevokeStatement
-            => StatementLane.Metadata,
+            => SqlStatementCategory.Schema,
 
         // SET GENERATOR / SET STATISTICS are structural; SET TERM / SET TRANSACTION / others are
         // directives or session-level → ambiguous.
-        SetStatement set => IsStructuralSet(set.Target) ? StatementLane.Metadata : StatementLane.Ambiguous,
+        SetStatement set => IsStructuralSet(set.Target) ? SqlStatementCategory.Schema : SqlStatementCategory.Ambiguous,
 
         // EmptyStatement, RawStatement, and anything else.
-        _ => StatementLane.Ambiguous,
+        _ => SqlStatementCategory.Ambiguous,
     };
 
     private static bool IsStructuralSet(string? target)

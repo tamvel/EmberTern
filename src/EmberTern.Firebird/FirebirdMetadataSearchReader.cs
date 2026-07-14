@@ -23,23 +23,23 @@ namespace EmberTern.Firebird;
 public sealed class FirebirdMetadataSearchReader
 {
     private readonly FirebirdConnectionService _connectionService;
-    private readonly TransactionService? _transactionService;
+    private readonly MetadataLane _lane;
 
     public FirebirdMetadataSearchReader(FirebirdConnectionService connectionService)
-        : this(connectionService, null)
+        : this(connectionService, new MetadataLane(connectionService))
     {
     }
 
-    public FirebirdMetadataSearchReader(FirebirdConnectionService connectionService, TransactionService? transactionService)
+    public FirebirdMetadataSearchReader(FirebirdConnectionService connectionService, MetadataLane lane)
     {
         _connectionService = connectionService;
-        _transactionService = transactionService;
+        _lane = lane;
     }
 
     private FbConnection LaneConnection()
-        => _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+        => _lane.RequireOpenConnection();
     private SemaphoreSlim LaneLock()
-        => _transactionService?.CommandLock ?? _connectionService.CommandLock;
+        => _lane.CommandLock;
 
     /// <summary>
     /// Runs the DB-side searches for <paramref name="query"/> and returns the hits
@@ -104,7 +104,7 @@ public sealed class FirebirdMetadataSearchReader
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;
         cmd.CommandTimeout = 0;
-        cmd.Transaction = _transactionService?.ActiveTransaction;
+        cmd.Transaction = _lane.TransactionForCommand;
         cmd.Parameters.AddWithValue("@term", term);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -124,7 +124,7 @@ public sealed class FirebirdMetadataSearchReader
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = PackageSourceSql;
         cmd.CommandTimeout = 0;
-        cmd.Transaction = _transactionService?.ActiveTransaction;
+        cmd.Transaction = _lane.TransactionForCommand;
         cmd.Parameters.AddWithValue("@term", term);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -146,7 +146,7 @@ public sealed class FirebirdMetadataSearchReader
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = ExceptionMessageSql;
         cmd.CommandTimeout = 0;
-        cmd.Transaction = _transactionService?.ActiveTransaction;
+        cmd.Transaction = _lane.TransactionForCommand;
         cmd.Parameters.AddWithValue("@term", term);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -166,7 +166,7 @@ public sealed class FirebirdMetadataSearchReader
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = TableFieldSql;
         cmd.CommandTimeout = 0;
-        cmd.Transaction = _transactionService?.ActiveTransaction;
+        cmd.Transaction = _lane.TransactionForCommand;
         cmd.Parameters.AddWithValue("@term", term);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);

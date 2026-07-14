@@ -29,34 +29,31 @@ namespace EmberTern.Firebird;
 public sealed class FirebirdSessionReader
 {
     private readonly FirebirdConnectionService _connectionService;
-    private readonly TransactionService? _dataTransactionService;
-    private readonly TransactionService? _metadataTransactionService;
+    private readonly TransactionService? _userTransaction;
+    private readonly MetadataLane? _metadataLane;
 
     public FirebirdSessionReader(
         FirebirdConnectionService connectionService,
-        TransactionService? dataTransactionService = null,
-        TransactionService? metadataTransactionService = null)
+        TransactionService? userTransaction = null,
+        MetadataLane? metadataLane = null)
     {
         _connectionService = connectionService;
-        _dataTransactionService = dataTransactionService;
-        _metadataTransactionService = metadataTransactionService;
+        _userTransaction = userTransaction;
+        _metadataLane = metadataLane;
     }
 
-    /// <summary>The working transaction to attach to for a lane — null when that lane has none
-    /// (the norm for the metadata lane → an implicit per-command tx → a fresh MON$ snapshot). When
-    /// the connection HAS a pending local transaction (always true for the data lane after a
-    /// SQL-Editor execute; also the degraded single-connection case where the metadata lane aliases
-    /// the data lane), we MUST attach to it or the driver rejects the command (gotcha #173). The
-    /// metadata service forwards to the data service in degraded mode, so this stays correct there.</summary>
+    /// <summary>The transaction a MON$ command must run under on a given lane.
+    /// <para>DATA lane: the user's working transaction. After any SQL-Editor execute the connection
+    /// HAS a pending local transaction, and the driver rejects a command that doesn't attach to it
+    /// (gotcha #173) — so we must borrow it.</para>
+    /// <para>METADATA lane: normally none — an implicit per-command transaction, which is what we
+    /// want for a MON$ snapshot (it sees fresh committed state). <see cref="MetadataLane"/> handles
+    /// the degraded single-attachment case internally, where it must join the user's transaction on
+    /// the shared connection.</para></summary>
     private FbTransaction? TxFor(ConnectionRole role)
-        => SelectTransactionService(role, _dataTransactionService, _metadataTransactionService)?.ActiveTransaction;
-
-    /// <summary>Pure lane→service routing (unit-pinned): the data lane borrows the data working
-    /// transaction, the metadata lane the metadata one. A null service (a lane with no working tx,
-    /// the norm for the metadata lane) yields a null transaction → an implicit per-command tx.</summary>
-    internal static TransactionService? SelectTransactionService(
-        ConnectionRole role, TransactionService? data, TransactionService? metadata)
-        => role == ConnectionRole.Metadata ? metadata : data;
+        => role == ConnectionRole.Metadata
+            ? _metadataLane?.TransactionForCommand
+            : _userTransaction?.ActiveTransaction;
 
     // --- SQL (kept as consts so the shape is unit-pinnable; FB 2.5+ column set, no FB4-only
     //     MON$SNAPSHOT_NUMBER so it stays portable across the supported engines) -------------

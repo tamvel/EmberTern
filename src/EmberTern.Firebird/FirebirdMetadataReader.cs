@@ -10,17 +10,17 @@ namespace EmberTern.Firebird;
 public sealed class FirebirdMetadataReader
 {
     private readonly FirebirdConnectionService _connectionService;
-    private readonly TransactionService? _transactionService;
+    private readonly MetadataLane _lane;
 
     public FirebirdMetadataReader(FirebirdConnectionService connectionService)
-        : this(connectionService, null)
+        : this(connectionService, new MetadataLane(connectionService))
     {
     }
 
-    public FirebirdMetadataReader(FirebirdConnectionService connectionService, TransactionService? transactionService)
+    public FirebirdMetadataReader(FirebirdConnectionService connectionService, MetadataLane lane)
     {
         _connectionService = connectionService;
-        _transactionService = transactionService;
+        _lane = lane;
     }
 
     // Connection + lock for this reader's lane. In production the reader is built with
@@ -28,9 +28,9 @@ public sealed class FirebirdMetadataReader
     // never pins objects in the user's data working transaction. Falls back to the data
     // connection when no transaction service is injected (tests).
     private FbConnection LaneConnection()
-        => _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+        => _lane.RequireOpenConnection();
     private SemaphoreSlim LaneLock()
-        => _transactionService?.CommandLock ?? _connectionService.CommandLock;
+        => _lane.CommandLock;
 
     public async Task<IReadOnlyList<MetadataObject>> ListAsync(
         MetadataObjectKind kind,
@@ -58,7 +58,7 @@ public sealed class FirebirdMetadataReader
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = sql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = _transactionService?.ActiveTransaction;
+            cmd.Transaction = _lane.TransactionForCommand;
 
             var results = new List<MetadataObject>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -130,7 +130,7 @@ public sealed class FirebirdMetadataReader
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = sql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = _transactionService?.ActiveTransaction;
+            cmd.Transaction = _lane.TransactionForCommand;
 
             var scalar = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
             // FB COUNT(*) is BIGINT in dialect 3 → comes back as long; ToInt32 is safe
@@ -227,7 +227,7 @@ public sealed class FirebirdMetadataReader
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = sql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = _transactionService?.ActiveTransaction;
+            cmd.Transaction = _lane.TransactionForCommand;
             cmd.Parameters.AddWithValue("@name", tableName);
 
             var columns = new List<ColumnSpec>();
@@ -298,7 +298,7 @@ public sealed class FirebirdMetadataReader
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = DomainsSql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = _transactionService?.ActiveTransaction;
+            cmd.Transaction = _lane.TransactionForCommand;
 
             var domains = new List<DomainSpec>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
