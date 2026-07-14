@@ -10,16 +10,20 @@ using FirebirdSql.Data.FirebirdClient;
 namespace EmberTern.Firebird;
 
 /// <summary>
-/// Which physical attachment a command runs on. C2 opens two connections to the
-/// same database: <see cref="Data"/> (#1) carries user SQL/DML and the data
-/// working transaction; <see cref="Metadata"/> (#2) carries metadata browsing and
-/// the metadata working transaction (DDL). Two attachments are required because the
-/// managed FirebirdClient forbids two transactions on one FbConnection.
+/// Which physical attachment a command runs on. Three connections to the same database:
+/// <see cref="Data"/> (#1) carries user SQL/DML (SQL editor F5, table-data edits, Execute
+/// Procedure) and the data working transaction; <see cref="Metadata"/> (#2) carries metadata
+/// browsing and the metadata working transaction; <see cref="Ddl"/> (#3) carries
+/// Compile/structure DDL and NOTHING else — it never holds a working transaction, so DDL can
+/// always begin its own autonomous transaction without waiting on the user to settle theirs.
+/// Separate attachments are required because the managed FirebirdClient forbids two
+/// transactions on one FbConnection (gotcha #89).
 /// </summary>
 public enum ConnectionRole
 {
     Data,
     Metadata,
+    Ddl,
 }
 
 public sealed class FirebirdConnectionService : IDisposable
@@ -34,6 +38,7 @@ public sealed class FirebirdConnectionService : IDisposable
 
     private FbConnection? _activeConnection;
     private FbConnection? _metadataConnection;
+    private FbConnection? _ddlConnection;
     private ConnectionProfile? _activeProfile;
 
     // FbConnection is single-threaded — concurrent commands on the same connection
@@ -49,8 +54,15 @@ public sealed class FirebirdConnectionService : IDisposable
     // attachments: data work and metadata work proceed in parallel).
     private readonly SemaphoreSlim _commandLock = new(1, 1);
     private readonly SemaphoreSlim _metadataCommandLock = new(1, 1);
+    private readonly SemaphoreSlim _ddlCommandLock = new(1, 1);
 
     public bool IsConnected => _activeConnection is { State: System.Data.ConnectionState.Open };
+
+    // True when the dedicated DDL attachment (#3) opened. When false we degrade to the Data
+    // connection — and then (and ONLY then) DDL must wait for the data working transaction to
+    // settle, because one FbConnection allows one transaction (gotcha #89).
+    public bool DdlIsIndependent
+        => _ddlConnection is { State: System.Data.ConnectionState.Open };
 
     // True when the metadata attachment (#2) opened successfully and is distinct from
     // the data attachment. When false (e.g. the server rejected the second attach), the
@@ -98,8 +110,12 @@ public sealed class FirebirdConnectionService : IDisposable
 
     // Per-role command lock. Metadata falls back to the data lock when the second
     // attachment is unavailable, keeping serialization correct on the shared connection.
-    internal SemaphoreSlim GetCommandLock(ConnectionRole role)
-        => role == ConnectionRole.Metadata && MetadataIsIndependent ? _metadataCommandLock : _commandLock;
+    internal SemaphoreSlim GetCommandLock(ConnectionRole role) => role switch
+    {
+        ConnectionRole.Metadata when MetadataIsIndependent => _metadataCommandLock,
+        ConnectionRole.Ddl when DdlIsIndependent => _ddlCommandLock,
+        _ => _commandLock,
+    };
 
     public async Task ConnectAsync(ConnectionProfile profile, CancellationToken cancellationToken = default)
     {
@@ -141,15 +157,35 @@ public sealed class FirebirdConnectionService : IDisposable
             LogConnectionAttempt("MetadataConnectFailed: " + ex.Message, profile, connectionString);
         }
 
+        // Open the third (DDL) attachment. It carries Compile/structure DDL and nothing else,
+        // and never holds a working transaction — so a Compile can always begin its own
+        // autonomous transaction regardless of what the user left open on the Data lane
+        // (the SQL editor's SELECT) or the Metadata lane. Best-effort: if it fails we degrade
+        // to the Data connection, where the old "settle the working tx first" rule applies.
+        try
+        {
+            var ddl = new FbConnection(connectionString);
+            await ddl.OpenAsync(cancellationToken).ConfigureAwait(false);
+            _ddlConnection = ddl;
+        }
+        catch (Exception ex)
+        {
+            _ddlConnection = null;
+            LogConnectionAttempt("DdlConnectFailed: " + ex.Message, profile, connectionString);
+        }
+
         ActiveConnectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task DisconnectAsync()
     {
-        if (_activeConnection is null && _metadataConnection is null)
+        if (_activeConnection is null && _metadataConnection is null && _ddlConnection is null)
         {
             return;
         }
+
+        await CloseAndDisposeAsync(_ddlConnection).ConfigureAwait(false);
+        _ddlConnection = null;
 
         await CloseAndDisposeAsync(_metadataConnection).ConfigureAwait(false);
         _metadataConnection = null;
@@ -281,21 +317,21 @@ public sealed class FirebirdConnectionService : IDisposable
     }
 
     /// <summary>
-    /// Runs all <paramref name="statements"/> as DDL in ONE transaction on the MAIN
-    /// (data) connection — the SAME attachment user statements (Execute Procedure,
-    /// F5) run on — and auto-commits on success. Co-location is deliberate: Firebird
-    /// allows an attachment to ALTER an object it loaded itself, but a DIFFERENT
-    /// attachment hits "object is in use" (the cross-attachment self-block). Running
-    /// Compile on the main connection makes Execute-then-Compile work without that
-    /// error. NO transient attachment is opened (that was the self-block cause).
+    /// Runs all <paramref name="statements"/> as DDL in ONE transaction on the dedicated
+    /// DDL attachment (#3) and auto-commits on success. That attachment carries nothing else
+    /// and never holds a working transaction, so Compile is independent of whatever the user
+    /// left open on the Data lane (an un-committed SQL-editor SELECT) or the Metadata lane.
     ///
-    /// The transaction uses the explicit <paramref name="options"/> (Krok 1: always
-    /// NOWAIT, matching prior behaviour; Developer Mode will swap this for WAIT +
-    /// lock timeout later). The caller MUST ensure no data working transaction is
-    /// active — one FbConnection allows only one transaction at a time (gotcha #89);
-    /// <see cref="FirebirdDdlExecutor"/> enforces that and surfaces a clear message.
-    /// Propagates the FbException (after rollback) to the caller. Holds the command
-    /// lock for the whole batch so it serializes against concurrent reads (gotcha #31).
+    /// <para>Why a separate attachment is safe (measured on FB5, Lab DB): the cross-attachment
+    /// "object … is in use" that once forced co-location onto the main connection is a
+    /// TRANSIENT metadata-cache lock, not a permanent pin. It only bites a NOWAIT transaction;
+    /// a WAIT transaction clears it in ~10 ms because the holding attachment releases its
+    /// cached metadata on demand. An unrelated open transaction on another attachment does not
+    /// block DDL at all. Hence <see cref="FirebirdDdlExecutor.BuildDdlTransactionOptions(bool)"/>
+    /// always uses WAIT with a bounded lock timeout — that, not co-location, is the real fix.</para>
+    ///
+    /// Propagates the FbException (after rollback) to the caller. Holds the DDL lane's own
+    /// command lock for the whole batch (gotcha #31); it does not serialize against data reads.
     /// </summary>
     public async Task ExecuteDdlAsync(IReadOnlyList<string> statements, FbTransactionOptions options, CancellationToken cancellationToken = default)
     {
@@ -303,11 +339,13 @@ public sealed class FirebirdConnectionService : IDisposable
         ArgumentNullException.ThrowIfNull(options);
         if (statements.Count == 0) return;
 
-        // Resolve the open main connection BEFORE acquiring the lock so a missing
-        // connection surfaces as InvalidOperationException without leaking the lock.
-        var connection = RequireOpenConnection();
+        // Resolve the connection BEFORE acquiring the lock so a missing connection surfaces as
+        // InvalidOperationException without leaking the lock. Capture the lane's lock ONCE
+        // (gotcha #98/#120 — never re-invoke the accessor at Release()).
+        var connection = RequireOpenConnection(ConnectionRole.Ddl);
+        var commandLock = GetCommandLock(ConnectionRole.Ddl);
 
-        await _commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         FbTransaction? tx = null;
         try
         {
@@ -325,7 +363,7 @@ public sealed class FirebirdConnectionService : IDisposable
         }
         catch (Exception ex)
         {
-            // Roll back first so the main connection has no active tx — then the
+            // Roll back first so the DDL connection has no active tx — then the
             // (env-gated) diagnostic dump can open its own short tx cleanly and show
             // which attachment still holds the object the ALTER tried to change.
             if (tx is not null)
@@ -344,7 +382,7 @@ public sealed class FirebirdConnectionService : IDisposable
             {
                 await tx.DisposeAsync().ConfigureAwait(false);
             }
-            _commandLock.Release();
+            commandLock.Release();
         }
     }
 
@@ -411,6 +449,10 @@ public sealed class FirebirdConnectionService : IDisposable
         {
             return _metadataConnection!;
         }
+        if (role == ConnectionRole.Ddl && DdlIsIndependent)
+        {
+            return _ddlConnection!;
+        }
         if (_activeConnection is null || _activeConnection.State != System.Data.ConnectionState.Open)
         {
             throw new InvalidOperationException("No active Firebird connection.");
@@ -420,6 +462,17 @@ public sealed class FirebirdConnectionService : IDisposable
 
     public void Dispose()
     {
+        try
+        {
+            _ddlConnection?.Close();
+        }
+        catch
+        {
+            // ignore
+        }
+        _ddlConnection?.Dispose();
+        _ddlConnection = null;
+
         try
         {
             _metadataConnection?.Close();

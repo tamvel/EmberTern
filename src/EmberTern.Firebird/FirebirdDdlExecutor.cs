@@ -9,12 +9,21 @@ namespace EmberTern.Firebird;
 
 /// <summary>
 /// Executes DDL statements ("CREATE TABLE", "ALTER TABLE", "CREATE GENERATOR",
-/// "CREATE TRIGGER", …) on the active <see cref="FirebirdConnectionService"/>.
+/// "CREATE TRIGGER", …) in ONE autonomous, auto-committed transaction on the dedicated
+/// DDL attachment (<see cref="ConnectionRole.Ddl"/>).
 ///
-/// DDL statements participate in the user's working transaction when one is
-/// active (so a single Compile run can be Rolled Back in one shot), and run
-/// without an explicit transaction when none is — Firebird auto-commits each
-/// DDL command in that case via the managed driver's implicit per-command tx.
+/// <para>The DDL attachment carries nothing but DDL and never holds a working transaction,
+/// so Compile is INDEPENDENT of whatever the user left open elsewhere — an un-committed
+/// SELECT in the SQL editor (Data lane) no longer blocks compiling a trigger. The old
+/// "Commit or roll back the active transaction before running DDL." guard existed only
+/// because DDL shared the Data connection (one FbConnection = one transaction, gotcha #89);
+/// with its own attachment that constraint is gone and the guard is deleted.</para>
+///
+/// <para>The cross-attachment "object … is in use" that once forced DDL onto the main
+/// connection is a TRANSIENT metadata-cache lock (measured on FB5): it bites only a NOWAIT
+/// transaction, and a WAIT transaction clears it in ~10 ms. So the DDL transaction always
+/// uses WAIT with a bounded lock timeout — see <see cref="BuildDdlTransactionOptions(bool)"/>.
+/// That, not co-location, is the actual fix.</para>
 ///
 /// Multi-statement payloads are split into individual statements (the FB engine
 /// does not accept multiple statements in a single <c>FbCommand</c>). The splitter
@@ -27,11 +36,9 @@ public sealed class FirebirdDdlExecutor
     private readonly FirebirdConnectionService _connectionService;
     private readonly TransactionService? _transactionService;
 
-    // Krok 1: DDL/Compile executes on the MAIN connection (co-location with the
-    // lane that runs Execute Procedure / F5) so a Compile of a just-executed object
-    // no longer hits the cross-attachment "object is in use" self-block. The
-    // TransactionService (the DATA lane) is consulted only to verify no working
-    // transaction is active before we begin our own autonomous DDL tx (gotcha #89).
+    // The TransactionService (DATA lane) is consulted ONLY in degraded mode — i.e. when the
+    // dedicated DDL attachment failed to open and DDL falls back onto the Data connection,
+    // where one-tx-per-connection (gotcha #89) still applies.
     public FirebirdDdlExecutor(FirebirdConnectionService connectionService, TransactionService? transactionService = null)
     {
         _connectionService = connectionService;
@@ -54,19 +61,16 @@ public sealed class FirebirdDdlExecutor
         => _connectionService.ExecuteAdminBatchAsync(statements, cancellationToken, progress, BuildDdlTransactionOptions());
 
     /// <summary>
-    /// Splits <paramref name="sql"/> on top-level semicolons, then runs the whole
-    /// batch in ONE transaction on the MAIN connection (co-location — see
-    /// <see cref="FirebirdConnectionService.ExecuteDdlAsync"/>), auto-committing on
-    /// success. The batch is atomic (e.g. ADD FIELD + CREATE GENERATOR + CREATE
-    /// TRIGGER all-or-nothing). Uses an explicit NOWAIT TPB — identical to prior
-    /// behaviour, but now genuinely explicit (the old autonomous path passed no
-    /// FbTransactionOptions, so it silently ignored any configured profile).
+    /// Splits <paramref name="sql"/> on top-level semicolons, then runs the whole batch in ONE
+    /// autonomous transaction on the dedicated DDL attachment, auto-committing on success. The
+    /// batch is atomic (e.g. ADD FIELD + CREATE GENERATOR + CREATE TRIGGER all-or-nothing).
     ///
-    /// gotcha #89: one FbConnection allows one transaction at a time, so a data
-    /// working transaction must be settled first. Surfaces a clear, actionable
-    /// message instead of the raw "Parallel transactions are not supported". The
-    /// self-block scenario (Execute Procedure → Commit/Rollback → Compile) has the
-    /// working tx already settled, so this does not impede it.
+    /// No working transaction anywhere can block this: the DDL attachment holds none. The only
+    /// exception is DEGRADED mode (the DDL attachment failed to open → we fall back to the Data
+    /// connection); there, and only there, an active data working transaction still has to be
+    /// settled first, and we say so plainly rather than surfacing the driver's raw
+    /// "Parallel transactions are not supported".
+    ///
     /// Throws <see cref="DdlExecutionException"/> with the server's message on the
     /// first FbException — the caller stops the Compile run at that point.
     /// </summary>
@@ -77,7 +81,9 @@ public sealed class FirebirdDdlExecutor
         var statements = SplitStatements(sql);
         if (statements.Count == 0) return;
 
-        if (_transactionService is { IsActive: true })
+        // Degraded mode ONLY: without its own attachment, DDL shares the Data connection, which
+        // allows one transaction at a time (gotcha #89).
+        if (!_connectionService.DdlIsIndependent && _transactionService is { IsActive: true })
         {
             throw new DdlExecutionException(
                 "Commit or roll back the active transaction before running DDL.");
@@ -95,34 +101,45 @@ public sealed class FirebirdDdlExecutor
         }
     }
 
-    // Lock timeout (seconds) for Developer Mode's WAIT transactions — bounds the wait
-    // so a Compile of a continuously-used object fails with a clear message instead of
-    // hanging indefinitely.
+    /// <summary>Lock timeout for Developer Mode — DDL waits this long for an object another
+    /// SESSION is using before giving up.</summary>
     internal const int DdlLockTimeoutSeconds = 10;
+
+    /// <summary>Lock timeout for Standard Mode. Short on purpose: it is long enough to absorb
+    /// the ~10 ms metadata-cache release from OUR OWN other attachments (the Data lane that
+    /// executed the routine — the transient cross-attachment "object is in use"), while still
+    /// failing fast against an object another session genuinely holds.</summary>
+    internal const int DdlSelfReleaseTimeoutSeconds = 3;
 
     private FbTransactionOptions BuildDdlTransactionOptions()
         => BuildDdlTransactionOptions(_connectionService.ActiveProfile?.DeveloperMode ?? false);
 
-    // Standard Mode → write + read_committed + rec_version + NOWAIT (fail-fast,
-    // identical to prior behaviour). Developer Mode → the same isolation but WAIT +
-    // a lock timeout, so DDL waits for an in-use object to be released rather than
-    // returning "object is in use" immediately. Pure + internal so a unit test pins
-    // both shapes without a live Firebird. Affects ONLY the DDL path; data ops are
-    // always NOWAIT.
+    // write + read_committed + rec_version + WAIT, bounded by a lock timeout.
+    //
+    // WAIT (not NOWAIT) is the actual fix for the cross-attachment "object … is in use":
+    // measured on FB5, that lock is TRANSIENT — the attachment holding the routine in its
+    // metadata cache releases it on demand, so a WAIT transaction succeeds in ~10 ms whereas
+    // NOWAIT fails instantly. NOWAIT is what forced DDL to be co-located on the Data
+    // connection (and thus forced the "settle your transaction first" guard). With WAIT, DDL
+    // runs happily on its own attachment.
+    //
+    // The two modes differ only in HOW LONG they wait: Standard fails fast against another
+    // session; Developer Mode waits longer. Pure + internal so a unit test pins both shapes
+    // without a live Firebird. Affects ONLY the DDL path; data ops are unchanged.
     internal static FbTransactionOptions BuildDdlTransactionOptions(bool developerMode)
     {
         var behavior =
             FbTransactionBehavior.Write
             | FbTransactionBehavior.ReadCommitted
             | FbTransactionBehavior.RecVersion
-            | (developerMode ? FbTransactionBehavior.Wait : FbTransactionBehavior.NoWait);
+            | FbTransactionBehavior.Wait;
 
-        var options = new FbTransactionOptions { TransactionBehavior = behavior };
-        if (developerMode)
+        return new FbTransactionOptions
         {
-            options.WaitTimeout = TimeSpan.FromSeconds(DdlLockTimeoutSeconds);
-        }
-        return options;
+            TransactionBehavior = behavior,
+            WaitTimeout = TimeSpan.FromSeconds(
+                developerMode ? DdlLockTimeoutSeconds : DdlSelfReleaseTimeoutSeconds),
+        };
     }
 
     /// <summary>
