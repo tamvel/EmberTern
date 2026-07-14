@@ -47,6 +47,7 @@ public static class SqlFormatter
     // ── Default style (§6 — single opinionated default; config panel deferred) ────────────────
     private const string ConjunctionIndent = "  ";   // AND/OR sub-conjunction indent
     private const string ViewColumnIndent = "    ";   // CREATE VIEW column list indent
+    private const string CteBodyIndent = "    ";      // WITH-CTE body indent (IBExpert style)
     private const int MaxLineWidth = 120;             // long-line wrap threshold (SELECT cols / IN list)
     private const int PsqlIndentSize = 2;             // spaces per PSQL nesting level
 
@@ -113,6 +114,13 @@ public static class SqlFormatter
         // MATCHING); unrecognised shapes fall back to the generic emitter (safe; §0 net covers it).
         InsertStatement => FormatInsertFamily(Flatten(stmt.Tokens), headerLen: 2),        // insert into
         UpdateOrInsertStatement => FormatInsertFamily(Flatten(stmt.Tokens), headerLen: 4), // update or insert into
+
+        // SELECT — a plain query goes through the clause-break emitter; a CTE-led "WITH … SELECT …"
+        // query is laid out as a first-class construct (each CTE body indented, set operators broken)
+        // by FormatWith. Both SELECT and WITH parse to SelectStatement (§5.4 statement skeleton), so
+        // the routing is decided here on the leading keyword; any shape FormatWith cannot fully model
+        // falls back to the generic emitter (§0-safe, and the lexeme net covers it regardless).
+        SelectStatement => FormatSelect(Flatten(stmt.Tokens)),
 
         // Everything else — all DML plus non-PSQL DDL, COMMENT, SET, GRANT/REVOKE, DECLARE,
         // EXECUTE PROCEDURE/STATEMENT — through the clause-break SQL emitter (which also handles the
@@ -550,6 +558,22 @@ public static class SqlFormatter
         var t = tokens[i];
         if (t.Kind != FKind.Word) return new Phrase(PhraseKind.None, 0);
 
+        // Set operators — UNION [ALL] / INTERSECT / EXCEPT — each break onto their own line so a
+        // compound query (and a CTE body) reads with each arm on its own line, at the base indent.
+        // One mechanism, applied everywhere Emit runs (top level and inside CTE bodies), so there is
+        // no CTE-specific union handling.
+        if (string.Equals(t.Text, "UNION", StringComparison.OrdinalIgnoreCase))
+        {
+            bool all = i + 1 < tokens.Count && tokens[i + 1].Kind == FKind.Word
+                       && string.Equals(tokens[i + 1].Text, "ALL", StringComparison.OrdinalIgnoreCase);
+            return new Phrase(PhraseKind.TopLevel, all ? 2 : 1);
+        }
+        if (string.Equals(t.Text, "INTERSECT", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(t.Text, "EXCEPT", StringComparison.OrdinalIgnoreCase))
+        {
+            return new Phrase(PhraseKind.TopLevel, 1);
+        }
+
         if (Conjunctions.Contains(t.Text))
         {
             // "OR ALTER" (CREATE OR ALTER …) is a DDL phrase, not a boolean OR — must not break.
@@ -858,6 +882,106 @@ public static class SqlFormatter
                 return k;
         }
         return -1;
+    }
+
+    // ── SELECT / WITH-CTE layout ────────────────────────────────────────────────────────────────
+    //
+    // A plain SELECT is the generic clause-break emitter; a CTE-led WITH is a first-class construct
+    // (FormatWith). Kept in one router so a nested "WITH" inside a CTE body / main query is formatted
+    // the same way (recursion through FormatWith).
+
+    private static string FormatSelect(List<FToken> tokens)
+        => tokens.Count > 0 && IsWordTok(tokens[0], "WITH") ? FormatWith(tokens) : Emit(tokens);
+
+    // Lays out "WITH [RECURSIVE] cte [ (cols) ] AS ( body ) [ , … ] <main query>" IBExpert-style, at
+    // the token level like every other construct handler (INSERT / VIEW / EXECUTE BLOCK) — no parser
+    // depth is needed: each CTE header is the name (+ optional column list on its own via the shared
+    // adaptive builder), "as (" on its own line, the CTE body formatted by the shared emitter and
+    // indented, ")" on its own line; multiple CTEs are joined "),", and the main query follows after a
+    // blank line. Set operators inside a body break via Emit (MatchStructuralPhrase). Any shape not
+    // fully recognised falls back to the generic emitter — never guess, never lose (§0; the lexeme net
+    // is the backstop).
+    private static string FormatWith(List<FToken> tokens)
+    {
+        int n = tokens.Count;
+        if (n == 0 || !IsWordTok(tokens[0], "WITH")) return Emit(tokens);
+
+        bool semi = IsPunctTok(tokens[n - 1], ";");
+        int end = semi ? n - 1 : n;
+
+        var sb = new StringBuilder("with");
+        int j = 1;
+        if (j < end && IsWordTok(tokens[j], "RECURSIVE")) { sb.Append(" recursive"); j++; }
+
+        bool firstCte = true;
+        while (true)
+        {
+            // CTE name (word or quoted identifier; never a style keyword).
+            if (j >= end) return Emit(tokens);
+            var nameTok = tokens[j];
+            if (!(nameTok.Kind == FKind.Word || nameTok.Kind == FKind.QuotedIdent)) return Emit(tokens);
+            if (nameTok.Kind == FKind.Word && IsStyleKeyword(nameTok.Text)) return Emit(tokens);
+
+            var nameLine = new StringBuilder(MaybeLowercase(nameTok));
+            int k = j + 1;
+
+            // Optional explicit column list "( a, b )" on the name line (shared adaptive builder).
+            if (k < end && IsPunctTok(tokens[k], "("))
+            {
+                int colClose = MatchParen(tokens, k);
+                if (colClose >= end) return Emit(tokens);
+                var cols = SplitTopLevelCommas(tokens, k + 1, colClose);
+                nameLine.Append(' ');
+                nameLine.Append(FormatAdaptiveList(cols, nameLine.Length + (firstCte ? 5 : 0)));
+                k = colClose + 1;
+            }
+
+            // AS ( body ).
+            if (k >= end || !IsWordTok(tokens[k], "AS")) return Emit(tokens);
+            k++;
+            if (k >= end || !IsPunctTok(tokens[k], "(")) return Emit(tokens);
+            int bodyClose = MatchParen(tokens, k);
+            if (bodyClose >= end) return Emit(tokens);
+            var bodyToks = tokens.GetRange(k + 1, bodyClose - k - 1);
+            string body = IndentBlock(FormatSelect(bodyToks), CteBodyIndent);
+
+            sb.Append(firstCte ? ' ' : '\n').Append(nameLine);
+            sb.Append('\n').Append("as (");
+            sb.Append('\n').Append(body);
+            sb.Append('\n').Append(')');
+
+            firstCte = false;
+            j = bodyClose + 1;
+
+            if (j < end && IsPunctTok(tokens[j], ","))
+            {
+                sb.Append(',');
+                j++;
+                continue;
+            }
+            break;
+        }
+
+        // Main query — blank line, then the SELECT/INSERT/… that consumes the CTEs.
+        if (j >= end) return Emit(tokens); // WITH with no main query (mid-edit) — generic, lossless
+        sb.Append('\n').Append('\n').Append(FormatSelect(tokens.GetRange(j, end - j)));
+
+        if (semi) sb.Append(';');
+        return sb.ToString();
+    }
+
+    // Prefixes every non-empty line of <paramref name="text"/> with <paramref name="indent"/>. Used to
+    // indent a CTE body under its "as (". Trailing newlines are trimmed so no dangling blank line.
+    private static string IndentBlock(string text, string indent)
+    {
+        var sb = new StringBuilder();
+        var parts = text.TrimEnd('\n').Split('\n');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (i > 0) sb.Append('\n');
+            if (parts[i].Length > 0) sb.Append(indent).Append(parts[i]);
+        }
+        return sb.ToString();
     }
 
     private static string MaybeLowercase(FToken t)
