@@ -305,7 +305,11 @@ public static class SqlParser
         {
             case "SELECT":
             case "WITH":
-                return new SelectStatement(start, length, slice);
+                // A WITH-led query models its CTE clause as AST structure (WithClause + CTE nodes) so
+                // consumers read the shape from the tree, not by re-scanning tokens; an unrecognised
+                // shape yields null and the statement is treated as a plain query (§0-safe).
+                return new SelectStatement(start, length, slice,
+                    Kw(first, "WITH") ? TryParseWithClause(slice) : null);
             case "INSERT":
                 return new InsertStatement(start, length, slice);
             case "UPDATE":
@@ -507,4 +511,92 @@ public static class SqlParser
     // before its keyword check.
     private static bool Kw(SqlToken t, string keyword)
         => t.Kind == TokenKind.Keyword && string.Equals(t.Text, keyword, StringComparison.OrdinalIgnoreCase);
+
+    // A word token (keyword OR identifier) whose text matches — for words that may lex either way
+    // (RECURSIVE is not always catalogued).
+    private static bool IsWordText(SqlToken t, string text)
+        => (t.Kind == TokenKind.Keyword || t.Kind == TokenKind.Identifier)
+           && string.Equals(t.Text, text, StringComparison.OrdinalIgnoreCase);
+
+    // ── WITH / CTE structure ────────────────────────────────────────────────────────────────────
+    //
+    // Parses the CTE clause of a WITH-led query into AST nodes (WithClause + CommonTableExpression),
+    // so the formatter (and future folding/breadcrumbs/semantic consumers) read the CTE shape from the
+    // tree instead of re-scanning tokens. Best-effort like the other Classify facts: any shape it does
+    // not cleanly recognise returns null, and the statement is treated as a plain query — never a throw,
+    // never a loss (the tokens are untouched, so §0's byte-for-byte round-trip is unaffected).
+
+    private static WithClause? TryParseWithClause(IReadOnlyList<SqlToken> slice)
+    {
+        int n = slice.Count;
+        if (n == 0 || !Kw(slice[0], "WITH")) return null;
+        int withStart = slice[0].Start;
+
+        int i = 1;
+        bool recursive = false;
+        if (i < n && IsWordText(slice[i], "RECURSIVE")) { recursive = true; i++; }
+
+        var ctes = new List<CommonTableExpression>();
+        int lastCloseEnd = -1;
+        while (true)
+        {
+            if (i >= n) return null;
+            var nameTok = slice[i];
+            if (nameTok.Kind != TokenKind.Identifier && nameTok.Kind != TokenKind.QuotedIdentifier)
+                return null;
+            int k = i + 1;
+
+            // Optional column list "( a, b )" (tokens between the parens).
+            IReadOnlyList<SqlToken>? colTokens = null;
+            if (k < n && slice[k].Kind == TokenKind.LParen)
+            {
+                int close = MatchParenTok(slice, k, n);
+                if (close >= n) return null;
+                colTokens = Sub(slice, k + 1, close);
+                k = close + 1;
+            }
+
+            if (k >= n || !Kw(slice[k], "AS")) return null;
+            k++;
+            if (k >= n || slice[k].Kind != TokenKind.LParen) return null;
+            int bodyOpen = k;
+            int bodyClose = MatchParenTok(slice, bodyOpen, n);
+            if (bodyClose >= n) return null;
+            var bodyTokens = Sub(slice, bodyOpen + 1, bodyClose);
+
+            int cteStart = nameTok.Start;
+            int cteEnd = slice[bodyClose].End;
+            ctes.Add(new CommonTableExpression(cteStart, cteEnd - cteStart, nameTok, colTokens, bodyTokens));
+            lastCloseEnd = cteEnd;
+            i = bodyClose + 1;
+
+            if (i < n && slice[i].Kind == TokenKind.Comma) { i++; continue; }
+            break;
+        }
+
+        if (ctes.Count == 0) return null;
+        var main = Sub(slice, i, n);
+        if (main.Count == 0) return null; // WITH with no main query (mid-edit) — treat as plain query
+        return new WithClause(withStart, lastCloseEnd - withStart, recursive, ctes, main);
+    }
+
+    // The index of the ')' matching the '(' at <paramref name="open"/> (nesting-aware), or
+    // <paramref name="hi"/> when unbalanced.
+    private static int MatchParenTok(IReadOnlyList<SqlToken> t, int open, int hi)
+    {
+        int depth = 0;
+        for (int k = open; k < hi; k++)
+        {
+            if (t[k].Kind == TokenKind.LParen) depth++;
+            else if (t[k].Kind == TokenKind.RParen) { if (--depth == 0) return k; }
+        }
+        return hi;
+    }
+
+    private static List<SqlToken> Sub(IReadOnlyList<SqlToken> t, int lo, int hi)
+    {
+        var list = new List<SqlToken>(hi > lo ? hi - lo : 0);
+        for (int k = lo; k < hi && k < t.Count; k++) list.Add(t[k]);
+        return list;
+    }
 }

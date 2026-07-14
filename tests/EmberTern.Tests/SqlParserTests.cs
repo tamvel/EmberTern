@@ -203,5 +203,48 @@ public class SqlParserTests
         Assert.Single(root.Descendants<DdlStatement>());
     }
 
+    // ── WITH / CTE modelled in the AST ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void With_ModelsCteStructure()
+    {
+        var sel = Assert.IsType<SelectStatement>(
+            Single("with c (a, b) as (select 1, 2 from t) select * from c"));
+        Assert.NotNull(sel.With);
+        Assert.False(sel.With!.IsRecursive);
+        var cte = Assert.Single(sel.With.Ctes);
+        Assert.Equal("C", cte.NameToken.Text.ToUpperInvariant());
+        Assert.NotNull(cte.ColumnTokens);
+        Assert.NotEmpty(cte.BodyTokens);
+        Assert.NotEmpty(sel.With.MainQueryTokens);
+        // The clause is a child of the statement, so NodeAt/Descendants can reach it.
+        Assert.Contains(sel.With, sel.Children);
+        Assert.Single(sel.Descendants<CommonTableExpression>());
+    }
+
+    [Fact]
+    public void With_Recursive_And_MultipleCtes()
+    {
+        var sel = Assert.IsType<SelectStatement>(
+            Single("with recursive a as (select 1 from t), b as (select 2 from u) select * from a"));
+        Assert.True(sel.With!.IsRecursive);
+        Assert.Equal(2, sel.With.Ctes.Count);
+    }
+
+    [Fact]
+    public void PlainSelect_HasNoWithClause()
+        => Assert.Null(Assert.IsType<SelectStatement>(Single("select * from t")).With);
+
+    [Fact]
+    public void With_MalformedShape_LeavesWithNull_StillRoundTrips()
+    {
+        // No AS ( … ) — the parser can't cleanly model it, so With is null (treated as a plain query),
+        // but the tokens are untouched so the §0 round-trip still holds.
+        const string sql = "with c select 1";
+        var root = SqlParser.Parse(sql).Root;
+        Assert.Null(Assert.IsType<SelectStatement>(Assert.Single(root.Statements)).With);
+        Assert.Equal(sql, root.ToSourceString());
+    }
+
     private static SqlStatement Single(string sql) => Assert.Single(SqlParser.Parse(sql).Root.Statements);
 }

@@ -10,10 +10,18 @@ namespace EmberTern.Core.Sql.Language.Ast;
 /// <summary><c>SELECT …</c> or a CTE-led <c>WITH … SELECT …</c> query.</summary>
 public sealed class SelectStatement : SqlStatement
 {
-    public SelectStatement(int start, int length, IReadOnlyList<SqlToken> tokens)
-        : base(start, length, tokens) { }
+    public SelectStatement(int start, int length, IReadOnlyList<SqlToken> tokens, WithClause? with = null)
+        : base(start, length, tokens) => With = with;
 
     public override StatementKind Kind => StatementKind.Select;
+
+    /// <summary>The leading <c>WITH …</c> clause when this is a CTE query, else <c>null</c> for a
+    /// plain SELECT. Populated by the parser; consumers (formatter, …) read the CTE structure here
+    /// rather than re-scanning the tokens. Null when the shape wasn't a clean CTE clause (§0: fall
+    /// back to treating the statement as a plain query).</summary>
+    public WithClause? With { get; }
+
+    public override IReadOnlyList<SqlNode> Children => With is null ? base.Children : new SqlNode[] { With };
 }
 
 /// <summary><c>INSERT …</c> (INTO … VALUES / SELECT / DEFAULT VALUES).</summary>

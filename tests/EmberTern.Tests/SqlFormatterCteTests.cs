@@ -19,7 +19,7 @@ public class SqlFormatterCteTests
     public void SingleCte_LaidOutWithIndentedBody()
     {
         Assert.Equal(
-            "with c\nas (\n    select id\n    from t\n)\n\nselect *\nfrom c",
+            "with c\nas (\n    select id\n    from t\n)\nselect *\nfrom c",
             SqlFormatter.Format("with c as (select id from t) select * from c"));
     }
 
@@ -27,7 +27,7 @@ public class SqlFormatterCteTests
     public void CteBody_UnionAll_BreaksOntoOwnLine()
     {
         Assert.Equal(
-            "with r\nas (\n    select id\n    from a\n    union all\n    select id\n    from b\n)\n\nselect *\nfrom r",
+            "with r\nas (\n    select id\n    from a\n    union all\n    select id\n    from b\n)\nselect *\nfrom r",
             SqlFormatter.Format("with r as (select id from a union all select id from b) select * from r"));
     }
 
@@ -35,7 +35,7 @@ public class SqlFormatterCteTests
     public void MultipleCtes_JoinedWithComma()
     {
         Assert.Equal(
-            "with a\nas (\n    select 1\n    from t\n),\nb\nas (\n    select 2\n    from u\n)\n\nselect *\nfrom a",
+            "with a\nas (\n    select 1\n    from t\n),\nb\nas (\n    select 2\n    from u\n)\nselect *\nfrom a",
             SqlFormatter.Format("with a as (select 1 from t), b as (select 2 from u) select * from a"));
     }
 
@@ -43,7 +43,7 @@ public class SqlFormatterCteTests
     public void Cte_WithExplicitColumnList()
     {
         Assert.Equal(
-            "with c (x, y)\nas (\n    select a, b\n    from t\n)\n\nselect *\nfrom c",
+            "with c (x, y)\nas (\n    select a, b\n    from t\n)\nselect *\nfrom c",
             SqlFormatter.Format("with c (x, y) as (select a, b from t) select * from c"));
     }
 
@@ -51,7 +51,7 @@ public class SqlFormatterCteTests
     public void Cte_Recursive()
     {
         Assert.Equal(
-            "with recursive r\nas (\n    select 1\n    from t\n)\n\nselect *\nfrom r",
+            "with recursive r\nas (\n    select 1\n    from t\n)\nselect *\nfrom r",
             SqlFormatter.Format("with recursive r as (select 1 from t) select * from r"));
     }
 
