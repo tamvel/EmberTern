@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Firebird;
 
 namespace EmberTern.App.ViewModels;
@@ -98,6 +99,29 @@ public partial class TriggerDetailTabViewModel : SourceObjectDetailTabViewModel
     partial void OnFiresInsertChanged(bool value) { MarkDirty(); MaybeAutoName(); }
     partial void OnFiresUpdateChanged(bool value) { MarkDirty(); MaybeAutoName(); }
     partial void OnFiresDeleteChanged(bool value) { MarkDirty(); MaybeAutoName(); }
+
+    /// <summary>Easy-mode body editor: the body text is only the BEGIN…END block — it has no
+    /// <c>CREATE TRIGGER … FOR &lt;table&gt;</c> header — so the semantic model can't establish the
+    /// trigger scope on its own. Seed the trigger context as ambient symbols (the same seam the
+    /// routine editors use for their params/variables): the NEW/OLD record aliases bound to the
+    /// target table, and the INSERTING/UPDATING/DELETING predicates. This makes them resolve and
+    /// get the context-variable highlight in the body editor exactly as in the full CREATE TRIGGER
+    /// text (the SQL Editor path, bound by <c>SemanticBinder.BindTriggerDefinition</c>). Plus the
+    /// Variables grid, as every routine editor.</summary>
+    public override IReadOnlyList<Symbol> BuildAmbientSymbols()
+    {
+        var table = string.IsNullOrWhiteSpace(TableName) ? null : TableName.Trim();
+        var symbols = new List<Symbol>
+        {
+            new RecordAliasSymbol("NEW") { TargetTable = table },
+            new RecordAliasSymbol("OLD") { TargetTable = table },
+            new TriggerPredicateSymbol("INSERTING"),
+            new TriggerPredicateSymbol("UPDATING"),
+            new TriggerPredicateSymbol("DELETING"),
+        };
+        AddVariableSymbols(symbols);
+        return symbols;
+    }
 
     [ObservableProperty] private int _position;
 

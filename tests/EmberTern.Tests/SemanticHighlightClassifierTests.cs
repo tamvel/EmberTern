@@ -126,6 +126,32 @@ public class SemanticHighlightClassifierTests
     }
 
     [Fact]
+    public void TriggerBodyOnly_WithAmbientTriggerContext_ClassifiesContextVariables()
+    {
+        // The trigger DETAIL editor edits only the body ("begin … end") — no CREATE TRIGGER header —
+        // so the model can't bind the trigger scope from the text. The VM seeds the trigger context
+        // as AMBIENT symbols (NEW/OLD record aliases + INSERTING/UPDATING/DELETING predicates); this
+        // pins that they then resolve and classify as ContextVariable, exactly as in the full text.
+        var meta = new FakeMetadata().Object("KONTRAHENT", SymbolKind.Table).Col("KONTRAHENT", "NAZWA", "VARCHAR(50)");
+        Symbol[] ambient =
+        {
+            new RecordAliasSymbol("NEW") { TargetTable = "KONTRAHENT" },
+            new RecordAliasSymbol("OLD") { TargetTable = "KONTRAHENT" },
+            new TriggerPredicateSymbol("INSERTING"),
+            new TriggerPredicateSymbol("UPDATING"),
+            new TriggerPredicateSymbol("DELETING"),
+        };
+        const string body = "begin if (updating) then exit; if (new.nazwa is null) then exit; end";
+        var model = SemanticModel.Build(body, meta, ambient);
+
+        var updating = model.ReferenceAt(body.IndexOf("updating", StringComparison.Ordinal) + 2);
+        Assert.Equal(SemanticHighlightClass.ContextVariable, SemanticHighlightClassifier.Classify(updating!).Class);
+
+        var neu = model.ReferenceAt(body.IndexOf("new.nazwa", StringComparison.Ordinal) + 1);
+        Assert.Equal(SemanticHighlightClass.ContextVariable, SemanticHighlightClassifier.Classify(neu!).Class);
+    }
+
+    [Fact]
     public void TriggerPredicate_OutsideTrigger_IsNotColoured()
     {
         // INSERTING is not a reserved word — used as a bare identifier in a plain procedure body it

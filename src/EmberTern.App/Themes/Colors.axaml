@@ -185,10 +185,11 @@
            final visual tuning in both themes is a follow-up. -->
       <SolidColorBrush x:Key="EditorColumnBrush"     Color="#A8C7E0" />
       <SolidColorBrush x:Key="EditorLocalBrush"      Color="#C8A8D8" />
-      <!-- Trigger context variables (NEW/OLD/INSERTING/UPDATING/DELETING). Mirrors the Function/
-           context-constant lexical colour (FirebirdSql.xshd "Function" = #DCDCAA) so they read as
-           the same family as CURRENT_DATE / CURRENT_USER — core language constructs, not locals. -->
-      <SolidColorBrush x:Key="EditorContextVariableBrush" Color="#DCDCAA" />
+      <!-- Trigger context variables (NEW/OLD/INSERTING/UPDATING/DELETING). Amber, the same family as
+           the built-in context constants (CURRENT_DATE / CURRENT_USER) so they read as core language
+           constructs — but with more chroma than the pale Function keyword (#DCDCAA) so they clearly
+           stand out from the near-grey identifier foreground (#D4D4D4). -->
+      <SolidColorBrush x:Key="EditorContextVariableBrush" Color="#E5C07B" />
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
