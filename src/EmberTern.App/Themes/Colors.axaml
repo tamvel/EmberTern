@@ -28,12 +28,15 @@
       <Color x:Key="RowAlternateColor">#0DFFFFFF</Color>
       <!-- Drag-and-drop drop-target overlay: ~33% of the dark accent blue. ARGB hex. -->
       <Color x:Key="DropTargetColor">#552D6BBF</Color>
-      <!-- Occurrence highlight (selecting an identifier boxes its other occurrences):
-           warm gold, clearly distinct from the blue selection. A stronger fill + a SOLID gold
-           border (OccurrenceHighlightBorderColor) so a boxed occurrence never reads as a text
-           selection. ARGB alpha-first. -->
-      <Color x:Key="OccurrenceHighlightColor">#4DE0A81E</Color>
-      <Color x:Key="OccurrenceHighlightBorderColor">#FFE0A81E</Color>
+      <!-- Occurrence highlight (selecting / clicking an identifier boxes its other occurrences,
+           plus the find-references highlighter). A subtle wash of the app's accent blue + a soft
+           accent border. Cool so it stays true on the near-black editor — the earlier warm gold
+           composited to a muddy brown that clashed with the theme (the exact trap the RowModified
+           note below documents). Reuses the design-language accent rather than a bespoke hue, and
+           is kept subtle so it never out-shouts syntax highlighting; the border + context set it
+           apart from the solid blue text selection. ARGB alpha-first. -->
+      <Color x:Key="OccurrenceHighlightColor">#382D6BBF</Color>
+      <Color x:Key="OccurrenceHighlightBorderColor">#802D6BBF</Color>
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
@@ -218,12 +221,12 @@
       <Color x:Key="RowAlternateColor">#0D000000</Color>
       <!-- Drag-and-drop drop-target overlay: ~33% of the light accent blue. ARGB hex. -->
       <Color x:Key="DropTargetColor">#552D6BBF</Color>
-      <!-- Occurrence highlight (selecting an identifier boxes its other occurrences):
-           warm gold, clearly distinct from the blue selection. A stronger fill + a SOLID gold
-           border (OccurrenceHighlightBorderColor) so a boxed occurrence never reads as a text
-           selection. ARGB alpha-first. -->
-      <Color x:Key="OccurrenceHighlightColor">#4DE0A81E</Color>
-      <Color x:Key="OccurrenceHighlightBorderColor">#FFE0A81E</Color>
+      <!-- Occurrence highlight — see the Dark note. A subtle wash of the accent blue over the
+           near-white editor with a soft accent border; slightly lower fill alpha than Dark so it
+           stays gentle on the light surface. Distinct enough from the pale-blue text selection
+           (SelectionColor) via the border + context. ARGB alpha-first. -->
+      <Color x:Key="OccurrenceHighlightColor">#2E2D6BBF</Color>
+      <Color x:Key="OccurrenceHighlightBorderColor">#802D6BBF</Color>
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
