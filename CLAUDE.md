@@ -512,9 +512,18 @@ noted.
   boundary; PACKAGE bodies — no `Body` node), and the robust PSQL block structurer (malformed-input safe).
   **One layout mechanism per construct — no parallel AST + token walker for the same construct.** The
   reported formatting problems are fixed: **CASE** lays out (adaptive), **WITH** and **multi-level nested
-  queries** indent naturally. Build 0/0, **4065 main + 23 probe green**, smoke clean. **On-screen appearance
-  awaits the user's visual confirmation per the QA rule.** **Next: Stage 7 (Diagnostics) — on the user's
-  go-ahead.** `SqlAliasResolver` is off the editor path (only `PredicateExtractor`/Performance uses it).
+  queries** indent naturally. **Three follow-up fixes closed reported gaps** (all pinned by tests): (a)
+  subqueries in function-call args / CASE arms / any derived table now nest at exactly +1 (not the
+  enclosing paren's column) — the shared list builders thread structural children, and `EmitFromClause`
+  goes structural for ANY derived table; (b) a **bare `IF`/`WHILE`/`FOR` fragment** (no enclosing
+  BEGIN…END — a selection lifted from a body) is recognised as an anonymous PSQL body (`Classify`) so it
+  formats instead of falling to a verbatim `RawStatement`; (c) a PSQL **`SELECT…INTO` leaf's leading
+  comment is no longer duplicated** (the AST leaf renderer re-materialised the comment the block
+  structurer already emitted → the duplicate tripped the §0 net and reverted the WHOLE routine to verbatim
+  — the "the whole procedure didn't format" symptom). Build 0/0, **4070 main + 23 probe green**, smoke
+  clean; user-confirmed on a real procedure. **ETAP 6.9 IS COMPLETE — parser + binder + formatter all
+  consume one AST model.** **Next: Stage 7 (Diagnostics) — on the user's go-ahead.** `SqlAliasResolver` is
+  off the editor path (only `PredicateExtractor`/Performance uses it).
   Still deferred: **P5d** a plain-hover info cue; **P2c** bold the typed completion-fragment (no clean
   AvaloniaEdit 12.0.0 path yet). Formatter grammar-depth items now folded into Etap 6.9 as node
   consumers: **CASE** (was inline/verbatim), **nested-query indentation** (no indent model today),

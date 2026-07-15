@@ -1,31 +1,37 @@
 # Etap 6.9 — Structural AST Deepening (implementation guide)
 
 > **Status: ETAP 6.9 COMPLETE (2026-07-15). Parser (B0–B5) + binder + FORMATTER are all AST consumers;
-> Stage 7 follows.** Formatter convergence landed construct-by-construct (§13.2): a query is laid out by an
-> AST-walking core with nested-query indentation + adaptive CASE; the token emitter is retained only as the
-> interior/expression renderer and for the constructs the parser intentionally does not model (UPDATE
-> SET/DELETE/MERGE clause layout, PACKAGE bodies), with one layout mechanism per construct. Verified: build
-> 0/0, 4065 main + 23 probe green, smoke clean. The binder is a full AST consumer — its
-> structural token walkers (`BindQuery`/`CollectTables`/`ParseTableList`/`ParseCteList`/`BindColumnReferences`
-> FROM+`(SELECT` re-scan, and the PSQL `BindLeafReferences` `(SELECT` branch) are DELETED; only
-> expression-level token work remains (column/local/param references + DML-target identification, which has
-> no AST node). The formatter is still a token-stream (`FToken`) layout engine — converging it is the last
-> item (see §13). Verified: build 0/0, 4008 main + 23 probe green, smoke clean. This document is the
-> implementation guide for Etap 6.9, the foundational
-> parser/AST deepening that must land **before Stage 7 (Diagnostics)** and before the future Debugger.
-> As of B5 the parser is the **single structural source for all SQL/PSQL structure** (within the
-> consciously-accepted structural-depth scope): the PSQL body tree is produced for all four PSQL surfaces
-> **and the semantic binder consumes it** (B1); the **query model is fully recursive** — clauses +
-> FROM/join + set operations (B2), WITH/CTE + derived tables + EXISTS/scalar subqueries (B3); **B3.1**
-> attaches a real `QueryNode` to every query embedded in another statement (INSERT/MERGE source, CREATE
-> VIEW body, UPDATE/DELETE/MERGE embedded subquery, PSQL FOR-SELECT cursor, DECLARE CURSOR query); **B4**
-> models `CASE … END` (simple + searched, SELECT-expression + PSQL) as a `CaseExpression`; and **B5**
-> promotes every embedded DSQL statement inside a PSQL body (SELECT/INSERT/UPDATE/DELETE/MERGE/EXECUTE) to
-> the **reused** top-level statement node, so a DML query inside a routine body is the SAME node — with the
-> same query structure — as at the top level (closing the last "query on tokens" residual). **No parallel
-> AST representation remains; structure lives once in the tree.** The binder now consumes that tree
-> (§13.1); the one remaining consumer that still re-derives structure from tokens is the FORMATTER (§13.2)
-> — the last Etap-6.9 step. (As-built + verification: §10 B0…B5, §13 convergence; boundaries: §12.)
+> Stage 7 follows.** As of B5 the parser is the **single structural source for all SQL/PSQL structure**
+> (within the consciously-accepted structural-depth scope): the PSQL body tree is produced for all four
+> PSQL surfaces **and consumed by the semantic binder** (B1); the **query model is fully recursive** —
+> clauses + FROM/join + set operations (B2), WITH/CTE + derived tables + EXISTS/scalar subqueries (B3);
+> **B3.1** attaches a real `QueryNode` to every query embedded in another statement (INSERT/MERGE source,
+> CREATE VIEW body, UPDATE/DELETE/MERGE embedded subquery, PSQL FOR-SELECT cursor, DECLARE CURSOR query);
+> **B4** models `CASE … END` (simple + searched) as a `CaseExpression`; **B5** promotes every embedded DSQL
+> statement inside a PSQL body to the **reused** top-level statement node. **No parallel AST representation
+> remains; structure lives once in the tree.**
+>
+> **BINDER convergence — DONE** (§13.1): its structural token walkers (`BindQuery`/`CollectTables`/
+> `ParseTableList`/`ParseCteList`/`BindColumnReferences` FROM+`(SELECT` re-scan, the PSQL
+> `BindLeafReferences`/`FindBodySelectEnd`/`BindOptionalInto`) are DELETED; only expression-level token work
+> remains (column/local/param references + DML-target identification, which has no AST node).
+>
+> **FORMATTER convergence — DONE** (§13.2): `SqlFormatter` lays a query out with an AST-walking core
+> (`EmitQuery`) — clauses per line, nested queries (derived table / EXISTS / scalar subquery / IN(SELECT) /
+> MERGE USING) as expanded-paren blocks at exactly one deeper level, adaptive CASE (inline when simple, else
+> a WHEN/THEN/ELSE block), WITH/CTE, INSERT…SELECT, CREATE VIEW bodies, and PSQL leaves + FOR SELECT cursors.
+> A flat query stays byte-identical; layout is idempotent; the §0 net is unchanged. The token emitter is
+> retained BY DESIGN as the clause/expression-interior renderer and for the constructs the parser
+> intentionally does not model (UPDATE SET / DELETE / MERGE clause layout, PSQL PACKAGE bodies) — one layout
+> mechanism per construct, no parallel AST + token walker. Three follow-up fixes closed reported gaps:
+> subqueries in function-args / CASE-arms / any derived table now nest at +1 (not the enclosing column); a
+> bare `IF`/`WHILE`/`FOR` fragment is recognised as an anonymous PSQL body (formats instead of falling to a
+> verbatim `RawStatement`); and a PSQL `SELECT…INTO` leaf's leading comment is no longer duplicated (which
+> had tripped the §0 net and reverted whole routines to verbatim).
+>
+> **Verified: build 0/0, 4070 main + 23 probe green, smoke clean.** This document is the implementation
+> guide for Etap 6.9, the foundational parser/AST deepening that landed **before Stage 7 (Diagnostics)** and
+> before the future Debugger. (As-built + verification: §10 B0…B5, §13 convergence; boundaries: §12.)
 > Produced by a pre-Stage-7 architecture review, captured here in full.
 >
 > Companion document: [`editor-stage7-diagnostics.md`](editor-stage7-diagnostics.md) (the Stage 7
