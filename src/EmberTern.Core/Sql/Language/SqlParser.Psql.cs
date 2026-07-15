@@ -133,6 +133,7 @@ public static partial class SqlParser
         int lo = i;
         int thenIdx = FindBodyWord(sig, i + 1, "THEN");
         if (thenIdx < 0) return ParsePsqlLeaf(sig, ref i); // malformed IF — lossless leaf
+        var conditions = ParseEmbeddedExpressions(sig, lo + 1, thenIdx); // subquery / CASE in the condition
         i = thenIdx + 1;
         var thenBranch = ParsePsqlUnit(sig, ref i);
         SqlNode? elseBranch = null;
@@ -142,7 +143,7 @@ public static partial class SqlParser
             elseBranch = ParsePsqlUnit(sig, ref i);
         }
         var (start, length) = TokenSpan(sig, lo, i);
-        return new IfStatement(start, length, Sub(sig, lo, i), thenBranch, elseBranch);
+        return new IfStatement(start, length, Sub(sig, lo, i), thenBranch, elseBranch, conditions);
     }
 
     private static SqlNode ParsePsqlWhile(IReadOnlyList<SqlToken> sig, ref int i)
@@ -150,10 +151,11 @@ public static partial class SqlParser
         int lo = i;
         int doIdx = FindBodyWord(sig, i + 1, "DO");
         if (doIdx < 0) return ParsePsqlLeaf(sig, ref i);
+        var conditions = ParseEmbeddedExpressions(sig, lo + 1, doIdx); // subquery / CASE in the condition
         i = doIdx + 1;
         var body = ParsePsqlUnit(sig, ref i);
         var (start, length) = TokenSpan(sig, lo, i);
-        return new WhileStatement(start, length, Sub(sig, lo, i), body);
+        return new WhileStatement(start, length, Sub(sig, lo, i), body, conditions);
     }
 
     // FOR <select|execute statement> [INTO <vars>] [AS CURSOR c] DO <body> — the DO is located at paren

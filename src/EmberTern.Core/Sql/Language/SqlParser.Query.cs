@@ -518,6 +518,10 @@ public static partial class SqlParser
     private static bool IsCoreEnd(IReadOnlyList<SqlToken> t, int k)
         => (Kw(t[k], "ORDER") && Kw(At(t, k + 1), "BY"))
            || Kw(t[k], "UNION") || Kw(t[k], "INTERSECT") || Kw(t[k], "EXCEPT")
+           // A PSQL singleton-select's INTO <vars> is not part of the query (a top-level DSQL SELECT never
+           // has one) — ending the core before it keeps the INTO targets outside the QueryNode, where the
+           // PSQL binder resolves them as local variables.
+           || Kw(t[k], "INTO")
            || IsQueryTail(t, k);
 
     private static bool IsQueryTail(IReadOnlyList<SqlToken> t, int k)

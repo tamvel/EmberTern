@@ -91,13 +91,24 @@ public sealed class IfStatement : PsqlStatement, IExecutableStatement
     private readonly SqlNode[] _children;
 
     public IfStatement(
-        int start, int length, IReadOnlyList<SqlToken> tokens, SqlNode? then, SqlNode? @else)
+        int start,
+        int length,
+        IReadOnlyList<SqlToken> tokens,
+        SqlNode? then,
+        SqlNode? @else,
+        IReadOnlyList<SqlNode>? conditionExpressions = null)
         : base(start, length, tokens)
     {
         Then = then;
         Else = @else;
-        _children = Pack(then, @else);
+        ConditionExpressions = conditionExpressions ?? Array.Empty<SqlNode>();
+        _children = Pack(ConditionExpressions, then, @else);
     }
+
+    /// <summary>The structurally-meaningful expressions embedded in the condition — a subquery
+    /// (<c>IF (EXISTS (…))</c>) or a CASE (Etap 6.9 / B3–B4). Empty when the condition has none. In source
+    /// order they precede the branches.</summary>
+    public IReadOnlyList<SqlNode> ConditionExpressions { get; }
 
     /// <summary>The THEN branch (a block or a single statement — a PSQL construct or a reused DSQL
     /// statement node, B5), or null on malformed input.</summary>
@@ -110,27 +121,54 @@ public sealed class IfStatement : PsqlStatement, IExecutableStatement
     /// <inheritdoc/>
     public override IReadOnlyList<SqlNode> Children => _children;
 
-    internal static SqlNode[] Pack(SqlNode? a, SqlNode? b)
+    private static SqlNode[] Pack(IReadOnlyList<SqlNode> head, SqlNode? a, SqlNode? b)
     {
-        if (a is null && b is null) return Array.Empty<SqlNode>();
-        if (b is null) return new SqlNode[] { a! };
-        if (a is null) return new SqlNode[] { b };
-        return new SqlNode[] { a, b };
+        int n = head.Count + (a is null ? 0 : 1) + (b is null ? 0 : 1);
+        if (n == 0) return Array.Empty<SqlNode>();
+        var arr = new SqlNode[n];
+        int k = 0;
+        for (int i = 0; i < head.Count; i++) arr[k++] = head[i];
+        if (a is not null) arr[k++] = a;
+        if (b is not null) arr[k++] = b;
+        return arr;
     }
 }
 
 /// <summary><c>WHILE (cond) DO &lt;body&gt;</c>. The condition stays in
-/// <see cref="PsqlStatement.Tokens"/>; the body is a child statement.</summary>
+/// <see cref="PsqlStatement.Tokens"/> (with its embedded subqueries/CASE as
+/// <see cref="ConditionExpressions"/>); the body is a child statement.</summary>
 public sealed class WhileStatement : PsqlStatement, IExecutableStatement
 {
     private readonly SqlNode[] _children;
 
-    public WhileStatement(int start, int length, IReadOnlyList<SqlToken> tokens, SqlNode? body)
+    public WhileStatement(
+        int start,
+        int length,
+        IReadOnlyList<SqlToken> tokens,
+        SqlNode? body,
+        IReadOnlyList<SqlNode>? conditionExpressions = null)
         : base(start, length, tokens)
     {
         Body = body;
-        _children = body is null ? Array.Empty<SqlNode>() : new SqlNode[] { body };
+        ConditionExpressions = conditionExpressions ?? Array.Empty<SqlNode>();
+        var head = ConditionExpressions;
+        if (head.Count == 0)
+        {
+            _children = body is null ? Array.Empty<SqlNode>() : new SqlNode[] { body };
+        }
+        else
+        {
+            var arr = new SqlNode[head.Count + (body is null ? 0 : 1)];
+            int k = 0;
+            for (int i = 0; i < head.Count; i++) arr[k++] = head[i];
+            if (body is not null) arr[k] = body;
+            _children = arr;
+        }
     }
+
+    /// <summary>The structurally-meaningful expressions embedded in the condition (subquery / CASE);
+    /// empty when none. In source order they precede the body.</summary>
+    public IReadOnlyList<SqlNode> ConditionExpressions { get; }
 
     /// <summary>The loop body (a block or a single statement — a PSQL construct or a reused DSQL statement
     /// node, B5), or null on malformed input.</summary>

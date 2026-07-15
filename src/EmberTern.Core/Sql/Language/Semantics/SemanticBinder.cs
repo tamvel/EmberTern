@@ -171,8 +171,11 @@ internal sealed partial class SemanticBinder
     {
         switch (stmt)
         {
-            case SelectStatement:
-                BindQuery(stmt.Tokens, 0, stmt.Tokens.Count, _root, stmt);
+            case SelectStatement sel:
+                // The parser's QueryNode is the structural source (Etap 6.9 convergence). Null only for a
+                // malformed WITH the parser couldn't model — then bind the tokens as a flat expression.
+                if (sel.Query is not null) BindQueryNode(sel.Query, _root, sel);
+                else BindQueryFallback(sel.Tokens, _root, sel);
                 break;
 
             case InsertStatement:

@@ -132,7 +132,7 @@ internal sealed partial class SemanticBinder
             table = FoldedName(tableTok);
             // Record the trigger's target table as a schema-object reference so it is coloured (and
             // Ctrl+Click-navigable) exactly like a table in FROM / UPDATE / INSERT INTO — closes the
-            // P5a consistency gap. Only when metadata resolves it (mirrors BindNamedTable's precision).
+            // P5a consistency gap. Only when metadata resolves it (mirrors DeclareTable's precision).
             var target = ResolveObject(table);
             if (target is not null) AddReference(tableTok, target, ReferenceRole.SchemaObject);
         }
@@ -258,13 +258,9 @@ internal sealed partial class SemanticBinder
 
     private void BindCreateView(DdlStatement ddl)
     {
-        var t = ddl.Tokens;
-        int hi = t.Count;
-        int asIdx = FindTopLevelKeyword(t, 0, hi, "AS");
-        if (asIdx < hi)
-        {
-            BindQuery(t, asIdx + 1, hi, _root, ddl);
-        }
+        // The view body query is the parser's QueryNode (Etap 6.9 / B3.1). Null only for a malformed body.
+        if (ddl.Query is not null) BindQueryNode(ddl.Query, _root, ddl);
+        else BindQueryFallback(ddl.Tokens, _root, ddl);
     }
 
     // ── Body tree traversal (Etap 6.9 / B1b — the binder as an AST consumer) ─────────────────
@@ -289,12 +285,11 @@ internal sealed partial class SemanticBinder
         foreach (var s in block.Statements) BindPsqlStatement(s, scope, stmt);
     }
 
-    // Dispatches one PSQL body statement to the right binding. Control-flow nodes bind the references
-    // in their OWN tokens (the condition / cursor query + INTO — everything before their first child)
-    // then recurse into their child statement(s); leaves bind their whole interior; declarations are
-    // handled here too so a stray DECLARE outside a block's declaration section still binds (defensive).
-    // A body statement is a SqlNode because an embedded DSQL statement (SELECT / INSERT / … ) is the
-    // reused top-level statement node (B5), not a PsqlStatement.
+    // Dispatches one PSQL body statement to the right binding — an AST CONSUMER throughout: subqueries /
+    // CASE and (for a reused DSQL leaf) the principal query come from the node's children (own scopes);
+    // only the ordinary expression interior (column/local/param references, INTO targets) is a token walk.
+    // A body statement is a SqlNode because an embedded DSQL statement (SELECT / INSERT / …) is the reused
+    // top-level statement node (B5), not a PsqlStatement.
     private void BindPsqlStatement(SqlNode node, Scope scope, SqlStatement stmt)
     {
         switch (node)
@@ -304,18 +299,18 @@ internal sealed partial class SemanticBinder
                 break;
 
             case IfStatement s:
-                BindControlHeader(s, s.Then, scope, stmt);
+                BindControlHeader(s.Tokens, s.ConditionExpressions, s.Then, scope, stmt);
                 if (s.Then is not null) BindPsqlStatement(s.Then, scope, stmt);
                 if (s.Else is not null) BindPsqlStatement(s.Else, scope, stmt);
                 break;
 
             case WhileStatement s:
-                BindControlHeader(s, s.Body, scope, stmt);
+                BindControlHeader(s.Tokens, s.ConditionExpressions, s.Body, scope, stmt);
                 if (s.Body is not null) BindPsqlStatement(s.Body, scope, stmt);
                 break;
 
             case ForSelectStatement s:
-                BindControlHeader(s, s.Body, scope, stmt);
+                BindForSelect(s, scope, stmt);
                 if (s.Body is not null) BindPsqlStatement(s.Body, scope, stmt);
                 break;
 
@@ -324,35 +319,80 @@ internal sealed partial class SemanticBinder
                 break;
 
             case PsqlLeafStatement leaf:
-                BindLeafReferences(leaf.Tokens, 0, leaf.Tokens.Count, scope, stmt);
+                BindLeaf(leaf.Tokens, leaf.Children, scope, stmt);
                 break;
 
             // An embedded DSQL statement reused node (B5) — a SELECT / INSERT / UPDATE / DELETE / MERGE /
-            // EXECUTE inside the body. Its interior is bound exactly as the pre-B5 flat leaf scan bound it
-            // (over the same tokens), so the reference set is unchanged; consuming its node structure
-            // (SourceQuery / clauses) for richer binding is a later convergence step.
+            // EXECUTE inside the body. Its principal query + subqueries recurse into their own scopes; the
+            // rest (INTO targets, :params, EXECUTE args, dotted/bare refs) binds in this scope.
             case SqlStatement dsql:
-                BindLeafReferences(dsql.Tokens, 0, dsql.Tokens.Count, scope, stmt);
+                BindBodyStatement(dsql, scope, stmt);
                 break;
         }
     }
 
-    // Binds the references in a control-flow node's OWN tokens — the leading tokens up to its first
-    // child statement (its condition / cursor query + INTO / the DO or THEN keyword). The child bodies
-    // are bound by recursion; the inter-child gap (an ELSE keyword) carries no reference. The header is
-    // an ordinary/query expression, so it rides the same token-based leaf scanner (deepened in B2/B3).
-    private void BindControlHeader(PsqlStatement node, SqlNode? firstChild, Scope scope, SqlStatement stmt)
+    // A control-flow node's condition: its embedded subqueries/CASE (own scopes), then the condition's
+    // column/local references (token walk up to the first branch, skipping the subquery spans).
+    private void BindControlHeader(
+        IReadOnlyList<SqlToken> toks, IReadOnlyList<SqlNode> conditionExprs, SqlNode? firstChild, Scope scope, SqlStatement stmt)
     {
-        var toks = node.Tokens;
-        int hi = toks.Count;
-        if (firstChild is not null)
+        var skip = new List<SqlNode>();
+        BindEmbedded(conditionExprs, scope, stmt, skip);
+        BindPsqlExpression(toks, 0, HeaderEnd(toks, firstChild), scope, stmt, skip);
+    }
+
+    // FOR <cursor query> [INTO <vars>] DO — the cursor query is its own child scope; the header's INTO
+    // targets / params bind here (skipping the cursor query span).
+    private void BindForSelect(ForSelectStatement s, Scope scope, SqlStatement stmt)
+    {
+        var skip = new List<SqlNode>();
+        if (s.Query is not null) { BindQueryNode(s.Query, scope, stmt); skip.Add(s.Query); }
+        BindPsqlExpression(s.Tokens, 0, HeaderEnd(s.Tokens, s.Body), scope, stmt, skip);
+    }
+
+    // A PSQL-only leaf (assignment / RETURN / EXCEPTION / SUSPEND / …): its embedded subqueries/CASE
+    // become their own scopes; the interior binds column/local/param references.
+    private void BindLeaf(IReadOnlyList<SqlToken> toks, IReadOnlyList<SqlNode> embedded, Scope scope, SqlStatement stmt)
+    {
+        var skip = new List<SqlNode>();
+        BindEmbedded(embedded, scope, stmt, skip);
+        BindPsqlExpression(toks, 0, toks.Count, scope, stmt, skip);
+    }
+
+    // A reused DSQL statement node inside a body. Its principal query (a SELECT's Query, an INSERT/MERGE's
+    // SourceQuery) and embedded subqueries recurse into their own scopes; the remaining tokens bind here.
+    private void BindBodyStatement(SqlStatement dsql, Scope scope, SqlStatement stmt)
+    {
+        var skip = new List<SqlNode>();
+        switch (dsql)
         {
-            for (int i = 0; i < toks.Count; i++)
-            {
-                if (toks[i].Start >= firstChild.Start) { hi = i; break; }
-            }
+            case SelectStatement s when s.Query is not null:
+                BindQueryNode(s.Query, scope, stmt); skip.Add(s.Query);
+                break;
+            case InsertStatement i:
+                if (i.SourceQuery is { } isrc) { BindQueryNode(isrc, scope, stmt); skip.Add(isrc); }
+                BindEmbedded(i.Subqueries, scope, stmt, skip);
+                break;
+            case MergeStatement m:
+                if (m.SourceQuery is { } msrc) { BindQueryNode(msrc, scope, stmt); skip.Add(msrc); }
+                BindEmbedded(m.Subqueries, scope, stmt, skip);
+                break;
+            case UpdateStatement u: BindEmbedded(u.Subqueries, scope, stmt, skip); break;
+            case UpdateOrInsertStatement uoi: BindEmbedded(uoi.Subqueries, scope, stmt, skip); break;
+            case DeleteStatement d: BindEmbedded(d.Subqueries, scope, stmt, skip); break;
         }
-        BindLeafReferences(toks, 0, hi, scope, stmt);
+        BindPsqlExpression(dsql.Tokens, 0, dsql.Tokens.Count, scope, stmt, skip);
+    }
+
+    // The token index of the first child statement (a branch / body), or the end of the header tokens.
+    private static int HeaderEnd(IReadOnlyList<SqlToken> toks, SqlNode? firstChild)
+    {
+        if (firstChild is null) return toks.Count;
+        for (int i = 0; i < toks.Count; i++)
+        {
+            if (toks[i].Start >= firstChild.Start) return i;
+        }
+        return toks.Count;
     }
 
     // Declares a DECLARE VARIABLE / DECLARE CURSOR node's symbol. The node type (produced by the parser)
@@ -407,38 +447,28 @@ internal sealed partial class SemanticBinder
         return k < toks.Count && IsNameToken(toks[k]) ? toks[k] : (SqlToken?)null;
     }
 
-    // ── Leaf-interior reference binding (token-based; the query tree deepens it in B2/B3) ─────
+    // ── Expression-interior reference binding (expression-level token walk; NOT query structure) ─────
     //
-    // Binds references within one executable leaf's / control-flow header's token range: FOR SELECT …
-    // INTO, singleton SELECT … INTO, subqueries, NEW/OLD.col and other dotted refs resolvable in this
-    // scope, :param tokens, and bare local (variable/parameter/cursor) references. This is NOT PSQL body
-    // structure (that is the tree above) — it is the ordinary/query expression interior of a single
-    // statement, which the query tree (B2/B3) will model; until then it stays a bounded token scan.
-    private void BindLeafReferences(IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement stmt)
+    // Binds the references in a PSQL statement's / control-flow header's ordinary expression interior:
+    // :param tokens, NEW/OLD.col and other dotted refs, bare local (variable/parameter/cursor/record-alias
+    // /trigger-predicate) references, and INTO targets. It NO LONGER discovers query structure — the
+    // subqueries / principal query are AST nodes bound in their own scopes by the caller, and their token
+    // spans are passed in <paramref name="skip"/> to step over. This is the agreed structural-depth
+    // boundary: an expression walker, not a query walker.
+    private void BindPsqlExpression(
+        IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement stmt, IReadOnlyList<SqlNode> skip)
     {
         int k = lo;
         while (k < hi)
         {
             var tok = t[k];
 
-            if (tok.Kind == TokenKind.LParen)
+            // Step over a query/subquery already bound in its own scope.
+            int sqEnd = SubqueryTokenEnd(skip, tok.Start);
+            if (sqEnd > tok.Start)
             {
-                if (BeginsSubquery(t, k, hi))
-                {
-                    int close = SkipParens(t, k, hi);
-                    BindQuery(t, k + 1, close - 1, scope, stmt);
-                    k = close;
-                    continue;
-                }
                 k++;
-                continue;
-            }
-
-            if (IsKeyword(tok, "SELECT"))
-            {
-                int selectEnd = FindBodySelectEnd(t, k, hi);
-                BindQuery(t, k, selectEnd, scope, stmt);
-                k = BindOptionalInto(t, selectEnd, hi, scope);
+                while (k < hi && t[k].Start < sqEnd) k++;
                 continue;
             }
 
@@ -465,45 +495,6 @@ internal sealed partial class SemanticBinder
 
             k++;
         }
-    }
-
-    // The end of a body SELECT — the first top-level INTO / ';' / DO / BEGIN / END.
-    private static int FindBodySelectEnd(IReadOnlyList<SqlToken> t, int k, int hi)
-    {
-        int depth = 0;
-        for (int i = k; i < hi; i++)
-        {
-            var kind = t[i].Kind;
-            if (kind == TokenKind.LParen) depth++;
-            else if (kind == TokenKind.RParen) { if (depth > 0) depth--; }
-            else if (depth == 0)
-            {
-                if (kind == TokenKind.Semicolon) return i;
-                if (IsKeyword(t[i], "INTO") || IsKeyword(t[i], "DO")
-                    || IsKeyword(t[i], "BEGIN") || IsKeyword(t[i], "END"))
-                {
-                    return i;
-                }
-            }
-        }
-        return hi;
-    }
-
-    // If the token at `at` is INTO, binds the following variable list (bare names and :params) up to
-    // DO / ';' and returns the index after it; otherwise returns `at` unchanged.
-    private int BindOptionalInto(IReadOnlyList<SqlToken> t, int at, int hi, Scope scope)
-    {
-        if (!IsKeyword(At(t, at), "INTO")) return at;
-        int k = at + 1;
-        while (k < hi)
-        {
-            var tok = t[k];
-            if (tok.Kind == TokenKind.Semicolon || IsKeyword(tok, "DO")) break;
-            if (tok.Kind == TokenKind.Parameter) { BindParameterToken(tok, scope); }
-            else if (IsNameToken(tok) && !(At(t, k + 1).Kind == TokenKind.Dot)) { BindBareLocal(tok, scope); }
-            k++;
-        }
-        return k;
     }
 
     private void BindParameterToken(SqlToken tok, Scope scope)

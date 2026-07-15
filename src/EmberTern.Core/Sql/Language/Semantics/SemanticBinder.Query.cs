@@ -4,245 +4,151 @@ using EmberTern.Core.Sql.Language.Ast;
 
 namespace EmberTern.Core.Sql.Language.Semantics;
 
-// Query binding: SELECT / subqueries / CTEs. Builds a nested Query scope, declares FROM/JOIN table
-// references (the alias -> table binding), recurses into subqueries as child scopes, and records
-// qualified (alias.col) and — when metadata disambiguates — bare column references.
+// Query binding — Etap 6.9 convergence: the binder is now an AST CONSUMER. It reads the parser's
+// QueryNode tree (SelectQuery / SetOperationQuery / WithQuery, FromClause items, embedded subquery
+// expressions) for STRUCTURE — which entries are FROM tables, which parens are subqueries, where the
+// CTEs are — instead of re-scanning tokens for it. The structural token walkers this replaces
+// (CollectTables / ParseTableList / ParseCteList / the FROM-first two-phase token scan + the
+// BeginsSubquery paren re-scan) are DELETED. What remains token-based is purely EXPRESSION-level: within
+// a clause's own tokens it records qualified (alias.col) and bare column references — ordinary expression
+// content, the agreed structural-depth boundary, not query structure.
+//
+// The scope shape is unchanged: one Query scope per query (a WITH shares its scope with its main query
+// and a set operation shares one scope across its arms, exactly as the old single-range walk did), while
+// a derived table / correlated subquery / CTE body each recurse into their own child Query scope. The
+// two-phase guarantee (the SELECT list, textually before FROM, still sees the FROM aliases) falls out for
+// free: BindSelectInto declares every FromClause item before binding any clause's column references.
 internal sealed partial class SemanticBinder
 {
-    // Clause words that end a FROM/JOIN table entry or the table list (only unquoted keyword
-    // tokens count; a quoted "WHERE" is a real name). Mirrors SqlAliasResolver's terminator set.
-    private static readonly HashSet<string> TableListTerminators = new(StringComparer.OrdinalIgnoreCase)
+    // ── Entry: bind a QueryNode under a parent, in its own new Query scope ────────────────────
+
+    /// <summary>Binds <paramref name="query"/> under <paramref name="parent"/> in a fresh
+    /// <see cref="ScopeKind.Query"/> scope, returning it. Used for a statement's top query and for every
+    /// nested query that owns a scope (a derived table, a correlated subquery, a CTE body).</summary>
+    private Scope BindQueryNode(QueryNode query, Scope parent, SqlStatement? stmt)
     {
-        "ON", "WHERE", "GROUP", "ORDER", "HAVING", "UNION", "INTERSECT", "EXCEPT",
-        "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "CROSS", "FULL", "NATURAL",
-        "RETURNING", "INTO", "SET", "VALUES", "USING", "WITH", "PLAN", "FOR",
-        "WHEN", "MATCHED", "MATCHING", "AND", "OR",
-        "ROWS", "OFFSET", "FETCH", "LIMIT", "FIRST", "SKIP",
-    };
-
-    /// <summary>Binds a query occupying tokens <c>[lo, hi)</c> under <paramref name="parent"/>,
-    /// returning the new query scope. Two phases so that column references anywhere in the query —
-    /// including the SELECT list, which precedes FROM textually — see the table aliases: phase 1
-    /// collects the FROM/JOIN table references into the scope, phase 2 resolves column references.</summary>
-    private Scope BindQuery(IReadOnlyList<SqlToken> t, int lo, int hi, Scope parent, SqlStatement? stmt)
-    {
-        var span = lo < hi ? TextSpan.FromBounds(t[lo].Start, t[hi - 1].End) : new TextSpan(lo < t.Count ? t[lo].Start : 0, 0);
-        var scope = parent.NewChild(ScopeKind.Query, span, stmt);
-
-        int i = lo;
-        if (IsKeyword(At(t, i), "WITH"))
-        {
-            i++;
-            if (IsKeyword(At(t, i), "RECURSIVE")) i++;
-            i = ParseCteList(t, i, hi, scope, stmt);
-        }
-
-        var ranges = CollectTables(t, i, hi, scope, stmt);
-        BindColumnReferences(t, i, hi, scope, stmt, ranges);
+        var scope = parent.NewChild(ScopeKind.Query, NodeSpan(query), stmt);
+        BindQueryInto(query, scope, stmt);
         return scope;
     }
 
-    // WITH [RECURSIVE] name [(cols)] AS ( subquery ) [, name AS (…) ]*  — returns the index of the
-    // main query that follows the CTE list.
-    private int ParseCteList(IReadOnlyList<SqlToken> t, int i, int hi, Scope scope, SqlStatement? stmt)
+    // Binds a query's declarations + references INTO an existing scope (no new scope). A WITH shares the
+    // scope with its main query (so the CTEs are visible); a set operation shares one scope across its
+    // arms (both arms' FROM tables land together, mirroring the pre-convergence single-range walk).
+    private void BindQueryInto(QueryNode query, Scope scope, SqlStatement? stmt)
     {
-        while (i < hi)
+        switch (query)
         {
-            var nameTok = At(t, i);
-            if (!IsNameToken(nameTok)) break;
-            var cteName = FoldedName(nameTok) ?? string.Empty;
-            i++;
+            case WithQuery wq:
+                foreach (var cte in wq.With.Ctes) BindCte(cte, scope, stmt);
+                BindQueryInto(wq.Query, scope, stmt);
+                break;
 
-            IReadOnlyList<string> cols = Array.Empty<string>();
-            if (At(t, i).Kind == TokenKind.LParen)
-            {
-                int close = SkipParens(t, i, hi);
-                cols = ReadNameList(t, i + 1, close - 1);
-                i = close;
-            }
+            case SetOperationQuery so:
+                BindQueryInto(so.Left, scope, stmt);
+                BindQueryInto(so.Right, scope, stmt);
+                if (so.OrderBy is { } ob) BindClauseReferences(ob, scope, stmt);
+                break;
 
-            if (IsKeyword(At(t, i), "AS")) i++;
+            case SelectQuery sq:
+                BindSelectInto(sq, scope, stmt);
+                break;
 
-            Scope? qscope = null;
-            if (At(t, i).Kind == TokenKind.LParen)
-            {
-                int close = SkipParens(t, i, hi);
-                qscope = BindQuery(t, i + 1, close - 1, scope, stmt);
-                i = close;
-            }
-
-            var cte = new CteSymbol(cteName)
-            {
-                Columns = cols,
-                DeclarationSpan = TextSpan.Of(nameTok),
-                DeclaringStatement = stmt,
-                QueryScope = qscope,
-            };
-            scope.Declare(cte);
-            AddSymbol(cte);
-            AddReference(nameTok, cte, ReferenceRole.SchemaObject, isDefinition: true);
-
-            if (At(t, i).Kind == TokenKind.Comma) { i++; continue; }
-            break;
+            case RawQuery raw:
+                // The query-level §0 valve — no clause structure recognised. Bind its interior as a flat
+                // expression range (records what column/local references it can; no new machinery).
+                BindExpressionReferences(raw.Tokens, 0, raw.Tokens.Count, scope, stmt, System.Array.Empty<SqlNode>());
+                break;
         }
-        return i;
     }
 
-    // ── Phase 1: collect the FROM/JOIN table references ──────────────────────────────────────
-    //
-    // Scans [lo, hi) and, for each top-level FROM/JOIN, parses its table list into `scope` (declaring
-    // a TableReferenceSymbol per entry and binding derived-table subqueries). Returns the token-index
-    // ranges the table lists consumed, so phase 2 skips them (a table/alias is never misread as a
-    // column). Non-FROM subqueries (SELECT-list / WHERE correlated) are NOT recursed here — their own
-    // FROM tables belong to their child scope; phase 2 binds them once this scope's tables are known.
-    private List<(int Lo, int Hi)> CollectTables(IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement? stmt)
+    // A single SELECT core: declare its FROM items (so the projection — textually first — sees the
+    // aliases), then bind each clause's embedded subqueries (own child scopes) + column references.
+    private void BindSelectInto(SelectQuery sq, Scope scope, SqlStatement? stmt)
     {
-        var ranges = new List<(int, int)>();
-        int k = lo;
-        while (k < hi)
+        if (sq.From is { } from)
         {
-            var tok = t[k];
-
-            // Step over a correlated subquery so its inner FROM isn't scooped into this scope
-            // (gotcha #18 — the outer scan must not descend into nested scopes).
-            if (tok.Kind == TokenKind.LParen && BeginsSubquery(t, k, hi))
-            {
-                k = SkipParens(t, k, hi);
-                continue;
-            }
-
-            if (IsKeyword(tok, "FROM") || IsKeyword(tok, "JOIN"))
-            {
-                int start = k;
-                k = ParseTableList(t, k + 1, hi, scope, stmt);
-                ranges.Add((start, k));
-                continue;
-            }
-
-            k++;
+            foreach (var item in from.Items) BindFromItem(item, scope, stmt);
         }
-        return ranges;
+        BindClauseReferences(sq.Select, scope, stmt);
+        BindClauseReferences(sq.Where, scope, stmt);
+        BindClauseReferences(sq.GroupBy, scope, stmt);
+        BindClauseReferences(sq.Having, scope, stmt);
+        BindClauseReferences(sq.OrderBy, scope, stmt);
     }
 
-    // ── Phase 2: resolve column / local references ───────────────────────────────────────────
-    //
-    // Scans [lo, hi) with every table already in scope (so the SELECT list — textually before FROM —
-    // resolves its columns; the two-phase split is exactly what fixes `select k.nazwa from t k`).
-    // Skips the phase-1 table-list ranges, recurses into non-FROM subqueries as correlated child
-    // scopes, and records qualified + bare column references.
-    private void BindColumnReferences(IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement? stmt, List<(int Lo, int Hi)> tableRanges)
+    // ── WITH / CTE (from WithClause nodes) ────────────────────────────────────────────────────
+
+    private void BindCte(CommonTableExpression cte, Scope scope, SqlStatement? stmt)
     {
-        int k = lo;
-        while (k < hi)
+        var qscope = BindQueryNode(cte.Body, scope, stmt);
+
+        var cteName = FoldedName(cte.NameToken) ?? string.Empty;
+        var sym = new CteSymbol(cteName)
         {
-            // A FROM/JOIN table list consumed in phase 1 — tables/aliases/derived tables already bound.
-            int rangeEnd = RangeEndIfInside(tableRanges, k);
-            if (rangeEnd > k) { k = rangeEnd; continue; }
+            Columns = cte.ColumnTokens is null ? Array.Empty<string>() : ReadNameList(cte.ColumnTokens, 0, cte.ColumnTokens.Count),
+            DeclarationSpan = TextSpan.Of(cte.NameToken),
+            DeclaringStatement = stmt,
+            QueryScope = qscope,
+        };
+        scope.Declare(sym);
+        AddSymbol(sym);
+        AddReference(cte.NameToken, sym, ReferenceRole.SchemaObject, isDefinition: true);
+    }
 
-            var tok = t[k];
+    // ── FROM items (from FromClause / JoinedTable nodes) ──────────────────────────────────────
 
-            if (tok.Kind == TokenKind.LParen)
-            {
-                if (BeginsSubquery(t, k, hi))
+    private void BindFromItem(FromItem item, Scope scope, SqlStatement? stmt)
+    {
+        switch (item)
+        {
+            case TableReference tr:
+                BindTableReference(tr, scope, stmt);
+                break;
+
+            case DerivedTable dt:
+                if (dt.Query is not null) BindQueryNode(dt.Query, scope, stmt);
+                DeclareDerivedTable(dt.AliasToken, scope, stmt);
+                break;
+
+            case JoinedTable jt:
+                BindFromItem(jt.Left, scope, stmt);
+                BindFromItem(jt.Right, scope, stmt);
+                // The ON condition is an ordinary expression (column refs); its subqueries are jt's
+                // structural children (after Left/Right in Children) — bind them into correlated scopes.
+                if (jt.OnTokens is { } on)
                 {
-                    int close = SkipParens(t, k, hi);
-                    BindQuery(t, k + 1, close - 1, scope, stmt); // correlated child scope, sees outer tables
-                    k = close;
-                    continue;
+                    var skip = new List<SqlNode>();
+                    BindEmbedded(OnSubqueries(jt), scope, stmt, skip);
+                    BindExpressionReferences(on, 0, on.Count, scope, stmt, skip);
                 }
-                k++; // a normal parenthesised expression — scan its contents in the same loop
-                continue;
-            }
-
-            // An output-column alias (`expr AS name`) or a CAST type (`CAST(x AS type)`) — the token
-            // after AS is a declaration/type, not a column reference. Skip it.
-            if (IsKeyword(tok, "AS"))
-            {
-                k++;
-                if (k < hi && IsWord(t[k])) k++;
-                continue;
-            }
-
-            // qualifier.column
-            if (IsNameToken(tok) && At(t, k + 1).Kind == TokenKind.Dot && IsWord(At(t, k + 2)))
-            {
-                BindDottedReference(tok, t[k + 2], scope);
-                k += 3;
-                continue;
-            }
-
-            // bare column / local reference (not a function-call head)
-            if (IsNameToken(tok) && At(t, k + 1).Kind != TokenKind.LParen)
-            {
-                BindBareReference(tok, scope);
-                k++;
-                continue;
-            }
-
-            k++;
+                break;
         }
     }
 
-    // The end index of the (non-overlapping) table-list range that contains token index k, or k
-    // itself when k is inside no range.
-    private static int RangeEndIfInside(List<(int Lo, int Hi)> ranges, int k)
+    // A named table entry from a FROM item node — [schema.]table [[AS] alias]. The dotted qualifier and
+    // alias come from the node (NameToken = the last dotted segment; AliasToken = the alias), so no token
+    // scan. Delegates the symbol creation to the shared DeclareTable (also used by DML targets, which have
+    // no FROM-item node).
+    private void BindTableReference(TableReference tr, Scope scope, SqlStatement? stmt)
     {
-        foreach (var r in ranges)
-        {
-            if (k >= r.Lo && k < r.Hi) return r.Hi;
-        }
-        return k;
+        if (tr.NameToken is { } tableTok) DeclareTable(tableTok, tr.AliasToken, scope, stmt);
     }
 
-    // Parses a FROM/JOIN table list starting at i, declaring a TableReferenceSymbol per entry, and
-    // binding derived-table subqueries. Returns the index of the terminator that ended the list.
-    private int ParseTableList(IReadOnlyList<SqlToken> t, int i, int hi, Scope scope, SqlStatement? stmt)
+    // Declares a table reference — the shared symbol/reference logic behind both a FROM-item
+    // <see cref="TableReference"/> (query binder) and a DML target/source identified from tokens (DML
+    // binder). Resolves the table against an in-scope CTE or the metadata catalog; records the schema-
+    // object reference on the name and the table-reference definition on the alias (or the name when
+    // unaliased).
+    private void DeclareTable(SqlToken tableTok, SqlToken? aliasTok, Scope scope, SqlStatement? stmt)
     {
-        while (i < hi)
-        {
-            var tok = At(t, i);
-            if (tok.Kind == TokenKind.LParen)
-            {
-                i = BindDerivedTable(t, i, hi, scope, stmt);
-            }
-            else if (!IsWord(tok) || IsTableListTerminator(tok))
-            {
-                return i;
-            }
-            else
-            {
-                i = BindNamedTable(t, i, hi, scope, stmt);
-            }
-
-            if (At(t, i).Kind == TokenKind.Comma) { i++; continue; }
-            return i;
-        }
-        return i;
-    }
-
-    // Binds a single named table entry — <c>table [alias]</c>, with an optional dotted qualifier —
-    // declaring its TableReferenceSymbol and references. Returns the index after the entry (its
-    // alias, when present). Shared by FROM/JOIN lists and DML targets/sources.
-    private int BindNamedTable(IReadOnlyList<SqlToken> t, int i, int hi, Scope scope, SqlStatement? stmt)
-    {
-        var tableTok = At(t, i);
         var tableName = FoldedName(tableTok) ?? string.Empty;
-        i++;
-        while (At(t, i).Kind == TokenKind.Dot && IsNameToken(At(t, i + 1)))
-        {
-            tableTok = t[i + 1];
-            tableName = FoldedName(t[i + 1]) ?? string.Empty;
-            i += 2;
-        }
-
         var cte = scope.Resolve(tableName) as CteSymbol;
         Symbol? target = cte ?? (Symbol?)ResolveObject(tableName);
 
-        var (alias, afterAlias) = ReadOptionalAlias(t, i, hi);
-        i = afterAlias;
-        bool isAlias = alias is not null;
-        var refName = isAlias ? FoldedName(alias!) ?? tableName : tableName;
-        var declTok = isAlias ? alias! : tableTok;
+        bool isAlias = aliasTok is not null;
+        var declTok = isAlias ? aliasTok! : tableTok;
+        var refName = isAlias ? FoldedName(aliasTok!) ?? tableName : tableName;
 
         var tref = new TableReferenceSymbol(refName)
         {
@@ -255,23 +161,12 @@ internal sealed partial class SemanticBinder
         scope.Declare(tref);
         AddSymbol(tref);
 
-        if (target is not null)
-        {
-            AddReference(tableTok, target, ReferenceRole.SchemaObject);
-        }
+        if (target is not null) AddReference(tableTok, target, ReferenceRole.SchemaObject);
         AddReference(declTok, tref, ReferenceRole.TableReference, isDefinition: true);
-        return i;
     }
 
-    // Binds a derived table — <c>( subquery ) [AS] alias</c>. Returns the index after the alias.
-    private int BindDerivedTable(IReadOnlyList<SqlToken> t, int i, int hi, Scope scope, SqlStatement? stmt)
+    private void DeclareDerivedTable(SqlToken? aliasTok, Scope scope, SqlStatement? stmt)
     {
-        int close = SkipParens(t, i, hi);
-        BindQuery(t, i + 1, close - 1, scope, stmt);
-        i = close;
-
-        var (aliasTok, next) = ReadOptionalAlias(t, i, hi);
-        i = next;
         var derivedName = aliasTok is null ? string.Empty : FoldedName(aliasTok) ?? string.Empty;
         var derived = new TableReferenceSymbol(derivedName)
         {
@@ -282,38 +177,130 @@ internal sealed partial class SemanticBinder
         };
         scope.Declare(derived);
         AddSymbol(derived);
-        if (aliasTok is not null)
-        {
-            AddReference(aliasTok, derived, ReferenceRole.TableReference, isDefinition: true);
-        }
-        return i;
+        if (aliasTok is not null) AddReference(aliasTok, derived, ReferenceRole.TableReference, isDefinition: true);
     }
 
-    // Reads an optional "[AS] alias" and returns (alias token or null, index after it). An alias
-    // must be a bare/quoted identifier that is not a clause terminator (so a keyword like WHERE or
-    // JOIN never becomes an alias).
-    private static (SqlToken? Alias, int Next) ReadOptionalAlias(IReadOnlyList<SqlToken> t, int i, int hi)
+    // ── Clause column references (expression-level token walk; subqueries recurse into own scopes) ──
+
+    // Binds one query clause: its embedded subquery expressions become correlated child scopes (they see
+    // this scope's tables), and its ordinary tokens are scanned for qualified/bare column references —
+    // skipping the subquery token ranges (bound in their own scope) but walking THROUGH a CASE (whose
+    // condition/result column references belong to this scope).
+    private void BindClauseReferences(QueryClause? clause, Scope scope, SqlStatement? stmt)
     {
-        int j = i;
-        if (IsKeyword(At(t, j), "AS")) j++;
-        var cand = At(t, j);
-        if (j < hi && IsNameToken(cand) && !IsTableListTerminator(cand))
-        {
-            return (cand, j + 1);
-        }
-        // "AS" with no following name (malformed) — consume the AS but yield no alias.
-        return (null, j);
+        if (clause is null) return;
+        var skip = new List<SqlNode>();
+        BindEmbedded(clause.Children, scope, stmt, skip); // subqueries → correlated child scopes (+ skip)
+        BindExpressionReferences(clause.Tokens, 0, clause.Tokens.Count, scope, stmt, skip);
     }
 
-    private static bool IsTableListTerminator(SqlToken t)
-        => t.Kind == TokenKind.Keyword && TableListTerminators.Contains(t.Text);
-
-    // True when the '(' at i opens a subquery — its first significant inner token is SELECT or WITH.
-    private static bool BeginsSubquery(IReadOnlyList<SqlToken> t, int lparen, int hi)
+    // Walks token range [lo, hi) recording qualified (alias.col) and bare column/local references, but
+    // stepping over the token span of each subquery in <paramref name="subqueries"/> (already bound into
+    // its own child scope). CASE and ordinary parens are walked through — their column references belong
+    // to this scope. Replaces the old BindColumnReferences (which re-scanned tokens for FROM lists and
+    // `(SELECT` subquery openings; structure now comes from the AST).
+    private void BindExpressionReferences(
+        IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement? stmt, IReadOnlyList<SqlNode> subqueries)
     {
-        int n = lparen + 1;
-        if (n >= hi) return false;
-        return IsKeyword(t[n], "SELECT") || IsKeyword(t[n], "WITH");
+        int k = lo;
+        while (k < hi)
+        {
+            var tok = t[k];
+
+            // Step over an embedded subquery's tokens (its interior is bound in its own scope).
+            int sqEnd = SubqueryTokenEnd(subqueries, tok.Start);
+            if (sqEnd > tok.Start)
+            {
+                k++;
+                while (k < hi && t[k].Start < sqEnd) k++;
+                continue;
+            }
+
+            // An output-column alias (expr AS name) or a CAST type (CAST(x AS type)) — the token after
+            // AS is a declaration/type, not a column reference.
+            if (IsKeyword(tok, "AS"))
+            {
+                k++;
+                if (k < hi && IsWord(t[k])) k++;
+                continue;
+            }
+
+            if (IsNameToken(tok) && At(t, k + 1).Kind == TokenKind.Dot && IsWord(At(t, k + 2)))
+            {
+                BindDottedReference(tok, t[k + 2], scope);
+                k += 3;
+                continue;
+            }
+
+            if (IsNameToken(tok) && At(t, k + 1).Kind != TokenKind.LParen)
+            {
+                BindBareReference(tok, scope);
+                k++;
+                continue;
+            }
+
+            k++;
+        }
+    }
+
+    // The end offset of the subquery whose span starts at exactly <paramref name="tokenStart"/>, or
+    // tokenStart when no subquery starts there. (Subqueries are non-overlapping and each starts on a real
+    // token — an EXISTS keyword or a '(' — so a start-offset match uniquely identifies one.)
+    private static int SubqueryTokenEnd(IReadOnlyList<SqlNode> subqueries, int tokenStart)
+    {
+        foreach (var sq in subqueries)
+        {
+            if (sq.Start == tokenStart) return sq.End;
+        }
+        return tokenStart;
+    }
+
+    // The subquery expressions to bind + skip for a clause: the SubqueryExpression descendants that are
+    // NOT nested inside another subquery (a subquery inside a CASE branch counts — CASE is descended
+    // through; a subquery inside a subquery does not — its parent subquery's own binding handles it).
+    private static IReadOnlyList<SqlNode> TopSubqueries(SqlNode node)
+    {
+        List<SqlNode>? acc = null;
+        CollectTopSubqueries(node, ref acc);
+        return acc ?? (IReadOnlyList<SqlNode>)Array.Empty<SqlNode>();
+    }
+
+    private static void CollectTopSubqueries(SqlNode node, ref List<SqlNode>? acc)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child is SubqueryExpression sq)
+            {
+                (acc ??= new List<SqlNode>()).Add(sq); // do NOT descend — its interior is a separate scope
+            }
+            else
+            {
+                CollectTopSubqueries(child, ref acc); // descend through CASE / WhenClause / etc.
+            }
+        }
+    }
+
+    // A JoinedTable's ON-condition subqueries — its children after Left and Right.
+    private static IReadOnlyList<SqlNode> OnSubqueries(JoinedTable jt)
+    {
+        var kids = jt.Children;
+        if (kids.Count <= 2) return Array.Empty<SqlNode>();
+        var list = new List<SqlNode>(kids.Count - 2);
+        for (int i = 2; i < kids.Count; i++) list.Add(kids[i]);
+        return list;
+    }
+
+    private static TextSpan NodeSpan(SqlNode node) => new(node.Start, node.Length);
+
+    // Fallback when a SelectStatement has no modelled QueryNode (a malformed WITH). Binds the tokens as a
+    // flat expression in a fresh Query scope — no table structure to discover, so it just records any
+    // resolvable column/local references (matches the pre-convergence behaviour on such input).
+    private void BindQueryFallback(IReadOnlyList<SqlToken> t, Scope parent, SqlStatement? stmt)
+    {
+        int hi = t.Count;
+        var span = hi > 0 ? TextSpan.FromBounds(t[0].Start, t[hi - 1].End) : new TextSpan(0, 0);
+        var scope = parent.NewChild(ScopeKind.Query, span, stmt);
+        BindExpressionReferences(t, 0, hi, scope, stmt, System.Array.Empty<SqlNode>());
     }
 
     // ── Column-reference resolution ──────────────────────────────────────────────────────────
@@ -336,8 +323,7 @@ internal sealed partial class SemanticBinder
                 break;
 
             // Qualifier is not a known table/record alias (e.g. a package.function call, or an
-            // unresolved alias). Leave it unrecorded to avoid noise — a later etap with a deeper
-            // AST can classify these precisely.
+            // unresolved alias). Leave it unrecorded to avoid noise.
         }
     }
 
@@ -364,7 +350,6 @@ internal sealed partial class SemanticBinder
         }
 
         // Bare column: resolve only when exactly one in-scope table owns a column by this name.
-        // Requires metadata; without it we record nothing (keeps bare-column refs high-precision).
         ColumnSymbol? unique = null;
         int matches = 0;
         foreach (var sym in scope.VisibleSymbols())
@@ -381,29 +366,19 @@ internal sealed partial class SemanticBinder
             }
         }
 
-        if (matches == 1)
-        {
-            AddReference(tok, unique, ReferenceRole.Column);
-        }
-        else if (matches > 1)
-        {
-            AddReference(tok, null, ReferenceRole.Column); // ambiguous — recorded unresolved
-        }
-        // matches == 0: not a known column — skip (may be a function / output alias / unknown).
+        if (matches == 1) AddReference(tok, unique, ReferenceRole.Column);
+        else if (matches > 1) AddReference(tok, null, ReferenceRole.Column); // ambiguous — recorded unresolved
     }
 
     // ── Column symbols (cached so references to the same column share one symbol) ─────────────
 
-    private readonly Dictionary<string, ColumnSymbol?> _columnCache =
-        new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ColumnSymbol?> _columnCache = new(StringComparer.OrdinalIgnoreCase);
 
     private ColumnSymbol? ResolveColumn(string? table, string? column)
     {
         if (string.IsNullOrEmpty(table) || string.IsNullOrEmpty(column)) return null;
-        // Composite cache key: table + a NUL separator + column. NUL cannot occur in an identifier,
-        // so (table, column) maps to exactly one key (a plain space could collide with a quoted
-        // identifier that contains a space). The separator is built as (char)0 rather than a raw NUL
-        // byte in the source -- a raw NUL makes git treat the file as binary and breaks grep/diff.
+        // Composite cache key: table + a NUL separator + column (NUL cannot occur in an identifier, so
+        // (table, column) maps to exactly one key). Built as (char)0 rather than a raw NUL in the source.
         var key = table + (char)0 + column;
         if (_columnCache.TryGetValue(key, out var cached)) return cached;
 
