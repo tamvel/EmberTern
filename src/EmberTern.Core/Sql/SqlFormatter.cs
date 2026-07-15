@@ -1851,12 +1851,36 @@ public static class SqlFormatter
     {
         if (query is null) return FormatLeafStatementTokens(stmt);
         int into = FindTopLevelWord(stmt, "INTO");
-        string head = EmitQuery(query);
+        // The PSQL block structurer already emitted this leaf's LEADING comment (it precedes the leaf's
+        // first token in the flattened body). EmitQuery would re-materialise it from the query's
+        // first-token trivia — a duplicate that trips the §0 lexeme net and reverts the whole statement to
+        // verbatim. Strip exactly those leading comments from the head (the structurer's copy remains, so
+        // nothing is lost or duplicated). Only this SELECT-leaf path is affected: the DML leaves render
+        // from the comment-free token list, and an INTERNAL subquery comment is emitted once (its enclosing
+        // Emit skips the spliced node's tokens).
+        string head = StripLeadingLeafComments(EmitQuery(query), query.Tokens);
         if (into > 0) return head + "\n" + Emit(stmt.GetRange(into, stmt.Count - into));
         // No INTO — glue any trailing tokens after the query (the terminating ';').
         int qEnd = stmt.Count;
         for (int k = 0; k < stmt.Count; k++) { if (stmt[k].Start >= query.End) { qEnd = k; break; } }
         return qEnd >= stmt.Count ? head : head + Emit(stmt.GetRange(qEnd, stmt.Count - qEnd));
+    }
+
+    // Removes, from the start of a rendered leaf, exactly the leading comments that live on the leaf's
+    // first token's trivia (which the PSQL block structurer has already emitted separately). Matching the
+    // exact comment text at the head is safe — it is the leaf's own leading trivia, not content.
+    private static string StripLeadingLeafComments(string rendered, IReadOnlyList<SqlToken> tokens)
+    {
+        if (tokens.Count == 0) return rendered;
+        foreach (var tr in tokens[0].LeadingTrivia)
+        {
+            if (tr.Kind is not (TriviaKind.LineComment or TriviaKind.BlockComment)) continue;
+            var text = tr.Kind == TriviaKind.LineComment ? tr.Text.TrimEnd() : tr.Text;
+            var trimmed = rendered.TrimStart('\n', ' ');
+            if (trimmed.StartsWith(text, StringComparison.Ordinal))
+                rendered = trimmed.Substring(text.Length);
+        }
+        return rendered.TrimStart('\n', ' ');
     }
 
     // The token-only leaf layout — the pre-convergence behaviour, kept for a leaf the parser did not model
