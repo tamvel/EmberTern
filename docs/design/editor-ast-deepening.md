@@ -1,8 +1,17 @@
 # Etap 6.9 — Structural AST Deepening (implementation guide)
 
-> **Status: PARSER STAGE COMPLETE — B0–B5 parser-producers DONE (2026-07-14/15). Binder + formatter
-> convergence and Stage 7 remain (deferred by user directive: build the whole structural model first,
-> migrate consumers after).** This document is the implementation guide for Etap 6.9, the foundational
+> **Status: ETAP 6.9 COMPLETE (2026-07-15). Parser (B0–B5) + binder + FORMATTER are all AST consumers;
+> Stage 7 follows.** Formatter convergence landed construct-by-construct (§13.2): a query is laid out by an
+> AST-walking core with nested-query indentation + adaptive CASE; the token emitter is retained only as the
+> interior/expression renderer and for the constructs the parser intentionally does not model (UPDATE
+> SET/DELETE/MERGE clause layout, PACKAGE bodies), with one layout mechanism per construct. Verified: build
+> 0/0, 4065 main + 23 probe green, smoke clean. The binder is a full AST consumer — its
+> structural token walkers (`BindQuery`/`CollectTables`/`ParseTableList`/`ParseCteList`/`BindColumnReferences`
+> FROM+`(SELECT` re-scan, and the PSQL `BindLeafReferences` `(SELECT` branch) are DELETED; only
+> expression-level token work remains (column/local/param references + DML-target identification, which has
+> no AST node). The formatter is still a token-stream (`FToken`) layout engine — converging it is the last
+> item (see §13). Verified: build 0/0, 4008 main + 23 probe green, smoke clean. This document is the
+> implementation guide for Etap 6.9, the foundational
 > parser/AST deepening that must land **before Stage 7 (Diagnostics)** and before the future Debugger.
 > As of B5 the parser is the **single structural source for all SQL/PSQL structure** (within the
 > consciously-accepted structural-depth scope): the PSQL body tree is produced for all four PSQL surfaces
@@ -14,10 +23,10 @@
 > promotes every embedded DSQL statement inside a PSQL body (SELECT/INSERT/UPDATE/DELETE/MERGE/EXECUTE) to
 > the **reused** top-level statement node, so a DML query inside a routine body is the SAME node — with the
 > same query structure — as at the top level (closing the last "query on tokens" residual). **No parallel
-> AST representation remains; structure lives once in the tree.** The remaining duplication is in the
-> CONSUMERS: the binder's query/DML walk and the whole formatter still re-derive structure from tokens —
-> that is the deferred convergence, not a parser gap. (As-built + verification: §10 B0…B5; remaining
-> boundaries: §12.) Produced by a pre-Stage-7 architecture review, captured here in full.
+> AST representation remains; structure lives once in the tree.** The binder now consumes that tree
+> (§13.1); the one remaining consumer that still re-derives structure from tokens is the FORMATTER (§13.2)
+> — the last Etap-6.9 step. (As-built + verification: §10 B0…B5, §13 convergence; boundaries: §12.)
+> Produced by a pre-Stage-7 architecture review, captured here in full.
 >
 > Companion document: [`editor-stage7-diagnostics.md`](editor-stage7-diagnostics.md) (the Stage 7
 > vision that consumes this foundation). Parent architecture: [`editor-architecture.md`](editor-architecture.md).
@@ -661,3 +670,77 @@ interior, which is a B5 item (leaves become reused DML nodes). Gaps #2–#5 are 
 deliberate boundary; #1a is a permanent boundary. **The binder can now migrate onto a genuinely complete
 query source in one pass** (B2/B3 clause + subquery tree, B3.1 embedded-statement queries), rather than
 twice — which was the whole point of completing the AST before convergence.
+
+---
+
+## 13. Consumer convergence — status (2026-07-15)
+
+The parser is the single structural source (B0–B5). Migrating the CONSUMERS off their own token walkers
+onto that source is the convergence. Status:
+
+### 13.1 Binder — ✅ DONE (2026-07-15)
+
+`SemanticBinder` is a full AST consumer:
+
+- **Query** (`SemanticBinder.Query.cs`) — `BindQueryNode`/`BindQueryInto`/`BindSelectInto` walk the
+  `QueryNode` tree: FROM tables come from `FromClause` items (`TableReference`/`DerivedTable`/`JoinedTable`),
+  CTEs from `WithClause`, embedded subqueries from each clause's `SubqueryExpression` children (each a
+  correlated child scope). The clause interior is walked only for column references (expression-level).
+- **DML** (`SemanticBinder.Dml.cs`) — the source query (`InsertStatement.SourceQuery` /
+  `MergeStatement.SourceQuery`) and embedded subqueries come from the AST; only the DML TARGET (which has
+  no AST node) and the SET/WHERE/VALUES column references are token-level.
+- **PSQL** (`SemanticBinder.Psql.cs`) — already consumed the body tree (B1b); now its leaf/header binding
+  drives subqueries from the AST too (a reused DSQL leaf's `Query`/`SourceQuery`/`Subqueries`, a
+  `PsqlLeafStatement`'s embedded children, an `IF`/`WHILE` condition's `ConditionExpressions`, a
+  `ForSelectStatement.Query`). Only the expression interior (`:param`/dotted/bare/INTO) is a token walk.
+
+**Deleted structural token walkers:** `BindQuery` (token), `CollectTables`, `ParseTableList`, `ParseCteList`,
+`BindColumnReferences` (the FROM-list + `(SELECT` re-scan), `RangeEndIfInside`, `BeginsSubquery`,
+`BindNamedTable`/`BindDerivedTable`/`BindTargetAfter`/`ReadOptionalAlias` (token FROM-item logic),
+`IsTableListTerminator`/`TableListTerminators`, and the PSQL `BindLeafReferences`/`FindBodySelectEnd`/
+`BindOptionalInto`. What remains is expression-level (column/local/param references) + DML-target
+identification (no AST node exists for it) — **not** structural query walkers. One producer refinement
+landed with it: `IF`/`WHILE` now carry `ConditionExpressions` (condition subqueries/CASE), and a PSQL
+singleton `SELECT … INTO` ends its `QueryNode` before `INTO` (top-level DSQL never has an INTO), so the
+INTO targets bind as locals. Behaviour-equivalent: 4008 main + 23 probe green.
+
+### 13.2 Formatter — ✅ DONE (2026-07-15)
+
+`SqlFormatter` is now an **AST-walking layout engine** wherever the parser provides structure. The core is
+`EmitQuery(QueryNode)`: it lays out each clause on its own line and recurses into nested queries (derived
+table / EXISTS / scalar subquery / IN(SELECT), and a MERGE `USING (…)` source) as **expanded-paren blocks**
+at one further indent level, so multi-level queries indent naturally instead of flattening to column 0.
+`CaseExpression` is laid out **adaptively** (`EmitCaseChild`/`EmitCaseBlock`) — inline when it is simple
+(≤1 WHEN) and fits the width, else a WHEN/THEN/ELSE block. The migration landed **construct by construct**
+behind byte-identity / intended-layout gates (F1 nested-query indentation + projection item model, F2 CASE,
+F3 WITH/CTE recursion, F4 INSERT…SELECT / CREATE VIEW body / MERGE source / UPDATE·DELETE embedded
+subqueries, F5 PSQL body leaves + FOR SELECT cursor). Rendering strategy: everything is emitted
+column-0-relative and composed by uniformly shifting a block right (`AppendBlock` / `IndentBlock`), so a
+**flat query is byte-identical** to the pre-convergence output (all pre-existing exact tests unchanged)
+while a **nested query gains real indentation**, and idempotency holds because layout is a pure function of
+the tree. New baselines: `SqlFormatterNestedQueryTests`, `SqlFormatterEmbeddedQueryTests`,
+`SqlFormatterPsqlAstTests`, plus a `StructuralConstructs` idempotency/§0 sweep in
+`SqlFormatterInvariantsTests`.
+
+**The token emitter (`Emit`) is retained — and this is the correct end state, not residual debt.** It is now
+(a) the renderer for a clause/expression **interior** (the structural-depth boundary keeps ordinary
+expressions as token fragments — a projection item, a WHERE predicate, an ON condition), into which it
+**splices** the embedded structural child nodes (subqueries / CASE) it is handed by span (`StructuralSplices`
++ `EmitStructuralChild`); and (b) the layout for the constructs the parser deliberately does **not** model
+structurally — UPDATE `SET` / DELETE / MERGE clause layout (no clause node — an intentional §12 boundary),
+and PSQL **PACKAGE** bodies (no `Body` node). The PSQL block structurer (`EmitPsqlUnit`/`EmitForSelect`) is
+**kept on purpose**: it is robust to the adversarial malformed-input corpus and handles PACKAGE bodies the
+parser leaves unmodelled, and rewriting it to a second AST walker would create exactly the parallel
+mechanism §5.3 forbids (there is no full AST for a PACKAGE body). Instead it **delegates each leaf's content
+to the AST** (`FormatLeafStatement` → `FormatAstLeaf`, keyed by a leaf-span index) so a DML/SELECT leaf, a
+FOR SELECT cursor, and an IF/WHILE/assignment CASE all lay out through the same AST-driven code as the top
+level. `MatchStructuralPhrase` / `FindColumnListEnd` likewise survive as the interior/DML layout for the
+non-modelled constructs — they are no longer reached for a plain SELECT (which goes through `EmitQuery`), so
+there is **one layout mechanism per construct**, no AST + token walker for the same construct.
+
+### 13.3 `SqlAliasResolver`
+
+No longer referenced by the editor path (the binder does not use it). Its ONE remaining consumer is
+`PredicateExtractor` (Performance Analysis), off the editor path. Retiring it is a separate
+Performance-feature migration (`PredicateExtractor` → the semantic model), not part of the formatter
+convergence — so it is intentionally left until that component is migrated.
