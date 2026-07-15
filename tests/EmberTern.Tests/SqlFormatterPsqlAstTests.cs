@@ -90,8 +90,22 @@ public class SqlFormatterPsqlAstTests
     }
 
     [Fact]
+    public void BarePsqlControlFlowFragment_FormatsAsAnonymousBlock_WithNesting()
+    {
+        // A bare IF/WHILE/FOR fragment (no enclosing BEGIN…END — e.g. a selection pasted out of a routine
+        // body) is recognised as an anonymous PSQL body and formatted (with full nested-query layout in the
+        // condition), instead of falling to a verbatim RawStatement.
+        Assert.Equal(
+            "if (exists (\n    select 1\n    from u\n    where u.k = :p\n)) then\n  wynik = 1;",
+            SqlFormatter.Format("if (exists (select 1 from u where u.k = :p)) then wynik = 1;"));
+    }
+
+    [Fact]
     public void PsqlAst_IsIdempotent()
     {
+        Idempotent("if (exists (select 1 from u where u.k = :p)) then wynik = 1;");
+        Idempotent("while (x < (select max(n) from t)) do x = x + 1;");
+        Idempotent("for select id from (select id from t where x > 0) d into :i do suspend;");
         Idempotent("create or alter procedure p returns (r integer) as begin for select id from (select id from t where x in (select k from u)) d into :r do begin suspend; end end");
         Idempotent("create procedure p as begin insert into t (a, b) select x, y from s where z in (select k from u); end");
         Idempotent("begin update t set s = case when x > 0 then 'p' when x < 0 then 'n' else 'z' end where id = 1; end");

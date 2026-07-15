@@ -349,6 +349,15 @@ public static partial class SqlParser
             case "REVOKE":
                 return new RevokeStatement(start, length, slice);
             case "BEGIN":
+            // A bare PSQL control-flow fragment with no enclosing BEGIN…END — an IF / WHILE / FOR loop
+            // pasted or selected out of a routine body. It is valid formattable PSQL (not unparseable
+            // input), so recognise it as an anonymous PSQL body: the body sub-parser handles the no-BEGIN
+            // shape (a bare statement list), so it formats + binds as PSQL instead of falling to a verbatim
+            // RawStatement. The statement segmenter already delimits it (top-level ';' with BEGIN/CASE/END
+            // depth). §0-safe additive overlay; the token slice still round-trips.
+            case "IF":
+            case "WHILE":
+            case "FOR":
                 // A bare anonymous PSQL block (a formattable body, not unparseable input). Etap 6.9/B1:
                 // the block's structure (BEGIN/END, IF/WHILE/FOR, declares, leaf spans) is parsed into a
                 // BlockStatement child — an additive overlay; the token slice still round-trips (§0).
