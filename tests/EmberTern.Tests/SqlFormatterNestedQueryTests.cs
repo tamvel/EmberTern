@@ -71,6 +71,27 @@ public class SqlFormatterNestedQueryTests
     }
 
     [Fact]
+    public void SubqueryInFunctionArgument_NestsDeeper_NotAtArgumentColumn()
+    {
+        // Regression: a subquery inside a function-call argument used to flatten to the argument's own
+        // column (no depth increase) because the shared list builder rendered items without the AST
+        // structural children. It must now splice + nest one level deeper than its paren.
+        Assert.Equal(
+            "select\n       coalesce(\n                (\n                    select max(x)\n                    from u\n                ),\n                0) as m\nfrom t",
+            SqlFormatter.Format("select coalesce((select max(x) from u), 0) as m from t"));
+    }
+
+    [Fact]
+    public void SubqueryInCaseArm_NestsUnderTheArm()
+    {
+        // Regression: a subquery in a WHEN … THEN result used to dedent its closing paren (the arm's
+        // multi-line continuation was not shifted by the arm indent).
+        Assert.Equal(
+            "select\n       case\n         when x > 0 then (\n             select max(y)\n             from u\n             where u.k = t.id\n         )\n         else 0\n       end as m\nfrom t",
+            SqlFormatter.Format("select case when x > 0 then (select max(y) from u where u.k = t.id) else 0 end as m from t"));
+    }
+
+    [Fact]
     public void NestedIndentation_IsIdempotent()
     {
         Idempotent("SELECT a FROM t WHERE x IN (SELECT id FROM other WHERE val > 1)");
@@ -78,6 +99,9 @@ public class SqlFormatterNestedQueryTests
         Idempotent("SELECT d.n FROM (SELECT id AS n FROM t WHERE x = 1) d WHERE d.n > 0");
         Idempotent("SELECT p.n FROM (SELECT n FROM t) p JOIN (SELECT n FROM u) q ON p.n = q.n");
         Idempotent("SELECT 1 FROM t a JOIN u b ON a.id = b.id AND EXISTS (SELECT 1 FROM v WHERE v.k = a.id)");
+        Idempotent("select coalesce((select max(x) from u), 0) as m from t");
+        Idempotent("select case when x > 0 then (select max(y) from u where u.k = t.id) else 0 end as m from t");
+        Idempotent("select * from (select * from (select * from (select y from t) a) b) c");
     }
 
     // ── CASE — adaptive ────────────────────────────────────────────────────────────────────────

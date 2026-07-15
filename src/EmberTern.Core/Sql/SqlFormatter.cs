@@ -519,7 +519,8 @@ public static class SqlFormatter
             if (IsWordTok(t, "IN") && i + 1 < meaningful.Count && IsPunctTok(meaningful[i + 1], "(")
                 && !StartsSubquery(meaningful, i + 2))
             {
-                i += EmitInList(meaningful, i, sb, ref prev) - 1;
+                i += EmitInList(meaningful, i, sb, ref prev, structuralChildren) - 1;
+                nextSplice = SkipConsumedSplices(splices, nextSplice, meaningful[i]);
                 continue;
             }
 
@@ -533,7 +534,8 @@ public static class SqlFormatter
                 && i + 1 < meaningful.Count && IsPunctTok(meaningful[i + 1], "(")
                 && !StartsSubquery(meaningful, i + 2))
             {
-                i += EmitCallArgList(meaningful, i, sb, ref prev) - 1;
+                i += EmitCallArgList(meaningful, i, sb, ref prev, structuralChildren) - 1;
+                nextSplice = SkipConsumedSplices(splices, nextSplice, meaningful[i]);
                 continue;
             }
 
@@ -581,9 +583,18 @@ public static class SqlFormatter
         return listEnd - start;
     }
 
+    // Advances the splice cursor past any embedded structural node whose tokens a list builder already
+    // consumed (and laid out from the AST) — so the outer loop does not try to re-splice it.
+    private static int SkipConsumedSplices(List<(int Start, SqlNode Node)> splices, int next, FToken lastConsumed)
+    {
+        while (next < splices.Count && splices[next].Start <= lastConsumed.Start) next++;
+        return next;
+    }
+
     // Emits "in ( … )" with the value list laid out by the shared adaptive builder, measured from the
-    // '(' column. Returns tokens consumed (IN through the matching ')').
-    private static int EmitInList(List<FToken> tokens, int inIdx, StringBuilder sb, ref FToken? prev)
+    // '(' column. A scalar subquery in a value expression is spliced from <paramref name="children"/>.
+    // Returns tokens consumed (IN through the matching ')').
+    private static int EmitInList(List<FToken> tokens, int inIdx, StringBuilder sb, ref FToken? prev, IReadOnlyList<SqlNode>? children)
     {
         if (NeedsSpaceBefore(prev, tokens[inIdx], sb)) sb.Append(' ');
         sb.Append("in");
@@ -595,7 +606,7 @@ public static class SqlFormatter
 
         if (NeedsSpaceBefore(prev, tokens[open], sb)) sb.Append(' ');
         int openColumn = CurrentColumn(sb);
-        sb.Append(FormatAdaptiveList(items, openColumn));
+        sb.Append(FormatAdaptiveList(items, openColumn, children));
         prev = close < tokens.Count ? tokens[close] : tokens[open];
 
         int last = close < tokens.Count ? close : tokens.Count - 1;
@@ -607,7 +618,7 @@ public static class SqlFormatter
     // mechanism for every call's arguments: EXECUTE PROCEDURE, function/procedure calls, and any other
     // "identifier ( comma-list )" — no per-construct arg formatter. Returns tokens consumed (name through
     // the matching ')').
-    private static int EmitCallArgList(List<FToken> tokens, int nameIdx, StringBuilder sb, ref FToken? prev)
+    private static int EmitCallArgList(List<FToken> tokens, int nameIdx, StringBuilder sb, ref FToken? prev, IReadOnlyList<SqlNode>? children)
     {
         if (NeedsSpaceBefore(prev, tokens[nameIdx], sb)) sb.Append(' ');
         sb.Append(MaybeLowercase(tokens[nameIdx]));
@@ -618,7 +629,9 @@ public static class SqlFormatter
         var items = SplitTopLevelCommas(tokens, open + 1, close);
 
         int openColumn = CurrentColumn(sb); // column of '(', since it glues to the name
-        sb.Append(FormatAdaptiveList(items, openColumn));
+        // A subquery / CASE embedded in an argument is spliced from the structural children (so it nests
+        // instead of flattening to the argument column).
+        sb.Append(FormatAdaptiveList(items, openColumn, children));
         prev = close < tokens.Count ? tokens[close] : tokens[open];
 
         int last = close < tokens.Count ? close : tokens.Count - 1;
@@ -1123,16 +1136,27 @@ public static class SqlFormatter
         int firstBoundary = whens.Count > 0 ? whens[0].Start : endStart;
         var operand = SliceSpan(toks, afterCase, firstBoundary);
         if (operand.Count > 0)
-            sb.Append(' ').Append(Emit(Flatten(operand), SpliceChildrenIn(ce.Children, afterCase, firstBoundary)).Trim());
+        {
+            sb.Append(' ');
+            AppendBlock(sb, Emit(Flatten(operand), SpliceChildrenIn(ce.Children, afterCase, firstBoundary)).Trim(), 0);
+        }
 
+        // Each arm / the ELSE result on its own line at the arm indent. AppendBlock shifts a multi-line
+        // arm's continuation (a spliced subquery / nested CASE block) by the arm indent too, so its lines
+        // stay under the arm instead of dedenting.
         foreach (var w in whens)
-            sb.Append('\n').Append(CaseArmIndent).Append(Emit(Flatten(w.Tokens), w.Children).Trim());
+        {
+            sb.Append('\n').Append(CaseArmIndent);
+            AppendBlock(sb, Emit(Flatten(w.Tokens), w.Children).Trim(), CaseArmIndent.Length);
+        }
 
         int elseFrom = whens.Count > 0 ? whens[whens.Count - 1].End : afterCase;
         var elseRegion = SliceSpan(toks, elseFrom, endStart);
         if (elseRegion.Count > 0)
-            sb.Append('\n').Append(CaseArmIndent)
-              .Append(Emit(Flatten(elseRegion), SpliceChildrenIn(ce.Children, elseFrom, endStart)).Trim());
+        {
+            sb.Append('\n').Append(CaseArmIndent);
+            AppendBlock(sb, Emit(Flatten(elseRegion), SpliceChildrenIn(ce.Children, elseFrom, endStart)).Trim(), CaseArmIndent.Length);
+        }
 
         sb.Append('\n').Append("end");
         return sb.ToString();
@@ -1310,12 +1334,12 @@ public static class SqlFormatter
     // table expanded as a paren block.
     private static string EmitFromClause(FromClause fc)
     {
+        // Lay out structurally when the FROM holds any derived table or embedded subquery/CASE — so a
+        // nested query is a real block (EmitDerivedTable itself decides inline vs. expanded by its content).
+        // A plain FROM (table refs + joins, no nested query) keeps the byte-identical token layout.
         bool structural = false;
         foreach (var n in fc.DescendantNodes())
-        {
-            if (n is SubqueryExpression or CaseExpression) { structural = true; break; }
-            if (n is DerivedTable dt && dt.Query is not null && EmitQuery(dt.Query).Contains('\n')) { structural = true; break; }
-        }
+            if (n is DerivedTable or SubqueryExpression or CaseExpression) { structural = true; break; }
         if (!structural) return Emit(Flatten(fc.Tokens));
 
         var sb = new StringBuilder("from ");
