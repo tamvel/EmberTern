@@ -6,13 +6,24 @@ namespace EmberTern.Core.Sql.Language.Semantics;
 
 // PSQL binding: CREATE PROCEDURE/FUNCTION/TRIGGER, EXECUTE BLOCK, anonymous blocks, EXECUTE
 // PROCEDURE, and CREATE VIEW … AS SELECT. Builds a RoutineBody scope, declares parameters
-// (+RETURNS), DECLARE variables/cursors, and (for triggers) the NEW/OLD record aliases, then binds
-// body references — FOR SELECT … INTO, embedded queries, NEW/OLD.col, and local variable/parameter
-// uses.
+// (+RETURNS) and (for triggers) the NEW/OLD record aliases, then binds the body by TRAVERSING the
+// parser's PSQL body tree (Etap 6.9 / B1b) — a BlockStatement of blocks, IF/WHILE/FOR control flow,
+// DECLARE variable/cursor declarations, and executable leaves. The binder is a pure AST CONSUMER: it
+// no longer re-derives the body's structure from tokens (the structural token walker — FirstTopLevelBegin
+// / FindTopLevelSemicolon / MatchingEndExclusive / SkipLocalSubprogram / the flat body scan — was
+// deleted in B1b). The parser owns structure; the binder consumes it.
+//
+// The header (parameters / RETURNS / the trigger's FOR table) precedes the body's top-level AS and is
+// NOT part of the body tree, so it stays token-based here — that is a routine's SIGNATURE, not its body
+// structure (its node model is a later milestone). A leaf's INTERIOR (an assignment's expression, a DML
+// leaf's clauses, a FOR cursor query, an IF/WHILE condition) also stays token-based for now: those are
+// ordinary/query expressions the query tree deepens in B2/B3, not PSQL body structure. Binding one leaf
+// range at a time yields exactly the reference set the old flat body scan produced — every body token
+// belongs to exactly one node, and the per-token binding logic is unchanged.
 //
 // Firebird PSQL has no block-local variable declarations (all DECLAREs precede the outermost BEGIN),
-// so the RoutineBody scope is the whole body's scope; nested BEGIN/END blocks add no symbols and are
-// not modelled as separate scopes in Etap 4 (a deliberate, documented simplification). Body queries
+// so the one RoutineBody scope is the whole body's scope; nested BEGIN/END blocks add no symbols and
+// are not modelled as separate scopes (a deliberate, documented simplification). Body queries
 // (FOR SELECT / singleton SELECT / subqueries) get their own Query child scopes so their FROM
 // aliases and column references resolve correctly.
 internal sealed partial class SemanticBinder
@@ -96,12 +107,11 @@ internal sealed partial class SemanticBinder
                 BindParamList(t, k + 1, close - 1, scope, ddl, ParameterDirection.Output);
                 k = close;
             }
-            // else: a function's single return type — skipped up to AS below.
+            // else: a function's single return type — nothing to bind here.
         }
 
-        int asIdx = FindTopLevelKeyword(t, k, hi, "AS");
-        int bodyLo = asIdx < hi ? asIdx + 1 : hi;
-        BindRoutineBody(t, bodyLo, hi, scope, ddl);
+        // The body (after the header's top-level AS) is the parser's BlockStatement tree.
+        BindBody(ddl.Body, scope, ddl);
     }
 
     // ── CREATE TRIGGER ───────────────────────────────────────────────────────────────────────
@@ -139,9 +149,8 @@ internal sealed partial class SemanticBinder
         DeclareTriggerPredicate(scope, "UPDATING", ddl);
         DeclareTriggerPredicate(scope, "DELETING", ddl);
 
-        int asIdx = FindTopLevelKeyword(t, 0, hi, "AS");
-        int bodyLo = asIdx < hi ? asIdx + 1 : hi;
-        BindRoutineBody(t, bodyLo, hi, scope, ddl);
+        // The body (after the header's top-level AS) is the parser's BlockStatement tree.
+        BindBody(ddl.Body, scope, ddl);
     }
 
     private void DeclareRecordAlias(Scope scope, string name, string? table, SqlStatement stmt)
@@ -164,7 +173,7 @@ internal sealed partial class SemanticBinder
 
     // ── EXECUTE BLOCK ────────────────────────────────────────────────────────────────────────
 
-    private void BindExecuteBlock(SqlStatement stmt)
+    private void BindExecuteBlock(ExecuteBlockStatement stmt)
     {
         var t = stmt.Tokens;
         int hi = t.Count;
@@ -192,18 +201,16 @@ internal sealed partial class SemanticBinder
             }
         }
 
-        int asIdx = FindTopLevelKeyword(t, k, hi, "AS");
-        int bodyLo = asIdx < hi ? asIdx + 1 : hi;
-        BindRoutineBody(t, bodyLo, hi, scope, stmt);
+        // The body (after the header's top-level AS) is the parser's BlockStatement tree.
+        BindBody(stmt.Body, scope, stmt);
     }
 
     // ── Anonymous PSQL block (the body editor's DECLARE … BEGIN … END) ───────────────────────
 
-    private void BindAnonymousBlock(SqlStatement stmt)
+    private void BindAnonymousBlock(AnonymousBlockStatement stmt)
     {
-        var t = stmt.Tokens;
         var scope = _root.NewChild(ScopeKind.RoutineBody, StatementSpan(stmt), stmt);
-        BindRoutineBody(t, 0, t.Count, scope, stmt);
+        BindBody(stmt.Body, scope, stmt);
     }
 
     // ── EXECUTE PROCEDURE ────────────────────────────────────────────────────────────────────
@@ -260,81 +267,154 @@ internal sealed partial class SemanticBinder
         }
     }
 
-    // ── Shared routine-body binding ──────────────────────────────────────────────────────────
+    // ── Body tree traversal (Etap 6.9 / B1b — the binder as an AST consumer) ─────────────────
+    //
+    // The parser attaches a BlockStatement `Body` tree to every PSQL surface (routine / trigger /
+    // EXECUTE BLOCK definition, anonymous block). These methods TRAVERSE it: they own no structural
+    // scanning — no BEGIN/END matching, no declaration-boundary scan, no local-subprogram skip. Each
+    // node's role is fixed by the parser; the binder only declares symbols and records references.
 
-    private void BindRoutineBody(IReadOnlyList<SqlToken> t, int bodyLo, int bodyHi, Scope scope, SqlStatement stmt)
+    // Binds the symbols/references of a PSQL body tree into `scope`. Null-tolerant (defensive; the
+    // parser always supplies a body for the surfaces bound here).
+    private void BindBody(BlockStatement? body, Scope scope, SqlStatement stmt)
     {
-        int mainBegin = FirstTopLevelBegin(t, bodyLo, bodyHi);
-        ScanDeclarations(t, bodyLo, mainBegin, scope, stmt);
-        BindBodyReferences(t, mainBegin < bodyHi ? mainBegin : bodyLo, bodyHi, scope, stmt);
+        if (body is not null) BindBlock(body, scope, stmt);
     }
 
-    // DECLARE [VARIABLE] name type [NOT NULL] [= default];  and  DECLARE name … CURSOR …;  and
-    // FB3 local DECLARE PROCEDURE/FUNCTION (skipped past). Scans the declaration section that
-    // precedes the outermost BEGIN.
-    private void ScanDeclarations(IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement stmt)
+    // A BEGIN … END block: its DECLARE section (routine / EXECUTE BLOCK body only) then its statements.
+    // The block's own BEGIN/END keyword tokens carry no references, so they are not scanned.
+    private void BindBlock(BlockStatement block, Scope scope, SqlStatement stmt)
     {
-        int k = lo;
-        while (k < hi)
+        foreach (var decl in block.Declarations) BindDeclaration(decl, scope, stmt);
+        foreach (var s in block.Statements) BindPsqlStatement(s, scope, stmt);
+    }
+
+    // Dispatches one PSQL body statement to the right binding. Control-flow nodes bind the references
+    // in their OWN tokens (the condition / cursor query + INTO — everything before their first child)
+    // then recurse into their child statement(s); leaves bind their whole interior; declarations are
+    // handled here too so a stray DECLARE outside a block's declaration section still binds (defensive).
+    // A body statement is a SqlNode because an embedded DSQL statement (SELECT / INSERT / … ) is the
+    // reused top-level statement node (B5), not a PsqlStatement.
+    private void BindPsqlStatement(SqlNode node, Scope scope, SqlStatement stmt)
+    {
+        switch (node)
         {
-            if (!IsKeyword(At(t, k), "DECLARE")) { k++; continue; }
+            case BlockStatement block:
+                BindBlock(block, scope, stmt);
+                break;
 
-            int declStart = k;
-            k++; // past DECLARE
-            if (IsKeyword(At(t, k), "VARIABLE")) k++;
+            case IfStatement s:
+                BindControlHeader(s, s.Then, scope, stmt);
+                if (s.Then is not null) BindPsqlStatement(s.Then, scope, stmt);
+                if (s.Else is not null) BindPsqlStatement(s.Else, scope, stmt);
+                break;
 
-            // Local subprogram — skip its whole declaration (to the END of its body).
-            if (IsKeyword(At(t, k), "PROCEDURE") || IsKeyword(At(t, k), "FUNCTION"))
-            {
-                k = SkipLocalSubprogram(t, k, hi);
-                continue;
-            }
+            case WhileStatement s:
+                BindControlHeader(s, s.Body, scope, stmt);
+                if (s.Body is not null) BindPsqlStatement(s.Body, scope, stmt);
+                break;
 
-            var nameTok = At(t, k);
-            if (!IsNameToken(nameTok)) { k = Math.Max(k + 1, declStart + 1); continue; }
-            k++;
+            case ForSelectStatement s:
+                BindControlHeader(s, s.Body, scope, stmt);
+                if (s.Body is not null) BindPsqlStatement(s.Body, scope, stmt);
+                break;
 
-            int declEnd = FindTopLevelSemicolon(t, k, hi); // token index of ';' (or hi)
-            bool isCursor = ContainsKeyword(t, k, declEnd, "CURSOR");
+            case DeclareVariableStatement or DeclareCursorStatement:
+                BindDeclaration((PsqlStatement)node, scope, stmt);
+                break;
 
-            if (isCursor)
-            {
-                var cursor = new CursorSymbol(FoldedName(nameTok) ?? string.Empty)
-                {
-                    DeclarationSpan = TextSpan.Of(nameTok),
-                    DeclaringStatement = stmt,
-                };
-                scope.Declare(cursor);
-                AddSymbol(cursor);
-                AddReference(nameTok, cursor, ReferenceRole.Cursor, isDefinition: true);
-            }
-            else
-            {
-                // Reconstruct "name type [NOT NULL] [= default]" from source for the proven segment
-                // parser; take the declaration name/span from the token.
-                string segText = SourceBetween(nameTok.Start, declEnd < hi ? t[declEnd - 1].End : (t.Count > 0 ? t[t.Count - 1].End : 0));
-                var parsed = EmberTern.Core.Sql.ProcedureSignatureParser.ParseSegment(segText);
-                var v = new VariableSymbol(parsed?.Name ?? FoldedName(nameTok) ?? string.Empty)
-                {
-                    DataType = parsed?.TypeText,
-                    Nullable = parsed is null ? null : (parsed.NotNull ? false : (bool?)null),
-                    DefaultValue = parsed?.DefaultValue,
-                    DeclarationSpan = TextSpan.Of(nameTok),
-                    DeclaringStatement = stmt,
-                };
-                scope.Declare(v);
-                AddSymbol(v);
-                AddReference(nameTok, v, ReferenceRole.Variable, isDefinition: true);
-            }
+            case PsqlLeafStatement leaf:
+                BindLeafReferences(leaf.Tokens, 0, leaf.Tokens.Count, scope, stmt);
+                break;
 
-            k = declEnd < hi ? declEnd + 1 : hi;
+            // An embedded DSQL statement reused node (B5) — a SELECT / INSERT / UPDATE / DELETE / MERGE /
+            // EXECUTE inside the body. Its interior is bound exactly as the pre-B5 flat leaf scan bound it
+            // (over the same tokens), so the reference set is unchanged; consuming its node structure
+            // (SourceQuery / clauses) for richer binding is a later convergence step.
+            case SqlStatement dsql:
+                BindLeafReferences(dsql.Tokens, 0, dsql.Tokens.Count, scope, stmt);
+                break;
         }
     }
 
-    // Binds references within the executable body: FOR SELECT … INTO, singleton SELECT … INTO,
-    // subqueries, NEW/OLD.col and other dotted refs resolvable in this scope, :param tokens, and
-    // bare local (variable/parameter/cursor) references.
-    private void BindBodyReferences(IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement stmt)
+    // Binds the references in a control-flow node's OWN tokens — the leading tokens up to its first
+    // child statement (its condition / cursor query + INTO / the DO or THEN keyword). The child bodies
+    // are bound by recursion; the inter-child gap (an ELSE keyword) carries no reference. The header is
+    // an ordinary/query expression, so it rides the same token-based leaf scanner (deepened in B2/B3).
+    private void BindControlHeader(PsqlStatement node, SqlNode? firstChild, Scope scope, SqlStatement stmt)
+    {
+        var toks = node.Tokens;
+        int hi = toks.Count;
+        if (firstChild is not null)
+        {
+            for (int i = 0; i < toks.Count; i++)
+            {
+                if (toks[i].Start >= firstChild.Start) { hi = i; break; }
+            }
+        }
+        BindLeafReferences(toks, 0, hi, scope, stmt);
+    }
+
+    // Declares a DECLARE VARIABLE / DECLARE CURSOR node's symbol. The node type (produced by the parser)
+    // already tells variable from cursor; the name token and — for a variable — its "name type [NOT NULL]
+    // [= default]" segment are read from the declaration's OWN tokens (a leaf; no boundary scanning).
+    private void BindDeclaration(PsqlStatement decl, Scope scope, SqlStatement stmt)
+    {
+        var toks = decl.Tokens;
+        if (DeclNameToken(toks) is not { } nameTok) return;
+
+        if (decl is DeclareCursorStatement)
+        {
+            var cursor = new CursorSymbol(FoldedName(nameTok) ?? string.Empty)
+            {
+                DeclarationSpan = TextSpan.Of(nameTok),
+                DeclaringStatement = stmt,
+            };
+            scope.Declare(cursor);
+            AddSymbol(cursor);
+            AddReference(nameTok, cursor, ReferenceRole.Cursor, isDefinition: true);
+            return;
+        }
+
+        // Variable: reconstruct "name type [NOT NULL] [= default]" (to before the trailing ';') for the
+        // proven segment parser; take the declaration name/span from the name token.
+        int last = toks.Count - 1;
+        while (last >= 0 && toks[last].Kind == TokenKind.Semicolon) last--;
+        int end = last >= 0 ? toks[last].End : nameTok.End;
+        string segText = SourceBetween(nameTok.Start, end);
+        var parsed = EmberTern.Core.Sql.ProcedureSignatureParser.ParseSegment(segText);
+        var v = new VariableSymbol(parsed?.Name ?? FoldedName(nameTok) ?? string.Empty)
+        {
+            DataType = parsed?.TypeText,
+            Nullable = parsed is null ? null : (parsed.NotNull ? false : (bool?)null),
+            DefaultValue = parsed?.DefaultValue,
+            DeclarationSpan = TextSpan.Of(nameTok),
+            DeclaringStatement = stmt,
+        };
+        scope.Declare(v);
+        AddSymbol(v);
+        AddReference(nameTok, v, ReferenceRole.Variable, isDefinition: true);
+    }
+
+    // The name token of a DECLARE VARIABLE/CURSOR node — the first identifier after DECLARE and an
+    // optional VARIABLE keyword (a cursor has no VARIABLE). Bounded to the declaration's own tokens;
+    // null when the name is absent or lexes as a keyword (matches the pre-B1b resolution rule).
+    private static SqlToken? DeclNameToken(IReadOnlyList<SqlToken> toks)
+    {
+        int k = 0;
+        if (k < toks.Count && IsKeyword(At(toks, k), "DECLARE")) k++;
+        if (k < toks.Count && IsKeyword(At(toks, k), "VARIABLE")) k++;
+        return k < toks.Count && IsNameToken(toks[k]) ? toks[k] : (SqlToken?)null;
+    }
+
+    // ── Leaf-interior reference binding (token-based; the query tree deepens it in B2/B3) ─────
+    //
+    // Binds references within one executable leaf's / control-flow header's token range: FOR SELECT …
+    // INTO, singleton SELECT … INTO, subqueries, NEW/OLD.col and other dotted refs resolvable in this
+    // scope, :param tokens, and bare local (variable/parameter/cursor) references. This is NOT PSQL body
+    // structure (that is the tree above) — it is the ordinary/query expression interior of a single
+    // statement, which the query tree (B2/B3) will model; until then it stays a bounded token scan.
+    private void BindLeafReferences(IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement stmt)
     {
         int k = lo;
         while (k < hi)
@@ -532,33 +612,6 @@ internal sealed partial class SemanticBinder
         return hi;
     }
 
-    // First top-level BEGIN (paren-depth 0), or hi.
-    private static int FirstTopLevelBegin(IReadOnlyList<SqlToken> t, int from, int hi)
-        => FindTopLevelKeyword(t, from, hi, "BEGIN");
-
-    // Index of the first top-level (paren-depth 0) ';' at or after `from`, or hi.
-    private static int FindTopLevelSemicolon(IReadOnlyList<SqlToken> t, int from, int hi)
-    {
-        int depth = 0;
-        for (int i = from; i < hi; i++)
-        {
-            var kind = t[i].Kind;
-            if (kind == TokenKind.LParen) depth++;
-            else if (kind == TokenKind.RParen) { if (depth > 0) depth--; }
-            else if (depth == 0 && kind == TokenKind.Semicolon) return i;
-        }
-        return hi;
-    }
-
-    private static bool ContainsKeyword(IReadOnlyList<SqlToken> t, int lo, int hi, string kw)
-    {
-        for (int i = lo; i < hi && i < t.Count; i++)
-        {
-            if (IsKeyword(t[i], kw)) return true;
-        }
-        return false;
-    }
-
     // Splits [lo, hi) into segments at top-level (paren-depth 0) commas.
     private static List<(int Lo, int Hi)> SplitTopLevelCommasTok(IReadOnlyList<SqlToken> t, int lo, int hi)
     {
@@ -577,35 +630,6 @@ internal sealed partial class SemanticBinder
         }
         if (hi > segStart) segs.Add((segStart, hi));
         return segs;
-    }
-
-    // Advances past a local DECLARE PROCEDURE/FUNCTION declaration — through its BEGIN…END body and
-    // an optional trailing ';'. Uses the shared BEGIN/END scan (starting at the subprogram keyword).
-    private static int SkipLocalSubprogram(IReadOnlyList<SqlToken> t, int k, int hi)
-    {
-        // Find the body BEGIN (after the header/AS), then its matching END.
-        int begin = FirstTopLevelBegin(t, k, hi);
-        if (begin >= hi)
-        {
-            // No body — a forward/header declaration; skip to its ';'.
-            int semi = FindTopLevelSemicolon(t, k, hi);
-            return semi < hi ? semi + 1 : hi;
-        }
-        int endExcl = MatchingEndExclusive(t, begin, hi);
-        if (endExcl < hi && t[endExcl].Kind == TokenKind.Semicolon) endExcl++;
-        return endExcl;
-    }
-
-    // With t[begin] on a BEGIN, returns the token index just past the END that closes it (CASE-aware).
-    private static int MatchingEndExclusive(IReadOnlyList<SqlToken> t, int begin, int hi)
-    {
-        int depth = 0;
-        for (int i = begin; i < hi; i++)
-        {
-            if (IsKeyword(t[i], "BEGIN") || IsKeyword(t[i], "CASE")) depth++;
-            else if (IsKeyword(t[i], "END")) { depth--; if (depth == 0) return i + 1; }
-        }
-        return hi;
     }
 
     // Maps the AST DDL object kind to a symbol kind (null when there is nothing meaningful to declare).

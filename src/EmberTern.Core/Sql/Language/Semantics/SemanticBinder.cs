@@ -187,12 +187,12 @@ internal sealed partial class SemanticBinder
                 BindDdl(ddl);
                 break;
 
-            case ExecuteBlockStatement:
-                BindExecuteBlock(stmt);
+            case ExecuteBlockStatement eb:
+                BindExecuteBlock(eb);
                 break;
 
-            case AnonymousBlockStatement:
-                BindAnonymousBlock(stmt);
+            case AnonymousBlockStatement ab:
+                BindAnonymousBlock(ab);
                 break;
 
             case ExecuteProcedureStatement exec:

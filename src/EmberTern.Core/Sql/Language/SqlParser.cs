@@ -31,8 +31,18 @@ namespace EmberTern.Core.Sql.Language;
 /// split it.
 /// </para>
 /// <para>Pure — no Avalonia, no Firebird driver — and offline unit-testable.</para>
+/// <para>
+/// <b>Extension point — Etap 6.9 (Structural AST Deepening).</b> The type is <c>partial</c> so the
+/// deeper, construct-specific sub-parsers land in their own files as they are built — the PSQL body
+/// tree in <c>SqlParser.Psql.cs</c> (milestone B1) and the query/clause tree in
+/// <c>SqlParser.Query.cs</c> (B2/B3) — without touching this segmentation core. Deepening only ever
+/// <em>adds</em> child nodes to the statements produced here (via <see cref="QueryNode"/> /
+/// <see cref="PsqlStatement"/>); it never changes the statement boundaries this file owns, so the §0
+/// round-trip and the DDL-splitter that rides these boundaries are unaffected. See
+/// <c>docs/design/editor-ast-deepening.md</c>.
+/// </para>
 /// </summary>
-public static class SqlParser
+public static partial class SqlParser
 {
     private static readonly IReadOnlyList<Diagnostic> NoDiagnostics = Array.Empty<Diagnostic>();
 
@@ -305,21 +315,24 @@ public static class SqlParser
         {
             case "SELECT":
             case "WITH":
-                // A WITH-led query models its CTE clause as AST structure (WithClause + CTE nodes) so
-                // consumers read the shape from the tree, not by re-scanning tokens; an unrecognised
-                // shape yields null and the statement is treated as a plain query (§0-safe).
-                return new SelectStatement(start, length, slice,
-                    Kw(first, "WITH") ? TryParseWithClause(slice) : null);
+                // The statement's query is modelled as a single recursive QueryNode (Etap 6.9 / B2 + B3):
+                // a SelectQuery / SetOperationQuery for a plain query, or a WithQuery (CTE bodies + main
+                // query all real QueryNodes) for a WITH-led query. Best-effort — an unrecognised shape
+                // yields null and the statement is treated as a plain query (§0-safe; the tokens are
+                // untouched, so the byte-for-byte round-trip is unaffected).
+                return new SelectStatement(start, length, slice, ParseSelectStatementQuery(slice));
             case "INSERT":
-                return new InsertStatement(start, length, slice);
+                // The source query (INSERT … SELECT/WITH) and any embedded value/RETURNING subqueries are
+                // modelled as real QueryNodes (Etap 6.9 / B3.1); §0-safe additive overlay over slice.
+                return BuildInsert(slice, start, length);
             case "UPDATE":
                 return IsUpdateOrInsert(slice)
-                    ? new UpdateOrInsertStatement(start, length, slice)
-                    : new UpdateStatement(start, length, slice);
+                    ? BuildUpdateOrInsert(slice, start, length)
+                    : BuildUpdate(slice, start, length);
             case "DELETE":
-                return new DeleteStatement(start, length, slice);
+                return BuildDelete(slice, start, length);
             case "MERGE":
-                return new MergeStatement(start, length, slice);
+                return BuildMerge(slice, start, length);
             case "EXECUTE":
                 return ClassifyExecute(slice, start, length);
             case "CREATE":
@@ -336,14 +349,16 @@ public static class SqlParser
             case "REVOKE":
                 return new RevokeStatement(start, length, slice);
             case "BEGIN":
-                // A bare anonymous PSQL block (a formattable body, not unparseable input).
-                return new AnonymousBlockStatement(start, length, slice);
+                // A bare anonymous PSQL block (a formattable body, not unparseable input). Etap 6.9/B1:
+                // the block's structure (BEGIN/END, IF/WHILE/FOR, declares, leaf spans) is parsed into a
+                // BlockStatement child — an additive overlay; the token slice still round-trips (§0).
+                return new AnonymousBlockStatement(start, length, slice, ParseAnonymousBlockBody(slice));
             case "DECLARE":
                 // A top-level DECLARE that runs into a BEGIN is a PSQL body fragment (a DECLARE
                 // section + local subprograms + main block, e.g. the body editor's text), NOT a
                 // top-level DECLARE EXTERNAL FUNCTION / DECLARE FILTER (which has no BEGIN).
                 return ContainsBeginKeyword(slice)
-                    ? new AnonymousBlockStatement(start, length, slice)
+                    ? new AnonymousBlockStatement(start, length, slice, ParseAnonymousBlockBody(slice))
                     : new DeclareStatement(start, length, slice);
             default:
                 return new RawStatement(start, length, slice);
@@ -368,7 +383,8 @@ public static class SqlParser
     {
         if (slice.Count >= 2)
         {
-            if (Kw(slice[1], "BLOCK")) return new ExecuteBlockStatement(start, length, slice);
+            if (Kw(slice[1], "BLOCK"))
+                return new ExecuteBlockStatement(start, length, slice, ParseRoutineBody(slice));
             if (Kw(slice[1], "PROCEDURE"))
                 return new ExecuteProcedureStatement(start, length, slice, ReadProcedureName(slice));
         }
@@ -429,7 +445,20 @@ public static class SqlParser
         while (j < slice.Count && IsExistenceGuard(slice[j])) j++;
         string? objectName = j < slice.Count ? ReadIdentifierName(slice[j]) : null;
 
-        return new DdlStatement(start, length, slice, verb, objectKind, objectName, isPsql);
+        // Etap 6.9/B1: a PSQL procedure/function/trigger definition gets its BEGIN…END body parsed into
+        // a Body tree (after the header's top-level AS). Additive — the token slice still round-trips
+        // (§0). PACKAGE (a list of subprograms) and non-PSQL DDL keep a null body.
+        var body = isPsql && objectKind is DdlObjectKind.Procedure or DdlObjectKind.Function or DdlObjectKind.Trigger
+            ? ParseRoutineBody(slice)
+            : null;
+
+        // Etap 6.9/B3.1: a CREATE/ALTER/RECREATE VIEW … AS <query> gets its body modelled as a real
+        // QueryNode (mutually exclusive with a PSQL body). Additive; the slice still round-trips (§0).
+        var query = objectKind == DdlObjectKind.View && verb != DdlVerb.Drop
+            ? ParseViewBodyQuery(slice)
+            : null;
+
+        return new DdlStatement(start, length, slice, verb, objectKind, objectName, isPsql, body, query);
     }
 
     private static bool IsDdlModifier(SqlToken t)
@@ -518,68 +547,6 @@ public static class SqlParser
         => (t.Kind == TokenKind.Keyword || t.Kind == TokenKind.Identifier)
            && string.Equals(t.Text, text, StringComparison.OrdinalIgnoreCase);
 
-    // ── WITH / CTE structure ────────────────────────────────────────────────────────────────────
-    //
-    // Parses the CTE clause of a WITH-led query into AST nodes (WithClause + CommonTableExpression),
-    // so the formatter (and future folding/breadcrumbs/semantic consumers) read the CTE shape from the
-    // tree instead of re-scanning tokens. Best-effort like the other Classify facts: any shape it does
-    // not cleanly recognise returns null, and the statement is treated as a plain query — never a throw,
-    // never a loss (the tokens are untouched, so §0's byte-for-byte round-trip is unaffected).
-
-    private static WithClause? TryParseWithClause(IReadOnlyList<SqlToken> slice)
-    {
-        int n = slice.Count;
-        if (n == 0 || !Kw(slice[0], "WITH")) return null;
-        int withStart = slice[0].Start;
-
-        int i = 1;
-        bool recursive = false;
-        if (i < n && IsWordText(slice[i], "RECURSIVE")) { recursive = true; i++; }
-
-        var ctes = new List<CommonTableExpression>();
-        int lastCloseEnd = -1;
-        while (true)
-        {
-            if (i >= n) return null;
-            var nameTok = slice[i];
-            if (nameTok.Kind != TokenKind.Identifier && nameTok.Kind != TokenKind.QuotedIdentifier)
-                return null;
-            int k = i + 1;
-
-            // Optional column list "( a, b )" (tokens between the parens).
-            IReadOnlyList<SqlToken>? colTokens = null;
-            if (k < n && slice[k].Kind == TokenKind.LParen)
-            {
-                int close = MatchParenTok(slice, k, n);
-                if (close >= n) return null;
-                colTokens = Sub(slice, k + 1, close);
-                k = close + 1;
-            }
-
-            if (k >= n || !Kw(slice[k], "AS")) return null;
-            k++;
-            if (k >= n || slice[k].Kind != TokenKind.LParen) return null;
-            int bodyOpen = k;
-            int bodyClose = MatchParenTok(slice, bodyOpen, n);
-            if (bodyClose >= n) return null;
-            var bodyTokens = Sub(slice, bodyOpen + 1, bodyClose);
-
-            int cteStart = nameTok.Start;
-            int cteEnd = slice[bodyClose].End;
-            ctes.Add(new CommonTableExpression(cteStart, cteEnd - cteStart, nameTok, colTokens, bodyTokens));
-            lastCloseEnd = cteEnd;
-            i = bodyClose + 1;
-
-            if (i < n && slice[i].Kind == TokenKind.Comma) { i++; continue; }
-            break;
-        }
-
-        if (ctes.Count == 0) return null;
-        var main = Sub(slice, i, n);
-        if (main.Count == 0) return null; // WITH with no main query (mid-edit) — treat as plain query
-        return new WithClause(withStart, lastCloseEnd - withStart, recursive, ctes, main);
-    }
-
     // The index of the ')' matching the '(' at <paramref name="open"/> (nesting-aware), or
     // <paramref name="hi"/> when unbalanced.
     private static int MatchParenTok(IReadOnlyList<SqlToken> t, int open, int hi)
@@ -598,5 +565,17 @@ public static class SqlParser
         var list = new List<SqlToken>(hi > lo ? hi - lo : 0);
         for (int k = lo; k < hi && k < t.Count; k++) list.Add(t[k]);
         return list;
+    }
+
+    // The absolute span [firstToken.Start, lastToken.End) of the token range [lo, hi) — the one helper
+    // every deepened sub-parser (PSQL body, query/clause tree) uses so a node's span is always the exact
+    // range it consumed (children therefore nest + stay in source order by construction). Empty range →
+    // a zero-length span at the range's start.
+    private static (int Start, int Length) TokenSpan(IReadOnlyList<SqlToken> t, int lo, int hi)
+    {
+        if (lo >= hi || lo >= t.Count) return (lo >= 0 && lo < t.Count ? t[lo].Start : 0, 0);
+        int start = t[lo].Start;
+        int end = t[hi - 1].End;
+        return (start, end - start);
     }
 }

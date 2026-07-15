@@ -116,10 +116,11 @@ public static class SqlFormatter
         UpdateOrInsertStatement => FormatInsertFamily(Flatten(stmt.Tokens), headerLen: 4), // update or insert into
 
         // SELECT — a plain query goes through the clause-break emitter; a CTE-led "WITH … SELECT …"
-        // query (the parser modelled its CTE clause into SelectStatement.With) is laid out as a
+        // query (the parser modelled it as a WithQuery on SelectStatement.Query) is laid out as a
         // first-class construct by FormatWithClause. A WITH whose shape the parser could not model has
-        // With == null and formats as a plain query (§0-safe; the lexeme net covers it regardless).
-        SelectStatement { With: { } withClause } => FormatWithClause(withClause),
+        // Query == null (or a non-WithQuery) and formats as a plain query (§0-safe; the lexeme net covers
+        // it regardless).
+        SelectStatement { Query: WithQuery wq } => FormatWithClause(wq),
         SelectStatement => Emit(Flatten(stmt.Tokens)),
 
         // Everything else — all DML plus non-PSQL DDL, COMMENT, SET, GRANT/REVOKE, DECLARE,
@@ -886,22 +887,25 @@ public static class SqlFormatter
 
     // ── WITH-CTE layout (AST-driven) ─────────────────────────────────────────────────────────────
     //
-    // The CTE structure is modelled by the parser (SelectStatement.With — a WithClause + CTE nodes),
-    // so the formatter reads it from the AST and never re-parses CTEs itself. Layout is IBExpert-style:
-    // each CTE's name (+ optional column list via the shared adaptive builder), "as (" on its own line,
-    // the CTE body formatted by the shared emitter and indented, ")" on its own; multiple CTEs joined
-    // "),"; the main query directly on the next line (one statement — no blank line). Set operators
-    // inside a body/main break via Emit (MatchStructuralPhrase). A statement whose CTE clause the parser
-    // could not cleanly model has With == null and is emitted as a plain query (§0-safe; the lexeme net
-    // is the backstop regardless).
-    private static string FormatWithClause(WithClause w)
+    // The CTE structure is modelled by the parser (SelectStatement.Query is a WithQuery — a WithClause of
+    // CTE nodes + the main query, all real QueryNodes since B3), so the formatter reads it from the AST and
+    // never re-parses CTEs itself. Layout is IBExpert-style: each CTE's name (+ optional column list via
+    // the shared adaptive builder), "as (" on its own line, the CTE body formatted by the shared emitter
+    // and indented, ")" on its own; multiple CTEs joined "),"; the main query directly on the next line
+    // (one statement — no blank line). Set operators inside a body/main break via Emit
+    // (MatchStructuralPhrase). The body/main text comes from each promoted query node's Tokens — the exact
+    // same token ranges the pre-B3 token bags held, so the layout is byte-identical. A statement whose CTE
+    // clause the parser could not cleanly model has Query == null / non-WithQuery and is emitted as a plain
+    // query (§0-safe; the lexeme net is the backstop regardless).
+    private static string FormatWithClause(WithQuery wq)
     {
         var sb = new StringBuilder("with");
-        if (w.IsRecursive) sb.Append(" recursive");
+        if (wq.With.IsRecursive) sb.Append(" recursive");
 
-        for (int c = 0; c < w.Ctes.Count; c++)
+        var ctes = wq.With.Ctes;
+        for (int c = 0; c < ctes.Count; c++)
         {
-            var cte = w.Ctes[c];
+            var cte = ctes[c];
             var nameLine = new StringBuilder(MaybeLowercaseWord(cte.NameToken));
 
             if (cte.ColumnTokens is { Count: > 0 } colTokens)
@@ -912,17 +916,17 @@ public static class SqlFormatter
                 nameLine.Append(FormatAdaptiveList(cols, nameLine.Length + (c == 0 ? 5 : 0)));
             }
 
-            string body = IndentBlock(Emit(Flatten(cte.BodyTokens)), CteBodyIndent);
+            string body = IndentBlock(Emit(Flatten(cte.Body.Tokens)), CteBodyIndent);
 
             sb.Append(c == 0 ? ' ' : '\n').Append(nameLine);
             sb.Append('\n').Append("as (");
             sb.Append('\n').Append(body);
             sb.Append('\n').Append(')');
-            if (c < w.Ctes.Count - 1) sb.Append(',');
+            if (c < ctes.Count - 1) sb.Append(',');
         }
 
         // Main query directly on the next line — a CTE query is ONE statement, not two.
-        sb.Append('\n').Append(Emit(Flatten(w.MainQueryTokens)));
+        sb.Append('\n').Append(Emit(Flatten(wq.Query.Tokens)));
         return sb.ToString();
     }
 

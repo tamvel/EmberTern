@@ -189,8 +189,11 @@ public class SqlParserTests
     {
         const string sql = "SELECT 1 FROM T; DROP TABLE T";
         var root = SqlParser.Parse(sql).Root;
-        Assert.IsType<SelectStatement>(root.NodeAt(2));                    // inside SELECT
-        Assert.IsType<DdlStatement>(root.NodeAt(sql.IndexOf("DROP") + 2)); // inside DROP
+        // NodeAt descends to the deepest node: offset 2 is inside the SELECT's projection clause (the
+        // B2 query tree is now live), which nests inside the SelectStatement.
+        Assert.IsType<SelectClause>(root.NodeAt(2));                       // inside SELECT's projection
+        Assert.IsType<SelectStatement>(root.NodeAt(sql.IndexOf(';')));     // the ';' — in the statement, no clause
+        Assert.IsType<DdlStatement>(root.NodeAt(sql.IndexOf("DROP") + 2)); // inside DROP (a leaf statement)
         Assert.Null(root.NodeAt(sql.Length));                             // past the end
     }
 
@@ -210,15 +213,16 @@ public class SqlParserTests
     {
         var sel = Assert.IsType<SelectStatement>(
             Single("with c (a, b) as (select 1, 2 from t) select * from c"));
-        Assert.NotNull(sel.With);
-        Assert.False(sel.With!.IsRecursive);
-        var cte = Assert.Single(sel.With.Ctes);
+        var wq = Assert.IsType<WithQuery>(sel.Query);
+        Assert.False(wq.With.IsRecursive);
+        var cte = Assert.Single(wq.With.Ctes);
         Assert.Equal("C", cte.NameToken.Text.ToUpperInvariant());
         Assert.NotNull(cte.ColumnTokens);
-        Assert.NotEmpty(cte.BodyTokens);
-        Assert.NotEmpty(sel.With.MainQueryTokens);
-        // The clause is a child of the statement, so NodeAt/Descendants can reach it.
-        Assert.Contains(sel.With, sel.Children);
+        // B3: the CTE body and the main query are real query nodes.
+        Assert.IsType<SelectQuery>(cte.Body);
+        Assert.IsType<SelectQuery>(wq.Query);
+        // The WithQuery is a child of the statement, so NodeAt/Descendants can reach it.
+        Assert.Contains(wq, sel.Children);
         Assert.Single(sel.Descendants<CommonTableExpression>());
     }
 
@@ -227,22 +231,35 @@ public class SqlParserTests
     {
         var sel = Assert.IsType<SelectStatement>(
             Single("with recursive a as (select 1 from t), b as (select 2 from u) select * from a"));
-        Assert.True(sel.With!.IsRecursive);
-        Assert.Equal(2, sel.With.Ctes.Count);
+        var wq = Assert.IsType<WithQuery>(sel.Query);
+        Assert.True(wq.With.IsRecursive);
+        Assert.Equal(2, wq.With.Ctes.Count);
     }
 
     [Fact]
-    public void PlainSelect_HasNoWithClause()
-        => Assert.Null(Assert.IsType<SelectStatement>(Single("select * from t")).With);
+    public void NestedCte_BodyIsItselfAWithQuery()
+    {
+        // A CTE body that is itself a WITH … SELECT recurses with no special handling (B3).
+        var sel = Assert.IsType<SelectStatement>(
+            Single("with a as (with b as (select 1 as n from t) select n from b) select n from a"));
+        var outer = Assert.IsType<WithQuery>(sel.Query);
+        var cteA = Assert.Single(outer.With.Ctes);
+        Assert.IsType<WithQuery>(cteA.Body); // nested WITH inside the CTE body
+    }
 
     [Fact]
-    public void With_MalformedShape_LeavesWithNull_StillRoundTrips()
+    public void PlainSelect_HasNoWithQuery()
+        => Assert.IsType<SelectQuery>(Assert.IsType<SelectStatement>(Single("select * from t")).Query);
+
+    [Fact]
+    public void With_MalformedShape_LeavesQueryNonWith_StillRoundTrips()
     {
-        // No AS ( … ) — the parser can't cleanly model it, so With is null (treated as a plain query),
-        // but the tokens are untouched so the §0 round-trip still holds.
+        // No AS ( … ) — the parser can't cleanly model the CTE clause, so Query is not a WithQuery
+        // (treated as a plain query), but the tokens are untouched so the §0 round-trip still holds.
         const string sql = "with c select 1";
         var root = SqlParser.Parse(sql).Root;
-        Assert.Null(Assert.IsType<SelectStatement>(Assert.Single(root.Statements)).With);
+        var sel = Assert.IsType<SelectStatement>(Assert.Single(root.Statements));
+        Assert.False(sel.Query is WithQuery);
         Assert.Equal(sql, root.ToSourceString());
     }
 

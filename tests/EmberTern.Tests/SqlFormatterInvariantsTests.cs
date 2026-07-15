@@ -24,54 +24,9 @@ namespace EmberTern.Tests;
 /// </summary>
 public class SqlFormatterInvariantsTests
 {
-    // A broad, representative corpus exercising every statement kind + edge cases (comments,
-    // incomplete input, erroneous input, unusual fragments, multi-statement scripts).
-    public static IEnumerable<object[]> Corpus() => new[]
-    {
-        // SELECT / DML
-        new object[] { "SELECT A, B FROM T WHERE X = 1 AND Y = 2 ORDER BY A" },
-        new object[] { "select n.id, count(p.amount) from nagl n join pozycje p on p.id_nagl = n.id group by n.id having count(*) > 1" },
-        new object[] { "WITH c AS (SELECT id FROM t) SELECT * FROM c WHERE id IN (1, 2, 3)" },
-        new object[] { "INSERT INTO T (A, B, C) VALUES (1, 'x', :p)" },
-        new object[] { "INSERT INTO T (A, B) SELECT X, Y FROM S WHERE Z = 1" },
-        new object[] { "UPDATE T SET A = 1, B = 'y' WHERE ID = 10" },
-        new object[] { "UPDATE OR INSERT INTO T (A, B) VALUES (1, 2) MATCHING (A)" },
-        new object[] { "DELETE FROM T WHERE X IN (1, 2, 3)" },
-        new object[] { "MERGE INTO T USING S ON T.ID = S.ID WHEN MATCHED THEN UPDATE SET T.V = S.V WHEN NOT MATCHED THEN INSERT (ID, V) VALUES (S.ID, S.V)" },
-        // Execution / PSQL
-        new object[] { "EXECUTE PROCEDURE MY_PROC(1, 'two', :three)" },
-        new object[] { "EXECUTE BLOCK RETURNS (R INTEGER) AS BEGIN R = 1; SUSPEND; END" },
-        new object[] { "CREATE OR ALTER PROCEDURE P (A INTEGER) RETURNS (V INTEGER) AS DECLARE VARIABLE T INTEGER; BEGIN V = case when A > 0 then 1 else 0 end; SUSPEND; END" },
-        new object[] { "CREATE OR ALTER FUNCTION F (A INTEGER) RETURNS INTEGER AS BEGIN RETURN A * 2; END" },
-        new object[] { "CREATE OR ALTER TRIGGER TR FOR NAGL ACTIVE BEFORE INSERT POSITION 0 AS BEGIN NEW.ID = GEN_ID(G, 1); END" },
-        new object[] { "begin x = 1; if (a = 1) then b = 2; else b = 3; end" },
-        new object[] { "declare variable x integer; declare variable y varchar(5); begin x = 1; end" },
-        // DDL
-        new object[] { "CREATE TABLE T (ID INTEGER NOT NULL, NAME VARCHAR(50), PRIMARY KEY (ID))" },
-        new object[] { "CREATE OR ALTER VIEW V (A, B) AS SELECT X.A, X.B FROM T X" },
-        new object[] { "ALTER TABLE T ADD CONSTRAINT FK1 FOREIGN KEY (PID) REFERENCES P (ID)" },
-        new object[] { "DROP INDEX IX_T_NAME" },
-        new object[] { "COMMENT ON TABLE T IS 'a table'" },
-        new object[] { "SET GENERATOR G TO 100" },
-        new object[] { "GRANT SELECT ON T TO PUBLIC" },
-        // Comments
-        new object[] { "SELECT a -- trailing comment\nFROM t" },
-        new object[] { "SELECT /* inline */ a FROM t" },
-        new object[] { "begin x = 1; -- note\n y = 2; end" },
-        new object[] { "/* leading */ SELECT 1 FROM RDB$DATABASE" },
-        // Literals / identifiers preserved
-        new object[] { "SELECT 'It''s ok', \"From\", 0x1F, 3.14 FROM t" },
-        // Incomplete / mid-typing (error tolerance)
-        new object[] { "SELECT " },
-        new object[] { "SELECT * FROM" },
-        new object[] { "CREATE PROCEDURE P AS BEGIN" },
-        // Unusual / unrecognised (RawStatement — verbatim)
-        new object[] { "FROBNICATE THE WIDGET" },
-        new object[] { "(SELECT 1)" },
-        new object[] { "a , b , c" },
-        // Multi-statement
-        new object[] { "SELECT 1 FROM T; DELETE FROM U; INSERT INTO V VALUES (1)" },
-    };
+    // The broad, representative corpus (every statement kind + edge cases) now lives in the shared
+    // SqlTestCorpus so the formatter invariants and the Etap-6.9 differential harness test one list.
+    public static IEnumerable<object[]> Corpus() => SqlTestCorpus.RepresentativeData();
 
     [Theory]
     [MemberData(nameof(Corpus))]

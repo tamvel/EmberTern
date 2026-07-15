@@ -578,8 +578,18 @@ Rationale for the change from the draft: **the Lexer is too important a foundati
   Quick Info Engine (Core) ✅ · M2 Navigation Engine (Core) ✅ · M3 Semantic highlighting (Core
   classifier + App painter) ✅ · M4 Ctrl+hover/click go-to-def + tooltip (App `NavigationController` + `QuickInfoView`) ✅ · M5 Quick Info detail pane
   + Peek + local find-refs/rename (F2 rename / Alt+F12 peek) ✅.** **Delivers**: P5 (semantic) + P6 + P9 (all of it).
+- **Etap 6.9 — Structural AST Deepening (NEW, inserted 2026-07-14 by the pre-Stage-7 review).** The
+  foundational parser/AST deepening that must land **before Etap 7** and the future Debugger: the AST
+  today is a *statement skeleton with token-bag annotations*, so SQL structure is duplicated across
+  3–4 token walkers (formatter, the binder's Query+Psql walks, `SqlAliasResolver`). Etap 6.9 gives the
+  parser "structural depth" (clauses, subqueries, CTE/nested-CTE, CASE, PSQL control-flow + executable
+  statements — ordinary expressions stay token fragments), migrates the binder first, and converges
+  the formatter **one construct at a time** (every milestone strictly reduces token-walk logic). Full
+  guide: **[editor-ast-deepening.md](editor-ast-deepening.md)** (milestones B0–B5 + progress matrix).
 - **Etap 7 — Diagnostics + editor niceties.** Squiggles + Quick Fixes; folding, breadcrumbs,
-  bracket/BEGIN-END matching, format-selection/on-paste. **Delivers**: P7.
+  bracket/BEGIN-END matching, format-selection/on-paste. **Delivers**: P7. **Now built as a client of
+  Etap 6.9's tree** — full design in **[editor-stage7-diagnostics.md](editor-stage7-diagnostics.md)**
+  (why it follows AST Deepening; semantic-only engine; Quick Fixes explicitly post-Stage-7).
 - **Final cleanup etap (after Etap 7).** Purge any remaining transitional names (`V2`/`NewX`/`Temp`/…
   — §14 decision #15), retire any coexistence shims, and re-home classes to their final namespaces so
   the front-end reads as one coherent system. (Names consolidated as each component's migration

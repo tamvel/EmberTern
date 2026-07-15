@@ -400,7 +400,11 @@ internal sealed partial class SemanticBinder
     private ColumnSymbol? ResolveColumn(string? table, string? column)
     {
         if (string.IsNullOrEmpty(table) || string.IsNullOrEmpty(column)) return null;
-        var key = table + " " + column;
+        // Composite cache key: table + a NUL separator + column. NUL cannot occur in an identifier,
+        // so (table, column) maps to exactly one key (a plain space could collide with a quoted
+        // identifier that contains a space). The separator is built as (char)0 rather than a raw NUL
+        // byte in the source -- a raw NUL makes git treat the file as binary and breaks grep/diff.
+        var key = table + (char)0 + column;
         if (_columnCache.TryGetValue(key, out var cached)) return cached;
 
         ColumnSymbol? sym = null;

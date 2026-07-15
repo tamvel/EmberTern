@@ -4,7 +4,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using AvaloniaEdit;
-using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Language.Semantics;
 
 namespace EmberTern.App.Completion;
@@ -17,28 +16,23 @@ namespace EmberTern.App.Completion;
 /// Etap 5 / M1 (design §22.1) adds the <see cref="SemanticModel"/>: on each idle tick
 /// it captures an immutable metadata snapshot on the UI thread (via the injected
 /// <see cref="_metadataSnapshot"/> factory), then off-thread parses the document and
-/// builds the model, and caches it. Completion still runs off the cached alias map in
-/// M1 — the model is built and cached but not yet consumed (M5 switches completion to
-/// it and retires the alias path). Both the alias map and the model are refreshed in
-/// the same idle tick to keep exactly one background parse per burst.
+/// builds the model, and caches it. Completion consumes the cached model directly (the
+/// per-editor alias map was retired in Etap 5 / M5; its dead scaffolding was removed in
+/// Etap 6.9 / B0). One background parse per burst.
 /// </para>
 /// </summary>
 /// <remarks>
-/// All state (<see cref="_aliases"/>, <see cref="_model"/>, the version counters,
-/// <see cref="_cts"/>) is touched only on the UI thread: the debounce timer ticks on
-/// the UI thread, the background parse resumes on the captured UI context
-/// (<c>ConfigureAwait(true)</c>), and every reader is called from completion, which
-/// runs on the UI thread. So no locking is needed. Only the pure
-/// <see cref="SqlAliasResolver.ParseAliases"/> + <see cref="SemanticModel.Build(string, ISqlMetadataProvider?)"/>
-/// calls run off-thread, on a captured string + a captured immutable snapshot.
+/// All state (<see cref="_model"/>, the version counters, <see cref="_cts"/>) is touched
+/// only on the UI thread: the debounce timer ticks on the UI thread, the background parse
+/// resumes on the captured UI context (<c>ConfigureAwait(true)</c>), and every reader is
+/// called from completion, which runs on the UI thread. So no locking is needed. Only the
+/// pure <see cref="SemanticModel.Build(string, ISqlMetadataProvider?)"/> call runs
+/// off-thread, on a captured string + a captured immutable snapshot.
 /// </remarks>
 internal sealed class EditorLanguageService : IDisposable
 {
     /// <summary>Idle delay before a background re-parse runs (design §4.3/§15).</summary>
     internal static readonly TimeSpan ParseDebounce = TimeSpan.FromMilliseconds(300);
-
-    private static readonly IReadOnlyDictionary<string, string> EmptyAliases =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Idle delay before a metadata-driven model refresh runs. Coalesces the burst of
     /// per-category loads on connect (prefetch raises one signal per category) into a single
@@ -82,14 +76,12 @@ internal sealed class EditorLanguageService : IDisposable
     private bool _warmingMetadata;
     private bool _warmRequested;
 
-    private IReadOnlyDictionary<string, string> _aliases = EmptyAliases;
     private SemanticModel? _model;
     private CancellationTokenSource? _cts;
     // Monotonic edit counter and the counter each cached artifact reflects. Start the
     // caches "stale" (-1 < 0) so the first deliberate trigger parses on demand even if
     // no edit has been observed yet (e.g. text set before we attached).
     private long _changeVersion;
-    private long _aliasesVersion = -1;
     private long _modelVersion = -1;
     private bool _disposed;
 
@@ -119,12 +111,6 @@ internal sealed class EditorLanguageService : IDisposable
         _editor.TextChanged += OnTextChanged;
     }
 
-    /// <summary>The most recently computed alias → table map. Never null.</summary>
-    public IReadOnlyDictionary<string, string> Aliases => _aliases;
-
-    /// <summary>True when the cached map reflects the current document text.</summary>
-    public bool AliasesFresh => _aliasesVersion == _changeVersion;
-
     /// <summary>The most recently built semantic model, or null before the first parse.</summary>
     public SemanticModel? Model => _model;
 
@@ -141,23 +127,6 @@ internal sealed class EditorLanguageService : IDisposable
     public event EventHandler? ModelUpdated;
 
     private void RaiseModelUpdated() => ModelUpdated?.Invoke(this, EventArgs.Empty);
-
-    /// <summary>
-    /// Synchronous fallback for <b>deliberate</b> triggers (a typed <c>.</c> or
-    /// Ctrl+Space): if the cached map is stale, re-parse now so the completion is
-    /// correct even when the user typed an alias and immediately asked for its
-    /// columns (before the ~300 ms background parse ran). No-op when already
-    /// fresh — so a burst of deliberate triggers costs at most one parse. This is
-    /// never called on the per-character auto-trigger path.
-    /// </summary>
-    public void EnsureFreshAliases()
-    {
-        if (_disposed || AliasesFresh) return;
-        var version = _changeVersion;
-        var text = _editor.Text ?? string.Empty;
-        _aliases = SqlAliasResolver.ParseAliases(text);
-        _aliasesVersion = version;
-    }
 
     /// <summary>
     /// Synchronous fallback for deliberate triggers that need the semantic model — the
@@ -358,16 +327,11 @@ internal sealed class EditorLanguageService : IDisposable
         var ambient = CaptureAmbientSymbols();      // UI-thread snapshot (reads VM grids), same rule
         try
         {
-            var (map, model) = await Task.Run(() =>
-            {
-                var aliases = SqlAliasResolver.ParseAliases(text);
-                var built = BuildModelSafe(text, provider, ambient);
-                return (aliases, built);
-            }, cts.Token).ConfigureAwait(true); // resume on the UI thread
+            var model = await Task.Run(
+                () => BuildModelSafe(text, provider, ambient),
+                cts.Token).ConfigureAwait(true); // resume on the UI thread
             // Drop the result if a newer parse superseded this one or we were cancelled.
             if (cts.IsCancellationRequested || !ReferenceEquals(cts, _cts)) return;
-            _aliases = map;
-            _aliasesVersion = version;
             _model = model;
             _modelVersion = version;
             _modelMetadataGeneration = generation;

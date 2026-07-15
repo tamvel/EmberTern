@@ -20,6 +20,8 @@ verbatim, in the archive below.
 |---|---|---|
 | **`CLAUDE.md`** (this file) | Rules, current architecture pointers, a short "what's built" inventory, current state, live gotchas that matter to almost every session. | Yes — every session. Keep it short on purpose. |
 | **`docs/design/editor-architecture.md`** | The SQL/PSQL editor's current architecture: components, public API, binding decisions, roadmap. Kept current — extend it, don't let it re-accumulate history. | Only when working on the editor. |
+| **`docs/design/editor-ast-deepening.md`** | **Active implementation guide** for **Etap 6.9 — Structural AST Deepening** (the next foundational work: node inventory, migration contract, milestones B0–B5, debugger considerations, formatter convergence, progress matrix). | When working on the parser/AST/binder deepening. |
+| **`docs/design/editor-stage7-diagnostics.md`** | **Active design/vision** for **Stage 7 (Diagnostics)** — engine, model, categories, pipeline, squiggles/panel/nav, milestones, post-Stage-7 Quick Fixes. Consumes Etap 6.9. | When working on Stage 7. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (~190 entries, #1–#202), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -370,15 +372,126 @@ noted.
     not yet built because no feature needs it — not debt. §0 is a checked invariant (per-statement +
     per-script lexeme preservation), so the formatter either reproduces every lexeme or leaves the
     fragment/document unchanged.
-- **What's next:** P8 is complete (incl. the two UX follow-ups: FOR SELECT one-construct + shared
-  call-argument wrapping). Do NOT start Etap 7 (diagnostics, folding, breadcrumbs, bracket-matching)
-  until the user formally closes the UX Polish Phase. Still deferred: **P5d** a plain-hover info cue;
-  **P2c** bold the typed completion-fragment (no clean AvaloniaEdit 12.0.0 path yet). Remaining
-  formatter grammar-depth items, available if a concrete feature later needs them: **UPDATE SET**
-  assignment-list breaks and **MERGE … WHEN** layout (the two DML shapes still on the plain generic
-  `Emit`, no clause breaks), CASE/expression interior, and CREATE-definition headers (kept verbatim by
-  design). All other argument/element lists (INSERT/VALUES/MATCHING/SELECT/IN/EXECUTE-BLOCK params +
-  RETURNS/CREATE-VIEW columns/calls) now share the one adaptive builder.
+- **What's next — DECIDED (pre-Stage-7 architecture review, 2026-07-14).** A review before Stage 7
+  found the AST is a *statement skeleton with token-bag annotations*, and SQL structure is duplicated
+  across 3–4 token walkers (formatter ~24 routines, the binder's Query+Psql walks, the legacy
+  `SqlAliasResolver`). Decision (user): **build a foundational parser/AST deepening — [Etap 6.9 —
+  Structural AST Deepening](docs/design/editor-ast-deepening.md) — BEFORE Stage 7**, at "structural
+  depth" (model clauses, subqueries, CTE/nested-CTE, CASE, PSQL control-flow + executable statements;
+  keep ordinary expressions as token fragments), foundation-first, migrating the binder first and the
+  formatter **one construct at a time** (never a big-bang rewrite; every milestone must strictly
+  reduce token-walk logic). This is also the foundation for the future Debugger (every executable
+  statement gets a stable node + span). Milestones B0–B5 + progress matrix are in that doc. **Stage 7
+  (Diagnostics) follows** and is fully specced in [editor-stage7-diagnostics.md](docs/design/editor-stage7-diagnostics.md)
+  (semantic-only engine, `Diagnostic` model, categories, squiggles/panel/nav, incremental refresh,
+  Quick Fixes explicitly post-Stage-7). **Etap 6.9 / B0 — DONE (2026-07-14):** pure-refactoring
+  scaffolding — new base abstractions `QueryNode` / `PsqlStatement` / `IExecutableStatement`,
+  `SqlParser` made `partial` (B1/B2 seam), a §0 differential-test harness (round-trip byte-identity +
+  tree well-formedness over a shared corpus), the NUL-byte fix in `SemanticBinder.Query.cs`, and the
+  dead alias path removed from `EditorLanguageService`; build 0/0, 3841 main + 23 probe green, smoke
+  clean, no formatter/semantic behaviour changed. **Etap 6.9 / B1a — DONE (2026-07-14):** the PSQL body
+  node hierarchy (`Ast/PsqlNodes.cs`: `BlockStatement`/`IfStatement`/`WhileStatement`/`ForSelectStatement`/
+  `PsqlLeafStatement`, control-flow + leaves implement `IExecutableStatement` = debugger step units) + a
+  body sub-parser (`SqlParser.Psql.cs`) that parses an `AnonymousBlockStatement` (the body-only editor
+  shape) into a `Body` tree — **additive only** (binder + formatter unchanged; token slice still
+  round-trips; spans nest + no token dropped by construction; mirrors the formatter's `EmitPsqlUnit`);
+  build 0/0, 3850 main + 23 probe green (+9 `PsqlAstTests`), smoke clean. **Etap 6.9 / B1b-prep — DONE
+  (2026-07-14):** reading the binder for B1b showed it walks FOUR PSQL surfaces (CREATE PROC/FUNC, CREATE
+  TRIGGER, EXECUTE BLOCK, anon block) + a DECLARE section, so retiring the walker COMPLETELY needs the AST
+  to cover them all first. Added (still additive) `ParseRoutineBody` (skip header to top-level `AS`, parse
+  declares+block) attaching a `Body` `BlockStatement` to `DdlStatement` (PSQL proc/func/trigger) +
+  `ExecuteBlockStatement`, and `DeclareVariable/CursorStatement` nodes + `BlockStatement.Declarations`
+  (now exercised); binder + formatter still token-walk (coexistence); build 0/0, 3857 main + 23 probe
+  green (+7 `PsqlAstTests`), smoke clean. **Etap 6.9 / B1b — DONE (2026-07-15):** `SemanticBinder.Psql`
+  is now a pure **AST consumer** — a visitor (`BindBody`→`BindBlock`→`BindPsqlStatement`, with
+  `BindControlHeader`/`BindDeclaration`) traverses the parser's `BlockStatement` body tree, and the
+  **complete structural PSQL token walker is DELETED** (`BindRoutineBody`, `ScanDeclarations`,
+  `FirstTopLevelBegin`, `FindTopLevelSemicolon`, `ContainsKeyword`, `SkipLocalSubprogram`,
+  `MatchingEndExclusive` — ~113 lines of BEGIN/END matching + boundary/subprogram scanning gone). The
+  entry points bind only the HEADER (signature) from tokens; the old flat body scan is retained as the
+  leaf-INTERIOR reference binder (`BindLeafReferences`, ordinary/query-expression depth = B2/B3) and now
+  runs per node-range — identical reference set (every body token is in exactly one node). Behaviour
+  delta (documented, negligible): a local `DECLARE PROCEDURE/FUNCTION` body is now traversed against the
+  enclosing scope (the old walker skipped it) — rare FB4+ surface, proper sub-routine scoping is B5+.
+  Build 0/0, 3864 main + 23 probe green (+3 `SemanticModelTests`), smoke clean; completion/highlighting/
+  navigation/Quick Info consume the same model API, unchanged. **Etap 6.9 / B2 — parser-producer DONE
+  (2026-07-15):** the **query clause tree** is now produced. New `Ast/QueryNodes.cs` (`SelectQuery` /
+  `SetOperationQuery` : `QueryNode`; the `QueryClause` base + `SelectClause`/`FromClause`/`WhereClause`/
+  `GroupByClause`/`HavingClause`/`OrderByClause`; the `FromItem` base + `TableReference`/`DerivedTable`/
+  `JoinedTable`; `SetOperator`+`JoinKind` enums) + new sub-parser `SqlParser.Query.cs` (`TryParseSelectQuery`
+  → clause-boundary scan + comma/JOIN-structured FROM list + left-assoc set operations with a trailing
+  ORDER BY on the whole). Wired into `Classify` so a plain (non-`WITH`) `SelectStatement` exposes a `Query`
+  child. **Additive only** — binder + formatter UNCHANGED (still token-walk; transitional coexistence),
+  token slice still round-trips (§0); shapes not cleanly recognised leave `Query` null (never lost). Depth
+  = structural: clause/join interiors stay token fragments; nested subqueries (derived body, EXISTS/scalar,
+  CTE body) NOT recursed — that's B3; `WITH`-led queries keep the `WithClause` token bag (main query →
+  `QueryNode` in B3, so no double representation). **Dedup:** `PsqlSpan`→shared `TokenSpan` in `SqlParser.cs`
+  (one token-range→span helper for both sub-parsers); reuses existing `Sub`/`MatchParenTok`/`Kw`/`At`.
+  Build 0/0, 3896 main + 23 probe green (+14 `QueryAstTests`, +5 corpus shapes), smoke clean. **Etap 6.9 /
+  B3 — parser-producer DONE (2026-07-15):** the **query model is now fully recursive**. New nodes
+  (`Ast/QueryNodes.cs`): `WithQuery` (WithClause CTE-decls + main `QueryNode`), `RawQuery` (query-level §0
+  valve), `SubqueryExpression` base + `ExistsExpression`/`ScalarSubquery` (each owning a `QueryNode`).
+  Promoted (`Ast/CteNodes.cs`): `CommonTableExpression.BodyTokens`→`Body` (real `QueryNode`); `WithClause`
+  dropped `MainQueryTokens` (main now on `WithQuery.Query`) — **no parallel representation**. `QueryNode`
+  base gained `Tokens` (pulled up from `SelectQuery`/`SetOperationQuery` — dedup). `SelectStatement.With`
+  **deleted** — a WITH-led statement's `Query` is a `WithQuery` (one representation everywhere). Parser:
+  `ParseQueryRange` is the single recursive entry (reused by CTE bodies, derived tables, `ParseEmbeddedSubqueries`
+  which finds EXISTS/scalar/IN subqueries in clause interiors, descending ordinary parens but never into a
+  subquery); clauses/derived-tables/JOIN-ON now carry their subquery children; `TryParseWithClause` deleted
+  (WITH parsing consolidated into `SqlParser.Query.cs`). **Formatter:** ONE forced byte-identical accessor
+  swap — `FormatWithClause` reads `cte.Body.Tokens`/`wq.Query.Tokens`, dispatcher matches
+  `SelectStatement { Query: WithQuery }`; emits the exact same token ranges → output unchanged (proven by
+  formatter invariants + idempotency + the per-statement lexeme net). Not a layout migration — the only way
+  to promote the WITH token-bag without a parallel representation. Build 0/0, 3913 main + 23 probe green,
+  smoke clean. **Etap 6.9 / B3.1 — parser-producer DONE (2026-07-15):** the last "query as a token blob"
+  gap is closed — the parser is now the single structural source for **every query reachable from a
+  top-level statement or a PSQL control-flow node**. New sub-parser `SqlParser.Dml.cs` attaches a real
+  `QueryNode` to: `InsertStatement.SourceQuery` (INSERT…SELECT/WITH) + `.Subqueries` (VALUES/RETURNING
+  scalar subqueries); `UpdateStatement`/`UpdateOrInsertStatement`/`DeleteStatement.Subqueries` (embedded
+  EXISTS/scalar/IN); `MergeStatement.SourceQuery` (USING (…)) + `.Subqueries` (ON/WHEN/SET/VALUES);
+  `DdlStatement.Query` (CREATE/ALTER/RECREATE VIEW…AS body, incl. WITH-led + set-op bodies, mutually
+  exclusive with the PSQL `Body`); PSQL `ForSelectStatement.Query` (FOR SELECT/WITH cursor — boundary stops
+  at depth-0 INTO / AS CURSOR, never a column-alias AS; null for FOR EXECUTE STATEMENT); PSQL
+  `DeclareCursorStatement.Query` (DECLARE…CURSOR FOR (…)). **Additive/producer-only** — binder + formatter
+  still token-walk these (convergence deferred, same as B2/B3); every embedded query is modelled ONCE as a
+  `QueryNode` (no parallel representation — the statement `Tokens` are the §0 backing, not a second model);
+  shared child-ordering in new `Ast/AstChildren.cs`. Also a **B2 robustness fix** (forced by a set-op VIEW
+  body): `ParseSetQuery` no longer folds a dangling `… UNION ALL` (lenient-split mid-statement) into a
+  degenerate `[0,0)` operand. Build 0/0, **3978 main + 23 probe green** (+`DmlQueryAstTests`, +14 corpus
+  shapes), smoke clean; no formatter/semantic behaviour changed. **ONE documented residual (→ B5, §12):** a
+  DML/`SELECT…INTO` statement appearing as a PSQL body LEAF stays a `PsqlLeafStatement` (its query token-only)
+  — modelling it now would create a parallel DML-query representation; the fix is B5 (leaves → reused DML
+  nodes). `EXECUTE STATEMENT '<sql>'` is never a `QueryNode` (runtime string — a permanent boundary, not
+  debt).
+- **Etap 6.9 / B4 (CASE AST) — parser-producer DONE (2026-07-15):** `CASE … END` (simple + searched, in a
+  SELECT expression and in PSQL) is now a `CaseExpression` (+ `WhenClause`) node — `Ast/ExpressionNodes.cs`.
+  The B3 clause-interior scan was generalised from `ParseEmbeddedSubqueries` to `ParseEmbeddedExpressions`
+  (finds subqueries AND CASE, recursively — a subquery/nested CASE inside a WHEN/THEN/ELSE stays a real
+  node); `PsqlLeafStatement` carries the same embedded-expression children so a CASE in an assignment/RETURN
+  is modelled too. Additive — the formatter still emits CASE inline (layout is deferred convergence).
+- **Etap 6.9 / B5 (Routine/PSQL body = reused DSQL nodes) — parser-producer DONE (2026-07-15):** an embedded
+  DSQL statement inside a PSQL body (SELECT/INSERT/UPDATE/DELETE/MERGE/EXECUTE) is now the **reused**
+  top-level statement node (with its B2/B3/B3.1 query structure), NOT a `PsqlLeafStatement` — so a DML query
+  in a routine body is the SAME node, modelled the SAME way, as at the top level (closes the §12 #1
+  residual). Body statement/branch slots widened `PsqlStatement`→`SqlNode`; PSQL-only leaves (assignment,
+  SUSPEND, EXIT, LEAVE, POST_EVENT, EXCEPTION, RETURN, subprogram header) stay `PsqlLeafStatement`; the
+  reused nodes now implement `IExecutableStatement` (debugger step coverage across every PSQL surface).
+  `PsqlLeafKind` dropped its DSQL members. **Binder behaviour-neutral** (a reused node is bound via the same
+  `BindLeafReferences` over its tokens as the old leaf scan); **formatter unaffected** (token-based PSQL
+  emitter). Build 0/0, **4008 main + 23 probe green**, smoke clean; no formatter/semantic behaviour changed.
+  **PARSER STAGE COMPLETE (B0–B5): the parser is the single structural source for all SQL/PSQL structure.
+  No parallel AST representation remains** — the residual duplication is CONSUMER-side (binder query/DML walk
+  + formatter layout engine + legacy `SqlAliasResolver` still re-derive structure from tokens = the deferred
+  convergence). **Per user directive convergence stays DEFERRED; B3.1+B4+B5 land as ONE combined commit
+  closing the parser stage. Next: binder convergence → formatter convergence → Stage 7 — on the user's
+  go-ahead.**
+  Still deferred: **P5d** a plain-hover info cue; **P2c** bold the typed completion-fragment (no clean
+  AvaloniaEdit 12.0.0 path yet). Formatter grammar-depth items now folded into Etap 6.9 as node
+  consumers: **CASE** (was inline/verbatim), **nested-query indentation** (no indent model today),
+  and eventually **UPDATE SET** / **MERGE … WHEN** if a feature needs them; CREATE-definition headers
+  stay verbatim by design. Immediate hygiene noted for Etap 6.9: a literal NUL byte in
+  `SemanticBinder.Query.cs` (composite cache key written as a raw `\0`), and the dead alias path in
+  `EditorLanguageService` (no consumer since Etap 5/M5 — remove once validated).
 - **R2 (2026-06-18 Transaction Architecture Audit) — CLOSED 2026-07-14, and its premise was wrong.**
   R2 ("procedure lock after Execute → Rollback → Compile") was left OPEN pending a live `MON$` dump,
   and the "Single-attachment DDL" fix that followed concluded DDL must be **co-located** on the
@@ -413,9 +526,36 @@ filed a **UX Polish Phase** backlog (P1–P9). **P1–P9 are done, including P8 
 max-line wrapping), which is now COMPLETE and architecturally closed** (§F shared list builder →
 INSERT / UPDATE OR INSERT → long-line wrapping → EXECUTE BLOCK → FOR SELECT, one mechanism each);
 only **P5d (a plain-hover info cue) and P2c (bold the typed completion fragment) remain consciously
-deferred** — see "Current state" above for exactly where things stand. **Etap 7 (diagnostics +
-folding/breadcrumbs/bracket-matching) does not start until the user formally closes the UX Polish
-Phase.**
+deferred** — see "Current state" above for exactly where things stand.
+
+A **pre-Stage-7 architecture review (2026-07-14)** then established the next foundation: because the
+AST is a *statement skeleton with token-bag annotations* and SQL structure is duplicated across 3–4
+token walkers, a foundational **Etap 6.9 — Structural AST Deepening** is inserted **before Stage 7**,
+so the parser/AST becomes the single structural source for the formatter, semantic model, diagnostics,
+folding, breadcrumbs and the future Debugger. Two design docs are the implementation guides:
+- **[docs/design/editor-ast-deepening.md](docs/design/editor-ast-deepening.md)** — Etap 6.9 (design
+  principles, node inventory, migration contract, milestones B0–B5, debugger considerations, formatter
+  convergence, and a progress matrix). **Read before touching the parser/AST/binder for this work.**
+- **[docs/design/editor-stage7-diagnostics.md](docs/design/editor-stage7-diagnostics.md)** — the full
+  Stage 7 (Diagnostics) vision, which consumes Etap 6.9.
+
+**Etap 6.9 parser stage is COMPLETE — B0–B5 parser producers are all DONE** (B0 = scaffolding + §0
+differential harness + NUL/alias cleanups; B1 = the PSQL body tree, produced for all four surfaces **and
+consumed by the semantic binder — its structural token walker is deleted**; B2 = the query clause tree
+(clauses + FROM/join + set operations); B3 = the **fully recursive query model** — WITH/CTE, derived tables,
+EXISTS/scalar subqueries all hold real `QueryNode`s; B3.1 = **queries embedded in OTHER statements**
+(INSERT/MERGE sources, CREATE VIEW bodies, UPDATE/DELETE/MERGE embedded subqueries, PSQL FOR-SELECT /
+DECLARE-CURSOR cursors); B4 = **CASE** (`CaseExpression`/`WhenClause`, simple + searched, SELECT-expression
++ PSQL); B5 = **PSQL body statements are reused top-level DSQL nodes** (a SELECT/INSERT/… inside a routine
+body is the SAME node, with the SAME query structure, as at the top level). **The parser is now the single
+structural source for all SQL/PSQL structure** (within the structural-depth scope: ordinary expressions stay
+token fragments; `EXECUTE STATEMENT '<sql>'` runtime strings and a `PACKAGE` body are conscious boundaries).
+**No parallel AST representation remains.** B2–B5 are additive/producer-only; the residual structural
+duplication is CONSUMER-side — the binder's query/DML walk and the whole formatter layout engine (plus the
+legacy `SqlAliasResolver`, off the editor path) still re-derive structure from tokens. **That is the
+deferred convergence — binder convergence → formatter convergence → Stage 7 (Diagnostics/Folding/
+Breadcrumbs) — and does not start until the user says so.** B3.1+B4+B5 are staged for ONE combined commit
+closing the parser stage.
 
 ## Architecture rules — enforce against drift
 
@@ -627,6 +767,14 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
 - **`docs/design/editor-architecture.md`** — the current, kept-up-to-date architecture of the
   SQL/PSQL editor language front-end. Read before touching `EmberTern.Core.Sql.Language` or
   anything downstream of it.
+- **`docs/design/editor-ast-deepening.md`** — **Etap 6.9 — Structural AST Deepening** implementation
+  guide (design principles, node inventory, migration contract, milestones B0–B5, debugger
+  considerations, formatter convergence, progress matrix). The next foundational work, ahead of
+  Stage 7. Read before deepening the parser/AST/binder.
+- **`docs/design/editor-stage7-diagnostics.md`** — the full **Stage 7 (Diagnostics)** design/vision
+  (engine, `Diagnostic` model, severities, categories, pipeline, squiggles/panel/navigation,
+  incremental refresh, cancellation, performance, milestones, and post-Stage-7 Quick Fixes). Consumes
+  Etap 6.9; explains why Diagnostics comes after AST Deepening.
 - **`docs/gotchas.md`** — the complete gotcha catalog (~190 entries), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,

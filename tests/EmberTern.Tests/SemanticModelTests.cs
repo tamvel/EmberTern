@@ -411,6 +411,95 @@ public class SemanticModelTests
         Assert.Equal(SymbolKind.Procedure, r.Symbol!.Kind);
     }
 
+    // ── B1b: the binder consumes the parser's PSQL body TREE (nested control flow) ──────────────
+
+    // A variable used deep inside nested IF / WHILE blocks resolves — the binder recurses into the
+    // body tree's child statements, not a flat scan. (Old flat scan also resolved it; this pins that
+    // the tree traversal keeps doing so.)
+    [Fact]
+    public void Procedure_ResolvesVariable_InNestedControlFlow()
+    {
+        const string sql =
+            "create procedure p as\n" +
+            "declare variable acc integer;\n" +
+            "begin\n" +
+            "  acc = 0;\n" +
+            "  while (acc < 10) do\n" +
+            "  begin\n" +
+            "    if (acc > 5) then\n" +
+            "      acc = acc + 1;\n" +
+            "    else\n" +
+            "      acc = acc + 2;\n" +
+            "  end\n" +
+            "end";
+        var m = Build(sql);
+
+        // The variable declaration is bound once as a definition.
+        var def = m.References.Single(r => r.IsDefinition && r.Symbol is VariableSymbol { Name: "ACC" });
+        Assert.Equal(ReferenceRole.Variable, def.Role);
+
+        // A use inside the WHILE condition resolves to the variable.
+        var inCond = RefAt(m, sql, "acc < 10")!;
+        Assert.Equal(ReferenceRole.Variable, inCond.Role);
+        Assert.Equal("ACC", inCond.Symbol!.Name);
+
+        // A use inside the nested IF's ELSE branch resolves too.
+        var inElse = RefAt(m, sql, "acc = acc + 2")!;
+        Assert.Equal(ReferenceRole.Variable, inElse.Role);
+        Assert.Equal("ACC", inElse.Symbol!.Name);
+
+        // Exactly one RoutineBody scope — nested blocks add no scope (documented simplification).
+        Assert.Single(m.RootScope.DescendantsAndSelf(), s => s.Kind == ScopeKind.RoutineBody);
+    }
+
+    // FOR SELECT … INTO … DO binds the cursor query's table (a Query child scope) AND the INTO target
+    // variable — the control-flow header is bound, then the loop body is recursed into.
+    [Fact]
+    public void Procedure_ForSelectInto_BindsCursorQueryAndIntoTarget_AndBody()
+    {
+        const string sql =
+            "create procedure p returns (total integer) as\n" +
+            "declare variable v integer;\n" +
+            "begin\n" +
+            "  for select amount from orders into :v do\n" +
+            "  begin\n" +
+            "    total = total + v;\n" +
+            "  end\n" +
+            "end";
+        var meta = new FakeMetadata().Col("ORDERS", "AMOUNT", "INTEGER");
+        var m = Build(sql, meta);
+
+        // The cursor query's FROM table resolved (proves a Query child scope was built from the header).
+        var table = RefAt(m, sql, "orders")!;
+        Assert.Equal(ReferenceRole.SchemaObject, table.Role);
+        Assert.Equal("ORDERS", table.Symbol!.Name);
+
+        // The INTO :v target binds to the local variable.
+        var into = RefAt(m, sql, ":v do")!;
+        Assert.Equal(ReferenceRole.Variable, into.Role);
+        Assert.Equal("V", into.Symbol!.Name);
+
+        // The loop body use of the variable also binds (the `v` in "total + v;").
+        var inBody = RefAt(m, sql, "v;")!;
+        Assert.Equal(ReferenceRole.Variable, inBody.Role);
+        Assert.Equal("V", inBody.Symbol!.Name);
+    }
+
+    // A DECLARE section with BOTH a variable and a cursor is bound from the body tree's Declarations.
+    [Fact]
+    public void Procedure_DeclaresVariableAndCursor_FromBodyTree()
+    {
+        const string sql =
+            "create procedure p as\n" +
+            "declare variable n integer;\n" +
+            "declare cur cursor for (select id from nagl);\n" +
+            "begin\n  suspend;\nend";
+        var m = Build(sql);
+        var scope = m.RootScope.DescendantsAndSelf().Single(s => s.Kind == ScopeKind.RoutineBody);
+        Assert.Contains(scope.Symbols, s => s is VariableSymbol { Name: "N" });
+        Assert.Contains(scope.Symbols, s => s is CursorSymbol { Name: "CUR" });
+    }
+
     [Fact]
     public void CreateView_BindsItsQuery_AndDeclaresTheView()
     {
