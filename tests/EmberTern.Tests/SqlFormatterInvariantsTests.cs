@@ -28,6 +28,22 @@ public class SqlFormatterInvariantsTests
     // SqlTestCorpus so the formatter invariants and the Etap-6.9 differential harness test one list.
     public static IEnumerable<object[]> Corpus() => SqlTestCorpus.RepresentativeData();
 
+    // The nested/structural shapes (CTE, CASE, derived tables, EXISTS, scalar subqueries, set operations,
+    // embedded-statement queries, PSQL cursors) the formatter convergence gave real AST-driven layout —
+    // held to the same §0 + idempotency invariants as the representative corpus.
+    public static IEnumerable<object[]> StructuralCorpus() =>
+        SqlTestCorpus.StructuralConstructs.Select(s => new object[] { s });
+
+    [Theory]
+    [MemberData(nameof(StructuralCorpus))]
+    public void StructuralConstructs_AreIdempotentAndLossless(string sql)
+    {
+        var once = SqlFormatter.Format(sql);
+        Assert.Equal(once, SqlFormatter.Format(once));                 // idempotent
+        Assert.Equal(TokenSignature(sql), TokenSignature(once));       // §0 — no token lost/added/reordered
+        Assert.Equal(Comments(sql), Comments(once));                   // §0 — comments preserved
+    }
+
     [Theory]
     [MemberData(nameof(Corpus))]
     public void Format_IsIdempotent(string sql)
