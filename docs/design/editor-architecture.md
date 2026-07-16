@@ -531,8 +531,13 @@ Prioritized; not all at once. Feasibility noted honestly.
 - **Code Folding** — AvaloniaEdit `FoldingManager`; regions come free from the AST (BEGIN/END,
   statements, CTEs). (Etap 7.)
 - **Breadcrumbs** — "PROCEDURE X ▸ FOR SELECT ▸ IF" from the AST path at the caret. (Etap 7.)
-- **BEGIN/END + bracket matching & structure-aware auto-indent** — from the AST. Fixes daily PSQL
-  indenting pain. (Etap 7.)
+- **BEGIN/END + bracket matching** — ✅ SHIPPED (**Stage 8 / M1**, 2026-07-16; awaits visual
+  confirmation) as the one **Related Elements Highlighting** pipeline: caret-adjacent `()` / `[]` / `{}`
+  (via the shared `SqlLexer`) and `BEGIN/END` (via the AST `BlockStatement`), plus the migrated
+  selection-occurrence + caret-symbol-reference highlighters — all interchangeable *producers* feeding one
+  renderer; a future CASE/END or LOOP is one more producer. As-built:
+  [docs/history/16-stage8-smart-editing.md](../history/16-stage8-smart-editing.md). **Structure-aware
+  auto-indent** — from the AST — is still unbuilt.
 - **Format selection / format-on-paste** — trivial once the AST formatter exists (Etap 3+).
 - **Peek definition** (§10) — Etap 6.
 - **Scope-aware completion inside subqueries/CTEs** — fixes the current wholesale-subquery-skip.

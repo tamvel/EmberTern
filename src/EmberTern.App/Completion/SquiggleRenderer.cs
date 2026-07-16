@@ -17,7 +17,7 @@ namespace EmberTern.App.Completion;
 /// or SQL interpretation of its own — it consumes only <see cref="Diagnostic.Start"/> /
 /// <see cref="Diagnostic.Length"/> / <see cref="Diagnostic.Severity"/>.
 /// <para>
-/// Mirrors the existing background-renderer highlighters (<see cref="OccurrenceHighlighter"/> /
+/// Mirrors the existing background-renderer highlighters (<see cref="RelatedElementsRenderer"/> /
 /// <see cref="SearchMatchHighlighter"/>): an <see cref="IBackgroundRenderer"/> attached in the single
 /// wiring seam <see cref="SqlEditorBehavior.Attach"/>, repainting on the shared
 /// <see cref="SqlCompletionController.ModelUpdated"/> cycle (same signal semantic highlighting uses) —

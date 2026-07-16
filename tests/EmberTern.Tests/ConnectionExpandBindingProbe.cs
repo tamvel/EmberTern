@@ -766,11 +766,11 @@ public sealed class ConnectionExpandBindingProbe
             Assert.Null(openedByName); // resolved via the model, not the name fallback
             log.AppendLine($"[3] go-to-def dispatched: {opened.Value.Name}/{opened.Value.Kind}");
 
-            // M5 — the reference-highlight renderer is registered.
-            Assert.Contains(editor.TextArea.TextView.BackgroundRenderers, r => r.GetType().Name == "ReferenceHighlightRenderer");
-            log.AppendLine("[4] reference-highlight renderer registered");
+            // Stage 8 / M1 — the caret-symbol reference HIGHLIGHT moved to the unified RelatedElementsRenderer
+            // (CaretSymbolReferenceProducer); NavigationController no longer registers a reference renderer.
+            // The computation stays reachable via ReferencesForTest (which delegates to the producer), pinned below.
 
-            // M5 — local find references: the alias `k` occurs twice (declaration + qualifier).
+            // Local find references: the alias `k` occurs twice (declaration + qualifier).
             int kOffset = sql.IndexOf("k.", System.StringComparison.Ordinal);
             Assert.True(nav.ReferencesForTest(kOffset).Count >= 2, "expected >= 2 alias occurrences");
             // A schema object / column has no local-reference highlight (calm — not boxed).
@@ -793,6 +793,48 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
 
         _out.WriteLine(log.ToString());
+    }
+
+    // Stage 8 / M1 — the Related Elements Highlighting renderer, driven by a REAL caret move on a real
+    // editor: placing the caret next to the first EXECUTE PROCEDURE call's '(' must produce the bracket
+    // pair (the manual-QA "first call doesn't activate" report). Pins the caret → recompute → spans wiring
+    // end to end; the paint-timing fix itself (Redraw over InvalidateVisual) is visual QA.
+    [Fact]
+    public async System.Threading.Tasks.Task RelatedElementsRenderer_CaretAtFirstCall_ProducesBracketPair()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 400, Height = 200 };
+            var window = new Window { Width = 500, Height = 320, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var objects = new[] { new MetadataObject("XXX_ZEST_FAKTUR_CR", MetadataObjectKind.Procedure) };
+            var snapshot = AppMetadataSnapshot.Build(
+                objects,
+                new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                    System.StringComparer.OrdinalIgnoreCase));
+            using var svc = new EditorLanguageService(editor, () => snapshot);
+
+            var renderer = RelatedElementsRenderer.Attach(editor, () => svc.Model);
+
+            const string sql = "execute procedure sp$_x(:id)\n\nselect * from xxx_zest_faktur_cr(:a, :b)";
+            editor.Text = sql;
+            Dispatcher.UIThread.RunJobs();
+            svc.EnsureFreshModel();
+
+            int open = sql.IndexOf('(');
+            int close = sql.IndexOf(')');
+            editor.CaretOffset = open + 1; // right after the FIRST '(' — the reported spot
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Contains(new TextSpan(open, 1), renderer.SpansForTest);
+            Assert.Contains(new TextSpan(close, 1), renderer.SpansForTest);
+
+            window.Close();
+        }, CancellationToken.None);
     }
 
     // Etap 6 UX-polish regression pin — the "FROM view / FROM proc(…) don't resolve" report. A view /

@@ -656,6 +656,38 @@ noted.
   dismissed by any click / text edit / pointer exit. **Gotcha #219 did NOT bite** — this adds no new
   `Attach`; the new `Attach` params are **required**, so a missed seam is a compile error (both were).
   Build 0/0, **4159 main + 23 probe green** (+11 `HoverInfoEngineTests`), smoke clean.
+- **Stage 8 (Smart Editing & Structural Assistance) — STARTED.** New milestone: *the editor helps you
+  write code but never writes it for you without your explicit decision* (modern-IDE, not IBExpert).
+  Charter: **M1 Structural Matching**, M2 Smart Snippets, M3 Snippet Engine, M4 Structural Selection
+  (future) — one at a time. Design/as-built:
+  [docs/history/16-stage8-smart-editing.md](docs/history/16-stage8-smart-editing.md).
+  **M1 — Structural Matching — DONE + visually confirmed + finalized (2026-07-16). CLOSED.** The editor's two
+  fragmented "related-elements" highlighters (the former text-based occurrence highlighter, and
+  `NavigationController`'s semantic caret-symbol reference boxer) are unified into **one Related Elements
+  Highlighting pipeline**: a Core `RelatedElementMatcher` (`Sql/Language/Matching/`, pure/testable) runs
+  interchangeable **producers** — selection occurrences, caret-symbol references, caret-adjacent bracket
+  pairs `()`/`[]`/`{}` (via the one `SqlLexer`, so brackets in strings/comments never match), and
+  caret-adjacent `BEGIN/END` (via the AST `BlockStatement.Descendants` — covers proc/func/trigger/EXECUTE
+  BLOCK/anonymous bodies + IF/WHILE/FOR bodies; a `CASE…END` is not a block so its END isn't matched) — and
+  the App `RelatedElementsRenderer` (one `IBackgroundRenderer`) paints them. A **future CASE/END or LOOP is
+  one more producer, never another renderer.** Matching reacts to the **caret** (adjacent to the token),
+  not only a selection. New high-contrast, theme-tuned tokens `RelatedElementHighlight*` (fill + border,
+  both dictionaries; the user delegated colour, requiring only high contrast in both themes and palette
+  consistency — burnt-orange Light / bright-amber Dark, now visually confirmed). Attached in **BOTH** wiring seams (gotcha #219);
+  the DDL-preview editor gets the model-less overload (text producers only).
+  **Finalization cleanup (post-confirmation):** the dormant rollback path was removed — `OccurrenceHighlighter.cs`
+  deleted and the obsolete `OccurrenceHighlightBorder*` tokens dropped; the one still-live consumer of the old
+  fill token, `SearchMatchHighlighter` (Global-Search preview), was migrated onto a correctly-named
+  `SearchMatch*` token so no "Occurrence" name survives as drift.
+  (`NavigationController`'s nested reference renderer could NOT stay dormant — unused private members fail
+  `TreatWarningsAsErrors` — so it was removed in place; git is its revert path.)
+  **Post-M1 QA fix (gotcha #223):** bracket matching didn't activate on the FIRST call right after connect
+  (worked after clicking another call and returning). The matcher is a pure function of (text, caret,
+  model) — proven correct for the exact input; the fault was the App repaint: a plain `InvalidateVisual()`
+  could run before the text view's visual lines were rebuilt (`Draw` saw `VisualLines.Count == 0`), and the
+  diff guard made the miss permanent. Fixed: repaint with `TextView.Redraw()` (as `SemanticHighlighter`
+  does) + skip the guard only on empty→empty so a missed paint self-heals. Build 0/0, **4187 main + 24
+  probe green** (+28 `RelatedElementMatchingTests`, +1 headless renderer pin), smoke clean.
 - **⚠ MILESTONE-ORDER DECISION (2026-07-16) — the Stage 7 retrospective's "consolidate the editor wiring
   first" recommendation was REVERSED, with reason.** It rested on "both backlog items add per-editor
   surfaces — exactly what the duplication punishes"; that is true of **Quick Fixes** (a light bulb = a new

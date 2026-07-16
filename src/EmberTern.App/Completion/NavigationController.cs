@@ -19,6 +19,7 @@ using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Language;
 using EmberTern.Core.Sql.Language.Hover;
+using EmberTern.Core.Sql.Language.Matching;
 using EmberTern.Core.Sql.Language.Navigation;
 using EmberTern.Core.Sql.Language.QuickInfo;
 using EmberTern.Core.Sql.Language.Semantics;
@@ -87,7 +88,6 @@ internal sealed class NavigationController
     // works for locals (declaration text from the document, no DB).
     private readonly Func<string, MetadataObjectKind, Task<string?>>? _fetchDefinition;
     private readonly UnderlineRenderer _underline;
-    private readonly ReferenceHighlightRenderer _references;
     private readonly DispatcherTimer _hoverDwell;
 
     private TextSpan? _activeSpan;   // the currently-underlined identifier, or null when clear
@@ -137,7 +137,6 @@ internal sealed class NavigationController
         _fetchDefinition = fetchDefinition;
         _showParameterHelper = showParameterHelper;
         _underline = new UnderlineRenderer(editor);
-        _references = new ReferenceHighlightRenderer(editor, LocalReferenceSpans);
 
         _hoverDwell = new DispatcherTimer { Interval = HoverDwell };
         _hoverDwell.Tick += OnHoverDwellElapsed;
@@ -171,7 +170,6 @@ internal sealed class NavigationController
             editor, model, diagnostics, isOtherPopupOpen, openSchemaObject, openByName,
             fetchDefinition, showParameterHelper);
         editor.TextArea.TextView.BackgroundRenderers.Add(c._underline);
-        editor.TextArea.TextView.BackgroundRenderers.Add(c._references);
 
         // Ctrl+Click — tunneled so it runs before AvaloniaEdit's own selection handling, letting us
         // consume the click (no stray word-select) when it navigates.
@@ -187,8 +185,6 @@ internal sealed class NavigationController
         editor.KeyUp += c.OnKeyChanged;
         // F2 (rename) / Alt+F12 (peek) — the M5 commands.
         editor.KeyDown += c.OnCommandKey;
-        // Repaint the local-reference highlight as the caret moves onto/off a local symbol.
-        editor.TextArea.Caret.PositionChanged += c.OnCaretMoved;
         // Double-click → INSERT/VALUES column helper (P6) or name-based open. Consolidated here so
         // there is ONE double-click handler (the two duplicated ones in SqlEditorBehavior / MainWindow
         // move here), avoiding an e.Handled ordering dance between two subscribers on one event.
@@ -203,14 +199,12 @@ internal sealed class NavigationController
         if (_detached) return;
         _detached = true;
         _editor.TextArea.TextView.BackgroundRenderers.Remove(_underline);
-        _editor.TextArea.TextView.BackgroundRenderers.Remove(_references);
         _editor.RemoveHandler(InputElement.PointerPressedEvent, OnPointerPressed);
         _editor.TextArea.TextView.PointerMoved -= OnPointerMoved;
         _editor.TextArea.TextView.PointerExited -= OnPointerExited;
         _editor.KeyDown -= OnKeyChanged;
         _editor.KeyUp -= OnKeyChanged;
         _editor.KeyDown -= OnCommandKey;
-        _editor.TextArea.Caret.PositionChanged -= OnCaretMoved;
         _editor.DoubleTapped -= OnDoubleTapped;
         _editor.TextChanged -= OnTextChanged;
         _hoverDwell.Stop();
@@ -414,7 +408,7 @@ internal sealed class NavigationController
     /// <summary>Test seam: the local-reference highlight spans at <paramref name="offset"/> (headless
     /// probe) — empty unless the offset is on a script-local symbol.</summary>
     internal IReadOnlyList<TextSpan> ReferencesForTest(int offset)
-        => ComputeLocalReferenceSpans(_model(), offset);
+        => CaretSymbolReferenceProducer.Compute(_model(), offset);
 
     private bool Navigate(int offset)
     {
@@ -453,44 +447,9 @@ internal sealed class NavigationController
         _editor.Focus();
     }
 
-    // ── Local find references — box every occurrence of the LOCAL under the caret (M5) ───────────
-
-    private int _refCaret = -1;
-    private SemanticModel? _refModel;
-    private IReadOnlyList<TextSpan> _refSpans = Array.Empty<TextSpan>();
-
-    private void OnCaretMoved(object? sender, EventArgs e)
-    {
-        if (_detached) return;
-        _editor.TextArea.TextView.InvalidateVisual(); // re-run the reference-highlight renderer
-        // (The Parameter Helper's own context-driven lifetime is handled by its own caret subscription.)
-    }
-
-    // Cached by (caret, model) so a scroll/repaint is cheap; recomputed only when the caret moves or
-    // the model rebuilds. Schema objects and columns are deliberately excluded (highlighting every
-    // occurrence of a table/column would be noise) — only script-local names light up.
-    private IReadOnlyList<TextSpan> LocalReferenceSpans()
-    {
-        var model = _model();
-        int caret = _editor.CaretOffset;
-        if (caret == _refCaret && ReferenceEquals(model, _refModel)) return _refSpans;
-        _refCaret = caret;
-        _refModel = model;
-        _refSpans = ComputeLocalReferenceSpans(model, caret);
-        return _refSpans;
-    }
-
-    private static IReadOnlyList<TextSpan> ComputeLocalReferenceSpans(SemanticModel? model, int caret)
-    {
-        if (model is null) return Array.Empty<TextSpan>();
-        var symbol = model.ReferenceAt(caret)?.Symbol;
-        if (symbol is null || !IsLocalHighlightSymbol(symbol)) return Array.Empty<TextSpan>();
-        return NavigationEngine.LocalReferences(model, caret);
-    }
-
-    private static bool IsLocalHighlightSymbol(Symbol symbol) => symbol
-        is TableReferenceSymbol or VariableSymbol or ParameterSymbol
-        or CursorSymbol or CteSymbol or RecordAliasSymbol;
+    // (The caret-symbol reference highlight moved to the unified RelatedElementsRenderer in Stage 8 / M1 —
+    // CaretSymbolReferenceProducer. ReferencesForTest above delegates to it so the headless probe is
+    // unchanged. This controller keeps only the Ctrl-hover underline + navigation/rename/peek.)
 
     // ── Safe local rename — F2 (M5, §0 / §10) ────────────────────────────────────────────────────
 
@@ -921,52 +880,6 @@ internal sealed class NavigationController
         // A safe default; the VM prefers the authoritative kind from loaded metadata anyway.
         _ => MetadataObjectKind.Table,
     };
-
-    /// <summary>Boxes every occurrence of the LOCAL symbol under the caret — find local references
-    /// (M5). Reuses the calm <c>OccurrenceHighlightBrush</c> so it reads consistently with the
-    /// select-a-word occurrence boxes. Fill-only (no outline) to stay subtle. A lone occurrence is
-    /// not boxed. Read-only paint — §0 holds by construction.</summary>
-    private sealed class ReferenceHighlightRenderer : IBackgroundRenderer
-    {
-        private readonly TextEditor _editor;
-        private readonly Func<IReadOnlyList<TextSpan>> _spans;
-
-        public ReferenceHighlightRenderer(TextEditor editor, Func<IReadOnlyList<TextSpan>> spans)
-        {
-            _editor = editor;
-            _spans = spans;
-        }
-
-        public KnownLayer Layer => KnownLayer.Selection;
-
-        public void Draw(TextView textView, DrawingContext drawingContext)
-        {
-            var spans = _spans();
-            if (spans.Count < 2 || textView.VisualLines.Count == 0) return;
-
-            var fill = ResolveBrush("OccurrenceHighlightBrush");
-            if (fill is null) return;
-
-            foreach (var span in spans)
-            {
-                if (span.Length == 0) continue;
-                var builder = new BackgroundGeometryBuilder { CornerRadius = 2 };
-                builder.AddSegment(textView, new TextSegment { StartOffset = span.Start, Length = span.Length });
-                var geo = builder.CreateGeometry();
-                if (geo is not null) drawingContext.DrawGeometry(fill, null, geo);
-            }
-        }
-
-        private IBrush? ResolveBrush(string key)
-        {
-            var theme = _editor.ActualThemeVariant;
-            if (Application.Current?.Resources.TryGetResource(key, theme, out var v) == true && v is IBrush b)
-            {
-                return b;
-            }
-            return null;
-        }
-    }
 
     /// <summary>Draws a 1px accent underline beneath the active (Ctrl-hovered) identifier.</summary>
     private sealed class UnderlineRenderer : IBackgroundRenderer

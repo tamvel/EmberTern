@@ -183,7 +183,11 @@ public partial class MainWindow : Window
             // constructor runs. Tracking here is also what gives this editor its F8 handler: it does NOT
             // go through SqlEditorBehavior.Attach (gotcha #219).
             _diagnostics.Track(_editor, _completion);
-            Completion.OccurrenceHighlighter.Attach(_editor);
+            // Stage 8 / M1: Related Elements Highlighting — ONE renderer (selection occurrences + caret
+            // symbol references + matching brackets + matching BEGIN/END), driven by the same cached model +
+            // ModelUpdated cycle. Attached here too (gotcha #219): the main editor does NOT go through
+            // SqlEditorBehavior.Attach. Replaced the former occurrence + reference highlighters.
+            Completion.RelatedElementsRenderer.Attach(_editor, _completion);
             Completion.EditorSearch.Install(_editor);
         }
         // S5: the panel's activation gestures (double-click / Enter / F8) target the active SQL document.
@@ -191,7 +195,9 @@ public partial class MainWindow : Window
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         if (_ddlEditor is not null)
         {
-            Completion.OccurrenceHighlighter.Attach(_ddlEditor);
+            // The read-only DDL preview has no language model → the model-less overload runs the text-based
+            // producers only (selection occurrences + bracket matching); BEGIN/END and caret-symbol need a model.
+            Completion.RelatedElementsRenderer.Attach(_ddlEditor, () => null);
             Completion.EditorSearch.Install(_ddlEditor);
         }
         // Re-apply on theme toggle. ActualThemeVariantChanged fires after the

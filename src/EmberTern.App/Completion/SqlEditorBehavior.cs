@@ -85,8 +85,10 @@ internal static class SqlEditorBehavior
         // hand-wires the same capabilities in MainWindow and attaches the renderer itself.
         SquiggleRenderer.Attach(editor, completion);
 
-        // Select-an-identifier → box all its occurrences in this editor.
-        OccurrenceHighlighter.Attach(editor);
+        // Stage 8 / M1: Related Elements Highlighting — ONE renderer for selection-word occurrences, the
+        // caret symbol's references, matching brackets, and matching BEGIN/END. Fed by the same cached
+        // model (one background parse per editor). Replaced the former occurrence + reference highlighters.
+        RelatedElementsRenderer.Attach(editor, completion);
 
         // Find (Ctrl+F) / Replace (Ctrl+H) + right-click menu — one shared installer.
         EditorSearch.Install(editor);

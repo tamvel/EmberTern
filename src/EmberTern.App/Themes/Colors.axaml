@@ -28,15 +28,18 @@
       <Color x:Key="RowAlternateColor">#0DFFFFFF</Color>
       <!-- Drag-and-drop drop-target overlay: ~33% of the dark accent blue. ARGB hex. -->
       <Color x:Key="DropTargetColor">#552D6BBF</Color>
-      <!-- Occurrence highlight (selecting / clicking an identifier boxes its other occurrences,
-           plus the find-references highlighter). A subtle wash of the app's accent blue + a soft
-           accent border. Cool so it stays true on the near-black editor — the earlier warm gold
-           composited to a muddy brown that clashed with the theme (the exact trap the RowModified
-           note below documents). Reuses the design-language accent rather than a bespoke hue, and
-           is kept subtle so it never out-shouts syntax highlighting; the border + context set it
-           apart from the solid blue text selection. ARGB alpha-first. -->
-      <Color x:Key="OccurrenceHighlightColor">#382D6BBF</Color>
-      <Color x:Key="OccurrenceHighlightBorderColor">#802D6BBF</Color>
+      <!-- Global-Search preview match highlight — boxes every hit of the search term in the read-only
+           DDL preview (SearchMatchHighlighter). A subtle wash of the app's accent blue. Cool so it stays
+           true on the near-black editor; kept subtle so it never out-shouts syntax highlighting. ARGB
+           alpha-first. -->
+      <Color x:Key="SearchMatchColor">#382D6BBF</Color>
+      <!-- Stage 8 / M1 — Related Elements Highlighting (matching brackets, BEGIN/END, occurrences),
+           one high-contrast, theme-tuned style: a translucent fill + a strong border so the partner
+           element is immediately noticeable. Light: a burnt-orange that reads on the near-white editor. -->
+      <Color x:Key="RelatedElementHighlightColor">#3DC85A00</Color>
+      <Color x:Key="RelatedElementHighlightBorderColor">#E6C85A00</Color>
+      <SolidColorBrush x:Key="RelatedElementHighlightBrush" Color="{StaticResource RelatedElementHighlightColor}" />
+      <SolidColorBrush x:Key="RelatedElementHighlightBorderBrush" Color="{StaticResource RelatedElementHighlightBorderColor}" />
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
@@ -96,8 +99,7 @@
       <SolidColorBrush x:Key="TxBand0" Color="#00000000" />
       <SolidColorBrush x:Key="TxBand1" Color="#20808CA8" />
       <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
-      <SolidColorBrush x:Key="OccurrenceHighlightBrush" Color="{StaticResource OccurrenceHighlightColor}" />
-      <SolidColorBrush x:Key="OccurrenceHighlightBorderBrush" Color="{StaticResource OccurrenceHighlightBorderColor}" />
+      <SolidColorBrush x:Key="SearchMatchBrush" Color="{StaticResource SearchMatchColor}" />
       <SolidColorBrush x:Key="RowModifiedBrush" Color="{StaticResource RowModifiedColor}" />
       <SolidColorBrush x:Key="RowAddedBrush" Color="{StaticResource RowAddedColor}" />
       <SolidColorBrush x:Key="RowDroppedBrush" Color="{StaticResource RowDroppedColor}" />
@@ -222,12 +224,17 @@
       <Color x:Key="RowAlternateColor">#0D000000</Color>
       <!-- Drag-and-drop drop-target overlay: ~33% of the light accent blue. ARGB hex. -->
       <Color x:Key="DropTargetColor">#552D6BBF</Color>
-      <!-- Occurrence highlight — see the Dark note. A subtle wash of the accent blue over the
-           near-white editor with a soft accent border; slightly lower fill alpha than Dark so it
-           stays gentle on the light surface. Distinct enough from the pale-blue text selection
-           (SelectionColor) via the border + context. ARGB alpha-first. -->
-      <Color x:Key="OccurrenceHighlightColor">#2E2D6BBF</Color>
-      <Color x:Key="OccurrenceHighlightBorderColor">#802D6BBF</Color>
+      <!-- Global-Search preview match highlight — see the Dark note. A subtle wash of the accent blue
+           over the near-white editor; slightly lower fill alpha than Dark so it stays gentle on the
+           light surface. ARGB alpha-first. -->
+      <Color x:Key="SearchMatchColor">#2E2D6BBF</Color>
+      <!-- Stage 8 / M1 — Related Elements Highlighting (matching brackets, BEGIN/END, occurrences),
+           one high-contrast, theme-tuned style: a translucent fill + a strong border so the partner
+           element is immediately noticeable. Dark: a bright amber that pops on the dark editor. -->
+      <Color x:Key="RelatedElementHighlightColor">#40E0A030</Color>
+      <Color x:Key="RelatedElementHighlightBorderColor">#E6E0A030</Color>
+      <SolidColorBrush x:Key="RelatedElementHighlightBrush" Color="{StaticResource RelatedElementHighlightColor}" />
+      <SolidColorBrush x:Key="RelatedElementHighlightBorderBrush" Color="{StaticResource RelatedElementHighlightBorderColor}" />
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
@@ -281,8 +288,7 @@
       <SolidColorBrush x:Key="TxBand0" Color="#00000000" />
       <SolidColorBrush x:Key="TxBand1" Color="#20808CA8" />
       <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
-      <SolidColorBrush x:Key="OccurrenceHighlightBrush" Color="{StaticResource OccurrenceHighlightColor}" />
-      <SolidColorBrush x:Key="OccurrenceHighlightBorderBrush" Color="{StaticResource OccurrenceHighlightBorderColor}" />
+      <SolidColorBrush x:Key="SearchMatchBrush" Color="{StaticResource SearchMatchColor}" />
       <SolidColorBrush x:Key="RowModifiedBrush" Color="{StaticResource RowModifiedColor}" />
       <SolidColorBrush x:Key="RowAddedBrush" Color="{StaticResource RowAddedColor}" />
       <SolidColorBrush x:Key="RowDroppedBrush" Color="{StaticResource RowDroppedColor}" />

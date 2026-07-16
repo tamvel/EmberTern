@@ -9,9 +9,9 @@ namespace EmberTern.App.Completion;
 
 /// <summary>
 /// Boxes every occurrence of a fixed search term in a read-only AvaloniaEdit preview
-/// (Global Search results). Cloned from <see cref="OccurrenceHighlighter"/> but driven
-/// by an explicit term (case-insensitive substring, no identifier-boundary requirement)
-/// rather than the editor selection. Theme brushes → follows light/dark.
+/// (Global Search results). Driven by an explicit term (case-insensitive substring, no
+/// identifier-boundary requirement) rather than the editor selection. Theme brushes → follows
+/// light/dark.
 /// </summary>
 internal sealed class SearchMatchHighlighter : IBackgroundRenderer
 {
@@ -46,7 +46,7 @@ internal sealed class SearchMatchHighlighter : IBackgroundRenderer
         int viewStart = textView.VisualLines[0].FirstDocumentLine.Offset;
         int viewEnd = textView.VisualLines[^1].LastDocumentLine.EndOffset;
 
-        var fill = ResolveBrush("OccurrenceHighlightBrush");
+        var fill = ResolveBrush("SearchMatchBrush");
         var outline = ResolveBrush("AccentBrush");
         var pen = outline is null ? null : new Pen(outline, 1);
         if (fill is null && pen is null) return;
