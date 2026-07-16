@@ -321,12 +321,20 @@ PACKAGE|DOMAIN|EXCEPTION|GENERATOR|INDEX|TABLE`, and PSQL bodies (`BEGIN/END`, `
   INSERT … SELECT, UPDATE, EXECUTE PROCEDURE, CREATE PROCEDURE/FUNCTION parameter lists, and
   every place the user works with parameters.
 
-### 5.11 Snippet Engine — `Core.Sql.Language.SnippetEngine` (Etap 5)
+### 5.11 Snippet Engine — `Core.Sql.Language.SnippetEngine` (Etap 5; session hardened in Stage 8 / M2)
 - Smart completion / live templates with tab-stops. **Reuses the existing `SqlSnippet` /
   `SqlSnippetBuilder` / `SqlTemplateRegistry`** (already track placeholder offsets). Templates
   for `if`→`if (·) then … end`, `declare`→`declare variable ·`, `execute`→EXECUTE BLOCK
   skeleton, `for select`, `create procedure/function/trigger/exception/domain/index`, etc.
   Tab-stop navigation in AvaloniaEdit via an overlay. Snippet expansion obeys §0.
+- **Stage 8 / M2** attempted a VS/Rider-style interactive snippet session on top of this engine
+  (mirrored placeholders, final caret, indentation-aware expansion) but was **reverted** — the wrong UX
+  for experienced developers. The code-writing experience was redesigned into **Language Completion**
+  (construct completion by natural prefix, Tab + shown hint — a separate subsystem in
+  `Core.Sql.Language.Constructs`, not the snippet engine) + **Typing Ergonomics** (`begin…end` pairing,
+  auto-indent). See **[editor-language-expansion.md](editor-language-expansion.md)**. This keyword
+  live-template `SnippetEngine` remains as-is for now (Etap-5 baseline) and will be retired when Language
+  Completion replaces its role in the list. History: `docs/history/16-stage8-smart-editing.md`.
 
 ### 5.12 Quick Info Engine — `Core.Sql.Language.QuickInfoEngine` (Etaps 4–6, §8A)
 - Given AST + Semantic Model + caret (or a completion-list item), returns a structured

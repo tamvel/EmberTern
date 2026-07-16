@@ -22,6 +22,7 @@ verbatim, in the archive below.
 | **`docs/design/editor-architecture.md`** | The SQL/PSQL editor's current architecture: components, public API, binding decisions, roadmap. Kept current — extend it, don't let it re-accumulate history. | Only when working on the editor. |
 | **`docs/design/editor-ast-deepening.md`** | **Active implementation guide** for **Etap 6.9 — Structural AST Deepening** (the next foundational work: node inventory, migration contract, milestones B0–B5, debugger considerations, formatter convergence, progress matrix). | When working on the parser/AST/binder deepening. |
 | **`docs/design/editor-stage7-diagnostics.md`** | **Active design/vision** for **Stage 7 (Diagnostics)** — engine, model, categories, pipeline, squiggles/panel/nav, milestones, post-Stage-7 Quick Fixes. Consumes Etap 6.9. | When working on Stage 7. |
+| **`docs/design/editor-language-expansion.md`** | **FROZEN design** for the code-writing experience that replaced Stage 8 M2: **Language Completion** (construct completion by natural prefix, Tab + shown hint, grammar-armed, synchronous) + **Typing Ergonomics** (`begin…end` pairing, auto-indent; Enter stays normal), separate from IntelliSense. | When working on `Core.Sql.Language.Constructs` or the completion/ergonomics wiring. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (~190 entries, #1–#202), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -688,6 +689,52 @@ noted.
   diff guard made the miss permanent. Fixed: repaint with `TextView.Redraw()` (as `SemanticHighlighter`
   does) + skip the guard only on empty→empty so a missed paint self-heals. Build 0/0, **4187 main + 24
   probe green** (+28 `RelatedElementMatchingTests`, +1 headless renderer pin), smoke clean.
+  **M1 finalization (post visual-confirmation) — DONE + CLOSED:** the dormant rollback path was removed —
+  `OccurrenceHighlighter.cs` deleted, obsolete `OccurrenceHighlightBorder*` tokens dropped, and the one
+  live consumer of the old fill token (`SearchMatchHighlighter`, Global-Search preview) migrated onto a
+  correctly-named `SearchMatch*` token so no "Occurrence" name survives as drift. Committed `5e51989`.
+  **M2 — Smart Snippets — BUILT then REVERTED (2026-07-16); SUPERSEDED.** A VS/Rider-style interactive
+  snippet session was implemented (mirrored placeholders, final caret, indentation-aware expansion) but the
+  user tried it and rejected the whole direction — *"now I delete half of this."* Full-block skeletons +
+  placeholder sessions are the wrong UX for experienced Firebird devs. The code-writing experience was
+  **redesigned from first principles** (uncommitted M2 reverted) into two independent subsystems — see the
+  next bullet. `CompletionMatcher` (prefix-first) was kept. History + rationale:
+  `docs/history/16-stage8-smart-editing.md`.
+- **Language Completion & Typing Ergonomics — DESIGN FROZEN + Core foundation started (2026-07-16).** The
+  redesign of the code-writing experience, goal = **fewest keystrokes, immediate & predictable, never
+  generate code the user deletes (Rule 0)**. Frozen design:
+  **[docs/design/editor-language-expansion.md](docs/design/editor-language-expansion.md)**. Three
+  independent tools, chosen by grammar: **IntelliSense** (names, prefix-first, idle-debounced — Tool C =
+  `CompletionMatcher`); **Language Completion** (finishes daily Firebird *constructs* the developer already
+  started typing — `if`→`if (▌) then`, `gro`→`group by ` — via **Tab + a shown OverlayLayer hint**, matched
+  by **natural prefix** (no invented abbreviations), **silent-until-unique** within a curated catalog,
+  **synchronous / never timing-dependent**); **Typing Ergonomics** (`begin…end` as a structural delimiter
+  pair, `()`/`''`/`[]` pairing, AST-aware auto-indent — **Enter stays a normal editing key everywhere**).
+  Key principle: *anything special Tab does is always shown on screen first — no EmberTern-specific
+  behaviour to memorise.* **DONE:** `CompletionMatcher` (+8 tests) and the **Language Completion Core
+  foundation** — `Core.Sql.Language.Constructs` (`LanguageConstruct`/`LanguageConstructCatalog`/
+  `LanguageConstructResolver`): the declarative catalog + a pure synchronous prefix resolver (multi-word
+  aware, unique-within-catalog), +19 tests. Build 0/0, **4214 main + 24 probe green**. **NEXT** (staged,
+  Core-before-App): grammar-aware arming (valid construct-starts at caret) → App hint controller + Tab →
+  Typing Ergonomics. **M3 Snippet Engine / M4 Structural Selection remain future.**
+- **Completion Matching Philosophy — prefix-first IntelliSense — IN PROGRESS (foundation done 2026-07-16).**
+  A separate **Completion** milestone (not Stage 8), inserted at the user's request: interactive completion
+  must be a **prediction engine, not a search engine**. Root cause of today's noise (`sta`→`NR_STATUS`/
+  `DATASTATUS`, `if`→`IIF`/`NULLIF`): the Core engine returns the FULL in-scope set unfiltered, and all
+  live narrowing is AvaloniaEdit's `CompletionList.GetMatchQuality` (private, no hook) which admits
+  **substring** matches. Agreed behaviour: no prefix→all (Ctrl+Space); prefix with ≥1 StartsWith→**only**
+  StartsWith; zero StartsWith→**close** (never Contains); consistent across every kind incl. keywords +
+  snippets. **Architecture (user directive):** `CompletionEngine` is the single authority returning the
+  FINAL list; a pure Core **`CompletionMatcher`** owns all filtering/ranking; the **UI is a passive view**;
+  AvaloniaEdit's substring filter is **disabled**. **DONE:** `CompletionMatcher` (Core, pure,
+  `Filter(items, prefix)` — StartsWith-only, exact floated to top, empty→all, zero-match→empty) +
+  `CompletionMatcherTests` (8). Build 0/0, suite green. **It is currently UNUSED** (foundation-first). The
+  **remaining step is entangled and must land atomically** (fold snippets into the engine + add a `prefix`
+  param + rewrite the App as a passive view: `IsFiltering=false`, re-query per keystroke, close on empty,
+  remap the new `Snippet` item kind) and needs **interactive visual QA** of AvaloniaEdit's `IsFiltering=false`
+  rendering/ordering — so it was deliberately deferred to a fresh focused session per the user's
+  "stop at a clean boundary" guidance. **The exact remaining steps are written up in
+  `docs/history/17-completion-matching-philosophy.md` — a fresh session should execute that.**
 - **⚠ MILESTONE-ORDER DECISION (2026-07-16) — the Stage 7 retrospective's "consolidate the editor wiring
   first" recommendation was REVERSED, with reason.** It rested on "both backlog items add per-editor
   surfaces — exactly what the duplication punishes"; that is true of **Quick Fixes** (a light bulb = a new
