@@ -311,6 +311,41 @@ and View host two; Package hosts two (header · body). The panel shows **one** o
 - Focusing the target editor makes it the last-focused SQL document — which is consistent (you navigated
   there), but means a jump **can** retarget the panel. Intended; just don't let it fight the sticky rule.
 
+#### 8.3.1 S5 — start here (handoff, 2026-07-16)
+
+S5 is the **only** milestone left in Stage 7. Scope: next/previous diagnostic (keyboard + panel) and
+jump-to-span. Nothing else — no Quick Fixes, no Unified Hover (§15), no code actions, no light bulb.
+
+**It is a pure consumer.** It must not parse, touch the AST, rebuild the `SemanticModel`, or recompute
+diagnostics — it navigates from the cached `Diagnostic` alone. That is already possible with no new
+plumbing: `DiagnosticRowViewModel` deliberately keeps the whole source record (`Diagnostic`), so a row
+carries its own `Start`/`Length`.
+
+**First code change — expose the active document; do not invent a second targeting mechanism.**
+`DiagnosticsPanelHost` already computes the one true target (`ActiveDocument` = the
+`LastFocusedSqlDocument` rule, §8.2.1) but keeps it **private**. Navigation must jump into *that* editor,
+or the row and the jump can disagree. Exposing it is the natural first step; everything else builds on it.
+
+**Suggested order:** the SQL Editor first — it has a single editor, always visible, so it proves the jump
+(caret + `ScrollTo` + focus) with none of the tab complications. Then the object editors, which add the
+two-target problem above (caret in the active document **and** switch the detail tab back to Editor —
+`EditorSubTabIndex = 0` on every detail VM; a cursor/subprogram target may also need its Easy-mode
+*sub*-tab selected).
+
+**Watch out for gotcha #219** if S5 adds any per-editor input handling: the main SQL Editor does **not**
+go through `SqlEditorBehavior.Attach` — it hand-wires its own capabilities in `MainWindow`. A handler
+added to only one of those two places silently misses a surface (exactly how S3 shipped with no squiggles
+in the SQL Editor).
+
+**Open UX decisions** (worth settling before coding — none are architectural):
+- the keyboard gesture for next/previous (e.g. F8 / Shift+F8), and whether it is editor-only or also
+  active while the panel has focus;
+- whether next/previous **wraps** at the last/first diagnostic;
+- how a panel row is activated — double-click, Enter, or single-click;
+- whether activating a row moves focus to the editor (probably yes) and whether the panel keeps its
+  selection afterwards. Note the S4 `Update` no-op guard exists partly to protect that selection across
+  debounce ticks (§8.2).
+
 ---
 
 ## 9. Incremental refresh & cancellation

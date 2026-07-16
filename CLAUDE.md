@@ -602,7 +602,9 @@ noted.
   `EmberTern.App.Diagnostics` namespace inside `MainWindowViewModel`; it lives on `SourceObjectDetailTabViewModel`
   (covering Procedure/Function/Trigger at once), `ViewDetailTabViewModel` and `PackageDetailTabViewModel`,
   mirroring `Performance`. Build 0/0, **4136 main + 23 probe green** (+14 `DiagnosticsPanelVmTests`), smoke
-  clean. **S4 awaits the user's manual visual verification before commit; then S5 (navigation) closes Stage 7.**
+  clean. **S4 is user-confirmed + committed (1d078c6).** **NEXT: S5 (navigation) — the ONLY milestone left in
+  Stage 7; start at `docs/design/editor-stage7-diagnostics.md` §8.3 + §8.3.1 ("S5 — start here": scope, the
+  pure-consumer rule, the first code change, suggested order, open UX decisions).**
 - **POST-Stage-7 backlog — "Unified Hover Information" (recorded 2026-07-16; do NOT implement during
   Stage 7).** ONE hover surface instead of independent Quick Info / diagnostics tooltips: plain hover (no
   Ctrl) shows the diagnostic on a squiggled span, today's Quick Info on a symbol, and both as *sections* of
