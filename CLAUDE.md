@@ -22,7 +22,7 @@ verbatim, in the archive below.
 | **`docs/design/editor-architecture.md`** | The SQL/PSQL editor's current architecture: components, public API, binding decisions, roadmap. Kept current — extend it, don't let it re-accumulate history. | Only when working on the editor. |
 | **`docs/design/editor-ast-deepening.md`** | **Active implementation guide** for **Etap 6.9 — Structural AST Deepening** (the next foundational work: node inventory, migration contract, milestones B0–B5, debugger considerations, formatter convergence, progress matrix). | When working on the parser/AST/binder deepening. |
 | **`docs/design/editor-stage7-diagnostics.md`** | **Active design/vision** for **Stage 7 (Diagnostics)** — engine, model, categories, pipeline, squiggles/panel/nav, milestones, post-Stage-7 Quick Fixes. Consumes Etap 6.9. | When working on Stage 7. |
-| **`docs/design/editor-language-expansion.md`** | **FROZEN design** for the code-writing experience that replaced Stage 8 M2: **Language Completion** (construct completion by natural prefix, Tab + shown hint, grammar-armed, synchronous — **shipped + user-approved**) + **Typing Ergonomics** (`begin…end` pairing, auto-indent; Enter stays normal — **next milestone**), separate from IntelliSense. §5 documents the as-built arming gate; §9.1 the **one-responsibility-one-owner** rule (vocabulary *and* grammatical position). | When working on `Core.Sql.Language.Constructs`, `Core.Sql.Language.Ergonomics`, or the completion/ergonomics wiring. |
+| **`docs/design/editor-language-expansion.md`** | **FULLY DELIVERED design** for the code-writing experience that replaced Stage 8 M2 — both halves shipped + user-approved: **Language Completion** (construct completion by natural prefix, Tab + shown hint, grammar-armed, synchronous) + **Typing Ergonomics** (`begin…end` pairing on Enter, `()`/`[]`/`''` pairing, structural auto-indent; Enter stays normal), separate from IntelliSense. §3 documents the as-built ergonomics (incl. what is deliberately NOT done: paren alignment, `IndentLines`); §5 the arming gate; §9.1 the **one-responsibility-one-owner** rule (vocabulary *and* grammatical position). | When working on `Core.Sql.Language.Constructs`, `Core.Sql.Language.Ergonomics`, or the completion/ergonomics wiring. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (~190 entries, #1–#202), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -746,14 +746,32 @@ noted.
   `Core/Sql/Templates/*` + `SqlSnippetDropTarget` — a different, shipped feature that only shares the word.
   Coverage guarantee: `EveryConstruct_ArmsWhereItMayBegin` (16 constructs × 33 positions) — exclusive
   ownership makes an under-armed position a **dead zone**, so a catalog row arming nowhere fails the build.
-  Build 0/0, **4293 green**, smoke clean. **Conscious open items (user decisions — revisit only on real
-  usage):** `OVER (ORDER BY` doesn't arm; single-letter clause arms collide with aliases (`from ORDERS o` →
-  `⇥ order by `); uniqueness is catalog-wide before gating (`wh` stays silent after FROM); **CASE stays an
-  IntelliSense keyword** — the catalog is intentionally small, grown from real usage, not completeness.
-  **NEXT: Typing Ergonomics** (`begin…end` pairing + AST-aware auto-indent) — it should *consume*
-  `KeywordPairCatalog`, not redeclare it; until it lands `begin` is deliberately **ownerless** (no hint, no
-  pairing, not in IntelliSense — the milestone boundary showing through, not a regression). **M4 Structural
-  Selection remains future; M3 Snippet Engine would now start from scratch** (that engine is deleted).
+  **Conscious open items (user decisions — revisit only on real usage):** `OVER (ORDER BY` doesn't arm;
+  single-letter clause arms collide with aliases (`from ORDERS o` → `⇥ order by `); uniqueness is
+  catalog-wide before gating (`wh` stays silent after FROM); **CASE stays an IntelliSense keyword** — the
+  catalog is intentionally small, grown from real usage, not completeness.
+- **Typing Ergonomics — DONE + user-approved (2026-07-16). THE LANGUAGE-EXPANSION DESIGN IS FULLY
+  DELIVERED.** `begin` has its owner. (1) **`begin … end` pairing** (`KeywordPairing`) — trigger settled as
+  **Enter** (pairing on the word's completion was rejected: it fires while typing `begin_date = …`, a Rule 0
+  violation). Enter keeps its meaning — the caret lands where plain Enter+indent would, and the closer
+  appears on the line *below*. Pairs only when an `end` is genuinely **missing** (CASE-aware, else Enter
+  after an existing `begin` bolts on a second `end`) and only at a statement position (`ConstructContext`).
+  (2) **Delimiter pairing** (`DelimiterPairing`) — `()`/`[]`/`''`, type-through (checked BEFORE pairing, as
+  `'` is self-closing), smart backspace, suppressed inside literals/comments and before a word; literal
+  openness by **quote parity** (`'it''` is open despite ending in a quote); line-comment span boundary =
+  gotcha #229. (3) **Structural auto-indent** (`AutoIndent` + `SqlIndentationStrategy`) via AvaloniaEdit's
+  own `IIndentationStrategy` seam — one level per unclosed block, +1 after `then`/`do`/`else`, `end` backs
+  out. **ONE FORMATTING LANGUAGE (user directive):** the indent is `SqlFormatter.PsqlIndentUnit` — now
+  **published by the formatter** because the editor's tab settings were a wrong guess — and a block's indent
+  is **structural**, not the opener's typed column (the formatter puts a block under `then` at the `if`'s
+  level, a single-statement body one deeper). Pinned by tests running the real formatter over generated
+  blocks (`Format(x) == x`). **Deliberately simpler than the formatter:** parens are OUT of auto-indent (it
+  aligns to columns, unknowable line-at-a-time) and `IndentLines` is **inherited untouched** from
+  `DefaultIndentationStrategy` — re-indent-selection is a lightweight command, not a second formatter (both
+  user decisions). CASE-aware block depth lives once in `BlockStructure`, shared by pairing + auto-indent.
+  `'` pairing kept pending real usage (one-line removal if it annoys). Build 0/0, **4347 green**, smoke
+  clean. **M4 Structural Selection remains future; M3 Snippet Engine would now start from scratch** (that
+  engine is deleted).
 - **Completion Matching Philosophy — prefix-first IntelliSense — IN PROGRESS (foundation done 2026-07-16).**
   A separate **Completion** milestone (not Stage 8), inserted at the user's request: interactive completion
   must be a **prediction engine, not a search engine**. Root cause of today's noise (`sta`→`NR_STATUS`/

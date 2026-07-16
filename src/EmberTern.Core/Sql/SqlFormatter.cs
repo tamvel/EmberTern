@@ -55,6 +55,15 @@ public static class SqlFormatter
     private const int MaxLineWidth = 120;             // long-line wrap threshold (SELECT cols / IN list)
     private const int PsqlIndentSize = 2;             // spaces per PSQL nesting level
 
+    /// <summary>
+    /// One PSQL nesting level, exactly as this formatter emits it. Public so the editor's <b>Typing
+    /// Ergonomics</b> generates a <c>begin … end</c> block at the same indent the formatter would have
+    /// produced — otherwise the first Alt+F would rewrite a block the editor had just created, and the
+    /// two would be speaking different formatting languages. This is the formatter's style decision, so
+    /// it is published from here rather than duplicated (or guessed from the editor's tab settings).
+    /// </summary>
+    public static string PsqlIndentUnit { get; } = new string(' ', PsqlIndentSize);
+
     /// <summary>Formats a SQL/PSQL script with the default style.</summary>
     public static string Format(string? sql)
     {

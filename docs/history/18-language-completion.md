@@ -209,17 +209,61 @@ IntelliSense keyword** — *"I'd rather grow the catalog based on real usage tha
   theoretical completeness."* Growing it is one declarative row (and ownership then follows automatically);
   do it in response to real "I type this daily" gaps.
 
-## What remains in Stage 8
+## Typing Ergonomics — as-built (2026-07-16, user-approved)
 
-- **Typing Ergonomics** (the next milestone): `begin…end` as a structural delimiter pair, `()`/`''`/`[]`
-  pairing with type-through, and AST-aware auto-indent on Enter (Enter stays a normal editing key). Design
-  §3 of the frozen doc. This is where `begin` gets handled — it is NOT a Language-Completion construct.
-  **It already has a foothold:** `Core/Sql/Language/Ergonomics/KeywordPairCatalog` declares `begin`/`end`
-  (data only, no behaviour) so ownership holds today; the milestone should consume that catalog, not
-  redeclare the pair. Until it lands, `begin` is deliberately **ownerless** in the UI — no hint, no pairing,
-  and not offered by IntelliSense. The user confirmed this is the milestone boundary showing through, not a
-  regression: *"this is simply the next milestone waiting to be implemented, not a reason to move `begin`
-  back into IntelliSense."*
+Built in the agreed order (pairing → delimiters → auto-indent), Core-first with tests before each App
+wiring. `begin` is no longer ownerless: it consumes `KeywordPairCatalog` exactly as intended.
+
+**1. `begin … end` pairing** (`KeywordPairing`). Trigger settled as **Enter** — see design §3.1 for the
+Rule 0 reasoning and why this does not give Enter a language meaning. Pairs only when an `end` is genuinely
+missing (CASE-aware), grammar-gated via `ConstructContext`, closer cased from the opener via `CaseMatcher`.
+
+**2. Delimiter pairing** (`DelimiterPairing`): `()`, `[]`, `''` with type-through and smart backspace,
+suppressed inside literals/comments and before a word. Design §3.3 records the two traps (line-comment
+boundary — gotcha #229; quote parity).
+
+**3. Structural auto-indent** (`AutoIndent` + `SqlIndentationStrategy`), through AvaloniaEdit's own
+`IIndentationStrategy` seam so Enter keeps its normal behaviour. Parens out of scope, `IndentLines`
+inherited untouched — both user decisions, reasoning in design §3.2.
+
+### The formatting-language decision (the milestone's most consequential change)
+
+The user asked that a paired block "exactly match the formatter's preferred style, so the generated block
+already looks like code the formatter would produce… Typing Ergonomics, Formatter and Language Completion
+all speak the same formatting language." Probing the formatter (rather than assuming) found **two real bugs
+in the already-passing step 1**:
+
+1. The indent came from the **editor's** `ConvertTabsToSpaces`/`IndentationSize`. The formatter is fixed at
+   2 spaces, always spaces — so on an editor set to tabs or 4 spaces, every generated block would have been
+   rewritten by the first Alt+F. Fixed by publishing `SqlFormatter.PsqlIndentUnit`: the indent is now a
+   **Core** decision read from the formatter, exactly as casing is.
+2. The closer aligned to the opener's **typed** column. But the formatter puts a block under `then` at the
+   `if`'s level while a single-statement body goes one deeper — so once auto-indent lands the caret at the
+   body indent, a `begin` typed there would produce a block one level too deep. Fixed by deriving the
+   block's indent **structurally** (one level per enclosing unclosed block). The indent no longer depends
+   on where the opener was typed; when the opener starts its line, the pairing re-renders that line at the
+   structural indent.
+
+"One formatting language" is now a **test, not a promise**: five cases generate a block, type a statement
+into its body, and assert `SqlFormatter.Format(x) == x`. If either side's convention moves, that fails.
+
+### Architecture note
+
+Pairing and auto-indent ask the same question ("how deep is this?"), so the CASE-aware counting lives once
+in `BlockStructure` and both consume it — two counters that can disagree about `case … end` is precisely how
+gotcha #117 keeps recurring. Extracting it also made `KeywordPairing.LineIndentAt` dead (the indent became
+structural), so it was deleted rather than left behind.
+
+### Known limitations (deliberate)
+
+- **Paren continuations get the previous line's indent**, not the formatter's column alignment (§3.2).
+- **`OVER (ORDER BY`-style formatter parity is not attempted** anywhere in typing; Alt+F is the answer.
+- **`'` pairing kept pending real usage** — removable in one line if it annoys.
+- A `begin` typed into *already-broken* (unbalanced) code, with statements after it, will place its `end`
+  immediately below rather than after those statements. The balance rule cannot distinguish "just typed"
+  from "caret happens to be here"; Ctrl+Z covers it.
+
+## What remains in Stage 8
 - **Deferred, separate track:** wiring the prefix-first `CompletionMatcher` (Tool C) into the completion
   engine/App as a passive view (the "Completion Matching Philosophy" work — `17-completion-matching-philosophy.md`).
   Note: the QA sprint deliberately did **not** use `CompletionMatcher` to fix the empty-popup bug (#227),
@@ -234,7 +278,12 @@ IntelliSense keyword** — *"I'd rather grow the catalog based on real usage tha
 
 ## Next session should start with
 
-**Typing Ergonomics**, from this committed baseline. Language Completion is **user-approved and complete** —
-*"So for now I'd consider Language Completion complete."* The open items above (`OVER (ORDER BY`, the
-single-letter alias collisions, grammar-first uniqueness) are conscious decisions to revisit only if real
-usage complains, not unfinished work.
+**A new milestone — this design doc is fully delivered.** Both Language Completion and Typing Ergonomics are
+implemented, QA'd and user-approved; every open item recorded here is a conscious decision to revisit only
+if real usage complains, not unfinished work.
+
+Unbuilt and needing no new foundation (both consume the Etap 6.9 AST): **Folding** and **Breadcrumbs**.
+Also outstanding: the **editor-wiring consolidation** (gotcha #219 — recommended immediately BEFORE Quick
+Fixes, per `editor-stage7-diagnostics.md` §15.4), **Quick Fixes**, the **Completion Matching Philosophy**
+wiring (`17-completion-matching-philosophy.md`), and **P2c**. Nothing is scheduled — next steps are the
+user's call.

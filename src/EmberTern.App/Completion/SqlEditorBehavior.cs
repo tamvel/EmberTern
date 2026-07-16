@@ -96,6 +96,11 @@ internal static class SqlEditorBehavior
         // seams (gotcha #219).
         LanguageExpansionController.Attach(editor, completion);
 
+        // Typing Ergonomics: the mechanical editing aids — `begin … end` pairing, delimiter pairing,
+        // auto-indent. A separate responsibility from Language Completion (which finishes constructs), and
+        // a thin consumer of the pure Core rules. Attach in BOTH seams (gotcha #219).
+        TypingErgonomicsController.Attach(editor);
+
         // Find (Ctrl+F) / Replace (Ctrl+H) + right-click menu — one shared installer.
         EditorSearch.Install(editor);
 

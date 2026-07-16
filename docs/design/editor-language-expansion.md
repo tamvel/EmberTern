@@ -1,13 +1,18 @@
 # EmberTern — Language Completion & Typing Ergonomics (design)
 
-**Status:** design **complete and agreed** (2026-07-16); **Language Completion is DONE — implemented,
-QA'd against the running app, and user-approved.** Replaces the Stage 8 **M2 Smart Snippets** direction
-(reverted). Shipped: the Core foundation (catalog + resolver), grammar-aware arming, the App layer
-(Tab-expand + passive hint), and a QA sprint that closed the separation of responsibilities — IntelliSense
-no longer competes with Language Completion for a keystroke, by **vocabulary** *and* by **grammatical
-position** (§5/§9), and the Etap-5 keyword live templates are removed (§11). **Next: Typing Ergonomics**
-(§3 — `begin…end` pairing + auto-indent); the `begin` opener-trigger detail is settled there. No open
-design decisions remain (§13). As-built record + the QA sprint's findings:
+**Status: BOTH SUBSYSTEMS DONE — implemented, QA'd against the running app, and user-approved
+(2026-07-16).** Replaces the Stage 8 **M2 Smart Snippets** direction (reverted).
+- **Language Completion** — Core foundation (catalog + resolver), grammar-aware arming, the App layer
+  (Tab-expand + passive hint), and a QA sprint that closed the separation of responsibilities:
+  IntelliSense no longer competes for a keystroke, by **vocabulary** *and* **grammatical position**
+  (§5/§9.1), and the Etap-5 keyword live templates are removed (§11).
+- **Typing Ergonomics** — `begin … end` pairing (§3.1; trigger settled: **Enter**), `()`/`[]`/`''`
+  pairing with type-through and smart backspace (§3.3), structural auto-indent (§3.2; parens
+  deliberately out of scope). Indentation is taken from `SqlFormatter.PsqlIndentUnit`, so Typing
+  Ergonomics, the Formatter and Language Completion speak **one formatting language** — pinned by tests
+  that run the real formatter over generated blocks.
+
+No open design decisions remain (§13). As-built record + the QA findings:
 [../history/18-language-completion.md](../history/18-language-completion.md).
 
 **Relationship to other docs:** consumes the language front-end (`docs/design/editor-architecture.md`)
@@ -184,16 +189,58 @@ Backspace on the freshly-opened empty pair removes it (pair semantics). This is 
 auto-inserting would violate Rule 0). If the developer wants a block there, they type `begin` and the pair
 forms.
 
-(The exact opener trigger — pair the moment `begin` is a complete keyword token vs. on the following
-whitespace — is a small Typing-Ergonomics detail to settle during implementation; both are deterministic
-and timing-free. It is no longer a Language-Completion decision.)
+**Trigger — SETTLED (2026-07-16, `KeywordPairing`): Enter, not the completion of the word.** Pairing the
+moment `begin` becomes a complete keyword token was rejected on **Rule 0** grounds: it fires while typing
+an identifier that merely starts with those letters, and `begin_date = current_date;` is an ordinary PSQL
+statement — the developer would be deleting a generated block. The boundary keystroke is the safe trigger,
+and Enter is the one actually typed after `begin`. (Space was not taken: `begin ` is ambiguous, and turning
+a space into a block would surprise.)
 
-### 3.2 AST-aware auto-indent (part of "normal" Enter)
+This does **not** give Enter a language meaning (§1). Enter still inserts a newline and still auto-indents,
+and **the caret lands exactly where a plain Enter + auto-indent would have put it** — the closer appears on
+the line *below* it. Enter never jumps the caret by grammar; the pair forming is the pair's behaviour, not
+Enter's. It is the multi-line analogue of typing `(` and getting `(▌)`.
 
-New lines inherit the correct structural indent (a level deeper after `begin` / `then` / `do` / `(`, back
-out on `end` / `)`), computed from the token/AST model — better than IBExpert's naive indent. This is
-ordinary modern-editor behaviour, not a special action: Enter still just makes a newline; only its leading
-whitespace is smart. It never moves the caret by grammar.
+Two rules make it safe, both pinned by tests:
+- **It pairs only when an `end` is genuinely missing.** Otherwise Enter after the `begin` of a complete
+  block would bolt on a second `end`. The balance count is **CASE-aware** (gotchas #117/#128/#129) — a
+  `CASE … END` contributes an `END` with no `BEGIN`, so a bare counter reads a genuinely unbalanced body
+  as balanced and refuses to pair.
+- **It is grammar-gated** through `ConstructContext` (§5), so a quoted `"begin"` or the word in an
+  expression never pairs — reusing the ONE definition of "statement position" rather than a second copy.
+
+**The generated block is formatter-style.** Its indent is **structural** — one level per enclosing unclosed
+block, at `SqlFormatter.PsqlIndentUnit` — not "wherever the opener was typed". That matters because the
+formatter puts a block under `then` at the `if`'s level while a single-statement body goes one deeper: with
+auto-indent (§3.2) landing the caret at the body indent, aligning to the typed column would produce a block
+one level too deep and Alt+F would move it. When the opener starts its line, the pairing re-renders that
+line at the structural indent; when it does not (`… as begin`), the opener is left where the developer put
+it — we never reflow surrounding code. Pinned by tests that run the real `SqlFormatter` over the generated
+block and assert it is unchanged.
+
+### 3.2 Structural auto-indent (part of "normal" Enter)
+
+New lines inherit the correct structural indent, computed from the token model — better than IBExpert's
+naive indent. This is ordinary modern-editor behaviour, not a special action: Enter still just makes a
+newline; only its leading whitespace is smart. It never moves the caret by grammar.
+
+**As built (`AutoIndent`, 2026-07-16).** One level per enclosing unclosed block, `+1` after `then` / `do` /
+`else` (the single-statement body the formatter emits), and a line starting with `end` backs out to its
+opener. CASE-aware via the shared `BlockStructure`. The unit is `SqlFormatter.PsqlIndentUnit`, so what
+typing produces is what the formatter produces for the same code.
+
+**Parentheses are deliberately OUT OF SCOPE** — this section originally said "a level deeper after `(`,
+back out on `)`", and that was **dropped by decision (user, 2026-07-16)**. The formatter does not indent a
+paren continuation by a level: it *aligns to the opening paren's column*, which is a function of the whole
+statement's width and cannot be known by a line-at-a-time indenter. Guessing a level would produce
+indentation that fights Alt+F — the one thing this must never do. Inside a paren continuation the previous
+line's indent stands and the formatter does the rest. Auto-indent is intentionally simpler than the
+formatter here, and should stay that way.
+
+**Re-indent-selection (`IndentLines`) is NOT ours** — `SqlIndentationStrategy` overrides only `IndentLine`
+and inherits `DefaultIndentationStrategy.IndentLines` unchanged. Applying the structural rule across a
+selection would flatten the formatter's paren alignment: a lightweight editing command would slowly become
+a second, worse formatter. Formatter-quality indentation is Alt+F's job (user decision).
 
 ### 3.3 Delimiter pairing
 
@@ -201,6 +248,19 @@ One pair family, one set of rules: `()`, `''`, `[]`, and the keyword pair `begin
 opener inserts its closer with the caret between; typing the closing char *types through* the auto-inserted
 one; backspace on an empty pair removes both. Standard, expected, keeps the developer on the line. (The
 `()` in `if (▌) then` comes from the catalog expansion, not from this — but the two are consistent.)
+
+**As built (`DelimiterPairing`, 2026-07-16).** Type-through is checked **before** pairing, because `'` is
+self-closing — its opener and closer are the same keystroke. Pairing is suppressed inside a string literal
+or comment (a `(` in a message is just text), and before a word (typing `(` at `|abc` means "wrap this", not
+"open an empty pair"). Two details that are easy to get wrong and are pinned by tests: a **line comment's
+span ends before the newline**, so a caret at its `End` is still inside the comment (gotcha #229); and
+whether a literal is still open is decided by **quote parity**, not by its last character — `'it''` is three
+quotes and still open even though it ends in one. Firebird's `"` quoted identifiers are deliberately not
+paired: they are typed around an existing name far more often than opened empty.
+
+`'` pairing is **kept pending real usage** (user decision) — quotes are where auto-pairing most often
+annoys, and Firebird's `''` escape makes it worse. Removing it later is one line
+(`DelimiterPairing.All`) and affects nothing else; adding it back after shipping would be harder.
 
 ---
 

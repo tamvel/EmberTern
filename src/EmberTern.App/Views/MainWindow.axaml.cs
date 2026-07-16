@@ -192,6 +192,10 @@ public partial class MainWindow : Window
             // with a passive OverlayLayer hint. Thin, stateless consumer of the Core resolver. Attached here
             // too (gotcha #219): the main editor does NOT go through SqlEditorBehavior.Attach.
             Completion.LanguageExpansionController.Attach(_editor, _completion);
+            // Typing Ergonomics: `begin … end` pairing, delimiter pairing, auto-indent — the mechanical
+            // editing aids. Attached here too (gotcha #219): the main editor does NOT go through
+            // SqlEditorBehavior.Attach.
+            Completion.TypingErgonomicsController.Attach(_editor);
             Completion.EditorSearch.Install(_editor);
         }
         // S5: the panel's activation gestures (double-click / Enter / F8) target the active SQL document.
