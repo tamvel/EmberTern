@@ -188,6 +188,10 @@ public partial class MainWindow : Window
             // ModelUpdated cycle. Attached here too (gotcha #219): the main editor does NOT go through
             // SqlEditorBehavior.Attach. Replaced the former occurrence + reference highlighters.
             Completion.RelatedElementsRenderer.Attach(_editor, _completion);
+            // Language Completion: Tab-completes a daily Firebird construct the developer started typing,
+            // with a passive OverlayLayer hint. Thin, stateless consumer of the Core resolver. Attached here
+            // too (gotcha #219): the main editor does NOT go through SqlEditorBehavior.Attach.
+            Completion.LanguageExpansionController.Attach(_editor, _completion);
             Completion.EditorSearch.Install(_editor);
         }
         // S5: the panel's activation gestures (double-click / Enter / F8) target the active SQL document.

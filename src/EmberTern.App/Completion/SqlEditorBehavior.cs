@@ -90,6 +90,12 @@ internal static class SqlEditorBehavior
         // model (one background parse per editor). Replaced the former occurrence + reference highlighters.
         RelatedElementsRenderer.Attach(editor, completion);
 
+        // Language Completion: finish a daily Firebird construct the developer started typing (if→if () then,
+        // gro→group by) via Tab + a passive OverlayLayer hint. Thin, stateless consumer of the pure Core
+        // resolver; shares the completion controller only to avoid competing with the list. Attach in BOTH
+        // seams (gotcha #219).
+        LanguageExpansionController.Attach(editor, completion);
+
         // Find (Ctrl+F) / Replace (Ctrl+H) + right-click menu — one shared installer.
         EditorSearch.Install(editor);
 

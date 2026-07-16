@@ -718,9 +718,17 @@ noted.
   (`ConstructContext` — a simple deterministic previous-significant-token rule: statement boundaries arm
   `Statement` constructs, value-completers arm `Clause` constructs, else none; one cheap synchronous lex,
   no AST/model, no timing). `LanguageConstructResolver.Resolve(text, caret)` = prefix match ∩ grammar is
-  the single App entry point. +44 Core tests. Build 0/0, **4239 main + 24 probe green**. **NEXT** (staged,
-  Core-before-App): App hint controller (OverlayLayer + Tab) → Typing Ergonomics (`begin…end` pairing +
-  auto-indent). **M3 Snippet Engine / M4 Structural Selection remain future.**
+  the single App entry point. +44 Core tests. **App hint controller — DONE (impl 2026-07-16); awaits user
+  visual confirmation.** `LanguageExpansionController` (App/Completion, attached in BOTH seams — gotcha
+  #219): a thin, **stateless** consumer — the armed construct is re-derived from (text, caret) via
+  `Resolve` on every caret move and on Tab, nothing remembered. A passive `OverlayLayer` hint (`⇥ <expansion>`,
+  reusing `EditorPopups`/`ClampIntoOverlay`) shows exactly what Tab inserts — below the caret line (never
+  covers it), viewport-clamped, non-focus/non-hit-test, theme-tokened, font-scaled, hidden the instant
+  nothing is armed and never while the completion list is up. **Tab** expands (tunnelled KeyDown preempts
+  AvaloniaEdit's indent; falls through to indent when nothing armed); casing via the pure Core
+  `ConstructExpansion.For` (Core owns the decision). +4 expansion tests. Build 0/0, **4243 main + 24 probe
+  green**, smoke clean. **NEXT:** Typing Ergonomics (`begin…end` pairing + AST-aware auto-indent). **M3
+  Snippet Engine / M4 Structural Selection remain future.**
 - **Completion Matching Philosophy — prefix-first IntelliSense — IN PROGRESS (foundation done 2026-07-16).**
   A separate **Completion** milestone (not Stage 8), inserted at the user's request: interactive completion
   must be a **prediction engine, not a search engine**. Root cause of today's noise (`sta`→`NR_STATUS`/
