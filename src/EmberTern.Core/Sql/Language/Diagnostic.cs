@@ -26,12 +26,16 @@ public enum DiagnosticSeverity
 /// <param name="Severity">Its severity.</param>
 /// <param name="Message">A human-readable description.</param>
 /// <param name="Code">A stable short code (e.g. <c>"ET0001"</c>) for future filtering/quick-fixes.</param>
+/// <param name="Category">The semantic <see cref="DiagnosticCategory"/> (Stage 7). Additive — defaults
+/// to <see cref="DiagnosticCategory.None"/> so the parser-recovery channel (which predates categories)
+/// keeps its existing shape; the <see cref="DiagnosticsEngine"/> always sets it.</param>
 public readonly record struct Diagnostic(
     int Start,
     int Length,
     DiagnosticSeverity Severity,
     string Message,
-    string Code)
+    string Code,
+    DiagnosticCategory Category = DiagnosticCategory.None)
 {
     /// <summary>Absolute source offset just past the finding's span.</summary>
     public int End => Start + Length;

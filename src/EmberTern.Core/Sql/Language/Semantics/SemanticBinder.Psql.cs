@@ -350,14 +350,76 @@ internal sealed partial class SemanticBinder
         BindPsqlExpression(s.Tokens, 0, HeaderEnd(s.Tokens, s.Body), scope, stmt, skip);
     }
 
-    // A PSQL-only leaf (assignment / RETURN / EXCEPTION / SUSPEND / …): its embedded subqueries/CASE
-    // become their own scopes; the interior binds column/local/param references.
+    // A PSQL-only leaf (assignment / RETURN / EXCEPTION / SUSPEND / cursor op / …): its embedded
+    // subqueries/CASE become their own scopes; the interior binds column/local/param references.
     private void BindLeaf(IReadOnlyList<SqlToken> toks, IReadOnlyList<SqlNode> embedded, Scope scope, SqlStatement stmt)
     {
         var skip = new List<SqlNode>();
         BindEmbedded(embedded, scope, stmt, skip);
-        BindPsqlExpression(toks, 0, toks.Count, scope, stmt, skip);
+
+        // A cursor operation (OPEN / FETCH / CLOSE <cursor>): bind its cursor operand as a Cursor
+        // reference — resolved to the in-scope DECLARE/FOR-cursor, or unresolved when no such cursor
+        // exists. This makes the binder model cursor USAGES the same way it already models cursor
+        // DECLARATIONS: a plain SymbolReference every model consumer reads (navigation, find-refs,
+        // rename, highlighting, quick info, diagnostics) — not diagnostics-specific. The operand is
+        // excluded from the generic reference walk so it is bound exactly once.
+        int cursorOperand = CursorOperandIndex(toks);
+        if (cursorOperand >= 0) BindCursorReference(toks[cursorOperand], scope);
+
+        BindPsqlExpression(toks, 0, toks.Count, scope, stmt, skip, excludeToken: cursorOperand);
     }
+
+    // The token index of the cursor named by an OPEN / CLOSE / FETCH statement, or -1 when the leaf is
+    // not a (recognised) cursor operation. OPEN/CLOSE take the first identifier after the verb; FETCH is
+    // "FETCH [<scroll direction>] [FROM] <cursor> [INTO <vars>]" — the name after a FROM, else the first
+    // identifier of a simple "FETCH <cursor>" (a leading scroll direction without FROM is malformed, so
+    // we stay silent). The cursor name is never crossed past an INTO.
+    private static int CursorOperandIndex(IReadOnlyList<SqlToken> toks)
+    {
+        if (toks.Count < 2) return -1;
+        var lead = toks[0];
+        bool fetch = IsWordText(lead, "FETCH");
+        if (!fetch && !IsWordText(lead, "OPEN") && !IsWordText(lead, "CLOSE")) return -1;
+
+        if (fetch)
+        {
+            int intoIdx = FindLeafWord(toks, 1, toks.Count, "INTO");
+            int end = intoIdx < 0 ? toks.Count : intoIdx;
+            int fromIdx = FindLeafWord(toks, 1, end, "FROM");
+            if (fromIdx >= 0)
+            {
+                int j = fromIdx + 1;
+                return j < end && IsNameToken(toks[j]) ? j : -1;
+            }
+            return 1 < end && IsNameToken(toks[1]) && !IsScrollDirection(toks[1]) ? 1 : -1;
+        }
+
+        for (int i = 1; i < toks.Count; i++)
+        {
+            if (IsNameToken(toks[i])) return i;
+        }
+        return -1;
+    }
+
+    private void BindCursorReference(SqlToken tok, Scope scope)
+    {
+        var name = FoldedName(tok);
+        var sym = scope.Resolve(name) as CursorSymbol;
+        AddReference(tok, sym, ReferenceRole.Cursor);
+    }
+
+    private static int FindLeafWord(IReadOnlyList<SqlToken> toks, int from, int end, string word)
+    {
+        for (int i = from; i < end && i < toks.Count; i++)
+        {
+            if (IsWordText(toks[i], word)) return i;
+        }
+        return -1;
+    }
+
+    private static bool IsScrollDirection(SqlToken t)
+        => IsWordText(t, "NEXT") || IsWordText(t, "PRIOR") || IsWordText(t, "FIRST")
+           || IsWordText(t, "LAST") || IsWordText(t, "ABSOLUTE") || IsWordText(t, "RELATIVE");
 
     // A reused DSQL statement node inside a body. Its principal query (a SELECT's Query, an INSERT/MERGE's
     // SourceQuery) and embedded subqueries recurse into their own scopes; the remaining tokens bind here.
@@ -456,11 +518,16 @@ internal sealed partial class SemanticBinder
     // spans are passed in <paramref name="skip"/> to step over. This is the agreed structural-depth
     // boundary: an expression walker, not a query walker.
     private void BindPsqlExpression(
-        IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement stmt, IReadOnlyList<SqlNode> skip)
+        IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement stmt, IReadOnlyList<SqlNode> skip,
+        int excludeToken = -1)
     {
         int k = lo;
         while (k < hi)
         {
+            // A cursor operation's operand is bound as a Cursor reference by the caller (BindLeaf); skip
+            // it here so it is not also bound as a generic bare local.
+            if (k == excludeToken) { k++; continue; }
+
             var tok = t[k];
 
             // Step over a query/subquery already bound in its own scope.

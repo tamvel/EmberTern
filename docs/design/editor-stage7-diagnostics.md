@@ -140,6 +140,51 @@ deepened AST + Semantic Model):
 Categories are added incrementally per milestone (§11); the list above is the target, not a
 big-bang. Every category must have a false-positive review before shipping (the conservatism rule).
 
+> **Note (S1) — `UnresolvedParameter` / `ET0004` is a forward-looking implementation, not dead code.**
+> The engine implements the `UnresolvedParameter` branch (code `ET0004`), but it is currently
+> **inactive by design**: at a use site Firebird references a variable and a parameter identically
+> (`:name` / bare `name`), and the binder maps an *unresolved* such reference to role `Variable`, never
+> `Parameter` (an unresolved parameter role is not producible by the current `SemanticBinder`). An
+> undeclared local in a routine body therefore always surfaces as `UnresolvedVariable` (`ET0003`).
+> `ET0004` stays dormant **until the `SemanticModel` is deliberately extended** to distinguish the two
+> at the reference site — a decision we make on its own merits, not by bending the binder just to
+> light up the code path. Keeping the branch means S1 is complete against the category set and the
+> future extension is additive.
+
+> **Note (S2) — how `UnknownColumn` and `AmbiguousColumn` are told apart without a second pass.**
+> The binder records BOTH as an unresolved `Column` reference: a qualified `alias.col` on a resolved
+> table whose column is absent (→ `UnknownColumn` / `ET0002`), and a bare column matching a column on
+> ≥2 in-scope tables (→ `AmbiguousColumn` / `ET0005`). The engine distinguishes them by the reference's
+> **immediate predecessor**: the binder always emits a member's qualifier reference right before it, so
+> a resolved `Qualifier`/`RecordAlias` predecessor ⇒ qualified (and if its table is unknown, silence —
+> no cascade); no such predecessor ⇒ bare ⇒ ambiguous. This keeps the whole classification inside the
+> single forward pass over `References`, no lookup index. `InsertCountMismatch` (`ET0006`, **Error**) is
+> a bounded per-INSERT check reached by an AST traversal (so it also covers an INSERT reused inside a
+> PSQL body, Etap 6.9 / B5); it reuses `SignatureHelpEngine`'s INSERT list reader
+> (`InsertColumnAndValueCounts`) rather than a parallel scanner, counts **top-level** comma items only
+> (a comma inside a function call never inflates the count), and stays silent unless there is an explicit
+> column list AND a single, cleanly-parseable `VALUES` row (INSERT…SELECT, DEFAULT VALUES, a malformed
+> list, or a multi-row `VALUES` all yield nothing).
+
+> **Note (S6) — cursor usages are modelled by the binder, not the diagnostics engine.** `UnknownCursor`
+> needed a signal the model didn't have: an *unresolved* cursor use. Rather than teach the engine to
+> re-recognise cursor operations (a second source of SQL knowledge), the **binder** was extended to model
+> cursor USAGES the same way it already models cursor DECLARATIONS — an `OPEN` / `FETCH` / `CLOSE` operand
+> becomes an ordinary `SymbolReference` with `ReferenceRole.Cursor`, resolved to the declaration or
+> unresolved. This is general semantic infrastructure every consumer reads (navigation / find-refs /
+> rename / highlighting / quick info / diagnostics); the binder carries **zero** diagnostics-specific
+> logic, and the engine stays a pure filter (`Role == Cursor && !IsResolved`). One conservatism guard: an
+> unresolved cursor whose name IS declared **somewhere** in the script is not flagged — that is a
+> scope/segmentation artifact (the lenient parser can split an EXECUTE BLOCK's `DECLARE` section from its
+> `BEGIN…END`), not a genuine unknown cursor. `SuspendOutsideSelectable` is a pure AST-context walk that
+> flags a `SUSPEND` leaf only inside a **trigger** or a **PSQL function** — the two contexts where it is
+> categorically invalid; a procedure / EXECUTE BLOCK may be selectable, so those stay silent.
+>
+> Known pre-existing limitation (not introduced here, surfaced by this work): the lenient segmentation
+> used by the semantic model can split an EXECUTE BLOCK that has a `DECLARE` section, degrading its
+> semantics. The `UnknownCursor` guard neutralises the one false-positive this would otherwise cause; a
+> proper fix (keep EXECUTE BLOCK whole in the lenient parser) is a separate parser task.
+
 ---
 
 ## 7. Pipeline (Parser → AST → Semantic Model → Diagnostics)
@@ -217,12 +262,18 @@ diagnostics pipeline earns trust before anything mutates or before the panel/nav
 
 | # | Milestone | Depends on | Notes |
 |---|---|---|---|
-| **S1** | `DiagnosticsEngine` (Core) — `UnknownObject`/`UnknownColumn`/`Unresolved*` from the model | Etap 6.9 B1/B2 | Pure Core; consumes the model; conservative + connection-gated. Add `DiagnosticCategory`. |
-| **S2** | `InsertCountMismatch` + `AmbiguousColumn` (Core) | S1 | Reuse `SignatureHelpEngine` list split — no new scan. |
-| **S3** | Squiggle rendering + wire into `SqlEditorBehavior.Attach` (App) | S1, S2 | Mirrors `SemanticHighlighter`; recompute on `ModelUpdated`. **Visual QA required** (see QA rule). |
+| **S1** ✅ DONE | `DiagnosticsEngine` (Core) — `UnknownObject`/`UnknownColumn`/`Unresolved*` from the model | Etap 6.9 B1/B2 | Pure Core; consumes the model; conservative + connection-gated. Add `DiagnosticCategory`. Codes `ET0001`–`ET0004`. |
+| **S2** ✅ DONE | `InsertCountMismatch` + `AmbiguousColumn` (Core) | S1 | Reuse `SignatureHelpEngine` list split — no new scan. Codes `ET0005`–`ET0006`. |
+| **S6** ✅ DONE | PSQL-specific categories (`UnknownCursor`, `SuspendOutsideSelectable`) | Etap 6.9 B1/B5 | Needs the PSQL body tree. Codes `ET0007`–`ET0008`. **Pulled ahead of S3–S5 (see note)** so the Core engine is complete before any UI. |
+| **S3** | Squiggle rendering + wire into `SqlEditorBehavior.Attach` (App) | S1, S2, S6 | Mirrors `SemanticHighlighter`; recompute on `ModelUpdated`. **Visual QA required** (see QA rule). |
 | **S4** | Diagnostics panel (App) | S3 | List + group/filter + jump-to-span; reuse panel/grid skeleton + theme tokens. |
 | **S5** | Navigation (next/prev, keyboard) | S3 | Inclusive-at-end offset lookups. |
-| **S6** | PSQL-specific categories (`UnknownCursor`, `SuspendOutsideSelectable`) | Etap 6.9 B1/B5 | Needs the PSQL body tree. |
+
+> **Execution-order note (user decision).** S6 was implemented **before** the App milestones S3–S5,
+> a deliberate sequence change (not a roadmap change): S6 is the last Core milestone, its prerequisites
+> (Etap 6.9 B1/B5) were already met, and it extends the engine without touching the App — so completing
+> it first gives a **fully complete Core diagnostics engine** (`ET0001`–`ET0008`) that S3 can render
+> against without later returning to add categories.
 
 Folding, breadcrumbs and bracket/BEGIN-END matching are the remaining "niceties" of the original
 Etap 7; they consume the same deepened tree and are tracked in

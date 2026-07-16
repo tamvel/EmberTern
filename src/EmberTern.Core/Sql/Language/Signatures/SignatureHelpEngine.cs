@@ -232,6 +232,109 @@ public static class SignatureHelpEngine
         return result;
     }
 
+    // ── INSERT count reuse (Stage 7 / S2 — DiagnosticsEngine.InsertCountMismatch) ──────────────
+
+    /// <summary>
+    /// The (column-count, value-count) and the source span of the <c>VALUES</c> list of an
+    /// <c>INSERT INTO t (c1, …) VALUES (v1, …)</c> — computed with this engine's own INSERT token-shape
+    /// reading so the Diagnostics engine's <c>InsertCountMismatch</c> check reuses one INSERT parser
+    /// rather than standing up a parallel scanner (design §10). Returns <c>null</c> (⇒ nothing to compare,
+    /// stay silent) unless the statement has BOTH an explicit column list AND a single, cleanly-parseable
+    /// <c>VALUES</c> row: an <c>INSERT … SELECT</c> / <c>… DEFAULT VALUES</c>, a missing/empty/malformed
+    /// list, or a (non-Firebird) multi-row <c>VALUES</c> all yield <c>null</c>. Counts are of top-level
+    /// (depth-1) comma-separated items, so a comma inside a function call or nested paren never inflates
+    /// them. Pure over <paramref name="tokens"/>; never throws.
+    /// </summary>
+    internal static (int Columns, int Values, int ValuesStart, int ValuesLength)? InsertColumnAndValueCounts(
+        IReadOnlyList<SqlToken> tokens)
+    {
+        int into = IndexOfKeyword(tokens, "INTO");
+        if (into < 0) return null;
+        int nameIdx = NextWordIndex(tokens, into + 1);
+        if (nameIdx < 0) return null;
+
+        // Skip a dotted target name (schema.table) to reach the position right after the table.
+        int afterName = nameIdx + 1;
+        while (afterName + 1 < tokens.Count
+               && tokens[afterName].Kind == TokenKind.Dot && IsWord(tokens[afterName + 1]))
+        {
+            afterName += 2;
+        }
+
+        // An explicit column list "(...)" must immediately follow the table name; without it there is
+        // nothing to compare against (columns default to the table's own — not a written-list mismatch).
+        if (afterName >= tokens.Count || tokens[afterName].Kind != TokenKind.LParen) return null;
+        int columns = CountParenItems(tokens, afterName);
+        if (columns <= 0) return null;
+
+        // VALUES (...) — the row paren immediately after the top-level VALUES keyword.
+        int valuesKw = IndexOfKeyword(tokens, "VALUES");
+        if (valuesKw < 0) return null; // INSERT … SELECT / DEFAULT VALUES — not a columns↔VALUES check
+        int valOpen = valuesKw + 1 < tokens.Count && tokens[valuesKw + 1].Kind == TokenKind.LParen
+            ? valuesKw + 1 : -1;
+        if (valOpen < 0) return null;
+
+        int values = CountParenItems(tokens, valOpen);
+        if (values <= 0) return null;
+
+        int valClose = MatchingParen(tokens, valOpen);
+        if (valClose < 0) return null;
+
+        // Firebird has no multi-row VALUES; a comma right after the row paren means a second row (or
+        // malformed input) — never guess, stay silent.
+        if (valClose + 1 < tokens.Count && tokens[valClose + 1].Kind == TokenKind.Comma) return null;
+
+        int start = tokens[valOpen].Start;
+        return (columns, values, start, tokens[valClose].End - start);
+    }
+
+    // The number of top-level (depth-1) comma-separated items inside the paren opening at
+    // <paramref name="openIdx"/>. Returns 0 for an empty paren, a malformed list (empty/leading/trailing
+    // segment), or an unbalanced paren — the caller treats 0 as "don't compare" (prefer silence). A comma
+    // nested inside a deeper paren (a function argument) is content, not a separator.
+    private static int CountParenItems(IReadOnlyList<SqlToken> tokens, int openIdx)
+    {
+        if (openIdx >= tokens.Count || tokens[openIdx].Kind != TokenKind.LParen) return 0;
+        int depth = 0, items = 0, segTokens = 0;
+        for (int i = openIdx; i < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            switch (t.Kind)
+            {
+                case TokenKind.LParen:
+                    depth++;
+                    if (depth > 1) segTokens++;
+                    break;
+                case TokenKind.RParen:
+                    depth--;
+                    if (depth == 0) return segTokens > 0 ? items + 1 : 0; // final segment; 0 = empty/trailing
+                    segTokens++;
+                    break;
+                case TokenKind.Comma when depth == 1:
+                    if (segTokens == 0) return 0; // empty segment (leading/double comma) → malformed
+                    items++;
+                    segTokens = 0;
+                    break;
+                default:
+                    if (depth >= 1) segTokens++;
+                    break;
+            }
+        }
+        return 0; // unbalanced
+    }
+
+    // The index of the ')' matching the '(' at openIdx, or -1 when unbalanced.
+    private static int MatchingParen(IReadOnlyList<SqlToken> tokens, int openIdx)
+    {
+        int depth = 0;
+        for (int i = openIdx; i < tokens.Count; i++)
+        {
+            if (tokens[i].Kind == TokenKind.LParen) depth++;
+            else if (tokens[i].Kind == TokenKind.RParen && --depth == 0) return i;
+        }
+        return -1;
+    }
+
     // ── UPDATE SET ───────────────────────────────────────────────────────────────────────────
 
     private static SignatureInfo? TryUpdateSetSignature(
