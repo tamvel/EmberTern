@@ -16,10 +16,15 @@ public sealed class ConnectionProfile
     public string ClientLibraryPath { get; set; } = string.Empty;
 
     // Developer Mode (single user-facing switch, replaces the old TPB profile pickers).
-    // OFF (default): DDL runs NOWAIT — fail-fast on an in-use object. ON: DDL runs WAIT
-    // + a lock timeout, so a Compile of an object currently used by other sessions waits
-    // briefly for it to be released instead of immediately returning "object is in use".
-    // Affects ONLY DDL (CREATE/ALTER/DROP/Compile); data operations always stay NOWAIT.
+    // A WAIT POLICY, not a transaction or a lane. DDL always runs WAIT + a bounded lock timeout;
+    // the modes differ only in how long: OFF (default) is short — long enough to absorb our own
+    // other lane's transient metadata-cache release (~10 ms, gotcha #214) while still failing fast
+    // against another SESSION; ON is long, i.e. actually wait for another session to release the
+    // object. Built by FirebirdDdlExecutor.BuildDdlTransactionOptions(bool).
+    //
+    // Scope — the object editors' Compile/Recompile, and the Script Executor's transaction when a
+    // script is ALL DDL under auto-commit. Data operations always stay NOWAIT, and the SQL Editor
+    // never consults it (it is a console: one working transaction, always NOWAIT).
     public bool DeveloperMode { get; set; }
 
     // Transaction profile for the DATA working transaction — SQL Editor F5, data

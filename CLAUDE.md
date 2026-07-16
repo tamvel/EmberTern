@@ -23,6 +23,7 @@ verbatim, in the archive below.
 | **`docs/design/editor-ast-deepening.md`** | **Active implementation guide** for **Etap 6.9 — Structural AST Deepening** (the next foundational work: node inventory, migration contract, milestones B0–B5, debugger considerations, formatter convergence, progress matrix). | When working on the parser/AST/binder deepening. |
 | **`docs/design/editor-stage7-diagnostics.md`** | **Active design/vision** for **Stage 7 (Diagnostics)** — engine, model, categories, pipeline, squiggles/panel/nav, milestones, post-Stage-7 Quick Fixes. Consumes Etap 6.9. | When working on Stage 7. |
 | **`docs/design/editor-language-expansion.md`** | **FULLY DELIVERED design** for the code-writing experience that replaced Stage 8 M2 — both halves shipped + user-approved: **Language Completion** (construct completion by natural prefix, Tab + shown hint, grammar-armed, synchronous) + **Typing Ergonomics** (`begin…end` pairing on Enter, `()`/`[]`/`''` pairing, structural auto-indent; Enter stays normal), separate from IntelliSense. §3 documents the as-built ergonomics (incl. what is deliberately NOT done: paren alignment, `IndentLines`); §5 the arming gate; §9.1 the **one-responsibility-one-owner** rule (vocabulary *and* grammatical position). | When working on `Core.Sql.Language.Constructs`, `Core.Sql.Language.Ergonomics`, or the completion/ergonomics wiring. |
+| **`docs/design/firebird-debugger.md`** | **Design only — awaiting review.** The debugger's full design: feasibility (Firebird has **no** debug API — verified), the Fidelity Law §F, the client-interpreter + `EXECUTE BLOCK` harness architecture, the `Debug` 4th lane + transaction model, nested frames/call stack, the local-routine strategy (no temporary metadata), cursor bridge, UI/UX, panels, reuse map, milestones D0–D12, and a live-engine verification log. | When working on the debugger. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (~190 entries, #1–#202), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -217,7 +218,21 @@ noted.
   the hang simply does not reproduce now, for the author or the user, across repeated full runs; if it
   returns, investigate then with concrete evidence rather than pre-emptively re-splitting.)* Smoke: clean
   (app launches).
-- **⚠ `FirebirdScriptExecutor` is KNOWN-BROKEN for its primary use case** — it runs the whole script
+- **Script Executor — Dev Mode integration DONE (2026-07-16; impl, awaits user visual confirmation).**
+  The Script Executor no longer ignores Developer Mode. An **all-DDL script under auto-commit** begins
+  its transaction with the Dev Mode-aware DDL wait policy (`FirebirdDdlExecutor.BuildDdlTransactionOptions`
+  — reused, not duplicated) instead of the working transaction's NOWAIT default, so deploying objects
+  other sessions are using waits rather than failing instantly. **Deliberately NOT changed:** one lane,
+  one transaction, no per-statement commits, no routing by statement kind (#215 stands) — this is one
+  TPB flag chosen at BEGIN. **Both conditions are load-bearing** (`FirebirdScriptExecutor.UsesDeveloperModeWaitPolicy`,
+  pure + unit-pinned): *all-DDL* because a transaction's wait policy is fixed at BEGIN and cannot vary
+  per statement, so it is the only thing guaranteeing no DML ever waits; *auto-commit* because Manual
+  leaves the tx OPEN and `BeginTransactionAsync` early-returns on an active tx, so the SQL Editor's next
+  F5 would **join** it and silently get a WAIT console (gotcha #230). `TransactionService.BeginTransactionAsync`
+  gained an optional `FbTransactionOptions`; the console never passes it and is unchanged. Full analysis:
+  [docs/design/script-executor-transaction-review.md](docs/design/script-executor-transaction-review.md).
+- **⚠ `FirebirdScriptExecutor` is STILL KNOWN-BROKEN for mixed DDL+DML** (unchanged by the above — Dev
+  Mode is a wait policy, not a fix for #213) — it runs the whole script
   in ONE transaction and its docstring claimed mixed DDL+DML migration is "all-or-nothing", which is
   **false** (gotcha #213: a Firebird transaction cannot use an object it created but has not
   committed). A deployment script that creates and then populates anything fails at the second
@@ -1122,6 +1137,16 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   (engine, `Diagnostic` model, severities, categories, pipeline, squiggles/panel/navigation,
   incremental refresh, cancellation, performance, milestones, and post-Stage-7 Quick Fixes). Consumes
   Etap 6.9; explains why Diagnostics comes after AST Deepening.
+- **`docs/design/firebird-debugger.md`** — **Stage X — Firebird Debugger, design only (awaiting
+  review; nothing implemented).** Read before any debugger work. Key established facts: Firebird
+  exposes **no debugging API at any version** (verified — `RDB$DEBUG_INFO` is a BLR→source map,
+  `MON$CALL_STACK` is read-only, `RDB$PROFILER` measures but cannot stop), so every Firebird debugger
+  is a **client-side PSQL interpreter**; EmberTern's owns **control flow** (from the AST) and delegates
+  **all semantics** to the server via a generated anonymous `EXECUTE BLOCK` harness (so no expression
+  AST is needed — the structural-depth boundary holds). Local routines need **no temporary packages**
+  (IBExpert's workaround): stepping into one is just another frame. **⚠ `IN AUTONOMOUS TRANSACTION`
+  work survives the debug session's rollback** — "nothing is persisted" is false for such routines.
+  Recommends the editor-wiring consolidation (gotcha #219) as prerequisite **D0**.
 - **`docs/gotchas.md`** — the complete gotcha catalog (~190 entries), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,

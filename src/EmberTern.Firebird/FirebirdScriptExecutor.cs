@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EmberTern.Core.Scripting;
@@ -9,16 +10,23 @@ using FirebirdSql.Data.FirebirdClient;
 namespace EmberTern.Firebird;
 
 /// <summary>
-/// Runs a parsed script as ONE caller-controlled transaction on the DATA lane — the same
-/// connection F5 / Execute Procedure use, so DDL is co-located with the attachment that ran
-/// it (gotcha #122). The transaction is the data working transaction owned by
-/// <see cref="TransactionService"/>, so it surfaces in the existing transaction UI, naturally
-/// gates the SQL Editor's F5 (one transaction per connection, gotcha #89), and is finalized
-/// with the same Commit / Rollback.
+/// Runs a parsed script as ONE caller-controlled transaction on the DATA lane. The transaction is
+/// the data working transaction owned by <see cref="TransactionService"/>, so it surfaces in the
+/// existing transaction UI, naturally gates the SQL Editor's F5 (one transaction per connection,
+/// gotcha #89), and is finalized with the same Commit / Rollback.
 ///
 /// Manual mode (the default) leaves the transaction OPEN after running every statement — the
 /// user reviews the results grid, then calls <see cref="CommitAsync"/> or
 /// <see cref="RollbackAsync"/>. There is NO per-statement autocommit (hard rule #3).
+///
+/// <para><b>Developer Mode.</b> An ALL-DDL script under auto-commit begins its transaction with the
+/// Developer-Mode-aware DDL wait policy (<see cref="FirebirdDdlExecutor.BuildDdlTransactionOptions(bool)"/>)
+/// instead of the working transaction's NOWAIT default, so deploying objects that other sessions are
+/// using waits for them to be released rather than failing instantly — the same behaviour the object
+/// editors' Compile has always had. Both conditions are load-bearing and are explained on
+/// <see cref="UsesDeveloperModeWaitPolicy"/>. Everything else — one lane, one transaction, no
+/// per-statement commits, no routing by statement kind (gotcha #215) — is unchanged; this is one TPB
+/// flag chosen at BEGIN, not an execution model.</para>
 ///
 /// <para><b>KNOWN BROKEN — do not trust the old claim that "Firebird DDL is transactional, so a
 /// mixed DDL+DML migration is genuinely all-or-nothing".</b> That was assumed, never measured, and
@@ -93,7 +101,8 @@ public sealed class FirebirdScriptExecutor
 
         try
         {
-            await _transactionService.BeginTransactionAsync().ConfigureAwait(false);
+            await _transactionService.BeginTransactionAsync(ResolveTransactionOptions(statements, mode))
+                .ConfigureAwait(false);
         }
         catch (TransactionFailedException ex)
         {
@@ -139,6 +148,43 @@ public sealed class FirebirdScriptExecutor
 
         return new ScriptRunOutcome(results, leftOpen, anyFailed, cancelled);
     }
+
+    /// <summary>
+    /// The TPB the script transaction begins with: the Developer-Mode-aware DDL policy when
+    /// <see cref="UsesDeveloperModeWaitPolicy"/> says so, otherwise null = the working
+    /// transaction's usual NOWAIT default. Reads Developer Mode from the active profile, exactly
+    /// like <see cref="FirebirdDdlExecutor"/> does.
+    /// </summary>
+    private FbTransactionOptions? ResolveTransactionOptions(
+        IReadOnlyList<ScriptStatement> statements, ScriptTransactionMode mode)
+        => UsesDeveloperModeWaitPolicy(statements, mode)
+            // Reuse the DDL executor's builder — one definition of "the Dev Mode wait policy",
+            // shared by Compile and by this. Standard = short wait, Developer = long (gotcha #214).
+            ? FirebirdDdlExecutor.BuildDdlTransactionOptions(
+                _connectionService.ActiveProfile?.DeveloperMode ?? false)
+            : null;
+
+    /// <summary>
+    /// Whether this run gets the Developer-Mode DDL wait policy instead of the working
+    /// transaction's NOWAIT default. True only when BOTH hold:
+    /// <list type="bullet">
+    /// <item>every statement is DDL — a transaction's wait policy is fixed at BEGIN and cannot vary
+    /// per statement, so this is what guarantees no DML is ever made to WAIT; and</item>
+    /// <item>the mode settles the transaction inside the run (<see cref="ScriptTransactionMode.AutoCommitOnSuccess"/>)
+    /// — in Manual the transaction is left OPEN and the SQL Editor's next F5 joins it
+    /// (<see cref="TransactionService.BeginTransactionAsync"/> early-returns when one is active),
+    /// which would silently give the console a WAIT transaction.</item>
+    /// </list>
+    /// An empty script gets no special policy. Pure + internal so the decision is unit-pinned
+    /// without a live Firebird.
+    /// <para>This does NOT decide where or how anything executes — one lane, one transaction, no
+    /// per-statement commits (gotcha #215 stands). It decides one TPB flag at BEGIN.</para>
+    /// </summary>
+    internal static bool UsesDeveloperModeWaitPolicy(
+        IReadOnlyList<ScriptStatement> statements, ScriptTransactionMode mode)
+        => mode == ScriptTransactionMode.AutoCommitOnSuccess
+        && statements.Count > 0
+        && statements.All(s => s.Kind == ScriptStatementKind.Ddl);
 
     // Runs one statement on the already-open script transaction. Row-bearing kinds go through
     // ExecuteReader (counting rows up to the cap without materializing a grid); everything else

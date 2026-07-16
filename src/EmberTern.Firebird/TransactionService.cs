@@ -57,7 +57,13 @@ public sealed class TransactionService : IDisposable
 
     public event EventHandler? TransactionStateChanged;
 
-    public async Task BeginTransactionAsync()
+    /// <summary>
+    /// Begins the working transaction. <paramref name="options"/> is normally null — the safe
+    /// NOWAIT read-committed default (see <see cref="ResolveActiveProfile"/>). The ONE caller that
+    /// passes options is <see cref="FirebirdScriptExecutor"/>, for an all-DDL script under
+    /// auto-commit; see the note on <see cref="ResolveActiveProfile"/> for why that is safe.
+    /// </summary>
+    public async Task BeginTransactionAsync(FbTransactionOptions? options = null)
     {
         if (_activeTransaction is not null)
         {
@@ -78,7 +84,7 @@ public sealed class TransactionService : IDisposable
             // matching IBExpert's default "Data transaction"). The profile is read
             // at begin time, so changing it only affects the NEXT transaction.
             _activeTransaction = (FbTransaction)await connection
-                .BeginTransactionAsync(BuildTransactionOptions(ResolveActiveProfile()))
+                .BeginTransactionAsync(options ?? BuildTransactionOptions(ResolveActiveProfile()))
                 .ConfigureAwait(false);
             _statementCount = 0;
             SetState(TransactionState.Active);
@@ -99,12 +105,21 @@ public sealed class TransactionService : IDisposable
         await LogTransactionParametersIfEnabledAsync().ConfigureAwait(false);
     }
 
-    // The user transaction is ALWAYS the safe NOWAIT read-committed default. The per-connection
-    // TPB profile is no longer user-configurable (Developer Mode's WAIT applies only to the DDL
-    // executor, never to this transaction), so a stored legacy profile — e.g. table-stability, which
-    // locks whole tables — must never silently make the SQL console WAIT or block other sessions.
-    // The TransactionProfile enum + the persisted fields are vestigial and slated for removal in
-    // their own pass; this method is where that decision is enforced.
+    // The DEFAULT for the user transaction is ALWAYS the safe NOWAIT read-committed profile. The
+    // per-connection TPB profile is not user-configurable, so a stored legacy profile — e.g.
+    // table-stability, which locks whole tables — must never silently make the SQL console WAIT or
+    // block other sessions. The TransactionProfile enum + the persisted fields are vestigial and
+    // slated for removal in their own pass; this method is where that decision is enforced.
+    //
+    // ONE deliberate exception, added with the Script Executor Dev Mode integration: a caller may
+    // pass explicit options to BeginTransactionAsync. Only FirebirdScriptExecutor does, and only for
+    // an ALL-DDL script under auto-commit — two conditions that together preserve everything this
+    // rule protects:
+    //   • all-DDL  ⇒ there is no DML in the transaction, so no data operation can be made to WAIT;
+    //   • auto-commit ⇒ the transaction is settled inside the run, so a WAIT policy can never be
+    //     left open for the SQL Editor's next F5 to inherit (BeginTransactionAsync early-returns on
+    //     an active transaction, so a left-open script tx WOULD otherwise become the console's).
+    // The console itself never passes options and is therefore unchanged: still always NOWAIT.
     private static TransactionProfile ResolveActiveProfile() => TransactionProfile.ReadCommitted;
 
     // Maps each IBExpert-style profile to its TPB. Internal + static so a unit

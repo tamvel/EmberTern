@@ -314,9 +314,9 @@ internal static class UiStrings
     // pickers. No transaction terminology is exposed (NOWAIT/WAIT/consistency are
     // implementation details).
     public const string DialogFieldDeveloperMode = "Developer Mode";
-    public const string DeveloperModeDescription = "Lets you modify procedures, functions, triggers and other objects that are in use by active sessions. DDL operations may wait for the object to be released instead of returning an error immediately.";
+    public const string DeveloperModeDescription = "Lets you modify procedures, functions, triggers and other objects that are in use by active sessions: compiling waits for the object to be released instead of returning an error immediately.\n\nAffects how objects are compiled — not how your SQL runs. It applies when you compile an object in its editor, and when the Script Executor runs a script that only creates or changes objects. The SQL Editor is not affected: it runs every statement in your working transaction, which never waits, so a query or an update can never be left hanging on someone else's lock.";
     public const string DeveloperModeBadge = "DEV MODE";
-    public const string DeveloperModeBadgeTooltip = "Developer Mode is on — DDL waits briefly for in-use objects instead of failing immediately.";
+    public const string DeveloperModeBadgeTooltip = "Developer Mode is on — compiling an object waits for other sessions to release it instead of failing immediately. Does not affect the SQL Editor.";
 
     // Transaction profile labels (IBExpert terms — kept in English on purpose).
     public const string TransactionProfileReadCommitted = "Read Committed";
