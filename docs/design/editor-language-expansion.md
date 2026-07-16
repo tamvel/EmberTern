@@ -1,8 +1,11 @@
 # EmberTern — Language Completion & Typing Ergonomics (design)
 
-**Status:** design **complete and agreed** (2026-07-16), pre-implementation. Replaces the Stage 8 **M2
-Smart Snippets** direction, which is to be reverted (uncommitted) — see §11. No open design decisions
-remain (§13 records the resolved ones); only an implementation-time detail on the `begin` opener trigger.
+**Status:** design **complete and agreed** (2026-07-16); **implementation in progress**. Replaces the
+Stage 8 **M2 Smart Snippets** direction (reverted). Done + committed: **Language Completion** — Core
+foundation (catalog + resolver), grammar-aware arming, and the App layer (Tab-expand + passive hint,
+awaits the user's visual QA). **Next: Typing Ergonomics** (§3 — `begin…end` pairing + auto-indent). No open
+design decisions remain (§13); the `begin` opener-trigger detail is settled during Typing Ergonomics.
+As-built record: [../history/18-language-completion.md](../history/18-language-completion.md).
 
 **Relationship to other docs:** consumes the language front-end (`docs/design/editor-architecture.md`)
 and the Etap 6.9 AST (`docs/design/editor-ast-deepening.md`) for grammar-aware behaviour; the prefix-first
