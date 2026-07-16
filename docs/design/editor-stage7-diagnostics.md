@@ -337,14 +337,28 @@ go through `SqlEditorBehavior.Attach` — it hand-wires its own capabilities in 
 added to only one of those two places silently misses a surface (exactly how S3 shipped with no squiggles
 in the SQL Editor).
 
-**Open UX decisions** (worth settling before coding — none are architectural):
-- the keyboard gesture for next/previous (e.g. F8 / Shift+F8), and whether it is editor-only or also
-  active while the panel has focus;
-- whether next/previous **wraps** at the last/first diagnostic;
-- how a panel row is activated — double-click, Enter, or single-click;
-- whether activating a row moves focus to the editor (probably yes) and whether the panel keeps its
-  selection afterwards. Note the S4 `Update` no-op guard exists partly to protect that selection across
-  debounce ticks (§8.2).
+**Decided defaults (user delegated, 2026-07-16).** The **behaviour is the contract**; the *binding* is
+not — it can be rebound later without touching the navigation architecture, and will be reviewed during
+manual testing.
+
+1. **`F8` = next diagnostic, `Shift+F8` = previous.** Visual Studio's Error-List convention, and free
+   here. Rider's `F2`/`Shift+F2` is **not** available: `F2` is already rename
+   (`NavigationController`) and Edit Field (Table Detail) — itself the VS convention. Also taken:
+   `F5`/`Shift+F5` execute, `F3` Global Search, `Alt+F12` peek, `Alt+F` format, `Ctrl+Space` /
+   `Ctrl+Shift+Space` completion / parameter helper. Active both on the SQL editing surface and while
+   the panel has focus, always scoped to the **active document** (§8.2.1).
+2. **Wrap around, silently** — last → first and first → last. Standard editor behaviour; a modal "no
+   more diagnostics" prompt would be noise. A document with no diagnostics is simply a no-op.
+3. **A panel row activates on double-click or `Enter`; single-click only selects.** So arrow-keying the
+   list never yanks the caret around, which is how every error list behaves — and double-click is already
+   this codebase's "open this" gesture (metadata tree → DDL, Trace → editor, the Parameter Helper).
+4. **Activating a row moves focus into the editor** (you navigated there to edit it), and the panel
+   **keeps its selection**. The S4 `Update` no-op guard (§8.2) already protects that selection across
+   debounce ticks — that is what it was for.
+5. **`F8`/`Shift+F8` also move the panel's selection** to the diagnostic they jump to, so the panel and
+   the caret never disagree. Together with (1)'s active-document scoping, this is the "the panel and
+   navigation always agree on the active SQL document" property S5 must preserve — it falls out of using
+   the one `LastFocusedSqlDocument` target rather than being separately enforced.
 
 ---
 
