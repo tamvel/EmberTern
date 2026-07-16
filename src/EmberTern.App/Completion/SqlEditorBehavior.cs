@@ -75,7 +75,8 @@ internal static class SqlEditorBehavior
         // Stage 7 / S3: diagnostic squiggles — a wavy underline under each Diagnostic the pure-Core
         // DiagnosticsEngine produced, computed on the same background pass the completion controller
         // owns (one parse per editor) and repainted on the shared ModelUpdated cycle. Renderer only —
-        // no analysis on the paint path. Attached here so EVERY SQL surface gets it at once.
+        // no analysis on the paint path. This seam covers the object editors; the main SQL Editor
+        // hand-wires the same capabilities in MainWindow and attaches the renderer itself.
         SquiggleRenderer.Attach(editor, completion);
 
         // Select-an-identifier → box all its occurrences in this editor.

@@ -154,6 +154,12 @@ public partial class MainWindow : Window
                 (name, kind) => _currentVm?.FetchObjectDefinitionAsync(name, kind) ?? Task.FromResult<string?>(null),
                 // Double-click on a value → the unified Parameter Helper (owned by the completion controller).
                 showParameterHelper: offset => _completion?.TryShowParameterHelperAt(offset) ?? false);
+            // Stage 7 / S3: diagnostic squiggles, driven by the same cached model + ModelUpdated cycle.
+            // Attached explicitly because this editor does NOT go through SqlEditorBehavior.Attach (it
+            // hand-wires the capabilities above with null-safe _currentVm callbacks) — the object editors
+            // get the renderer from that seam instead. The duplication is known and tracked separately;
+            // until it is resolved, a new editor capability must be added in BOTH places.
+            Completion.SquiggleRenderer.Attach(_editor, _completion);
             Completion.OccurrenceHighlighter.Attach(_editor);
             Completion.EditorSearch.Install(_editor);
         }
