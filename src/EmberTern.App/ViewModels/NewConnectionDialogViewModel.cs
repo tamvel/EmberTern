@@ -172,15 +172,26 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
     private bool TryBuildProfile(out ConnectionProfile profile, out string error)
     {
         profile = null!;
-        if (string.IsNullOrWhiteSpace(Name))
-        {
-            error = UiStrings.ValidationNameRequired;
-            return false;
-        }
 
+        // Database path is required first — the name can be DERIVED from it (below), but nothing
+        // can be derived from a missing path.
         if (string.IsNullOrWhiteSpace(DatabasePath))
         {
             error = UiStrings.ValidationDatabaseRequired;
+            return false;
+        }
+
+        // Convenience (IBExpert parity): a blank name defaults to the database file's base name —
+        // "D:\Bazy\Firma\Magazyn.fdb" → "Magazyn". Persist it so the field the user next sees is
+        // populated too, not just the saved profile.
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            Name = DeriveConnectionName(DatabasePath);
+        }
+
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            error = UiStrings.ValidationNameRequired;
             return false;
         }
 
@@ -215,5 +226,14 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
 
         error = string.Empty;
         return true;
+    }
+
+    /// <summary>The database file's base name, used as the default connection name when the user
+    /// leaves the field blank. "D:\Bazy\Firma\Magazyn.fdb" → "Magazyn". Handles either path
+    /// separator; falls back to the raw path for an alias with no file component.</summary>
+    private static string DeriveConnectionName(string databasePath)
+    {
+        var name = System.IO.Path.GetFileNameWithoutExtension(databasePath.Trim());
+        return string.IsNullOrWhiteSpace(name) ? databasePath.Trim() : name;
     }
 }

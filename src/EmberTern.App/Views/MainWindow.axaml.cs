@@ -38,6 +38,10 @@ public partial class MainWindow : Window
     private DataGrid? _resultGrid;
     private MainWindowViewModel? _currentVm;
     private SqlCompletionController? _completion;
+    // Feeds + navigates the Diagnostics bottom tab (S4/S5). The SQL Editor has a single SQL document, so
+    // the LastFocusedSqlDocument rule collapses onto it — but it goes through the SAME host as the object
+    // editors on purpose: one targeting mechanism, so the panel and F8 can never disagree anywhere.
+    private readonly Completion.DiagnosticsPanelHost _diagnostics;
 
     private SvgIcon? _maxRestoreGlyph;
 
@@ -113,6 +117,13 @@ public partial class MainWindow : Window
         InitializeComponent();
         Icon = new WindowIcon(
             AssetLoader.Open(new Uri("avares://EmberTern/Assets/Branding/EmberTern.ico")));
+        _diagnostics = new Completion.DiagnosticsPanelHost(
+            () => _currentVm?.DiagnosticsPanel,
+            () => _editor,
+            // The SQL editor sits above its panel and is normally visible, so there is no tab to switch
+            // back to — except when the results panel is maximized, which collapses the editor's row to
+            // zero height. Restore the split through the existing toggle rather than a second sizing path.
+            reveal: _ => { if (_resultsMaximized) ToggleResultsMaximized(); });
         _editor = this.FindControl<TextEditor>("SqlEditor");
         _ddlEditor = this.FindControl<TextEditor>("DdlEditor");
         _resultGrid = this.FindControl<DataGrid>("ResultGrid");
@@ -122,16 +133,62 @@ public partial class MainWindow : Window
         if (_editor is not null)
         {
             _editor.TextChanged += OnEditorTextChanged;
-            _editor.DoubleTapped += OnSqlEditorDoubleTapped;
+            // Double-click (INSERT/VALUES helper + name-based open) is owned by NavigationController.
             _completion = new SqlCompletionController(
                 _editor,
-                GetCompletionObjects,
-                dotTableResolver: ResolveDotTable,
-                cachedColumnsProvider: GetCachedColumns,
-                ensureColumnsAsync: EnsureColumnsAsync);
+                metadataSnapshot: CreateMetadataSnapshot,
+                ensureColumnsAsync: EnsureColumnsAsync,
+                ensureRoutineParamsAsync: EnsureRoutineParametersAsync,
+                // Metadata generation → the model rebuilds on the next deliberate trigger when a
+                // category loads (prefetch on connect), so IntelliSense is live without a keystroke.
+                metadataGeneration: () => _currentVm?.Metadata.ObjectsGeneration ?? 0,
+                // Sprint 1 (point b) + Package 5 (Stage B/C): warm the columns + rich detail of the
+                // objects the current statement references, so completion / Quick Info / hover are
+                // complete on tab open without typing "table.".
+                warmReferencedMetadata: WarmReferencedMetadataAsync);
+            // Rebuild the model when a metadata category finishes loading so late-loaded objects
+            // (views / selectable procedures in FROM) resolve. The metadata event is wired to the
+            // STABLE VM in OnDataContextChanged (below) — NOT via the controller's attach-time hook,
+            // which silently latched "subscribed" even when _currentVm was still null at attach time,
+            // permanently dropping the ObjectsChanged handler and leaving views/procs (which prefetch
+            // last) unresolved. The VM outlives this window, so subscribe-once there is leak-free.
+            // Semantic highlighting (Etap 6): colour identifiers by resolved role, driven by the
+            // completion controller's cached semantic model.
+            Completion.SemanticHighlighter.Attach(_editor, _completion);
+            // Hover + navigation (Etap 6 / M4 + the unified hover): PLAIN hover → one info card (the
+            // diagnostic behind a squiggle and/or the semantic Quick Info); Ctrl+hover → the underline +
+            // hand-cursor actionability cue; Ctrl+Click → go-to-definition. Same cached model + cached
+            // diagnostics. Callbacks delegate to the current VM (null-safe before connect).
+            Completion.NavigationController.Attach(
+                _editor,
+                () => _completion?.Model,
+                // The cached, version-matched diagnostics — the same list the squiggles paint from, so
+                // the underline and its explanation can never disagree.
+                () => _completion?.Diagnostics ?? Array.Empty<EmberTern.Core.Sql.Language.Diagnostic>(),
+                () => _completion?.IsPopupOpen ?? false,
+                (name, kind) => _currentVm?.TryOpenSchemaObject(name, kind) ?? false,
+                word => _currentVm?.TryOpenDdlForWord(word) ?? false,
+                (name, kind) => _currentVm?.FetchObjectDefinitionAsync(name, kind) ?? Task.FromResult<string?>(null),
+                // Double-click on a value → the unified Parameter Helper (owned by the completion controller).
+                showParameterHelper: offset => _completion?.TryShowParameterHelperAt(offset) ?? false);
+            // Stage 7 / S3: diagnostic squiggles, driven by the same cached model + ModelUpdated cycle.
+            // Attached explicitly because this editor does NOT go through SqlEditorBehavior.Attach (it
+            // hand-wires the capabilities above with null-safe _currentVm callbacks) — the object editors
+            // get the renderer from that seam instead. The duplication is known and tracked separately;
+            // until it is resolved, a new editor capability must be added in BOTH places.
+            Completion.SquiggleRenderer.Attach(_editor, _completion);
+            // Stage 7 / S4 + S5: the Diagnostics bottom-panel tab — a view of the SAME cached diagnostics
+            // the squiggles paint, republished on the same ModelUpdated cycle (no parse, no re-analysis) —
+            // and F8 / Shift+F8 navigation over them. The VM is resolved lazily: it attaches after this
+            // constructor runs. Tracking here is also what gives this editor its F8 handler: it does NOT
+            // go through SqlEditorBehavior.Attach (gotcha #219).
+            _diagnostics.Track(_editor, _completion);
             Completion.OccurrenceHighlighter.Attach(_editor);
             Completion.EditorSearch.Install(_editor);
         }
+        // S5: the panel's activation gestures (double-click / Enter / F8) target the active SQL document.
+        var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("SqlDiagnosticsPanel");
+        if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         if (_ddlEditor is not null)
         {
             Completion.OccurrenceHighlighter.Attach(_ddlEditor);
@@ -459,6 +516,23 @@ public partial class MainWindow : Window
         }
     }
 
+    // A metadata category finished loading — rebuild the main SQL editor's semantic model against a
+    // fresh snapshot so newly-loaded objects (notably views + selectable procedures referenced in
+    // FROM) begin resolving. The controller coalesces the burst of per-category signals into one
+    // rebuild. Wired to the stable VM in OnDataContextChanged (never dropped).
+    private void OnMainEditorMetadataChanged() => _completion?.NotifyMetadataChanged();
+
+    // Prefetch complete → the main SQL editor rebuilds against the now-complete metadata and warms all
+    // referenced objects (columns + detail + routine parameters), publishing one complete Semantic Model
+    // (Package 5 closure). The authoritative completion step for a document open before connect.
+    private void OnMainEditorMetadataReady() => _completion?.RefreshModelForMetadataReady();
+
+    // Warms the columns + rich Quick Info detail of the objects the SQL editor's current statement
+    // references (Sprint 1 point b + Package 5 Stage B/C). Delegates to the VM; null-safe before connect.
+    private Task<bool> WarmReferencedMetadataAsync(
+        System.Collections.Generic.IReadOnlyList<string> names, System.Threading.CancellationToken ct)
+        => _currentVm?.WarmReferencedAsync(names, ct) ?? Task.FromResult(false);
+
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_currentVm is not null)
@@ -477,8 +551,11 @@ public partial class MainWindow : Window
             _currentVm.GlobalSearchRequested -= OnGlobalSearchRequested;
             _currentVm.RecompileDependentsRequested -= OnRecompileDependentsRequested;
             _currentVm.SmartParametersRequested -= OnSmartParametersRequested;
+            _currentVm.EditorFocusRequested -= OnEditorFocusRequested;
             _currentVm.SelectedQueryTextProvider = null;
             _currentVm.ReplaceSelectedOrAllText = null;
+            _currentVm.Metadata.ObjectsChanged -= OnMainEditorMetadataChanged;
+            _currentVm.Metadata.MetadataReady -= OnMainEditorMetadataReady;
         }
 
         _currentVm = DataContext as MainWindowViewModel;
@@ -499,8 +576,16 @@ public partial class MainWindow : Window
             _currentVm.GlobalSearchRequested += OnGlobalSearchRequested;
             _currentVm.RecompileDependentsRequested += OnRecompileDependentsRequested;
             _currentVm.SmartParametersRequested += OnSmartParametersRequested;
+            _currentVm.EditorFocusRequested += OnEditorFocusRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
+            // Late-loaded metadata (a category finishing prefetch/expand/refresh) → rebuild the SQL
+            // editor's semantic model so views / selectable procedures used in FROM start resolving
+            // (colour + Ctrl-nav + Quick Info). Tied to the stable VM here, so it can never be dropped.
+            _currentVm.Metadata.ObjectsChanged += OnMainEditorMetadataChanged;
+            // Prefetch complete → the definitive rebuild + full warm + publish for the main editor
+            // (Package 5 closure). Tied to the stable VM here so it can never be dropped.
+            _currentVm.Metadata.MetadataReady += OnMainEditorMetadataReady;
 
             // Metadata-object drop target on the main SQL editor (once — the VM is stable here).
             if (!_snippetDropAttached && _editor is not null)
@@ -534,6 +619,11 @@ public partial class MainWindow : Window
             {
                 _editor.Text = _currentVm.QueryText;
             }
+
+            // Seed the newly-attached VM's Diagnostics panel from the cached diagnostics. The editor was
+            // wired before any VM existed, so a model built in the meantime published into nothing; an
+            // unchanged restored text also raises no TextChanged to republish on.
+            _diagnostics.Republish();
 
             // Apply persisted sidebar width/collapse + results height once the VM
             // (and thus _pendingRestore) is available, then size the results row for
@@ -1107,27 +1197,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // Double-click on a word in the SQL editor: if the word matches a loaded metadata
-    // object, open its DDL tab (same path as the metadata-tree double-click). If not,
-    // leave the editor's default word-select behaviour in place.
-    private void OnSqlEditorDoubleTapped(object? sender, TappedEventArgs e)
-    {
-        if (_currentVm is null || _editor is null) return;
-        var text = _editor.Text;
-        if (string.IsNullOrEmpty(text)) return;
-
-        var word = SqlCompletionContext.GetWordAt(text, _editor.CaretOffset);
-        if (word.IsEmpty) return;
-
-        if (_currentVm.TryOpenDdlForWord(word.Text))
-        {
-            // Mark handled so AvaloniaEdit doesn't keep the word-selection live in the
-            // SQL editor — focus is moving to the DDL tab and any lingering selection
-            // there is just noise.
-            e.Handled = true;
-        }
-    }
-
     private void OnEditorTextChanged(object? sender, EventArgs e)
     {
         if (_currentVm is not null && _editor is not null)
@@ -1136,23 +1205,32 @@ public partial class MainWindow : Window
         }
     }
 
-    // Source for the SQL editor's autocomplete: keywords always + objects from
-    // the active connection's loaded metadata categories. Lives on the VM so the
-    // controller (UI-side) can stay free of cross-VM traversal.
-    private System.Collections.Generic.IReadOnlyList<MetadataObject> GetCompletionObjects()
-        => _currentVm?.EnumerateLoadedObjects() ?? System.Array.Empty<MetadataObject>();
+    // Move keyboard focus into the SQL editor (New query → type immediately). Posted so it runs after
+    // the new query's (empty) text has been pushed into the editor and layout has settled. Focus the
+    // TextArea — the TextEditor delegates keyboard input there.
+    private void OnEditorFocusRequested()
+    {
+        if (_editor is null) return;
+        Dispatcher.UIThread.Post(() => _editor.TextArea.Focus(), DispatcherPriority.Background);
+    }
 
-    // Dot autocomplete plumbing — pure resolve on the VM, fetched columns
-    // cached there too. Controller just funnels them into the popup.
-    private string? ResolveDotTable(string text, int caret)
-        => _currentVm?.ResolveDotTable(text, caret);
-
-    private System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>? GetCachedColumns(string tableName)
-        => _currentVm?.TryGetCachedColumns(tableName);
-
+    // Dot autocomplete plumbing — warms (and caches) an uncached table's columns
+    // for the controller's dot completion. Object/keyword/alias resolution now runs
+    // in the Core CompletionEngine against the semantic model (M5); the controller
+    // no longer pulls the object/known-table/cached-column lists directly.
     private Task<System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>> EnsureColumnsAsync(string tableName)
         => _currentVm?.EnsureColumnsAsync(tableName)
            ?? Task.FromResult<System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>>(System.Array.Empty<EmberTern.Core.Metadata.ColumnSpec>());
+
+    // Warms a routine's parameters for the editor's Signature Help (Etap 5 / M7).
+    private Task EnsureRoutineParametersAsync(string routineName)
+        => _currentVm?.EnsureRoutineParametersAsync(routineName) ?? Task.CompletedTask;
+
+    // Immutable metadata snapshot for the SQL editor's semantic model (Etap 5 / M1).
+    // Built on the UI thread; consumed off-thread. Empty provider when no VM/connection.
+    private EmberTern.Core.Sql.Language.Semantics.ISqlMetadataProvider CreateMetadataSnapshot()
+        => _currentVm?.CreateMetadataSnapshot()
+           ?? EmberTern.Core.Sql.Language.Semantics.EmptyMetadataProvider.Instance;
 
     // Returns the currently-selected text in the SQL editor, or null when nothing
     // is selected. Used by the VM to scope Execute / Format SQL to the selection.
@@ -1544,18 +1622,37 @@ public partial class MainWindow : Window
     private void OnResultGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
         => _currentVm?.SetResultSelectedRow(_resultGrid?.SelectedIndex ?? -1);
 
-    // ── Filter-from-cell (SQL Results) ────────────────────────────────────────
+    // ── Filter-from-cell + copy-from-cell (SQL Results) ───────────────────────
     private GridCellFilterContext? _resultCellCtx;
+    // The exact object?[] row the user right-clicked. Both the filter menu and the
+    // copy menu resolve their target from the clicked cell, never from the grid's
+    // view coordinates (SelectedIndex / CurrentColumn) — those index the sorted/
+    // filtered/paged view, not CurrentResult.Rows, and CurrentColumn is null on a
+    // fresh right-click. See ResolveResultRowIndex.
+    private object?[]? _resultCellRow;
 
     private void OnResultCellPointerPressed(object? sender, DataGridCellPointerPressedEventArgs e)
     {
         if (_resultGrid is null || _currentVm is null) return;
         if (!e.PointerPressedEventArgs.GetCurrentPoint(_resultGrid).Properties.IsRightButtonPressed) return;
-        // Row selection is handled by OnResultGridPointerPressed; here we only resolve
-        // the clicked cell for the filter menu + enable Contains for text cells.
+        // Row selection is handled by OnResultGridPointerPressed; here we resolve the
+        // clicked cell for the filter menu (Contains gating) AND for the copy menu.
+        _resultCellRow = e.Row?.DataContext as object?[];
         _resultCellCtx = GridCellFilter.Resolve(_resultGrid, e, _currentVm.ResultFilterPanel.Columns);
         if (ResultFilterContainsItem is not null)
             ResultFilterContainsItem.IsEnabled = _resultCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);
+    }
+
+    // Translate the right-clicked row object into its index in CurrentResult.Rows.
+    // PagedResultRows holds the SAME object?[] references (filter/sort/page only
+    // reorder/slice), so a reference lookup is the correct view→data mapping.
+    private int ResolveResultRowIndex(object?[]? rowObject)
+    {
+        var rows = _currentVm?.CurrentResult?.Rows;
+        if (rowObject is null || rows is null) return -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (ReferenceEquals(rows[i], rowObject)) return i;
+        return -1;
     }
 
     private void OnResultFilterByValueClick(object? sender, RoutedEventArgs e)
@@ -1593,9 +1690,13 @@ public partial class MainWindow : Window
 
     private async void InvokeCopy(CopyGridMode mode)
     {
-        if (_currentVm is null || _resultGrid is null) return;
-        var rowIndex = _resultGrid.SelectedIndex;
-        var colIndex = _resultGrid.CurrentColumn?.DisplayIndex ?? 0;
+        if (_currentVm is null) return;
+        // Resolve the TARGET from the right-clicked cell (captured in
+        // OnResultCellPointerPressed), not from the grid's view coordinates:
+        //   row → data index in CurrentResult.Rows (robust to sort/filter/paging);
+        //   column → the cell's boxed data index (robust to column reorder).
+        var rowIndex = ResolveResultRowIndex(_resultCellRow);
+        var colIndex = _resultCellCtx?.ColumnIndex ?? 0;
         await _currentVm.CopyGridAsync(mode, rowIndex, colIndex);
     }
 

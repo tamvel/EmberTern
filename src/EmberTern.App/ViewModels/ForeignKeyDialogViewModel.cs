@@ -59,9 +59,11 @@ public partial class ForeignKeyDialogViewModel : ViewModelBase
         IReadOnlyList<string> sourceFields,
         IReadOnlyList<string> availableTables,
         Func<string, Task<IReadOnlyList<string>>> loadReferencedFieldsAsync,
-        Func<string, Task<IReadOnlyList<string>>> loadReferencedPrimaryKeyAsync)
+        Func<string, Task<IReadOnlyList<string>>> loadReferencedPrimaryKeyAsync,
+        IReadOnlyList<string>? existingNames = null)
     {
         SourceTableName = sourceTableName ?? string.Empty;
+        _existingNames = existingNames;
         SourceFields = new ObservableCollection<SelectableFieldViewModel>(
             (sourceFields ?? Array.Empty<string>()).Select(n => new SelectableFieldViewModel(n)));
         ReferencedFields = new ObservableCollection<SelectableFieldViewModel>();
@@ -84,6 +86,7 @@ public partial class ForeignKeyDialogViewModel : ViewModelBase
     }
 
     public string SourceTableName { get; }
+    private readonly IReadOnlyList<string>? _existingNames;
     public ObservableCollection<SelectableFieldViewModel> SourceFields { get; }
     public ObservableCollection<string> AvailableTables { get; }
     public ObservableCollection<SelectableFieldViewModel> ReferencedFields { get; }
@@ -256,7 +259,8 @@ public partial class ForeignKeyDialogViewModel : ViewModelBase
     private void TryAutoDeriveConstraintName()
     {
         if (string.IsNullOrWhiteSpace(SelectedReferencedTable)) return;
-        var proposed = $"FK_{SourceTableName.Trim().ToUpperInvariant()}_{SelectedReferencedTable.Trim().ToUpperInvariant()}";
+        var baseName = $"FK_{SourceTableName.Trim().ToUpperInvariant()}_{SelectedReferencedTable.Trim().ToUpperInvariant()}";
+        var proposed = ConstraintNaming.MakeUnique(baseName, _existingNames);
         // Replace ONLY when the field is empty or matches a previous auto-derive.
         if (string.IsNullOrWhiteSpace(ConstraintName)
             || string.Equals(ConstraintName, _lastAutoDerivedName, StringComparison.Ordinal))

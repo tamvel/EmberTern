@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Export;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Performance;
 using EmberTern.Core.Query;
 using EmberTern.Core.Sql;
@@ -42,6 +43,10 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
     // Easy-mode sub-tab indices (Arguments / Result / Variables / Cursors / Subprograms).
     // Result (1) is a single record — no collection toolbar.
     private const int ResultEasyIndex = 1;
+    // The two Easy sub-tabs that host an SQL editor of their own: diagnostics navigation (S5) has to
+    // select the right one before the caret it just moved can be seen.
+    public const int CursorsEasyIndex = 3;
+    public const int SubprogramsEasyIndex = 4;
 
     public const string NewFunctionTemplate =
         "CREATE OR ALTER FUNCTION NEW_FUNCTION\nRETURNS INTEGER\nAS\nBEGIN\n    RETURN 0;\nEND";
@@ -95,6 +100,11 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
         TrackDirty(Cursors);
         TrackDirty(Subprograms);
 
+        // Ambient-symbol refresh: the arguments feed BuildAmbientSymbols, so a rename/add/remove must
+        // rebuild the body editor's model (Variables is tracked by the base; ResultRows is the return
+        // value, not an in-body symbol).
+        TrackAmbient(Arguments);
+
         // Shared filter panel + aggregation bar for the Execute Result grid
         // (materialized: filter/aggregate/page all client-side over the exec result).
         ExecFilterPanel = new FilterPanelViewModel { ApplyRequested = ApplyExecFilterAsync };
@@ -133,6 +143,22 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
     // ─── Arguments (editable) ─────────────────────────────────────────────
 
     public ObservableCollection<ProcedureParamRowViewModel> Arguments { get; }
+
+    /// <summary>Easy-mode body editor: the body text declares neither the arguments nor the
+    /// variables (they live in the grids), so seed both into the model. See
+    /// <see cref="SourceObjectDetailTabViewModel.BuildAmbientSymbols"/>.</summary>
+    public override IReadOnlyList<Symbol> BuildAmbientSymbols()
+    {
+        var symbols = new List<Symbol>();
+        foreach (var a in Arguments)
+        {
+            var name = a.Name?.Trim();
+            if (string.IsNullOrEmpty(name)) continue;
+            symbols.Add(new ParameterSymbol(name) { Direction = ParameterDirection.Input });
+        }
+        AddVariableSymbols(symbols);
+        return symbols;
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteArgumentCommand))]

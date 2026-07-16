@@ -1,0 +1,82 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:app="using:EmberTern.App"
+             xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="240"
+             x:Class="EmberTern.App.Views.DiagnosticsPanelView"
+             x:Name="RootControl"
+             x:DataType="vm:DiagnosticsPanelViewModel"
+             Background="{DynamicResource BackgroundBrush}">
+
+  <!-- Stage 7 / S4 — a view of the DiagnosticsEngine's findings for the active SQL document, in engine
+       order. No filtering, grouping or sorting here. A clean document gets a readable empty state, never
+       an empty table. A ListBox (not an ItemsControl in a ScrollViewer) so a very large script's findings
+       virtualize; its selection/hover colours come from the central ListBoxItem overrides in
+       ControlStyles.axaml.
+       S5 adds activation only: SelectedIndex is two-way so navigation can move the selection (and the
+       list auto-scrolls to it), double-click / Enter jump to the span, and F8 / Shift+F8 work here just
+       as they do in the editor. Every decision belongs to the code-behind's Navigator. -->
+  <Grid>
+
+    <TextBlock Text="{Binding EmptyHint}"
+               Classes="subtle"
+               Margin="14,14,0,0"
+               IsVisible="{Binding ShowEmptyState}" />
+
+    <ListBox ItemsSource="{Binding Diagnostics}"
+             SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+             DoubleTapped="OnRowDoubleTapped"
+             KeyDown="OnListKeyDown"
+             Background="Transparent"
+             BorderThickness="0"
+             IsVisible="{Binding HasDiagnostics}">
+      <ListBox.ItemTemplate>
+        <DataTemplate DataType="vm:DiagnosticRowViewModel">
+          <!-- severity icon · code · message · location -->
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,1">
+
+            <controls:SvgIcon Grid.Column="0"
+                              Data="{Binding SeverityGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                              Width="14" Height="14"
+                              VerticalAlignment="Top"
+                              Margin="0,2,8,0"
+                              ToolTip.Tip="{Binding SeverityText}">
+              <controls:SvgIcon.Foreground>
+                <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                  <Binding Path="SeverityBrushKey" />
+                  <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                </MultiBinding>
+              </controls:SvgIcon.Foreground>
+            </controls:SvgIcon>
+
+            <TextBlock Grid.Column="1"
+                       Text="{Binding Code}"
+                       Classes="subtle"
+                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       FontSize="11"
+                       Width="56"
+                       VerticalAlignment="Top"
+                       Margin="0,1,10,0" />
+
+            <TextBlock Grid.Column="2"
+                       Text="{Binding Message}"
+                       FontSize="12"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource ForegroundBrush}" />
+
+            <TextBlock Grid.Column="3"
+                       Text="{Binding LocationLabel}"
+                       Classes="subtle"
+                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       FontSize="11"
+                       VerticalAlignment="Top"
+                       Margin="12,1,4,0" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </Grid>
+</UserControl>

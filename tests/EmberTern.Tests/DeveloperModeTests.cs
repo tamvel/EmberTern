@@ -9,27 +9,48 @@ using Xunit;
 namespace EmberTern.Tests;
 
 /// <summary>
-/// Krok 2: Developer Mode replaces the per-lane TPB profile pickers with one switch
-/// that affects ONLY the DDL path. Standard = NOWAIT (fail-fast); Developer = WAIT +
-/// lock timeout (DDL waits for an in-use object instead of "object is in use"). Data
-/// operations are unaffected (always NOWAIT). These pin the DDL TPB shapes, the
-/// persistence round-trip of the flag, and the dialog VM carrying it + the (now
-/// UI-less) SQL Dialect value.
+/// Developer Mode is one switch that affects ONLY the DDL path. DDL always runs WAIT (see
+/// below); the modes differ only in the lock timeout — Standard fails fast against another
+/// session, Developer waits longer. Data operations are unaffected.
+///
+/// <para>DDL is ALWAYS Wait because it now runs on its own attachment and can therefore meet
+/// the transient cross-attachment metadata-cache lock held by one of our other lanes (the Data
+/// lane that executed the routine). Measured on FB5: that lock clears in ~10 ms for a WAIT
+/// transaction but fails instantly for NOWAIT — which is why NOWAIT used to force DDL onto the
+/// Data connection and produce the "Commit or roll back the active transaction" guard.</para>
+///
+/// These pin the DDL TPB shapes, the persistence round-trip of the flag, and the dialog VM
+/// carrying it + the (now UI-less) SQL Dialect value.
 /// </summary>
 public class DeveloperModeTests
 {
     // ── DDL transaction-options shape (Standard vs Developer) ──────────────
 
+    // DDL now runs on its OWN attachment, so it can meet a transient cross-attachment
+    // metadata-cache lock held by one of our other lanes (the Data lane that executed the
+    // routine). Measured on FB5: that lock clears in ~10 ms for a WAIT transaction but fails
+    // instantly for NOWAIT. So DDL is ALWAYS Wait; the modes differ only in the timeout —
+    // Standard is short (absorb our own release, still fail fast against another session),
+    // Developer is long (wait for another session).
     [Fact]
-    public void Standard_DdlIsNoWaitReadWriteReadCommitted()
+    public void Standard_DdlIsWaitWithShortSelfReleaseTimeout()
     {
         var o = FirebirdDdlExecutor.BuildDdlTransactionOptions(developerMode: false);
         Assert.True(o.TransactionBehavior.HasFlag(FbTransactionBehavior.Write));
         Assert.True(o.TransactionBehavior.HasFlag(FbTransactionBehavior.ReadCommitted));
         Assert.True(o.TransactionBehavior.HasFlag(FbTransactionBehavior.RecVersion));
-        Assert.True(o.TransactionBehavior.HasFlag(FbTransactionBehavior.NoWait));
-        Assert.False(o.TransactionBehavior.HasFlag(FbTransactionBehavior.Wait));
-        Assert.Null(o.WaitTimeout); // no lock timeout in fail-fast mode
+        Assert.True(o.TransactionBehavior.HasFlag(FbTransactionBehavior.Wait));
+        Assert.False(o.TransactionBehavior.HasFlag(FbTransactionBehavior.NoWait));
+        Assert.Equal(TimeSpan.FromSeconds(FirebirdDdlExecutor.DdlSelfReleaseTimeoutSeconds), o.WaitTimeout);
+    }
+
+    // Developer Mode waits strictly longer than Standard.
+    [Fact]
+    public void Developer_WaitsLongerThanStandard()
+    {
+        var std = FirebirdDdlExecutor.BuildDdlTransactionOptions(developerMode: false);
+        var dev = FirebirdDdlExecutor.BuildDdlTransactionOptions(developerMode: true);
+        Assert.True(dev.WaitTimeout > std.WaitTimeout);
     }
 
     [Fact]

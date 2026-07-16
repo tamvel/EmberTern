@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using EmberTern.Core.Sql.Language;
+using EmberTern.Core.Sql.Language.Ast;
 
 namespace EmberTern.Core.Sql;
 
@@ -10,59 +12,32 @@ public sealed record SqlParameter(string Name, int Offset, int Length, char Mark
 
 /// <summary>
 /// Extracts named parameters (<c>:name</c> / <c>@name</c>) from a SQL statement for the "Smart SQL
-/// Parameters" feature. Built entirely on <see cref="SqlScanHelpers"/> — <b>no regex</b>: string
-/// literals (<c>'…'</c>), quoted identifiers (<c>"…"</c>) and line/block comments are skipped, and
-/// <c>::</c> is treated as the cast operator (not a parameter). EXECUTE BLOCK is excluded because
-/// its <c>:vars</c> are block locals, not input parameters.
+/// Parameters" feature. Built on the shared <see cref="SqlLexer"/> (Etap 2): parameters are simply
+/// the lexer's <see cref="TokenKind.Parameter"/> tokens, so string literals (<c>'…'</c>), quoted
+/// identifiers (<c>"…"</c>) and comments are already opaque, and <c>::</c> is the cast operator
+/// (not a parameter). EXECUTE BLOCK is excluded because its <c>:vars</c> are block locals, not
+/// input parameters.
 /// </summary>
 public static class SqlParameterScanner
 {
-    /// <summary>Every <c>:name</c> / <c>@name</c> occurrence in order, with offsets. Literals,
-    /// quoted identifiers and comments are skipped; <c>::</c> is not a parameter.</summary>
+    /// <summary>Every <c>:name</c> / <c>@name</c> occurrence in order, with offsets. Positional
+    /// <c>?</c> markers (which have no name) and everything inside literals/comments/quoted
+    /// identifiers are excluded — a direct consequence of the lexer's token kinds.</summary>
     public static IReadOnlyList<SqlParameter> Scan(string? sql)
     {
         var result = new List<SqlParameter>();
         if (string.IsNullOrEmpty(sql)) return result;
 
-        int i = 0, n = sql!.Length;
-        while (i < n)
+        foreach (var token in SqlLexer.Tokenize(sql!))
         {
-            SqlScanHelpers.SkipTrivia(sql, ref i);         // whitespace + -- and /* */ comments
-            if (i >= n) break;
-            if (SqlScanHelpers.TrySkipQuoted(sql, ref i)) continue; // '…' string / "…" identifier
-
-            char c = sql[i];
-            if (c == ':')
+            if (token.Kind != TokenKind.Parameter || token.Length < 2) continue;
+            char marker = token.Text[0];
+            if (marker is ':' or '@')
             {
-                if (i + 1 < n && sql[i + 1] == ':') { i += 2; continue; } // :: cast — not a parameter
-                int marker = i;
-                i++;
-                var name = ReadName(sql, ref i);
-                if (name is not null) result.Add(new SqlParameter(name, marker, i - marker, ':'));
-                continue; // a lone ':' just advances past the colon
+                result.Add(new SqlParameter(token.Text.Substring(1), token.Start, token.Length, marker));
             }
-            if (c == '@')
-            {
-                int marker = i;
-                i++;
-                var name = ReadName(sql, ref i);
-                if (name is not null) result.Add(new SqlParameter(name, marker, i - marker, '@'));
-                continue; // a lone '@' advances past it
-            }
-            i++;
         }
         return result;
-    }
-
-    // A parameter name starts with a letter or underscore, then identifier chars (letters/digits/_/$).
-    private static string? ReadName(string s, ref int i)
-    {
-        if (i >= s.Length) return null;
-        char first = s[i];
-        if (!(char.IsLetter(first) || first == '_')) return null;
-        int start = i;
-        while (i < s.Length && SqlScanHelpers.IsIdentifierChar(s[i])) i++;
-        return s.Substring(start, i - start);
     }
 
     /// <summary>
@@ -96,33 +71,24 @@ public static class SqlParameterScanner
     }
 
     /// <summary>True when the statement is an EXECUTE BLOCK — its <c>:vars</c> are block locals,
-    /// NOT input parameters, so it must be excluded from named-parameter collection.</summary>
+    /// NOT input parameters, so it must be excluded from named-parameter collection. Determined
+    /// from the parsed statement kind.</summary>
     public static bool IsExecuteBlock(string? sql)
     {
         if (string.IsNullOrEmpty(sql)) return false;
-        int i = 0;
-        SqlScanHelpers.SkipTrivia(sql!, ref i);
-        if (!SqlScanHelpers.TryKeyword(sql!, ref i, "EXECUTE")) return false;
-        SqlScanHelpers.SkipTrivia(sql!, ref i);
-        return SqlScanHelpers.TryKeyword(sql!, ref i, "BLOCK");
+        var statements = SqlParser.Parse(sql!).Root.Statements;
+        return statements.Count > 0 && statements[0] is ExecuteBlockStatement;
     }
 
     /// <summary>If the statement is <c>EXECUTE PROCEDURE name …</c>, returns the procedure name so
     /// its catalog parameter types can be resolved (unquoted names are upper-cased to match the
-    /// catalog; a quoted name keeps its case); otherwise null.</summary>
+    /// catalog; a quoted name keeps its case); otherwise null. Read from the parsed statement.</summary>
     public static string? TryExtractExecuteProcedureName(string? sql)
     {
         if (string.IsNullOrEmpty(sql)) return null;
-        int i = 0;
-        SqlScanHelpers.SkipTrivia(sql!, ref i);
-        if (!SqlScanHelpers.TryKeyword(sql!, ref i, "EXECUTE")) return null;
-        SqlScanHelpers.SkipTrivia(sql!, ref i);
-        if (!SqlScanHelpers.TryKeyword(sql!, ref i, "PROCEDURE")) return null;
-        SqlScanHelpers.SkipTrivia(sql!, ref i);
-
-        bool quoted = i < sql!.Length && sql[i] == '"';
-        var name = SqlScanHelpers.ReadIdentifier(sql!, ref i);
-        if (string.IsNullOrEmpty(name)) return null;
-        return quoted ? name! : name!.ToUpperInvariant();
+        var statements = SqlParser.Parse(sql!).Root.Statements;
+        return statements.Count > 0 && statements[0] is ExecuteProcedureStatement ep
+            ? ep.ProcedureName
+            : null;
     }
 }

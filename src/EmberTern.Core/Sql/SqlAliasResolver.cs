@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
+using Lang = EmberTern.Core.Sql.Language;
 
 namespace EmberTern.Core.Sql;
 
@@ -53,6 +53,19 @@ public static class SqlAliasResolver
         string sql,
         string qualifier,
         IReadOnlyCollection<string> knownTables)
+        => ResolveTableForQualifier(ParseAliases(sql), qualifier, knownTables);
+
+    /// <summary>
+    /// Same resolution as the <c>(sql, …)</c> overload but against a
+    /// <b>pre-computed</b> alias map. The editor caches
+    /// <see cref="ParseAliases"/> off the keystroke and resolves dot-completion
+    /// qualifiers through this overload, so no whole-document re-tokenize runs
+    /// while the user types. Pure — no DB access, no scanning.
+    /// </summary>
+    public static string? ResolveTableForQualifier(
+        IReadOnlyDictionary<string, string> aliases,
+        string qualifier,
+        IReadOnlyCollection<string> knownTables)
     {
         if (string.IsNullOrEmpty(qualifier)) return null;
 
@@ -66,8 +79,7 @@ public static class SqlAliasResolver
             }
         }
 
-        var aliases = ParseAliases(sql);
-        if (!aliases.TryGetValue(qualifier, out var aliased)) return null;
+        if (aliases is null || !aliases.TryGetValue(qualifier, out var aliased)) return null;
 
         foreach (var t in knownTables)
         {
@@ -231,6 +243,12 @@ public static class SqlAliasResolver
     }
 
     // -- Tokenizer --------------------------------------------------------------
+    //
+    // The resolver walks its own tiny Word/Comma/Dot/LParen/RParen/Other token shape (below).
+    // Tokenization is delegated to the shared Firebird lexer (Etap 1); we project its rich
+    // token stream onto that shape, preserving the historical behaviour this resolver relies
+    // on: string literals are invisible (contribute no token), unquoted words are uppercased
+    // to match Firebird's catalog convention, quoted identifiers keep their literal case.
 
     private enum TokenKind { Word, Comma, Dot, LParen, RParen, Other }
 
@@ -239,93 +257,39 @@ public static class SqlAliasResolver
     private static List<Token> Tokenize(string sql)
     {
         var result = new List<Token>();
-        int i = 0;
-        while (i < sql.Length)
+        foreach (var t in Lang.SqlLexer.Tokenize(sql))
         {
-            char c = sql[i];
-
-            // Whitespace
-            if (char.IsWhiteSpace(c)) { i++; continue; }
-
-            // Line comment "-- ..."
-            if (c == '-' && i + 1 < sql.Length && sql[i + 1] == '-')
+            switch (t.Kind)
             {
-                while (i < sql.Length && sql[i] != '\n') i++;
-                continue;
+                case Lang.TokenKind.EndOfFile:
+                case Lang.TokenKind.StringLiteral:
+                    // Trivia is attached to tokens (never emitted); string literals are opaque
+                    // and must not start a table-list parse — both contribute no token.
+                    break;
+                case Lang.TokenKind.Keyword:
+                case Lang.TokenKind.Identifier:
+                    result.Add(new Token(TokenKind.Word, t.Text.ToUpperInvariant()));
+                    break;
+                case Lang.TokenKind.QuotedIdentifier:
+                    result.Add(new Token(TokenKind.Word, t.Value)); // decoded, case-preserved
+                    break;
+                case Lang.TokenKind.Comma:
+                    result.Add(new Token(TokenKind.Comma, ","));
+                    break;
+                case Lang.TokenKind.Dot:
+                    result.Add(new Token(TokenKind.Dot, "."));
+                    break;
+                case Lang.TokenKind.LParen:
+                    result.Add(new Token(TokenKind.LParen, "("));
+                    break;
+                case Lang.TokenKind.RParen:
+                    result.Add(new Token(TokenKind.RParen, ")"));
+                    break;
+                default:
+                    // Numbers, operators, parameters, ';', unknown — opaque to alias parsing.
+                    result.Add(new Token(TokenKind.Other, t.Text));
+                    break;
             }
-
-            // Block comment "/* ... */"
-            if (c == '/' && i + 1 < sql.Length && sql[i + 1] == '*')
-            {
-                i += 2;
-                while (i + 1 < sql.Length && !(sql[i] == '*' && sql[i + 1] == '/')) i++;
-                if (i + 1 < sql.Length) i += 2;
-                continue;
-            }
-
-            // String literal — supports doubled-quote escape.
-            if (c == '\'')
-            {
-                i++;
-                while (i < sql.Length)
-                {
-                    if (sql[i] == '\'')
-                    {
-                        if (i + 1 < sql.Length && sql[i + 1] == '\'') { i += 2; continue; }
-                        i++; break;
-                    }
-                    i++;
-                }
-                continue;
-            }
-
-            // Quoted identifier — supports doubled-quote escape.
-            if (c == '"')
-            {
-                i++;
-                var sb = new StringBuilder();
-                while (i < sql.Length)
-                {
-                    if (sql[i] == '"')
-                    {
-                        if (i + 1 < sql.Length && sql[i + 1] == '"') { sb.Append('"'); i += 2; continue; }
-                        i++; break;
-                    }
-                    sb.Append(sql[i]);
-                    i++;
-                }
-                // Preserve quoted-identifier case verbatim.
-                result.Add(new Token(TokenKind.Word, sb.ToString()));
-                continue;
-            }
-
-            // Punctuation we care about.
-            if (c == ',') { result.Add(new Token(TokenKind.Comma, ",")); i++; continue; }
-            if (c == '.') { result.Add(new Token(TokenKind.Dot, ".")); i++; continue; }
-            if (c == '(') { result.Add(new Token(TokenKind.LParen, "(")); i++; continue; }
-            if (c == ')') { result.Add(new Token(TokenKind.RParen, ")")); i++; continue; }
-            if (c == ';') { result.Add(new Token(TokenKind.Other, ";")); i++; continue; }
-
-            // Identifier / word — letters, digits, underscore. Identifiers MAY
-            // start with a digit (defensive); reserved keywords don't, so the
-            // alias-vs-table-vs-keyword check still works.
-            if (SqlCompletionContext.IsIdentifierChar(c) || c == '$')
-            {
-                int start = i;
-                while (i < sql.Length && (SqlCompletionContext.IsIdentifierChar(sql[i]) || sql[i] == '$'))
-                {
-                    i++;
-                }
-                // Uppercase unquoted identifiers so they line up with Firebird's
-                // catalog convention (RDB$RELATIONS uses uppercase names).
-                var value = sql.Substring(start, i - start).ToUpperInvariant();
-                result.Add(new Token(TokenKind.Word, value));
-                continue;
-            }
-
-            // Anything else (operators etc) — opaque.
-            result.Add(new Token(TokenKind.Other, c.ToString()));
-            i++;
         }
         return result;
     }

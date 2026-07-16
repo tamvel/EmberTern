@@ -131,6 +131,38 @@ public class CopyGridTests
         Assert.Equal("1", captured);
     }
 
+    // Regression guard for the copy-cell bug: after a sort, the grid's view
+    // coordinates (SelectedIndex / paged position) no longer equal the row's index
+    // in CurrentResult.Rows. The View fix resolves the clicked ROW OBJECT back to
+    // its data index by reference — which only works because PagedResultRows holds
+    // the SAME object?[] instances as CurrentResult.Rows. Pin both facts here.
+    [Fact]
+    public void AfterSort_PagedRowsShareReferences_AndDataIndexCopyMatchesClickedRow()
+    {
+        using var h = new Harness();
+        h.Main.CurrentResult = SampleResult();
+
+        // Sort descending on ID (column 0): paged order becomes 3,2,1 while
+        // CurrentResult.Rows stays 1,2,3.
+        h.Main.CycleResultSort(0); // ascending
+        h.Main.CycleResultSort(0); // descending
+
+        var paged = h.Main.PagedResultRows;
+        Assert.Equal(3, paged.Count);
+        // View row 0 is ID=3, but its data index in CurrentResult.Rows is 2 — the
+        // exact divergence the old SelectedIndex-based copy got wrong.
+        var clicked = paged[0];
+        int dataIndex = -1;
+        for (int i = 0; i < h.Main.CurrentResult!.Rows.Count; i++)
+            if (ReferenceEquals(h.Main.CurrentResult.Rows[i], clicked)) { dataIndex = i; break; }
+        Assert.Equal(2, dataIndex);
+
+        // Copying the NAME cell (data column 1) of the clicked view row must yield
+        // that row's value, resolved via the data index.
+        Assert.Equal("3", h.Main.BuildCopyText(CopyGridMode.Cell, dataIndex, 0));
+        Assert.Equal("charlie@example.com", h.Main.BuildCopyText(CopyGridMode.Cell, dataIndex, 2));
+    }
+
     [Fact]
     public async Task CopyGridAsync_NoResult_ReturnsFalseAndDoesNotInvokeClipboard()
     {

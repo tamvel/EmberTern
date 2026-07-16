@@ -3,6 +3,7 @@
              xmlns:vm="using:EmberTern.App.ViewModels"
              xmlns:app="using:EmberTern.App"
              xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:views="using:EmberTern.App.Views"
              xmlns:ae="using:AvaloniaEdit"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -259,6 +260,16 @@
                        Foreground="{DynamicResource ForegroundBrush}" />
       </TabItem>
 
+      <!-- Diagnostics (Stage 7 / S4) — the SAME view + VM the SQL Editor's Diagnostics tab uses,
+           hosted per object. Shows the ACTIVE SQL document's findings (the LastFocusedSqlDocument
+           rule — see DiagnosticsPanelHost): the header or body editor, whichever was last edited.
+           Appended LAST so the persisted ActiveSubTabIndex and the PackageSubTabIndex /
+           BodySubTabIndex constants never shift. -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
+        <views:DiagnosticsPanelView x:Name="PackageDiagnosticsPanel"
+                                    DataContext="{Binding DiagnosticsPanel}" />
+      </TabItem>
+
     </TabControl>
 
     <StackPanel Grid.Row="1" Orientation="Vertical">
@@ -267,7 +278,7 @@
                  Margin="10,4"
                  FontSize="11"
                  IsVisible="{Binding IsLoading}" />
-      <TextBlock Text="{Binding ErrorMessage}"
+      <SelectableTextBlock Text="{Binding ErrorMessage}"
                  Classes="subtle error"
                  Margin="10,4"
                  FontSize="11"

@@ -318,7 +318,8 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
                 System.StringComparison.OrdinalIgnoreCase);
             if (domainChanged && !string.IsNullOrWhiteSpace(row.DomainName))
             {
-                typeClause = row.DomainName;
+                // Generated-DDL identifier style: present the domain UPPERCASE (bare) — §0-safe.
+                typeClause = EmberTern.Core.Metadata.DdlGenerator.PresentIdentifier(row.DomainName);
             }
             else if (typeChanged
                      && string.IsNullOrWhiteSpace(row.DomainName)
@@ -373,6 +374,17 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
     }
     public ObservableCollection<IndexInfo> Indexes { get; }
     public ObservableCollection<ConstraintInfo> Constraints { get; }
+
+    /// <summary>Every index + constraint name currently on the table — the collision set the
+    /// Add-Index / Add-PK / Add-Unique / Add-Check / Add-FK dialogs feed to
+    /// <see cref="EmberTern.Core.Metadata.ConstraintNaming.MakeUnique"/> so their default name is
+    /// auto-numbered past anything already used (IDX_T → IDX1_T …), instead of colliding.</summary>
+    public IReadOnlyList<string> ExistingIndexAndConstraintNames
+        => Indexes.Select(i => i.Name)
+            .Concat(Constraints.Select(c => c.Name))
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .ToList();
+
     public ObservableCollection<DependencyInfo> DependsOn { get; }
     public ObservableCollection<DependencyInfo> DependedOnBy { get; }
     public ObservableCollection<DependencyGroupNode> DependsOnTree { get; }

@@ -299,8 +299,9 @@ public static class DdlGenerator
     {
         if (!string.IsNullOrWhiteSpace(def.Domain))
         {
-            // Firebird syntax: ADD <name> <DOMAIN_NAME> — no DOMAIN keyword.
-            return Quote(def.Domain!.Trim());
+            // Firebird syntax: ADD <name> <DOMAIN_NAME> — no DOMAIN keyword. Presented in the
+            // generated-DDL identifier style (regular names UPPERCASE + bare; §0-safe).
+            return PresentIdentifier(def.Domain);
         }
 
         if (!string.IsNullOrWhiteSpace(def.TypeOf))
@@ -932,6 +933,44 @@ public static class DdlGenerator
     // from the always-quote Quote used elsewhere in this generator.
     // Quote only when needed (lowercase / special / leading non-letter); SHOUTY_CASE
     // names stay bare, matching the catalog. internal so SecurityDdlGenerator reuses it.
+    /// <summary>
+    /// Presents an identifier the way EmberTern's <b>generated DDL</b> (Easy-mode field/parameter
+    /// definitions, domain selections, type clauses) should show it: a <em>regular</em> identifier is
+    /// folded to UPPERCASE and emitted bare — the house style (see gotcha #141: typed names are already
+    /// coerced upper), and §0-safe because Firebird folds an unquoted regular identifier to upper
+    /// anyway, so this changes only the presentation, never which object is resolved. An identifier
+    /// that genuinely needs quoting (leading non-letter or a special / non-ASCII character, i.e. a
+    /// case-sensitive quoted identifier) is preserved <em>verbatim</em> and quoted via
+    /// <see cref="QuoteLight"/> — never uppercased, so its identity is never changed.
+    /// <para>
+    /// This is deliberately a <b>generation-only</b> presentation rule, distinct from
+    /// <c>SqlFormatter</c> (which formats existing source and preserves its own casing). A future
+    /// per-category formatter casing option must not reach into this path, and vice-versa.
+    /// </para>
+    /// </summary>
+    public static string PresentIdentifier(string? name)
+    {
+        var n = (name ?? string.Empty).Trim();
+        if (n.Length == 0) return n;
+        if (n[0] == '"') return n; // already an explicitly-quoted identifier — leave verbatim
+        return IsRegularIdentifier(n) ? n.ToUpperInvariant() : QuoteLight(n);
+    }
+
+    // A regular (unquoted-able) Firebird identifier: an ASCII letter followed by ASCII letters /
+    // digits / '_' / '$'. Only these are fold-safe to uppercase; anything else is case-sensitive.
+    private static bool IsRegularIdentifier(string n)
+    {
+        char c0 = n[0];
+        if (!((c0 >= 'A' && c0 <= 'Z') || (c0 >= 'a' && c0 <= 'z'))) return false;
+        foreach (var c in n)
+        {
+            bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                      || (c >= '0' && c <= '9') || c == '_' || c == '$';
+            if (!ok) return false;
+        }
+        return true;
+    }
+
     internal static string QuoteLight(string name)
     {
         if (string.IsNullOrEmpty(name)) return "\"\"";

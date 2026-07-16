@@ -33,9 +33,11 @@ public sealed record IndexSpec(
 /// </summary>
 public partial class IndexDialogViewModel : ViewModelBase
 {
-    public IndexDialogViewModel(string tableName, IReadOnlyList<string> fields)
+    public IndexDialogViewModel(string tableName, IReadOnlyList<string> fields,
+        IReadOnlyList<string>? existingNames = null)
     {
         TableName = tableName ?? string.Empty;
+        _existingNames = existingNames;
         Fields = new ObservableCollection<SelectableFieldViewModel>(
             (fields ?? Array.Empty<string>()).Select(n => new SelectableFieldViewModel(n)));
         Fields.CollectionChanged += OnFieldsCollectionChanged;
@@ -45,6 +47,7 @@ public partial class IndexDialogViewModel : ViewModelBase
     }
 
     public string TableName { get; }
+    private readonly IReadOnlyList<string>? _existingNames;
     public ObservableCollection<SelectableFieldViewModel> Fields { get; }
 
     [ObservableProperty]
@@ -131,7 +134,8 @@ public partial class IndexDialogViewModel : ViewModelBase
     private string DefaultName()
     {
         var t = TableName.Trim().ToUpperInvariant();
-        return string.IsNullOrEmpty(t) ? "IDX" : "IDX_" + t;
+        var baseName = string.IsNullOrEmpty(t) ? "IDX" : "IDX_" + t;
+        return ConstraintNaming.MakeUnique(baseName, _existingNames);
     }
 
     private List<string> SelectedFieldNames()

@@ -28,9 +28,15 @@
       <Color x:Key="RowAlternateColor">#0DFFFFFF</Color>
       <!-- Drag-and-drop drop-target overlay: ~33% of the dark accent blue. ARGB hex. -->
       <Color x:Key="DropTargetColor">#552D6BBF</Color>
-      <!-- Occurrence highlight (selecting an identifier boxes its other occurrences):
-           faint warm gold, distinct from the blue selection. ARGB alpha-first. -->
-      <Color x:Key="OccurrenceHighlightColor">#33C8A030</Color>
+      <!-- Occurrence highlight (selecting / clicking an identifier boxes its other occurrences,
+           plus the find-references highlighter). A subtle wash of the app's accent blue + a soft
+           accent border. Cool so it stays true on the near-black editor — the earlier warm gold
+           composited to a muddy brown that clashed with the theme (the exact trap the RowModified
+           note below documents). Reuses the design-language accent rather than a bespoke hue, and
+           is kept subtle so it never out-shouts syntax highlighting; the border + context set it
+           apart from the solid blue text selection. ARGB alpha-first. -->
+      <Color x:Key="OccurrenceHighlightColor">#382D6BBF</Color>
+      <Color x:Key="OccurrenceHighlightBorderColor">#802D6BBF</Color>
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
@@ -91,6 +97,7 @@
       <SolidColorBrush x:Key="TxBand1" Color="#20808CA8" />
       <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
       <SolidColorBrush x:Key="OccurrenceHighlightBrush" Color="{StaticResource OccurrenceHighlightColor}" />
+      <SolidColorBrush x:Key="OccurrenceHighlightBorderBrush" Color="{StaticResource OccurrenceHighlightBorderColor}" />
       <SolidColorBrush x:Key="RowModifiedBrush" Color="{StaticResource RowModifiedColor}" />
       <SolidColorBrush x:Key="RowAddedBrush" Color="{StaticResource RowAddedColor}" />
       <SolidColorBrush x:Key="RowDroppedBrush" Color="{StaticResource RowDroppedColor}" />
@@ -169,6 +176,20 @@
       <SolidColorBrush x:Key="IconColor_SystemTable" Color="#757575" />
       <!-- Query (SQL Editor) tab icon — neutral on dark, distinct from blue Table. -->
       <SolidColorBrush x:Key="IconColor_Query"       Color="#B0BEC5" />
+
+      <!-- Editor semantic-highlight accent (Etap 6, §9.2 "calm base, semantic accent").
+           Navigable schema objects reuse the IconColor_* palette above (editor colour ==
+           tree icon), so only two extra tokens are needed: columns get one calm readable
+           colour; local names (FROM/JOIN aliases, PSQL variables/parameters, cursors, CTEs,
+           NEW/OLD) a distinct low-chroma "local scope" hue. Hex is a conservative default —
+           final visual tuning in both themes is a follow-up. -->
+      <SolidColorBrush x:Key="EditorColumnBrush"     Color="#A8C7E0" />
+      <SolidColorBrush x:Key="EditorLocalBrush"      Color="#C8A8D8" />
+      <!-- Trigger context variables (NEW/OLD/INSERTING/UPDATING/DELETING). Amber, the same family as
+           the built-in context constants (CURRENT_DATE / CURRENT_USER) so they read as core language
+           constructs — but with more chroma than the pale Function keyword (#DCDCAA) so they clearly
+           stand out from the near-grey identifier foreground (#D4D4D4). -->
+      <SolidColorBrush x:Key="EditorContextVariableBrush" Color="#E5C07B" />
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
@@ -201,9 +222,12 @@
       <Color x:Key="RowAlternateColor">#0D000000</Color>
       <!-- Drag-and-drop drop-target overlay: ~33% of the light accent blue. ARGB hex. -->
       <Color x:Key="DropTargetColor">#552D6BBF</Color>
-      <!-- Occurrence highlight (selecting an identifier boxes its other occurrences):
-           faint warm gold, distinct from the blue selection. ARGB alpha-first. -->
-      <Color x:Key="OccurrenceHighlightColor">#33C8A030</Color>
+      <!-- Occurrence highlight — see the Dark note. A subtle wash of the accent blue over the
+           near-white editor with a soft accent border; slightly lower fill alpha than Dark so it
+           stays gentle on the light surface. Distinct enough from the pale-blue text selection
+           (SelectionColor) via the border + context. ARGB alpha-first. -->
+      <Color x:Key="OccurrenceHighlightColor">#2E2D6BBF</Color>
+      <Color x:Key="OccurrenceHighlightBorderColor">#802D6BBF</Color>
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
@@ -258,6 +282,7 @@
       <SolidColorBrush x:Key="TxBand1" Color="#20808CA8" />
       <SolidColorBrush x:Key="DropTargetBrush" Color="{StaticResource DropTargetColor}" />
       <SolidColorBrush x:Key="OccurrenceHighlightBrush" Color="{StaticResource OccurrenceHighlightColor}" />
+      <SolidColorBrush x:Key="OccurrenceHighlightBorderBrush" Color="{StaticResource OccurrenceHighlightBorderColor}" />
       <SolidColorBrush x:Key="RowModifiedBrush" Color="{StaticResource RowModifiedColor}" />
       <SolidColorBrush x:Key="RowAddedBrush" Color="{StaticResource RowAddedColor}" />
       <SolidColorBrush x:Key="RowDroppedBrush" Color="{StaticResource RowDroppedColor}" />
@@ -320,6 +345,15 @@
       <SolidColorBrush x:Key="IconColor_Index"       Color="#558B2F" />
       <SolidColorBrush x:Key="IconColor_SystemTable" Color="#424242" />
       <SolidColorBrush x:Key="IconColor_Query"       Color="#455A64" />
+
+      <!-- Editor semantic-highlight accent (Etap 6, §9.2) — light theme. Darker + more
+           saturated than the dark variant for legibility on the near-white editor, and
+           kept distinct in both hue AND lightness from the object palette above (§9.3).
+           Conservative default; final visual tuning is a follow-up. -->
+      <SolidColorBrush x:Key="EditorColumnBrush"     Color="#2E5C82" />
+      <SolidColorBrush x:Key="EditorLocalBrush"      Color="#7A4E86" />
+      <!-- Trigger context variables — mirrors the Light "Function" lexical colour (#8C6600). -->
+      <SolidColorBrush x:Key="EditorContextVariableBrush" Color="#8C6600" />
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>

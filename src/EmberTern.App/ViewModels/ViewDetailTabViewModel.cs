@@ -34,9 +34,16 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
     public const int RowCountCap = 50000;
 
     // Sub-tab indices — must match the TabItem order in ViewDetailTabView.axaml
-    // (SQL, Fields, Dependencies, Data, Description, DDL).
+    // (SQL, Fields, Dependencies, Data, Description, DDL, Diagnostics — Diagnostics is
+    // appended LAST so these indices, which are also persisted per tab, never shift).
     public const int SqlSubTabIndex = 0;
     public const int DataSubTabIndex = 3;
+
+    /// <summary>Diagnostics panel (Stage 7 / S4) for this editor's own Diagnostics sub-tab — the same view
+    /// and VM the SQL Editor uses, hosted per object exactly as the routine editors do. Fed by the View's
+    /// <c>DiagnosticsPanelHost</c> from the active SQL document's cached diagnostics; this VM computes
+    /// nothing.</summary>
+    public DiagnosticsPanelViewModel DiagnosticsPanel { get; } = new();
 
     // Default CREATE VIEW template for the New View flow. The user edits the SQL
     // directly — no visual designer (per milestone scope).

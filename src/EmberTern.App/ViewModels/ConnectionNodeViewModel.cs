@@ -146,6 +146,12 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         sw.Stop();
         Diagnostics.PerfTrace.LogCategoryLoad(Profile.Name, categories.Count, sw.ElapsedMilliseconds);
 
+        // Prefetch is complete — every category's objects are loaded. Fire the definitive "metadata
+        // ready" event so every open SQL editor does its final rebuild + full warm and publishes one
+        // complete Semantic Model (Package 5 closure). This is the authoritative completion signal, not
+        // the per-category debounce the editor also listens to.
+        metadata.NotifyMetadataReady();
+
         // Re-assert expanded after the categories exist. OnIsConnectedChanged already
         // set IsExpanded=true synchronously; this is a plain idempotent confirmation
         // now that the TreeViewItem→VM binding is sound (see the MainWindow.axaml
@@ -182,8 +188,14 @@ public partial class ConnectionNodeViewModel : ViewModelBase
     [RelayCommand]
     private void Edit() => _owner?.RequestEdit(Profile);
 
+    // Copy duplicates the profile then opens the new copy in the edit dialog straight away —
+    // the user almost always wants to rename / re-point the fresh copy (IBExpert parity).
     [RelayCommand]
-    private void Copy() => _owner?.Copy(Profile);
+    private void Copy()
+    {
+        var clone = _owner?.Copy(Profile);
+        if (clone is not null) _owner?.RequestEdit(clone);
+    }
 
     // Goes through the confirming wrapper — connection delete is HIGH risk
     // (config + saved queries + workspace state, irreversible).

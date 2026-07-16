@@ -76,13 +76,24 @@
                 <DataGrid x:Name="InputParamsGrid"
                           ItemsSource="{Binding InputParams}"
                           SelectedItem="{Binding SelectedInputParam, Mode=TwoWay}"
+                          PointerPressed="OnEasyGridPointerPressed"
                           IsReadOnly="False" AutoGenerateColumns="False"
                           CanUserSortColumns="False" CanUserResizeColumns="True"
                           CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="11"
                           GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                           VerticalGridLinesBrush="{DynamicResource BorderBrush}"
-                          Background="{DynamicResource BackgroundBrush}" />
+                          Background="{DynamicResource BackgroundBrush}">
+                  <DataGrid.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionAddTooltip}" Command="{Binding AddCollectionItemCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionRemoveTooltip}" Command="{Binding RemoveCollectionItemCommand}" />
+                      <Separator />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Command="{Binding MoveCollectionItemUpCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Command="{Binding MoveCollectionItemDownCommand}" />
+                    </ContextMenu>
+                  </DataGrid.ContextMenu>
+                </DataGrid>
               </TabItem>
 
               <!-- Output parameters (editable; no default). -->
@@ -90,13 +101,24 @@
                 <DataGrid x:Name="OutputParamsGrid"
                           ItemsSource="{Binding OutputParams}"
                           SelectedItem="{Binding SelectedOutputParam, Mode=TwoWay}"
+                          PointerPressed="OnEasyGridPointerPressed"
                           IsReadOnly="False" AutoGenerateColumns="False"
                           CanUserSortColumns="False" CanUserResizeColumns="True"
                           CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="11"
                           GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                           VerticalGridLinesBrush="{DynamicResource BorderBrush}"
-                          Background="{DynamicResource BackgroundBrush}" />
+                          Background="{DynamicResource BackgroundBrush}">
+                  <DataGrid.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionAddTooltip}" Command="{Binding AddCollectionItemCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionRemoveTooltip}" Command="{Binding RemoveCollectionItemCommand}" />
+                      <Separator />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Command="{Binding MoveCollectionItemUpCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Command="{Binding MoveCollectionItemDownCommand}" />
+                    </ContextMenu>
+                  </DataGrid.ContextMenu>
+                </DataGrid>
               </TabItem>
 
               <!-- Variables (editable, full field model — reuses the field Type/Domain dropdowns). -->
@@ -104,13 +126,24 @@
                 <DataGrid x:Name="VariablesGrid"
                           ItemsSource="{Binding Variables}"
                           SelectedItem="{Binding SelectedVariable, Mode=TwoWay}"
+                          PointerPressed="OnEasyGridPointerPressed"
                           IsReadOnly="False" AutoGenerateColumns="False"
                           CanUserSortColumns="False" CanUserResizeColumns="True"
                           CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="11"
                           GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                           VerticalGridLinesBrush="{DynamicResource BorderBrush}"
-                          Background="{DynamicResource BackgroundBrush}" />
+                          Background="{DynamicResource BackgroundBrush}">
+                  <DataGrid.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionAddTooltip}" Command="{Binding AddCollectionItemCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionRemoveTooltip}" Command="{Binding RemoveCollectionItemCommand}" />
+                      <Separator />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Command="{Binding MoveCollectionItemUpCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Command="{Binding MoveCollectionItemDownCommand}" />
+                    </ContextMenu>
+                  </DataGrid.ContextMenu>
+                </DataGrid>
               </TabItem>
 
               <!-- Cursors — IBExpert-style split: names (left) + editable source (right). -->
@@ -410,6 +443,16 @@
         <views:PerformancePanelView x:Name="ProcPerformancePanel" />
       </TabItem>
 
+      <!-- Diagnostics (Stage 7 / S4) — the SAME view + VM the SQL Editor's Diagnostics tab uses,
+           hosted per object exactly like Performance above. Shows the ACTIVE SQL document's findings
+           (the LastFocusedSqlDocument rule — see DiagnosticsPanelHost), never a merge of the four
+           editors. Appended LAST: ActiveSubTabIndex is persisted AND PerformanceSubTabIndex = 5 is a
+           hard-coded constant, so the existing indices must not shift. -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
+        <views:DiagnosticsPanelView x:Name="ProcDiagnosticsPanel"
+                                    DataContext="{Binding DiagnosticsPanel}" />
+      </TabItem>
+
     </TabControl>
 
     <!-- Persistent execution-info panel — visible after any Execute regardless of
@@ -504,7 +547,7 @@
       </Border>
       <TextBlock Text="{x:Static app:UiStrings.ProcedureDetailLoadingHint}" Classes="subtle"
                  Margin="10,4" FontSize="11" IsVisible="{Binding IsLoading}" />
-      <TextBlock Text="{Binding ErrorMessage}" Classes="subtle error" Margin="10,4" FontSize="11"
+      <SelectableTextBlock Text="{Binding ErrorMessage}" Classes="subtle error" Margin="10,4" FontSize="11"
                  TextWrapping="Wrap" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     </StackPanel>
   </Grid>

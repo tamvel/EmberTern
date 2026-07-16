@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Firebird;
 
 namespace EmberTern.App.ViewModels;
@@ -62,9 +63,52 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
             MoveVariableDownCommand.NotifyCanExecuteChanged();
         };
         TrackDirty(Variables);
+        TrackAmbient(Variables);
 
         // Subclasses release the ctor-time suppression at the END of their own ctor,
         // once their fields/collections are assigned — do NOT release it here.
+    }
+
+    // ─── Ambient-symbol change tracking (Easy-mode diagnostics/completion refresh) ──────────
+
+    /// <summary>Raised whenever the out-of-text declarations that feed <see cref="BuildAmbientSymbols"/>
+    /// change — a parameter/variable added, removed, reordered, or <b>renamed</b> in the Easy-mode grids.
+    /// The Easy-mode body editor holds only the BODY; its params/variables live in these grids and reach
+    /// the semantic model as ambient symbols. Without this signal the model (and therefore diagnostics,
+    /// completion, highlighting, Quick Info) would go stale until the user next edited the body text —
+    /// e.g. a squiggle under <c>:test</c> would linger after the user added <c>test</c> to the Variables
+    /// grid. The view subscribes and asks each ambient-seeded editor to rebuild its model. Debounced on
+    /// the consuming side, so a name typed character-by-character coalesces into one rebuild.</summary>
+    public event EventHandler? AmbientSymbolsChanged;
+
+    /// <summary>Signals that the ambient-symbol set changed. Not gated by <see cref="_suppressDirty"/>:
+    /// a rebuild must also happen on the programmatic load/toggle that first populates the grids, so the
+    /// initial model reflects the final grid state regardless of load order; the consumer debounces the
+    /// burst.</summary>
+    protected void RaiseAmbientSymbolsChanged() => AmbientSymbolsChanged?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Raises <see cref="AmbientSymbolsChanged"/> on any add/remove/reorder of the collection
+    /// AND on a row's <see cref="ProcedureFieldRowBase.Name"/> edit (the only row property that affects
+    /// symbol resolution — type/domain/size/scale/default do not). Subclasses call this for their own
+    /// ambient-feeding grids (Input/Output params, function arguments); the base tracks Variables.</summary>
+    protected void TrackAmbient(INotifyCollectionChanged collection)
+    {
+        collection.CollectionChanged += (_, e) =>
+        {
+            RaiseAmbientSymbolsChanged();
+            if (e.NewItems is not null)
+            {
+                foreach (INotifyPropertyChanged row in e.NewItems)
+                {
+                    row.PropertyChanged += OnAmbientRowPropertyChanged;
+                }
+            }
+        };
+    }
+
+    private void OnAmbientRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProcedureFieldRowBase.Name)) RaiseAmbientSymbolsChanged();
     }
 
     // ─── Dirty tracking (drives IUnsavedWorkSource + Revert) ──────────────
@@ -125,6 +169,12 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
     public bool IsNew { get; init; }
 
     public virtual bool CanUseEasyMode => true;
+
+    /// <summary>Diagnostics panel (Stage 7 / S4) for this editor's own Diagnostics sub-tab — the same view
+    /// and VM the SQL Editor uses, hosted per object exactly as <c>Performance</c> is (one context per host,
+    /// no shared global state). Fed by the View's <c>DiagnosticsPanelHost</c> from the active SQL document's
+    /// cached diagnostics; this VM computes nothing.</summary>
+    public DiagnosticsPanelViewModel DiagnosticsPanel { get; } = new();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSourceMode))]
@@ -227,6 +277,34 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
     // ─── Variables (editable grid — shared by all routine editors) ────────
 
     public ObservableCollection<ProcedureVariableRowViewModel> Variables { get; }
+
+    /// <summary>
+    /// The routine's declarations as semantic symbols, for the Easy-mode BODY editor. That editor's
+    /// text is only the body — the DECLAREd variables (and, for a procedure/function, the
+    /// parameters) live in the surrounding grids, so a text-only semantic model cannot see them and
+    /// Ctrl+Space offered no params/locals. These are seeded into the model's root scope, which
+    /// makes them visible to every model client (completion, Quick Info, navigation, highlighting).
+    /// <para>Base = the shared Variables grid; routine kinds with parameters override and add them.
+    /// Source mode passes nothing (the text already declares everything).</para>
+    /// </summary>
+    public virtual IReadOnlyList<Symbol> BuildAmbientSymbols()
+    {
+        var symbols = new List<Symbol>();
+        AddVariableSymbols(symbols);
+        return symbols;
+    }
+
+    /// <summary>Appends the Variables grid as <see cref="VariableSymbol"/>s. Blank/duplicate names
+    /// are skipped — a half-typed row must never poison the scope.</summary>
+    protected void AddVariableSymbols(List<Symbol> symbols)
+    {
+        foreach (var v in Variables)
+        {
+            var name = v.Name?.Trim();
+            if (string.IsNullOrEmpty(name)) continue;
+            symbols.Add(new VariableSymbol(name));
+        }
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteVariableCommand))]

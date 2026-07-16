@@ -1,44 +1,32 @@
 using System.Threading.Tasks;
 using EmberTern.Core.Connections;
 using EmberTern.Firebird;
+using FirebirdSql.Data.FirebirdClient;
 using Xunit;
 
 namespace EmberTern.Tests;
 
+/// <summary>
+/// TransactionService is THE user transaction — one, on the data attachment, NOWAIT.
+/// It used to be parameterized by <c>ConnectionRole</c>, with a second "metadata" instance and a
+/// degraded-mode fallback chain — machinery that existed only because the SQL Editor silently
+/// routed DDL onto the metadata attachment. That routing is gone, so the role, the profile
+/// selector and the fallback are gone: there is one constructor and one transaction.
+/// </summary>
 public class TransactionServiceTests
 {
+    // The TPB is fixed: read-committed / rec_version / write / NOWAIT. It is NOT read from the
+    // stored per-connection profile — a legacy table-stability profile must never be able to make
+    // the SQL console WAIT or lock whole tables.
     [Fact]
-    public void ConvenienceCtor_IsDataLane()
+    public void UserTransaction_IsAlwaysReadCommittedNoWait()
     {
-        using var conn = new FirebirdConnectionService();
-        using var tx = new TransactionService(conn);
-        Assert.Equal(ConnectionRole.Data, tx.Role);
-    }
-
-    [Fact]
-    public void MetadataLaneCtor_HasMetadataRole()
-    {
-        using var conn = new FirebirdConnectionService();
-        using var data = new TransactionService(conn);
-        using var meta = new TransactionService(
-            conn, ConnectionRole.Metadata,
-            p => p?.MetadataTransactionProfile ?? TransactionProfile.ReadCommitted, data);
-        Assert.Equal(ConnectionRole.Metadata, meta.Role);
-    }
-
-    [Fact]
-    public async Task MetadataLane_DegradesToDataLane_WhenNoSecondAttachment_ThrowsCleanlyWithoutConnection()
-    {
-        using var conn = new FirebirdConnectionService();
-        using var data = new TransactionService(conn);
-        using var meta = new TransactionService(
-            conn, ConnectionRole.Metadata,
-            p => p?.MetadataTransactionProfile ?? TransactionProfile.ReadCommitted, data);
-
-        // Not connected → metadata is not independent → metadata Begin delegates to the
-        // data lane, whose RequireOpenConnection throws InvalidOperationException.
-        await Assert.ThrowsAsync<System.InvalidOperationException>(() => meta.BeginTransactionAsync());
-        Assert.Equal(TransactionState.Idle, meta.State);
+        var o = TransactionService.BuildTransactionOptions(TransactionProfile.ReadCommitted);
+        Assert.True(o.TransactionBehavior.HasFlag(FbTransactionBehavior.Write));
+        Assert.True(o.TransactionBehavior.HasFlag(FbTransactionBehavior.ReadCommitted));
+        Assert.True(o.TransactionBehavior.HasFlag(FbTransactionBehavior.RecVersion));
+        Assert.True(o.TransactionBehavior.HasFlag(FbTransactionBehavior.NoWait));
+        Assert.False(o.TransactionBehavior.HasFlag(FbTransactionBehavior.Wait));
     }
 
     [Fact]

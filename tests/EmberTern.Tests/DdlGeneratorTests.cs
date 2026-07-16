@@ -95,7 +95,9 @@ public class DdlGeneratorTests
     {
         var def = new FieldDefinition { Name = "ID_KRAJ", Domain = "T_ID", BasicType = "VARCHAR", Size = 80 };
         var sql = DdlGenerator.BuildAddField("ADRES", def);
-        Assert.Contains("\"T_ID\"", sql);
+        // Generated-DDL identifier style: a regular domain name is UPPERCASE + bare (not quoted).
+        Assert.Contains("T_ID", sql);
+        Assert.DoesNotContain("\"T_ID\"", sql);
         Assert.DoesNotContain("VARCHAR", sql);
     }
 
@@ -449,4 +451,37 @@ END";
         var def = new FieldDefinition { BasicType = "VARCHAR", Size = 30 };
         Assert.Equal("VARCHAR(30)", DdlGenerator.FormatTypeOrDomain(def));
     }
+
+    // ─── Generated-DDL identifier presentation (Easy-mode casing) ─────────────
+
+    [Theory]
+    [InlineData("my_domain", "MY_DOMAIN")] // regular lower → UPPER (the reported case)
+    [InlineData("MY_DOMAIN", "MY_DOMAIN")] // regular upper → unchanged
+    [InlineData("Mixed_Case1", "MIXED_CASE1")]
+    [InlineData("  spaced  ", "SPACED")]   // trimmed then folded
+    [InlineData("A$B_C", "A$B_C")]         // '$' / '_' are regular-identifier chars
+    public void PresentIdentifier_RegularName_IsUppercasedBare(string input, string expected)
+    {
+        Assert.Equal(expected, DdlGenerator.PresentIdentifier(input));
+    }
+
+    [Theory]
+    [InlineData("weird name")]  // space → case-sensitive quoted identifier
+    [InlineData("2cool")]       // leading digit
+    [InlineData("źródło")]      // non-ASCII
+    public void PresentIdentifier_SpecialName_PreservedVerbatimAndQuoted(string input)
+    {
+        var r = DdlGenerator.PresentIdentifier(input);
+        // Never uppercased (identity preserved), always quoted so it stays valid.
+        Assert.StartsWith("\"", r);
+        Assert.Contains(input.Trim(), r);
+    }
+
+    [Fact]
+    public void PresentIdentifier_AlreadyQuoted_LeftVerbatim()
+        => Assert.Equal("\"lower\"", DdlGenerator.PresentIdentifier("\"lower\""));
+
+    [Fact]
+    public void PresentIdentifier_Empty_ReturnsEmpty()
+        => Assert.Equal(string.Empty, DdlGenerator.PresentIdentifier("   "));
 }

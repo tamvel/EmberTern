@@ -18,8 +18,21 @@ namespace EmberTern.Firebird;
 ///
 /// Manual mode (the default) leaves the transaction OPEN after running every statement — the
 /// user reviews the results grid, then calls <see cref="CommitAsync"/> or
-/// <see cref="RollbackAsync"/>. There is NO per-statement autocommit (hard rule #3). Firebird
-/// DDL is transactional, so a mixed DDL+DML migration is genuinely all-or-nothing.
+/// <see cref="RollbackAsync"/>. There is NO per-statement autocommit (hard rule #3).
+///
+/// <para><b>KNOWN BROKEN — do not trust the old claim that "Firebird DDL is transactional, so a
+/// mixed DDL+DML migration is genuinely all-or-nothing".</b> That was assumed, never measured, and
+/// it is FALSE. Measured on FB5: a transaction CANNOT use an object it created but has not
+/// committed — <c>CREATE TABLE T …; INSERT INTO T …;</c> in one transaction fails the INSERT with
+/// <c>Table unknown (-204)</c>. Since every mode here runs the whole script in ONE transaction,
+/// a mixed migration script — the very thing this tool exists for — cannot work today. Firebird
+/// cannot both (a) let a transaction use an object it created and (b) keep that object
+/// rollbackable; isql picks (a) via <c>SET AUTODDL ON</c>. Fixing this needs a real execution
+/// policy (commit-after-DDL / AUTODDL, DDL-aware WAIT, up-front rejection of mixed scripts in
+/// single-transaction mode) driven by the AST classifier
+/// (<see cref="EmberTern.Core.Sql.SqlStatementClassifier"/>) rather than the driver's statement
+/// enum. Deliberately deferred to its own sprint — see docs/history. This comment is the only
+/// change made to this file by the SQL-Editor console refactor.</para>
 ///
 /// The whole statement loop holds the connection's command lock (gotcha #31) so nothing
 /// interleaves on the data connection mid-run; the lock is released before returning while the

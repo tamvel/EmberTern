@@ -288,7 +288,8 @@ public partial class TableDetailTabView : UserControl
             sourceFieldNames,
             tableNames,
             LoadFields,
-            LoadPrimaryKey);
+            LoadPrimaryKey,
+            _currentVm.ExistingIndexAndConstraintNames);
         return await ForeignKeyDialog.ShowAsync(window, dialogVm).ConfigureAwait(true);
     }
 
@@ -313,7 +314,8 @@ public partial class TableDetailTabView : UserControl
 
         var fieldNames = await ResolveFieldNamesAsync(window).ConfigureAwait(true);
 
-        var dialogVm = new ConstraintFieldDialogViewModel(kind, _currentVm.TableName, fieldNames);
+        var dialogVm = new ConstraintFieldDialogViewModel(kind, _currentVm.TableName, fieldNames,
+            _currentVm.ExistingIndexAndConstraintNames);
         return await ConstraintFieldDialog.ShowAsync(window, dialogVm).ConfigureAwait(true);
     }
 
@@ -346,7 +348,8 @@ public partial class TableDetailTabView : UserControl
         var window = this.FindAncestorOfType<Window>();
         if (window is null) return null;
 
-        var dialogVm = new CheckConstraintDialogViewModel(_currentVm.TableName);
+        var dialogVm = new CheckConstraintDialogViewModel(_currentVm.TableName,
+            _currentVm.ExistingIndexAndConstraintNames);
         return await CheckConstraintDialog.ShowAsync(window, dialogVm).ConfigureAwait(true);
     }
 
@@ -359,7 +362,8 @@ public partial class TableDetailTabView : UserControl
         if (window is null) return null;
 
         var fieldNames = await ResolveFieldNamesAsync(window).ConfigureAwait(true);
-        var dialogVm = new IndexDialogViewModel(_currentVm.TableName, fieldNames);
+        var dialogVm = new IndexDialogViewModel(_currentVm.TableName, fieldNames,
+            _currentVm.ExistingIndexAndConstraintNames);
         return await IndexDialog.ShowAsync(window, dialogVm).ConfigureAwait(true);
     }
 

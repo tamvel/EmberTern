@@ -57,6 +57,7 @@
           <DataGrid x:Name="NewTableFieldsGrid"
                     ItemsSource="{Binding Fields}"
                     SelectedItem="{Binding SelectedField, Mode=TwoWay}"
+                    PointerPressed="OnEasyGridPointerPressed"
                     FontSize="11"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
@@ -67,6 +68,15 @@
                     HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                     VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                     Background="{DynamicResource BackgroundBrush}">
+            <DataGrid.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="{x:Static app:UiStrings.CollectionAddTooltip}" Command="{Binding AddFieldCommand}" />
+                <MenuItem Header="{x:Static app:UiStrings.CollectionRemoveTooltip}" Command="{Binding DeleteFieldCommand}" />
+                <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Command="{Binding MoveFieldUpCommand}" />
+                <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Command="{Binding MoveFieldDownCommand}" />
+              </ContextMenu>
+            </DataGrid.ContextMenu>
             <DataGrid.Columns>
               <!-- Every editable cell is a template column whose editor binds
                    IsEnabled to a per-row gate (Is*Enabled) so the field

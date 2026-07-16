@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Export;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Performance;
 using EmberTern.Core.Query;
 using EmberTern.Core.Sql;
@@ -50,6 +51,12 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
     public const int EditorSubTabIndex = 0;
     public const int ResultSubTabIndex = 4;
     public const int PerformanceSubTabIndex = 5;
+
+    // Easy-mode sub-tab indices (0=Input 1=Output 2=Variables 3=Cursors 4=Subprograms) — see
+    // ActiveEasyCollectionIndex. Named for the two that host an SQL editor of their own, because
+    // diagnostics navigation (S5) has to select the right one before the caret can be seen.
+    public const int CursorsEasyIndex = 3;
+    public const int SubprogramsEasyIndex = 4;
 
     public const string NewProcedureTemplate =
         "CREATE OR ALTER PROCEDURE NEW_PROCEDURE\nRETURNS (\n    RESULT INTEGER\n)\nAS\nBEGIN\n    RESULT = 0;\n    SUSPEND;\nEND";
@@ -110,6 +117,11 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         TrackDirty(Cursors);
         TrackDirty(Subprograms);
 
+        // Ambient-symbol refresh: the Input/Output params feed BuildAmbientSymbols, so a rename/
+        // add/remove must rebuild the body editor's model (Variables is tracked by the base).
+        TrackAmbient(InputParams);
+        TrackAmbient(OutputParams);
+
         // Shared filter panel + aggregation bar for the Execute Result grid
         // (materialized: filter/aggregate/page all client-side over the exec result).
         ExecFilterPanel = new FilterPanelViewModel { ApplyRequested = ApplyExecFilterAsync };
@@ -151,6 +163,31 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
 
     public ObservableCollection<ProcedureParamRowViewModel> InputParams { get; }
     public ObservableCollection<ProcedureParamRowViewModel> OutputParams { get; }
+
+    /// <summary>Easy-mode body editor: the body text declares neither the parameters nor the
+    /// variables (they live in the grids), so seed both into the model. See
+    /// <see cref="SourceObjectDetailTabViewModel.BuildAmbientSymbols"/>.</summary>
+    public override IReadOnlyList<Symbol> BuildAmbientSymbols()
+    {
+        var symbols = new List<Symbol>();
+        AddParams(symbols, InputParams, ParameterDirection.Input);
+        AddParams(symbols, OutputParams, ParameterDirection.Output);
+        AddVariableSymbols(symbols);
+        return symbols;
+    }
+
+    private static void AddParams(
+        List<Symbol> symbols,
+        ObservableCollection<ProcedureParamRowViewModel> rows,
+        ParameterDirection direction)
+    {
+        foreach (var p in rows)
+        {
+            var name = p.Name?.Trim();
+            if (string.IsNullOrEmpty(name)) continue;
+            symbols.Add(new ParameterSymbol(name) { Direction = direction });
+        }
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteInputParamCommand))]

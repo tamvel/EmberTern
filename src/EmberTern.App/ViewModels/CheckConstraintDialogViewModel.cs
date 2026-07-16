@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EmberTern.Core.Metadata;
@@ -20,13 +21,15 @@ public sealed record CheckConstraintSpec(string Name, string Expression);
 /// </summary>
 public partial class CheckConstraintDialogViewModel : ViewModelBase
 {
-    public CheckConstraintDialogViewModel(string tableName)
+    public CheckConstraintDialogViewModel(string tableName, IReadOnlyList<string>? existingNames = null)
     {
         TableName = tableName ?? string.Empty;
+        _existingNames = existingNames;
         ConstraintName = DefaultName();
     }
 
     public string TableName { get; }
+    private readonly IReadOnlyList<string>? _existingNames;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DdlPreview))]
@@ -82,7 +85,8 @@ public partial class CheckConstraintDialogViewModel : ViewModelBase
     private string DefaultName()
     {
         var t = TableName.Trim().ToUpperInvariant();
-        return string.IsNullOrEmpty(t) ? "CHK" : "CHK_" + t;
+        var baseName = string.IsNullOrEmpty(t) ? "CHK" : "CHK_" + t;
+        return ConstraintNaming.MakeUnique(baseName, _existingNames);
     }
 
     public event Action? RequestClose;

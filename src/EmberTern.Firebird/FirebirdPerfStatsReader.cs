@@ -37,16 +37,16 @@ public sealed class FirebirdPerfStatsReader
         "AND ts.MON$TABLE_NAME NOT STARTING WITH 'SEC$'";
 
     private readonly FirebirdConnectionService _connectionService;
-    private readonly TransactionService? _metadataTransactionService;
+    private readonly MetadataLane _metadataLane;
     private readonly TransactionService? _dataTransactionService;
 
     public FirebirdPerfStatsReader(
         FirebirdConnectionService connectionService,
-        TransactionService? metadataTransactionService,
+        MetadataLane metadataLane,
         TransactionService? dataTransactionService)
     {
         _connectionService = connectionService;
-        _metadataTransactionService = metadataTransactionService;
+        _metadataLane = metadataLane;
         _dataTransactionService = dataTransactionService;
     }
 
@@ -83,9 +83,9 @@ public sealed class FirebirdPerfStatsReader
     /// on the metadata lane. Each call is a fresh MON$ snapshot.</summary>
     public async Task<IReadOnlyList<PerTableReadRow>> SnapshotAsync(long attachmentId, CancellationToken cancellationToken = default)
     {
-        var connection = _metadataTransactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+        var connection = _metadataLane.RequireOpenConnection();
         // Capture the lock once (gotcha #120).
-        var commandLock = _metadataTransactionService?.CommandLock ?? _connectionService.CommandLock;
+        var commandLock = _metadataLane.CommandLock;
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -94,7 +94,7 @@ public sealed class FirebirdPerfStatsReader
             cmd.CommandTimeout = 0;
             // Attach to the metadata working tx if one is active; otherwise the driver runs
             // this read in a fresh implicit tx — which gives the fresh MON$ snapshot we need.
-            if (_metadataTransactionService?.ActiveTransaction is { } tx)
+            if (_metadataLane.TransactionForCommand is { } tx)
             {
                 cmd.Transaction = tx;
             }

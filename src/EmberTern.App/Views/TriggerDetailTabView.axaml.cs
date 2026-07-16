@@ -13,6 +13,7 @@ using AvaloniaEdit.Highlighting;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Templates;
 
@@ -31,13 +32,24 @@ public partial class TriggerDetailTabView : UserControl
     // and Alt+F act on (body in Easy mode, source in Source mode).
     private TextEditor? _focusedEditor;
     private bool _completionAttached;
+    // Rebuilds the ambient-seeded body model when the Easy-mode Variables grid changes (S3 follow-up).
+    private readonly AmbientModelRefresh _ambientRefresh = new();
+    // Feeds this trigger's own Diagnostics sub-tab from the ACTIVE SQL document (S4).
+    private readonly DiagnosticsPanelHost _diagnostics;
 
     public TriggerDetailTabView()
     {
         InitializeComponent();
+        _diagnostics = new DiagnosticsPanelHost(
+            () => _currentVm?.DiagnosticsPanel,
+            () => ModePrimaryEditor,
+            RevealEditor);
         _sqlEditor = this.FindControl<TextEditor>("TriggerSqlEditor");
         _bodyEditor = this.FindControl<TextEditor>("TriggerBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("TriggerDdlEditor");
+        // S5: the panel's activation gestures navigate the active SQL document.
+        var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("TriggerDiagnosticsPanel");
+        if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         _variablesGrid = this.FindControl<DataGrid>("VariablesGrid");
         if (_variablesGrid is not null) FieldGridColumns.Build(_variablesGrid, includeDefault: true);
 
@@ -70,8 +82,25 @@ public partial class TriggerDetailTabView : UserControl
         {
             // NEW. / OLD. in the trigger body complete the trigger's table columns.
             Func<string?> triggerTable = () => _currentVm?.TableName;
-            if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm, triggerTable);
-            if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm, triggerTable);
+            // Easy mode holds only the body; the trigger's DECLAREd variables live in the grid, so
+            // seed them into the model or Ctrl+Space offers no locals. Source mode needs nothing.
+            Func<IReadOnlyList<Symbol>> ambient = () =>
+                _currentVm?.BuildAmbientSymbols() ?? Array.Empty<Symbol>();
+
+            // Each editor is tracked by the Diagnostics host too, so this trigger's Diagnostics sub-tab
+            // reflects whichever of them is the active SQL document (S4).
+            if (_sqlEditor is not null)
+            {
+                _diagnostics.Track(_sqlEditor, SqlEditorBehavior.Attach(_sqlEditor, mainVm, triggerTable));
+            }
+            if (_bodyEditor is not null)
+            {
+                var c = SqlEditorBehavior.Attach(_bodyEditor, mainVm, triggerTable, ambientSymbols: ambient);
+                _ambientRefresh.Track(c);
+                _diagnostics.Track(_bodyEditor, c);
+            }
+            // Variables-grid edits (add/remove/rename) → rebuild the ambient-seeded body model.
+            _ambientRefresh.Bind(_currentVm);
 
             // Metadata-object drop → snippet flyout, into the editable trigger editors.
             if (_sqlEditor is not null) SqlSnippetDropTarget.Attach(_sqlEditor, mainVm, SnippetInsertionContext.PsqlBody);
@@ -89,6 +118,11 @@ public partial class TriggerDetailTabView : UserControl
             _currentVm.UncommentRequested -= OnUncommentRequested;
         }
         _currentVm = DataContext as TriggerDetailTabViewModel;
+        // Follow the (possibly reused) view onto this VM for ambient-grid → model rebuilds.
+        _ambientRefresh.Bind(_currentVm);
+        // A different trigger is now in these editors: the sticky diagnostics document belongs to the
+        // previous one, so drop it and seed the incoming VM's panel from the cached diagnostics.
+        _diagnostics.ResetActiveDocument();
         if (_currentVm is not null)
         {
             _currentVm.PropertyChanged += OnVmPropertyChanged;
@@ -102,12 +136,24 @@ public partial class TriggerDetailTabView : UserControl
         }
     }
 
+    // The editor this mode's work happens in by default: the body-only editor in Easy mode, the full
+    // CREATE TRIGGER text in Source mode. Also the Diagnostics panel's fallback document.
+    private TextEditor? ModePrimaryEditor => (_currentVm?.EasyMode ?? false) ? _bodyEditor : _sqlEditor;
+
+    // S5 — the Diagnostics panel is a PEER tab, so reading the list hides the editor: a jump has to switch
+    // back to it, not just move the caret. Both trigger editors live directly on the Editor tab (visibility
+    // follows the mode), so there is no sub-tab to select.
+    private void RevealEditor(TextEditor editor)
+    {
+        if (_currentVm is not null) _currentVm.ActiveSubTabIndex = TriggerDetailTabViewModel.EditorSubTabIndex;
+    }
+
     private TextEditor? ActiveEditor
     {
         get
         {
             if (_focusedEditor is not null && _focusedEditor.IsEffectivelyVisible) return _focusedEditor;
-            return (_currentVm?.EasyMode ?? false) ? _bodyEditor : _sqlEditor;
+            return ModePrimaryEditor;
         }
     }
 
@@ -152,6 +198,9 @@ public partial class TriggerDetailTabView : UserControl
             case nameof(TriggerDetailTabViewModel.SourceText): PushSource(); break;
             case nameof(TriggerDetailTabViewModel.ExecutableBody): PushBody(); break;
             case nameof(TriggerDetailTabViewModel.DdlText): PushDdl(); break;
+            // Source⇄Easy flip: the sticky diagnostics document belongs to the mode we just left, so drop
+            // it and fall back to the new mode's primary editor.
+            case nameof(TriggerDetailTabViewModel.EasyMode): _diagnostics.ResetActiveDocument(); break;
         }
     }
 
@@ -159,6 +208,18 @@ public partial class TriggerDetailTabView : UserControl
     {
         if (_suppressSourceSync || _currentVm is null || _sqlEditor is null) return;
         _currentVm.SourceText = _sqlEditor.Text;
+    }
+
+    // Select the row under a right-click on the Variables grid so the context-menu
+    // Remove / Move act on the clicked row (Avalonia DataGrid doesn't auto-select on
+    // right-click, gotcha #16). Handled stays false so the ContextMenu still opens.
+    private void OnEasyGridPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not DataGrid grid) return;
+        if (!e.GetCurrentPoint(grid).Properties.IsRightButtonPressed) return;
+        if (e.Source is not Visual v) return;
+        var row = v.FindAncestorOfType<DataGridRow>(includeSelf: true);
+        if (row?.DataContext is { } item) grid.SelectedItem = item;
     }
 
     private void OnBodyEditorTextChanged(object? sender, EventArgs e)

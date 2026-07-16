@@ -195,22 +195,16 @@ internal static class UiStrings
     public const string TransactionRolledBackFormat = "Transaction rolled back ({0} statement(s)).";
     // Lane-qualified transaction strings (C2 — Data / Metadata working transactions).
     public const string TransactionLaneData = "Data";
-    public const string TransactionLaneMetadata = "Metadata";
     public const string TransactionLaneStartedFormat = "{0} transaction started.";
     public const string TransactionLaneCommittedFormat = "{0} transaction committed ({1} statement(s)).";
     public const string TransactionLaneRolledBackFormat = "{0} transaction rolled back ({1} statement(s)).";
-    public const string TransactionDataBarPrefix = "Data";
-    public const string TransactionMetadataBarPrefix = "Meta";
     public const string TransactionCommitDataTooltip = "Commit data transaction";
     public const string TransactionRollbackDataTooltip = "Roll back data transaction";
-    public const string TransactionCommitMetadataTooltip = "Commit metadata transaction";
-    public const string TransactionRollbackMetadataTooltip = "Roll back metadata transaction";
     // Unified single-pair tooltips — the app commits/rolls back whichever lane(s) are open.
     public const string TransactionCommitTooltip = "Commit";
     public const string TransactionRollbackTooltip = "Roll back";
     // Execution-lane feedback: which profile the auto-router chose for a statement.
     // {0} = lane (Data/Metadata), {1} = profile label (e.g. "Read Committed").
-    public const string ExecutedViaProfileFormat = "Executed via {0} profile ({1}).";
     // Legacy binary disconnect-confirm strings — superseded by the DisconnectChoice*
     // set below (Commit / Roll back / Cancel). Kept only to avoid churn; not referenced.
     public const string DisconnectConfirmTitle = "Active transaction";
@@ -240,7 +234,6 @@ internal static class UiStrings
     public const string UnsavedModifiedIndexFormat = "Index {0} — unsaved changes";
     public const string UnsavedPendingStructureFormat = "Table {0} — uncompiled structural changes";
     public const string UnsavedTransactionDataFormat = "Data transaction — {0} pending statement(s)";
-    public const string UnsavedTransactionMetadataFormat = "Metadata transaction — {0} pending statement(s)";
 
     // Tab close (binary Discard / Cancel). {0} = the tab's unsaved-work label.
     public const string CloseTabUnsavedConfirmTitle = "Unsaved changes";
@@ -271,6 +264,14 @@ internal static class UiStrings
     public const string BottomTabMessages = "Messages";
     public const string BottomTabResults = "Results";
     public const string BottomTabOutput = "Output";
+    public const string BottomTabDiagnostics = "Diagnostics";
+
+    // Diagnostics panel (Stage 7 / S4) — a view of the DiagnosticsEngine's findings for the SQL editor.
+    public const string DiagnosticsEmptyHint = "No diagnostics — nothing to report for this document.";
+    public const string DiagnosticsLocationFormat = "Ln {0}, Col {1}";
+    public const string DiagnosticSeverityError = "Error";
+    public const string DiagnosticSeverityWarning = "Warning";
+    public const string DiagnosticSeverityInfo = "Info";
 
     public const string StatusBarReady = "Ready";
     public const string StatusBarConnectedTo = "Connected to";
@@ -388,6 +389,7 @@ internal static class UiStrings
     public const string ResultsEmptyHint = "Run a query to see results.";
     public const string MessagesEmptyHint = "No messages yet.";
     public const string ExecutingStatus = "Executing query…";
+    public const string CancellingStatus = "Cancelling…";
     // Live execution-timer indicator (SQL Editor / Execute Procedure/Function / Script Executor).
     // One cohesive label — {0} = mm:ss.f elapsed.
     public const string ExecutionElapsedFormat = "Elapsed: {0}";
@@ -1311,6 +1313,8 @@ internal static class UiStrings
     public const string TraceStart = "Start";
     public const string TraceStop = "Stop";
     public const string TracePauseResume = "Pause / Resume";
+    public const string TracePause = "Pause";
+    public const string TraceResume = "Resume";
     public const string TraceClear = "Clear";
     public const string TraceGroupNone = "Events";
     public const string TraceGroupTransaction = "Transactions";

@@ -41,6 +41,21 @@ public class DomainTypeSyncTests
     }
 
     [Fact]
+    public void Proc_PickLowercaseDomain_GeneratedTypeAndDisplayAreUppercase()
+    {
+        // The reported case: a domain the catalog happens to expose lower-case must show UPPERCASE in
+        // the generated parameter/variable type (Easy-mode DDL presentation), not verbatim lower-case.
+        var owner = new ProcedureDetailTabViewModel("P");
+        owner.SetAvailableDomains(new[] { new DomainSpec("my_domain", "INTEGER") });
+
+        var row = new ProcedureVariableRowViewModel(owner) { Name = "V" };
+        row.DomainName = "my_domain";
+
+        Assert.Equal("MY_DOMAIN", row.TypeText);          // generated DDL type
+        Assert.Equal("MY_DOMAIN", row.TypeSourceDisplay); // the picker's closed-box display
+    }
+
+    [Fact]
     public void Proc_ChangeTypeAwayFromSize_ClearsStaleSizeScale()
     {
         var row = new ProcedureVariableRowViewModel { BaseType = "NUMERIC", Size = 15, Scale = 2 };

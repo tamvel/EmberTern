@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using EmberTern.Core.Sql;
 using Xunit;
 
@@ -208,5 +209,54 @@ public class SqlAliasResolverTests
         Assert.Equal("NAGL",
             SqlAliasResolver.ResolveTableForQualifier(
                 "select * from nagl n", "n", known));
+    }
+
+    // -- ResolveTableForQualifier (pre-computed alias map — the cached editor path) --
+
+    [Fact]
+    public void ResolveMap_AliasMapsToKnownTable()
+    {
+        var aliases = SqlAliasResolver.ParseAliases(
+            "SELECT * FROM NAGL N JOIN POZYCJE P ON P.X = N.Y");
+        var known = new[] { "NAGL", "POZYCJE" };
+        Assert.Equal("NAGL", SqlAliasResolver.ResolveTableForQualifier(aliases, "N", known));
+        Assert.Equal("POZYCJE", SqlAliasResolver.ResolveTableForQualifier(aliases, "P", known));
+    }
+
+    [Fact]
+    public void ResolveMap_DirectTableNameQualifier_NeedsNoAliasEntry()
+    {
+        // A fully-qualified TABLE.column resolves even against an empty map.
+        var empty = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+        var known = new[] { "NAGL", "POZYCJE" };
+        Assert.Equal("NAGL", SqlAliasResolver.ResolveTableForQualifier(empty, "NAGL", known));
+    }
+
+    [Fact]
+    public void ResolveMap_UnknownQualifier_ReturnsNull()
+    {
+        var aliases = SqlAliasResolver.ParseAliases("SELECT * FROM NAGL N");
+        var known = new[] { "NAGL" };
+        Assert.Null(SqlAliasResolver.ResolveTableForQualifier(aliases, "X", known));
+    }
+
+    [Fact]
+    public void ResolveMap_AliasToTableNotInSchema_ReturnsNull()
+    {
+        var aliases = SqlAliasResolver.ParseAliases("SELECT * FROM GHOSTS G");
+        var known = new[] { "NAGL" };
+        Assert.Null(SqlAliasResolver.ResolveTableForQualifier(aliases, "G", known));
+    }
+
+    [Fact]
+    public void ResolveMap_MatchesSqlOverload()
+    {
+        // The (sql,…) overload must be exactly the map overload fed ParseAliases(sql).
+        const string sql = "SELECT * FROM NAGL N JOIN POZYCJE P ON P.X = N.Y";
+        var known = new[] { "NAGL", "POZYCJE" };
+        var viaSql = SqlAliasResolver.ResolveTableForQualifier(sql, "P", known);
+        var viaMap = SqlAliasResolver.ResolveTableForQualifier(
+            SqlAliasResolver.ParseAliases(sql), "P", known);
+        Assert.Equal(viaSql, viaMap);
     }
 }

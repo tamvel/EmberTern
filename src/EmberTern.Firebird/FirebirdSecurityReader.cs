@@ -17,24 +17,24 @@ namespace EmberTern.Firebird;
 public sealed class FirebirdSecurityReader
 {
     private readonly FirebirdConnectionService _connectionService;
-    private readonly TransactionService? _transactionService;
+    private readonly MetadataLane _lane;
 
     public FirebirdSecurityReader(FirebirdConnectionService connectionService)
-        : this(connectionService, null)
+        : this(connectionService, new MetadataLane(connectionService))
     {
     }
 
-    public FirebirdSecurityReader(FirebirdConnectionService connectionService, TransactionService? transactionService)
+    public FirebirdSecurityReader(FirebirdConnectionService connectionService, MetadataLane lane)
     {
         _connectionService = connectionService;
-        _transactionService = transactionService;
+        _lane = lane;
     }
 
     private FbConnection LaneConnection()
-        => _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+        => _lane.RequireOpenConnection();
     private SemaphoreSlim LaneLock()
-        => _transactionService?.CommandLock ?? _connectionService.CommandLock;
-    private FbTransaction? LaneTx => _transactionService?.ActiveTransaction;
+        => _lane.CommandLock;
+    private FbTransaction? LaneTx => _lane.TransactionForCommand;
 
     // Object-type codes we surface in the Privileges grid; excludes charset (11) /
     // collation (17) noise and role-membership rows (handled separately).

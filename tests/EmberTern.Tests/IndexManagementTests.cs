@@ -128,6 +128,16 @@ public class IndexManagementTests
     }
 
     [Fact]
+    public void Dialog_DefaultName_AutoNumbersPastExistingNames()
+    {
+        // IDX_USERS already exists on the table → the dialog opens on IDX1_USERS (IBExpert style),
+        // so the user isn't handed a name that would collide on Compile.
+        var vm = new IndexDialogViewModel("USERS", new[] { "ID", "NAME" },
+            new[] { "PK_USERS", "IDX_USERS" });
+        Assert.Equal("IDX1_USERS", vm.ConstraintName);
+    }
+
+    [Fact]
     public void Dialog_IsValid_RequiresNameAndFieldOrExpression()
     {
         var vm = new IndexDialogViewModel("T", new[] { "A" });

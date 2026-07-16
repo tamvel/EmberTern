@@ -17,6 +17,7 @@ using AvaloniaEdit.Highlighting;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Export;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Templates;
@@ -43,10 +44,18 @@ public partial class FunctionDetailTabView : UserControl
     private bool _suppressSubprogramSync;
     private TextEditor? _focusedEditor;
     private bool _completionAttached;
+    // Rebuilds the ambient-seeded editors' models when the Easy-mode grids change (S3 follow-up).
+    private readonly AmbientModelRefresh _ambientRefresh = new();
+    // Feeds this function's own Diagnostics sub-tab from the ACTIVE SQL document (S4).
+    private readonly DiagnosticsPanelHost _diagnostics;
 
     public FunctionDetailTabView()
     {
         InitializeComponent();
+        _diagnostics = new DiagnosticsPanelHost(
+            () => _currentVm?.DiagnosticsPanel,
+            () => ModePrimaryEditor,
+            RevealEditor);
         _sqlEditor = this.FindControl<TextEditor>("FuncSqlEditor");
         _bodyEditor = this.FindControl<TextEditor>("FuncBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("FuncDdlEditor");
@@ -58,6 +67,9 @@ public partial class FunctionDetailTabView : UserControl
         _resultTypeGrid = this.FindControl<DataGrid>("FuncResultTypeGrid");
         _variablesGrid = this.FindControl<DataGrid>("FuncVariablesGrid");
         _performancePanel = this.FindControl<PerformancePanelView>("FuncPerformancePanel");
+        // S5: the panel's activation gestures navigate the active SQL document.
+        var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("FuncDiagnosticsPanel");
+        if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         if (_argumentsGrid is not null) FieldGridColumns.Build(_argumentsGrid, includeDefault: true);
         // The return value is a single, unnamed row — omit the Name + Default columns.
         if (_resultTypeGrid is not null) FieldGridColumns.Build(_resultTypeGrid, includeDefault: false, includeName: false);
@@ -91,10 +103,38 @@ public partial class FunctionDetailTabView : UserControl
         if (_completionAttached) return;
         if (this.FindAncestorOfType<Window>()?.DataContext is MainWindowViewModel mainVm)
         {
-            if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm);
-            if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm);
-            if (_cursorEditor is not null) SqlEditorBehavior.Attach(_cursorEditor, mainVm);
-            if (_subprogramEditor is not null) SqlEditorBehavior.Attach(_subprogramEditor, mainVm);
+            // Easy-mode fragments (body / cursor / subprogram) don't declare the function's
+            // arguments or variables — those live in the grids — so seed them into the model or
+            // Ctrl+Space offers no args/locals. Source mode needs nothing (the text has it all).
+            Func<IReadOnlyList<Symbol>> ambient = () =>
+                _currentVm?.BuildAmbientSymbols() ?? Array.Empty<Symbol>();
+
+            // Each editor is tracked by the Diagnostics host too, so this function's Diagnostics sub-tab
+            // reflects whichever of them is the active SQL document (S4).
+            if (_sqlEditor is not null)
+            {
+                _diagnostics.Track(_sqlEditor, SqlEditorBehavior.Attach(_sqlEditor, mainVm));
+            }
+            if (_bodyEditor is not null)
+            {
+                var c = SqlEditorBehavior.Attach(_bodyEditor, mainVm, ambientSymbols: ambient);
+                _ambientRefresh.Track(c);
+                _diagnostics.Track(_bodyEditor, c);
+            }
+            if (_cursorEditor is not null)
+            {
+                var c = SqlEditorBehavior.Attach(_cursorEditor, mainVm, ambientSymbols: ambient);
+                _ambientRefresh.Track(c);
+                _diagnostics.Track(_cursorEditor, c);
+            }
+            if (_subprogramEditor is not null)
+            {
+                var c = SqlEditorBehavior.Attach(_subprogramEditor, mainVm, ambientSymbols: ambient);
+                _ambientRefresh.Track(c);
+                _diagnostics.Track(_subprogramEditor, c);
+            }
+            // Grid edits (argument/variable add/remove/rename) → rebuild the ambient-seeded models.
+            _ambientRefresh.Bind(_currentVm);
 
             // Metadata-object drop → snippet flyout, into every editable PSQL editor.
             if (_sqlEditor is not null) SqlSnippetDropTarget.Attach(_sqlEditor, mainVm, SnippetInsertionContext.PsqlBody);
@@ -116,6 +156,11 @@ public partial class FunctionDetailTabView : UserControl
             _currentVm.Performance?.SetVisible(false);
         }
         _currentVm = DataContext as FunctionDetailTabViewModel;
+        // Follow the (possibly reused) view onto this VM for ambient-grid → model rebuilds.
+        _ambientRefresh.Bind(_currentVm);
+        // A different function is now in these editors: the sticky diagnostics document belongs to the
+        // previous one, so drop it and seed the incoming VM's panel from the cached diagnostics.
+        _diagnostics.ResetActiveDocument();
         if (_currentVm is not null)
         {
             _currentVm.PropertyChanged += OnVmPropertyChanged;
@@ -138,12 +183,35 @@ public partial class FunctionDetailTabView : UserControl
         }
     }
 
+    // The editor this mode's work happens in by default: the body-only editor in Easy mode, the full
+    // CREATE FUNCTION text in Source mode. Also the Diagnostics panel's fallback document.
+    private TextEditor? ModePrimaryEditor => (_currentVm?.EasyMode ?? false) ? _bodyEditor : _sqlEditor;
+
+    // S5 — a diagnostics jump has TWO targets here, not one: the Diagnostics panel is a PEER tab, so the
+    // user is looking at the list *instead of* the editor. Moving the caret alone would land it off-screen;
+    // switch back to the Editor tab, and (Easy mode) onto the sub-tab that actually hosts the target —
+    // Cursors and Subprograms have SQL editors of their own, while the body sits below the sub-tab strip
+    // and needs nothing. The target is the host's active document, never re-derived here.
+    private void RevealEditor(TextEditor editor)
+    {
+        if (_currentVm is null) return;
+        _currentVm.ActiveSubTabIndex = FunctionDetailTabViewModel.EditorSubTabIndex;
+        if (ReferenceEquals(editor, _cursorEditor))
+        {
+            _currentVm.ActiveEasyCollectionIndex = FunctionDetailTabViewModel.CursorsEasyIndex;
+        }
+        else if (ReferenceEquals(editor, _subprogramEditor))
+        {
+            _currentVm.ActiveEasyCollectionIndex = FunctionDetailTabViewModel.SubprogramsEasyIndex;
+        }
+    }
+
     private TextEditor? ActiveEditor
     {
         get
         {
             if (_focusedEditor is not null && _focusedEditor.IsEffectivelyVisible) return _focusedEditor;
-            return (_currentVm?.EasyMode ?? false) ? _bodyEditor : _sqlEditor;
+            return ModePrimaryEditor;
         }
     }
 
@@ -213,6 +281,9 @@ public partial class FunctionDetailTabView : UserControl
             case nameof(FunctionDetailTabViewModel.SelectedCursor): PushCursor(); break;
             case nameof(FunctionDetailTabViewModel.SelectedSubprogram): PushSubprogram(); break;
             case nameof(FunctionDetailTabViewModel.ActiveSubTabIndex): NotifyPerformanceVisibility(); break;
+            // Source⇄Easy flip: the sticky diagnostics document belongs to the mode we just left, so drop
+            // it and fall back to the new mode's primary editor.
+            case nameof(FunctionDetailTabViewModel.EasyMode): _diagnostics.ResetActiveDocument(); break;
         }
     }
 
@@ -311,6 +382,19 @@ public partial class FunctionDetailTabView : UserControl
     // Feeds the "Record N of M" indicator (SelectedIndex is within the page).
     private void OnFuncExecResultSelectionChanged(object? sender, SelectionChangedEventArgs e)
         => _currentVm?.SetExecSelectedRow(_execResultGrid?.SelectedIndex ?? -1);
+
+    // Select the row under a right-click on an Easy-Mode collection grid (arguments /
+    // variables) so the context-menu Remove / Move act on the clicked row — Avalonia's
+    // DataGrid doesn't auto-select on right-click (gotcha #16). Handled stays false so the
+    // ContextMenu still opens; the SelectedItem two-way binding carries it to the VM.
+    private void OnEasyGridPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not DataGrid grid) return;
+        if (!e.GetCurrentPoint(grid).Properties.IsRightButtonPressed) return;
+        if (e.Source is not Visual v) return;
+        var row = v.FindAncestorOfType<DataGridRow>(includeSelf: true);
+        if (row?.DataContext is { } item) grid.SelectedItem = item;
+    }
 
     // ── Filter-from-cell (Execute Result) ────────────────────────────────────
     private GridCellFilterContext? _execCellCtx;

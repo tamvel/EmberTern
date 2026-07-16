@@ -493,6 +493,20 @@ public class TraceMonitorVmTests
         Assert.True(vm.ShowOpDelete);
     }
 
+    // The single Pause/Resume toggle must reflect the live state — a paused session
+    // shows Resume (not a lit Pause). Pins the glyph/tooltip driver properties.
+    [Theory]
+    [InlineData(TraceSessionState.Running, false, "Pause")]
+    [InlineData(TraceSessionState.Paused, true, "Resume")]
+    [InlineData(TraceSessionState.Stopped, false, "Pause")]
+    public void PauseResumeToggle_ReflectsState(TraceSessionState state, bool isPaused, string tooltip)
+    {
+        var vm = NewVm();
+        vm.State = state;
+        Assert.Equal(isPaused, vm.IsPaused);
+        Assert.Equal(tooltip, vm.PauseResumeTooltip);
+    }
+
     [Fact]
     public void CopyRow_And_CopyCell_And_CopySql_RaiseClipboard()
     {

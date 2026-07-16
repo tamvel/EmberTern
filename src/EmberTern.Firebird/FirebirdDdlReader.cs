@@ -12,26 +12,26 @@ namespace EmberTern.Firebird;
 public sealed class FirebirdDdlReader
 {
     private readonly FirebirdConnectionService _connectionService;
-    private readonly TransactionService? _transactionService;
+    private readonly MetadataLane _lane;
 
     public FirebirdDdlReader(FirebirdConnectionService connectionService)
-        : this(connectionService, null)
+        : this(connectionService, new MetadataLane(connectionService))
     {
     }
 
-    public FirebirdDdlReader(FirebirdConnectionService connectionService, TransactionService? transactionService)
+    public FirebirdDdlReader(FirebirdConnectionService connectionService, MetadataLane lane)
     {
         _connectionService = connectionService;
-        _transactionService = transactionService;
+        _lane = lane;
     }
 
     // Connection + lock for this reader's lane (metadata in production), so DDL browsing
     // runs on the metadata attachment. Falls back to the data connection when no
     // transaction service is injected (tests).
     private FbConnection LaneConnection()
-        => _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+        => _lane.RequireOpenConnection();
     private SemaphoreSlim LaneLock()
-        => _transactionService?.CommandLock ?? _connectionService.CommandLock;
+        => _lane.CommandLock;
 
     public async Task<string> FetchDdlAsync(MetadataObject obj, CancellationToken cancellationToken = default)
     {
@@ -51,7 +51,7 @@ public sealed class FirebirdDdlReader
         // issue multiple commands (table builder reads RDB$RELATION_FIELDS,
         // RDB$RELATION_CONSTRAINTS, RDB$INDICES separately), and FbConnection
         // is single-threaded.
-        var tx = _transactionService?.ActiveTransaction;
+        var tx = _lane.TransactionForCommand;
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -236,7 +236,7 @@ public sealed class FirebirdDdlReader
 
         var connection = LaneConnection();
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
-        var tx = _transactionService?.ActiveTransaction;
+        var tx = _lane.TransactionForCommand;
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -307,7 +307,7 @@ public sealed class FirebirdDdlReader
         var connection = LaneConnection();
         var serverMajor = ParseServerMajor(connection.ServerVersion);
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
-        var tx = _transactionService?.ActiveTransaction;
+        var tx = _lane.TransactionForCommand;
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -336,7 +336,7 @@ public sealed class FirebirdDdlReader
 
         var connection = LaneConnection();
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
-        var tx = _transactionService?.ActiveTransaction;
+        var tx = _lane.TransactionForCommand;
         var serverMajor = ParseServerMajor(connection.ServerVersion);
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -375,7 +375,7 @@ public sealed class FirebirdDdlReader
 
         var connection = LaneConnection();
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
-        var tx = _transactionService?.ActiveTransaction;
+        var tx = _lane.TransactionForCommand;
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -405,7 +405,7 @@ public sealed class FirebirdDdlReader
 
         var connection = LaneConnection();
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
-        var tx = _transactionService?.ActiveTransaction;
+        var tx = _lane.TransactionForCommand;
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -506,7 +506,7 @@ public sealed class FirebirdDdlReader
 
         var connection = LaneConnection();
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
-        var tx = _transactionService?.ActiveTransaction;
+        var tx = _lane.TransactionForCommand;
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -536,7 +536,7 @@ public sealed class FirebirdDdlReader
 
         var connection = LaneConnection();
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
-        var tx = _transactionService?.ActiveTransaction;
+        var tx = _lane.TransactionForCommand;
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -665,7 +665,7 @@ public sealed class FirebirdDdlReader
         var connection = LaneConnection();
         var serverMajor = ParseServerMajor(connection.ServerVersion);
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
-        var tx = _transactionService?.ActiveTransaction;
+        var tx = _lane.TransactionForCommand;
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -693,7 +693,7 @@ public sealed class FirebirdDdlReader
 
         var connection = LaneConnection();
         var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
-        var tx = _transactionService?.ActiveTransaction;
+        var tx = _lane.TransactionForCommand;
         var serverMajor = ParseServerMajor(connection.ServerVersion);
         var commandLock = LaneLock();
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);

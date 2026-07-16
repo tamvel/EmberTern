@@ -255,4 +255,58 @@ public class MetadataReaderTests
         await Assert.ThrowsAsync<System.InvalidOperationException>(
             () => reader.CountAsync(MetadataObjectKind.Table));
     }
+
+    // ─── Enriched columns query (Package 5, Stage A) ──────────────────────
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(5)]
+    public void ColumnsSqlFor_Fb3Plus_DetectsIdentityViaIdentityType(int serverMajor)
+    {
+        // FB3+ identity columns are detected from RDB$IDENTITY_TYPE.
+        var sql = FirebirdMetadataReader.ColumnsSqlFor(serverMajor);
+        Assert.Contains("RDB$IDENTITY_TYPE", sql);
+        Assert.Contains("IS_IDENTITY", sql);
+    }
+
+    [Fact]
+    public void ColumnsSqlFor_Fb25_DoesNotReferenceIdentityTypeColumn()
+    {
+        // RDB$IDENTITY_TYPE does not exist on FB2.5 — referencing it would throw
+        // (gotcha #146). The identity slot must be projected as a constant instead,
+        // so the reader ordinals stay identical across versions.
+        var sql = FirebirdMetadataReader.ColumnsSqlFor(2);
+        Assert.DoesNotContain("RDB$IDENTITY_TYPE", sql);
+        Assert.Contains("CAST(0 AS INTEGER) AS IS_IDENTITY", sql);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(5)]
+    public void ColumnsSqlFor_ProjectsRichColumnFacts(int serverMajor)
+    {
+        // Every rich-but-optional Quick Info fact the reader maps must be projected,
+        // regardless of server version.
+        var sql = FirebirdMetadataReader.ColumnsSqlFor(serverMajor);
+        Assert.Contains("RDB$DEFAULT_SOURCE", sql);
+        Assert.Contains("RDB$DESCRIPTION", sql);
+        Assert.Contains("RDB$COMPUTED_SOURCE", sql);
+        Assert.Contains("'PRIMARY KEY'", sql);   // PK flag subquery
+        Assert.Contains("'FOREIGN KEY'", sql);   // FK flag + FK-target subqueries
+        Assert.Contains("RDB$REF_CONSTRAINTS", sql); // FK-target table resolution
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(5)]
+    public void ColumnsSqlFor_KeepsLightContract(int serverMajor)
+    {
+        // The enrichment must not change the query's binding contract: still keyed by
+        // @name and still ordered by field position (so the dropdown/Quick Info column
+        // order matches the table's declared order).
+        var sql = FirebirdMetadataReader.ColumnsSqlFor(serverMajor);
+        Assert.Contains("@name", sql);
+        Assert.Contains("ORDER BY rf.RDB$FIELD_POSITION", sql);
+        Assert.Contains("RDB$RELATION_FIELDS", sql);
+    }
 }

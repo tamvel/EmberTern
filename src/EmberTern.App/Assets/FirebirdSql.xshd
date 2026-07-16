@@ -12,10 +12,10 @@
 <SyntaxDefinition name="Firebird SQL" extensions=".sql"
                   xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
 
-  <Color name="Comment"          foreground="#6A9955" />
+  <Color name="Comment"          foreground="#7FB86B" />
   <Color name="String"           foreground="#CE9178" />
   <Color name="Number"           foreground="#B5CEA8" />
-  <Color name="DmlKeyword"       foreground="#569CD6" fontWeight="bold" />
+  <Color name="DmlKeyword"       foreground="#5A8AC8" fontWeight="bold" />
   <Color name="StatementKeyword" foreground="#C586C0" fontWeight="bold" />
   <Color name="DataType"         foreground="#4EC9B0" />
   <Color name="Function"         foreground="#DCDCAA" />
