@@ -424,7 +424,8 @@
            rule — see DiagnosticsPanelHost). Appended LAST so the persisted ActiveSubTabIndex and the
            SqlSubTabIndex / DataSubTabIndex constants never shift. -->
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
-        <views:DiagnosticsPanelView DataContext="{Binding DiagnosticsPanel}" />
+        <views:DiagnosticsPanelView x:Name="ViewDiagnosticsPanel"
+                                    DataContext="{Binding DiagnosticsPanel}" />
       </TabItem>
 
     </TabControl>

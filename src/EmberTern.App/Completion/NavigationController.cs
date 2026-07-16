@@ -18,6 +18,7 @@ using AvaloniaEdit.Rendering;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Language;
+using EmberTern.Core.Sql.Language.Hover;
 using EmberTern.Core.Sql.Language.Navigation;
 using EmberTern.Core.Sql.Language.QuickInfo;
 using EmberTern.Core.Sql.Language.Semantics;
@@ -26,34 +27,60 @@ using EmberTern.Core.Sql.Language.Signatures;
 namespace EmberTern.App.Completion;
 
 /// <summary>
-/// The navigation UX layer (Etap 6 / M4, design §9.4 / §10). Gives an AvaloniaEdit
-/// <see cref="TextEditor"/> the modern "Ctrl to navigate" affordance:
+/// The editor's hover + navigation UX layer (Etap 6 / M4, design §9.4 / §10; unified hover per
+/// <c>editor-stage7-diagnostics.md</c> §15). Two deliberately separate cues over one
+/// <see cref="TextEditor"/>:
 /// <list type="bullet">
-///   <item><b>Ctrl + hover</b> over a navigable identifier → underline it, switch the cursor to a
-///   hand, and pop a Quick Info tooltip (kind + facts + members) — so the user instantly sees the
-///   element leads somewhere and can check it without opening its definition.</item>
-///   <item><b>Ctrl + click</b> → go to definition via the <see cref="NavigationEngine"/> (a schema
-///   object opens its detail/DDL tab; a local — alias/variable/parameter/cursor/CTE — jumps the
-///   caret to its declaration in the editor).</item>
+///   <item><b>Plain hover (no modifier) = INFORMATION.</b> After a short dwell, ONE card explains what
+///   is under the pointer: the diagnostic behind a squiggle, the semantic Quick Info for a symbol, or
+///   both as sections (<see cref="HoverInfoEngine"/> composes, <see cref="HoverInfoView"/> renders).</item>
+///   <item><b>Ctrl = ACTIONABILITY.</b> Ctrl+hover over a <em>navigable</em> identifier underlines it and
+///   switches the cursor to a hand; <b>Ctrl+click</b> goes to the definition via
+///   <see cref="NavigationEngine"/> (a schema object opens its detail/DDL tab; a local —
+///   alias/variable/parameter/cursor/CTE — jumps the caret to its declaration).</item>
 /// </list>
-/// A thin App glue over the pure Core engines (<see cref="NavigationEngine"/>,
-/// <see cref="QuickInfoEngine"/>): it maps a pointer position to a document offset, asks the engines,
-/// and paints/opens. It reads the per-editor cached <see cref="SemanticModel"/> (shared with the
-/// completion controller + semantic highlighter — one background parse per editor); it never
-/// re-parses on the pointer path. Read-only, so §0 (never lose information) holds by construction.
-/// <para>
-/// The affordance is driven by real resolution, not a name search — so the underline appears exactly
-/// where Ctrl+Click will navigate. When the model can't resolve (e.g. a body-only Easy-mode editor
-/// whose CREATE header isn't in the text), Ctrl+Click falls back to the name-based open
-/// (<see cref="_openByName"/>); the hover affordance stays semantic (no underline there).
-/// </para>
+///
+/// <para><b>Why information is NOT behind Ctrl.</b> The two cues answer different questions, and the
+/// split is the frozen §9.4 decision: the semantic colour is the permanent cue, Ctrl is the actionable
+/// one. Requiring Ctrl to learn <em>why</em> a span is squiggled would be a contradiction — the
+/// actionability cue means "this leads somewhere", and the most common squiggle (an unknown object)
+/// leads NOWHERE: it is unresolved, so it has no navigation target at all. Gating information on
+/// <see cref="NavigationEngine.TargetAt"/> (which is what this class used to do) therefore showed
+/// nothing precisely where <c>ET0001</c> fires. Plain hover answers "what is this / why is it flagged";
+/// Ctrl answers "can I go there".</para>
+///
+/// <para>A thin App glue over the pure Core engines (<see cref="NavigationEngine"/>,
+/// <see cref="HoverInfoEngine"/>, <see cref="QuickInfoEngine"/>): it maps a pointer position to a
+/// document offset, asks the engines, and paints/opens. It reads the per-editor cached
+/// <see cref="SemanticModel"/> and the language service's cached diagnostics (shared with the completion
+/// controller, semantic highlighter and squiggle renderer — one background parse per editor); it never
+/// parses or analyses on the pointer path. Read-only, so §0 (never lose information) holds by
+/// construction.</para>
+///
+/// <para>The Ctrl affordance is driven by real resolution, not a name search — so the underline appears
+/// exactly where Ctrl+Click will navigate. When the model can't resolve (e.g. a body-only Easy-mode
+/// editor whose CREATE header isn't in the text), Ctrl+Click falls back to the name-based open
+/// (<see cref="_openByName"/>); the affordance stays semantic (no underline there).</para>
 /// </summary>
 internal sealed class NavigationController
 {
     private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
 
+    // Plain hover fires on every pointer move, where Ctrl+hover was self-limiting — the dwell is the
+    // whole noise budget. Long enough not to flash while the pointer crosses the text on its way
+    // somewhere, short enough to feel like an answer rather than a wait.
+    private static readonly TimeSpan HoverDwell = TimeSpan.FromMilliseconds(350);
+    // Gap between the pointer and the card, so the card never sits under the cursor itself.
+    private const double HoverGap = 16;
+
     private readonly TextEditor _editor;
     private readonly Func<SemanticModel?> _model;
+    // The language service's CACHED, version-matched diagnostics — an input, never recomputed here (the
+    // hover performs no analysis; HoverInfoEngine's signature enforces that).
+    private readonly Func<IReadOnlyList<Diagnostic>> _diagnostics;
+    // True while the completion list / Parameter Helper / Quick Info popup owns the screen — the hover
+    // stays out of their way rather than stacking on them.
+    private readonly Func<bool> _isOtherPopupOpen;
     private readonly Func<string, MetadataObjectKind, bool> _openSchemaObject;
     private readonly Func<string, bool> _openByName;
     // Async fetch of a schema object's DDL/source text for Peek Definition (M5), or null → Peek only
@@ -61,12 +88,19 @@ internal sealed class NavigationController
     private readonly Func<string, MetadataObjectKind, Task<string?>>? _fetchDefinition;
     private readonly UnderlineRenderer _underline;
     private readonly ReferenceHighlightRenderer _references;
-    private readonly Popup _tooltip;
+    private readonly DispatcherTimer _hoverDwell;
 
     private TextSpan? _activeSpan;   // the currently-underlined identifier, or null when clear
     private Point _lastPointer;
     private bool _pointerInside;
     private bool _detached;
+
+    // The hover card currently in the editor's OverlayLayer, and the span it describes. Hosted in the
+    // overlay rather than a bare Popup: that pattern renders invisibly on the desktop despite
+    // IsOpen/Visible/Opacity all true (gotcha #209 — it cost the Parameter Helper a debugging session,
+    // and plain hover makes this the primary discovery surface, so it is not a bet worth taking).
+    private Control? _hoverCard;
+    private TextSpan? _hoverSpan;
 
     // Inline rename popup (M5), created lazily on first F2.
     private Popup? _renamePopup;
@@ -87,6 +121,8 @@ internal sealed class NavigationController
     private NavigationController(
         TextEditor editor,
         Func<SemanticModel?> model,
+        Func<IReadOnlyList<Diagnostic>> diagnostics,
+        Func<bool> isOtherPopupOpen,
         Func<string, MetadataObjectKind, bool> openSchemaObject,
         Func<string, bool> openByName,
         Func<string, MetadataObjectKind, Task<string?>>? fetchDefinition,
@@ -94,6 +130,8 @@ internal sealed class NavigationController
     {
         _editor = editor;
         _model = model;
+        _diagnostics = diagnostics;
+        _isOtherPopupOpen = isOtherPopupOpen;
         _openSchemaObject = openSchemaObject;
         _openByName = openByName;
         _fetchDefinition = fetchDefinition;
@@ -101,20 +139,18 @@ internal sealed class NavigationController
         _underline = new UnderlineRenderer(editor);
         _references = new ReferenceHighlightRenderer(editor, LocalReferenceSpans);
 
-        // A self-managed, focus-neutral hover tooltip. Hit-test-invisible content so it never steals
-        // the pointer (which would fire PointerExited on the editor and flicker the popup shut).
-        _tooltip = new Popup
-        {
-            PlacementTarget = editor,
-            Placement = PlacementMode.Pointer,
-            IsLightDismissEnabled = false,
-            VerticalOffset = 16,
-        };
-        ((ISetLogicalParent)_tooltip).SetParent(editor);
+        _hoverDwell = new DispatcherTimer { Interval = HoverDwell };
+        _hoverDwell.Tick += OnHoverDwellElapsed;
     }
 
-    /// <summary>Attaches navigation to <paramref name="editor"/>.</summary>
+    /// <summary>Attaches hover + navigation to <paramref name="editor"/>.</summary>
     /// <param name="model">The editor's cached semantic model (from the completion controller).</param>
+    /// <param name="diagnostics">The editor's CACHED, version-matched diagnostics (from the same
+    /// controller). <b>Required, deliberately</b>: an optional-with-default source would let a wiring
+    /// seam silently omit it and leave that surface's squiggles unexplained — exactly the S3 failure
+    /// (gotcha #219). Required makes a missed seam a compile error instead.</param>
+    /// <param name="isOtherPopupOpen">True while the completion list / Parameter Helper / Quick Info popup
+    /// is up, so the hover never stacks on them. Required for the same reason.</param>
     /// <param name="openSchemaObject">Opens a resolved schema object (name + kind) — the VM.</param>
     /// <param name="openByName">Name-based open fallback for editors the model can't fully resolve.</param>
     /// <param name="fetchDefinition">Async fetch of a schema object's DDL/source for Peek Definition
@@ -124,12 +160,16 @@ internal sealed class NavigationController
     public static NavigationController Attach(
         TextEditor editor,
         Func<SemanticModel?> model,
+        Func<IReadOnlyList<Diagnostic>> diagnostics,
+        Func<bool> isOtherPopupOpen,
         Func<string, MetadataObjectKind, bool> openSchemaObject,
         Func<string, bool> openByName,
         Func<string, MetadataObjectKind, Task<string?>>? fetchDefinition = null,
         Func<int, bool>? showParameterHelper = null)
     {
-        var c = new NavigationController(editor, model, openSchemaObject, openByName, fetchDefinition, showParameterHelper);
+        var c = new NavigationController(
+            editor, model, diagnostics, isOtherPopupOpen, openSchemaObject, openByName,
+            fetchDefinition, showParameterHelper);
         editor.TextArea.TextView.BackgroundRenderers.Add(c._underline);
         editor.TextArea.TextView.BackgroundRenderers.Add(c._references);
 
@@ -153,6 +193,8 @@ internal sealed class NavigationController
         // there is ONE double-click handler (the two duplicated ones in SqlEditorBehavior / MainWindow
         // move here), avoiding an e.Handled ordering dance between two subscribers on one event.
         editor.DoubleTapped += c.OnDoubleTapped;
+        // An edit invalidates the card: it describes an offset in a document that just changed.
+        editor.TextChanged += c.OnTextChanged;
         return c;
     }
 
@@ -170,19 +212,23 @@ internal sealed class NavigationController
         _editor.KeyDown -= OnCommandKey;
         _editor.TextArea.Caret.PositionChanged -= OnCaretMoved;
         _editor.DoubleTapped -= OnDoubleTapped;
-        _tooltip.IsOpen = false;
+        _editor.TextChanged -= OnTextChanged;
+        _hoverDwell.Stop();
+        _hoverDwell.Tick -= OnHoverDwellElapsed;
+        HideHover();
         _peekGeneration++;
         if (_renamePopup is not null) _renamePopup.IsOpen = false;
         if (_peekPopup is not null) _peekPopup.IsOpen = false;
     }
 
-    // ── Hover affordance ─────────────────────────────────────────────────────────────────────────
+    // ── Pointer plumbing ─────────────────────────────────────────────────────────────────────────
 
     private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
         _pointerInside = true;
         _lastPointer = e.GetPosition(_editor);
-        UpdateHover(e.KeyModifiers);
+        UpdateNavigationAffordance(e.KeyModifiers);  // Ctrl → "this leads somewhere"
+        UpdateHoverInfo();                           // plain → "what is this / why is it flagged"
     }
 
     private void OnPointerExited(object? sender, PointerEventArgs e)
@@ -193,58 +239,137 @@ internal sealed class NavigationController
 
     private void OnKeyChanged(object? sender, KeyEventArgs e)
     {
-        if (_pointerInside) UpdateHover(e.KeyModifiers);
+        // Ctrl press/release only re-evaluates the AFFORDANCE. The info card deliberately survives it:
+        // pressing Ctrl to navigate what you are already reading must not blink the explanation away.
+        if (_pointerInside) UpdateNavigationAffordance(e.KeyModifiers);
     }
 
-    private void UpdateHover(KeyModifiers modifiers)
+    private void OnTextChanged(object? sender, EventArgs e) => HideHover();
+
+    /// <summary>Clears both cues — the pointer left, or a click/navigation happened.</summary>
+    private void Clear()
+    {
+        ClearNavigationAffordance();
+        HideHover();
+    }
+
+    // ── Ctrl = actionability (underline + hand cursor) ───────────────────────────────────────────
+
+    private void UpdateNavigationAffordance(KeyModifiers modifiers)
     {
         if (_detached) return;
         bool ctrl = (modifiers & KeyModifiers.Control) == KeyModifiers.Control;
-        if (!ctrl || !_pointerInside) { Clear(); return; }
+        if (!ctrl || !_pointerInside) { ClearNavigationAffordance(); return; }
 
         int? offset = OffsetAt(_lastPointer);
         var model = _model();
         var target = offset is { } o && model is not null ? NavigationEngine.TargetAt(model, o) : null;
-        if (target is null) { Clear(); return; }
+        if (target is null) { ClearNavigationAffordance(); return; }
 
         var span = target.ReferenceSpan;
         if (_activeSpan is { } a && a.Start == span.Start && a.Length == span.Length)
         {
-            return; // same identifier — already lit; don't rebuild/reposition the tooltip
+            return; // same identifier — already lit; don't redundantly invalidate
         }
 
         _activeSpan = span;
         _underline.Segment = new TextSegment { StartOffset = span.Start, Length = span.Length };
         _editor.TextArea.TextView.InvalidateVisual();
         _editor.TextArea.TextView.Cursor = HandCursor;
-        ShowTooltip(QuickInfoEngine.GetQuickInfo(model!, offset!.Value));
     }
 
-    private void Clear()
+    private void ClearNavigationAffordance()
     {
         if (_activeSpan is null) return; // already clear — avoid redundant invalidations on plain moves
         _activeSpan = null;
         _underline.Segment = null;
         _editor.TextArea.TextView.InvalidateVisual();
         _editor.TextArea.TextView.Cursor = null; // fall back to the editor's I-beam
-        _tooltip.IsOpen = false;
     }
 
-    private void ShowTooltip(QuickInfo? info)
+    // ── Plain hover = information (the unified card) ─────────────────────────────────────────────
+
+    private void UpdateHoverInfo()
     {
-        if (info is null) { _tooltip.IsOpen = false; return; }
-        var card = QuickInfoView.Build(info, _editor.ActualThemeVariant);
-        card.IsHitTestVisible = false; // never intercept the pointer
-        // Toggle off→on so PlacementMode.Pointer re-reads the current pointer position.
-        _tooltip.IsOpen = false;
-        _tooltip.Child = card;
-        _tooltip.IsOpen = true;
+        if (_detached) return;
+        if (!_pointerInside) { HideHover(); return; }
+
+        int? offset = OffsetAt(_lastPointer);
+        if (offset is null) { HideHover(); return; }
+
+        // Still inside the region the open card describes ⇒ its content cannot have changed. Leaving it
+        // alone is what stops the card flickering as the pointer drifts across one identifier.
+        if (_hoverCard is not null && _hoverSpan is { } s && offset >= s.Start && offset <= s.End) return;
+
+        // Moved onto something else: drop the stale card and re-arm the dwell, so crossing the text on
+        // the way somewhere never strobes cards along the path.
+        HideHover();
+        _hoverDwell.Stop();
+        _hoverDwell.Start();
+    }
+
+    private void OnHoverDwellElapsed(object? sender, EventArgs e)
+    {
+        _hoverDwell.Stop();
+        if (_detached || !_pointerInside) return;
+        // Arbitration: the completion list and the Parameter Helper own the screen while they are up.
+        if (_isOtherPopupOpen()) return;
+
+        int? offset = OffsetAt(_lastPointer);
+        var model = _model();
+        if (offset is null || model is null) return;
+
+        // Pure lookup over two already-computed results — no parse, no analysis on the pointer path.
+        var hover = HoverInfoEngine.GetHover(model, _diagnostics(), offset.Value);
+        if (hover is null) return;
+        ShowHover(hover);
+    }
+
+    private void ShowHover(HoverInfo hover)
+    {
+        var overlay = OverlayLayer.GetOverlayLayer(_editor);
+        if (overlay is null) return;
+
+        HideHover();
+        var card = HoverInfoView.Build(hover, _editor.ActualThemeVariant);
+        // Never intercept the pointer: a hit-testable card under the cursor fires PointerExited on the
+        // editor and flickers itself shut. It must also never take focus — hovering is not an action.
+        card.IsHitTestVisible = false;
+        card.Focusable = false;
+
+        var anchor = _editor.TranslatePoint(new Point(_lastPointer.X, _lastPointer.Y + HoverGap), overlay);
+        Canvas.SetLeft(card, anchor?.X ?? 0);
+        Canvas.SetTop(card, anchor?.Y ?? 0);
+        overlay.Children.Add(card);
+        _hoverCard = card;
+        _hoverSpan = hover.Span;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(_hoverCard, card)) return;
+            // Flip above the POINTER (not the caret), clearing the gap we just added below it.
+            EditorPopups.ClampIntoOverlay(overlay, card, flipOffset: HoverGap * 2);
+        }, DispatcherPriority.Background);
+    }
+
+    private void HideHover()
+    {
+        _hoverDwell.Stop();
+        if (_hoverCard is { } card)
+        {
+            OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card);
+            _hoverCard = null;
+        }
+        _hoverSpan = null;
     }
 
     // ── Ctrl+Click → navigate ──────────────────────────────────────────────────────────────────
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        // Any click dismisses the info card — you have started doing something, not reading.
+        HideHover();
+
         var props = e.GetCurrentPoint(_editor).Properties;
         if (!props.IsLeftButtonPressed) return;
         if ((e.KeyModifiers & KeyModifiers.Control) != KeyModifiers.Control) return;

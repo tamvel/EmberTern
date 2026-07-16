@@ -732,6 +732,10 @@ public sealed class ConnectionExpandBindingProbe
             var nav = NavigationController.Attach(
                 editor,
                 () => svc.Model,
+                // The cached, version-matched diagnostics the unified hover explains — the same list the
+                // squiggles paint from.
+                () => svc.Diagnostics,
+                () => false, // no completion list / Parameter Helper competing in this probe
                 (name, kind) => { opened = (name, kind); return true; },
                 word => { openedByName = word; return true; });
 

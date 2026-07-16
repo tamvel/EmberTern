@@ -38,10 +38,14 @@ public partial class PackageDetailTabView : UserControl
         InitializeComponent();
         _diagnostics = new DiagnosticsPanelHost(
             () => _currentVm?.DiagnosticsPanel,
-            () => ActiveEditor);
+            () => ActiveEditor,
+            RevealEditor);
         _headerEditor = this.FindControl<TextEditor>("PackageHeaderEditor");
         _bodyEditor = this.FindControl<TextEditor>("PackageBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("PackageDdlEditor");
+        // S5: the panel's activation gestures navigate the active SQL document.
+        var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("PackageDiagnosticsPanel");
+        if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         if (_headerEditor is not null)
         {
             _headerEditor.TextChanged += OnHeaderEditorTextChanged;
@@ -118,6 +122,18 @@ public partial class PackageDetailTabView : UserControl
         => (_currentVm?.ActiveSubTabIndex == PackageDetailTabViewModel.BodySubTabIndex)
             ? _bodyEditor
             : _headerEditor;
+
+    // S5 — the Diagnostics panel is a PEER tab, so reading the list hides both editors: a jump has to
+    // switch back to the one that owns the finding, not just move its caret. Here the editor IS the tab
+    // (header / body), so selecting the tab is the whole reveal — and it re-aligns the tab-based
+    // ActiveEditor fallback with the document just navigated to.
+    private void RevealEditor(TextEditor editor)
+    {
+        if (_currentVm is null) return;
+        _currentVm.ActiveSubTabIndex = ReferenceEquals(editor, _bodyEditor)
+            ? PackageDetailTabViewModel.BodySubTabIndex
+            : PackageDetailTabViewModel.PackageSubTabIndex;
+    }
 
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {

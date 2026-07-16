@@ -42,10 +42,14 @@ public partial class TriggerDetailTabView : UserControl
         InitializeComponent();
         _diagnostics = new DiagnosticsPanelHost(
             () => _currentVm?.DiagnosticsPanel,
-            () => ModePrimaryEditor);
+            () => ModePrimaryEditor,
+            RevealEditor);
         _sqlEditor = this.FindControl<TextEditor>("TriggerSqlEditor");
         _bodyEditor = this.FindControl<TextEditor>("TriggerBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("TriggerDdlEditor");
+        // S5: the panel's activation gestures navigate the active SQL document.
+        var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("TriggerDiagnosticsPanel");
+        if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         _variablesGrid = this.FindControl<DataGrid>("VariablesGrid");
         if (_variablesGrid is not null) FieldGridColumns.Build(_variablesGrid, includeDefault: true);
 
@@ -135,6 +139,14 @@ public partial class TriggerDetailTabView : UserControl
     // The editor this mode's work happens in by default: the body-only editor in Easy mode, the full
     // CREATE TRIGGER text in Source mode. Also the Diagnostics panel's fallback document.
     private TextEditor? ModePrimaryEditor => (_currentVm?.EasyMode ?? false) ? _bodyEditor : _sqlEditor;
+
+    // S5 — the Diagnostics panel is a PEER tab, so reading the list hides the editor: a jump has to switch
+    // back to it, not just move the caret. Both trigger editors live directly on the Editor tab (visibility
+    // follows the mode), so there is no sub-tab to select.
+    private void RevealEditor(TextEditor editor)
+    {
+        if (_currentVm is not null) _currentVm.ActiveSubTabIndex = TriggerDetailTabViewModel.EditorSubTabIndex;
+    }
 
     private TextEditor? ActiveEditor
     {

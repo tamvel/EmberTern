@@ -27,9 +27,19 @@ internal static class QuickInfoView
     private const double MaxWidth = 460;
 
     /// <summary>Builds the quick-info card. <paramref name="maxMembers"/> caps the member list (a
-    /// table's columns / a routine's parameters) so the hover tooltip stays compact; the overflow is
+    /// table's columns / a routine's parameters) so the tooltip stays compact; the overflow is
     /// summarised. Returns a self-contained, themed <see cref="Border"/>.</summary>
     public static Control Build(QuickInfo info, ThemeVariant theme, int maxMembers = 12)
+        => Card(BuildContent(info, theme, maxMembers), theme);
+
+    /// <summary>
+    /// The quick-info <b>sections only</b>, with no card chrome — so a composite surface can place them
+    /// alongside other sections inside ONE card. This is the semantic section of the unified hover
+    /// (<see cref="HoverInfoView"/>); <see cref="Build"/> is the same content in its own card, for the
+    /// standalone Ctrl+Space Quick Info popup. One content builder, two hosts — never two renderers that
+    /// have to be kept looking alike.
+    /// </summary>
+    public static Control BuildContent(QuickInfo info, ThemeVariant theme, int maxMembers = 12)
     {
         var panel = new StackPanel { Spacing = 2 };
 
@@ -67,18 +77,26 @@ internal static class QuickInfoView
 
         AddFacts(panel, info.Facts, theme);
         AddMembers(panel, info.Members, theme, maxMembers);
-
-        return new Border
-        {
-            Child = panel,
-            Background = Brush("ElevatedPanelBrush", theme) ?? Brush("BackgroundBrush", theme),
-            BorderBrush = Brush("BorderBrush", theme),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(10, 7),
-            MaxWidth = MaxWidth + 24,
-        };
+        return panel;
     }
+
+    /// <summary>The shared editor-popup card chrome. Used by both the standalone Quick Info popup and
+    /// the unified hover, so the two read as the same surface — one set of tokens, one place to change
+    /// them.</summary>
+    public static Control Card(Control content, ThemeVariant theme) => new Border
+    {
+        Child = content,
+        Background = Brush("ElevatedPanelBrush", theme) ?? Brush("BackgroundBrush", theme),
+        BorderBrush = Brush("BorderBrush", theme),
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(4),
+        Padding = new Thickness(10, 7),
+        MaxWidth = MaxWidth + 24,
+    };
+
+    /// <summary>The card's content width budget — shared so a peer section (the unified hover's
+    /// diagnostics) wraps at the same measure as the quick-info sections.</summary>
+    public static double ContentMaxWidth => MaxWidth;
 
     // ── Facts (owner, domain, nullability, default, keys, generated, direction, …) ──────────────
 

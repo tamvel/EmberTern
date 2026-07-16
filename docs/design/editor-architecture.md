@@ -519,11 +519,13 @@ parameter within the statement/body) is safe and feasible; **cross-DB rename is 
 Prioritized; not all at once. Feasibility noted honestly.
 - **Error squiggles + Quick Fixes** (add missing alias, fix INSERT/VALUES count, wrap in EXECUTE
   BLOCK) — Diagnostics Engine (Etap 7). Every fix obeys §0.
-- **Unified Hover Information** — ONE hover surface instead of independent Quick Info and diagnostics
-  tooltips: plain hover (no Ctrl) shows the diagnostic on a squiggled span, today's Quick Info on a
-  symbol, and both as sections of a *single* popup when a span has both. Pure presentation over the
-  existing `SemanticModel` + cached `DiagnosticsEngine` results — no new parsing or analysis.
-  **Post-Stage-7 backlog** (user, 2026-07-16); **absorbs P5d** (§15.2). Design + architectural notes:
+- **Unified Hover Information — ✅ SHIPPED (2026-07-16; awaits visual confirmation).** ONE hover surface
+  instead of independent Quick Info and diagnostics tooltips: **plain hover** (no Ctrl) shows the
+  diagnostic on a squiggled span, today's Quick Info on a symbol, and both as sections of a *single* card
+  when a span has both — diagnostics first. Pure presentation over the existing `SemanticModel` + the
+  **cached** `DiagnosticsEngine` results, with "no new analysis" enforced by
+  `HoverInfoEngine.GetHover`'s signature (diagnostics are an input). **Absorbed P5d.** Confirms §9.4
+  (plain hover = information, Ctrl = actionability) rather than amending it. As-built:
   [editor-stage7-diagnostics.md](editor-stage7-diagnostics.md) §15.
 - **Live Templates / Snippets with tab-stops** — reuse existing snippet infra (Etap 5).
 - **Code Folding** — AvaloniaEdit `FoldingManager`; regions come free from the AST (BEGIN/END,
@@ -904,17 +906,13 @@ cases — the dark DML keyword color and the light built-in-function color).
   (per-statement + per-script lexeme preservation) so the formatter can never silently corrupt or lose
   code. No further P8 work is required; formatter grammar-depth items are available on demand if a later
   feature needs them.
-- **P5d — a plain-hover info cue.** A dwell-delayed, info-only Quick Info tooltip on plain hover
-  (no Ctrl held); the underline + hand-cursor affordance stays Ctrl-only per §9.4. Small and
-  implementable, but it's a live-tuning UX addition (dwell delay, noise) the design defers to
-  interactive judgment rather than shipping blind.
-  > **P5d is now FOLDED INTO the post-Stage-7 "Unified Hover Information" feature** (user, 2026-07-16 —
-  > full design + architectural notes in
-  > [editor-stage7-diagnostics.md](editor-stage7-diagnostics.md) **§15**). Both build the *same* surface:
-  > the plain-hover trigger, its dwell delay and its noise budget. Shipping P5d alone would mean building
-  > that surface and then immediately reopening it to add a diagnostics section and re-tune the dwell.
-  > **Do not implement P5d separately** — one milestone, one tuning pass. (It remains fully compatible with
-  > §9.4: plain hover = information, Ctrl = actionability. §9.4 never required Ctrl for information.)
+- **P5d — a plain-hover info cue. ✅ DELIVERED (2026-07-16) by "Unified Hover Information"** — the
+  post-Stage-7 milestone it was folded into (design + as-built:
+  [editor-stage7-diagnostics.md](editor-stage7-diagnostics.md) **§15**). P5d asked for a dwell-delayed,
+  info-only Quick Info tooltip on plain hover, with the underline + hand-cursor affordance staying
+  Ctrl-only per §9.4; that is exactly what shipped, with the diagnostics section included so the surface,
+  its 350 ms dwell and its noise budget were built and tuned **once**. §9.4 is confirmed, not amended:
+  **plain hover = information, Ctrl = actionability.** This item is closed.
 - **P2c — bold the typed fragment in each completion row.** Re-confirmed not cleanly doable on
   AvaloniaEdit 12.0.0: `CompletionList` exposes no per-item matched-range to a custom `Content`.
   Needs either a custom `CompletionListBox` item template or a controller-side re-render of every

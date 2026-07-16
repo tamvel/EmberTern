@@ -43,6 +43,10 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
     // Easy-mode sub-tab indices (Arguments / Result / Variables / Cursors / Subprograms).
     // Result (1) is a single record — no collection toolbar.
     private const int ResultEasyIndex = 1;
+    // The two Easy sub-tabs that host an SQL editor of their own: diagnostics navigation (S5) has to
+    // select the right one before the caret it just moved can be seen.
+    public const int CursorsEasyIndex = 3;
+    public const int SubprogramsEasyIndex = 4;
 
     public const string NewFunctionTemplate =
         "CREATE OR ALTER FUNCTION NEW_FUNCTION\nRETURNS INTEGER\nAS\nBEGIN\n    RETURN 0;\nEND";

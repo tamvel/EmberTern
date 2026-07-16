@@ -54,7 +54,8 @@ public partial class FunctionDetailTabView : UserControl
         InitializeComponent();
         _diagnostics = new DiagnosticsPanelHost(
             () => _currentVm?.DiagnosticsPanel,
-            () => ModePrimaryEditor);
+            () => ModePrimaryEditor,
+            RevealEditor);
         _sqlEditor = this.FindControl<TextEditor>("FuncSqlEditor");
         _bodyEditor = this.FindControl<TextEditor>("FuncBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("FuncDdlEditor");
@@ -66,6 +67,9 @@ public partial class FunctionDetailTabView : UserControl
         _resultTypeGrid = this.FindControl<DataGrid>("FuncResultTypeGrid");
         _variablesGrid = this.FindControl<DataGrid>("FuncVariablesGrid");
         _performancePanel = this.FindControl<PerformancePanelView>("FuncPerformancePanel");
+        // S5: the panel's activation gestures navigate the active SQL document.
+        var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("FuncDiagnosticsPanel");
+        if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         if (_argumentsGrid is not null) FieldGridColumns.Build(_argumentsGrid, includeDefault: true);
         // The return value is a single, unnamed row — omit the Name + Default columns.
         if (_resultTypeGrid is not null) FieldGridColumns.Build(_resultTypeGrid, includeDefault: false, includeName: false);
@@ -182,6 +186,25 @@ public partial class FunctionDetailTabView : UserControl
     // The editor this mode's work happens in by default: the body-only editor in Easy mode, the full
     // CREATE FUNCTION text in Source mode. Also the Diagnostics panel's fallback document.
     private TextEditor? ModePrimaryEditor => (_currentVm?.EasyMode ?? false) ? _bodyEditor : _sqlEditor;
+
+    // S5 — a diagnostics jump has TWO targets here, not one: the Diagnostics panel is a PEER tab, so the
+    // user is looking at the list *instead of* the editor. Moving the caret alone would land it off-screen;
+    // switch back to the Editor tab, and (Easy mode) onto the sub-tab that actually hosts the target —
+    // Cursors and Subprograms have SQL editors of their own, while the body sits below the sub-tab strip
+    // and needs nothing. The target is the host's active document, never re-derived here.
+    private void RevealEditor(TextEditor editor)
+    {
+        if (_currentVm is null) return;
+        _currentVm.ActiveSubTabIndex = FunctionDetailTabViewModel.EditorSubTabIndex;
+        if (ReferenceEquals(editor, _cursorEditor))
+        {
+            _currentVm.ActiveEasyCollectionIndex = FunctionDetailTabViewModel.CursorsEasyIndex;
+        }
+        else if (ReferenceEquals(editor, _subprogramEditor))
+        {
+            _currentVm.ActiveEasyCollectionIndex = FunctionDetailTabViewModel.SubprogramsEasyIndex;
+        }
+    }
 
     private TextEditor? ActiveEditor
     {

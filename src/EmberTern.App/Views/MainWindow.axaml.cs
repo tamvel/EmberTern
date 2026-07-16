@@ -38,7 +38,10 @@ public partial class MainWindow : Window
     private DataGrid? _resultGrid;
     private MainWindowViewModel? _currentVm;
     private SqlCompletionController? _completion;
-    private Completion.DiagnosticsPanelBinder? _diagnosticsBinder;
+    // Feeds + navigates the Diagnostics bottom tab (S4/S5). The SQL Editor has a single SQL document, so
+    // the LastFocusedSqlDocument rule collapses onto it — but it goes through the SAME host as the object
+    // editors on purpose: one targeting mechanism, so the panel and F8 can never disagree anywhere.
+    private readonly Completion.DiagnosticsPanelHost _diagnostics;
 
     private SvgIcon? _maxRestoreGlyph;
 
@@ -114,6 +117,13 @@ public partial class MainWindow : Window
         InitializeComponent();
         Icon = new WindowIcon(
             AssetLoader.Open(new Uri("avares://EmberTern/Assets/Branding/EmberTern.ico")));
+        _diagnostics = new Completion.DiagnosticsPanelHost(
+            () => _currentVm?.DiagnosticsPanel,
+            () => _editor,
+            // The SQL editor sits above its panel and is normally visible, so there is no tab to switch
+            // back to — except when the results panel is maximized, which collapses the editor's row to
+            // zero height. Restore the split through the existing toggle rather than a second sizing path.
+            reveal: _ => { if (_resultsMaximized) ToggleResultsMaximized(); });
         _editor = this.FindControl<TextEditor>("SqlEditor");
         _ddlEditor = this.FindControl<TextEditor>("DdlEditor");
         _resultGrid = this.FindControl<DataGrid>("ResultGrid");
@@ -145,11 +155,17 @@ public partial class MainWindow : Window
             // Semantic highlighting (Etap 6): colour identifiers by resolved role, driven by the
             // completion controller's cached semantic model.
             Completion.SemanticHighlighter.Attach(_editor, _completion);
-            // Navigation (Etap 6 / M4): Ctrl+hover affordance + Ctrl+Click go-to-definition, sharing
-            // the same cached model. Callbacks delegate to the current VM (null-safe before connect).
+            // Hover + navigation (Etap 6 / M4 + the unified hover): PLAIN hover → one info card (the
+            // diagnostic behind a squiggle and/or the semantic Quick Info); Ctrl+hover → the underline +
+            // hand-cursor actionability cue; Ctrl+Click → go-to-definition. Same cached model + cached
+            // diagnostics. Callbacks delegate to the current VM (null-safe before connect).
             Completion.NavigationController.Attach(
                 _editor,
                 () => _completion?.Model,
+                // The cached, version-matched diagnostics — the same list the squiggles paint from, so
+                // the underline and its explanation can never disagree.
+                () => _completion?.Diagnostics ?? Array.Empty<EmberTern.Core.Sql.Language.Diagnostic>(),
+                () => _completion?.IsPopupOpen ?? false,
                 (name, kind) => _currentVm?.TryOpenSchemaObject(name, kind) ?? false,
                 word => _currentVm?.TryOpenDdlForWord(word) ?? false,
                 (name, kind) => _currentVm?.FetchObjectDefinitionAsync(name, kind) ?? Task.FromResult<string?>(null),
@@ -161,14 +177,18 @@ public partial class MainWindow : Window
             // get the renderer from that seam instead. The duplication is known and tracked separately;
             // until it is resolved, a new editor capability must be added in BOTH places.
             Completion.SquiggleRenderer.Attach(_editor, _completion);
-            // Stage 7 / S4: the Diagnostics bottom-panel tab — a view of the SAME cached diagnostics the
-            // squiggles paint, republished on the same ModelUpdated cycle (no parse, no re-analysis). The
-            // VM is resolved lazily: it attaches after this constructor runs.
-            _diagnosticsBinder = Completion.DiagnosticsPanelBinder.Attach(
-                _editor, _completion, () => _currentVm?.DiagnosticsPanel);
+            // Stage 7 / S4 + S5: the Diagnostics bottom-panel tab — a view of the SAME cached diagnostics
+            // the squiggles paint, republished on the same ModelUpdated cycle (no parse, no re-analysis) —
+            // and F8 / Shift+F8 navigation over them. The VM is resolved lazily: it attaches after this
+            // constructor runs. Tracking here is also what gives this editor its F8 handler: it does NOT
+            // go through SqlEditorBehavior.Attach (gotcha #219).
+            _diagnostics.Track(_editor, _completion);
             Completion.OccurrenceHighlighter.Attach(_editor);
             Completion.EditorSearch.Install(_editor);
         }
+        // S5: the panel's activation gestures (double-click / Enter / F8) target the active SQL document.
+        var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("SqlDiagnosticsPanel");
+        if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         if (_ddlEditor is not null)
         {
             Completion.OccurrenceHighlighter.Attach(_ddlEditor);
@@ -603,7 +623,7 @@ public partial class MainWindow : Window
             // Seed the newly-attached VM's Diagnostics panel from the cached diagnostics. The editor was
             // wired before any VM existed, so a model built in the meantime published into nothing; an
             // unchanged restored text also raises no TextChanged to republish on.
-            _diagnosticsBinder?.Publish();
+            _diagnostics.Republish();
 
             // Apply persisted sidebar width/collapse + results height once the VM
             // (and thus _pendingRestore) is available, then size the results row for

@@ -52,6 +52,12 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
     public const int ResultSubTabIndex = 4;
     public const int PerformanceSubTabIndex = 5;
 
+    // Easy-mode sub-tab indices (0=Input 1=Output 2=Variables 3=Cursors 4=Subprograms) — see
+    // ActiveEasyCollectionIndex. Named for the two that host an SQL editor of their own, because
+    // diagnostics navigation (S5) has to select the right one before the caret can be seen.
+    public const int CursorsEasyIndex = 3;
+    public const int SubprogramsEasyIndex = 4;
+
     public const string NewProcedureTemplate =
         "CREATE OR ALTER PROCEDURE NEW_PROCEDURE\nRETURNS (\n    RESULT INTEGER\n)\nAS\nBEGIN\n    RESULT = 0;\n    SUSPEND;\nEND";
 

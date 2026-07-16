@@ -195,26 +195,10 @@ internal sealed class ParameterHelper
         Dispatcher.UIThread.Post(() =>
         {
             if (!ReferenceEquals(_card, card)) return;
-            ClampIntoOverlay(overlay, card);
+            // 18 ≈ one caret line + a gap, so a flipped card clears the line it describes.
+            EditorPopups.ClampIntoOverlay(overlay, card, flipOffset: 18);
             _activeRow?.BringIntoView();
         }, DispatcherPriority.Background);
-    }
-
-    // Keeps the card inside the overlay: nudge left if it overflows the right edge, and flip it ABOVE
-    // the caret line if it would overflow the bottom (a 40-column INSERT is taller than the editor).
-    private static void ClampIntoOverlay(OverlayLayer overlay, Control card)
-    {
-        double ow = overlay.Bounds.Width, oh = overlay.Bounds.Height;
-        double cw = card.Bounds.Width, ch = card.Bounds.Height;
-        double left = Canvas.GetLeft(card), top = Canvas.GetTop(card);
-        if (cw > 0 && left + cw > ow) left = Math.Max(0, ow - cw - 2);
-        if (ch > 0 && top + ch > oh)
-        {
-            double above = top - ch - 18;
-            top = above >= 0 ? above : Math.Max(0, oh - ch - 2);
-        }
-        Canvas.SetLeft(card, left);
-        Canvas.SetTop(card, top);
     }
 
     // A compact themed card: a kind-appropriate heading, then a numbered parameter list (1-based

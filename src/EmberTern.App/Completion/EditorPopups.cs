@@ -8,10 +8,10 @@ using AvaloniaEdit.Rendering;
 namespace EmberTern.App.Completion;
 
 /// <summary>
-/// Shared placement helpers for the editor's self-managed popups (Quick Info on Ctrl+Space, the
-/// Ctrl-hover tooltip's caret variants, inline rename, Peek Definition). Extracted so the completion
-/// controller and the navigation controller anchor popups to the caret with ONE implementation
-/// (reuse-before-create) rather than each carrying its own copy.
+/// Shared placement helpers for the editor's self-managed popups (Quick Info on Ctrl+Space, inline
+/// rename, Peek Definition) and for the <see cref="OverlayLayer"/>-hosted cards (the Parameter Helper,
+/// the unified hover). Extracted so the completion and navigation controllers anchor popups with ONE
+/// implementation (reuse-before-create) rather than each carrying its own copy.
 /// </summary>
 internal static class EditorPopups
 {
@@ -65,5 +65,32 @@ internal static class EditorPopups
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Keeps an <see cref="OverlayLayer"/>-hosted card on screen: nudge it left if it overflows the right
+    /// edge, and flip it ABOVE its anchor if it would overflow the bottom. Call after layout, when the
+    /// card's <c>Bounds</c> are known.
+    /// <para>
+    /// Shared by the Parameter Helper (a 40-column INSERT is taller than the editor) and the unified
+    /// hover (a hover near the last line) — the same geometry problem, so one implementation.
+    /// </para>
+    /// </summary>
+    /// <param name="flipOffset">Vertical distance from the card's current top back to its anchor, so a
+    /// flipped card clears the thing it describes: the caret's line height for a caret-anchored card,
+    /// the pointer gap for a pointer-anchored one.</param>
+    public static void ClampIntoOverlay(OverlayLayer overlay, Control card, double flipOffset)
+    {
+        double ow = overlay.Bounds.Width, oh = overlay.Bounds.Height;
+        double cw = card.Bounds.Width, ch = card.Bounds.Height;
+        double left = Canvas.GetLeft(card), top = Canvas.GetTop(card);
+        if (cw > 0 && left + cw > ow) left = Math.Max(0, ow - cw - 2);
+        if (ch > 0 && top + ch > oh)
+        {
+            double above = top - ch - flipOffset;
+            top = above >= 0 ? above : Math.Max(0, oh - ch - 2);
+        }
+        Canvas.SetLeft(card, left);
+        Canvas.SetTop(card, top);
     }
 }

@@ -59,13 +59,19 @@ internal static class SqlEditorBehavior
         // cached semantic model the completion controller owns (one background parse per editor).
         SemanticHighlighter.Attach(editor, completion);
 
-        // Navigation (Etap 6 / M4): Ctrl+hover (underline + hand cursor + Quick Info tooltip) and
-        // Ctrl+Click go-to-definition, driven by the same cached model. Owns the Ctrl+Click gesture;
-        // a name-based open is the fallback for editors the model can't fully resolve (e.g. a
-        // body-only Easy-mode trigger editor whose CREATE header isn't in the text).
+        // Hover + navigation (Etap 6 / M4 + the unified hover): PLAIN hover → one info card (the
+        // diagnostic behind a squiggle and/or the semantic Quick Info); Ctrl+hover → the underline +
+        // hand-cursor actionability cue; Ctrl+Click → go-to-definition. All driven by the same cached
+        // model + cached diagnostics. Owns the Ctrl+Click gesture; a name-based open is the fallback for
+        // editors the model can't fully resolve (e.g. a body-only Easy-mode trigger editor whose CREATE
+        // header isn't in the text).
         NavigationController.Attach(
             editor,
             () => completion.Model,
+            // The cached, version-matched diagnostics — the same list the squiggles paint from, so the
+            // underline and its explanation can never disagree.
+            () => completion.Diagnostics,
+            () => completion.IsPopupOpen,
             (name, kind) => vm.TryOpenSchemaObject(name, kind),
             word => vm.TryOpenDdlForWord(word),
             (name, kind) => vm.FetchObjectDefinitionAsync(name, kind),

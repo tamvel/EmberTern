@@ -238,9 +238,11 @@ noted.
   closing only on a real context change / Escape / detach. The journey (all fixed): wrong offset (caret
   vs pointer, #206), columns not warmed (#204), bare `Popup`/`PopupRoot` invisible on the desktop →
   OverlayLayer (#209). Engine: `SignatureHelpEngine` now treats `StatementKind.UpdateOrInsert` like
-  `Insert`. All temporary `EditorDiagnostics` instrumentation removed (code clean). The other custom
-  popups (hover tooltip, Quick Info, Peek, rename) still use the bare-Popup pattern — migrate to
-  OverlayLayer if they show the same invisibility symptom.
+  `Insert`. All temporary `EditorDiagnostics` instrumentation removed (code clean). **The hover tooltip has
+  since been migrated to OverlayLayer too** (the Unified Hover milestone — done up front, before plain hover
+  made it the primary discovery surface, rather than after a bug report); `ClampIntoOverlay` now lives in
+  `EditorPopups`, shared by both cards. The remaining custom popups (Ctrl+Space Quick Info, Peek, rename)
+  still use the bare-Popup pattern — migrate to OverlayLayer if they show the same invisibility symptom.
 - **Multi-statement root cause FOUND & FIXED (gotcha #208):** the user's real problem was that several
   statements in one editor **separated only by newlines (no `;`)** collapsed into ONE parser statement
   (`ScanPlain` ends only at a top-level `;`), so only the first was analysed (coloured/nav/Quick Info).
@@ -533,7 +535,8 @@ noted.
   stay verbatim by design. Immediate hygiene noted for Etap 6.9: a literal NUL byte in
   `SemanticBinder.Query.cs` (composite cache key written as a raw `\0`), and the dead alias path in
   `EditorLanguageService` (no consumer since Etap 5/M5 — remove once validated).
-- **Stage 7 (Diagnostics) — IN PROGRESS.** Design/vision: [editor-stage7-diagnostics.md](docs/design/editor-stage7-diagnostics.md).
+- **Stage 7 (Diagnostics) — COMPLETE** (S5 impl done 2026-07-16; awaits the user's visual confirmation per
+  the QA rule). Design/vision + as-built: [editor-stage7-diagnostics.md](docs/design/editor-stage7-diagnostics.md).
   **Core engine (S1+S2+S6) — DONE (commit c3a269d):** `DiagnosticsEngine` is a pure-Core client of
   `SemanticModel` — conservative, deterministic, de-duplicated diagnostics `ET0001`–`ET0008`
   (UnknownObject/UnknownColumn/UnresolvedVariable/UnresolvedParameter/AmbiguousColumn/InsertCountMismatch/
@@ -602,21 +605,70 @@ noted.
   `EmberTern.App.Diagnostics` namespace inside `MainWindowViewModel`; it lives on `SourceObjectDetailTabViewModel`
   (covering Procedure/Function/Trigger at once), `ViewDetailTabViewModel` and `PackageDetailTabViewModel`,
   mirroring `Performance`. Build 0/0, **4136 main + 23 probe green** (+14 `DiagnosticsPanelVmTests`), smoke
-  clean. **S4 is user-confirmed + committed (1d078c6).** **NEXT: S5 (navigation) — the ONLY milestone left in
-  Stage 7; start at `docs/design/editor-stage7-diagnostics.md` §8.3 + §8.3.1 ("S5 — start here": scope, the
-  pure-consumer rule, the first code change, suggested order, open UX decisions).**
-- **POST-Stage-7 backlog — "Unified Hover Information" (recorded 2026-07-16; do NOT implement during
-  Stage 7).** ONE hover surface instead of independent Quick Info / diagnostics tooltips: plain hover (no
-  Ctrl) shows the diagnostic on a squiggled span, today's Quick Info on a symbol, and both as *sections* of
-  a single popup when a span has both. Pure presentation over the existing `SemanticModel` + **cached**
-  `DiagnosticsEngine` results — no new parse/analysis. **Absorbs P5d.** Compatible with the frozen §9.4
-  (plain hover = information, Ctrl = actionability). Full design + architectural notes:
-  `docs/design/editor-stage7-diagnostics.md` **§15** — including the two non-obvious traps: (a) the common
-  case has NO Quick Info (an unknown object's reference is *unresolved*, so `GetQuickInfo` returns null
-  exactly where `ET0001` fires ⇒ the hover gate must become "symbol **or** diagnostic", not symbol-driven);
-  (b) `NavigationController._tooltip` is still the bare-`Popup` pattern that was invisible on the desktop for
-  the Parameter Helper (gotcha #209) — migrate it to `OverlayLayer` *before* plain hover makes it the primary
-  discovery surface.
+  clean. **S4 is user-confirmed + committed (1d078c6).**
+  **S5 (Navigation) — DONE (impl); awaits user visual confirmation. CLOSES STAGE 7.** `F8` / `Shift+F8` =
+  next / previous (wrapping, silently; a clean document is a no-op), panel row activation on **double-click
+  or Enter** (single-click only selects), caret + span selection + scroll + focus, and the object editors'
+  two-target routing. A **pure consumer**: it navigates the panel's already-published rows — no parse, no
+  model rebuild, no re-analysis. **The one architectural decision: everything routes through the ONE target**
+  — `DiagnosticsPanelHost.ActiveDocument` (the `LastFocusedSqlDocument` rule) was made public, and navigation
+  lives on the host because that is the class that knows it; so a row and its jump cannot disagree *by
+  construction*. Navigation also scans the panel's **own** order (= the engine's, `Finalize` sorts by Start/
+  Length/Code) rather than sorting again — reusing the one order is what makes "panel and navigation always
+  agree" structural instead of coincidental; **pinned by a test against the real engine**. **The SQL Editor
+  was migrated off its bare `DiagnosticsPanelBinder` onto the same host** — behaviour-identical (one editor ⇒
+  the rule collapses onto it), but it removes the second targeting path AND hands that editor `F8` for free:
+  `F8` is wired **once**, in `Track`, so no surface can be missed (**gotcha #219 dissolved by construction**,
+  not by remembering two places). Script Executor has no panel ⇒ no host ⇒ no `F8` (consistent, S4's
+  deferral). Object-editor reveal is a per-surface `Action<TextEditor>` handed the host's active document (it
+  never re-derives a target): Procedure/Function → Editor tab **+** `Cursors/SubprogramsEasyIndex` when the
+  target is those editors; Trigger/View → Editor/SQL tab; Package → the editor IS the tab; SQL Editor →
+  nothing, except un-maximizing a results-maximized layout via the existing `ToggleResultsMaximized()`.
+  Jump semantics mirror go-to-definition (`NavigationController.JumpTo`). **Near-miss worth knowing (gotcha
+  #221):** the established "post the whole caret+scroll+focus block at `DispatcherPriority.Background`" idiom
+  (Package member nav) would have made a held `F8` re-select the same diagnostic forever — `Input` outranks
+  `Background`, so the next keypress reads the pre-jump caret; caret+selection are therefore set
+  **synchronously** and only scroll+focus are posted. Build 0/0, **4148 main + 23 probe green** (+12
+  `DiagnosticsPanelVmTests`), smoke clean.
+- **Unified Hover Information — DONE (2026-07-16; impl, awaits user visual confirmation).** The first
+  post-Stage-7 milestone. ONE hover surface instead of independent Quick Info / diagnostics tooltips:
+  **plain hover** (no Ctrl, 350 ms dwell) shows the diagnostic on a squiggled span, today's Quick Info on a
+  symbol, and both as *sections* of a single card when a span has both (**diagnostics first**). Pure
+  presentation over the existing `SemanticModel` + the **cached** `DiagnosticsEngine` list — and
+  "no new analysis" is **enforced by the signature**: `HoverInfoEngine.GetHover(model, diagnostics, offset)`
+  takes the diagnostics as an INPUT, so it *cannot* re-analyse. **Absorbs + closes P5d.** New: Core
+  `Sql/Language/Hover/` (`HoverInfo` = ordered aggregate `Span`/`Diagnostics`/`Info`, **no `IHoverProvider`**
+  — rule #2; `HoverInfoEngine`), App `HoverInfoView` (composes the EXISTING `QuickInfoView.BuildContent` +
+  shared `QuickInfoView.Card` chrome, so the unified hover and the standalone Ctrl+Space Quick Info cannot
+  drift apart). **INTERACTION DECISION (user delegated) — plain hover = information, Ctrl = actionability;
+  this CONFIRMS the frozen §9.4, it does not amend it.** The deciding fact is technical: the old tooltip was
+  gated on `NavigationEngine.TargetAt` returning a *navigable target*, so Ctrl+hover showed **nothing exactly
+  where `ET0001` fires** (an unknown object is unresolved ⇒ no target). Ctrl also *means* "this leads
+  somewhere" — and an unknown object leads nowhere, so overloading it would make the affordance lie.
+  `NavigationController` now has two independent cues (`UpdateNavigationAffordance` = Ctrl → underline +
+  hand cursor; `UpdateHoverInfo` = plain → the card) sharing only the pointer position; Ctrl+hover shows the
+  card too (superset) and does NOT dismiss one you are reading. **Gotcha #209 closed:** `_tooltip`'s bare
+  `Popup` is **deleted** — the card is `OverlayLayer`-hosted, and `ClampIntoOverlay` was extracted from
+  `ParameterHelper` into `EditorPopups` (one implementation, two consumers). Noise control: dwell + card
+  stays put while the pointer is inside `HoverInfo.Span` (narrowest section, so no flicker) + never opens
+  while the completion list / Parameter Helper / Quick Info is up (`SqlCompletionController.IsPopupOpen` —
+  that controller already owned the "don't stack" rule) + never steals focus / never hit-testable +
+  dismissed by any click / text edit / pointer exit. **Gotcha #219 did NOT bite** — this adds no new
+  `Attach`; the new `Attach` params are **required**, so a missed seam is a compile error (both were).
+  Build 0/0, **4159 main + 23 probe green** (+11 `HoverInfoEngineTests`), smoke clean.
+- **⚠ MILESTONE-ORDER DECISION (2026-07-16) — the Stage 7 retrospective's "consolidate the editor wiring
+  first" recommendation was REVERSED, with reason.** It rested on "both backlog items add per-editor
+  surfaces — exactly what the duplication punishes"; that is true of **Quick Fixes** (a light bulb = a new
+  adorner + gesture = a new `Attach` = the silent-omission risk) but **false of Unified Hover** (no new
+  attach; required params ⇒ compile-time enforcement; and `NavigationController` is already the chosen
+  consolidation point — the double-click handler was moved *into* it from the two seams). Consolidation is
+  also not a mechanical merge: the seams differ by a real lifecycle (MainWindow's editor exists *before* its
+  VM; object editors attach *after*), and MainWindow deliberately bypasses `subscribeMetadataChanged`
+  because it latched "subscribed" against a null VM and dropped the handler — so consolidation must first
+  solve "subscribe once the VM arrives". It touches every capability's installation on every surface for
+  zero user-visible value, which under the QA rule means a full manual re-verification everywhere.
+  **Standing recommendation: the wiring consolidation is the milestone immediately BEFORE Quick Fixes**,
+  where it actually pays. Full reasoning: `docs/design/editor-stage7-diagnostics.md` §15.4.
 - **R2 (2026-06-18 Transaction Architecture Audit) — CLOSED 2026-07-14, and its premise was wrong.**
   R2 ("procedure lock after Execute → Rollback → Compile") was left OPEN pending a live `MON$` dump,
   and the "Single-attachment DDL" fix that followed concluded DDL must be **co-located** on the
@@ -697,8 +749,14 @@ renderer + the layout for constructs the parser intentionally does not model (UP
 layout, PACKAGE bodies) — one layout mechanism per construct, no parallel AST + token walker. The reported
 issues (CASE, WITH, multi-level indentation) are fixed. See `editor-ast-deepening.md` §13.2. The legacy
 `SqlAliasResolver` is off the editor path (only `PredicateExtractor`/Performance uses it); retiring it is a
-separate Performance migration. **Next: Stage 7 (Diagnostics/Folding/Breadcrumbs) — on the user's
-go-ahead.**
+separate Performance migration. **Stage 7 (Diagnostics) is COMPLETE** (S1–S6; engine → squiggles → panel
+→ navigation), and the first post-Stage-7 milestone — **Unified Hover Information** (§15, absorbed P5d) —
+**has shipped** (see "Current state" above). **Folding and Breadcrumbs** were part of the original "Etap 7
+niceties" and are still **unbuilt**; they consume the same AST and need no further foundation. Remaining
+backlog: **editor-wiring consolidation** (gotcha #219 — recommended as the milestone immediately BEFORE
+Quick Fixes, per §15.4), **Quick Fixes** (`editor-stage7-diagnostics.md` §12), Folding, Breadcrumbs, and
+**P2c** (bold the typed completion fragment — still no clean AvaloniaEdit 12.0.0 path). Nothing is
+scheduled: next steps are the user's call.
 
 ## Architecture rules — enforce against drift
 

@@ -443,7 +443,8 @@
            editors. Appended LAST: ActiveSubTabIndex is persisted AND PerformanceSubTabIndex = 5 is a
            hard-coded constant, so the existing indices must not shift. -->
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
-        <views:DiagnosticsPanelView DataContext="{Binding DiagnosticsPanel}" />
+        <views:DiagnosticsPanelView x:Name="FuncDiagnosticsPanel"
+                                    DataContext="{Binding DiagnosticsPanel}" />
       </TabItem>
 
     </TabControl>

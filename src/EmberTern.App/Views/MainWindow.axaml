@@ -1506,7 +1506,8 @@
                  persisted in WorkspaceState and referenced by PerformanceBottomTabIndex, so
                  Results=0 / Messages=1 / Output=2 / Performance=3 must keep their positions. -->
             <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
-              <views:DiagnosticsPanelView DataContext="{Binding DiagnosticsPanel}" />
+              <views:DiagnosticsPanelView x:Name="SqlDiagnosticsPanel"
+                                          DataContext="{Binding DiagnosticsPanel}" />
             </TabItem>
           </TabControl>
           </Grid>

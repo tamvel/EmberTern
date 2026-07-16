@@ -60,7 +60,8 @@ public partial class ProcedureDetailTabView : UserControl
         InitializeComponent();
         _diagnostics = new DiagnosticsPanelHost(
             () => _currentVm?.DiagnosticsPanel,
-            () => ModePrimaryEditor);
+            () => ModePrimaryEditor,
+            RevealEditor);
         _sqlEditor = this.FindControl<TextEditor>("ProcSqlEditor");
         _bodyEditor = this.FindControl<TextEditor>("ProcBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("ProcDdlEditor");
@@ -72,6 +73,9 @@ public partial class ProcedureDetailTabView : UserControl
         _outputGrid = this.FindControl<DataGrid>("OutputParamsGrid");
         _variablesGrid = this.FindControl<DataGrid>("VariablesGrid");
         _performancePanel = this.FindControl<PerformancePanelView>("ProcPerformancePanel");
+        // S5: the panel's activation gestures navigate the active SQL document.
+        var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("ProcDiagnosticsPanel");
+        if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         if (_inputGrid is not null) FieldGridColumns.Build(_inputGrid, includeDefault: true);
         if (_outputGrid is not null) FieldGridColumns.Build(_outputGrid, includeDefault: false);
         if (_variablesGrid is not null) FieldGridColumns.Build(_variablesGrid, includeDefault: true);
@@ -191,6 +195,25 @@ public partial class ProcedureDetailTabView : UserControl
     // The editor this mode's work happens in by default: the body-only editor in Easy mode, the full
     // CREATE PROCEDURE text in Source mode. Also the Diagnostics panel's fallback document.
     private TextEditor? ModePrimaryEditor => (_currentVm?.EasyMode ?? false) ? _bodyEditor : _sqlEditor;
+
+    // S5 — a diagnostics jump has TWO targets here, not one: the Diagnostics panel is a PEER tab, so the
+    // user is looking at the list *instead of* the editor. Moving the caret alone would land it off-screen;
+    // switch back to the Editor tab, and (Easy mode) onto the sub-tab that actually hosts the target —
+    // Cursors and Subprograms have SQL editors of their own, while the body sits below the sub-tab strip
+    // and needs nothing. The target is the host's active document, never re-derived here.
+    private void RevealEditor(TextEditor editor)
+    {
+        if (_currentVm is null) return;
+        _currentVm.ActiveSubTabIndex = ProcedureDetailTabViewModel.EditorSubTabIndex;
+        if (ReferenceEquals(editor, _cursorEditor))
+        {
+            _currentVm.ActiveEasyCollectionIndex = ProcedureDetailTabViewModel.CursorsEasyIndex;
+        }
+        else if (ReferenceEquals(editor, _subprogramEditor))
+        {
+            _currentVm.ActiveEasyCollectionIndex = ProcedureDetailTabViewModel.SubprogramsEasyIndex;
+        }
+    }
 
     private TextEditor? ActiveEditor
     {

@@ -195,8 +195,20 @@ internal sealed class SqlCompletionController
     public SemanticModel? Model => _language.Model;
 
     /// <summary>Stage 7 (Diagnostics) — the cached semantic diagnostics of <see cref="Model"/>, computed
-    /// on the same background pass and consistent with it. The squiggle renderer reads this on paint.</summary>
+    /// on the same background pass and consistent with it. The squiggle renderer reads this on paint, the
+    /// Diagnostics panel lists it, and the unified hover explains it — all from this one cached list.</summary>
     public IReadOnlyList<EmberTern.Core.Sql.Language.Diagnostic> Diagnostics => _language.Diagnostics;
+
+    /// <summary>
+    /// True while one of this controller's popups owns the screen — the completion list, the Parameter
+    /// Helper, or the on-demand Quick Info card.
+    /// <para>
+    /// Exposed for the unified hover, which must not stack on top of them. This controller already owns
+    /// the "they shouldn't stack — the list wins" rule for all three, so the arbitration stays in ONE
+    /// place rather than the hover re-deriving it from three separate handles.
+    /// </para>
+    /// </summary>
+    public bool IsPopupOpen => _window is not null || _parameterHelper.IsOpen || _quickInfo?.IsOpen == true;
 
     /// <summary>Notifies the controller that the App's loaded metadata set changed (a category
     /// finished loading — prefetch/expand/refresh), scheduling a coalesced model rebuild so late-loaded

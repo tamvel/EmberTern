@@ -1,10 +1,13 @@
 # Stage 7 — Diagnostics (design & vision)
 
-> **Status: IN PROGRESS — S1 · S2 · S6 · S3 · S4 are DONE; only S5 (navigation) remains** (updated
-> 2026-07-16). Its blockers are gone: [Etap 6.9 — Structural AST Deepening](editor-ast-deepening.md) is
-> COMPLETE and the UX Polish Phase is closed. The engine (`ET0001`–`ET0008`), the squiggles and the
-> Diagnostics panel are shipped; **§11 is the authoritative milestone status**. Parent architecture:
+> **Status: STAGE 7 IS COMPLETE — S1 · S2 · S6 · S3 · S4 · S5 all DONE** (updated 2026-07-16). The engine
+> (`ET0001`–`ET0008`), the squiggles, the Diagnostics panel and navigation are all shipped; **§11 is the
+> authoritative milestone status**. Its blockers were [Etap 6.9 — Structural AST
+> Deepening](editor-ast-deepening.md) (COMPLETE) and the UX Polish Phase (closed). Parent architecture:
 > [`editor-architecture.md`](editor-architecture.md) §5.9 / §11.
+>
+> Diagnostics is now a closed, read-only pipeline. The two follow-ups built ON it — Quick Fixes (§12) and
+> Unified Hover (§15) — are **post-Stage-7** and deliberately unscheduled.
 >
 > This document is both the original vision **and** the as-built record — where implementation refined a
 > decision, the decision is rewritten here in place (see §8.2/§8.2.1) rather than left as an aspiration
@@ -294,71 +297,88 @@ and View host two; Package hosts two (header · body). The panel shows **one** o
   through that one signal.
 - A clean document shows a readable "No diagnostics" state, never an empty table.
 
-### 8.3 Navigation
+### 8.3 Navigation — AS BUILT (S5)
 
-> **S5 — not yet implemented.** The notes below include what S4's hosting decisions imply for it.
+**Everything routes through the ONE target.** `DiagnosticsPanelHost.ActiveDocument` (the
+`LastFocusedSqlDocument` rule, §8.2.1) was made public and is now the single answer to "which document?" for
+both the panel's contents and every jump — so a row and the jump it performs cannot disagree. Navigation
+lives **on the host** because that is the class that already knows the target; it is a **pure consumer**,
+reading the panel's already-published rows (themselves the language service's cached, version-matched
+findings) and never parsing, rebuilding a `SemanticModel`, or re-running the engine.
 
-- Next/previous diagnostic (keyboard + panel), jump-to-span. Offset lookups are **inclusive at span
-  end** (gotcha #198) — reuse the model's existing offset conventions.
-- **A jump has TWO targets in an object editor, not one** (a consequence of §8.2/§8.2.1, recorded while
-  the S4 implementation was fresh): the panel there is a **peer tab**, so activating a diagnostic must
-  (a) move the caret in the **active SQL document** — which may be the cursor/subprogram editor, and may
-  itself sit on a different Easy-mode *sub*-tab — and (b) switch the detail tab back to **Editor** so the
-  caret is actually on screen. The SQL Editor has neither problem (its panel sits below a permanently
-  visible editor). The active document is already known: it is the one the panel is reflecting
-  (`DiagnosticsPanelHost`'s `LastFocusedSqlDocument`) — S5 must route the jump through the same rule
-  rather than re-deriving a target, or the row and the jump can disagree.
-- Focusing the target editor makes it the last-focused SQL document — which is consistent (you navigated
-  there), but means a jump **can** retarget the panel. Intended; just don't let it fight the sticky rule.
+- **`F8` / `Shift+F8` = next / previous**, wired **once**, in `DiagnosticsPanelHost.Track`. Because every SQL
+  editing surface tracks its editors there — **including the main SQL Editor, which now takes a host too**
+  (see below) — this sidesteps gotcha #219 by construction rather than by remembering two places. The editor
+  receiving the key IS the active document (it has focus), so the binding is always scoped correctly.
+- **The caret is the anchor**, not a remembered index: `IndexAfter`/`IndexBefore` on the panel VM scan for the
+  first/last diagnostic starting strictly after/before `CaretOffset`. Navigation is therefore monotonic
+  regardless of how the selection got where it is, and repeated `F8` walks each finding once, then **wraps
+  silently** (last → first, first → last). A clean document is a **no-op** — never a prompt.
+- **The scan uses the panel's OWN order** — which is the engine's order (`Finalize` sorts by `Start`, `Length`,
+  `Code`; the panel never re-sorts). Sorting again in the navigator would have been a *second* ordering, i.e.
+  a second source of truth; reusing the one order is what makes "the panel and navigation always agree" true
+  by construction. That dependency is pinned by a test against the real engine.
+- **The panel's selection follows** every `F8` (the host writes `SelectedIndex`), and the list auto-scrolls to
+  it. A row activates on **double-click or `Enter`**; single-click only selects, so arrow-keying the list
+  never yanks the caret. Activation **moves focus into the editor** and leaves the selection alone — the S4
+  `Update` no-op guard (§8.2) is what preserves it across debounce ticks, exactly as intended.
+- **The jump itself mirrors go-to-definition** (`NavigationController.JumpTo`): caret at `Start`, select the
+  span, `BringCaretToView`, focus — so a jump reads the same wherever it came from. Offsets are clamped the
+  same way the squiggle renderer and the panel binder clamp (a jump can land a hair ahead of the next
+  rebuild).
+- **The SQL Editor was migrated from a bare `DiagnosticsPanelBinder` onto the host.** Its single editor makes
+  the rule collapse onto itself, so this changes no behaviour — it exists so there is exactly **one**
+  targeting mechanism, per the standing "no parallel implementation" rule. It also gives that editor `F8` for
+  free.
 
-#### 8.3.1 S5 — start here (handoff, 2026-07-16)
+#### 8.3.1 The two-target problem in the object editors — AS BUILT
 
-S5 is the **only** milestone left in Stage 7. Scope: next/previous diagnostic (keyboard + panel) and
-jump-to-span. Nothing else — no Quick Fixes, no Unified Hover (§15), no code actions, no light bulb.
+**A jump has TWO targets there, not one** (a consequence of §8.2/§8.2.1): the panel is a **peer tab**, so the
+user is reading the list *instead of* the editor. Moving the caret alone would land it off-screen. This is
+handled by the host's optional `reveal` callback, supplied per surface — the host still decides *which*
+editor, the view only knows *how to show* it:
 
-**It is a pure consumer.** It must not parse, touch the AST, rebuild the `SemanticModel`, or recompute
-diagnostics — it navigates from the cached `Diagnostic` alone. That is already possible with no new
-plumbing: `DiagnosticRowViewModel` deliberately keeps the whole source record (`Diagnostic`), so a row
-carries its own `Start`/`Length`.
+| Surface | `reveal` |
+|---|---|
+| **SQL Editor** | Editor is always visible beside its panel — nothing to switch. Only exception: a **results-maximized** layout collapses the editor's row to zero height, so reveal restores the split via the existing `ToggleResultsMaximized()` (no second sizing path). |
+| **Procedure / Function** | `ActiveSubTabIndex = EditorSubTabIndex`, **plus** `ActiveEasyCollectionIndex = Cursors/SubprogramsEasyIndex` when the target is the cursor or subprogram editor — those Easy sub-tabs host SQL editors of their own. The body sits *below* the sub-tab strip and needs nothing. |
+| **Trigger / View** | `ActiveSubTabIndex = EditorSubTabIndex` / `SqlSubTabIndex`. Both editors live directly on that tab (visibility follows the mode) — no sub-tab. |
+| **Package** | The editor **is** the tab: `ActiveSubTabIndex = Body/PackageSubTabIndex`. This also re-aligns Package's tab-based `ActiveEditor` fallback with the document just navigated to. |
 
-**First code change — expose the active document; do not invent a second targeting mechanism.**
-`DiagnosticsPanelHost` already computes the one true target (`ActiveDocument` = the
-`LastFocusedSqlDocument` rule, §8.2.1) but keeps it **private**. Navigation must jump into *that* editor,
-or the row and the jump can disagree. Exposing it is the natural first step; everything else builds on it.
+- **Reveal never re-derives the target** — it is handed the host's active document. Re-deriving it is exactly
+  how the row and the jump would drift apart.
+- Focusing the target makes it the last-focused SQL document, so a jump **can** retarget the panel. Intended
+  and consistent (you navigated there); it does not fight the sticky rule because the `GotFocus` handler
+  no-ops when the editor is already the sticky one.
+- **Caret + selection are set SYNCHRONOUSLY; only scrolling + focus are posted** (`DispatcherPriority.Background`).
+  This is a deliberate divergence from the Package member-navigation idiom, which posts the whole block: the
+  caret is the anchor the *next* `F8` reads, and `Background` is dispatched **after** queued `Input`, so
+  posting it would make a held `F8` re-select the same diagnostic forever (gotcha #221).
+- **Script Executor** has no Diagnostics panel (S4 deferred it — no tab strip), so it has no host and
+  therefore no `F8`. Consistent by construction, not by omission.
 
-**Suggested order:** the SQL Editor first — it has a single editor, always visible, so it proves the jump
-(caret + `ScrollTo` + focus) with none of the tab complications. Then the object editors, which add the
-two-target problem above (caret in the active document **and** switch the detail tab back to Editor —
-`EditorSubTabIndex = 0` on every detail VM; a cursor/subprogram target may also need its Easy-mode
-*sub*-tab selected).
+#### 8.3.2 The UX contract (user delegated, 2026-07-16) — SHIPPED
 
-**Watch out for gotcha #219** if S5 adds any per-editor input handling: the main SQL Editor does **not**
-go through `SqlEditorBehavior.Attach` — it hand-wires its own capabilities in `MainWindow`. A handler
-added to only one of those two places silently misses a surface (exactly how S3 shipped with no squiggles
-in the SQL Editor).
+**The behaviour is the contract; the *binding* is not.** `F8` can be rebound later without touching the
+navigation architecture — the key is read in exactly two handlers (`DiagnosticsPanelHost.OnEditorKeyDown`
+and `DiagnosticsPanelView.OnListKeyDown`), and nothing else knows about it.
 
-**Decided defaults (user delegated, 2026-07-16).** The **behaviour is the contract**; the *binding* is
-not — it can be rebound later without touching the navigation architecture, and will be reviewed during
-manual testing.
-
-1. **`F8` = next diagnostic, `Shift+F8` = previous.** Visual Studio's Error-List convention, and free
-   here. Rider's `F2`/`Shift+F2` is **not** available: `F2` is already rename
-   (`NavigationController`) and Edit Field (Table Detail) — itself the VS convention. Also taken:
-   `F5`/`Shift+F5` execute, `F3` Global Search, `Alt+F12` peek, `Alt+F` format, `Ctrl+Space` /
-   `Ctrl+Shift+Space` completion / parameter helper. Active both on the SQL editing surface and while
-   the panel has focus, always scoped to the **active document** (§8.2.1).
-2. **Wrap around, silently** — last → first and first → last. Standard editor behaviour; a modal "no
-   more diagnostics" prompt would be noise. A document with no diagnostics is simply a no-op.
-3. **A panel row activates on double-click or `Enter`; single-click only selects.** So arrow-keying the
-   list never yanks the caret around, which is how every error list behaves — and double-click is already
-   this codebase's "open this" gesture (metadata tree → DDL, Trace → editor, the Parameter Helper).
-4. **Activating a row moves focus into the editor** (you navigated there to edit it), and the panel
-   **keeps its selection**. The S4 `Update` no-op guard (§8.2) already protects that selection across
-   debounce ticks — that is what it was for.
-5. **`F8`/`Shift+F8` also move the panel's selection** to the diagnostic they jump to, so the panel and
-   the caret never disagree. Together with (1)'s active-document scoping, this is the "the panel and
-   navigation always agree on the active SQL document" property S5 must preserve — it falls out of using
-   the one `LastFocusedSqlDocument` target rather than being separately enforced.
+1. **`F8` = next diagnostic, `Shift+F8` = previous.** Visual Studio's Error-List convention, and free here.
+   Rider's `F2`/`Shift+F2` is **not** available: `F2` is already rename (`NavigationController`) and Edit
+   Field (Table Detail) — itself the VS convention. Also taken: `F5`/`Shift+F5` execute, `F3` Global Search,
+   `Alt+F12` peek, `Alt+F` format, `Ctrl+Space` / `Ctrl+Shift+Space` completion / parameter helper. Active
+   both on the SQL editing surface and while the panel has focus, always scoped to the **active document**
+   (§8.2.1).
+2. **Wrap around, silently** — last → first and first → last. A document with no diagnostics is a no-op.
+3. **A panel row activates on double-click or `Enter`; single-click only selects.** Double-click is already
+   this codebase's "open this" gesture (metadata tree → DDL, Trace → editor, the Parameter Helper). It
+   activates the row **under the pointer**, not the selection, so a double-click on empty space below the
+   list does nothing instead of yanking the caret to a stale row.
+4. **Activating a row moves focus into the editor** (you navigated there to edit it), and the panel **keeps
+   its selection** — protected by the S4 `Update` no-op guard, which is what it was for.
+5. **`F8`/`Shift+F8` also move the panel's selection.** Combined with (1)'s active-document scoping, this is
+   the "panel and navigation always agree" property — and it *falls out of* using the one
+   `LastFocusedSqlDocument` target and the one engine order, rather than being separately enforced.
 
 ---
 
@@ -411,7 +431,7 @@ diagnostics pipeline earns trust before anything mutates or before the panel/nav
 | **S6** ✅ DONE | PSQL-specific categories (`UnknownCursor`, `SuspendOutsideSelectable`) | Etap 6.9 B1/B5 | Needs the PSQL body tree. Codes `ET0007`–`ET0008`. **Pulled ahead of S3–S5 (see note)** so the Core engine is complete before any UI. |
 | **S3** ✅ **DONE + user-confirmed + committed** (c8266e3, + gap fix f397190) | Squiggle rendering (App) | S1, S2, S6 | `SquiggleRenderer` (`IBackgroundRenderer`), mirrors `SemanticHighlighter`; diagnostics computed on the same background pass as the model (in `EditorLanguageService`, cached + version-matched), repainted on `ModelUpdated`. Renderer only — zero analysis on the paint path. Includes the **Easy-mode ambient-refresh** follow-up (grid add/remove/rename → live model rebuild, §9). **Hover/tooltip NOT in S3** — deferred, and now folded into the post-Stage-7 Unified Hover (§15). **Attached in TWO places, not one** (§8.1): `SqlEditorBehavior.Attach` covers the object editors, `MainWindow` attaches its own — assuming a single seam is exactly what left the main SQL Editor with no squiggles until it was caught while preparing S4. |
 | **S4** ✅ DONE (impl; awaits visual confirm) | Diagnostics panel (App) | S3 | **List only** (user scope decision — see §8.2): severity · code · message · location, in engine order, with a readable empty state. Hosted on **every** SQL editing surface: a fifth `bottom-tab` in the SQL Editor, and a peer top-level tab in the **Procedure / Function / Trigger / View / Package** editors (same view + VM, hosted like `PerformancePanelView`; Script Executor deferred). The panel reflects the **active SQL document only** — the `LastFocusedSqlDocument` rule (§8.2.1), never a merge. Fed by `DiagnosticsPanelBinder` from the **cached** diagnostics on the shared `ModelUpdated` cycle — no parse, no re-analysis. Group/filter and jump-to-span are NOT part of S4. |
-| **S5** | Navigation (next/prev, keyboard) | S3, S4 | Inclusive-at-end offset lookups. Closes Stage 7. |
+| **S5** ✅ DONE (impl; awaits visual confirm) | Navigation (next/prev, keyboard) | S3, S4 | **Closes Stage 7.** `F8` / `Shift+F8` (wrapping, silent), panel row activation on double-click / `Enter`, caret + span selection + scroll + focus, and the object editors' two-target routing (caret **and** tab). A **pure consumer**: it navigates the panel's already-published rows — no parse, no model rebuild, no re-analysis. Everything routes through the one `DiagnosticsPanelHost.ActiveDocument` (§8.2.1, now public) and the one engine order, so the panel and the caret agree by construction. The SQL Editor was migrated off its bare `DiagnosticsPanelBinder` onto the same host — behaviour-identical, but it collapses the two targeting mechanisms into one and hands that editor `F8` for free (gotcha #219 handled by construction). See §8.3 for the as-built record. |
 
 > **Execution-order note (user decision).** S6 was implemented **before** the App milestones S3–S5,
 > a deliberate sequence change (not a roadmap change): S6 is the last Core milestone, its prerequisites
@@ -471,20 +491,20 @@ Debugger all depend on SQL structure being represented **once**, in the tree.
 
 ---
 
-## 15. POST-STAGE-7 — Unified Hover Information (BACKLOG — do not implement during Stage 7)
+## 15. Unified Hover Information — SHIPPED (post-Stage-7, 2026-07-16)
 
-> **Status: recorded, not scheduled** (user, 2026-07-16). Raised during S4 manual QA: the panel is useful,
-> but for a single squiggled error it is unnecessary context switching. **Explicitly out of Stage 7's
-> scope** — Stage 7 finishes at S5 (navigation). Like Quick Fixes (§12), this is a dedicated follow-up
-> built on the trusted, read-only pipeline.
+> **Status: DONE (impl); awaits user visual confirmation.** Raised during S4 manual QA: the panel is
+> useful, but for a single squiggled error it is unnecessary context switching. Chosen as the first
+> post-Stage-7 milestone **ahead of the editor-wiring consolidation** — see §15.4 for why that order was
+> reversed. **Absorbs P5d.**
 
-### 15.1 The idea
+### 15.1 The idea — as built
 
 **One** hover surface, not two competing tooltips:
 
 - hovering a **squiggled span** shows the diagnostic — **without requiring Ctrl**;
 - hovering a **normal symbol** shows today's Quick Info, unchanged;
-- when a span has **both**, they appear in **one** popup, diagnostics as an additional *section* — never a
+- when a span has **both**, they appear in **one** popup, diagnostics as the *first* section — never a
   second popup.
 
 ```
@@ -494,67 +514,137 @@ Hover ─► Diagnostics ───────────┘        (+ future s
 ```
 
 **Hard constraint (user):** pure presentation. It consumes the existing `SemanticModel` and the existing
-cached `DiagnosticsEngine` results and performs **no new parsing or semantic analysis**.
+cached `DiagnosticsEngine` results and performs **no new parsing or semantic analysis** — enforced by
+`HoverInfoEngine.GetHover`'s signature, which takes the diagnostics as an **input**.
 
-### 15.2 It is compatible with §9.4 — and it is where **P5d** should land
+#### 15.1.1 DESIGN DECISION — plain hover = information, Ctrl = actionability
 
-This does **not** amend the frozen §9.4 navigation-affordance decision, and that is worth stating plainly
-because it looks like it might. §9.4 splits the cues: *permanent cue = the semantic colour*; *actionable
-cue = Ctrl + hover* (underline + hand cursor + navigate). It never claimed information requires Ctrl.
-[`editor-architecture.md`](editor-architecture.md) §15.2 already carries the deferred **P5d — a plain-hover
-info cue**: *"a dwell-delayed, info-only Quick Info tooltip on plain hover (no Ctrl held); the underline +
-hand-cursor affordance stays Ctrl-only per §9.4"*, deferred only because dwell/noise wants live tuning.
+> The user delegated the interaction choice (2026-07-16), stating the goal as: *"when I see a squiggled
+> span while writing SQL, I want to understand why it is underlined without switching to the Diagnostics
+> panel."*
 
-So the split stays exactly as approved: **plain hover = information, Ctrl = actionability.**
+**Plain hover (dwell-delayed) shows information; Ctrl keeps meaning actionability.** This **confirms** the
+frozen §9.4 split rather than amending it — §9.4 assigns the *permanent* cue to the semantic colour and the
+*actionable* cue to Ctrl; it never claimed information requires Ctrl.
 
-> **Recommendation: fold P5d into this feature; do not ship it separately first.** Both build the same
-> surface — the plain-hover trigger, its dwell delay and its noise budget. Shipping P5d alone means
-> building that surface, then immediately reopening it to add a section and re-tuning the dwell. One
-> milestone, one tuning pass.
+Three reasons, in order of decisiveness:
 
-### 15.3 Architectural notes for whoever implements it
+1. **Ctrl+hover physically cannot show it.** The old tooltip was gated on `NavigationEngine.TargetAt`
+   returning a **navigable target**. An unknown object is *unresolved* — there is no target — so Ctrl+hover
+   displayed nothing **precisely where `ET0001` fires**. It could not solve the stated problem without being
+   re-gated anyway, and once re-gated the modifier is pure friction.
+2. **It would make the actionability cue lie.** Ctrl+hover means *"this leads somewhere"* (underline + hand
+   cursor). The most common squiggle leads **nowhere**. Overloading Ctrl to also explain errors would
+   attach a navigation affordance to things that cannot be navigated.
+3. **Information should not need a modifier you must already know to press.** The squiggle is the cue that
+   something is wrong; requiring a hidden gesture to read *why* is the context switch this feature exists to
+   remove. Plain hover is also what VS / Rider / VS Code do — zero learning cost.
 
-1. **The shapes don't match, and the common case is diagnostic-only.** `QuickInfoEngine.GetQuickInfo` is
-   *symbol*-shaped — `model.ReferenceAt(offset)` → `Symbol` → `QuickInfo`, and it returns **null** when the
-   offset isn't on a **resolved** identifier. Diagnostics are *span*-shaped and frequently sit where no
-   symbol resolved — in fact **the most common unified case has no Quick Info at all**: hovering an unknown
-   table (`ET0001`) means the reference did **not** resolve, so `GetQuickInfo` returns null exactly there.
-   `ET0006` (InsertCountMismatch) spans a statement/list with no symbol under most of it. Consequence: the
-   hover gate must change from *"is there a resolved symbol?"* to *"is there a resolved symbol **or** a
-   diagnostic at this offset?"* — the trigger can no longer be driven by symbol resolution. Treat
-   "both sections present" as the *rarer* path, not the design centre.
-2. **Compose in Core, not the App — "presentation-layer" means "no new analysis", not "no model".** The
-   composition is a pure offset lookup over two existing results; it belongs beside `QuickInfoEngine`
-   (Core, zero Avalonia, headlessly unit-testable — the value of which S4's VM tests just demonstrated).
-   Suggested shape, with the constraint enforced **by the signature**:
+The two cues are now genuinely independent in `NavigationController`: `UpdateNavigationAffordance`
+(Ctrl → underline + hand cursor) and `UpdateHoverInfo` (plain → the card) share only the pointer position.
+Ctrl+hover shows the card too — it is a superset, and pressing Ctrl deliberately does **not** dismiss a card
+you are already reading.
+
+### 15.1.2 Noise control — as built
+
+Plain hover fires constantly where Ctrl+hover was self-limiting, so the noise budget is the whole UX risk:
+
+- **Dwell: 350 ms** before anything appears (`NavigationController.HoverDwell`). Long enough not to flash
+  while the pointer crosses text on its way somewhere; short enough to read as an answer.
+- **Stability:** the card stays put while the pointer remains inside `HoverInfo.Span` (the narrowest section's
+  span), so it does not flicker as the pointer drifts across one identifier. Moving off it drops the card and
+  re-arms the dwell, so crossing text never strobes cards along the path.
+- **Arbitration:** the card never opens while the completion list, the Parameter Helper or the Quick Info
+  popup is up (`SqlCompletionController.IsPopupOpen` — the controller already owned the "they shouldn't
+  stack" rule for all three, so it stays in one place).
+- **Never steals focus, never intercepts the pointer** (`IsHitTestVisible = false`, `Focusable = false`) — a
+  hit-testable card under the cursor fires `PointerExited` on the editor and flickers itself shut.
+- **Dismissal:** any click, any text edit, or the pointer leaving the editor.
+
+### 15.2 §9.4 is confirmed, not amended — and **P5d is absorbed**
+
+§9.4 splits the cues: *permanent cue = the semantic colour*; *actionable cue = Ctrl + hover* (underline +
+hand cursor + navigate). It never claimed information requires Ctrl. So the split stays exactly as approved:
+**plain hover = information, Ctrl = actionability** (§15.1.1 for why that is the only workable reading).
+
+**P5d — "a dwell-delayed, info-only Quick Info tooltip on plain hover"** — is **delivered by this feature**
+and is closed. Shipping it separately would have built the same surface (the plain-hover trigger, its dwell
+delay, its noise budget) and then immediately reopened it to add a section and re-tune the dwell. One
+milestone, one tuning pass — as recommended. See [editor-architecture.md](editor-architecture.md) §15.2.
+
+### 15.3 Architectural record — as built
+
+1. **The gate is "a resolved symbol OR a diagnostic", never symbol resolution.** `QuickInfoEngine` is
+   *symbol*-shaped and returns **null** unless the offset is on a **resolved** identifier; diagnostics are
+   *span*-shaped and mostly sit where nothing resolved. **This is not an edge case — it is the headline
+   case:** hovering an unknown table (`ET0001`) means the reference did *not* resolve, so `GetQuickInfo`
+   returns null exactly there. Implementation confirmed this is even stronger than predicted: `ET0001`,
+   `ET0002`, `ET0003`, `ET0005`, `ET0007` **all** fire on unresolved references by construction, so
+   "both sections" is genuinely rare — `ET0006` is the main way to reach it (it spans the VALUES list, which
+   can contain resolved symbols). Pinned by
+   `HoverInfoEngineTests.UnknownObject_HoverExplainsTheSquiggle_EvenWithNoQuickInfo`.
+2. **Composed in Core** (`Core.Sql.Language.Hover`), not the App — "presentation-layer" means "no new
+   analysis", not "no model". The composition is a pure offset lookup over two existing results, so it sits
+   beside `QuickInfoEngine`: zero Avalonia, headlessly unit-testable. **The constraint is enforced by the
+   signature** — diagnostics are an *input*, so the engine cannot analyse even by mistake:
    ```csharp
-   // Core. Diagnostics are an INPUT (the cached, version-matched list) — so the engine
-   // *cannot* analyze, by construction, rather than by a rule someone must remember.
    HoverInfo? HoverInfoEngine.GetHover(SemanticModel model, IReadOnlyList<Diagnostic> diagnostics, int offset);
    ```
-   The App renders `HoverInfo`'s sections, reusing `QuickInfoView.Build` for the semantic section.
-3. **Don't build the provider interface yet (architecture rule #2 — no interfaces without two concrete
-   implementations).** "Provider → provider → future providers" is a good *mental* model, but the actual
-   composition is a handful of lines. Model it as an ordered aggregate of optional sections
-   (`HoverInfo { QuickInfo? Info; IReadOnlyList<Diagnostic> Diagnostics; }`) and introduce `IHoverProvider`
-   only if a third source genuinely lands and the set becomes open-ended. The real contract to decide is
-   **section order**, not the provider type — recommend **diagnostics first**: the reason the user hovered a
-   squiggle is the error; the semantic info is supporting context.
-4. **Migrate the tooltip to `OverlayLayer` first (gotcha #209).** `NavigationController`'s `_tooltip` is
-   still the bare `Popup` + `((ISetLogicalParent)…).SetParent(editor)` pattern — the exact pattern that was
-   invisible on the desktop for the Parameter Helper and forced the OverlayLayer move. Under Ctrl-only
-   hover it is rarely exercised; plain hover makes it the **primary** discovery surface. Do the migration up
-   front, not after the bug report.
-5. **Popup arbitration + noise.** Plain hover fires constantly, where Ctrl+hover was self-limiting. One
-   rule needed: the hover never opens while the completion window or the Parameter Helper is open, and never
-   steals focus (today's tooltip is already hit-test-invisible and focus-neutral — keep that). The dwell
-   delay is the whole UX risk (P5d's stated reason for deferral, and P2's original "pops too early"
-   complaint); budget a live-tuning pass.
-6. **Reuse the existing guards.** Offset→span hit-testing is **inclusive at the span end** (gotcha #198).
-   Diagnostics are version-matched to the model, so the hover applies the same clamp the squiggle renderer
-   does on paint (a hover can land a hair ahead of the next rebuild).
-7. **It is the natural home for Quick Fixes (§12).** When they land, the light bulb / fix list is a third
-   section of this popup. Design the aggregate with room for it — but per (3), still don't abstract early.
-8. **Scope boundary.** This must never become a reason to move diagnostics into the semantic model, change
+   Pinned by `Diagnostics_AreAnInput_NeverRecomputed` (feeding it a list the analyser would never produce).
+3. **No provider interface** (architecture rule #2 — no interfaces without two concrete implementations).
+   `HoverInfo` is an ordered aggregate of optional sections (`Span`, `Diagnostics`, `Info`). The real
+   contract is **section order: diagnostics first** — the reason the user hovered a squiggle is the error;
+   the semantic info is supporting context. `IHoverProvider` arrives only if a third *open-ended* source
+   lands.
+4. **The tooltip was migrated to `OverlayLayer` as step one** (gotcha #209). The old `_tooltip` was the bare
+   `Popup` + `SetParent(editor)` pattern that rendered invisibly on the desktop for the Parameter Helper.
+   Ctrl-only hover rarely exercised it; plain hover makes it the **primary** discovery surface, so the
+   migration went in up front rather than after the bug report. Placement reuses
+   `EditorPopups.ClampIntoOverlay` — extracted from `ParameterHelper` (which had the only copy) and now
+   shared: same geometry problem, one implementation.
+5. **Arbitration + noise** — see §15.1.2. `SqlCompletionController.IsPopupOpen` is the single arbitration
+   handle (that controller already owned the "they shouldn't stack" rule for its three popups). The dwell is
+   **350 ms** and is the one number expected to want live tuning.
+6. **Existing guards reused.** Offset→span hit-testing is **inclusive at the span end** and mirrors
+   `SemanticModel.ReferenceAt` exactly (gotcha #198) — one convention, so the two sections agree about what
+   "here" means. Diagnostics are version-matched to the model, so a hover that lands a hair ahead of the next
+   rebuild degrades exactly like the squiggle renderer's paint-path clamp.
+7. **`HoverInfo.Span` is the narrowest section's span**, not the union: a wide `ET0006` overlapping a short
+   column reference must still re-query when the pointer leaves the column, because the content genuinely
+   differs there. It mirrors `ReferenceAt`'s narrowest-wins tie-break, and it is what the App uses to keep a
+   card stable without flicker.
+8. **It is the natural home for Quick Fixes (§12).** When they land, the light bulb / fix list is a third
+   section of this card — but per (3), still don't abstract early.
+9. **Scope boundary.** This must never become a reason to move diagnostics into the semantic model, change
    severity semantics, or add an analysis pass. If a hover wants something the model doesn't have, the fix
    is upstream (engine/binder), never a hover-side scan.
+
+### 15.4 DECISION — why this shipped BEFORE the editor-wiring consolidation
+
+> The Stage 7 retrospective recommended consolidating the duplicated editor wiring (`MainWindow` vs
+> `SqlEditorBehavior.Attach`, gotcha #219) **before** the next editor feature. The user left the order to
+> judgement; on inspection **that recommendation was wrong for this feature** and was reversed.
+
+The retrospective's argument was: *"both backlog items add per-editor surfaces — exactly the change the
+duplication punishes."* That is true of **Quick Fixes** (a light bulb is a new adorner + gesture ⇒ a new
+`Attach` call ⇒ the silent-omission risk). It is **false of Unified Hover**:
+
+- Unified Hover **adds no new attach**. It modifies `NavigationController`, which *both* seams already
+  attach. The only wiring change is new parameters on `Attach` — and they are **required**, so a missed seam
+  is a **compile error**, not a silent gap. Gotcha #219 is about *silent* omission; a signature change is
+  loud. (Both seams were in fact caught by the compiler during implementation.)
+- `NavigationController` is already the codebase's chosen consolidation point — the double-click handler was
+  deliberately moved *into* it from the two duplicated wirings. This feature continues that pattern, so it
+  **reduces** per-seam surface rather than adding to it.
+- The consolidation is **not** a mechanical merge: the two wirings differ because of a real lifecycle
+  difference (MainWindow's editor exists *before* its VM; the object editors attach *after*), and MainWindow
+  deliberately bypasses the controller's `subscribeMetadataChanged` hook because it silently latched
+  "subscribed" against a null VM and dropped the handler. Consolidation must first solve "subscribe once the
+  VM arrives" — a design problem worth its own milestone, not a rename.
+- Consolidation touches the *installation of every editor capability on every surface* for **zero
+  user-visible value**, and under the project's QA rule it cannot be signed off on green tests — it needs a
+  full manual re-verification everywhere. Spending that bill is justified when it *pays*: immediately before
+  **Quick Fixes**.
+
+**Standing recommendation: the wiring consolidation is now the milestone immediately before Quick Fixes.**
+Doing Unified Hover first cost it one extra parameter to thread.

@@ -45,10 +45,14 @@ public partial class ViewDetailTabView : UserControl
         InitializeComponent();
         _diagnostics = new DiagnosticsPanelHost(
             () => _currentVm?.DiagnosticsPanel,
-            () => ActiveEditor);
+            () => ActiveEditor,
+            RevealEditor);
         _sqlEditor = this.FindControl<TextEditor>("ViewSqlEditor");
         _bodyEditor = this.FindControl<TextEditor>("ViewBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("ViewDdlEditor");
+        // S5: the panel's activation gestures navigate the active SQL document.
+        var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("ViewDiagnosticsPanel");
+        if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         _dataPreviewGrid = this.FindControl<DataGrid>("DataPreviewGrid");
         if (_sqlEditor is not null)
         {
@@ -143,6 +147,14 @@ public partial class ViewDetailTabView : UserControl
     // editor in Easy mode, the full-source editor in Source mode.
     private TextEditor? ActiveEditor
         => (_currentVm?.EasyMode ?? false) ? _bodyEditor : _sqlEditor;
+
+    // S5 — the Diagnostics panel is a PEER tab, so reading the list hides the editor: a jump has to switch
+    // back to it, not just move the caret. Both view editors live directly on the SQL tab (visibility
+    // follows the mode), so there is no sub-tab to select.
+    private void RevealEditor(TextEditor editor)
+    {
+        if (_currentVm is not null) _currentVm.ActiveSubTabIndex = ViewDetailTabViewModel.SqlSubTabIndex;
+    }
 
     // Selection in the active editor, or null when nothing is selected.
     private string? GetActiveEditorSelection()
