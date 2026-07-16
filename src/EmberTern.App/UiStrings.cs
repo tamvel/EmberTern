@@ -1370,6 +1370,7 @@ internal static class UiStrings
     public const string TraceDetailNoSelection = "Select an event to see its detail.";
     public const string TraceEmptyHint = "Press Start to begin monitoring database activity.";
     public const string TraceEmptyWaiting = "Waiting for database activity…";
+    public const string TraceEmptyPaused = "Paused — press Start to resume monitoring.";
     public const string TraceEmptyNoMatch = "No events match the current filter.";
 
     // Performance Analysis (Phase 1 — plan + timings)

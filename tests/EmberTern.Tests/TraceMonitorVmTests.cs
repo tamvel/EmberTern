@@ -286,6 +286,19 @@ public class TraceMonitorVmTests
         Assert.Equal(UiStrings.TraceEmptyNoMatch, vm.EmptyStateText);
     }
 
+    // The centre-screen empty-state message must distinguish a running session (awaiting activity)
+    // from a paused one (nothing will arrive until Start resumes).
+    [Theory]
+    [InlineData(TraceSessionState.Running, "Waiting for database activity…")]
+    [InlineData(TraceSessionState.Paused, "Paused — press Start to resume monitoring.")]
+    [InlineData(TraceSessionState.Stopped, "Press Start to begin monitoring database activity.")]
+    public void EmptyStateText_ReflectsSessionState(TraceSessionState state, string expected)
+    {
+        var vm = NewVm();
+        vm.State = state;
+        Assert.Equal(expected, vm.EmptyStateText);
+    }
+
     [Fact]
     public void CleanSql_StripsTraceSeparatorLines()
     {
@@ -493,18 +506,20 @@ public class TraceMonitorVmTests
         Assert.True(vm.ShowOpDelete);
     }
 
-    // The single Pause/Resume toggle must reflect the live state — a paused session
-    // shows Resume (not a lit Pause). Pins the glyph/tooltip driver properties.
+    // Start and Pause are two distinct buttons that must never both be usable at once:
+    // Running → Pause enabled, Start disabled; Paused → Pause disabled, Start enabled
+    // (Start doubles as Resume); Stopped/Faulted → Start enabled, Pause disabled.
     [Theory]
-    [InlineData(TraceSessionState.Running, false, "Pause")]
-    [InlineData(TraceSessionState.Paused, true, "Resume")]
-    [InlineData(TraceSessionState.Stopped, false, "Pause")]
-    public void PauseResumeToggle_ReflectsState(TraceSessionState state, bool isPaused, string tooltip)
+    [InlineData(TraceSessionState.Running, false, true)]
+    [InlineData(TraceSessionState.Paused, true, false)]
+    [InlineData(TraceSessionState.Stopped, true, false)]
+    [InlineData(TraceSessionState.Faulted, true, false)]
+    public void StartAndPause_EnablementIsMutuallyExclusive(TraceSessionState state, bool canStart, bool canPause)
     {
         var vm = NewVm();
         vm.State = state;
-        Assert.Equal(isPaused, vm.IsPaused);
-        Assert.Equal(tooltip, vm.PauseResumeTooltip);
+        Assert.Equal(canStart, vm.CanStart);
+        Assert.Equal(canPause, vm.CanPause);
     }
 
     [Fact]

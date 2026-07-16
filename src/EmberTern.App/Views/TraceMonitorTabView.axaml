@@ -60,15 +60,10 @@
         <Button Classes="icon" Command="{Binding StartCommand}" ToolTip.Tip="{x:Static app:UiStrings.TraceStart}">
           <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
         </Button>
-        <!-- ONE toggle, one command; the glyph + tooltip flip with state so a paused session
-             shows Resume (Play) instead of a lit Pause. -->
-        <Button Classes="icon" Command="{Binding PauseResumeCommand}" ToolTip.Tip="{Binding PauseResumeTooltip}">
-          <Panel>
-            <controls:SvgIcon Data="{StaticResource Icon.Pause}" Foreground="{DynamicResource WarningBrush}"
-                              IsVisible="{Binding !IsPaused}" />
-            <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}"
-                              IsVisible="{Binding IsPaused}" />
-          </Panel>
+        <!-- Pause is enabled only while Running; once paused it disables and Start (which doubles
+             as Resume) lights up. Two distinct buttons, never both usable at once. -->
+        <Button Classes="icon" Command="{Binding PauseCommand}" ToolTip.Tip="{x:Static app:UiStrings.TracePause}">
+          <controls:SvgIcon Data="{StaticResource Icon.Pause}" Foreground="{DynamicResource WarningBrush}" />
         </Button>
         <Button Classes="icon" Command="{Binding StopCommand}" ToolTip.Tip="{x:Static app:UiStrings.TraceStop}">
           <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}" />
