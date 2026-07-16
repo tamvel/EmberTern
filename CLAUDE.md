@@ -713,10 +713,14 @@ noted.
   Key principle: *anything special Tab does is always shown on screen first — no EmberTern-specific
   behaviour to memorise.* **DONE:** `CompletionMatcher` (+8 tests) and the **Language Completion Core
   foundation** — `Core.Sql.Language.Constructs` (`LanguageConstruct`/`LanguageConstructCatalog`/
-  `LanguageConstructResolver`): the declarative catalog + a pure synchronous prefix resolver (multi-word
-  aware, unique-within-catalog), +19 tests. Build 0/0, **4214 main + 24 probe green**. **NEXT** (staged,
-  Core-before-App): grammar-aware arming (valid construct-starts at caret) → App hint controller + Tab →
-  Typing Ergonomics. **M3 Snippet Engine / M4 Structural Selection remain future.**
+  `LanguageConstructResolver`): the declarative catalog (each row a `ConstructCategory`) + a pure
+  synchronous prefix resolver (multi-word aware, unique-within-catalog) + the **grammar-aware arming gate**
+  (`ConstructContext` — a simple deterministic previous-significant-token rule: statement boundaries arm
+  `Statement` constructs, value-completers arm `Clause` constructs, else none; one cheap synchronous lex,
+  no AST/model, no timing). `LanguageConstructResolver.Resolve(text, caret)` = prefix match ∩ grammar is
+  the single App entry point. +44 Core tests. Build 0/0, **4239 main + 24 probe green**. **NEXT** (staged,
+  Core-before-App): App hint controller (OverlayLayer + Tab) → Typing Ergonomics (`begin…end` pairing +
+  auto-indent). **M3 Snippet Engine / M4 Structural Selection remain future.**
 - **Completion Matching Philosophy — prefix-first IntelliSense — IN PROGRESS (foundation done 2026-07-16).**
   A separate **Completion** milestone (not Stage 8), inserted at the user's request: interactive completion
   must be a **prediction engine, not a search engine**. Root cause of today's noise (`sta`→`NR_STATUS`/

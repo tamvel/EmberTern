@@ -17,8 +17,23 @@ namespace EmberTern.Core.Sql.Language.Constructs;
 /// </summary>
 public static class LanguageConstructResolver
 {
+    /// <summary>The full resolve for the App: the construct the caret's text uniquely completes AND that
+    /// the grammar allows to begin here. Null when nothing is armed. This is the one entry point the App
+    /// calls per keystroke — pure, synchronous, timing-free (prefix match via <see cref="Match"/> gated by
+    /// <see cref="ConstructContext"/>).</summary>
+    public static ConstructMatch? Resolve(string text, int caret)
+    {
+        var match = Match(text, caret);
+        if (match is null) return null;
+
+        int prefixStart = caret - match.PrefixLength;
+        var position = ConstructContext.Classify(text, prefixStart);
+        return ConstructContext.Allows(match.Construct.Category, position) ? match : null;
+    }
+
     /// <summary>Returns the construct the caret's preceding text uniquely completes, or null when there
-    /// is no word before the caret, no catalog prefix matches, or the prefix is still ambiguous.</summary>
+    /// is no word before the caret, no catalog prefix matches, or the prefix is still ambiguous.
+    /// Prefix matching only — no grammar gating (see <see cref="Resolve"/> for the gated result).</summary>
     public static ConstructMatch? Match(string text, int caret)
     {
         if (string.IsNullOrEmpty(text) || caret <= 0 || caret > text.Length) return null;

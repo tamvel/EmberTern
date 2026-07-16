@@ -18,7 +18,24 @@ namespace EmberTern.Core.Sql.Language.Constructs;
 /// Pure value; zero UI; no timing. This is declarative data — adding a construct is one catalog row,
 /// never special-case code.
 /// </summary>
-public sealed record LanguageConstruct(string Spelling, string Expansion, int CaretOffset);
+/// <param name="Category">Which grammatical position the construct may begin in — the single fact the
+/// arming gate needs (see <see cref="ConstructContext"/>). Declarative, per row.</param>
+public sealed record LanguageConstruct(string Spelling, string Expansion, int CaretOffset, ConstructCategory Category);
+
+/// <summary>
+/// Where a construct may legally begin — the coarse, deterministic classification the arming gate uses
+/// (design §5, kept simple: two buckets, decided by the previous significant token).
+/// </summary>
+public enum ConstructCategory
+{
+    /// <summary>Begins a statement / PSQL body statement (<c>if</c>, <c>select</c>, <c>insert into</c>,
+    /// <c>declare variable</c>, …) — arms at a statement boundary.</summary>
+    Statement,
+
+    /// <summary>Continues a query with a clause (<c>where</c>, <c>group by</c>, <c>order by</c>,
+    /// <c>union</c>, …) — arms after something that completes a table/expression.</summary>
+    Clause,
+}
 
 /// <summary>
 /// The result of resolving the editor text + caret against the catalog: the construct to expand and how
@@ -51,39 +68,35 @@ public static class LanguageConstructCatalog
     public static int MaxWords { get; } = ComputeMaxWords(All);
 
     // Caret marked with CaretMark where it belongs; no mark → caret at the end of the expansion.
-    private static LanguageConstruct C(string spelling, string template)
+    private static LanguageConstruct C(string spelling, ConstructCategory category, string template)
     {
         int mark = template.IndexOf(CaretMark);
-        if (mark < 0) return new LanguageConstruct(spelling, template, template.Length);
+        if (mark < 0) return new LanguageConstruct(spelling, template, template.Length, category);
         var expansion = template.Substring(0, mark) + template.Substring(mark + 1);
-        return new LanguageConstruct(spelling, expansion, mark);
+        return new LanguageConstruct(spelling, expansion, mark, category);
     }
 
     private static IReadOnlyList<LanguageConstruct> Build() => new[]
     {
-        // Control flow (caret inside the condition).
-        C("if", "if (￿) then"),
-        C("while", "while (￿) do"),
-        C("for select", "for select "),
+        // Statements & control flow (arm at a statement boundary). Control-flow carets sit in the condition.
+        C("if", ConstructCategory.Statement, "if (￿) then"),
+        C("while", ConstructCategory.Statement, "while (￿) do"),
+        C("for select", ConstructCategory.Statement, "for select "),
+        C("select", ConstructCategory.Statement, "select "),
+        C("insert into", ConstructCategory.Statement, "insert into "),
+        C("update", ConstructCategory.Statement, "update "),
+        C("delete from", ConstructCategory.Statement, "delete from "),
+        C("execute procedure", ConstructCategory.Statement, "execute procedure "),
+        C("execute block", ConstructCategory.Statement, "execute block "),
+        C("declare variable", ConstructCategory.Statement, "declare variable "),
+        C("when", ConstructCategory.Statement, "when ￿ do"),
 
-        // Statements.
-        C("select", "select "),
-        C("insert into", "insert into "),
-        C("update", "update "),
-        C("delete from", "delete from "),
-        C("execute procedure", "execute procedure "),
-        C("execute block", "execute block "),
-
-        // Clauses (caret at end — the developer continues typing the clause body).
-        C("where", "where "),
-        C("group by", "group by "),
-        C("having", "having "),
-        C("order by", "order by "),
-        C("union", "union "),
-
-        // PSQL declarations / handlers.
-        C("declare variable", "declare variable "),
-        C("when", "when ￿ do"),
+        // Query clauses (arm after something that completes a table/expression). Caret at end.
+        C("where", ConstructCategory.Clause, "where "),
+        C("group by", ConstructCategory.Clause, "group by "),
+        C("having", ConstructCategory.Clause, "having "),
+        C("order by", ConstructCategory.Clause, "order by "),
+        C("union", ConstructCategory.Clause, "union "),
     };
 
     private static int ComputeMaxWords(IReadOnlyList<LanguageConstruct> all)
