@@ -38,6 +38,7 @@ public partial class MainWindow : Window
     private DataGrid? _resultGrid;
     private MainWindowViewModel? _currentVm;
     private SqlCompletionController? _completion;
+    private Completion.DiagnosticsPanelBinder? _diagnosticsBinder;
 
     private SvgIcon? _maxRestoreGlyph;
 
@@ -160,6 +161,11 @@ public partial class MainWindow : Window
             // get the renderer from that seam instead. The duplication is known and tracked separately;
             // until it is resolved, a new editor capability must be added in BOTH places.
             Completion.SquiggleRenderer.Attach(_editor, _completion);
+            // Stage 7 / S4: the Diagnostics bottom-panel tab — a view of the SAME cached diagnostics the
+            // squiggles paint, republished on the same ModelUpdated cycle (no parse, no re-analysis). The
+            // VM is resolved lazily: it attaches after this constructor runs.
+            _diagnosticsBinder = Completion.DiagnosticsPanelBinder.Attach(
+                _editor, _completion, () => _currentVm?.DiagnosticsPanel);
             Completion.OccurrenceHighlighter.Attach(_editor);
             Completion.EditorSearch.Install(_editor);
         }
@@ -593,6 +599,11 @@ public partial class MainWindow : Window
             {
                 _editor.Text = _currentVm.QueryText;
             }
+
+            // Seed the newly-attached VM's Diagnostics panel from the cached diagnostics. The editor was
+            // wired before any VM existed, so a model built in the meantime published into nothing; an
+            // unchanged restored text also raises no TextChanged to republish on.
+            _diagnosticsBinder?.Publish();
 
             // Apply persisted sidebar width/collapse + results height once the VM
             // (and thus _pendingRestore) is available, then size the results row for

@@ -524,8 +524,10 @@ noted.
   clean; user-confirmed on a real procedure. **ETAP 6.9 IS COMPLETE — parser + binder + formatter all
   consume one AST model.** **Stage 7 (Diagnostics) has since begun — see the Stage 7 bullet below.**
   `SqlAliasResolver` is off the editor path (only `PredicateExtractor`/Performance uses it).
-  Still deferred: **P5d** a plain-hover info cue; **P2c** bold the typed completion-fragment (no clean
-  AvaloniaEdit 12.0.0 path yet). Formatter grammar-depth items now folded into Etap 6.9 as node
+  Still deferred: **P5d** a plain-hover info cue — now **folded into the post-Stage-7 "Unified Hover
+  Information" backlog item** (do NOT ship P5d separately: it builds the same plain-hover surface, dwell
+  delay and noise budget the unified hover needs — see `editor-stage7-diagnostics.md` §15); **P2c** bold
+  the typed completion-fragment (no clean AvaloniaEdit 12.0.0 path yet). Formatter grammar-depth items now folded into Etap 6.9 as node
   consumers: **CASE** (was inline/verbatim), **nested-query indentation** (no indent model today),
   and eventually **UPDATE SET** / **MERGE … WHEN** if a feature needs them; CREATE-definition headers
   stay verbatim by design. Immediate hygiene noted for Etap 6.9: a literal NUL byte in
@@ -560,8 +562,59 @@ noted.
   binder/engine/ambient mechanism are all correct — fed complete ambient symbols the model has zero false
   positives; the only gap was this staleness. Analysis stays on the *visible fragment + ambient*, NOT a
   synthesized full CREATE source (avoids offset translation; consistent with every other model consumer).
-  Build 0/0, **4122 main + 23 probe green**, smoke clean. **S3 awaits the user's manual visual verification
-  before commit; then S4 (Diagnostics panel) → S5 (navigation) on the user's go-ahead.**
+  **S3 is COMPLETE + committed (c8266e3), plus a defect fix found while preparing S4 (f397190): the main
+  SQL Editor rendered NO squiggles.** S3 attached the renderer in `SqlEditorBehavior.Attach` believing that
+  seam covered "every SQL surface" — it does not: that installer serves the **object editors**, while
+  `MainWindow` hand-wires the main editor itself (null-safe `_currentVm?.…` callbacks). Its diagnostics were
+  computed all along; only the paint was missing. Fixed minimally (attach the renderer in `MainWindow`
+  too + correct the false comments); consolidating the duplicated wiring is the real fix and is owed **its
+  own refactoring milestone**, deliberately kept out of Stage 7 (user decision). **⚠ Until then, a new
+  editor capability must be attached in BOTH places** (gotcha #219).
+  **S4 (Diagnostics panel) — DONE (impl); awaits user visual confirmation.** Scope was deliberately narrow
+  (user directive): **list only** — no navigation/next-prev (S5), no Quick Fix, light bulb, hover, code
+  actions, filtering or grouping. Hosted on **every** SQL editing surface (scope widened during manual QA —
+  the object editors had squiggles since S3 but no way to browse them): a fifth `bottom-tab` in the SQL
+  Editor (Results/Messages/Output/Performance/**Diagnostics**, gated on `IsQueryTabActive`), and a **peer
+  top-level tab in the Procedure / Function / Trigger / View / Package editors**, hosted exactly the way
+  `PerformancePanelView` already is there (same view + VM type, one panel VM per host, no shared state).
+  **Script Executor deliberately deferred** (no tab strip → its own UX decision). The tab is appended **last**
+  everywhere because `SelectedBottomTabIndex`/`ActiveSubTabIndex` are persisted and `PerformanceBottomTabIndex
+  = 3` / `PerformanceSubTabIndex = 5` / `SqlSubTabIndex` / `PackageSubTabIndex` are hard-coded. Editor layouts
+  were **not** redesigned (no panel-below-editor, no extra splitters — user decision).
+  **DESIGN DECISION — the panel reflects the ACTIVE SQL document only, never a merge** (`LastFocusedSqlDocument`,
+  design §8.2.1): the last SQL editor to take focus, else the mode's primary (body in Easy / full source in
+  Source). Focus change retargets + republishes with no text edit; a mode flip or object rebind clears the
+  sticky and falls back. It deliberately does **not** reuse the views' `ActiveEditor` — its
+  `IsEffectivelyVisible` guard can never hold while a peer Diagnostics tab is on screen, so Cursors/Subprograms
+  findings could never reach the panel (gotcha #220). A workspace-wide list, if ever wanted, is a SEPARATE
+  feature and must not change this panel's meaning. New: `DiagnosticsPanelHost` (App/Completion — pure wiring
+  over the UNCHANGED binder: one binder per editor, gated via the binder's existing lazy panel resolver),
+  `DiagnosticRowViewModel` + `DiagnosticsPanelViewModel` (App/ViewModels),
+  `DiagnosticsPanelBinder` (App/Completion — the view-layer bridge, beside `AmbientModelRefresh`, because
+  offset→line/column needs the AvaloniaEdit document), `DiagnosticsPanelView` (App/Views — a *virtualizing*
+  `ListBox`, not the Messages panel's `ItemsControl`-in-`ScrollViewer`, so a huge script's findings don't all
+  realize). The panel is **only a view**: it analyses nothing, sorts nothing, filters nothing and shows the
+  engine's findings in the engine's order. It rides the existing `ModelUpdated` cycle and reads the
+  **cached** version-matched list — no parse, no model rebuild, no second analysis — so every refresh
+  trigger (text edit, model rebuild, metadata bump, Easy-mode ambient change) is satisfied by that ONE
+  subscription. Severity→brush mapping is identical to the squiggle renderer's, so a row and its underline
+  always agree. VM property is `DiagnosticsPanel`, not `Diagnostics` — that name already resolves to the
+  `EmberTern.App.Diagnostics` namespace inside `MainWindowViewModel`; it lives on `SourceObjectDetailTabViewModel`
+  (covering Procedure/Function/Trigger at once), `ViewDetailTabViewModel` and `PackageDetailTabViewModel`,
+  mirroring `Performance`. Build 0/0, **4136 main + 23 probe green** (+14 `DiagnosticsPanelVmTests`), smoke
+  clean. **S4 awaits the user's manual visual verification before commit; then S5 (navigation) closes Stage 7.**
+- **POST-Stage-7 backlog — "Unified Hover Information" (recorded 2026-07-16; do NOT implement during
+  Stage 7).** ONE hover surface instead of independent Quick Info / diagnostics tooltips: plain hover (no
+  Ctrl) shows the diagnostic on a squiggled span, today's Quick Info on a symbol, and both as *sections* of
+  a single popup when a span has both. Pure presentation over the existing `SemanticModel` + **cached**
+  `DiagnosticsEngine` results — no new parse/analysis. **Absorbs P5d.** Compatible with the frozen §9.4
+  (plain hover = information, Ctrl = actionability). Full design + architectural notes:
+  `docs/design/editor-stage7-diagnostics.md` **§15** — including the two non-obvious traps: (a) the common
+  case has NO Quick Info (an unknown object's reference is *unresolved*, so `GetQuickInfo` returns null
+  exactly where `ET0001` fires ⇒ the hover gate must become "symbol **or** diagnostic", not symbol-driven);
+  (b) `NavigationController._tooltip` is still the bare-`Popup` pattern that was invisible on the desktop for
+  the Parameter Helper (gotcha #209) — migrate it to `OverlayLayer` *before* plain hover makes it the primary
+  discovery surface.
 - **R2 (2026-06-18 Transaction Architecture Audit) — CLOSED 2026-07-14, and its premise was wrong.**
   R2 ("procedure lock after Execute → Rollback → Compile") was left OPEN pending a live `MON$` dump,
   and the "Single-attachment DDL" fix that followed concluded DDL must be **co-located** on the
@@ -801,6 +854,10 @@ for the full explanation, code, and the failure it prevents.
 - Every object editor (Table/View/Procedure/Trigger/Function/Package/Domain/Generator/Exception/
   Index Detail) ships a Revert/Discard action beside its primary Compile/Save action, and it must
   **confirm** before discarding — an accidental click must never lose uncompiled work. *(#143)*
+- **`SqlEditorBehavior.Attach` is NOT "the one seam" — it installs the OBJECT editors' capabilities; the
+  main SQL Editor hand-wires its own in `MainWindow`.** A capability added only to that installer silently
+  misses the app's most-used editor (this is exactly how S3 shipped with no squiggles in the SQL Editor).
+  Add it in **both** places and verify by grepping the call sites, not by trusting the comment. *(#219)*
 
 **General**
 - Reflect the actual API surface (get/set, public/protected) before assuming a member is

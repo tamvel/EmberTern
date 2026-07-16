@@ -1,10 +1,14 @@
 # Stage 7 — Diagnostics (design & vision)
 
-> **Status: DESIGN, not yet started (2026-07-14).** This document captures the complete Stage 7
-> vision so future sessions can implement it without reconstructing the reasoning. Stage 7 is
-> **blocked on [Etap 6.9 — Structural AST Deepening](editor-ast-deepening.md)** and on the user
-> formally closing the UX Polish Phase. Parent architecture: [`editor-architecture.md`](editor-architecture.md)
-> §5.9 / §11.
+> **Status: IN PROGRESS — S1 · S2 · S6 · S3 · S4 are DONE; only S5 (navigation) remains** (updated
+> 2026-07-16). Its blockers are gone: [Etap 6.9 — Structural AST Deepening](editor-ast-deepening.md) is
+> COMPLETE and the UX Polish Phase is closed. The engine (`ET0001`–`ET0008`), the squiggles and the
+> Diagnostics panel are shipped; **§11 is the authoritative milestone status**. Parent architecture:
+> [`editor-architecture.md`](editor-architecture.md) §5.9 / §11.
+>
+> This document is both the original vision **and** the as-built record — where implementation refined a
+> decision, the decision is rewritten here in place (see §8.2/§8.2.1) rather than left as an aspiration
+> the code no longer matches. Post-Stage-7 follow-ups are §12 (Quick Fixes) and §15 (Unified Hover).
 >
 > Original scope of "Etap 7": **Diagnostics + editor niceties** (squiggles, folding, breadcrumbs,
 > bracket/BEGIN-END matching, format-selection/on-paste). Folding, breadcrumbs and structural
@@ -49,8 +53,8 @@ the Semantic Model records every identifier occurrence as a `SymbolReference` wi
                                                      │
         ┌────────────────────────────┬──────────────┴───────────────┐
    Squiggle renderer            Diagnostics panel               Navigation
-   (IBackgroundRenderer /       (list, grouped/filtered)        (next/prev error,
-    colorizing transformer)                                      jump-to-span)
+   (IBackgroundRenderer)        (plain list, engine order;       (next/prev error,
+                                 active document only — §8.2)     jump-to-span)  ← S5
 ```
 
 - **`DiagnosticsEngine` is pure Core** (`Core.Sql.Language.DiagnosticsEngine`), zero Avalonia. It
@@ -77,7 +81,7 @@ the Semantic Model records every identifier occurrence as a `SymbolReference` wi
   this). Local-scope diagnostics (unresolved variable, count-mismatch) do not need a connection.
 - **Never mutate code** (§0 holds by construction — read-only analysis).
 - **Deterministic** — same model ⇒ same diagnostics (stable ordering by span for the panel + tests).
-- Be **cancellable and cheap** (§8) — it runs on the shared idle tick.
+- Be **cancellable and cheap** (§9 / §10) — it runs on the shared idle tick.
 
 The engine does **not** apply fixes. Quick Fixes are explicitly post-Stage-7 (§12).
 
@@ -85,19 +89,22 @@ The engine does **not** apply fixes. Quick Fixes are explicitly post-Stage-7 (§
 
 ## 4. Diagnostic model
 
-The `Diagnostic` type already exists in Core (`Diagnostic.cs`), currently:
+The `Diagnostic` type predates Stage 7 (`Diagnostic.cs`). Stage 7 kept its shape and made exactly one
+additive extension — `Category` (§6), defaulted so the older parser-recovery channel is unaffected:
 
 ```csharp
 public readonly record struct Diagnostic(
-    int Start, int Length, DiagnosticSeverity Severity, string Message, string Code)
+    int Start, int Length, DiagnosticSeverity Severity, string Message, string Code,
+    DiagnosticCategory Category = DiagnosticCategory.None)   // ← added by S1
 {
     public int End => Start + Length;
 }
 ```
 
-Stage 7 keeps this shape. A `Category` (enum, §6) and, later, a `QuickFixes` collection (§12) are the
-only additive extensions — and `QuickFixes` is **not** added until the post-Stage-7 Quick Fix stage,
-so the read-only pipeline stays minimal.
+A `QuickFixes` collection (§12) is the only other planned extension, and it is **not** added until the
+post-Stage-7 Quick Fix stage, so the read-only pipeline stays minimal. Being a **record struct** also
+buys the panel free value equality — that is what lets it skip a rebuild when a keystroke leaves the
+findings unchanged (§8.2).
 
 - `Start`/`Length` — the **precise node span** (from the deepened AST), so the squiggle underlines
   exactly the offending construct.
@@ -124,7 +131,8 @@ tokens (`ErrorBrush`/`WarningBrush`, both themes) — no hardcoded colours (UI s
 
 ## 6. Diagnostic categories
 
-Introduce a `DiagnosticCategory` enum. Initial set (all conservative, all expressible only on the
+`DiagnosticCategory` (added by S1). The full set below is **shipped** — S1 + S2 + S6 completed the engine
+before any UI, so `ET0001`–`ET0008` all exist today (all conservative, all expressible only on the
 deepened AST + Semantic Model):
 
 | Category | Severity | Requires connection | Source |
@@ -137,8 +145,9 @@ deepened AST + Semantic Model):
 | `UnknownCursor` | Warning | No | PSQL cursor scope |
 | `SuspendOutsideSelectable` | Warning | No | PSQL body node context (needs B1/B5) |
 
-Categories are added incrementally per milestone (§11); the list above is the target, not a
-big-bang. Every category must have a false-positive review before shipping (the conservatism rule).
+Categories were added incrementally per milestone (§11) rather than big-bang, each with a
+false-positive review before shipping (the conservatism rule). **The set is now complete** — extending it
+further is a deliberate new decision, not a leftover.
 
 > **Note (S1) — `UnresolvedParameter` / `ET0004` is a forward-looking implementation, not dead code.**
 > The engine implements the `UnresolvedParameter` branch (code `ET0004`), but it is currently
@@ -208,8 +217,16 @@ No second parse, no second model, no second loop. Diagnostics ride the existing 
 
 - A dedicated renderer following the existing proven pattern — `SemanticHighlighter`
   (`DocumentColorizingTransformer`) and `OccurrenceHighlighter` / `SearchMatchHighlighter`
-  (`IBackgroundRenderer`) — attached in the single wiring seam `SqlEditorBehavior.Attach`, so **every
-  SQL surface** (SQL Editor + object editors) gets diagnostics at once.
+  (`IBackgroundRenderer`) — attached so **every SQL surface** (SQL Editor + object editors) gets
+  diagnostics.
+  > **There is no single wiring seam — this cost S3 a defect.** `SqlEditorBehavior.Attach` installs the
+  > shared editor capabilities for the **object editors only**; the **main SQL Editor** hand-wires its own
+  > `SqlCompletionController` + renderers in `MainWindow` (its callbacks are null-safe `_currentVm?.…`
+  > rather than a stable `vm`). S3 attached the renderer in `SqlEditorBehavior.Attach` alone and assumed
+  > that covered everything, so the most-used surface silently had no squiggles until it was caught while
+  > preparing S4 (its diagnostics were computed all along — only the paint was missing). **Any new editor
+  > capability must be attached in BOTH places** until the duplicated wiring is consolidated — a known
+  > refactor deliberately kept out of Stage 7 and owed its own milestone.
 - Underlines the diagnostic span with the severity brush (Error → `ErrorBrush`, Warning → `WarningBrush`,
   Info → `SubtleForegroundBrush`; both themes, no hardcoded colours).
 - Repaints on `ModelUpdated`; reads only the cached diagnostics (no work on the paint path).
@@ -220,16 +237,79 @@ No second parse, no second model, no second loop. Diagnostics ride the existing 
 
 ### 8.2 Diagnostics panel
 
-- A list of the current diagnostics: severity icon, message, code, location; grouped/filterable by
-  severity and category; click → navigate to the span (§8.3).
-- Reuses existing list/grid styling + theme tokens (UI styling rules — no bespoke colours). Reuse the
-  results-grid/panel skeleton rather than a new mechanism.
-- Live-updates from the cached diagnostics on `ModelUpdated`.
+- A list of the current diagnostics: severity icon, message, code, location. **Grouping and filtering
+  were dropped from S4** (user scope decision, 2026-07-16): the panel ships as a plain list first, and
+  we only add controls over it if the complete workflow (with S5 navigation) shows a real need. Click →
+  navigate to the span is **S5**, not S4.
+- **The panel is only a view.** It analyses nothing, filters no semantics, invents no diagnostics, and
+  applies no sorting of its own — it shows what `DiagnosticsEngine` produced, in the engine's order. The
+  engine is the single source of truth.
+- **Host: every SQL editing surface, one panel each.** In the SQL Editor it is a fifth `bottom-tab`
+  (Results / Messages / Output / Performance / **Diagnostics**), gated on the existing `IsQueryTabActive`.
+  In the object editors — **Procedure, Function, Trigger, View, Package** — it is a peer top-level
+  `bottom-tab`, hosted exactly the way `PerformancePanelView` already is there: the same view type, one
+  panel VM per host, no shared global state. **Script Executor is deliberately deferred** (user decision):
+  it is an SQL editing surface, but its layout has no tab strip (toolbar / editor / splitter / bottom
+  area), so it needs its own UX decision rather than being folded in at the end of S4.
+  The tab is appended **last** everywhere: `SelectedBottomTabIndex` / `ActiveSubTabIndex` are persisted and
+  `PerformanceBottomTabIndex = 3`, `Procedure/Function.PerformanceSubTabIndex = 5`, `ResultSubTabIndex`,
+  `SqlSubTabIndex`, `PackageSubTabIndex`… are hard-coded, so the existing indices must not shift.
+- **The editor layouts are NOT redesigned** (explicit user decision): no panel below the editor, no extra
+  splitters. A peer tab was chosen over an editor-adjacent panel because the latter is layout surgery in
+  five views, steals space from an already dense Easy mode (`Auto,240,4,*`) and stacks a second splitter.
+  The accepted trade-off: reading the list hides the editor — exactly as Performance already behaves.
+
+#### 8.2.1 DESIGN DECISION — the panel reflects the ACTIVE SQL document only
+
+> Explicit decision (user, 2026-07-16), not an implementation detail.
+
+A Procedure/Function detail tab hosts **four** SQL editors (source · body · cursor · subprogram); Trigger
+and View host two; Package hosts two (header · body). The panel shows **one** of them — never a merge:
+
+- **It never aggregates.** A finding in a non-active editor is not listed; its squiggle still flags it in
+  place. If a workspace-wide diagnostics list is ever wanted, it is a **separate feature** and must not
+  change the meaning of this panel.
+- **The rule is `LastFocusedSqlDocument`**: the last SQL editor to take focus, or — until one does, and
+  after a mode switch — the mode's primary editor (body in Easy mode, full source in Source mode; for
+  Package, the tab-based `ActiveEditor`). Switching focus between Source / Body / Cursor / Subprogram
+  retargets and republishes the panel immediately, with no text edit required.
+- **Why not the views' existing `ActiveEditor` property**, whose first clause is
+  `_focusedEditor is not null && _focusedEditor.IsEffectivelyVisible`? Selecting the peer Diagnostics tab
+  **hides the editor tab**, so that guard always fails while the panel is on screen and `ActiveEditor`
+  collapses to the mode's primary editor — the Cursors/Subprograms editors could then never appear in the
+  panel at all, and "focus an editor → the panel refreshes" would be unobservable by construction. The
+  guard exists so Alt+F never formats a hidden editor; a read-only list has no such concern. Tracking
+  focus stickily also keeps the panel independent of how TabControl realizes hidden tab content.
+- Implemented by `DiagnosticsPanelHost` (App/Completion) — pure wiring over the unchanged
+  `DiagnosticsPanelBinder`: one binder per editor, gated through the binder's existing lazy panel
+  resolver, so a non-active editor's binder resolves to `null` and publishes nothing.
+- Reuses existing list/panel styling + theme tokens (UI styling rules — no bespoke colours): the central
+  `ListBoxItem` state overrides, `Classes="subtle"`, and the `SeverityBrushKey` + `IconBrushConverter`
+  pattern established by `SessionWarningViewModel` / `FindingViewModel`. A **virtualizing `ListBox`**, not
+  an `ItemsControl` in a `ScrollViewer`, so a very large script's findings don't all realize.
+- The row's severity → brush mapping is **identical to the squiggle renderer's**, so a row and the
+  underline it describes always read as the same severity.
+- Live-updates from the **cached** diagnostics on `ModelUpdated` — one subscription, zero analysis. Every
+  refresh trigger (text edit, model rebuild, metadata bump, Easy-mode ambient-symbol change) already routes
+  through that one signal.
+- A clean document shows a readable "No diagnostics" state, never an empty table.
 
 ### 8.3 Navigation
 
+> **S5 — not yet implemented.** The notes below include what S4's hosting decisions imply for it.
+
 - Next/previous diagnostic (keyboard + panel), jump-to-span. Offset lookups are **inclusive at span
   end** (gotcha #198) — reuse the model's existing offset conventions.
+- **A jump has TWO targets in an object editor, not one** (a consequence of §8.2/§8.2.1, recorded while
+  the S4 implementation was fresh): the panel there is a **peer tab**, so activating a diagnostic must
+  (a) move the caret in the **active SQL document** — which may be the cursor/subprogram editor, and may
+  itself sit on a different Easy-mode *sub*-tab — and (b) switch the detail tab back to **Editor** so the
+  caret is actually on screen. The SQL Editor has neither problem (its panel sits below a permanently
+  visible editor). The active document is already known: it is the one the panel is reflecting
+  (`DiagnosticsPanelHost`'s `LastFocusedSqlDocument`) — S5 must route the jump through the same rule
+  rather than re-deriving a target, or the row and the jump can disagree.
+- Focusing the target editor makes it the last-focused SQL document — which is consistent (you navigated
+  there), but means a jump **can** retarget the panel. Intended; just don't let it fight the sticky rule.
 
 ---
 
@@ -280,9 +360,9 @@ diagnostics pipeline earns trust before anything mutates or before the panel/nav
 | **S1** ✅ DONE | `DiagnosticsEngine` (Core) — `UnknownObject`/`UnknownColumn`/`Unresolved*` from the model | Etap 6.9 B1/B2 | Pure Core; consumes the model; conservative + connection-gated. Add `DiagnosticCategory`. Codes `ET0001`–`ET0004`. |
 | **S2** ✅ DONE | `InsertCountMismatch` + `AmbiguousColumn` (Core) | S1 | Reuse `SignatureHelpEngine` list split — no new scan. Codes `ET0005`–`ET0006`. |
 | **S6** ✅ DONE | PSQL-specific categories (`UnknownCursor`, `SuspendOutsideSelectable`) | Etap 6.9 B1/B5 | Needs the PSQL body tree. Codes `ET0007`–`ET0008`. **Pulled ahead of S3–S5 (see note)** so the Core engine is complete before any UI. |
-| **S3** ✅ DONE (impl; awaits visual confirm) | Squiggle rendering + wire into `SqlEditorBehavior.Attach` (App) | S1, S2, S6 | `SquiggleRenderer` (`IBackgroundRenderer`), mirrors `SemanticHighlighter`; diagnostics computed on the same background pass as the model (in `EditorLanguageService`, cached + version-matched), repainted on `ModelUpdated`. Renderer only — zero analysis on the paint path. Includes the **Easy-mode ambient-refresh** follow-up (grid add/remove/rename → live model rebuild, §9). **Hover/tooltip NOT in S3** (deferred, see §8.1). **Visual QA awaits user confirmation** (QA rule). |
-| **S4** | Diagnostics panel (App) | S3 | List + group/filter + jump-to-span; reuse panel/grid skeleton + theme tokens. |
-| **S5** | Navigation (next/prev, keyboard) | S3 | Inclusive-at-end offset lookups. |
+| **S3** ✅ **DONE + user-confirmed + committed** (c8266e3, + gap fix f397190) | Squiggle rendering (App) | S1, S2, S6 | `SquiggleRenderer` (`IBackgroundRenderer`), mirrors `SemanticHighlighter`; diagnostics computed on the same background pass as the model (in `EditorLanguageService`, cached + version-matched), repainted on `ModelUpdated`. Renderer only — zero analysis on the paint path. Includes the **Easy-mode ambient-refresh** follow-up (grid add/remove/rename → live model rebuild, §9). **Hover/tooltip NOT in S3** — deferred, and now folded into the post-Stage-7 Unified Hover (§15). **Attached in TWO places, not one** (§8.1): `SqlEditorBehavior.Attach` covers the object editors, `MainWindow` attaches its own — assuming a single seam is exactly what left the main SQL Editor with no squiggles until it was caught while preparing S4. |
+| **S4** ✅ DONE (impl; awaits visual confirm) | Diagnostics panel (App) | S3 | **List only** (user scope decision — see §8.2): severity · code · message · location, in engine order, with a readable empty state. Hosted on **every** SQL editing surface: a fifth `bottom-tab` in the SQL Editor, and a peer top-level tab in the **Procedure / Function / Trigger / View / Package** editors (same view + VM, hosted like `PerformancePanelView`; Script Executor deferred). The panel reflects the **active SQL document only** — the `LastFocusedSqlDocument` rule (§8.2.1), never a merge. Fed by `DiagnosticsPanelBinder` from the **cached** diagnostics on the shared `ModelUpdated` cycle — no parse, no re-analysis. Group/filter and jump-to-span are NOT part of S4. |
+| **S5** | Navigation (next/prev, keyboard) | S3, S4 | Inclusive-at-end offset lookups. Closes Stage 7. |
 
 > **Execution-order note (user decision).** S6 was implemented **before** the App milestones S3–S5,
 > a deliberate sequence change (not a roadmap change): S6 is the last Core milestone, its prerequisites
@@ -339,3 +419,93 @@ structure it does not compute, emits conservative diagnostics on the existing ba
 renders them through the existing renderer/panel/navigation patterns. It comes after Etap 6.9 because
 its trustworthiness, its category coverage, and its shared foundation with Folding / Breadcrumbs / the
 Debugger all depend on SQL structure being represented **once**, in the tree.
+
+---
+
+## 15. POST-STAGE-7 — Unified Hover Information (BACKLOG — do not implement during Stage 7)
+
+> **Status: recorded, not scheduled** (user, 2026-07-16). Raised during S4 manual QA: the panel is useful,
+> but for a single squiggled error it is unnecessary context switching. **Explicitly out of Stage 7's
+> scope** — Stage 7 finishes at S5 (navigation). Like Quick Fixes (§12), this is a dedicated follow-up
+> built on the trusted, read-only pipeline.
+
+### 15.1 The idea
+
+**One** hover surface, not two competing tooltips:
+
+- hovering a **squiggled span** shows the diagnostic — **without requiring Ctrl**;
+- hovering a **normal symbol** shows today's Quick Info, unchanged;
+- when a span has **both**, they appear in **one** popup, diagnostics as an additional *section* — never a
+  second popup.
+
+```
+Hover ─► Quick Info (semantic) ─┐
+                                ├─► one unified popup
+Hover ─► Diagnostics ───────────┘        (+ future sections)
+```
+
+**Hard constraint (user):** pure presentation. It consumes the existing `SemanticModel` and the existing
+cached `DiagnosticsEngine` results and performs **no new parsing or semantic analysis**.
+
+### 15.2 It is compatible with §9.4 — and it is where **P5d** should land
+
+This does **not** amend the frozen §9.4 navigation-affordance decision, and that is worth stating plainly
+because it looks like it might. §9.4 splits the cues: *permanent cue = the semantic colour*; *actionable
+cue = Ctrl + hover* (underline + hand cursor + navigate). It never claimed information requires Ctrl.
+[`editor-architecture.md`](editor-architecture.md) §15.2 already carries the deferred **P5d — a plain-hover
+info cue**: *"a dwell-delayed, info-only Quick Info tooltip on plain hover (no Ctrl held); the underline +
+hand-cursor affordance stays Ctrl-only per §9.4"*, deferred only because dwell/noise wants live tuning.
+
+So the split stays exactly as approved: **plain hover = information, Ctrl = actionability.**
+
+> **Recommendation: fold P5d into this feature; do not ship it separately first.** Both build the same
+> surface — the plain-hover trigger, its dwell delay and its noise budget. Shipping P5d alone means
+> building that surface, then immediately reopening it to add a section and re-tuning the dwell. One
+> milestone, one tuning pass.
+
+### 15.3 Architectural notes for whoever implements it
+
+1. **The shapes don't match, and the common case is diagnostic-only.** `QuickInfoEngine.GetQuickInfo` is
+   *symbol*-shaped — `model.ReferenceAt(offset)` → `Symbol` → `QuickInfo`, and it returns **null** when the
+   offset isn't on a **resolved** identifier. Diagnostics are *span*-shaped and frequently sit where no
+   symbol resolved — in fact **the most common unified case has no Quick Info at all**: hovering an unknown
+   table (`ET0001`) means the reference did **not** resolve, so `GetQuickInfo` returns null exactly there.
+   `ET0006` (InsertCountMismatch) spans a statement/list with no symbol under most of it. Consequence: the
+   hover gate must change from *"is there a resolved symbol?"* to *"is there a resolved symbol **or** a
+   diagnostic at this offset?"* — the trigger can no longer be driven by symbol resolution. Treat
+   "both sections present" as the *rarer* path, not the design centre.
+2. **Compose in Core, not the App — "presentation-layer" means "no new analysis", not "no model".** The
+   composition is a pure offset lookup over two existing results; it belongs beside `QuickInfoEngine`
+   (Core, zero Avalonia, headlessly unit-testable — the value of which S4's VM tests just demonstrated).
+   Suggested shape, with the constraint enforced **by the signature**:
+   ```csharp
+   // Core. Diagnostics are an INPUT (the cached, version-matched list) — so the engine
+   // *cannot* analyze, by construction, rather than by a rule someone must remember.
+   HoverInfo? HoverInfoEngine.GetHover(SemanticModel model, IReadOnlyList<Diagnostic> diagnostics, int offset);
+   ```
+   The App renders `HoverInfo`'s sections, reusing `QuickInfoView.Build` for the semantic section.
+3. **Don't build the provider interface yet (architecture rule #2 — no interfaces without two concrete
+   implementations).** "Provider → provider → future providers" is a good *mental* model, but the actual
+   composition is a handful of lines. Model it as an ordered aggregate of optional sections
+   (`HoverInfo { QuickInfo? Info; IReadOnlyList<Diagnostic> Diagnostics; }`) and introduce `IHoverProvider`
+   only if a third source genuinely lands and the set becomes open-ended. The real contract to decide is
+   **section order**, not the provider type — recommend **diagnostics first**: the reason the user hovered a
+   squiggle is the error; the semantic info is supporting context.
+4. **Migrate the tooltip to `OverlayLayer` first (gotcha #209).** `NavigationController`'s `_tooltip` is
+   still the bare `Popup` + `((ISetLogicalParent)…).SetParent(editor)` pattern — the exact pattern that was
+   invisible on the desktop for the Parameter Helper and forced the OverlayLayer move. Under Ctrl-only
+   hover it is rarely exercised; plain hover makes it the **primary** discovery surface. Do the migration up
+   front, not after the bug report.
+5. **Popup arbitration + noise.** Plain hover fires constantly, where Ctrl+hover was self-limiting. One
+   rule needed: the hover never opens while the completion window or the Parameter Helper is open, and never
+   steals focus (today's tooltip is already hit-test-invisible and focus-neutral — keep that). The dwell
+   delay is the whole UX risk (P5d's stated reason for deferral, and P2's original "pops too early"
+   complaint); budget a live-tuning pass.
+6. **Reuse the existing guards.** Offset→span hit-testing is **inclusive at the span end** (gotcha #198).
+   Diagnostics are version-matched to the model, so the hover applies the same clamp the squiggle renderer
+   does on paint (a hover can land a hair ahead of the next rebuild).
+7. **It is the natural home for Quick Fixes (§12).** When they land, the light bulb / fix list is a third
+   section of this popup. Design the aggregate with room for it — but per (3), still don't abstract early.
+8. **Scope boundary.** This must never become a reason to move diagnostics into the semantic model, change
+   severity semantics, or add an analysis pass. If a hover wants something the model doesn't have, the fix
+   is upstream (engine/binder), never a hover-side scan.

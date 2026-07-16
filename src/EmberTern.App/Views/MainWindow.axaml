@@ -1502,6 +1502,12 @@
             <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.PerformanceTabHeader}">
               <views:PerformancePanelView DataContext="{Binding Performance}" />
             </TabItem>
+            <!-- Diagnostics (Stage 7 / S4). Appended LAST on purpose: the bottom-tab index is
+                 persisted in WorkspaceState and referenced by PerformanceBottomTabIndex, so
+                 Results=0 / Messages=1 / Output=2 / Performance=3 must keep their positions. -->
+            <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
+              <views:DiagnosticsPanelView DataContext="{Binding DiagnosticsPanel}" />
+            </TabItem>
           </TabControl>
           </Grid>
         </Border>

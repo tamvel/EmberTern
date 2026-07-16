@@ -32,8 +32,15 @@ namespace EmberTern.App.ViewModels;
 public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
 {
     // Sub-tab indices — must match the TabItem order in PackageDetailTabView.axaml.
+    // (Diagnostics is appended LAST so these indices, which are also persisted per tab, never shift.)
     public const int PackageSubTabIndex = 0;
     public const int BodySubTabIndex = 1;
+
+    /// <summary>Diagnostics panel (Stage 7 / S4) for this editor's own Diagnostics sub-tab — the same view
+    /// and VM the SQL Editor uses, hosted per object exactly as the routine editors do. Fed by the View's
+    /// <c>DiagnosticsPanelHost</c> from the active SQL document's cached diagnostics; this VM computes
+    /// nothing.</summary>
+    public DiagnosticsPanelViewModel DiagnosticsPanel { get; } = new();
 
     // Templates for the New Package flow (the user edits the SQL directly).
     public const string NewPackageHeaderTemplate =

@@ -4,6 +4,7 @@
              xmlns:app="using:EmberTern.App"
              xmlns:controls="using:EmberTern.App.Controls"
              xmlns:behaviors="using:EmberTern.App.Behaviors"
+             xmlns:views="using:EmberTern.App.Views"
              xmlns:ae="using:AvaloniaEdit"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -261,6 +262,14 @@
                        HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                        Background="{DynamicResource BackgroundBrush}"
                        Foreground="{DynamicResource ForegroundBrush}" />
+      </TabItem>
+
+      <!-- Diagnostics (Stage 7 / S4) — the SAME view + VM the SQL Editor's Diagnostics tab uses,
+           hosted per object. Shows the ACTIVE SQL document's findings (the LastFocusedSqlDocument
+           rule — see DiagnosticsPanelHost). Appended LAST so the persisted ActiveSubTabIndex and the
+           existing sub-tab indices never shift. -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
+        <views:DiagnosticsPanelView DataContext="{Binding DiagnosticsPanel}" />
       </TabItem>
 
     </TabControl>

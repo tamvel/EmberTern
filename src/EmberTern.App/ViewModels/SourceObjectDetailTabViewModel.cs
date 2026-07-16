@@ -170,6 +170,12 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
 
     public virtual bool CanUseEasyMode => true;
 
+    /// <summary>Diagnostics panel (Stage 7 / S4) for this editor's own Diagnostics sub-tab — the same view
+    /// and VM the SQL Editor uses, hosted per object exactly as <c>Performance</c> is (one context per host,
+    /// no shared global state). Fed by the View's <c>DiagnosticsPanelHost</c> from the active SQL document's
+    /// cached diagnostics; this VM computes nothing.</summary>
+    public DiagnosticsPanelViewModel DiagnosticsPanel { get; } = new();
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSourceMode))]
     private bool _easyMode;

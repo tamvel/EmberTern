@@ -36,10 +36,16 @@ public partial class ViewDetailTabView : UserControl
     private bool _suppressSourceSync;
     private bool _suppressBodySync;
     private bool _completionAttached;
+    // Feeds this view's own Diagnostics sub-tab from the ACTIVE SQL document (S4). Only one of the two
+    // editors is usable per mode, so ActiveEditor (already just the mode primary here) is the fallback.
+    private readonly DiagnosticsPanelHost _diagnostics;
 
     public ViewDetailTabView()
     {
         InitializeComponent();
+        _diagnostics = new DiagnosticsPanelHost(
+            () => _currentVm?.DiagnosticsPanel,
+            () => ActiveEditor);
         _sqlEditor = this.FindControl<TextEditor>("ViewSqlEditor");
         _bodyEditor = this.FindControl<TextEditor>("ViewBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("ViewDdlEditor");
@@ -79,8 +85,16 @@ public partial class ViewDetailTabView : UserControl
         if (_completionAttached) return;
         if (this.FindAncestorOfType<Window>()?.DataContext is MainWindowViewModel mainVm)
         {
-            if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm);
-            if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm);
+            // Each editor is tracked by the Diagnostics host too, so this view's Diagnostics sub-tab
+            // reflects whichever of them is the active SQL document (S4).
+            if (_sqlEditor is not null)
+            {
+                _diagnostics.Track(_sqlEditor, SqlEditorBehavior.Attach(_sqlEditor, mainVm));
+            }
+            if (_bodyEditor is not null)
+            {
+                _diagnostics.Track(_bodyEditor, SqlEditorBehavior.Attach(_bodyEditor, mainVm));
+            }
 
             // Metadata-object drop → snippet flyout. A view editor is SELECT/DDL, not PSQL.
             if (_sqlEditor is not null) SqlSnippetDropTarget.Attach(_sqlEditor, mainVm, SnippetInsertionContext.PlainSql);
@@ -96,6 +110,9 @@ public partial class ViewDetailTabView : UserControl
             _currentVm.PropertyChanged -= OnVmPropertyChanged;
         }
         _currentVm = DataContext as ViewDetailTabViewModel;
+        // A different view is now in these editors: the sticky diagnostics document belongs to the
+        // previous one, so drop it and seed the incoming VM's panel from the cached diagnostics.
+        _diagnostics.ResetActiveDocument();
         if (_currentVm is not null)
         {
             _currentVm.PropertyChanged += OnVmPropertyChanged;
@@ -167,6 +184,12 @@ public partial class ViewDetailTabView : UserControl
         else if (e.PropertyName == nameof(ViewDetailTabViewModel.DdlText))
         {
             PushDdl();
+        }
+        else if (e.PropertyName == nameof(ViewDetailTabViewModel.EasyMode))
+        {
+            // Source⇄Easy flip: the sticky diagnostics document belongs to the mode we just left, so
+            // drop it and fall back to the new mode's primary editor.
+            _diagnostics.ResetActiveDocument();
         }
         else if (e.PropertyName == nameof(ViewDetailTabViewModel.DataResultVersionTag))
         {

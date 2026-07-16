@@ -264,6 +264,14 @@ internal static class UiStrings
     public const string BottomTabMessages = "Messages";
     public const string BottomTabResults = "Results";
     public const string BottomTabOutput = "Output";
+    public const string BottomTabDiagnostics = "Diagnostics";
+
+    // Diagnostics panel (Stage 7 / S4) — a view of the DiagnosticsEngine's findings for the SQL editor.
+    public const string DiagnosticsEmptyHint = "No diagnostics — nothing to report for this document.";
+    public const string DiagnosticsLocationFormat = "Ln {0}, Col {1}";
+    public const string DiagnosticSeverityError = "Error";
+    public const string DiagnosticSeverityWarning = "Warning";
+    public const string DiagnosticSeverityInfo = "Info";
 
     public const string StatusBarReady = "Ready";
     public const string StatusBarConnectedTo = "Connected to";

@@ -443,6 +443,15 @@
         <views:PerformancePanelView x:Name="ProcPerformancePanel" />
       </TabItem>
 
+      <!-- Diagnostics (Stage 7 / S4) — the SAME view + VM the SQL Editor's Diagnostics tab uses,
+           hosted per object exactly like Performance above. Shows the ACTIVE SQL document's findings
+           (the LastFocusedSqlDocument rule — see DiagnosticsPanelHost), never a merge of the four
+           editors. Appended LAST: ActiveSubTabIndex is persisted AND PerformanceSubTabIndex = 5 is a
+           hard-coded constant, so the existing indices must not shift. -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
+        <views:DiagnosticsPanelView DataContext="{Binding DiagnosticsPanel}" />
+      </TabItem>
+
     </TabControl>
 
     <!-- Persistent execution-info panel — visible after any Execute regardless of

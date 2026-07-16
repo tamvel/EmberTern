@@ -252,6 +252,13 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>Performance Analysis panel for the SQL Editor bottom-panel sub-tab.</summary>
     public PerformancePanelViewModel Performance => SqlEditorPerformance.Panel;
 
+    /// <summary>Diagnostics panel (Stage 7 / S4) for the SQL Editor bottom-panel sub-tab — a view of the
+    /// DiagnosticsEngine's findings for the editor's document. Fed by the View's <c>DiagnosticsPanelBinder</c>
+    /// from the editor's cached, version-matched diagnostics (the VM computes nothing). Named
+    /// <c>DiagnosticsPanel</c>, not <c>Diagnostics</c>, because this class resolves that name to the
+    /// <see cref="EmberTern.App.Diagnostics"/> namespace (ScrollTrace / RefreshTrace).</summary>
+    public DiagnosticsPanelViewModel DiagnosticsPanel { get; } = new();
+
     /// <summary>Builds a per-run Performance report (plan + reads + advisor) from a captured
     /// execution. Shared by every <see cref="HostPerformanceContext"/> — the readers live here, the
     /// captured data lives in the context.</summary>

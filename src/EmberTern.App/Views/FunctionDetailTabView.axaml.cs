@@ -46,10 +46,15 @@ public partial class FunctionDetailTabView : UserControl
     private bool _completionAttached;
     // Rebuilds the ambient-seeded editors' models when the Easy-mode grids change (S3 follow-up).
     private readonly AmbientModelRefresh _ambientRefresh = new();
+    // Feeds this function's own Diagnostics sub-tab from the ACTIVE SQL document (S4).
+    private readonly DiagnosticsPanelHost _diagnostics;
 
     public FunctionDetailTabView()
     {
         InitializeComponent();
+        _diagnostics = new DiagnosticsPanelHost(
+            () => _currentVm?.DiagnosticsPanel,
+            () => ModePrimaryEditor);
         _sqlEditor = this.FindControl<TextEditor>("FuncSqlEditor");
         _bodyEditor = this.FindControl<TextEditor>("FuncBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("FuncDdlEditor");
@@ -100,10 +105,30 @@ public partial class FunctionDetailTabView : UserControl
             Func<IReadOnlyList<Symbol>> ambient = () =>
                 _currentVm?.BuildAmbientSymbols() ?? Array.Empty<Symbol>();
 
-            if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm);
-            if (_bodyEditor is not null) _ambientRefresh.Track(SqlEditorBehavior.Attach(_bodyEditor, mainVm, ambientSymbols: ambient));
-            if (_cursorEditor is not null) _ambientRefresh.Track(SqlEditorBehavior.Attach(_cursorEditor, mainVm, ambientSymbols: ambient));
-            if (_subprogramEditor is not null) _ambientRefresh.Track(SqlEditorBehavior.Attach(_subprogramEditor, mainVm, ambientSymbols: ambient));
+            // Each editor is tracked by the Diagnostics host too, so this function's Diagnostics sub-tab
+            // reflects whichever of them is the active SQL document (S4).
+            if (_sqlEditor is not null)
+            {
+                _diagnostics.Track(_sqlEditor, SqlEditorBehavior.Attach(_sqlEditor, mainVm));
+            }
+            if (_bodyEditor is not null)
+            {
+                var c = SqlEditorBehavior.Attach(_bodyEditor, mainVm, ambientSymbols: ambient);
+                _ambientRefresh.Track(c);
+                _diagnostics.Track(_bodyEditor, c);
+            }
+            if (_cursorEditor is not null)
+            {
+                var c = SqlEditorBehavior.Attach(_cursorEditor, mainVm, ambientSymbols: ambient);
+                _ambientRefresh.Track(c);
+                _diagnostics.Track(_cursorEditor, c);
+            }
+            if (_subprogramEditor is not null)
+            {
+                var c = SqlEditorBehavior.Attach(_subprogramEditor, mainVm, ambientSymbols: ambient);
+                _ambientRefresh.Track(c);
+                _diagnostics.Track(_subprogramEditor, c);
+            }
             // Grid edits (argument/variable add/remove/rename) → rebuild the ambient-seeded models.
             _ambientRefresh.Bind(_currentVm);
 
@@ -129,6 +154,9 @@ public partial class FunctionDetailTabView : UserControl
         _currentVm = DataContext as FunctionDetailTabViewModel;
         // Follow the (possibly reused) view onto this VM for ambient-grid → model rebuilds.
         _ambientRefresh.Bind(_currentVm);
+        // A different function is now in these editors: the sticky diagnostics document belongs to the
+        // previous one, so drop it and seed the incoming VM's panel from the cached diagnostics.
+        _diagnostics.ResetActiveDocument();
         if (_currentVm is not null)
         {
             _currentVm.PropertyChanged += OnVmPropertyChanged;
@@ -151,12 +179,16 @@ public partial class FunctionDetailTabView : UserControl
         }
     }
 
+    // The editor this mode's work happens in by default: the body-only editor in Easy mode, the full
+    // CREATE FUNCTION text in Source mode. Also the Diagnostics panel's fallback document.
+    private TextEditor? ModePrimaryEditor => (_currentVm?.EasyMode ?? false) ? _bodyEditor : _sqlEditor;
+
     private TextEditor? ActiveEditor
     {
         get
         {
             if (_focusedEditor is not null && _focusedEditor.IsEffectivelyVisible) return _focusedEditor;
-            return (_currentVm?.EasyMode ?? false) ? _bodyEditor : _sqlEditor;
+            return ModePrimaryEditor;
         }
     }
 
@@ -226,6 +258,9 @@ public partial class FunctionDetailTabView : UserControl
             case nameof(FunctionDetailTabViewModel.SelectedCursor): PushCursor(); break;
             case nameof(FunctionDetailTabViewModel.SelectedSubprogram): PushSubprogram(); break;
             case nameof(FunctionDetailTabViewModel.ActiveSubTabIndex): NotifyPerformanceVisibility(); break;
+            // Source⇄Easy flip: the sticky diagnostics document belongs to the mode we just left, so drop
+            // it and fall back to the new mode's primary editor.
+            case nameof(FunctionDetailTabViewModel.EasyMode): _diagnostics.ResetActiveDocument(); break;
         }
     }
 

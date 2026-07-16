@@ -29,10 +29,16 @@ public partial class PackageDetailTabView : UserControl
     private bool _suppressHeaderSync;
     private bool _suppressBodySync;
     private bool _completionAttached;
+    // Feeds this package's own Diagnostics sub-tab from the ACTIVE SQL document (S4). A package has no
+    // Easy/Source mode: until an editor takes focus the fallback is ActiveEditor's tab-based rule.
+    private readonly DiagnosticsPanelHost _diagnostics;
 
     public PackageDetailTabView()
     {
         InitializeComponent();
+        _diagnostics = new DiagnosticsPanelHost(
+            () => _currentVm?.DiagnosticsPanel,
+            () => ActiveEditor);
         _headerEditor = this.FindControl<TextEditor>("PackageHeaderEditor");
         _bodyEditor = this.FindControl<TextEditor>("PackageBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("PackageDdlEditor");
@@ -61,8 +67,16 @@ public partial class PackageDetailTabView : UserControl
         if (_completionAttached) return;
         if (this.FindAncestorOfType<Window>()?.DataContext is MainWindowViewModel mainVm)
         {
-            if (_headerEditor is not null) SqlEditorBehavior.Attach(_headerEditor, mainVm);
-            if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm);
+            // Each editor is tracked by the Diagnostics host too, so this package's Diagnostics sub-tab
+            // reflects whichever of them is the active SQL document (S4).
+            if (_headerEditor is not null)
+            {
+                _diagnostics.Track(_headerEditor, SqlEditorBehavior.Attach(_headerEditor, mainVm));
+            }
+            if (_bodyEditor is not null)
+            {
+                _diagnostics.Track(_bodyEditor, SqlEditorBehavior.Attach(_bodyEditor, mainVm));
+            }
 
             // Metadata-object drop → snippet flyout, into the editable package editors.
             if (_headerEditor is not null) SqlSnippetDropTarget.Attach(_headerEditor, mainVm, SnippetInsertionContext.PsqlBody);
@@ -81,6 +95,9 @@ public partial class PackageDetailTabView : UserControl
             _currentVm.NavigateToMemberRequested -= OnNavigateToMember;
         }
         _currentVm = DataContext as PackageDetailTabViewModel;
+        // A different package is now in these editors: the sticky diagnostics document belongs to the
+        // previous one, so drop it and seed the incoming VM's panel from the cached diagnostics.
+        _diagnostics.ResetActiveDocument();
         if (_currentVm is not null)
         {
             _currentVm.PropertyChanged += OnVmPropertyChanged;

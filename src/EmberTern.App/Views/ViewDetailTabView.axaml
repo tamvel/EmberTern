@@ -419,6 +419,14 @@
                        Foreground="{DynamicResource ForegroundBrush}" />
       </TabItem>
 
+      <!-- Diagnostics (Stage 7 / S4) — the SAME view + VM the SQL Editor's Diagnostics tab uses,
+           hosted per object. Shows the ACTIVE SQL document's findings (the LastFocusedSqlDocument
+           rule — see DiagnosticsPanelHost). Appended LAST so the persisted ActiveSubTabIndex and the
+           SqlSubTabIndex / DataSubTabIndex constants never shift. -->
+      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
+        <views:DiagnosticsPanelView DataContext="{Binding DiagnosticsPanel}" />
+      </TabItem>
+
     </TabControl>
 
     <StackPanel Grid.Row="1" Orientation="Vertical">

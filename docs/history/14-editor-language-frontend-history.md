@@ -1617,3 +1617,155 @@ row edit does not) + `EasyModeDiagnosticsTests` (ambient params/vars suppress th
 S3 is complete and committed.**
 
 ---
+
+### S3 gap — the main SQL Editor never got squiggles (found while preparing S4; FIXED)
+
+Preparing S4 surfaced a defect in shipped S3: **the single most-used SQL surface rendered no squiggles at
+all.** S3 attached `SquiggleRenderer` in `SqlEditorBehavior.Attach` and its comment (and commit message)
+claimed that covered "every SQL surface". It does not. `SqlEditorBehavior.Attach` is the shared installer
+for the *object* editors; the **main SQL Editor is not one of its callers** — `MainWindow` hand-wires its
+own `SqlCompletionController` and then attaches `SemanticHighlighter`, `NavigationController`,
+`OccurrenceHighlighter` and `EditorSearch` one by one (its callbacks differ: null-safe `_currentVm?.…`
+rather than a stable `vm`). So the renderer was simply never installed there. The *diagnostics* were being
+computed for that editor all along — `EditorLanguageService` runs the engine on its background pass
+regardless — only the paint was missing. This is also why the S3 manual QA pass, which ran in an Easy-mode
+procedure editor, found the ambient-refresh bug but not this one.
+
+**Root cause: duplicated wiring.** `MainWindow` is a parallel copy of `SqlEditorBehavior.Attach`, so every
+new editor capability misses the main editor unless someone remembers both places. **Fix (user decision):
+minimal.** Attach `SquiggleRenderer` in `MainWindow` next to the other renderers it already wires by hand,
+and correct the false "every SQL surface" comment in `SqlEditorBehavior`. Consolidating the two wiring
+paths is the real fix but is a refactor of its own and was explicitly kept out of Stage 7 — it gets a
+dedicated milestone. Committed separately from S4 (`fix(diagnostics): render squiggles in the main SQL
+Editor (S3 gap)`); build 0/0, 4122 main + 23 probe green. **With this, S3 is genuinely complete.**
+
+> Lesson (gotcha #219): "wired in the one shared seam ⇒ every surface has it" is only true if every surface
+> actually goes through that seam. `MainWindow`'s editor does not. Verify the call sites, don't trust the
+> comment — and when adding an editor capability, add it in BOTH places until the duplication is retired.
+
+### S4 — Diagnostics panel (App) — DONE (impl); awaits user visual confirmation
+
+The panel is **only a view** of what the engine already produced. Scope was deliberately narrow (user
+directive): list the findings, nothing else — no navigation (S5), no next/previous, no Quick Fix, no light
+bulb, no hover, no code actions, no filtering, no grouping.
+
+**Host — the SQL Editor's bottom tab strip only** (user decision). It joins Results / Messages / Output /
+Performance as a fifth `bottom-tab`, gated on the existing `IsQueryTabActive`, so "the active document" is
+unambiguous: the one `SqlEditor`. The object-detail editors were considered and deferred — each detail tab
+hosts *four* editors (source / body / cursor / subprogram), so a panel there must first decide which one is
+"the document" (focus-following), which is S5-shaped work and pure scope creep for S4. It is appended
+**last** in the tab strip on purpose: `SelectedBottomTabIndex` is persisted in `WorkspaceState` and
+`PerformanceBottomTabIndex = 3` is a hard-coded constant, so Results=0 / Messages=1 / Output=2 /
+Performance=3 had to keep their positions.
+
+**Data flow — one subscription, zero analysis.**
+`DiagnosticsEngine → EditorLanguageService (cached, version-matched) → SqlCompletionController.Diagnostics
+→ DiagnosticsPanelBinder → DiagnosticsPanelViewModel → DiagnosticsPanelView`. The binder subscribes to the
+shared `SqlCompletionController.ModelUpdated` — the same signal the semantic highlighter and the squiggle
+renderer ride — and simply *reads* the already-computed list. No second parse, no second model, no second
+analysis, no new loop. Every refresh requirement falls out of that one subscription: a text edit and a
+metadata-generation bump rebuild the model, and an Easy-mode ambient-symbol change routes through
+`NotifyAmbientSymbolsChanged()` into the very same rebuild. Switching workspace tabs needs no work at all —
+the whole bottom panel is already gated on `IsQueryTabActive`.
+
+**Classes.** `DiagnosticRowViewModel` (App/ViewModels) — a read-only projection of one Core `Diagnostic`
+following the established `SessionWarningViewModel` / `FindingViewModel` card shape: it keeps the source
+record whole (so S5 can jump to its span without a second projection) and exposes display facets plus a
+theme brush **key** (`SeverityBrushKey`), never a brush — resolved by `IconBrushConverter`, so the VM stays
+free of Avalonia types. Its severity→brush mapping is deliberately **identical to the squiggle renderer's**
+(Error→`ErrorBrush`, Warning→`WarningBrush`, Info→`SubtleForegroundBrush`), so a row and the underline it
+describes always read as the same severity. `DiagnosticsPanelViewModel` (App/ViewModels) — an
+`ObservableCollection` of rows plus `HasDiagnostics`/`ShowEmptyState` (the existing panel naming), whose
+`Update` copies the rows verbatim, in engine order: it sorts nothing, filters nothing, analyses nothing.
+`DiagnosticsPanelBinder` (App/Completion) — the view-layer bridge, sitting beside `AmbientModelRefresh` for
+exactly the same reason: mapping a diagnostic's absolute offset to a line/column needs the AvaloniaEdit
+document. `DiagnosticsPanelView` (App/Views) — a `ListBox` (virtualizing: a very large script's findings
+must not be realized all at once — an `ItemsControl` in a `ScrollViewer`, as the Messages panel uses, would
+not virtualize) with a severity icon · code · message · location row, and a readable "No diagnostics" state
+instead of an empty table.
+
+**One refinement worth naming:** `Update` no-ops when the findings *and* their locations are unchanged. A
+keystroke rebuilds the model every debounce tick, but the diagnostics usually do not change, and rebuilding
+the collection would churn the UI for nothing (and, from S5 on, drop the user's selection). `Diagnostic` is
+a record struct, so this is a plain value comparison; the location is compared too, because an edit *above*
+a diagnostic moves it to a new line without changing the engine's record.
+
+**Naming note.** The VM property is `MainWindowViewModel.DiagnosticsPanel`, not the parallel-to-`Performance`
+name `Diagnostics` — inside that class `Diagnostics` already resolves to the `EmberTern.App.Diagnostics`
+namespace (`ScrollTrace` / `RefreshTrace`), so the obvious name is a compile error.
+
+**Tests.** `DiagnosticsPanelVmTests` (14) pins what the panel promises: the empty state and its
+`PropertyChanged` notifications (gotcha #179/#187 — a binding gated on a collection-derived value must be
+told to re-query), engine order preserved for deliberately out-of-order input, replace-not-append, the
+unchanged-input no-op, the same-diagnostic-new-line refresh, the severity→squiggle-brush mapping, and — end
+to end — that running the **real** `DiagnosticsEngine` over a **real** `SemanticModel` and projecting it
+yields exactly the engine's findings, count and order. Per the user's directive the renderer/binder stay
+visually verified (no artificial UI tests). Build 0/0, **4136 main + 23 probe green**, smoke clean.
+**Manual visual verification awaits the user; on confirmation S4 is complete and committed, and S5
+(navigation) closes Stage 7.**
+
+---
+
+### S4 rollout — the Diagnostics panel on every object editor (scope change during manual QA)
+
+Manual QA of S4 changed the scope. The panel worked, but the result read as inconsistent: the object
+editors had shown **squiggles** since S3 yet offered no way to *browse* the findings. The user asked for
+diagnostics to be available consistently across all SQL editing surfaces — explicitly **without** a second
+diagnostics system: reuse `DiagnosticsPanelView` / `DiagnosticsPanelViewModel` / `DiagnosticsPanelBinder`
+verbatim, and let only the hosting differ. A proposal was requested before any code.
+
+**Two existing facts decided the design, and finding them first is what kept this small.**
+
+1. **The hosting pattern already existed.** `PerformancePanelView` is *already* reused verbatim in the
+   Procedure and Function detail tabs as a peer `bottom-tab`, its DataContext set to that tab's own panel
+   VM — its comment reads *"Same view type as the SQL Editor's panel, but each host owns a separate context
+   — no shared global state."* That is precisely "same view + VM, different host". So Diagnostics is hosted
+   the same way, in **Procedure / Function / Trigger / View / Package** (all five already have a top-level
+   `bottom-tab` strip). **Script Executor was deliberately deferred** (user decision): it is an SQL editing
+   surface, but it has no tab strip, so it deserves its own UX decision rather than widening S4 at the end.
+   The tab is appended **last** everywhere — `ActiveSubTabIndex` is persisted per tab and
+   `PerformanceSubTabIndex = 5` / `SqlSubTabIndex` / `PackageSubTabIndex` / … are hard-coded constants.
+2. **"Which editor?" was already answered.** Procedure/Function host FOUR SQL editors (source, body,
+   cursor, subprogram) — the reason the object editors were excluded from S4 in the first place. But every
+   one of these code-behinds already had a shipped `ActiveEditor` property (focus-following with a
+   mode-aware fallback) driving Alt+F Format and selection replace. Users are trained on it.
+
+**The trap that the proposal caught (and why the rule is NOT `ActiveEditor`).** `ActiveEditor`'s first
+clause is `_focusedEditor is not null && _focusedEditor.IsEffectivelyVisible`. Selecting a **peer**
+Diagnostics tab *hides the editor tab*, so that guard can never hold while the panel is on screen —
+`ActiveEditor` would always collapse onto the mode's primary editor. The Cursors/Subprograms editors could
+then never appear in the panel, and the user's explicit requirement ("changing focus between Source / Body
+/ Cursor / Subprogram should refresh the panel") would be unobservable *by construction*. The two approved
+decisions — peer tab + reuse `ActiveEditor` — silently conflicted. Raised before implementing; the user
+chose the fix and asked for it to become an explicit design decision:
+
+> **`LastFocusedSqlDocument` (Stage 7 design decision).** The Diagnostics panel reflects the SQL document
+> the user was last *working in*, not the currently visible editor control: the last SQL editor to take
+> focus, or — until one does, and after a mode switch — the mode's primary editor. Focus change retargets
+> and republishes immediately (no text edit). A mode flip (Easy ⇄ Source) and a rebind to a different
+> object both clear the sticky selection and fall back. **The panel never aggregates several editors**; a
+> workspace-wide diagnostics list, if ever wanted, is a separate feature and must not change this panel's
+> meaning. The visibility guard exists so Alt+F never formats a hidden editor — a read-only list has no
+> such concern — and dropping it also makes the panel independent of how TabControl realizes hidden tab
+> content.
+
+**Implementation — one new wiring class, nothing else changed.** `DiagnosticsPanelHost` (App/Completion,
+beside `AmbientModelRefresh`) owns the rule for a view: `Track(editor, controller)` attaches an ordinary
+`DiagnosticsPanelBinder` gated through **the binder's existing lazy panel resolver** — a binder whose editor
+is not the active document resolves to `null` and publishes nothing — so `Republish()` can simply ask every
+binder to publish and exactly one will. `DiagnosticsPanelBinder`, `DiagnosticsPanelViewModel`,
+`DiagnosticRowViewModel` and `DiagnosticsPanelView` are **byte-for-byte unchanged**; the panel VM is a
+property on `SourceObjectDetailTabViewModel` (covering Procedure/Function/Trigger in one place),
+`ViewDetailTabViewModel` and `PackageDetailTabViewModel`, mirroring `Performance`. Each view's duplicated
+fallback expression was factored out of `ActiveEditor` into a `ModePrimaryEditor` property, which
+`ActiveEditor` now calls — a small net reduction, not an addition. The host tracks focus separately from the
+view's `_focusedEditor` on purpose: the two encode genuinely different rules (visibility-guarded for Format,
+sticky for diagnostics), and that is documented at both sites.
+
+**Tests.** The host is view-layer (it needs real `TextEditor` + controller instances), so per the standing
+directive — renderers/binders are verified visually, no artificial UI tests, and one headless session per
+process (#94) — it carries no unit test; the `LastFocusedSqlDocument` rule is on the manual QA checklist.
+The 14 `DiagnosticsPanelVmTests` still pin everything the panel promises. Build 0/0, **4136 main + 23 probe
+green**, smoke clean. **Awaits the user's manual visual verification; S5 (navigation) then closes Stage 7.**
+
+---
