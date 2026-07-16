@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using EmberTern.Core.Sql.Language.Ast;
+using EmberTern.Core.Sql.Language.Constructs;
+using EmberTern.Core.Sql.Language.Ergonomics;
 using EmberTern.Core.Sql.Language.Semantics;
 
 namespace EmberTern.Core.Sql.Language.Completion;
@@ -250,10 +252,27 @@ public static class CompletionEngine
         }
     }
 
+    /// <summary>
+    /// The keyword vocabulary, minus every word another editor tool is responsible for.
+    /// <para><b>One responsibility, one owner.</b> The editor has three: IntelliSense predicts
+    /// <i>names</i>; Language Completion finishes <i>constructs</i> (Tab + a shown hint); Typing
+    /// Ergonomics maintains <i>delimiter pairs</i> (<c>begin … end</c>). Offering another tool's word here
+    /// means two systems competing for one keystroke — the developer types <c>wher</c> and gets
+    /// <c>WHERE</c> in the list AND <c>⇥ where</c> beside it, or types <c>begin</c> and is offered a
+    /// keyword that a pairing rule should have handled.</para>
+    /// <para>Each owner <b>declares</b> its own vocabulary and this method reads those declarations —
+    /// never a copy kept in step by hand. A construct added to the catalog, or a new keyword pair, leaves
+    /// this list automatically, so the tools cannot drift apart.</para>
+    /// <para>Only owned words go: everything else a developer writes (<c>from</c>, <c>join</c>, <c>and</c>,
+    /// <c>values</c>, <c>create</c>, datatypes, functions…) is still offered here, because nothing else
+    /// completes it.</para>
+    /// </summary>
     private static void AddKeywords(List<CompletionItem> items, HashSet<(string, CompletionItemKind)> seen)
     {
         foreach (var kw in FirebirdSyntax.CompletionKeywords)
         {
+            if (LanguageConstructCatalog.OwnedWords.Contains(kw)) continue;   // Language Completion
+            if (KeywordPairCatalog.OwnedWords.Contains(kw)) continue;         // Typing Ergonomics
             AddItem(items, seen, kw, CompletionItemKind.Keyword, detail: null);
         }
     }

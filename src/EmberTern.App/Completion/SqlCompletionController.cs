@@ -17,10 +17,10 @@ using AvaloniaEdit.Editing;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Language.Completion;
+using EmberTern.Core.Sql.Language.Constructs;
 using EmberTern.Core.Sql.Language.QuickInfo;
 using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Sql.Language.Signatures;
-using EmberTern.Core.Sql.Language.Snippets;
 
 namespace EmberTern.App.Completion;
 
@@ -333,9 +333,14 @@ internal sealed class SqlCompletionController
             return;
         }
 
-        // Window already open — AvaloniaEdit's CompletionList narrows by the typed
-        // prefix on its own. Nothing to do.
-        if (_window is not null) return;
+        // Window already open — AvaloniaEdit's CompletionList narrows by the typed prefix on its own (the
+        // caret moved before this event, so its filter has already run). All we add is: if that left
+        // nothing, don't sit there as an empty rectangle.
+        if (_window is not null)
+        {
+            CloseIfNarrowedToNothing();
+            return;
+        }
 
         // Typing into a dot prefix (e.g. "N.I" after "I") while the window is closed:
         // keep the column flavor. Cache-only (no whole-document parse on the
@@ -379,13 +384,24 @@ internal sealed class SqlCompletionController
             return;
         }
 
-        // ≥2 chars: a plain identifier (≥3) auto-triggers, and a 2-char prefix of a snippet keyword
-        // (e.g. "if") does too — ShowBaseline applies the combined gate. A 1-char word never triggers.
+        // A 1-char word never auto-triggers; ShowBaseline applies the real identifier-length gate.
         var word = CaretContext.GetCurrentWord(doc, caret);
-        if (word.Text.Length >= 2)
-        {
-            ShowBaseline(force: false, allowSyncRefresh: true, word);
-        }
+        if (word.Text.Length < 2) return;
+
+        // Design §1: "where a construct may begin, the identifier list doesn't auto-pop." The developer is
+        // part-way through a construct Language Completion owns, so IntelliSense stays out of the way —
+        // one keystroke, one tool. This is not cosmetic: an open list OWNS Tab (§7/§9), so popping a NAME
+        // list over an armed construct means Tab inserts the name — typing `select` and getting a
+        // procedure called SELECT_PRACOWNIKOW, with the construct's hint never even shown.
+        //
+        // Only the AUTO path is gated. Ctrl+Space is an explicit request for names and still opens the
+        // list (which then owns Tab, per §7) — the developer can always overrule the grammar. The moment
+        // the typed word stops being a construct prefix (`select_`), nothing is armed and the list returns
+        // on its own; no state is kept, this re-asks the same pure resolver the hint does, so the two can
+        // never disagree about what is armed.
+        if (LanguageConstructResolver.Resolve(doc.Text, caret) is not null) return;
+
+        ShowBaseline(force: false, allowSyncRefresh: true, word);
     }
 
     // ── Dot / qualifier → columns ────────────────────────────────────────────────────────────
@@ -493,19 +509,10 @@ internal sealed class SqlCompletionController
         var model = ResolveModel(allowSyncRefresh || force);
         if (model is null) return false;
 
-        // Keyword live templates (M8) surface alongside keywords/objects/in-scope symbols,
-        // gated by scope (PSQL control-flow in a body; DDL/EXECUTE BLOCK at the top level).
-        var snippets = SnippetEngine.GetSnippets(model, caret);
-
-        // Auto-trigger gate (Ctrl+Space / force bypasses it): a completable identifier of the
-        // minimum length OR a short prefix of an applicable snippet keyword — so a 2-char "if"
-        // template still auto-surfaces even though it's below the identifier threshold (P7).
-        if (!force
-            && !SqlCompletionContext.ShouldAutoTrigger(word.Text)
-            && !WordMayTriggerSnippet(word.Text, snippets))
-        {
-            return false;
-        }
+        // Auto-trigger gate (Ctrl+Space / force bypasses it): a completable identifier of the minimum
+        // length. Short words get no exception to surface the list early — a 2-char construct prefix like
+        // "if" arms a Language Completion hint instead, and this list stays out of its way (design §9.1).
+        if (!force && !SqlCompletionContext.ShouldAutoTrigger(word.Text)) return false;
 
         var trigger = force ? CompletionTrigger.Explicit : CompletionTrigger.Identifier;
         var result = CompletionEngine.GetCompletions(model, caret, trigger);
@@ -513,41 +520,7 @@ internal sealed class SqlCompletionController
         // already routes dots through TryShowDot), don't show the baseline list.
         if (result.IsDotContext) return false;
 
-        return ShowBaselineWindow(word.Start, word.End, result.Items, snippets);
-    }
-
-    // Whether <paramref name="word"/> should auto-surface the list because it is a prefix (≥2 chars)
-    // of a snippet keyword valid at the caret — the exception that lets short PSQL/DDL live templates
-    // (notably 2-char "if") fire without lowering the general identifier auto-trigger threshold (P7).
-    internal static bool WordMayTriggerSnippet(string word, IReadOnlyList<SnippetTemplate> applicable)
-    {
-        if (string.IsNullOrEmpty(word) || word.Length < 2) return false;
-        foreach (var t in applicable)
-        {
-            if (t.Keyword.StartsWith(word, StringComparison.OrdinalIgnoreCase)) return true;
-        }
-        return false;
-    }
-
-    private bool ShowBaselineWindow(
-        int startOffset,
-        int endOffset,
-        IReadOnlyList<CompletionItem> items,
-        IReadOnlyList<SnippetTemplate> snippets)
-    {
-        if (items.Count == 0 && snippets.Count == 0) return false;
-
-        var window = OpenWindow(startOffset, endOffset);
-        var data = window.CompletionList.CompletionData;
-        foreach (var item in items)
-        {
-            data.Add(SqlCompletionData.FromItem(item, () => BuildItemDetail(item)));
-        }
-        foreach (var template in snippets)
-        {
-            data.Add(new SnippetCompletionData(template));
-        }
-        return FinishWindow(window);
+        return ShowItems(word.Start, word.End, result.Items);
     }
 
     // ── Window plumbing ──────────────────────────────────────────────────────────────────────
@@ -761,7 +734,15 @@ internal sealed class SqlCompletionController
         window.Closed += (_, _) => _window = null;
         _window = window;
         window.Show();
-        ApplyInitialFilter(window);
+        // The guard above tests the UNFILTERED candidate set; the initial filter below can still narrow
+        // it to nothing, which is how an empty bordered rectangle ended up on screen ("begi", once BEGIN
+        // became Typing Ergonomics' word and no name matched either). Only meaningful when a filter
+        // actually ran — with no prefix typed, CurrentList is not the list's state yet.
+        if (ApplyInitialFilter(window) && window.CompletionList.CurrentList.Count == 0)
+        {
+            window.Close();   // → Closed → _window = null
+            return false;
+        }
         return true;
     }
 
@@ -771,16 +752,28 @@ internal sealed class SqlCompletionController
     // "n.nrdok|" + Ctrl+Space listed every column instead of narrowing to NRDOK. We apply the initial
     // filter to the already-typed prefix (StartOffset..caret) ourselves so the list narrows on open.
     // No-op when nothing is typed (a fresh "n.|" / Ctrl+Space on whitespace) → the full list stands.
-    private void ApplyInitialFilter(CompletionWindow window)
+    /// <returns>True when a prefix was present and the list was actually filtered.</returns>
+    private bool ApplyInitialFilter(CompletionWindow window)
     {
         var doc = _editor.Document;
-        if (doc is null) return;
+        if (doc is null) return false;
         int start = window.StartOffset;
         int caret = _editor.CaretOffset;
         if (caret > start && start >= 0 && caret <= doc.TextLength)
         {
             window.CompletionList.SelectItem(doc.GetText(start, caret - start));
+            return true;
         }
+        return false;
+    }
+
+    // A list that has narrowed to nothing is pure noise: an empty bordered rectangle over the code that
+    // still owns Tab/Enter. AvaloniaEdit leaves it open, so we close it. Asks CurrentList — AvaloniaEdit's
+    // OWN filtered view — rather than re-deriving its match rule, so what we test is exactly what it would
+    // draw. (Prefix-first narrowing of that rule is the separate Completion Matching milestone.)
+    private void CloseIfNarrowedToNothing()
+    {
+        if (_window is { } w && w.CompletionList.CurrentList.Count == 0) w.Close();
     }
 
     // ── Parameter Helper (design §28) — the ONE parameter-info surface ─────────────────────────

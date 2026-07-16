@@ -67,6 +67,21 @@ public static class LanguageConstructCatalog
     /// many trailing words when matching a multi-word construct (e.g. <c>group by</c>).</summary>
     public static int MaxWords { get; } = ComputeMaxWords(All);
 
+    /// <summary>
+    /// The words Language Completion <b>owns</b>: the first word of every construct's spelling — exactly
+    /// the words a developer starts typing to reach a construct (<c>group</c> for <c>group by</c>,
+    /// <c>execute</c> for both EXECUTE constructs).
+    /// <para><b>One responsibility, one owner.</b> Any other completion vocabulary must exclude these, so
+    /// a construct is never offered by two systems at once — IntelliSense is for <i>names</i>, Language
+    /// Completion is for <i>constructs</i>. It is <b>derived</b> from <see cref="All"/> rather than
+    /// hand-listed, so the two can never drift: adding a catalog row automatically retires that word from
+    /// IntelliSense, and removing one hands it back. Consumer:
+    /// <c>CompletionEngine.AddKeywords</c>.</para>
+    /// <para>Only the FIRST word is owned. A trailing word (<c>by</c>, <c>into</c>, <c>variable</c>) does
+    /// not trigger a construct on its own, so offering it as a keyword competes with nothing.</para>
+    /// </summary>
+    public static IReadOnlySet<string> OwnedWords { get; } = ComputeOwnedWords(All);
+
     // Caret marked with CaretMark where it belongs; no mark → caret at the end of the expansion.
     private static LanguageConstruct C(string spelling, ConstructCategory category, string template)
     {
@@ -98,6 +113,17 @@ public static class LanguageConstructCatalog
         C("order by", ConstructCategory.Clause, "order by "),
         C("union", ConstructCategory.Clause, "union "),
     };
+
+    private static IReadOnlySet<string> ComputeOwnedWords(IReadOnlyList<LanguageConstruct> all)
+    {
+        var owned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in all)
+        {
+            var words = c.Spelling.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length > 0) owned.Add(words[0]);
+        }
+        return owned;
+    }
 
     private static int ComputeMaxWords(IReadOnlyList<LanguageConstruct> all)
     {

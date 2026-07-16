@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EmberTern.Core.Sql.Language.Completion;
+using EmberTern.Core.Sql.Language.Constructs;
+using EmberTern.Core.Sql.Language.Ergonomics;
 using EmberTern.Core.Sql.Language.Semantics;
 using Xunit;
 
@@ -69,8 +71,54 @@ public class CompletionEngineTests
     {
         var items = Complete("sel", 3);
         Assert.Contains(items, i => i.Kind == CompletionItemKind.Keyword);
-        Assert.True(Has(items, "SELECT", CompletionItemKind.Keyword));
         Assert.True(Has(items, "FROM", CompletionItemKind.Keyword));
+    }
+
+    // ── One responsibility, one owner ────────────────────────────────────────────────────────
+
+    // The editor has three tools and each owns its own keystrokes: IntelliSense predicts NAMES, Language
+    // Completion finishes CONSTRUCTS (Tab + a shown hint), Typing Ergonomics maintains PAIRS (begin…end).
+    // A word another tool owns must not also appear here — otherwise the developer types "wher" and gets
+    // WHERE in the list AND "⇥ where" beside it, or types "begin" and is offered a keyword that a pairing
+    // rule is responsible for. Asserted over each owner's OWN declaration rather than a hand-written list
+    // of words, so it keeps holding for rows added later — a copy kept in step by hand is what drifts.
+    [Fact]
+    public void ConstructTriggerWords_AreNotAlsoOfferedAsKeywords()
+    {
+        var items = Complete("select 1 from t ", 16);
+        Assert.NotEmpty(LanguageConstructCatalog.OwnedWords);
+        foreach (var owned in LanguageConstructCatalog.OwnedWords)
+        {
+            Assert.False(
+                Has(items, owned, CompletionItemKind.Keyword),
+                $"'{owned}' is owned by Language Completion and must not be an IntelliSense keyword too.");
+        }
+    }
+
+    [Fact]
+    public void KeywordPairWords_AreNotOfferedAsKeywords()
+    {
+        var items = Complete("select 1 from t ", 16);
+        Assert.NotEmpty(KeywordPairCatalog.OwnedWords);
+        foreach (var owned in KeywordPairCatalog.OwnedWords)
+        {
+            Assert.False(
+                Has(items, owned, CompletionItemKind.Keyword),
+                $"'{owned}' is a Typing Ergonomics delimiter pair and must not be an IntelliSense keyword.");
+        }
+    }
+
+    // The converse, so the exclusion can never quietly widen into "IntelliSense lost its keywords":
+    // everything no other tool owns is still offered, including the trailing words of multi-word
+    // constructs (BY, INTO), which trigger nothing on their own.
+    [Fact]
+    public void UnownedKeywords_AreStillOffered()
+    {
+        var items = Complete("select 1 from t ", 16);
+        foreach (var kw in new[] { "FROM", "JOIN", "ON", "AND", "VALUES", "CREATE", "BY", "INTO", "THEN", "DO" })
+        {
+            Assert.True(Has(items, kw, CompletionItemKind.Keyword), $"'{kw}' should still be offered.");
+        }
     }
 
     // ── Loaded schema objects are listed ─────────────────────────────────────────────────────
@@ -350,9 +398,10 @@ public class CompletionEngineTests
         var items = CompletionEngine.GetCompletions(SemanticModel.Build(sql, meta), offset).Items;
 
         Assert.True(PriorityOf(items, "TAB", CompletionItemKind.Table) > 50, "table should be boosted after FROM");
-        // A keyword is not boosted here — the table out-ranks it decisively.
+        // A keyword is not boosted here — the table out-ranks it decisively. (JOIN, not SELECT: construct
+        // trigger words are owned by Language Completion and are no longer keyword items at all.)
         Assert.True(PriorityOf(items, "TAB", CompletionItemKind.Table)
-                    > PriorityOf(items, "SELECT", CompletionItemKind.Keyword) + 10);
+                    > PriorityOf(items, "JOIN", CompletionItemKind.Keyword) + 10);
     }
 
     [Fact]

@@ -321,20 +321,26 @@ PACKAGE|DOMAIN|EXCEPTION|GENERATOR|INDEX|TABLE`, and PSQL bodies (`BEGIN/END`, `
   INSERT … SELECT, UPDATE, EXECUTE PROCEDURE, CREATE PROCEDURE/FUNCTION parameter lists, and
   every place the user works with parameters.
 
-### 5.11 Snippet Engine — `Core.Sql.Language.SnippetEngine` (Etap 5; session hardened in Stage 8 / M2)
-- Smart completion / live templates with tab-stops. **Reuses the existing `SqlSnippet` /
-  `SqlSnippetBuilder` / `SqlTemplateRegistry`** (already track placeholder offsets). Templates
-  for `if`→`if (·) then … end`, `declare`→`declare variable ·`, `execute`→EXECUTE BLOCK
-  skeleton, `for select`, `create procedure/function/trigger/exception/domain/index`, etc.
-  Tab-stop navigation in AvaloniaEdit via an overlay. Snippet expansion obeys §0.
-- **Stage 8 / M2** attempted a VS/Rider-style interactive snippet session on top of this engine
-  (mirrored placeholders, final caret, indentation-aware expansion) but was **reverted** — the wrong UX
-  for experienced developers. The code-writing experience was redesigned into **Language Completion**
-  (construct completion by natural prefix, Tab + shown hint — a separate subsystem in
-  `Core.Sql.Language.Constructs`, not the snippet engine) + **Typing Ergonomics** (`begin…end` pairing,
-  auto-indent). See **[editor-language-expansion.md](editor-language-expansion.md)**. This keyword
-  live-template `SnippetEngine` remains as-is for now (Etap-5 baseline) and will be retired when Language
-  Completion replaces its role in the list. History: `docs/history/16-stage8-smart-editing.md`.
+### 5.11 Snippet Engine — **REMOVED (2026-07-16)**; superseded by Language Completion
+- The Etap-5 keyword live-template engine (`Core.Sql.Language.Snippets.SnippetEngine` +
+  `SnippetTemplate` + the App's `SnippetCompletionData`) offered tab-stop skeletons in the completion
+  list — `if`→`if (…) then begin … end`, `begin … end`, `case when … then … else … end`, etc. **It is
+  deleted.** Stage 8 / M2 first tried to *harden* it into a VS/Rider-style interactive snippet session
+  (mirrored placeholders, final caret, indentation-aware expansion); the user tried it and rejected the
+  whole direction — *"now I delete half of this"* — and the code-writing experience was redesigned from
+  first principles into **Language Completion** + **Typing Ergonomics**
+  (**[editor-language-expansion.md](editor-language-expansion.md)**). The engine itself survived that
+  revert only because M2 reverted *to* the Etap-5 baseline; the QA sprint finished the job (design §11).
+- **What replaces it:** Language Completion (`Core.Sql.Language.Constructs`) completes *constructs*
+  from a natural prefix — `if` → `if (▌) then`, nothing to delete (Rule 0) — via Tab + a shown hint;
+  `begin … end` is a delimiter pair owned by Typing Ergonomics
+  (`Core.Sql.Language.Ergonomics.KeywordPairCatalog`). Templates are not part of the design.
+- **NOT removed — a different feature that only shares the word "snippet":** the object-driven
+  **drag-drop templates** — `Core/Sql/Templates/*` (`SqlSnippet`, `SqlSnippetBuilder`,
+  `SqlTemplateRegistry`, Table/Psql/Routine templates) + `SqlSnippetDropTarget`. Drag an object into the
+  editor → generated SQL. Shipped, live, untouched.
+- History: `docs/history/16-stage8-smart-editing.md` (the M2 attempt + revert),
+  `docs/history/18-language-completion.md` (the redesign + the removal).
 
 ### 5.12 Quick Info Engine — `Core.Sql.Language.QuickInfoEngine` (Etaps 4–6, §8A)
 - Given AST + Semantic Model + caret (or a completion-list item), returns a structured
@@ -535,7 +541,11 @@ Prioritized; not all at once. Feasibility noted honestly.
   `HoverInfoEngine.GetHover`'s signature (diagnostics are an input). **Absorbed P5d.** Confirms §9.4
   (plain hover = information, Ctrl = actionability) rather than amending it. As-built:
   [editor-stage7-diagnostics.md](editor-stage7-diagnostics.md) §15.
-- **Live Templates / Snippets with tab-stops** — reuse existing snippet infra (Etap 5).
+- ~~**Live Templates / Snippets with tab-stops**~~ — **dropped, not deferred.** Tried (Etap 5's engine,
+  hardened by Stage 8 / M2), rejected by the user in real use, and the engine is now deleted (§5.11).
+  Constructs are completed by **Language Completion**, blocks by **Typing Ergonomics**; templates are not
+  part of the design. Do not reintroduce them as "reuse the existing infra" — that infra is gone, and the
+  remaining `Core/Sql/Templates/*` belongs to the unrelated drag-drop feature.
 - **Code Folding** — AvaloniaEdit `FoldingManager`; regions come free from the AST (BEGIN/END,
   statements, CTEs). (Etap 7.)
 - **Breadcrumbs** — "PROCEDURE X ▸ FOR SELECT ▸ IF" from the AST path at the caret. (Etap 7.)

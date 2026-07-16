@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -35,6 +36,16 @@ namespace EmberTern.Tests;
 // bindings, real styles) so the binding under test is the production one.
 public sealed class ConnectionExpandBindingProbe
 {
+    // ONE headless session for the whole class (gotcha #94). This is not a tidy-up: a session owns a UI
+    // thread, and AvaloniaEdit builds its caret/editing KeyBindings as STATIC lists created on whichever
+    // thread first constructs a TextEditor. With a session per test, every later test's TextArea shares
+    // those KeyBinding instances across threads, so any real KeyDown into an editor dies with
+    // "The calling thread cannot access this object because a different thread owns it" — regardless of how
+    // the key is injected. One session keeps every test on one thread, which is also what the gotcha has
+    // always said to do.
+    private static readonly HeadlessUnitTestSession SharedSession =
+        HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+
     private readonly ITestOutputHelper _out;
 
     public ConnectionExpandBindingProbe(ITestOutputHelper output) => _out = output;
@@ -52,7 +63,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task FlatSidebar_RendersRootRows()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -101,7 +112,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task AutoExpandOnConnect_ReflectedInFlatList()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -151,7 +162,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task SystemAccentColor_OverriddenToEmberternBlue()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -185,7 +196,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task ViewCompileButton_EnabledWhenViewTabActiveAndEdited()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -280,7 +291,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task TypeToFilter_ListTyping_RedirectsToFilterBox()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -344,7 +355,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task IconGeometries_AllKindsAndChromeResolve()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -382,7 +393,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task AggregationAddRow_ProducesComputedChip()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -469,7 +480,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task FilterActiveDotStyle_Applies()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -496,7 +507,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task SearchableComboBox_TemplatesAndOpensWithoutThrowing()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -551,7 +562,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task EditorSearch_InstallsAndRoutingPredicateHolds()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -583,6 +594,156 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
+    // Stage 8 / Language Completion (App layer) — the LIVE interaction contract, which the pure Core
+    // tests (resolver / arming / expansion / casing) structurally cannot reach: they know nothing about
+    // focus, selections, the tunnelled Tab, or the overlay. Every assertion below is a rule the frozen
+    // design states outright (docs/design/editor-language-expansion.md §2.2 "the hint shows the exact text
+    // Tab will produce"; §7 the explicit-control contract):
+    //   [1] TextArea really holds keyboard focus — the load-bearing assumption the hint's focus guard
+    //       rests on. Were it false, CurrentEdit would return null forever and the whole feature would be
+    //       silently dead with a green build (gotcha #199 — reflect the real API, never assume it).
+    //   [2] the hint shows EXACTLY what Tab inserts, casing included — the hint must never lie;
+    //   [3] Tab inserts precisely the previewed text, caret at the construct's edit point;
+    //   [4] Escape dismisses → Tab is a plain indent again (never a hidden special action);
+    //   [5] a selection means Tab is (block) indent — Language Completion never replaces selected code;
+    //   [6] losing focus removes the hint — it never floats over another control.
+    // Drives the REAL production seam (SqlEditorBehavior.Attach) and types through real key events, so
+    // what is pinned is the shipped wiring rather than a hand-built rehearsal of it.
+    [Fact]
+    public async System.Threading.Tasks.Task LanguageCompletion_HintNeverLies_AndYieldsTabWhenNotArmed()
+    {
+        var session = SharedSession;
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-probe-langexp-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var store = new ConnectionProfileStore(tempDir);
+            using var service = new FirebirdConnectionService();
+            var vm = new MainWindowViewModel(store, service);
+
+            var editor = new TextEditor { Width = 400, Height = 200 };
+            var outside = new TextBox { Width = 100, Height = 24 };
+            var root = new StackPanel { Children = { editor, outside } };
+            var window = new Window { Width = 600, Height = 400, Content = root };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            SqlEditorBehavior.Attach(editor, vm);   // the production wiring seam
+            window.Activate();
+            // NOTE: TextEditor itself is NOT focusable in AvaloniaEdit 12 — editor.Focus() is a no-op that
+            // returns false. Keyboard focus lives on the TextArea, which is what a real click focuses; that
+            // is precisely why the controller's guard reads TextArea.IsKeyboardFocusWithin (gotcha #225).
+            editor.TextArea.Focus();
+            Dispatcher.UIThread.RunJobs();
+
+            // [1] The assumption the focus guard is built on.
+            var focused = TopLevel.GetTopLevel(window)?.FocusManager?.GetFocusedElement();
+            log.AppendLine($"[1] focused={focused?.GetType().Name ?? "<null>"} "
+                + $"TextArea.IsKeyboardFocusWithin={editor.TextArea.IsKeyboardFocusWithin}");
+            Assert.True(editor.TextArea.IsKeyboardFocusWithin,
+                "the hint's focus guard requires TextArea to hold keyboard focus — if this is false, "
+                + "Language Completion never arms at all.\n" + log);
+
+            // The hint card's expansion label: the overlay's only text that isn't the ⇥ glyph.
+            string? Hint() => OverlayLayer.GetOverlayLayer(editor)?.Children
+                .SelectMany(c => c.GetVisualDescendants().OfType<TextBlock>())
+                .Select(t => t.Text)
+                .FirstOrDefault(t => !string.IsNullOrEmpty(t) && t != "⇥");
+
+            // Sets the document and lands the caret at the end, always via a real 0 → end caret change so
+            // Caret.PositionChanged fires exactly as it does while typing (that event is what updates the
+            // hint). Deliberately NOT window.KeyTextInput: the headless input-injection path routes through
+            // PresentationSource/Dispatcher.Send and only lands on the right thread for the FIRST
+            // HeadlessUnitTestSession in the process — and this class starts 24 of them (gotcha #94).
+            void Type(string text)
+            {
+                editor.SelectionLength = 0;
+                editor.Document.Text = string.Empty;
+                editor.CaretOffset = 0;
+                Dispatcher.UIThread.RunJobs();
+                editor.Document.Text = text;
+                editor.CaretOffset = text.Length;
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            // Raises the key straight at the TextArea, on this thread. KeyDownEvent is registered
+            // Tunnel|Bubble, so the route still runs our TUNNEL handler on the editor (an ancestor) and
+            // then AvaloniaEdit's own bubble handler at the source — i.e. both the interception under test
+            // and the real indent it must fall through to.
+            void Press(Key key)
+            {
+                editor.TextArea.RaiseEvent(new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = key,
+                    KeyModifiers = KeyModifiers.None,
+                });
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            // [2] The catalog spelling is lowercase; typing IF must PREVIEW as IF () THEN, not if () then.
+            Type("IF");
+            log.AppendLine($"[2] hint after typing 'IF' = {Hint() ?? "<none>"}");
+            Assert.Equal("IF () THEN", Hint());
+
+            // [3] Tab inserts exactly what was previewed (the document holds only the construct, so the
+            //     preview and the whole document text must be character-identical), caret inside the parens.
+            var previewed = Hint();
+            Press(Key.Tab);
+            log.AppendLine($"[3] after Tab: text='{editor.Document.Text}' caret={editor.CaretOffset}");
+            Assert.Equal(previewed, editor.Document.Text);
+            Assert.Equal(4, editor.CaretOffset);            // IF (▌) THEN
+            Assert.Null(Hint());                            // expanded → hint gone
+
+            // [4] Escape dismisses; Tab must then do the editor's normal thing (indent), NOT expand.
+            Type("if");
+            Assert.NotNull(Hint());
+            Press(Key.Escape);
+            log.AppendLine($"[4] hint after Escape = {Hint() ?? "<none>"}");
+            Assert.Null(Hint());
+            Press(Key.Tab);
+            log.AppendLine($"[4] after Escape+Tab: text='{editor.Document.Text.Replace("\t", "\\t")}'");
+            Assert.Equal("if", editor.Document.Text.TrimEnd());          // not expanded …
+            Assert.True(editor.Document.Text.Length > 2, "Tab should have indented normally.\n" + log);
+
+            // [5] With a selection, Tab belongs to (block) indent. The caret sits right after `where`,
+            //     whose previous token (CUSTOMER) arms the WHERE clause — i.e. exactly the case that would
+            //     otherwise eat the selected code.
+            editor.Document.Text = "select *\nfrom CUSTOMER\nwhere";
+            editor.CaretOffset = 0;
+            Dispatcher.UIThread.RunJobs();
+            editor.Select(0, editor.Document.TextLength);
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[5] selection={editor.SelectionLength}, hint = {Hint() ?? "<none>"}");
+            Assert.True(editor.SelectionLength > 0, "the selection must be live for this case.\n" + log);
+            Assert.Null(Hint());   // armed text under the caret, but a selection owns Tab
+            Press(Key.Tab);
+            var afterTab = editor.Document.Text;
+            log.AppendLine($"[5] after Tab: text='{afterTab.Replace("\n", "\\n").Replace("\t", "\\t")}'");
+            Assert.Contains("select *", afterTab);        // every line survived — nothing was replaced
+            Assert.Contains("from CUSTOMER", afterTab);
+            Assert.Contains("where", afterTab);
+
+            // [6] The hint must not outlive the editor's focus.
+            editor.SelectionLength = 0;
+            editor.TextArea.Focus();
+            Dispatcher.UIThread.RunJobs();
+            Type("sele");
+            log.AppendLine($"[6] hint while focused = {Hint() ?? "<none>"}");
+            Assert.Equal("select ", Hint());
+            outside.Focus();
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[6] hint after focus moved away = {Hint() ?? "<none>"}");
+            Assert.Null(Hint());
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
     // Etap 5 / M1 — proves the editor's language service builds + caches a SemanticModel from a
     // captured metadata snapshot (the factory → AppMetadataSnapshot → SemanticModel wiring), and
     // that it resolves a simple aliased query. The alias-map path is unchanged (M5 switches
@@ -590,7 +751,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task EditorLanguageService_BuildsAndCachesSemanticModel()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -648,7 +809,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task SemanticHighlighter_AttachesAndColorizesWithoutThrowing()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -707,7 +868,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task NavigationController_AttachesAndDispatchesGoToDefinition()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -802,7 +963,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task RelatedElementsRenderer_CaretAtFirstCall_ProducesBracketPair()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
 
         await session.Dispatch(() =>
         {
@@ -847,7 +1008,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task EditorModel_RebuildsAgainstGrownMetadata_ResolvesViewAndProc()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -923,7 +1084,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task EditorModel_WarmsReferencedTableColumns_WithoutDot()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
 
         await session.Dispatch(async () =>
         {
@@ -973,7 +1134,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task EditorModel_WarmsGeneratorDetail_ForNextValueFor()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
 
         await session.Dispatch(async () =>
         {
@@ -1024,7 +1185,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task EditorModel_WarmsRoutineParameters_ForReferencedProcedure()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
 
         await session.Dispatch(async () =>
         {
@@ -1080,7 +1241,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task EditorModel_WarmConverges_WhenMetadataGrowsMidWarm()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
 
         await session.Dispatch(async () =>
         {
@@ -1140,7 +1301,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task EditorModel_EnsureFresh_RebuildsWhenMetadataGenerationMoves()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>
@@ -1200,7 +1361,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task ParameterHelper_InsertUpdateOrInsertProcedure()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
 
         await session.Dispatch(async () =>
         {
@@ -1300,7 +1461,7 @@ public sealed class ConnectionExpandBindingProbe
     [InlineData("update or insert into t (a, b) values (1, 2)")]
     public async System.Threading.Tasks.Task ParameterHelper_ColumnWarm_OpensAfterWarm(string sql)
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
 
         await session.Dispatch(async () =>
         {
@@ -1349,7 +1510,7 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public async System.Threading.Tasks.Task SemanticHighlighter_BareFromView_PaintsObjectColour_NotLocal()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+        var session = SharedSession;
         var log = new StringBuilder();
 
         await session.Dispatch(() =>

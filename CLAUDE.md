@@ -22,7 +22,7 @@ verbatim, in the archive below.
 | **`docs/design/editor-architecture.md`** | The SQL/PSQL editor's current architecture: components, public API, binding decisions, roadmap. Kept current — extend it, don't let it re-accumulate history. | Only when working on the editor. |
 | **`docs/design/editor-ast-deepening.md`** | **Active implementation guide** for **Etap 6.9 — Structural AST Deepening** (the next foundational work: node inventory, migration contract, milestones B0–B5, debugger considerations, formatter convergence, progress matrix). | When working on the parser/AST/binder deepening. |
 | **`docs/design/editor-stage7-diagnostics.md`** | **Active design/vision** for **Stage 7 (Diagnostics)** — engine, model, categories, pipeline, squiggles/panel/nav, milestones, post-Stage-7 Quick Fixes. Consumes Etap 6.9. | When working on Stage 7. |
-| **`docs/design/editor-language-expansion.md`** | **FROZEN design** for the code-writing experience that replaced Stage 8 M2: **Language Completion** (construct completion by natural prefix, Tab + shown hint, grammar-armed, synchronous) + **Typing Ergonomics** (`begin…end` pairing, auto-indent; Enter stays normal), separate from IntelliSense. | When working on `Core.Sql.Language.Constructs` or the completion/ergonomics wiring. |
+| **`docs/design/editor-language-expansion.md`** | **FROZEN design** for the code-writing experience that replaced Stage 8 M2: **Language Completion** (construct completion by natural prefix, Tab + shown hint, grammar-armed, synchronous — **shipped + user-approved**) + **Typing Ergonomics** (`begin…end` pairing, auto-indent; Enter stays normal — **next milestone**), separate from IntelliSense. §5 documents the as-built arming gate; §9.1 the **one-responsibility-one-owner** rule (vocabulary *and* grammatical position). | When working on `Core.Sql.Language.Constructs`, `Core.Sql.Language.Ergonomics`, or the completion/ergonomics wiring. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (~190 entries, #1–#202), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -114,8 +114,8 @@ src/
     Assets/ (FirebirdSql.xshd + .Light.xshd, Branding/, Icons/ — SvgIcon geometries)
     (NuGet: Avalonia.AvaloniaEdit 12.0.0, Avalonia.Controls.DataGrid 12.0.0)
 tests/
-  EmberTern.Tests/           # xunit; run the headless-probe test class as its own
-                             # `dotnet test` partition — see "Live gotchas" (#94)
+  EmberTern.Tests/           # xunit; ONE shared HeadlessUnitTestSession for the whole
+                             # ConnectionExpandBindingProbe class — see gotchas #94 / #226
 ```
 
 
@@ -207,12 +207,16 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: 3666 main + 23
-  headless-probe (run the `ConnectionExpandBindingProbe` headless class as its own `dotnet test`
-  partition — it intermittently hangs alongside the rest of the suite; both partitions pass
-  independently). Smoke: clean (app launches). *(Trigger-highlight + occurrence colours are proven by
-  headless model/classifier tests + chosen per the documented palette; the on-screen appearance awaits
-  the user's visual confirmation per the QA rule.)*
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **4293, all green in ONE
+  `dotnet test` run** (`dotnet test EmberTern.slnx`, ~10s). The two-partition workaround is no longer
+  needed: `ConnectionExpandBindingProbe` now uses **one shared `HeadlessUnitTestSession` for the whole
+  class** instead of `StartNew` per test — which is what gotcha #94 always prescribed, and is now
+  **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into a `TextEditor`
+  throw cross-thread from every session after the first (gotcha #226). It also cut that class from 16s to
+  5s. *(The old "intermittently hangs alongside the rest of the suite" caveat is **not** claimed fixed —
+  the hang simply does not reproduce now, for the author or the user, across repeated full runs; if it
+  returns, investigate then with concrete evidence rather than pre-emptively re-splitting.)* Smoke: clean
+  (app launches).
 - **⚠ `FirebirdScriptExecutor` is KNOWN-BROKEN for its primary use case** — it runs the whole script
   in ONE transaction and its docstring claimed mixed DDL+DML migration is "all-or-nothing", which is
   **false** (gotcha #213: a Firebird transaction cannot use an object it created but has not
@@ -718,34 +722,58 @@ noted.
   (`ConstructContext` — a simple deterministic previous-significant-token rule: statement boundaries arm
   `Statement` constructs, value-completers arm `Clause` constructs, else none; one cheap synchronous lex,
   no AST/model, no timing). `LanguageConstructResolver.Resolve(text, caret)` = prefix match ∩ grammar is
-  the single App entry point. +44 Core tests. **App hint controller — DONE (impl 2026-07-16); awaits user
-  visual confirmation.** `LanguageExpansionController` (App/Completion, attached in BOTH seams — gotcha
-  #219): a thin, **stateless** consumer — the armed construct is re-derived from (text, caret) via
-  `Resolve` on every caret move and on Tab, nothing remembered. A passive `OverlayLayer` hint (`⇥ <expansion>`,
-  reusing `EditorPopups`/`ClampIntoOverlay`) shows exactly what Tab inserts — below the caret line (never
-  covers it), viewport-clamped, non-focus/non-hit-test, theme-tokened, font-scaled, hidden the instant
-  nothing is armed and never while the completion list is up. **Tab** expands (tunnelled KeyDown preempts
-  AvaloniaEdit's indent; falls through to indent when nothing armed); casing via the pure Core
-  `ConstructExpansion.For` (Core owns the decision). +4 expansion tests. Build 0/0, **4243 main + 24 probe
-  green**, smoke clean. **NEXT:** Typing Ergonomics (`begin…end` pairing + AST-aware auto-indent). **M3
-  Snippet Engine / M4 Structural Selection remain future.**
+  the single App entry point. **App layer + QA sprint — DONE and USER-APPROVED (2026-07-16); LANGUAGE
+  COMPLETION IS COMPLETE.** `LanguageExpansionController` (App/Completion, attached in BOTH seams — gotcha
+  #219) has ONE decision point, `CurrentEdit()`, returning the very `ExpansionEdit` Tab applies — the hint
+  renders *that object's* text, so preview and result **cannot** drift (casing was the first proof: `IF`
+  previewed `if () then`, inserted `IF () THEN`). Every subscription only says *re-evaluate*; the sole state
+  is `_dismissedAt` (Escape's caret offset — not derivable from (text, caret); without it Escape hid the card
+  while Tab still expanded). Guards: focus (`TextArea.IsKeyboardFocusWithin` — **`TextEditor` is NOT
+  focusable and `editor.Focus()` is a no-op**, gotcha #225), no selection (Tab = block indent), list closed,
+  not dismissed. Passive `OverlayLayer` hint; **Tab** expands via a tunnelled KeyDown (gotcha #224).
+  **Grammar arming** now returns a `[Flags]` set so a caret can be both Clause and StatementStart: a **blank
+  line** *adds* StatementStart (fixes `where` ⏎ blank ⏎ `if`), `(` arms subquery `select`, and a bounded
+  enclosing-statement look-back arms `INSERT … SELECT`; widening never removes a position. **ONE
+  RESPONSIBILITY, ONE OWNER** — separation is by **vocabulary** *and* **grammatical position** (design §9.1,
+  gotcha #228): `LanguageConstructCatalog.OwnedWords` + `KeywordPairCatalog.OwnedWords` (new
+  `Core/Sql/Language/Ergonomics/` — **data only**, `begin`/`end` for Typing Ergonomics) are *derived* by
+  `CompletionEngine.AddKeywords`, never hand-listed; **and** the identifier list no longer auto-pops where a
+  construct is armed (it asks the same `Resolve`). Without that second half, typing `select` **inserted a
+  procedure named `SELECT_PRACOWNIKOW`** — a *name* is not a keyword, and an open list owns Tab. Ctrl+Space
+  still overrules the grammar. **The Etap-5 keyword live templates are DELETED** (`SnippetEngine`/
+  `SnippetTemplate`/`SnippetCompletionData` + tests — design §11's unfinished clause; also removed the P7
+  auto-trigger exception and the duplicate `ShowBaselineWindow`). **NOT touched:** the drag-drop
+  `Core/Sql/Templates/*` + `SqlSnippetDropTarget` — a different, shipped feature that only shares the word.
+  Coverage guarantee: `EveryConstruct_ArmsWhereItMayBegin` (16 constructs × 33 positions) — exclusive
+  ownership makes an under-armed position a **dead zone**, so a catalog row arming nowhere fails the build.
+  Build 0/0, **4293 green**, smoke clean. **Conscious open items (user decisions — revisit only on real
+  usage):** `OVER (ORDER BY` doesn't arm; single-letter clause arms collide with aliases (`from ORDERS o` →
+  `⇥ order by `); uniqueness is catalog-wide before gating (`wh` stays silent after FROM); **CASE stays an
+  IntelliSense keyword** — the catalog is intentionally small, grown from real usage, not completeness.
+  **NEXT: Typing Ergonomics** (`begin…end` pairing + AST-aware auto-indent) — it should *consume*
+  `KeywordPairCatalog`, not redeclare it; until it lands `begin` is deliberately **ownerless** (no hint, no
+  pairing, not in IntelliSense — the milestone boundary showing through, not a regression). **M4 Structural
+  Selection remains future; M3 Snippet Engine would now start from scratch** (that engine is deleted).
 - **Completion Matching Philosophy — prefix-first IntelliSense — IN PROGRESS (foundation done 2026-07-16).**
   A separate **Completion** milestone (not Stage 8), inserted at the user's request: interactive completion
   must be a **prediction engine, not a search engine**. Root cause of today's noise (`sta`→`NR_STATUS`/
   `DATASTATUS`, `if`→`IIF`/`NULLIF`): the Core engine returns the FULL in-scope set unfiltered, and all
   live narrowing is AvaloniaEdit's `CompletionList.GetMatchQuality` (private, no hook) which admits
   **substring** matches. Agreed behaviour: no prefix→all (Ctrl+Space); prefix with ≥1 StartsWith→**only**
-  StartsWith; zero StartsWith→**close** (never Contains); consistent across every kind incl. keywords +
-  snippets. **Architecture (user directive):** `CompletionEngine` is the single authority returning the
-  FINAL list; a pure Core **`CompletionMatcher`** owns all filtering/ranking; the **UI is a passive view**;
-  AvaloniaEdit's substring filter is **disabled**. **DONE:** `CompletionMatcher` (Core, pure,
-  `Filter(items, prefix)` — StartsWith-only, exact floated to top, empty→all, zero-match→empty) +
-  `CompletionMatcherTests` (8). Build 0/0, suite green. **It is currently UNUSED** (foundation-first). The
-  **remaining step is entangled and must land atomically** (fold snippets into the engine + add a `prefix`
-  param + rewrite the App as a passive view: `IsFiltering=false`, re-query per keystroke, close on empty,
-  remap the new `Snippet` item kind) and needs **interactive visual QA** of AvaloniaEdit's `IsFiltering=false`
-  rendering/ordering — so it was deliberately deferred to a fresh focused session per the user's
-  "stop at a clean boundary" guidance. **The exact remaining steps are written up in
+  StartsWith; zero StartsWith→**close** (never Contains); consistent across every kind. **Architecture (user
+  directive):** `CompletionEngine` is the single authority returning the FINAL list; a pure Core
+  **`CompletionMatcher`** owns all filtering/ranking; the **UI is a passive view**; AvaloniaEdit's substring
+  filter is **disabled**. **DONE:** `CompletionMatcher` (Core, pure, `Filter(items, prefix)` — StartsWith-only,
+  exact floated to top, empty→all, zero-match→empty) + `CompletionMatcherTests` (8). Build 0/0, suite green.
+  **It is currently UNUSED** (foundation-first). The **remaining step is entangled and must land atomically**
+  (add a `prefix` param + rewrite the App as a passive view: `IsFiltering=false`, re-query per keystroke,
+  close on empty) and needs **interactive visual QA** of AvaloniaEdit's `IsFiltering=false` rendering/ordering
+  — so it was deliberately deferred to a fresh focused session per the user's "stop at a clean boundary"
+  guidance. **Two things got simpler since:** the "fold snippets into the engine / remap the `Snippet` item
+  kind" work is **gone** (the Etap-5 snippets are deleted — see the Language Completion bullet above), and
+  "close on empty" is **already done** for the empty-window symptom via AvaloniaEdit's own `CurrentList`
+  (gotcha #227) — deliberately NOT via `CompletionMatcher`, which would have imposed prefix-first matching
+  ahead of this milestone. **The exact remaining steps are written up in
   `docs/history/17-completion-matching-philosophy.md` — a fresh session should execute that.**
 - **⚠ MILESTONE-ORDER DECISION (2026-07-16) — the Stage 7 retrospective's "consolidate the editor wiring
   first" recommendation was REVERSED, with reason.** It rested on "both backlog items add per-editor
@@ -1014,9 +1042,14 @@ for the full explanation, code, and the failure it prevents.
 - Reflect the actual API surface (get/set, public/protected) before assuming a member is
   settable or overridable — a member appearing in a metadata dump doesn't mean it has an
   accessible setter or is safely overridable. *(#199, applies broadly)*
-- One headless UI test session (`ConnectionExpandBindingProbe`) per test process — share it,
-  don't spin up a second `HeadlessUnitTestSession`, and run it as its own `dotnet test` partition
-  when the full suite hangs. *(#94)*
+- One headless UI test session per test **process** — share it, never `StartNew` per test. Not tidiness:
+  AvaloniaEdit builds its caret/editing `KeyBinding`s as **static** lists owned by the thread of whichever
+  session first constructs a `TextEditor`, so any real key sent into an editor from a later session throws
+  *"the calling thread cannot access this object"* — no injection style avoids it. *(#94, #226)*
+- **Reflect the real runtime contract of a UI member before guarding on it.** AvaloniaEdit's `TextEditor`
+  is **not focusable** — `editor.Focus()` is a no-op returning `false` and `editor.IsFocused` is *always*
+  false; keyboard focus lives on `editor.TextArea`. A guard written against the plausible-looking member
+  compiles, tests green, and silently disables the feature forever. *(#225, an instance of #199)*
 
 ## Known driver gotchas (Firebird + managed .NET driver)
 

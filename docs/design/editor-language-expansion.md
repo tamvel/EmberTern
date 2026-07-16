@@ -1,11 +1,14 @@
 # EmberTern — Language Completion & Typing Ergonomics (design)
 
-**Status:** design **complete and agreed** (2026-07-16); **implementation in progress**. Replaces the
-Stage 8 **M2 Smart Snippets** direction (reverted). Done + committed: **Language Completion** — Core
-foundation (catalog + resolver), grammar-aware arming, and the App layer (Tab-expand + passive hint,
-awaits the user's visual QA). **Next: Typing Ergonomics** (§3 — `begin…end` pairing + auto-indent). No open
-design decisions remain (§13); the `begin` opener-trigger detail is settled during Typing Ergonomics.
-As-built record: [../history/18-language-completion.md](../history/18-language-completion.md).
+**Status:** design **complete and agreed** (2026-07-16); **Language Completion is DONE — implemented,
+QA'd against the running app, and user-approved.** Replaces the Stage 8 **M2 Smart Snippets** direction
+(reverted). Shipped: the Core foundation (catalog + resolver), grammar-aware arming, the App layer
+(Tab-expand + passive hint), and a QA sprint that closed the separation of responsibilities — IntelliSense
+no longer competes with Language Completion for a keystroke, by **vocabulary** *and* by **grammatical
+position** (§5/§9), and the Etap-5 keyword live templates are removed (§11). **Next: Typing Ergonomics**
+(§3 — `begin…end` pairing + auto-indent); the `begin` opener-trigger detail is settled there. No open
+design decisions remain (§13). As-built record + the QA sprint's findings:
+[../history/18-language-completion.md](../history/18-language-completion.md).
 
 **Relationship to other docs:** consumes the language front-end (`docs/design/editor-architecture.md`)
 and the Etap 6.9 AST (`docs/design/editor-ast-deepening.md`) for grammar-aware behaviour; the prefix-first
@@ -227,6 +230,29 @@ query clause structure / PSQL body position / DECLARE section) and arms only cat
 Where the parse can't classify a fragment, it falls back to a coarse token-position rule (arm the common
 statement/PSQL starters) — never worse than a naive editor.
 
+**As built (`ConstructContext.Classify`).** The coarse rule is what shipped, and it is deliberately simple:
+one cheap synchronous lex, classified from the **previous significant token**, no AST. It returns a
+`[Flags]` **set**, because a caret can legitimately be both a clause continuation and a statement start:
+
+- start of text / `;` / a boundary keyword (`begin`/`then`/`do`/`else`/`as`/`union`) → `StatementStart`;
+- `(` → `StatementStart` (a subquery, CTE body or derived table may open here);
+- a token completing a name/value (identifier, quoted ident, number, string, parameter, `)`) → `Clause`;
+- anything else (non-boundary keyword, operator, comma, dot) → `None`;
+- **plus** a **blank line** between the previous token and the caret **adds** `StatementStart` — a developer
+  who leaves an empty line and starts typing is starting a statement, whether or not they wrote a `;`, and
+  no single token can carry that fact;
+- **plus** inside an `INSERT` (enclosing statement's first two tokens are `insert into`, found by a bounded
+  look-back to the last `;`/blank line) a `Clause` position also gets `StatementStart`, so `INSERT … SELECT`
+  arms. This is the sanctioned "cheap local lex of the enclosing statement" above.
+
+**Widening, never narrowing, is the rule.** Once Language Completion *exclusively* owns a word (§9.1),
+an under-arming gate is a **dead zone** — the identifier list is no longer there to cover it — whereas
+over-arming only shows a hint the developer ignores. So a signal adds a position; it never removes one, and
+where the coarse rule is uncertain it arms. `ConstructArmingTests.EveryConstruct_ArmsWhereItMayBegin` pins
+every construct against the positions it may legally begin in; a catalog row that arms nowhere fails the
+build. One documented exception: `OVER (ORDER BY …` does not arm (closing it needs `(` → `Clause`, arming
+clause constructs after every paren).
+
 **This computation is synchronous and timing-free** (per §1): arming depends only on the current text +
 caret, resolved by a cheap local lex/parse of the enclosing statement — **not** on the debounced background
 `SemanticModel`, which trails typing. Tool A must give the same answer whether or not the async model has
@@ -280,6 +306,20 @@ overlay — AvaloniaEdit 12 has no first-class inline-suggestion API — so it's
   `SqlEditorBehavior.Attach` + MainWindow seams (gotcha #219 — attach in both), the AST context signal.
 - **Not reused:** the entire M2 snippet engine (§11).
 
+**As built — the shape that matters.** `LanguageExpansionController` has ONE decision point,
+`CurrentEdit()`, which returns the very `ExpansionEdit` Tab applies (or null). The hint renders *that
+object's* `InsertText`, so the preview and the result are the same value and **cannot** drift — casing was
+the first per-site decision to prove why that matters. Every subscription (caret move, selection change,
+focus in/out) only says *re-evaluate*; none decides anything, so no trigger can disagree with the Tab
+handler. The guards inside it are: the editor must hold focus (`TextArea.IsKeyboardFocusWithin` — **not**
+`editor.IsFocused`, gotcha #225), no selection (Tab belongs to block-indent), the completion list must be
+closed, and the caret must not be where Escape dismissed the hint.
+
+`_dismissedAt` (the caret offset of an Escape dismissal, retired on the next caret move) is the controller's
+**only** state, and it is not a violation of "stateless": *"the user said not here"* is not a function of
+(text, caret), so no pure resolver can derive it. Everything about **what** is armed remains derived. Without
+it, Escape hid the card while Tab still expanded — a hidden special action, which §7 forbids.
+
 ---
 
 ## 9. Coexistence & precedence
@@ -287,6 +327,32 @@ overlay — AvaloniaEdit 12 has no first-class inline-suggestion API — so it's
 At any caret, at most one of {construct hint, completion list} is present, by grammar. Precedence if both
 could apply: an open completion list wins Tab. Tool B (indent/pairing) is always available and never
 conflicts (it acts on typing/Enter, not Tab).
+
+### 9.1 One responsibility, one owner — as built
+
+"Disjoint by grammatical position" (§1) has **two** halves, and both are required. Implementing only the
+first is what let `select` insert a procedure named `SELECT_PRACOWNIKOW` (gotcha #228):
+
+1. **Vocabulary.** A word another tool owns is not offered by IntelliSense. Each owner *declares* its own
+   vocabulary and `CompletionEngine.AddKeywords` *derives* the exclusion from those declarations — there is
+   no hand-kept list to drift:
+   - `LanguageConstructCatalog.OwnedWords` — the **first word** of every construct spelling (`group` for
+     `group by`). Only the first word: a trailing word (`by`, `into`, `variable`) triggers nothing on its
+     own, so offering it competes with nothing.
+   - `KeywordPairCatalog.OwnedWords` — both halves of every Typing Ergonomics pair (`begin`/`end`).
+   Adding a construct or a pair retires its word from IntelliSense automatically.
+2. **Position.** Where a construct may begin, the identifier list **does not auto-pop**. Vocabulary alone
+   cannot achieve this: the list offers *names*, and a procedure/table can match a construct's prefix. The
+   auto-pop path asks the **same** `LanguageConstructResolver.Resolve(text, caret)` the hint asks, and
+   returns if anything is armed — one resolver, so the two can never disagree about what is armed.
+
+**Ctrl+Space always overrules the grammar**: it is an explicit request for names, opens the list, and the
+list then owns Tab (§7). Only the *automatic* path is gated. When the typed word stops being a construct
+prefix (`select_`), nothing is armed and the list returns on its own — no state is involved.
+
+Consequence worth stating plainly: a word may be **temporarily ownerless** while its owner is unbuilt.
+`begin` is exactly that today — no hint, no pairing, not in IntelliSense — and that is the milestone
+boundary showing through, not a regression. It is not a reason to hand the word back to IntelliSense.
 
 ---
 
@@ -309,17 +375,52 @@ mirrored placeholders, final-caret, the enriched snippet completion row, and the
 completion list all go. The only surviving idea — "the caret's landing offset" — is one integer per catalog
 row here. `CompletionMatcher` (prefix-first) is **kept** — it's Tool C.
 
+**Completed 2026-07-16 (QA sprint).** The revert stopped at the *Etap-5 snippet baseline*, so the last
+clause above — "the `SnippetEngine` role in the completion list" — went unimplemented and the list kept
+offering `if (…) then begin … end`, `begin … end`, `case when … then … else … end`. Now **deleted**:
+`SnippetEngine` + `SnippetTemplate` (Core), `SnippetCompletionData` (App), the controller wiring, and
+`SnippetEngineTests`. Those templates are the abandoned direction: Language Completion completes
+*constructs* (`if` → `if (▌) then`), it does not insert skeletons the developer then deletes (Rule 0).
+
+Two things fell out of the removal, both simplifications: the **P7 auto-trigger exception** (which existed
+so a 2-char snippet keyword like `if` could auto-pop the list below the identifier threshold — precisely the
+competition §9.1 removes) is gone; and `ShowBaselineWindow` became byte-identical to `ShowItems`, leaving
+one window-populating path instead of two.
+
+**Explicitly NOT removed** (it only shares the word "snippet"): the object-driven **drag-drop templates** —
+`Core/Sql/Templates/*` (`SqlSnippet`, `SqlSnippetBuilder`, the `ISqlTemplate` registry, Table/Psql/Routine
+templates) and `SqlSnippetDropTarget` — a shipped, unrelated feature (drag an object into the editor →
+generated SQL). `SnippetEngine`'s own docstring called it "a **parallel** path … which stay[s] untouched".
+
 ---
 
 ## 12. Testing
 
 - **Core (pure, cheap):** catalog prefix resolution (unique/ambiguous/casing), grammar "valid starts here"
   for representative query/PSQL carets, expansion text + caret offset per construct.
-- **App:** a headless probe (the `ConnectionExpandBindingProbe` pattern) that types a prefix and asserts the
-  hint content + that Tab produces the exact expansion and caret; auto-indent + `begin` pairing over sample
-  input.
+- **Core coverage guarantee (added by the QA sprint):**
+  `ConstructArmingTests.EveryConstruct_ArmsWhereItMayBegin` is a table of every construct × every position
+  it may legally begin in. This is not routine coverage — it is the **precondition for exclusive ownership**
+  (§9.1): once IntelliSense stops offering a word, a position where it fails to arm is a dead zone. A new
+  catalog row that arms nowhere fails the build. Its sibling pins what must stay silent (value slots,
+  `CASE … WHEN`).
+- **Ownership tests assert over the owners' declarations** (`LanguageConstructCatalog.OwnedWords`,
+  `KeywordPairCatalog.OwnedWords`), never a written-out word list, so they keep holding for catalog rows
+  added later. The converse is pinned too (`FROM`/`JOIN`/`AND`/`VALUES`/`BY`/`INTO`… are still offered), so
+  the exclusion cannot quietly widen into "IntelliSense lost its keywords".
+- **App:** `ConnectionExpandBindingProbe.LanguageCompletion_HintNeverLies_AndYieldsTabWhenNotArmed` drives
+  the real `SqlEditorBehavior.Attach` seam and pins the live contract: focus, the hint == what Tab inserts
+  (casing included), Tab's exact result + caret, Escape → Tab indents, selection → Tab block-indents, focus
+  loss → hint gone. It raises keys **directly at the `TextArea`** and the class uses **one shared headless
+  session** — both are forced by gotcha #226, not stylistic. Auto-indent + `begin` pairing land with Typing
+  Ergonomics.
 - **QA rule:** the on-screen hint feel, Tab/Enter behaviour, and grammar arming in both themes await the
-  user's interactive confirmation before "done."
+  user's interactive confirmation before "done." **This is what actually found the four App-layer defects
+  (hint casing, Escape, selection, focus), the arming bug, the auto-pop competition, the empty popup, and
+  the leftover snippets — none of which the Core tests could reach.** The one that matters most: a headless
+  probe written to *prove* the focus guard (rather than trust it) failed immediately and exposed that
+  `TextEditor` is not focusable — a guard on `editor.IsFocused` would have shipped the feature dead with a
+  green build.
 
 ---
 
