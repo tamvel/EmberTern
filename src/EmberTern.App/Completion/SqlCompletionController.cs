@@ -194,12 +194,24 @@ internal sealed class SqlCompletionController
     /// there is exactly one background parse per editor. Null before the first parse.</summary>
     public SemanticModel? Model => _language.Model;
 
+    /// <summary>Stage 7 (Diagnostics) — the cached semantic diagnostics of <see cref="Model"/>, computed
+    /// on the same background pass and consistent with it. The squiggle renderer reads this on paint.</summary>
+    public IReadOnlyList<EmberTern.Core.Sql.Language.Diagnostic> Diagnostics => _language.Diagnostics;
+
     /// <summary>Notifies the controller that the App's loaded metadata set changed (a category
     /// finished loading — prefetch/expand/refresh), scheduling a coalesced model rebuild so late-loaded
     /// objects (views / selectable procedures used in FROM) start resolving. Public so a host that
     /// owns the metadata event lifecycle (the main window ties it to its stable VM in
     /// OnDataContextChanged) can drive it directly instead of via the fragile attach-time hook.</summary>
     public void NotifyMetadataChanged() => _language.NotifyMetadataChanged();
+
+    /// <summary>Notifies the controller that the editor's <b>ambient symbols</b> changed — the out-of-text
+    /// declarations an Easy-mode routine editor supplies from its grids (params / DECLAREd variables).
+    /// Schedules the same coalesced model rebuild as <see cref="NotifyMetadataChanged"/> (which re-captures
+    /// the ambient symbols), so diagnostics / completion / highlighting refresh immediately after a grid
+    /// edit instead of waiting for the next body-text change. Debounced — a burst of row edits collapses to
+    /// one rebuild.</summary>
+    public void NotifyAmbientSymbolsChanged() => _language.NotifyMetadataChanged();
 
     /// <summary>Raised whenever <see cref="Model"/> is (re)built — the semantic highlighter repaints
     /// on this. Forwarded from the per-editor <see cref="EditorLanguageService"/>.</summary>

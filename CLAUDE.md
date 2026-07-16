@@ -522,8 +522,8 @@ noted.
   structurer already emitted → the duplicate tripped the §0 net and reverted the WHOLE routine to verbatim
   — the "the whole procedure didn't format" symptom). Build 0/0, **4070 main + 23 probe green**, smoke
   clean; user-confirmed on a real procedure. **ETAP 6.9 IS COMPLETE — parser + binder + formatter all
-  consume one AST model.** **Next: Stage 7 (Diagnostics) — on the user's go-ahead.** `SqlAliasResolver` is
-  off the editor path (only `PredicateExtractor`/Performance uses it).
+  consume one AST model.** **Stage 7 (Diagnostics) has since begun — see the Stage 7 bullet below.**
+  `SqlAliasResolver` is off the editor path (only `PredicateExtractor`/Performance uses it).
   Still deferred: **P5d** a plain-hover info cue; **P2c** bold the typed completion-fragment (no clean
   AvaloniaEdit 12.0.0 path yet). Formatter grammar-depth items now folded into Etap 6.9 as node
   consumers: **CASE** (was inline/verbatim), **nested-query indentation** (no indent model today),
@@ -531,6 +531,37 @@ noted.
   stay verbatim by design. Immediate hygiene noted for Etap 6.9: a literal NUL byte in
   `SemanticBinder.Query.cs` (composite cache key written as a raw `\0`), and the dead alias path in
   `EditorLanguageService` (no consumer since Etap 5/M5 — remove once validated).
+- **Stage 7 (Diagnostics) — IN PROGRESS.** Design/vision: [editor-stage7-diagnostics.md](docs/design/editor-stage7-diagnostics.md).
+  **Core engine (S1+S2+S6) — DONE (commit c3a269d):** `DiagnosticsEngine` is a pure-Core client of
+  `SemanticModel` — conservative, deterministic, de-duplicated diagnostics `ET0001`–`ET0008`
+  (UnknownObject/UnknownColumn/UnresolvedVariable/UnresolvedParameter/AmbiguousColumn/InsertCountMismatch/
+  UnknownCursor/SuspendOutsideSelectable) in one forward pass over `References` + bounded AST checks; zero
+  Avalonia, "prefer silence over false positives" throughout (object/column categories gated on live
+  metadata). **S3 (Squiggle rendering) — DONE (impl); awaits user visual confirmation.** New App renderer
+  `SquiggleRenderer` (`IBackgroundRenderer`, `Completion/SquiggleRenderer.cs`) draws a wavy underline under
+  each diagnostic span (Error→`ErrorBrush`, Warning→`WarningBrush`, Info→`SubtleForegroundBrush`; both
+  themes, no hardcoded colours), mirroring `SemanticHighlighter`/`OccurrenceHighlighter`. Wired once in
+  `SqlEditorBehavior.Attach` → every SQL surface. Diagnostics are computed on the **existing** model
+  background pass: `EditorLanguageService` now runs `DiagnosticsEngine.Analyze` inside the same cancellable
+  `Task.Run` that builds the model (and on the two synchronous rebuild paths), caches an `IReadOnlyList<Diagnostic>`
+  version-matched to the model, and exposes it via `SqlCompletionController.Diagnostics`. No second parse
+  loop, no parallel analyses (a newer edit cancels the in-flight one via the existing CTS); the paint path
+  reads the cached list only (viewport-culled + doc-clamped, so large scripts + post-edit staleness are safe).
+  **Hover/tooltip is NOT part of S3** (user scope decision — squiggles only; the message surface is a later
+  milestone). **S3 follow-up — Easy-mode ambient refresh (DONE, impl):** an Easy-mode routine editor's body
+  holds only the fragment; its params/`DECLARE`d variables live in the grids and reach the model as *ambient
+  symbols* (gotcha #218). A manual-QA pass found the model did NOT rebuild when those grids changed, so
+  squiggles (and completion/highlighting) went stale until the next body-text edit. Fixed: the routine VMs
+  raise `SourceObjectDetailTabViewModel.AmbientSymbolsChanged` on a grid add/remove/reorder or row **rename**
+  (base tracks Variables; Procedure adds Input/Output params, Function adds Arguments — via a `TrackAmbient`
+  mirror of `TrackDirty`, scoped to the `Name` property); the detail views bridge it (`AmbientModelRefresh`)
+  to each ambient-seeded editor's new `SqlCompletionController.NotifyAmbientSymbolsChanged()` → the existing
+  debounced `RefreshModelWithMetadata` rebuild (re-captures ambient). **Root-cause note (investigation):** the
+  binder/engine/ambient mechanism are all correct — fed complete ambient symbols the model has zero false
+  positives; the only gap was this staleness. Analysis stays on the *visible fragment + ambient*, NOT a
+  synthesized full CREATE source (avoids offset translation; consistent with every other model consumer).
+  Build 0/0, **4122 main + 23 probe green**, smoke clean. **S3 awaits the user's manual visual verification
+  before commit; then S4 (Diagnostics panel) → S5 (navigation) on the user's go-ahead.**
 - **R2 (2026-06-18 Transaction Architecture Audit) — CLOSED 2026-07-14, and its premise was wrong.**
   R2 ("procedure lock after Execute → Rollback → Compile") was left OPEN pending a live `MON$` dump,
   and the "Single-attachment DDL" fix that followed concluded DDL must be **co-located** on the

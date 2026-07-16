@@ -96,6 +96,11 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
         TrackDirty(Cursors);
         TrackDirty(Subprograms);
 
+        // Ambient-symbol refresh: the arguments feed BuildAmbientSymbols, so a rename/add/remove must
+        // rebuild the body editor's model (Variables is tracked by the base; ResultRows is the return
+        // value, not an in-body symbol).
+        TrackAmbient(Arguments);
+
         // Shared filter panel + aggregation bar for the Execute Result grid
         // (materialized: filter/aggregate/page all client-side over the exec result).
         ExecFilterPanel = new FilterPanelViewModel { ApplyRequested = ApplyExecFilterAsync };

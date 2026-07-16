@@ -32,6 +32,8 @@ public partial class TriggerDetailTabView : UserControl
     // and Alt+F act on (body in Easy mode, source in Source mode).
     private TextEditor? _focusedEditor;
     private bool _completionAttached;
+    // Rebuilds the ambient-seeded body model when the Easy-mode Variables grid changes (S3 follow-up).
+    private readonly AmbientModelRefresh _ambientRefresh = new();
 
     public TriggerDetailTabView()
     {
@@ -78,7 +80,9 @@ public partial class TriggerDetailTabView : UserControl
 
             if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm, triggerTable);
             if (_bodyEditor is not null)
-                SqlEditorBehavior.Attach(_bodyEditor, mainVm, triggerTable, ambientSymbols: ambient);
+                _ambientRefresh.Track(SqlEditorBehavior.Attach(_bodyEditor, mainVm, triggerTable, ambientSymbols: ambient));
+            // Variables-grid edits (add/remove/rename) → rebuild the ambient-seeded body model.
+            _ambientRefresh.Bind(_currentVm);
 
             // Metadata-object drop → snippet flyout, into the editable trigger editors.
             if (_sqlEditor is not null) SqlSnippetDropTarget.Attach(_sqlEditor, mainVm, SnippetInsertionContext.PsqlBody);
@@ -96,6 +100,8 @@ public partial class TriggerDetailTabView : UserControl
             _currentVm.UncommentRequested -= OnUncommentRequested;
         }
         _currentVm = DataContext as TriggerDetailTabViewModel;
+        // Follow the (possibly reused) view onto this VM for ambient-grid → model rebuilds.
+        _ambientRefresh.Bind(_currentVm);
         if (_currentVm is not null)
         {
             _currentVm.PropertyChanged += OnVmPropertyChanged;

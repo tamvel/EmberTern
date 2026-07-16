@@ -63,9 +63,52 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
             MoveVariableDownCommand.NotifyCanExecuteChanged();
         };
         TrackDirty(Variables);
+        TrackAmbient(Variables);
 
         // Subclasses release the ctor-time suppression at the END of their own ctor,
         // once their fields/collections are assigned — do NOT release it here.
+    }
+
+    // ─── Ambient-symbol change tracking (Easy-mode diagnostics/completion refresh) ──────────
+
+    /// <summary>Raised whenever the out-of-text declarations that feed <see cref="BuildAmbientSymbols"/>
+    /// change — a parameter/variable added, removed, reordered, or <b>renamed</b> in the Easy-mode grids.
+    /// The Easy-mode body editor holds only the BODY; its params/variables live in these grids and reach
+    /// the semantic model as ambient symbols. Without this signal the model (and therefore diagnostics,
+    /// completion, highlighting, Quick Info) would go stale until the user next edited the body text —
+    /// e.g. a squiggle under <c>:test</c> would linger after the user added <c>test</c> to the Variables
+    /// grid. The view subscribes and asks each ambient-seeded editor to rebuild its model. Debounced on
+    /// the consuming side, so a name typed character-by-character coalesces into one rebuild.</summary>
+    public event EventHandler? AmbientSymbolsChanged;
+
+    /// <summary>Signals that the ambient-symbol set changed. Not gated by <see cref="_suppressDirty"/>:
+    /// a rebuild must also happen on the programmatic load/toggle that first populates the grids, so the
+    /// initial model reflects the final grid state regardless of load order; the consumer debounces the
+    /// burst.</summary>
+    protected void RaiseAmbientSymbolsChanged() => AmbientSymbolsChanged?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Raises <see cref="AmbientSymbolsChanged"/> on any add/remove/reorder of the collection
+    /// AND on a row's <see cref="ProcedureFieldRowBase.Name"/> edit (the only row property that affects
+    /// symbol resolution — type/domain/size/scale/default do not). Subclasses call this for their own
+    /// ambient-feeding grids (Input/Output params, function arguments); the base tracks Variables.</summary>
+    protected void TrackAmbient(INotifyCollectionChanged collection)
+    {
+        collection.CollectionChanged += (_, e) =>
+        {
+            RaiseAmbientSymbolsChanged();
+            if (e.NewItems is not null)
+            {
+                foreach (INotifyPropertyChanged row in e.NewItems)
+                {
+                    row.PropertyChanged += OnAmbientRowPropertyChanged;
+                }
+            }
+        };
+    }
+
+    private void OnAmbientRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProcedureFieldRowBase.Name)) RaiseAmbientSymbolsChanged();
     }
 
     // ─── Dirty tracking (drives IUnsavedWorkSource + Revert) ──────────────

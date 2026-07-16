@@ -72,6 +72,12 @@ internal static class SqlEditorBehavior
             // Double-click on a value → the unified Parameter Helper (owned by the completion controller).
             showParameterHelper: offset => completion.TryShowParameterHelperAt(offset));
 
+        // Stage 7 / S3: diagnostic squiggles — a wavy underline under each Diagnostic the pure-Core
+        // DiagnosticsEngine produced, computed on the same background pass the completion controller
+        // owns (one parse per editor) and repainted on the shared ModelUpdated cycle. Renderer only —
+        // no analysis on the paint path. Attached here so EVERY SQL surface gets it at once.
+        SquiggleRenderer.Attach(editor, completion);
+
         // Select-an-identifier → box all its occurrences in this editor.
         OccurrenceHighlighter.Attach(editor);
 

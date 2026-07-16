@@ -111,6 +111,11 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         TrackDirty(Cursors);
         TrackDirty(Subprograms);
 
+        // Ambient-symbol refresh: the Input/Output params feed BuildAmbientSymbols, so a rename/
+        // add/remove must rebuild the body editor's model (Variables is tracked by the base).
+        TrackAmbient(InputParams);
+        TrackAmbient(OutputParams);
+
         // Shared filter panel + aggregation bar for the Execute Result grid
         // (materialized: filter/aggregate/page all client-side over the exec result).
         ExecFilterPanel = new FilterPanelViewModel { ApplyRequested = ApplyExecFilterAsync };

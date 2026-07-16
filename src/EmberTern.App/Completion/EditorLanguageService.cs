@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using AvaloniaEdit;
+using EmberTern.Core.Sql.Language;
 using EmberTern.Core.Sql.Language.Semantics;
 
 namespace EmberTern.App.Completion;
@@ -77,6 +78,11 @@ internal sealed class EditorLanguageService : IDisposable
     private bool _warmRequested;
 
     private SemanticModel? _model;
+    // Stage 7 / S3: the diagnostics of the currently-cached model, computed on the same background
+    // pass that builds the model and always consistent with it (same document version). The squiggle
+    // renderer reads this cached list on each paint — it never analyses on the paint path. Empty until
+    // the first model is built, and whenever the model is null.
+    private IReadOnlyList<Diagnostic> _diagnostics = Array.Empty<Diagnostic>();
     private CancellationTokenSource? _cts;
     // Monotonic edit counter and the counter each cached artifact reflects. Start the
     // caches "stale" (-1 < 0) so the first deliberate trigger parses on demand even if
@@ -114,6 +120,12 @@ internal sealed class EditorLanguageService : IDisposable
     /// <summary>The most recently built semantic model, or null before the first parse.</summary>
     public SemanticModel? Model => _model;
 
+    /// <summary>Stage 7 (Diagnostics) — the semantic diagnostics of the cached <see cref="Model"/>,
+    /// computed by <see cref="DiagnosticsEngine"/> on the same background pass that builds the model, so
+    /// the two always reflect the same document version. Read by the squiggle renderer on the paint path
+    /// (the paint path does no analysis). Empty until the first model is built.</summary>
+    public IReadOnlyList<Diagnostic> Diagnostics => _diagnostics;
+
     /// <summary>True when the cached model reflects both the current document text <b>and</b> the
     /// current metadata generation. The metadata half is what lets a deliberate Ctrl+Space rebuild the
     /// model after a category loaded (prefetch on connect) without a keystroke — the text-only gate
@@ -145,6 +157,7 @@ internal sealed class EditorLanguageService : IDisposable
         var text = _editor.Text ?? string.Empty;
         var provider = _metadataSnapshot?.Invoke();
         _model = BuildModelSafe(text, provider, CaptureAmbientSymbols());
+        _diagnostics = AnalyzeSafe(_model, CancellationToken.None);
         _modelVersion = version;
         _modelMetadataGeneration = generation;
         RaiseModelUpdated();
@@ -168,6 +181,7 @@ internal sealed class EditorLanguageService : IDisposable
         var text = _editor.Text ?? string.Empty;
         var provider = _metadataSnapshot?.Invoke();
         _model = BuildModelSafe(text, provider, CaptureAmbientSymbols());
+        _diagnostics = AnalyzeSafe(_model, CancellationToken.None);
         _modelVersion = version;
         _modelMetadataGeneration = generation;
         RaiseModelUpdated();
@@ -327,12 +341,20 @@ internal sealed class EditorLanguageService : IDisposable
         var ambient = CaptureAmbientSymbols();      // UI-thread snapshot (reads VM grids), same rule
         try
         {
-            var model = await Task.Run(
-                () => BuildModelSafe(text, provider, ambient),
+            // Build the model AND analyse it in the same off-thread pass, under the same token — so a
+            // newer edit cancels an in-flight diagnostics run (§9: no parallel analyses, stale ones
+            // cancelled) and the paint path never analyses.
+            var (model, diagnostics) = await Task.Run(
+                () =>
+                {
+                    var m = BuildModelSafe(text, provider, ambient);
+                    return (m, AnalyzeSafe(m, cts.Token));
+                },
                 cts.Token).ConfigureAwait(true); // resume on the UI thread
             // Drop the result if a newer parse superseded this one or we were cancelled.
             if (cts.IsCancellationRequested || !ReferenceEquals(cts, _cts)) return;
             _model = model;
+            _diagnostics = diagnostics;
             _modelVersion = version;
             _modelMetadataGeneration = generation;
             RaiseModelUpdated();
@@ -363,6 +385,27 @@ internal sealed class EditorLanguageService : IDisposable
         catch
         {
             return null;
+        }
+    }
+
+    // Runs the pure-Core DiagnosticsEngine over a freshly-built model. Returns empty for a null model.
+    // Cancellation (from the shared reparse token) is allowed to propagate so Task.Run reports the pass
+    // as cancelled and its result is dropped; any other failure only costs diagnostics, never the model
+    // or the editor (§0 / best-effort — the model itself is already published).
+    private static IReadOnlyList<Diagnostic> AnalyzeSafe(SemanticModel? model, CancellationToken ct)
+    {
+        if (model is null) return Array.Empty<Diagnostic>();
+        try
+        {
+            return DiagnosticsEngine.Analyze(model, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return Array.Empty<Diagnostic>();
         }
     }
 

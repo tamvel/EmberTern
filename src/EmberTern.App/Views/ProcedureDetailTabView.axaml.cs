@@ -49,6 +49,9 @@ public partial class ProcedureDetailTabView : UserControl
     // Format / Comment commands and Alt+F act on (body, source, cursor, subprogram).
     private TextEditor? _focusedEditor;
     private bool _completionAttached;
+    // Rebuilds the ambient-seeded editors' models when the Easy-mode grids change (S3 follow-up) so
+    // diagnostics/completion/highlighting refresh live without a body-text edit.
+    private readonly AmbientModelRefresh _ambientRefresh = new();
 
     public ProcedureDetailTabView()
     {
@@ -107,9 +110,11 @@ public partial class ProcedureDetailTabView : UserControl
                 _currentVm?.BuildAmbientSymbols() ?? Array.Empty<Symbol>();
 
             if (_sqlEditor is not null) SqlEditorBehavior.Attach(_sqlEditor, mainVm);
-            if (_bodyEditor is not null) SqlEditorBehavior.Attach(_bodyEditor, mainVm, ambientSymbols: ambient);
-            if (_cursorEditor is not null) SqlEditorBehavior.Attach(_cursorEditor, mainVm, ambientSymbols: ambient);
-            if (_subprogramEditor is not null) SqlEditorBehavior.Attach(_subprogramEditor, mainVm, ambientSymbols: ambient);
+            if (_bodyEditor is not null) _ambientRefresh.Track(SqlEditorBehavior.Attach(_bodyEditor, mainVm, ambientSymbols: ambient));
+            if (_cursorEditor is not null) _ambientRefresh.Track(SqlEditorBehavior.Attach(_cursorEditor, mainVm, ambientSymbols: ambient));
+            if (_subprogramEditor is not null) _ambientRefresh.Track(SqlEditorBehavior.Attach(_subprogramEditor, mainVm, ambientSymbols: ambient));
+            // Grid edits (param/variable add/remove/rename) → rebuild the ambient-seeded models.
+            _ambientRefresh.Bind(_currentVm);
 
             // Metadata-object drop → snippet flyout, into every editable PSQL editor.
             if (_sqlEditor is not null) SqlSnippetDropTarget.Attach(_sqlEditor, mainVm, SnippetInsertionContext.PsqlBody);
@@ -131,6 +136,8 @@ public partial class ProcedureDetailTabView : UserControl
             _currentVm.Performance?.SetVisible(false);
         }
         _currentVm = DataContext as ProcedureDetailTabViewModel;
+        // Follow the (possibly reused) view onto this VM for ambient-grid → model rebuilds.
+        _ambientRefresh.Bind(_currentVm);
         if (_currentVm is not null)
         {
             _currentVm.PropertyChanged += OnVmPropertyChanged;

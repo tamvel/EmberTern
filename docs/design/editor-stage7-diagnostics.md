@@ -210,8 +210,13 @@ No second parse, no second model, no second loop. Diagnostics ride the existing 
   (`DocumentColorizingTransformer`) and `OccurrenceHighlighter` / `SearchMatchHighlighter`
   (`IBackgroundRenderer`) — attached in the single wiring seam `SqlEditorBehavior.Attach`, so **every
   SQL surface** (SQL Editor + object editors) gets diagnostics at once.
-- Underlines the diagnostic span with the severity brush; hover shows the message (+ code).
+- Underlines the diagnostic span with the severity brush (Error → `ErrorBrush`, Warning → `WarningBrush`,
+  Info → `SubtleForegroundBrush`; both themes, no hardcoded colours).
 - Repaints on `ModelUpdated`; reads only the cached diagnostics (no work on the paint path).
+- **Hover-shows-the-message is deferred out of S3** (user scope decision, 2026-07-16): S3 renders the
+  squiggle only — no tooltip. The hover/message surface is a later milestone (it pairs naturally with
+  the panel/nav UI). The squiggle already communicates location + severity; the message is available
+  once the panel (S4) lands.
 
 ### 8.2 Diagnostics panel
 
@@ -234,6 +239,16 @@ No second parse, no second model, no second loop. Diagnostics ride the existing 
   debounce coalesces the burst; the background pass rebuilds the model **and** re-analyzes; the UI
   refreshes once. A metadata-generation bump (a category finishing load) also triggers a rebuild +
   re-analyze without a keystroke (the mechanism already exists for highlighting/completion).
+- **Easy-mode ambient changes trigger the same rebuild (S3 follow-up).** An Easy-mode routine editor's
+  body holds only the fragment; its parameters and `DECLARE`d variables live in the surrounding grids and
+  reach the model as *ambient symbols*. Editing those grids (add / remove / reorder / **rename**) raises
+  `SourceObjectDetailTabViewModel.AmbientSymbolsChanged`, which the view forwards to each ambient-seeded
+  editor's `SqlCompletionController.NotifyAmbientSymbolsChanged()` → the same debounced
+  `RefreshModelWithMetadata` rebuild (it re-captures the ambient symbols). Without this the model — and
+  thus the squiggles — would go stale until the next body-text edit (e.g. a squiggle under `:test`
+  lingering after the user added `test` to the Variables grid). Only the row **Name** is tracked (the only
+  property affecting resolution); the debounce coalesces a name typed character-by-character into one
+  rebuild.
 - **Cancellation:** the analysis runs inside the same cancellable background pass; a newer edit
   cancels the in-flight one via the existing `CancellationTokenSource`. `DiagnosticsEngine.Analyze`
   accepts a `CancellationToken` and checks it between statements.
@@ -265,7 +280,7 @@ diagnostics pipeline earns trust before anything mutates or before the panel/nav
 | **S1** ✅ DONE | `DiagnosticsEngine` (Core) — `UnknownObject`/`UnknownColumn`/`Unresolved*` from the model | Etap 6.9 B1/B2 | Pure Core; consumes the model; conservative + connection-gated. Add `DiagnosticCategory`. Codes `ET0001`–`ET0004`. |
 | **S2** ✅ DONE | `InsertCountMismatch` + `AmbiguousColumn` (Core) | S1 | Reuse `SignatureHelpEngine` list split — no new scan. Codes `ET0005`–`ET0006`. |
 | **S6** ✅ DONE | PSQL-specific categories (`UnknownCursor`, `SuspendOutsideSelectable`) | Etap 6.9 B1/B5 | Needs the PSQL body tree. Codes `ET0007`–`ET0008`. **Pulled ahead of S3–S5 (see note)** so the Core engine is complete before any UI. |
-| **S3** | Squiggle rendering + wire into `SqlEditorBehavior.Attach` (App) | S1, S2, S6 | Mirrors `SemanticHighlighter`; recompute on `ModelUpdated`. **Visual QA required** (see QA rule). |
+| **S3** ✅ DONE (impl; awaits visual confirm) | Squiggle rendering + wire into `SqlEditorBehavior.Attach` (App) | S1, S2, S6 | `SquiggleRenderer` (`IBackgroundRenderer`), mirrors `SemanticHighlighter`; diagnostics computed on the same background pass as the model (in `EditorLanguageService`, cached + version-matched), repainted on `ModelUpdated`. Renderer only — zero analysis on the paint path. Includes the **Easy-mode ambient-refresh** follow-up (grid add/remove/rename → live model rebuild, §9). **Hover/tooltip NOT in S3** (deferred, see §8.1). **Visual QA awaits user confirmation** (QA rule). |
 | **S4** | Diagnostics panel (App) | S3 | List + group/filter + jump-to-span; reuse panel/grid skeleton + theme tokens. |
 | **S5** | Navigation (next/prev, keyboard) | S3 | Inclusive-at-end offset lookups. |
 

@@ -1510,3 +1510,110 @@ directly across INSERT (cached + warm + lifetime) + UPDATE OR INSERT + EXECUTE P
 smoke clean.
 
 ---
+
+## Stage 7 — Diagnostics
+
+Design/vision: [`docs/design/editor-stage7-diagnostics.md`](../design/editor-stage7-diagnostics.md).
+Stage 7 turns the deepened AST + Semantic Model (Etap 6.9) into user-visible diagnostics: a thin,
+pure-Core analysis engine that emits conservative findings, rendered/panelled/navigated by thin App
+clients on the *existing* cached-model / `ModelUpdated` cycle — no second parse loop.
+
+### S1 + S2 + S6 — Core diagnostics engine (commit c3a269d)
+
+`DiagnosticsEngine` (`Core.Sql.Language.DiagnosticsEngine`) is a pure-Core client of `SemanticModel`:
+given a built model it returns a conservative, de-duplicated, deterministically-ordered
+`IReadOnlyList<Diagnostic>` in one forward pass over `References` plus bounded AST checks (per-INSERT
+count, SUSPEND context). Zero Avalonia, offline, unit-tested. It computes nothing structural — the
+parser is the single structural source and the binder already resolved every occurrence, so diagnostics
+are a *filter over existing data*. Codes `ET0001`–`ET0008`: UnknownObject, UnknownColumn,
+UnresolvedVariable, UnresolvedParameter, AmbiguousColumn, InsertCountMismatch, UnknownCursor,
+SuspendOutsideSelectable. Object/column categories are gated on a live metadata snapshot (with no
+connection every object is unresolved by construction, so flagging would be pure noise). The binder was
+extended once with general cursor-usage modelling (`ReferenceRole.Cursor`) so `UnknownCursor` is a pure
+filter, not engine-side re-recognition. Tests: 41 `DiagnosticsEngineTests` + 3 `CursorUsageBindingTests`.
+
+### S3 — Squiggle rendering (App) — DONE (impl); awaits user visual confirmation
+
+The first *visual* Stage 7 milestone: connect the finished Core engine to the editor and draw
+underlines, refreshing automatically. Scope was deliberately squiggles-only — no panel, no navigation,
+**no hover tooltip** (the design doc had listed hover under S3; the user scoped it out — the message
+surface pairs with the panel in a later milestone).
+
+**Data flow (unchanged pipeline, one added step):**
+
+```
+text → Lexer → Parser → AST → SemanticModel → DiagnosticsEngine.Analyze → SquiggleRenderer
+```
+
+`EditorLanguageService` already built + cached the `SemanticModel` on a debounced, cancellable,
+off-thread pass, raising `ModelUpdated`. Stage 7 adds exactly one step to that cycle: after the model is
+built, run `DiagnosticsEngine.Analyze(model, ct)` and cache an `IReadOnlyList<Diagnostic>` alongside the
+model. Done in all three model-build sites — inside the same `Task.Run` as the background reparse (so a
+newer edit cancels the in-flight analysis via the existing `CancellationTokenSource`, and the token
+propagates into the engine), and on the two synchronous rebuild paths (`EnsureFreshModel`,
+`RefreshModelWithMetadata` — deliberate triggers + metadata warm/refresh). The cached list is always
+version-matched to the cached model; a warm-driven rebuild (unknown object → resolved after its category
+loads) re-analyses, so squiggles clear as metadata fills in. Exposed via
+`SqlCompletionController.Diagnostics`.
+
+`SquiggleRenderer` (`Completion/SquiggleRenderer.cs`) is an `IBackgroundRenderer` mirroring
+`OccurrenceHighlighter`/`SearchMatchHighlighter`: attached once in `SqlEditorBehavior.Attach` (so every
+SQL surface — SQL Editor + object editors — gets it at once), it repaints on `ModelUpdated`
+(`InvalidateVisual`) and, on the paint path, does *zero* analysis — it reads the cached diagnostics and
+draws a triangle-wave underline under each span using a severity theme brush (Error → `ErrorBrush`,
+Warning → `WarningBrush`, Info → `SubtleForegroundBrush`; both light/dark, no hardcoded colours). The
+paint loop is viewport-culled (bounds cost to on-screen diagnostics on a large script) and doc-clamped
+(a paint that lands a hair ahead of the next rebuild never draws past the text — the staleness guard).
+The renderer consumes only `Diagnostic.Start`/`Length`/`Severity`; it never interprets SQL or the AST.
+
+Consistent with §9: no parallel analyses (diagnostics ride the single model pass; stale ones are
+cancelled with their model), and only the current document is refreshed (each editor owns its own
+service + renderer). Following the project convention that renderers are proven by *visual*
+confirmation (neither `SemanticHighlighter` nor `OccurrenceHighlighter` has an App unit test — the
+analysis they render is what carries the automated coverage), S3 adds no headless paint test; the
+`DiagnosticsEngine` behaviour is already pinned by 44 Core tests. Build 0/0, 4114 main + 23 probe green,
+smoke clean. **Visual QA (single/multiple/adjacent errors, fast typing + deletion, no flicker, squiggle
+removal on fix, tab switch, connection change, large scripts) awaits the user** per the QA rule.
+
+#### S3 QA finding + follow-up — Easy-mode ambient refresh
+
+A manual QA pass reported that in an Easy-mode routine editor, local variables / input parameters appeared
+as unresolved (squiggled). The user asked the right question first: does the model analyse the full
+generated PSQL source or only the visible Easy-mode fragment?
+
+**Investigation (empirical, not inferred).** The Easy-mode body editor holds only the BODY; the routine's
+params + `DECLARE`d variables live in the surrounding grids and reach the model as *ambient symbols* seeded
+into the root scope (gotcha #218 — the same seam completion/highlighting/navigation use). The binder's
+`scope.Resolve` walks the body scope up to the root, so a seeded param/variable resolves. Feeding the same
+body fragment three ways proved the mechanism is sound: **no ambient → 5 false positives; params + variables
+→ 0; params only (matching the screenshot's `Variables (0)`) → only the genuinely-undeclared variables
+flagged, params resolve.** So the engine, the binder, and the ambient mechanism are all correct — analysing
+*fragment + ambient* is the right design (a synthesized full `CREATE PROCEDURE` source would need offset
+translation back into the fragment, a second code path the ambient design exists to avoid). Decision (user):
+keep fragment + ambient; do not investigate the body→grid split (no evidence of a parse bug — `Variables (0)`
+can simply mean the object has no declared variables).
+
+**The real bug (UX).** The investigation surfaced a genuine gap now made visible by squiggles: **editing the
+Easy-mode grids did not rebuild the model.** The grids' `CollectionChanged` handlers only refreshed tab
+headers + command state. So after adding `test` to the Variables grid, the `:test` squiggle lingered until
+the user next edited the body text (which bumps the version and re-captures ambient). The user scoped fixing
+this as *completing S3* (not S4): the model must rebuild when the ambient set changes.
+
+**Fix.** `SourceObjectDetailTabViewModel` gained an `AmbientSymbolsChanged` event and a `TrackAmbient`
+helper (a mirror of the existing `TrackDirty` — observe collection add/remove/reorder + each row's
+`PropertyChanged`, but scoped to the `Name` property, the only one that affects symbol resolution). The base
+tracks the shared Variables grid; `ProcedureDetailTabViewModel` additionally tracks Input/Output params and
+`FunctionDetailTabViewModel` tracks Arguments (the collections that feed each `BuildAmbientSymbols`). A new
+view-layer bridge `AmbientModelRefresh` (owned by each detail view) tracks the ambient-seeded editors'
+controllers and, following the reused view onto its current VM, forwards `AmbientSymbolsChanged` to each
+controller's new `SqlCompletionController.NotifyAmbientSymbolsChanged()` — which schedules the existing
+debounced `RefreshModelWithMetadata` rebuild (that already re-captures ambient via the live delegate). So a
+grid edit now rebuilds the model once (debounced — a name typed char-by-char coalesces), and **all**
+SemanticModel consumers (diagnostics, completion, highlighting, Quick Info) refresh together, no body-text
+edit required. Because the ambient delegate reads the grids live at each build, this also makes the initial
+model robust to load order. Pinned by `EasyModeAmbientRefreshTests` (add/rename raises the event; a non-Name
+row edit does not) + `EasyModeDiagnosticsTests` (ambient params/vars suppress the false positives). Build
+0/0, 4122 main + 23 probe green, smoke clean. **Manual visual verification awaits the user; on confirmation
+S3 is complete and committed.**
+
+---
