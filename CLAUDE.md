@@ -330,8 +330,8 @@ noted.
   `PsqlDeclarationExtractor` + 5 `DebugErrorMapper` + 1 `ReadWriteSetAnalyzer` fallback pin). **Build 0/0;
   4732 tests green in one run; smoke clean.** History:
   [docs/history/19-...](docs/history/19-firebird-debugger.md).
-  **D3 (editor-wiring consolidation) — DONE (2026-07-17; impl behavior-preserving, awaits user visual
-  confirmation).** The **two** hand-maintained copies of the SQL editor's intrinsic language block
+  **D3 (editor-wiring consolidation) — DONE + user-confirmed (2026-07-17; behavior-preserving, manual QA
+  passed on every surface in both themes).** The **two** hand-maintained copies of the SQL editor's intrinsic language block
   (completion / highlighting / navigation / squiggles / related-elements / language-completion /
   typing-ergonomics / search) are collapsed into **one attach path** — dissolving gotcha #219 *before* the
   debug tab (D4) becomes a third host. `MainWindow` no longer hand-wires that block in its ctor; it calls the

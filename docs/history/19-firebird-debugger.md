@@ -631,8 +631,8 @@ equivalent; the lifetime scoping exists for the object editors' tabs, which do d
 Build 0/0; **4732 tests green in one run** (identical to the D2 baseline — no tests added or removed, this is
 behaviour-preserving); smoke clean. Per the QA rule, the visual equivalence of every capability on every
 surface (squiggles, hover, related-elements, completion, language-completion, diagnostics panel, F8
-navigation — in the SQL Editor *and* the object editors, in *both* themes) **cannot be proven by tests** and
-is reported as *awaits user confirmation* — a manual checklist is in the session summary. Gotcha #219 updated
-to "resolved by D3"; the plan's "Dual wiring (until D3)" danger row retired.
+navigation — in the SQL Editor *and* the object editors, in *both* themes) cannot be proven by tests; it was
+verified by a **manual QA pass — user-confirmed 2026-07-17**. Gotcha #219 updated to "resolved by D3"; the
+plan's "Dual wiring (until D3)" danger row retired.
 
 **Next: D4 (debugger tab MVP)** — the first debugger UI, now attaching its renderers through the one seam.
