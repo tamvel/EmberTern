@@ -32,6 +32,53 @@ First of a two-increment data-loss-prevention model (Increment 2 = auto-draft, s
 
 **Known minor gap** (closed by Increment 2's same hooks): a *rename-only* edit of a View column row / Procedure local row flips dirty via the row `PropertyChanged` subscription — covered; a missed signal would only drop one prompt, never cause silent loss.
 
+### Data-loss protection — Save-and-close / Save-and-disconnect (shipped 2026-07-17)
+
+Closes the "only Discard, never Save" gap the WorkGuard shipped with: previously, unsaved
+metadata editors could be **listed and discarded** at close/disconnect but not saved — the user
+had to cancel, re-open each editor, Compile by hand, and close again. Now the guard offers to
+**compile every dirty editor in one pass** (IBExpert-style), and — critically — **reuses the
+existing group-recompilation pipeline** rather than standing up a second save mechanism.
+
+- **One save mechanism.** The actual save of one object stays in each editor's existing compile
+  (`ExecuteCompileAsync` / Table's `CompileAsync` / New Table's owner-driven create). A new thin
+  adapter interface [`ISavableObjectEditor`](src/EmberTern.App/ViewModels/ISavableObjectEditor.cs)
+  (`Task<EditorSaveResult> SaveAsync(ct)`, `EditorSaveResult(bool Success, string? Error)`) wraps
+  that compile and returns a structured pass/fail (the editors swallow server errors into
+  `ErrorMessage` rather than throwing, so the adapter reports `ErrorMessage is null`). Implemented
+  by every object editor (Source base = Procedure/Trigger/Function, View, Package, Table, NewTable,
+  Domain, Generator, Exception, Index). `WorkspaceTabViewModel.SavableEditor` exposes it per tab,
+  paired with the **existing** `IUnsavedWorkSource.UnsavedWork` for dirtiness (no second dirty flag).
+- **One pipeline, launched differently.** `RunBatchWithReportAsync` gained an optional
+  `executeAsync` execution-strategy delegate (default = today's `ExecuteAutonomousBatchAsync` SQL
+  path, so recompile/activate/recompute are byte-for-byte unchanged). `SaveDirtyEditorsAsync`
+  passes an executor that drives each dirty editor's `SaveAsync` — same batch-results dialog, same
+  live per-object rows, same continue-on-error, same Cancel.
+- **Continue-and-report, not stop-on-first-error** (user decision). Every dirty editor is
+  attempted; the app/connection closes only if **all** succeed. On any failure the close is
+  aborted, the first failed tab is selected (its `ErrorMessage` already in view), and the user
+  fixes + retries. Because DDL auto-commits per object (Ddl lane), a mid-batch failure does **not**
+  undo the ones already saved — only the failing objects remain, so retries shrink.
+- **Save order = tab order.** A deliberate v1 simplification. Dependency-derived ordering is a
+  possible future refinement but is **not required**: under continue-and-report a dependency error
+  merely keeps the app open, and a retry after its dependency saved succeeds.
+- **Guard wiring.** App close (`TryCloseApplicationAsync`) adds a **Save and exit** option
+  (Cancel default / Save / Discard). Disconnect (`ConfirmDisconnectAsync`) is now **two phases**:
+  Phase 1 = unsaved metadata (**Save / Discard / Cancel**, default Save), Phase 2 = the unchanged
+  data-transaction Commit/Rollback/Cancel. The old binary no-tx discard confirm and the tx-dialog's
+  unsaved-discard note are removed (Phase 1 owns unsaved metadata now).
+- **Scope includes new objects** (user decision): a new View/Procedure/Function/Package compiles
+  via its `IsNew` path; a New Table draft creates via the owner path; an incomplete/invalid new
+  object fails validation → aborts the close until fixed or its tab closed.
+- **Side-effect suppression.** `_bulkSaveInProgress` gates `OfferRecompileDependentsAsync` so the
+  per-compile "recompile dependents?" offer never pops mid-shutdown.
+- **Tests** — `DataLossGuardTests` (+ save-flow cases: 3-option app-close dialog, save-all-succeed
+  → close allowed, New-Table-invalid → stay open + failed tab selected, phased disconnect dialog,
+  `SavableEditor` mapping, adapter pass/fail). Build 0/0; full suite green.
+
+**User-confirmed (2026-07-17):** manual testing verified Save-and-exit, Save-and-disconnect, saving
+existing + new objects, compile-error handling, the progress dialog, and first-failed-tab selection.
+
 **Gotchas — promote to architecture lore.**
 
 130. **To prompt asynchronously during window close, make `OnWindowClosing` `async void`, set `e.Cancel = true` BEFORE the first `await`, run the guard, then re-`Close()` behind a `_forceClose` flag.** Avalonia reads `e.Cancel` when the synchronous portion of the handler returns — an `async void` handler runs synchronously up to the first await, so setting `e.Cancel = true` there keeps the window open while the awaited guard/dialog runs. If the guard allows the close, set a `_forceClose` field and call `Close()` again; the re-entrant handler skips the guard and runs the persist path. Never try to await inside a synchronous closing handler without cancelling first — the window tears down underneath you.

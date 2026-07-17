@@ -33,7 +33,7 @@ namespace EmberTern.App.ViewModels;
 /// param/header collections. View Detail is deliberately NOT on this base — a view has no
 /// PSQL body / variables / params, so it is a different family.
 /// </summary>
-public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, IFieldRowOwner
+public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IFieldRowOwner
 {
     protected readonly FirebirdTableDetailReader? Reader;
     protected readonly FirebirdDdlReader? DdlReader;
@@ -530,6 +530,17 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
 
         await RefreshAsync(cancellationToken).ConfigureAwait(true);
         CompiledExistingObject?.Invoke();
+    }
+
+    // ─── ISavableObjectEditor (Save-and-close / Save-and-disconnect WorkGuard) ──
+    // Thin adapter over ExecuteCompileAsync (the ONE save path) — not a second
+    // mechanism. Compile reports failure by setting ErrorMessage and returning, so
+    // success is "no error after the attempt".
+    public async Task<EditorSaveResult> SaveAsync(CancellationToken cancellationToken = default)
+    {
+        ErrorMessage = null;
+        await ExecuteCompileAsync(cancellationToken).ConfigureAwait(true);
+        return ErrorMessage is null ? new EditorSaveResult(true, null) : new EditorSaveResult(false, ErrorMessage);
     }
 
     // ─── Revert (discard uncompiled edits, reload from DB) ────────────────

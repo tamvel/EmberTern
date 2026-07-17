@@ -17,7 +17,7 @@ using EmberTern.Firebird;
 
 namespace EmberTern.App.ViewModels;
 
-public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
+public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
 {
     // Data preview is capped — we never want to pull a whole table into the
     // grid from a metadata-browsing tab. 200 is the default page size for
@@ -3089,6 +3089,15 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
             Description = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditDescriptionMoveFormat, fieldName, oneBasedPosition),
             Sql = DdlGenerator.BuildMoveField(TableName, fieldName, oneBasedPosition),
         });
+    }
+
+    // ─── ISavableObjectEditor (Save-and-close / Save-and-disconnect WorkGuard) ──
+    // Thin adapter over CompileAsync (applies the queued PendingChanges — the ONE save path); not a second mechanism.
+    public async Task<EditorSaveResult> SaveAsync(CancellationToken cancellationToken = default)
+    {
+        ErrorMessage = null;
+        await CompileAsync().ConfigureAwait(true);
+        return ErrorMessage is null ? new EditorSaveResult(true, null) : new EditorSaveResult(false, ErrorMessage);
     }
 
     [RelayCommand(CanExecute = nameof(CanCompile))]

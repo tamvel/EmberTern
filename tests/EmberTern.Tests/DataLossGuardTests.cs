@@ -233,10 +233,39 @@ public class DataLossGuardTests
         Assert.True(await h.Main.TryCloseApplicationAsync());
         Assert.NotNull(seen);
         Assert.Contains("V_DIRTY", seen!.Message);
-        // Exactly the two app-close outcomes, default = cancel.
-        Assert.Equal(2, seen.Options.Count);
+        // A savable dirty editor adds a "Save and exit" option: cancel (default) / save / discard.
+        Assert.Equal(3, seen.Options.Count);
         Assert.Contains(seen.Options, o => o.Id == "cancel" && o.IsDefault);
+        Assert.Contains(seen.Options, o => o.Id == "save");
         Assert.Contains(seen.Options, o => o.Id == "discard");
+    }
+
+    [Fact]
+    public async Task TryCloseApplication_Unsaved_Save_AllSucceed_ReturnsTrue()
+    {
+        using var h = new Harness();
+        // A dirty View with no DDL executor: SaveAsync compiles a no-op and reports success,
+        // so the save-all batch completes cleanly and the app may close.
+        h.Main.WorkspaceTabs.Add(ViewTab(h, "V_DIRTY", dirty: true));
+        h.Main.ChoiceRequested += _ => Task.FromResult<string?>("save");
+
+        Assert.True(await h.Main.TryCloseApplicationAsync());
+    }
+
+    [Fact]
+    public async Task TryCloseApplication_Unsaved_Save_Fails_KeepsAppOpenAndSelectsTab()
+    {
+        using var h = new Harness();
+        // A New Table with a name but no named field: IsValid() fails, so SaveAsync fails
+        // deterministically (no database needed) — the app must stay open.
+        var newTable = new NewTableTabViewModel { TableName = "BADTABLE" };
+        var tab = WorkspaceTabViewModel.CreateNewTable(h.Main, newTable, null);
+        h.Main.WorkspaceTabs.Add(tab);
+        h.Main.ChoiceRequested += _ => Task.FromResult<string?>("save");
+
+        Assert.False(await h.Main.TryCloseApplicationAsync());
+        Assert.Contains(tab, h.Main.WorkspaceTabs);
+        Assert.True(tab.IsSelected); // the offending tab is brought into focus
     }
 
     [Fact]
@@ -258,21 +287,73 @@ public class DataLossGuardTests
         Assert.False(await h.Main.TryCloseApplicationAsync());
     }
 
-    // ─── Disconnect with uncompiled tab work (no transaction) ─────────────
+    // ─── Disconnect with unsaved metadata editors (no transaction) ────────
 
     [Fact]
-    public async Task Disconnect_UnsavedNoTx_PromptsDiscardConfirm()
+    public async Task Disconnect_UnsavedNoTx_OffersSaveDiscardCancel()
     {
         using var h = new Harness();
         h.Main.WorkspaceTabs.Add(ViewTab(h, "V_DIRTY", dirty: true));
-        ConfirmRequest? seen = null;
-        h.Main.ConfirmationRequested += req => { seen = req; return Task.FromResult(false); };
+        ChoiceRequest? seen = null;
+        // Cancel keeps the connection: the guard's phase-1 dialog is a 3-way choice now.
+        h.Main.ChoiceRequested += req => { seen = req; return Task.FromResult<string?>("cancel"); };
 
         await h.Main.DisconnectAsync();
 
         Assert.NotNull(seen);
-        Assert.True(seen!.IsDestructive);
-        Assert.Contains("V_DIRTY", seen.Message);
+        Assert.Contains("V_DIRTY", seen!.Message);
+        Assert.Contains(seen.Options, o => o.Id == "save" && o.IsDefault);
+        Assert.Contains(seen.Options, o => o.Id == "discard");
+        Assert.Contains(seen.Options, o => o.Id == "cancel" && o.IsCancel);
+    }
+
+    [Fact]
+    public async Task Disconnect_UnsavedNoTx_Save_AllSucceed_NoError()
+    {
+        using var h = new Harness();
+        // Dirty View with no executor → SaveAsync is a successful no-op → disconnect proceeds
+        // (with no active connection, DisconnectAsync is a harmless no-op) without prompting twice.
+        h.Main.WorkspaceTabs.Add(ViewTab(h, "V_DIRTY", dirty: true));
+        int prompts = 0;
+        h.Main.ChoiceRequested += _ => { prompts++; return Task.FromResult<string?>("save"); };
+
+        await h.Main.DisconnectAsync();
+
+        Assert.Equal(1, prompts); // only the phase-1 metadata dialog; no transaction phase
+    }
+
+    // ─── ISavableObjectEditor adapter + tab exposure ──────────────────────
+
+    [Fact]
+    public void SavableEditor_ExposedForEditorTabs_NullForOthers()
+    {
+        using var h = new Harness();
+        var viewTab = ViewTab(h, "V", dirty: false);
+        Assert.NotNull(viewTab.SavableEditor);
+
+        var queryTab = WorkspaceTabViewModel.CreateQuery(h.Main);
+        Assert.Null(queryTab.SavableEditor);
+    }
+
+    [Fact]
+    public async Task ViewEditor_SaveAsync_NoExecutor_ReportsSuccess()
+    {
+        // No DDL executor wired → the compile is a no-op that raises no error, so the
+        // adapter reports success (nothing to fail on).
+        var vm = new ViewDetailTabViewModel("V") { SourceText = "SELECT 1 FROM RDB$DATABASE" };
+        var result = await vm.SaveAsync();
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task NewTable_SaveAsync_InvalidState_ReturnsFailure()
+    {
+        // Empty table name → IsValid() fails, so SaveAsync fails deterministically (before
+        // touching the owner create path) and surfaces the validation message.
+        var vm = new NewTableTabViewModel();
+        var result = await vm.SaveAsync();
+        Assert.False(result.Success);
+        Assert.False(string.IsNullOrEmpty(result.Error));
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────

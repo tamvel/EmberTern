@@ -2240,6 +2240,83 @@ public partial class MainWindowViewModel : ViewModelBase
         return items;
     }
 
+    // True when at least one open tab holds unsaved work AND can compile it (every object
+    // editor can). Drives whether the WorkGuard offers "Save …" alongside Discard/Cancel.
+    private bool HasSavableDirtyEditors()
+    {
+        foreach (var tab in WorkspaceTabs)
+            if (tab.UnsavedWork is not null && tab.SavableEditor is not null) return true;
+        return false;
+    }
+
+    // Compiles every dirty object editor through the shared group-recompilation results
+    // pipeline (one row per object, continue-on-error, live progress) — reusing the exact
+    // pipeline behind "Recompile group/dependents", only launched differently and driving
+    // each editor's own SaveAsync instead of re-running stored source. Returns true only if
+    // EVERY dirty editor saved — the WorkGuard then proceeds with the close/disconnect. On
+    // any failure (or a user cancel) it returns false: the caller stays open and the first
+    // failed tab is selected so its error is in view. Saves auto-commit per object (DDL
+    // lane), so a mid-batch failure does NOT undo the ones already saved — only the failing
+    // objects remain to fix and retry. Save order = tab order (a deliberate v1 simplification;
+    // dependency-derived order is a possible future refinement, not required here).
+    private async Task<bool> SaveDirtyEditorsAsync()
+    {
+        var savable = new List<(WorkspaceTabViewModel Tab, ISavableObjectEditor Editor)>();
+        foreach (var tab in WorkspaceTabs)
+            if (tab.UnsavedWork is not null && tab.SavableEditor is { } editor)
+                savable.Add((tab, editor));
+        if (savable.Count == 0) return true;
+
+        // Tally the outcome from the execution loop directly (NOT from the dialog VM's
+        // counters, which are updated via IProgress and may lag): this is what decides
+        // whether the close/disconnect may proceed.
+        var succeeded = 0;
+        WorkspaceTabViewModel? firstFailedTab = null;
+
+        _bulkSaveInProgress = true;
+        try
+        {
+            await RunBatchWithReportAsync(
+                UiStrings.SaveDirtyEditorsBatchTitle,
+                (_, _) => Task.FromResult(new BatchPlan(
+                    savable.Select(s => (s.Tab.BaseTitle, UiStrings.BatchOpSave, string.Empty))
+                           .ToList<(string, string, string)>(),
+                    Array.Empty<BatchOperationResult>())),
+                refreshAfter: false,
+                executeAsync: async (steps, progress, ct) =>
+                {
+                    for (int i = 0; i < savable.Count; i++)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        EditorSaveResult result;
+                        try
+                        {
+                            result = await savable[i].Editor.SaveAsync(ct).ConfigureAwait(true);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex) when (ex is DdlExecutionException or InvalidOperationException)
+                        {
+                            result = new EditorSaveResult(false, ex.Message);
+                        }
+                        if (result.Success) succeeded++;
+                        else if (firstFailedTab is null) firstFailedTab = savable[i].Tab;
+                        progress.Report((i, result.Success ? null : (result.Error ?? UiStrings.SaveDirtyEditorsUnknownError)));
+                    }
+                }).ConfigureAwait(true);
+        }
+        finally
+        {
+            _bulkSaveInProgress = false;
+        }
+
+        var allSaved = succeeded == savable.Count;
+        if (!allSaved && firstFailedTab is not null) SelectTab(firstFailedTab);
+        return allSaved;
+    }
+
     private bool AnyTransactionActive => _transactionService.IsActive;
 
     private void AppendActiveTransactionLines(System.Text.StringBuilder sb)
@@ -2274,40 +2351,76 @@ public partial class MainWindowViewModel : ViewModelBase
             sb.Append(UiStrings.ExitUnsavedTransactionNote);
         }
 
+        var options = new List<ChoiceOption>
+        {
+            new ChoiceOption { Id = "cancel", Label = UiStrings.ExitUnsavedCancel, IsDefault = true, IsCancel = true },
+        };
+        if (HasSavableDirtyEditors())
+            options.Add(new ChoiceOption { Id = "save", Label = UiStrings.ExitUnsavedSave });
+        options.Add(new ChoiceOption { Id = "discard", Label = UiStrings.ExitUnsavedDiscard, IsDestructive = true });
+
         var id = await RequestChoiceAsync(new ChoiceRequest
         {
             Title = UiStrings.ExitUnsavedTitle,
             Message = sb.ToString().TrimEnd(),
-            Options = new[]
-            {
-                new ChoiceOption { Id = "cancel", Label = UiStrings.ExitUnsavedCancel, IsDefault = true, IsCancel = true },
-                new ChoiceOption { Id = "discard", Label = UiStrings.ExitUnsavedDiscard, IsDestructive = true },
-            },
+            Options = options.ToArray(),
         }).ConfigureAwait(true);
 
+        if (id == "save")
+        {
+            // Compile every dirty editor first; a single failure keeps the app open
+            // (SaveDirtyEditorsAsync selects the offending tab + shows its error).
+            if (!await SaveDirtyEditorsAsync().ConfigureAwait(true)) return false;
+            if (txActive) await RollbackAllAsync().ConfigureAwait(true);
+            return true;
+        }
         if (id != "discard") return false;
         if (txActive) await RollbackAllAsync().ConfigureAwait(true);
         return true;
     }
 
-    // Disconnect guard. Returns true if the disconnect may proceed (after settling
-    // transactions per the user's pick), false if cancelled.
+    // Disconnect guard. Two phases, each independent: first offer to Save/Discard the
+    // unsaved metadata editors, then settle any active data transaction. Returns true if
+    // the disconnect may proceed, false if the user cancelled (or a Save failed).
     private async Task<bool> ConfirmDisconnectAsync()
     {
-        var unsaved = CollectUnsavedWork();
+        // Phase 1 — unsaved metadata editors: Save all / Discard / Cancel. "Save" compiles
+        // every dirty editor through the shared batch dialog; a failure keeps us connected
+        // (SaveDirtyEditorsAsync selects the offending tab + shows its error). "Discard"
+        // just proceeds — the open tabs are torn down on the actual disconnect regardless.
+        if (HasSavableDirtyEditors())
+        {
+            var unsaved = CollectUnsavedWork();
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(string.Format(CultureInfo.CurrentCulture,
+                UiStrings.DisconnectSaveHeaderFormat, _service.ActiveProfile?.Name ?? string.Empty));
+            foreach (var it in unsaved) sb.AppendLine("  • " + it.Label);
+            sb.AppendLine();
+            sb.Append(UiStrings.DisconnectSaveQuestion);
 
+            var id = await RequestChoiceAsync(new ChoiceRequest
+            {
+                Title = UiStrings.DisconnectSaveTitle,
+                Message = sb.ToString(),
+                Options = new[]
+                {
+                    new ChoiceOption { Id = "save", Label = UiStrings.DisconnectSaveConfirm, IsDefault = true },
+                    new ChoiceOption { Id = "discard", Label = UiStrings.DisconnectSaveDiscard, IsDestructive = true },
+                    new ChoiceOption { Id = "cancel", Label = UiStrings.DisconnectChoiceCancel, IsCancel = true },
+                },
+            }).ConfigureAwait(true);
+
+            if (id is null or "cancel") return false;
+            if (id == "save" && !await SaveDirtyEditorsAsync().ConfigureAwait(true)) return false;
+        }
+
+        // Phase 2 — active data transaction: Commit / Roll back (default) / Cancel.
         if (AnyTransactionActive)
         {
             var sb = new System.Text.StringBuilder();
             sb.AppendLine(string.Format(CultureInfo.CurrentCulture,
                 UiStrings.DisconnectChoiceHeaderFormat, _service.ActiveProfile?.Name ?? string.Empty));
             AppendActiveTransactionLines(sb);
-            if (unsaved.Count > 0)
-            {
-                sb.AppendLine();
-                sb.AppendLine(string.Format(CultureInfo.CurrentCulture,
-                    UiStrings.DisconnectUnsavedDiscardNoteFormat, unsaved.Count));
-            }
             sb.AppendLine();
             sb.Append(UiStrings.DisconnectChoiceQuestion);
 
@@ -2327,23 +2440,6 @@ public partial class MainWindowViewModel : ViewModelBase
             if (id == "commit") await CommitAllAsync().ConfigureAwait(true);
             else await RollbackAllAsync().ConfigureAwait(true);
             return true;
-        }
-
-        // No transaction, but uncompiled tab work would be lost (Increment 1 — no
-        // drafts yet). Binary discard confirm.
-        if (unsaved.Count > 0)
-        {
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine(UiStrings.DisconnectUnsavedIntro);
-            foreach (var it in unsaved) sb.AppendLine("  • " + it.Label);
-            return await RequestConfirmAsync(new ConfirmRequest
-            {
-                Title = UiStrings.DisconnectUnsavedTitle,
-                Message = sb.ToString().TrimEnd(),
-                ConfirmLabel = UiStrings.DisconnectUnsavedYes,
-                CancelLabel = UiStrings.DialogCancel,
-                IsDestructive = true,
-            }).ConfigureAwait(true);
         }
 
         return true;
@@ -4691,7 +4787,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task<BatchResultsViewModel> RunBatchWithReportAsync(
         string title,
         Func<BatchResultsViewModel, CancellationToken, Task<BatchPlan>> prepareAsync,
-        bool refreshAfter)
+        bool refreshAfter,
+        Func<IReadOnlyList<(string Object, string Operation, string Sql)>,
+             IProgress<(int Index, string? Error)>, CancellationToken, Task>? executeAsync = null)
     {
         var vm = new BatchResultsViewModel(title); // opens in IsPreparing=true
 
@@ -4738,8 +4836,14 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 if (steps.Count > 0)
                 {
-                    await _ddlExecutor.ExecuteAutonomousBatchAsync(
-                        steps.Select(s => s.Sql).ToList(), vm.CancellationToken, progress).ConfigureAwait(true);
+                    // Default: run each step's SQL on the DDL lane (recompile / activate / recompute).
+                    // A caller may override the execution strategy (e.g. Save-and-close drives each
+                    // dirty editor's own SaveAsync) — the reporting/progress shell is identical either way.
+                    if (executeAsync is not null)
+                        await executeAsync(steps, progress, vm.CancellationToken).ConfigureAwait(true);
+                    else
+                        await _ddlExecutor.ExecuteAutonomousBatchAsync(
+                            steps.Select(s => s.Sql).ToList(), vm.CancellationToken, progress).ConfigureAwait(true);
                 }
             }
             catch (OperationCanceledException) { /* user cancelled — already-run rows stand */ }
@@ -4953,9 +5057,18 @@ public partial class MainWindowViewModel : ViewModelBase
     // Session-scoped "don't ask again" — set when the user checks that box in the dialog.
     private bool _suppressRecompileOffer;
 
+    // True only while SaveDirtyEditorsAsync is compiling the dirty editors during a
+    // "Save and close / Save and disconnect" — suppresses the per-object "recompile
+    // dependents?" offer that each compile would otherwise trigger mid-shutdown.
+    private bool _bulkSaveInProgress;
+
     // Raised by a source-object editor after a successful Compile of an EXISTING object.
     private async Task OfferRecompileDependentsAsync(MetadataObject compiled)
     {
+        // During a Save-and-close batch every dirty editor compiles in turn; each fires
+        // CompiledExistingObject, which would otherwise pop the "recompile dependents?"
+        // dialog mid-shutdown. Suppress it for the duration of the batch.
+        if (_bulkSaveInProgress) return;
         if (_suppressRecompileOffer) return;
         if (RecompileDependentsRequested is not { } ask) return;
 

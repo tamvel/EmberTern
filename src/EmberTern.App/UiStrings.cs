@@ -77,6 +77,7 @@ internal static class UiStrings
     public const string BatchOpRecompileHeader = "Recompile header";
     public const string BatchOpRecompileBody = "Recompile body";
     public const string BatchOpRecomputeStatistics = "Recompute statistics";
+    public const string BatchOpSave = "Save";
     public const string BatchTitleActivateTriggers = "Activate triggers";
     public const string BatchTitleDeactivateTriggers = "Deactivate triggers";
     // "Selected" scope confirmation — {0} = number of selected triggers.
@@ -87,6 +88,9 @@ internal static class UiStrings
     public const string BatchTitleRecompileFormat = "Recompile {0}s";
     public const string BatchTitleRecompileAll = "Recompile all objects";
     public const string BatchTitleRecomputeStatistics = "Recompute index statistics";
+    // Save-and-close / Save-and-disconnect: compile every dirty object editor (shared batch dialog).
+    public const string SaveDirtyEditorsBatchTitle = "Saving changes";
+    public const string SaveDirtyEditorsUnknownError = "Compilation failed.";
     public const string BatchResultsColumnObject = "Object";
     public const string BatchResultsColumnOperation = "Operation";
     public const string BatchResultsColumnResult = "Result";
@@ -254,10 +258,19 @@ internal static class UiStrings
     public const string DisconnectUnsavedIntro = "Disconnecting will discard uncompiled changes in:";
     public const string DisconnectUnsavedYes = "Discard and disconnect";
 
-    // App close with unsaved work / active transactions (2-way; default Cancel).
+    // Disconnect with unsaved metadata editors (Phase 1: Save / Discard / Cancel; default Save).
+    public const string DisconnectSaveTitle = "Unsaved changes";
+    public const string DisconnectSaveHeaderFormat = "Connection \"{0}\" has unsaved changes in these editors:";
+    public const string DisconnectSaveQuestion = "Save them before disconnecting?";
+    public const string DisconnectSaveConfirm = "Save and disconnect";
+    public const string DisconnectSaveDiscard = "Discard and disconnect";
+
+    // App close with unsaved work / active transactions (default Cancel; "Save and exit"
+    // appears when there are unsaved editors to compile).
     public const string ExitUnsavedTitle = "Unsaved work";
     public const string ExitUnsavedIntro = "Exiting now will lose the following:";
     public const string ExitUnsavedTransactionNote = "Active transactions will be rolled back.";
+    public const string ExitUnsavedSave = "Save and exit";
     public const string ExitUnsavedDiscard = "Discard and exit";
     public const string ExitUnsavedCancel = "Cancel";
 
