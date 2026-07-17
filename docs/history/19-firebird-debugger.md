@@ -464,3 +464,75 @@ IDebugExecutor` — wires D1's interpreter to seam (a)'s `DebugSessionConnection
 the **lab-mandatory** simulated-vs-real fidelity comparison (extend `Lab/setup.sql` with the debugging zoo
 first). `HarnessBuilder`/`ReadWriteSetAnalyzer` are deliberately-parked pure infrastructure (mitigating
 #233 — recorded here because nothing calls them until seam c). Order within D2: (a) → (b) → **(c)**.
+
+## D2 seam (c) — FirebirdDebugExecutor + live fidelity (2026-07-17)
+
+The seam that closes the debugger foundation: the real executor, driving `DebugSession` against a live
+Firebird, with the mandated simulated-vs-real fidelity comparison (spec §2.1). Landed at natural
+sub-seams, each green and committable.
+
+**c.1 — `PsqlDeclarationExtractor` (pure Core).** Lifts a routine frame's local variable declarations
+verbatim (R3 — domain / `NOT NULL` / `CHECK` / default preserved) and their type spec (the R2 base-type
+resolver's input) from the parsed `BlockStatement` + source. Paren-aware type-spec slicing
+(`NUMERIC(15,2)` whole, `DEFAULT`/`NOT NULL` excluded); `TYPE OF` kept verbatim for the resolver.
+`SubRoutines` (R5) is empty in D2 **by construction** — a local `DECLARE PROCEDURE/FUNCTION` is not in
+`BlockStatement.Declarations` (the parser's `IsDeclarationStart` excludes it; it is D9's flagship). 6
+tests. Commit `21c7270`.
+
+**c.2 — `FirebirdDebugExecutor` + `DebugErrorMapper` + `FirebirdDebugMetadata`.** The executor implements
+`IDebugExecutor`: each step / DML leaf → a Statement-mode harness; each `IF`/`WHILE` condition →
+an Expression-mode `BOOLEAN` harness; the read/write set narrows the payload; frame values injected
+(R1 skips null/absent), write-backs applied. `SUSPEND` is control flow — the output row is emitted
+client-side from the output params, no round-trip. Savepoints delegate to the session. The
+sync-over-async bridge (`IDebugExecutor` is synchronous — D1's frozen contract) blocks on the async
+session; deadlock-safe because everything is `ConfigureAwait(false)` and stepping runs off the UI thread
+(D4). D2 boundaries (§F, explained stops): `ResolveRoutine` → null (a call runs in place = step-over,
+100% faithful §5.3; step-into is D8/D9), `OpenCursor` → the Cursor Bridge (D6).
+
+`FirebirdDebugMetadata` resolves the frame variable templates once at session start: **R2 base types**
+come from `RDB$FIELDS` via the existing `FirebirdDdlReader.FormatType` ("derivation, not guessing"),
+params from `RDB$PROCEDURE_PARAMETERS` (declared with their user domain, R3; base-typed injection, R2),
+locals via the c.1 extractor. `TYPE OF` is a bounded D2 stop. `DebugErrorMapper` maps `FbException` →
+`DebugError` from SQLSTATE/GDS, **grounded against the live engine** (a throwaway driver probe): a user
+`EXCEPTION` carries `isc_except` (335544517) with its name on the message's **first line**; a `NOT NULL`
+domain validation is SQLSTATE 42000 / GDS 335544879; the small vector entries (0, 1) are argument
+separators, not GDS codes. The pure `Build()` decision is unit-tested (an `FbException` cannot be
+constructed in a test); `SqlCode` (the legacy code the driver does not distinctly expose) and the
+symbolic GDS name are documented D2 boundaries. 5 tests. Commit `d077a5f`.
+
+**c.3 — lab zoo + live fidelity.** A small **D1 extension** was needed first: `DebugSession` had no way
+to seed the root frame's input-parameter arguments (the root has no caller to provide them), so it gained
+an optional `rootValues` ctor arg (additive; existing tests pass null). The lab was extended with two D2
+procedures — `SP_DBG_SUMMARY` (assignment, a **domain `NOT NULL` local**, IF/ELSE, SUSPEND) and
+`SP_DBG_GUARD` (`EXCEPTION` + `WHEN … DO`) — mirrored into `Lab/setup.sql` and the `.fdb` rebuilt at an
+ASCII temp path then copied back (#149).
+
+The fidelity harness (throwaway) drove the **real** `FirebirdDebugExecutor` through `DebugSession`
+step-by-step and compared the DB state + outputs to **real execution** of the same routine. All seven
+cases matched:
+
+- `SP_DBG_SUMMARY(2,60)` → `(120,BIG)`, `(1,10)` → `(10,SMALL)` — the domain-`NOT NULL` local `V_TOTAL`,
+  declared but unassigned at entry, **does not crash** (R1: never inject the null; R3: declared verbatim;
+  R2: base-typed write-back) — the explicit DoD case.
+- `SP_DBG_GUARD(10)` → `OK`, `(-5)` → `CAUGHT` — an `EXCEPTION` routed through the **real** `FbException`
+  → `DebugErrorMapper` → `ExceptionRouter` → the `WHEN EXCEPTION` body.
+- `SP_ADD_ORDER(1,…)` — `SELECT … INTO`, IF, DML `INSERT` (firing `TR_ORDERS_BI`), SUSPEND: inserts a
+  matching order, and the session rollback undoes it (savepoint/tx).
+- `SP_ADD_ORDER(999,…)` — unhandled `EXCEPTION E_CUSTOMER_NOT_FOUND`: `Faulted`, name resolved, root frame
+  rolled back, no row.
+
+**The finding that only the live comparison caught (gotcha #238).** The first `SP_ADD_ORDER` runs both
+silently mis-behaved — the customer check no-oped. Diagnosis: a reused `SELECT … INTO` statement
+(Etap 6.9 / B5) surfaces **no** local references from the binder (the query binder records its
+`FROM`/columns, not the `:`-colon refs in the `WHERE` nor the `INTO` targets — a token-walked
+`INSERT`/assignment/`IF` records theirs correctly), so `ReadWriteSetAnalyzer.Analyze` returns empty reads
+AND empty writes — dropping the `INTO` write-back the statement exists to perform. Fixed in the consumer,
+not with a second resolver: when the model surfaces nothing (empty/empty) the executor falls back to
+§3.5's named `InScopeLocals` primitive (inject/return ALL in-scope locals — correct, chattier), never a
+guess; precise narrowing stays in force for every statement whose refs the binder does surface. Pinned by
+`ReadWriteSetAnalyzerTests.SelectInto_SurfacesNoLocalRefs_*` (a Core test that flips if the binder is ever
+deepened to surface those refs). This is the §2.1 lesson in miniature: a green unit suite proved the
+interpreter self-consistent; only the lab proved it **faithful**.
+
+Build 0/0; **4732 tests green in one run**; smoke clean. D2 COMPLETE. Next: **D3** (editor-wiring
+consolidation) — the first non-pure milestone, immediately before the first debugger UI.

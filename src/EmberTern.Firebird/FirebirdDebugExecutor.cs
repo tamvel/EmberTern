@@ -104,14 +104,14 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         }
 
         var node = AsNode(statement);
-        var rw = ReadWriteSetAnalyzer.Analyze(node, _model);
+        var (reads, writes) = ResolveReadWrite(node);
         var request = new HarnessRequest
         {
             Fragment = Slice(node),
             Mode = HarnessMode.Statement,
             Variables = BindValues(frame),
-            Reads = rw.Reads,
-            Writes = rw.Writes,
+            Reads = reads,
+            Writes = writes,
         };
 
         try
@@ -132,14 +132,14 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         ArgumentNullException.ThrowIfNull(frame);
 
         var node = AsNode(owner);
-        var rw = ReadWriteSetAnalyzer.Analyze(node, _model);
+        var (reads, _) = ResolveReadWrite(node);
         var request = new HarnessRequest
         {
             Fragment = ConditionExpression(node),
             Mode = HarnessMode.Expression,
             ExpressionResultType = BooleanResultType,
             Variables = BindValues(frame),
-            Reads = rw.Reads,
+            Reads = reads,
         };
 
         try
@@ -229,6 +229,26 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     {
         int i = reader.GetOrdinal(column);
         return reader.IsDBNull(i) ? null : reader.GetValue(i);
+    }
+
+    // ── Read/write set (§3.5) ───────────────────────────────────────────────────────────────────────
+
+    // The precise read/write set narrows the injected payload (§3.5). But a reused SELECT … INTO surfaces
+    // NO local references — the query binder records its FROM/columns, not the :colon-refs in the WHERE nor
+    // the INTO targets (verified: such a statement analyses to empty reads AND empty writes, while a token-
+    // walked INSERT/assignment/IF surfaces its refs correctly). Injecting a wrong narrow set there would drop
+    // the INTO write-back (the variable the statement exists to set) — a §F divergence. So when the model
+    // surfaces nothing, fall back to §3.5's named "inject all in-scope" primitive (correct, chattier), never
+    // a guess. A statement that genuinely touches no local (e.g. bare EXCEPTION) is over-included harmlessly.
+    private (IReadOnlyList<string> Reads, IReadOnlyList<string> Writes) ResolveReadWrite(SqlNode node)
+    {
+        var rw = ReadWriteSetAnalyzer.Analyze(node, _model);
+        if (rw.Reads.Count == 0 && rw.Writes.Count == 0)
+        {
+            var all = ReadWriteSetAnalyzer.InScopeLocals(_model, node.Start);
+            return (all, all);
+        }
+        return (rw.Reads, rw.Writes);
     }
 
     // ── Frame → harness variables ───────────────────────────────────────────────────────────────────

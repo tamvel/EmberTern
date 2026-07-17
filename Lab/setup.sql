@@ -229,6 +229,42 @@ BEGIN
   SUSPEND;
 END^
 
+/* ---------- Debugger zoo (Stage X / D2) ----------------------------
+   D2 step units: assignment, IF/ELSE, a domain NOT NULL local (declared
+   but not assigned at entry — must not crash under the harness, §3.4 R1),
+   SUSPEND, and a WHEN … DO exception handler caught through the real
+   FbException → DebugError mapping. Nested calls / cursors / local
+   routines / autonomous tx grow this zoo per their own milestones
+   (D6/D8/D9), which is where the debugger can step them.               */
+
+CREATE PROCEDURE SP_DBG_SUMMARY(P_QTY INTEGER, P_PRICE NUMERIC(15,2))
+RETURNS (LINE_TOTAL NUMERIC(15,2), LABEL VARCHAR(20))
+AS
+  DECLARE VARIABLE V_TOTAL D_AMOUNT NOT NULL;   /* domain NOT NULL local */
+BEGIN
+  V_TOTAL = P_QTY * P_PRICE;
+  IF (V_TOTAL > 100) THEN
+    LABEL = 'BIG';
+  ELSE
+    LABEL = 'SMALL';
+  LINE_TOTAL = V_TOTAL;
+  SUSPEND;
+END^
+
+CREATE PROCEDURE SP_DBG_GUARD(P_AMOUNT NUMERIC(15,2))
+RETURNS (RESULT VARCHAR(20))
+AS
+BEGIN
+  BEGIN
+    IF (P_AMOUNT < 0) THEN
+      EXCEPTION E_NEGATIVE_AMOUNT;
+    RESULT = 'OK';
+  WHEN EXCEPTION E_NEGATIVE_AMOUNT DO
+    RESULT = 'CAUGHT';
+  END
+  SUSPEND;
+END^
+
 SET TERM ; ^
 
 /* ---------- Triggers (PSQL) ----------------------------------------

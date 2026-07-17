@@ -1007,3 +1007,25 @@ Driver probes: `FirebirdSql.Data.FirebirdClient` 10.3.4 in a throwaway console a
 
 *(Incidental: `PKG_ORDERS`' routines are all `RDB$PRIVATE_FLAG = 0` — the lab has no private package routine,
 hence §8.2's open probe.)*
+
+### 15.4 D2 seam (c) — executor fidelity (simulated vs real, FB5 lab)
+
+The mandated §2.1 proof: the real `FirebirdDebugExecutor` drove `DebugSession` through three lab procedures
+step-by-step and the result was compared to **real execution** of the same routine. All identical.
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **[6]** | `FbException` identity fields (user `EXCEPTION` / `NOT NULL` domain validation) | user exc → `isc_except` (335544517) present, **name on the message's first line**; validation → SQLSTATE 42000 / GDS 335544879 | The `DebugErrorMapper` mapping (§3.6). |
+| **[7]** | `SP_DBG_SUMMARY` — assignment + **domain `NOT NULL` local** + IF/ELSE + SUSPEND | sim `(120,BIG)`/`(10,SMALL)` == real | R1/R2/R3 hold; a domain-`NOT NULL` uninitialized local **does not crash** (the DoD case). |
+| **[8]** | `SP_DBG_GUARD` — `EXCEPTION` + `WHEN EXCEPTION … DO` | sim `OK`/`CAUGHT` == real | Exception routing through the **real** `FbException` → `DebugError` → `ExceptionRouter`. |
+| **[9]** | `SP_ADD_ORDER(1,…)` — `SELECT … INTO`, IF, DML `INSERT` (+ trigger), SUSPEND | inserted order matches; **session rollback undoes it** | DML leaves + savepoint/tx rollback. |
+| **[10]** | `SP_ADD_ORDER(999,…)` — unhandled `EXCEPTION E_CUSTOMER_NOT_FOUND` | `Faulted`, name resolved, **root frame rolled back**, no row | Unhandled-exit frame savepoint rollback (§4.5). |
+
+**Finding (drove a design decision):** a reused `SELECT … INTO` statement surfaces **no** local references
+from the binder (the query binder records its FROM/columns, not the `:`-colon refs in the `WHERE` nor the
+`INTO` targets — a token-walked `INSERT`/assignment/`IF` surfaces its refs correctly). Its precise read/write
+set is therefore empty, which would drop the `INTO` write-back. **Resolution:** the executor falls back to
+§3.5's named "inject all in-scope" primitive (`InScopeLocals` — correct, chattier) when the model surfaces
+nothing, never a wrong narrow set (gotcha #238). Precise narrowing stays in force for every statement whose
+refs the binder does surface. (A future binder deepening that surfaces reused-`SELECT`/`INTO` refs would let
+the fallback stop firing — pinned by `ReadWriteSetAnalyzerTests.SelectInto_SurfacesNoLocalRefs_*`.)

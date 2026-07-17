@@ -25,6 +25,7 @@ public sealed class DebugSession
     private readonly IDebugExecutor _executor;
     private readonly BlockStatement _rootBody;
     private readonly string _rootName;
+    private readonly IReadOnlyDictionary<string, object?>? _rootValues;
     private readonly List<Frame> _frames = new();
     private readonly BreakpointSet _breakpoints = new();
     private readonly List<IReadOnlyDictionary<string, object?>> _emittedRows = new();
@@ -32,11 +33,20 @@ public sealed class DebugSession
     private IExecutableStatement? _currentStep;
     private DebugError? _error;
 
-    public DebugSession(BlockStatement rootBody, IDebugExecutor executor, string? rootName = null)
+    /// <summary>Creates a session over <paramref name="rootBody"/>. <paramref name="rootValues"/> seeds the
+    /// root frame's initial values — the routine's <b>input parameter</b> arguments supplied at launch (§9.3):
+    /// the root frame has no caller to provide them, so the launch does, exactly as a callee frame receives a
+    /// call's arguments. Null (the default) starts every variable unassigned.</summary>
+    public DebugSession(
+        BlockStatement rootBody,
+        IDebugExecutor executor,
+        string? rootName = null,
+        IReadOnlyDictionary<string, object?>? rootValues = null)
     {
         _rootBody = rootBody ?? throw new ArgumentNullException(nameof(rootBody));
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _rootName = string.IsNullOrEmpty(rootName) ? "(anonymous block)" : rootName!;
+        _rootValues = rootValues;
         State = DebugState.Ready;
         StopReason = StopReason.NotStarted;
     }
@@ -86,7 +96,7 @@ public sealed class DebugSession
             throw new InvalidOperationException("The debug session has already been started.");
         }
 
-        PushFrame(_rootName, _rootBody, parent: null, callSite: null, initialValues: null);
+        PushFrame(_rootName, _rootBody, parent: null, callSite: null, initialValues: _rootValues);
         _currentStep = AdvanceToNextStepPoint();
         if (_currentStep is null)
         {

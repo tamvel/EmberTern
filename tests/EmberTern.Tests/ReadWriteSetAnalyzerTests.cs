@@ -106,4 +106,38 @@ public class ReadWriteSetAnalyzerTests
         Assert.Contains("W", locals);
         Assert.Contains("R", locals); // the RETURNS parameter is an in-scope local too
     }
+
+    // Stage X / D2 seam c: a reused SELECT … INTO surfaces NO local references — the query binder records its
+    // FROM/columns, not the :colon-refs in the WHERE nor the INTO targets. So its precise read/write set is
+    // empty even though it reads the WHERE param and WRITES the INTO variable. This pins the exact condition
+    // the FirebirdDebugExecutor detects (empty/empty) to fall back to the §3.5 "inject all in-scope" set —
+    // otherwise the INTO write-back is silently dropped (a §F divergence). If the binder later surfaces these
+    // refs, this test flips and the executor's fallback simply stops firing.
+    private const string SelectIntoSql = """
+        create procedure p (pid integer) returns (r integer) as
+        declare v_exists integer;
+        begin
+          select count(*) from customers where customer_id = :pid into :v_exists;
+          if (v_exists = 0) then r = 0;
+        end
+        """;
+
+    [Fact]
+    public void SelectInto_SurfacesNoLocalRefs_SoTheFallbackIsInScopeLocals()
+    {
+        var model = SemanticModel.Build(SqlParser.Parse(SelectIntoSql).Root);
+        var body = model.Syntax.Statements.OfType<DdlStatement>().First().Body!;
+        var selectInto = body.Statements.First(s =>
+            SelectIntoSql.Substring(s.Start, s.Length).StartsWith("select", System.StringComparison.OrdinalIgnoreCase));
+
+        var precise = ReadWriteSetAnalyzer.Analyze(selectInto, model);
+        var fallback = ReadWriteSetAnalyzer.InScopeLocals(model, selectInto.Start);
+
+        // The precise set is empty (the gap the executor's fallback exists for) …
+        Assert.Empty(precise.Reads);
+        Assert.Empty(precise.Writes);
+        // … while the fallback carries the WHERE read AND the INTO write target.
+        Assert.Contains("PID", fallback);
+        Assert.Contains("V_EXISTS", fallback);
+    }
 }

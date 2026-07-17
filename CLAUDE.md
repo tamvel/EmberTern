@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1 DONE, D2 seams (a)+(b) DONE (2026-07-17).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1 DONE, D2 COMPLETE — seams (a)+(b)+(c) DONE + live-fidelity-verified (2026-07-17).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -298,16 +298,41 @@ noted.
   with a bound body) — the editor's lenient `SemanticModel.Build(string)` splits a routine apart and binds
   the body without its declared vars. Build 0/0; tests green (user-verified — full-suite run was slow, so
   confirmed manually); smoke clean.
-  **Parked for the next session — D2 seam (c):** `FirebirdDebugExecutor : IDebugExecutor` wires D1's
-  interpreter to seam (a)'s `DebugSessionConnection` through this harness, then the **lab-mandatory**
-  simulated-vs-real fidelity comparison (extend `Lab/setup.sql` with the debugging zoo first — nested calls,
-  local routines, cursors, exception handlers, an autonomous-tx routine, a generator user, domain-`NOT NULL`
-  vars). `HarnessBuilder`/`ReadWriteSetAnalyzer`/`DebugSessionConnection` are deliberately-parked pure
-  infrastructure (mitigating #233 — nothing calls them until seam c). History:
+  **D2 seam (c) — executor + live fidelity — DONE + verified (2026-07-17). D2 IS COMPLETE.**
+  `FirebirdDebugExecutor : IDebugExecutor` (`EmberTern.Firebird`) wires D1's interpreter to seam (a)'s
+  `DebugSessionConnection` through seam (b)'s `HarnessBuilder`: each step/DML leaf → a Statement-mode harness,
+  each `IF`/`WHILE` condition → an Expression-mode `BOOLEAN` harness, run in the debug tx; the server computes
+  **all** semantics. `SUSPEND` is control flow — the output row is emitted **client-side** from the output
+  params (no round-trip). Savepoints delegate to the session. **Sync-over-async** bridge is deadlock-safe
+  (ConfigureAwait(false) throughout; per-wire-op command lock #98/#120/#236). **D2 boundaries (§F, explained
+  stops):** `ResolveRoutine` → null (a call runs in place = step-over, 100% faithful §5.3; step-into is
+  D8/D9); `OpenCursor` → Cursor Bridge (D6). New pure Core `PsqlDeclarationExtractor` (verbatim locals R3 +
+  type spec, sub-routines R5 empty in D2 by construction). New `FirebirdDebugMetadata`: **R2 base-type
+  derivation** from `RDB$FIELDS` via the existing `FirebirdDdlReader.FormatType` (derivation, not guessing) +
+  frame variable templates (params from `RDB$PROCEDURE_PARAMETERS`, declared with their user domain R3 /
+  base-typed injection R2; locals verbatim). New `DebugErrorMapper`: `FbException` → `DebugError` from
+  SQLSTATE/GDS, never message-parsed (**grounded live** — user `EXCEPTION` carries `isc_except` 335544517 with
+  its name on the message's first line; `NOT NULL` validation is SQLSTATE 42000 / GDS 335544879); pure
+  `Build()` unit-tested; `SqlCode` + symbolic GDS name are documented D2 boundaries. Small **D1 extension**:
+  `DebugSession` gained an optional `rootValues` ctor arg (a standalone routine's launch **input-parameter
+  arguments** seed the root frame — the root has no caller to provide them; additive, existing tests pass
+  null). **⚠ §3.5 fallback (gotcha #238):** a reused `SELECT … INTO` surfaces **no** local refs from the
+  binder (the query binder records FROM/columns, not the `:`-refs in WHERE / the INTO targets), so its precise
+  read/write set is empty and would drop the write-back — the executor falls back to `InScopeLocals` (§3.5
+  "inject all in-scope", correct+chattier) when the model surfaces nothing; precise narrowing stays for every
+  statement whose refs the binder does surface. **Lab zoo extended** (`Lab/setup.sql` + rebuilt `.fdb`): two
+  D2 procs — `SP_DBG_SUMMARY` (assignment, **domain `NOT NULL` local**, IF/ELSE, SUSPEND) and `SP_DBG_GUARD`
+  (`EXCEPTION` + `WHEN … DO`). **Live fidelity PROVEN (§15.4):** the real executor drove `DebugSession`
+  step-by-step through `SP_DBG_SUMMARY`/`SP_DBG_GUARD`/`SP_ADD_ORDER` and the DB state + outputs **matched real
+  execution** in all 7 cases (incl. the domain-`NOT NULL` local not crashing, exception routing via real
+  `FbException`, DML + savepoint rollback, unhandled-exception root rollback). Nested calls / cursors / local
+  routines / autonomous-tx grow the zoo per their own milestones (D6/D8/D9). +12 tests (6
+  `PsqlDeclarationExtractor` + 5 `DebugErrorMapper` + 1 `ReadWriteSetAnalyzer` fallback pin). **Build 0/0;
+  4732 tests green in one run; smoke clean.** History:
   [docs/history/19-...](docs/history/19-firebird-debugger.md).
-  **Next session: D2 seam (c).** Order stays **risk-first** (P1 → P2 → D1 → D2 → D3 …); the wiring
-  consolidation (gotcha #219) sits at **D3**, right before the first debugger UI. **Read the plan + your
-  milestone's brief before writing any debugger code.**
+  **Next session: D3 (editor-wiring consolidation).** Order stays **risk-first** (P1 → P2 → D1 → D2 → D3 …);
+  the wiring consolidation (gotcha #219) sits at **D3**, right before the first debugger UI. **Read the plan +
+  your milestone's brief before writing any debugger code.**
 - **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**
   The close/disconnect WorkGuard can now **compile every dirty metadata editor in one pass** instead
   of only listing-and-discarding them. It **reuses the group-recompilation pipeline** (one save
