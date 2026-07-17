@@ -168,3 +168,79 @@ The gate runs on both open paths:
 **Follow-up (not urgent, per the brief):** the existing `serverMajor >= 3` catalog gates (e.g.
 `StandalonePackageFilter`, the FB5 `RDB$` column gates) are now statically true and could be simplified in
 a later cleanup.
+
+---
+
+## D1 — Debug engine core, seam (a) (2026-07-17)
+
+**Goal.** The interpreter of PSQL **control flow** — frames, scopes, stepping — proven with **zero server
+in the loop**. Control flow is the part the client owns (spec §3.1), therefore the part we can get wrong,
+therefore where tests are cheapest and most valuable. D1 is a **two-session milestone**; this session is
+the confirmed seam (a): frames + FrameValues + scopes + `StepPlanner` + the `DebugSession` state machine +
+the savepoint-on-entry model + a full test suite. Seam (b) — `ExceptionRouter`, unhandled-exit rollback,
+breakpoints — is the next session.
+
+### The design: an explicit resumable control stack
+
+The interpreter is a small VM. Each `Frame` holds a control stack of resumable **activations**
+(`SequenceActivation` for a block / branch, `WhileActivation`, `ForActivation`) — the frame's
+"instruction pointer". Two operations compose it:
+
+- **Navigation** (`Frame.NextStepPoint`) — *pure, no server*: descends into nested blocks, pushes the loop
+  activations, pops completed sequences, and returns the next `IExecutableStatement` step point (a leaf,
+  an `IF`, or a loop header). A nested `BEGIN…END` is structural (not a step point); `IF`/`WHILE`/`FOR`
+  headers and leaves are step points.
+- **Execution** (`DebugSession.ExecuteCurrent`) — the *only* place the server (executor) is touched:
+  evaluate an `IF`/`WHILE` condition and push the taken branch/body; open a `FOR` cursor and fetch a row,
+  applying the `INTO` writes and pushing the body; run a leaf and apply its write-back. A `WHILE`/`FOR`
+  header re-presents itself as the step point each iteration (the activation stays on the stack).
+
+This split is what makes "every step decision is a pure function of (AST, frames, command)" literally true:
+navigation is deterministic structure-walking, and the stop decision is `StepPlanner.ShouldStop`, a pure
+function. The server only ever answers "what did this statement do / what is this condition" — it never
+drives the walk.
+
+### Stepping
+
+`Step(Into/Over/Out/Continue)`, `RunToCursor(offset)`, `SetNextStatement(offset)`. Into and Over both stop
+at the next step point after one executed step; they differ **only** in how a call is handled: **Into**
+`EXECUTE PROCEDURE` resolves a callee body (`IDebugExecutor.ResolveRoutine`) and pushes a **new frame**;
+**Over** runs the call on the server in place (spec §5.3 — step-over is real execution, step-into is
+simulation). Out runs (Over-style) until the starting frame returns. Continue runs to completion (seam b
+adds breakpoints). Run To Cursor runs until the target step point. Set Next repositions within the
+current/enclosing active block (a documented D1 limit: it cannot jump into a branch/loop not yet entered).
+
+### Frames, scopes, savepoints
+
+A `Frame` carries its `Body`, `FrameValues` (the client-side truth, case-insensitive), a lexical `Parent`,
+a `CallSite`, and a `SavepointName`. The **scope chain** (`TryResolveValue`/`SetResolvedValue` walking
+`Parent`) is the mechanism the flagship D9 (local routines as closures, spec §6.1) builds on — provided and
+tested now, wired to local routines later. The **savepoint model is present from day one** (spec §4.5, the
+brief's hard requirement): `EnterFrameSavepoint` on every frame push (root included), `LeaveFrameSavepoint`
+on normal exit. The unhandled-exit `ROLLBACK TO` needs the `ExceptionRouter`, so it is seam (b); seam (a)
+stops a raised statement at `DebugState.Faulted` (no routing).
+
+### The one seam: `IDebugExecutor`
+
+Every server interaction goes through this one contract (spec §3.3) — execute statement, evaluate
+condition, open cursor, resolve routine, enter/leave savepoint. It is the **single precedented exception**
+to Architecture rule #2 (Core declares the contract it needs, exactly as `ISqlMetadataProvider` does);
+D2/D6/D8 implement it, D1 drives it with a scripted fake. The interpreter never evaluates an expression,
+coerces a type, or decides a boolean.
+
+### Tests
+
+`DebugEngineTests` (+24) against a scripted fake executor: leaf step ordering; IF true/false/no-else;
+WHILE re-evaluating its header per iteration; FOR iterating rows, applying `INTO`, closing the cursor,
+and the no-rows case; nested-block-is-structural; step Into pushing a frame (with savepoint order asserted)
+/ callee completing + releasing + caller resuming / step Over executing in place / unresolvable call
+falling back / step Out; Continue; Run To Cursor; Set Next forward/backward/unreachable; raised → Faulted;
+SUSPEND rows; write-back into frame values; and the scope chain resolving + writing an outer variable
+through a real nested frame (no reflection — Core does not expose internals, so the test drives the public
+session API).
+
+### Verification
+
+Build 0/0. Tests: **4676** green in two partitions (4649 non-probe + 27 `ConnectionExpandBindingProbe`
+alone, #94/#226). Smoke: app launches (the engine is pure Core, not yet wired to any UI). No lab needed
+(no server). Seam (b) parked, recorded in CLAUDE.md's "Current state".
