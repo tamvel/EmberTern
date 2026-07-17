@@ -330,9 +330,29 @@ noted.
   `PsqlDeclarationExtractor` + 5 `DebugErrorMapper` + 1 `ReadWriteSetAnalyzer` fallback pin). **Build 0/0;
   4732 tests green in one run; smoke clean.** History:
   [docs/history/19-...](docs/history/19-firebird-debugger.md).
-  **Next session: D3 (editor-wiring consolidation).** Order stays **risk-first** (P1 → P2 → D1 → D2 → D3 …);
-  the wiring consolidation (gotcha #219) sits at **D3**, right before the first debugger UI. **Read the plan +
-  your milestone's brief before writing any debugger code.**
+  **D3 (editor-wiring consolidation) — DONE (2026-07-17; impl behavior-preserving, awaits user visual
+  confirmation).** The **two** hand-maintained copies of the SQL editor's intrinsic language block
+  (completion / highlighting / navigation / squiggles / related-elements / language-completion /
+  typing-ergonomics / search) are collapsed into **one attach path** — dissolving gotcha #219 *before* the
+  debug tab (D4) becomes a third host. `MainWindow` no longer hand-wires that block in its ctor; it calls the
+  **same** `SqlEditorBehavior.Attach(_editor, _currentVm)` the object editors use, once its VM arrives (first
+  non-null `OnDataContextChanged` — the window's `DataContext` is set after construction, and the shared path
+  needs a stable non-null VM: **"subscribe once the VM arrives"**, the spec §11.1 intent). Approach chosen
+  over a null-safe shared-helper alternative because it **solves** the lifecycle rather than encapsulating it
+  (user-ratified). **Deleted as now-dead** (Contract #20, only after the new path built + tested green — the
+  user's "prove before delete" directive): `OnMainEditorMetadataChanged` / `OnMainEditorMetadataReady` /
+  `WarmReferencedMetadataAsync` + the private `CreateMetadataSnapshot` / `EnsureColumnsAsync` /
+  `EnsureRoutineParametersAsync` forwarders — every responsibility now owned by the shared `Attach` (metadata
+  hooks bound to `vm.Metadata`; warm/snapshot/ensure read the VM's own methods). **Boundary: intrinsic block
+  ONLY** (user-confirmed) — the per-host wiring (`DiagnosticsPanelHost.Track` = F8 + diagnostics panel,
+  `AmbientModelRefresh`, `SqlSnippetDropTarget`) stays a caller responsibility, as it genuinely differs per
+  host and was never the #219 risk. `SqlEditorBehavior` gained **no** new parameters — consolidation by
+  *deleting* the second copy, not growing the shared one. Build 0/0; **4732 tests green in one run** (identical
+  to the D2 baseline — behavior-preserving); smoke clean; the headless `ConnectionExpandBindingProbe` (drives
+  `SqlEditorBehavior.Attach` + real key events) green. Gotcha #219 → **resolved by D3**; plan's "Dual wiring
+  (until D3)" danger row retired. History: [docs/history/19-...](docs/history/19-firebird-debugger.md) (D3).
+  **Next session: D4 (debugger tab MVP).** Order stays **risk-first** (P1 → P2 → D1 → D2 → D3 → D4 …).
+  **Read the plan + your milestone's brief before writing any debugger code.**
 - **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**
   The close/disconnect WorkGuard can now **compile every dirty metadata editor in one pass** instead
   of only listing-and-discarding them. It **reuses the group-recompilation pipeline** (one save
@@ -1095,8 +1115,9 @@ separate Performance migration. **Stage 7 (Diagnostics) is COMPLETE** (S1–S6; 
 → navigation), and the first post-Stage-7 milestone — **Unified Hover Information** (§15, absorbed P5d) —
 **has shipped** (see "Current state" above). **Folding and Breadcrumbs** were part of the original "Etap 7
 niceties" and are still **unbuilt**; they consume the same AST and need no further foundation. Remaining
-backlog: **editor-wiring consolidation** (gotcha #219 — recommended as the milestone immediately BEFORE
-Quick Fixes, per §15.4), **Quick Fixes** (`editor-stage7-diagnostics.md` §12), Folding and Breadcrumbs.
+backlog: ~~editor-wiring consolidation~~ (**DONE** — debugger milestone D3, 2026-07-17: the main SQL editor
+now goes through the one `SqlEditorBehavior.Attach`; gotcha #219 resolved), **Quick Fixes**
+(`editor-stage7-diagnostics.md` §12), Folding and Breadcrumbs.
 **P2c is DONE** (2026-07-17): its "no clean AvaloniaEdit path" blocker was a *consequence* of AvaloniaEdit
 owning the completion filter, and dissolved the moment the Completion Matching milestone took the list over
 — a reminder that a long-deferred item is worth re-testing after the thing under it changes. Nothing is
@@ -1258,10 +1279,13 @@ for the full explanation, code, and the failure it prevents.
 - Every object editor (Table/View/Procedure/Trigger/Function/Package/Domain/Generator/Exception/
   Index Detail) ships a Revert/Discard action beside its primary Compile/Save action, and it must
   **confirm** before discarding — an accidental click must never lose uncompiled work. *(#143)*
-- **`SqlEditorBehavior.Attach` is NOT "the one seam" — it installs the OBJECT editors' capabilities; the
-  main SQL Editor hand-wires its own in `MainWindow`.** A capability added only to that installer silently
-  misses the app's most-used editor (this is exactly how S3 shipped with no squiggles in the SQL Editor).
-  Add it in **both** places and verify by grepping the call sites, not by trusting the comment. *(#219)*
+- **`SqlEditorBehavior.Attach` IS now "the one seam" for the editor-intrinsic block — RESOLVED by D3
+  (2026-07-17).** It *used* to install only the OBJECT editors' capabilities while the main SQL Editor
+  hand-wired its own in `MainWindow` — so a capability added to only one silently missed the other (how S3
+  shipped with no squiggles in the SQL Editor). **D3 consolidated it:** `MainWindow` now calls the same
+  `SqlEditorBehavior.Attach` at VM-arrival, so a new editor-intrinsic capability goes in **one** place.
+  Per-host wiring (`DiagnosticsPanelHost.Track`, `AmbientModelRefresh`, `SqlSnippetDropTarget`) stays with the
+  caller by design. *(#219 — resolved)*
 
 **General**
 - Reflect the actual API surface (get/set, public/protected) before assuming a member is

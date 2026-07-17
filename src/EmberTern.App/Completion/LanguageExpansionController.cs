@@ -51,7 +51,8 @@ internal sealed class LanguageExpansionController
     }
 
     /// <summary>Attaches to an editor. Shares the completion controller only to know when the completion
-    /// list is up (so the two never compete). Attach in BOTH wiring seams (gotcha #219).</summary>
+    /// list is up (so the two never compete). Called from the single shared wiring seam
+    /// <see cref="SqlEditorBehavior.Attach"/> (D3 consolidated the former two seams; gotcha #219).</summary>
     public static void Attach(TextEditor editor, SqlCompletionController completion)
     {
         var c = new LanguageExpansionController(editor, () => completion.IsPopupOpen);

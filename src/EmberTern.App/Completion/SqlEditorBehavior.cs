@@ -7,13 +7,23 @@ using EmberTern.Core.Sql.Language.Semantics;
 namespace EmberTern.App.Completion;
 
 /// <summary>
-/// Shared wiring that gives any AvaloniaEdit <see cref="TextEditor"/> the same
-/// SQL-editor capabilities the main SQL Editor has — autocomplete (object + column
-/// suggestions via <see cref="SqlCompletionController"/>) and open-object navigation
-/// (double-click + Ctrl+click on an identifier → <see cref="MainWindowViewModel.TryOpenDdlForWord"/>).
-/// One implementation, reused by the SQL Editor's surfaces and the Procedure Detail
-/// editors — the completion + resolution logic lives in <see cref="SqlCompletionController"/>
-/// / <see cref="SqlCompletionContext"/> / the VM, not duplicated here.
+/// The ONE attach path for an AvaloniaEdit <see cref="TextEditor"/>'s SQL-editor language capabilities —
+/// completion (<see cref="SqlCompletionController"/>), semantic highlighting, hover + open-object navigation,
+/// diagnostic squiggles, related-elements highlighting, language completion, typing ergonomics, and
+/// Find/Replace. Every SQL surface goes through here: the object editors (Procedure / Function / Trigger /
+/// View / Package detail + Script Executor) and — since D3 — the main SQL Editor, which calls this once its
+/// VM arrives (<c>MainWindow.OnDataContextChanged</c>), rather than hand-wiring a second copy.
+/// <para>
+/// This is the "intrinsic block" — the capabilities that are identical on every surface (gotcha #219: they
+/// used to live in two hand-maintained copies, which is how S3 shipped with no squiggles in the main editor).
+/// Genuinely per-host wiring stays with the caller: the Diagnostics panel + F8 nav
+/// (<see cref="DiagnosticsPanelHost"/>), Easy-mode ambient refresh (<see cref="AmbientModelRefresh"/>), and
+/// the metadata-object drop target (<see cref="EmberTern.App.Sql.SqlSnippetDropTarget"/>).
+/// </para>
+/// <para>Requires a stable, non-null <see cref="MainWindowViewModel"/> — the completion controller subscribes
+/// to that VM's metadata events (leak-free via the editor's visual-tree lifetime) and warms referenced
+/// objects itself. The main SQL editor cannot call this in its ctor because the window's VM is set after
+/// construction; it waits for the VM ("subscribe once the VM arrives").</para>
 /// </summary>
 internal static class SqlEditorBehavior
 {
@@ -81,8 +91,8 @@ internal static class SqlEditorBehavior
         // Stage 7 / S3: diagnostic squiggles — a wavy underline under each Diagnostic the pure-Core
         // DiagnosticsEngine produced, computed on the same background pass the completion controller
         // owns (one parse per editor) and repainted on the shared ModelUpdated cycle. Renderer only —
-        // no analysis on the paint path. This seam covers the object editors; the main SQL Editor
-        // hand-wires the same capabilities in MainWindow and attaches the renderer itself.
+        // no analysis on the paint path. (D3: this is now the single attach path — the main SQL Editor
+        // routes through here too, so there is no second copy to keep in sync.)
         SquiggleRenderer.Attach(editor, completion);
 
         // Stage 8 / M1: Related Elements Highlighting — ONE renderer for selection-word occurrences, the
@@ -92,13 +102,12 @@ internal static class SqlEditorBehavior
 
         // Language Completion: finish a daily Firebird construct the developer started typing (if→if () then,
         // gro→group by) via Tab + a passive OverlayLayer hint. Thin, stateless consumer of the pure Core
-        // resolver; shares the completion controller only to avoid competing with the list. Attach in BOTH
-        // seams (gotcha #219).
+        // resolver; shares the completion controller only to avoid competing with the list.
         LanguageExpansionController.Attach(editor, completion);
 
         // Typing Ergonomics: the mechanical editing aids — `begin … end` pairing, delimiter pairing,
         // auto-indent. A separate responsibility from Language Completion (which finishes constructs), and
-        // a thin consumer of the pure Core rules. Attach in BOTH seams (gotcha #219).
+        // a thin consumer of the pure Core rules.
         TypingErgonomicsController.Attach(editor);
 
         // Find (Ctrl+F) / Replace (Ctrl+H) + right-click menu — one shared installer.

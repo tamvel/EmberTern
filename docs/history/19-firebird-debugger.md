@@ -536,3 +536,103 @@ interpreter self-consistent; only the lab proved it **faithful**.
 
 Build 0/0; **4732 tests green in one run**; smoke clean. D2 COMPLETE. Next: **D3** (editor-wiring
 consolidation) — the first non-pure milestone, immediately before the first debugger UI.
+
+## D3 — Editor-wiring consolidation (2026-07-17)
+
+**The first non-pure debugger milestone, and the one with zero debugger code.** Spec §11.1, gotcha #219,
+plan §2 (D3). Its job is to collapse the *two* hand-maintained copies of the SQL editor's language wiring
+into **one attach path** — *before* the debug tab (D4) becomes a third host bringing four new renderers at
+once, in the exact pattern that shipped S3 with no squiggles in the main editor.
+
+### The two seams, and why they diverged
+
+The **intrinsic block** — the capabilities identical on every SQL surface — is: `SqlCompletionController`
+-> `SemanticHighlighter` -> `NavigationController` -> `SquiggleRenderer` -> `RelatedElementsRenderer` ->
+`LanguageExpansionController` -> `TypingErgonomicsController` -> `EditorSearch`. It lived in two copies:
+
+- **`SqlEditorBehavior.Attach`** — the object editors' installer (Procedure / Function / Trigger / View /
+  Package detail + Script Executor). Runs at `OnAttachedToVisualTree`, where a **stable, non-null**
+  `MainWindowViewModel` is reachable via `FindAncestorOfType<Window>().DataContext`. Uses the completion
+  controller's built-in `subscribeMetadataChanged` / `subscribeMetadataReady` hooks.
+- **`MainWindow` ctor** — the main SQL editor, hand-wired with null-safe `_currentVm?.…` callbacks, because
+  the window's `DataContext` (its VM) is set *after* construction (`App.axaml.cs`:
+  `new MainWindow { DataContext = … }`). It deliberately **bypassed** the controller's metadata hooks —
+  they latched "subscribed" against a null VM and dropped the handler — and instead wired
+  `Metadata.ObjectsChanged` / `MetadataReady` to the stable VM in `OnDataContextChanged`
+  (`OnMainEditorMetadataChanged` / `OnMainEditorMetadataReady`), plus a private `WarmReferencedMetadataAsync`
+  and private `CreateMetadataSnapshot` / `EnsureColumnsAsync` / `EnsureRoutineParametersAsync` forwarders.
+
+The only real difference between the two copies was **timing** — the VM is the same type and stable once
+known; the main editor just knows it late. So the null-safety, the bespoke metadata handlers, and the
+metadata forwarders were *all* workarounds for attaching before the VM existed.
+
+### The approach — "attach at VM-arrival" (user-ratified over a shared-helper alternative)
+
+Rather than factor the block into a null-safe shared helper (which would preserve the timing but keep the
+lifecycle problem encapsulated rather than solved), the main editor's wiring **moves from the ctor to the
+first non-null `OnDataContextChanged`**, where it calls the *same* `SqlEditorBehavior.Attach(_editor,
+_currentVm)` the object editors use — with a stable, non-null VM. This is precisely what the spec meant by
+"subscribe once the VM arrives," and it dissolves the historical workaround instead of encapsulating it.
+
+Feasibility was grounded before touching anything: `_completion` is referenced **nowhere** in `MainWindow`
+except the wiring block and the two metadata handlers, so the blast radius is contained; and `DataContext`
+is set via an object initializer after construction, so `OnDataContextChanged` reliably fires with the
+non-null VM before `Show()` (the app already depends on that event for all its VM-event wiring).
+
+**Consolidation boundary (user-confirmed): the intrinsic block only.** The genuinely per-host wiring stays
+with the caller — `DiagnosticsPanelHost.Track` (per-window host + reveal), `AmbientModelRefresh`
+(routine/trigger editors only), and `SqlSnippetDropTarget.Attach` (context varies) — because they truly
+differ per host, were never the #219 duplication risk, and folding them into `Attach` would force
+artificial per-host parameters for no proportional gain.
+
+### The change
+
+- `MainWindow` ctor: the ~65-line hand-wired language block is deleted; only `_editor.TextChanged +=
+  OnEditorTextChanged` (needs no VM) stays. The DDL-preview editor + `diagnosticsPanel.Navigator` wiring
+  (also VM-free) stay in the ctor untouched.
+- `MainWindow.OnDataContextChanged`: a guarded (`_completionAttached`) one-time block calls
+  `_completion = SqlEditorBehavior.Attach(_editor, _currentVm)` then `_diagnostics.Track(_editor,
+  _completion)`. The `Metadata.ObjectsChanged` / `MetadataReady` subscribe+unsubscribe lines are removed.
+- **Deleted as now-dead** (Developer Contract #20): `OnMainEditorMetadataChanged`, `OnMainEditorMetadataReady`,
+  `WarmReferencedMetadataAsync`, and the private `CreateMetadataSnapshot` / `EnsureColumnsAsync` /
+  `EnsureRoutineParametersAsync` forwarders — every one of their responsibilities is now owned by the shared
+  `Attach` (which reads `vm.CreateMetadataSnapshot` / `vm.EnsureColumnsAsync` / `vm.EnsureRoutineParametersAsync`
+  / `vm.WarmReferencedAsync` and subscribes the controller's own metadata hooks to `vm.Metadata`). Removal
+  came **after** the new path built + tested green, per the user's explicit "prove before delete" directive.
+- `SqlEditorBehavior` gained no new parameters — the consolidation is achieved by *deleting* the second copy,
+  not growing the shared one (lighter than the plan implied; user agreed this is the better result). Its
+  XML-doc + the stale "attach in BOTH seams" comments (here, in `TypingErgonomicsController`,
+  `LanguageExpansionController`, and the `SquiggleRenderer`/`MainWindow` inline notes) were corrected to
+  describe one path.
+
+### Responsibility-transfer proof (why the deletion was safe)
+
+| Removed MainWindow mechanism | Responsibility | New owner in the shared path |
+|---|---|---|
+| `OnMainEditorMetadataChanged` | rebuild model when a metadata category loads | controller's `subscribeMetadataChanged` hook -> `_language.NotifyMetadataChanged()` (wired via `vm.Metadata.ObjectsChanged`) |
+| `OnMainEditorMetadataReady` | definitive rebuild + full warm + publish on prefetch complete | controller's `subscribeMetadataReady` hook -> `_language.RefreshModelWithMetadata()` (via `vm.Metadata.MetadataReady`) |
+| `WarmReferencedMetadataAsync` | warm referenced objects' columns/detail | `Attach`'s `warmReferencedMetadata: (n,ct) => vm.WarmReferencedAsync(n,ct)` |
+| `CreateMetadataSnapshot` | metadata snapshot for the model | `Attach`'s `metadataSnapshot: vm.CreateMetadataSnapshot` |
+| `EnsureColumnsAsync` | dot-completion column warm | `Attach`'s `ensureColumnsAsync: t => vm.EnsureColumnsAsync(t)` |
+| `EnsureRoutineParametersAsync` | signature-help param warm | `Attach`'s `ensureRoutineParamsAsync: t => vm.EnsureRoutineParametersAsync(t)` |
+| `metadataGeneration: … ?? 0` | generation counter | `Attach`'s `metadataGeneration: () => vm.Metadata.ObjectsGeneration` |
+
+Each responsibility has a live owner, and — the strongest evidence — **the object editors already run this
+exact path in production**, exercised by the full suite (including the headless `ConnectionExpandBindingProbe`,
+which drives `SqlEditorBehavior.Attach` and types real key events into the editor).
+
+A behavioural equivalence worth noting: the old main-editor metadata subscription was tied to the stable VM
+(always live); the new one is scoped to the *editor's visual-tree lifetime* (subscribe on attach, unsubscribe
+on detach). For the main SQL editor — a permanent part of the window layout that never detaches — these are
+equivalent; the lifetime scoping exists for the object editors' tabs, which do detach/reattach.
+
+### Verification
+
+Build 0/0; **4732 tests green in one run** (identical to the D2 baseline — no tests added or removed, this is
+behaviour-preserving); smoke clean. Per the QA rule, the visual equivalence of every capability on every
+surface (squiggles, hover, related-elements, completion, language-completion, diagnostics panel, F8
+navigation — in the SQL Editor *and* the object editors, in *both* themes) **cannot be proven by tests** and
+is reported as *awaits user confirmation* — a manual checklist is in the session summary. Gotcha #219 updated
+to "resolved by D3"; the plan's "Dual wiring (until D3)" danger row retired.
+
+**Next: D4 (debugger tab MVP)** — the first debugger UI, now attaching its renderers through the one seam.

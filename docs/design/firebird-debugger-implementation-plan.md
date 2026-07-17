@@ -432,7 +432,7 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
 
 | Zone | Rule |
 |---|---|
-| **Dual wiring** (until D3) | `SqlEditorBehavior.Attach` serves **object editors**; `MainWindow` hand-wires the **main SQL editor**. A capability added to one **silently misses** the other (this is exactly how S3 shipped with no squiggles). Until D3 lands: **attach in BOTH, verify by grepping call sites** — not by trusting a comment. *(#219)* |
+| ~~**Dual wiring** (until D3)~~ **RESOLVED by D3** | *Was:* `SqlEditorBehavior.Attach` served object editors; `MainWindow` hand-wired the main SQL editor, so a capability added to one silently missed the other (how S3 shipped with no squiggles). **D3 consolidated the intrinsic block into one `SqlEditorBehavior.Attach` seam** — `MainWindow` now calls it too, at VM-arrival. New editor-intrinsic capabilities go in **one** place. Per-host wiring (`DiagnosticsPanelHost.Track`, `AmbientModelRefresh`, `SqlSnippetDropTarget`) remains a caller responsibility by design. *(#219 — resolved; `docs/history/19`)* |
 | **Headless tests** | **ONE `HeadlessUnitTestSession` per process.** Add probes to the existing `ConnectionExpandBindingProbe` class; never `StartNew`. AvaloniaEdit's `KeyBinding` lists are **static** and owned by the first session's thread — any later session throws cross-thread. *(#94/#226)* |
 | **Focus** | `TextEditor` is **not focusable**; `editor.Focus()` is a no-op returning `false`; `IsFocused` is always false. Focus lives on `editor.TextArea`. *(#225)* |
 | **Repaint** | Use `TextView.Redraw()`, not `InvalidateVisual()` — the latter can run before visual lines exist and a diff-guard makes the miss permanent. *(#223)* |

@@ -24,7 +24,8 @@ internal sealed class TypingErgonomicsController
 
     private TypingErgonomicsController(TextEditor editor) => _editor = editor;
 
-    /// <summary>Attaches to an editor. Attach in BOTH wiring seams (gotcha #219).</summary>
+    /// <summary>Attaches to an editor. Called from the single shared wiring seam
+    /// <see cref="SqlEditorBehavior.Attach"/> (D3 consolidated the former two seams; gotcha #219).</summary>
     public static void Attach(TextEditor editor)
     {
         var c = new TypingErgonomicsController(editor);
