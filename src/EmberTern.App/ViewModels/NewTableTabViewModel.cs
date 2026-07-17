@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -331,7 +332,7 @@ public partial class NewTableFieldRowViewModel : ObservableObject, ITypeSourceRo
 /// table progressively, switch to other tabs, and come back. Compile fires
 /// the DDL through <c>FirebirdDdlExecutor</c> via the owner.
 /// </summary>
-public partial class NewTableTabViewModel : ViewModelBase, IUnsavedWorkSource
+public partial class NewTableTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
 {
     public NewTableTabViewModel() : this(null)
     {
@@ -566,6 +567,20 @@ public partial class NewTableTabViewModel : ViewModelBase, IUnsavedWorkSource
         if (!IsValid()) return;
         if (CompileRequested is null) return;
         await CompileRequested(this).ConfigureAwait(true);
+    }
+
+    // ─── ISavableObjectEditor (Save-and-close / Save-and-disconnect WorkGuard) ──
+    // Thin adapter over the owner-driven create path (CompileRequested — the ONE save path);
+    // not a second mechanism. The owner reports failure by setting ValidationMessage (and
+    // leaves it empty on success), so success is "no validation message after the attempt".
+    public async Task<EditorSaveResult> SaveAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsValid()) return new EditorSaveResult(false, ValidationMessage);
+        if (CompileRequested is null) return new EditorSaveResult(false, ValidationMessage);
+        await CompileRequested(this).ConfigureAwait(true);
+        return string.IsNullOrEmpty(ValidationMessage)
+            ? new EditorSaveResult(true, null)
+            : new EditorSaveResult(false, ValidationMessage);
     }
 
     private void OnFieldsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)

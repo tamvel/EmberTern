@@ -27,7 +27,7 @@ namespace EmberTern.App.ViewModels;
 /// CREATE / ALTER EXCEPTION (message) + COMMENT ON EXCEPTION (description); Firebird
 /// has no ALTER EXCEPTION … TO, so the name is read-only on an existing exception.
 /// </summary>
-public partial class ExceptionDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
+public partial class ExceptionDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
 {
     private readonly FirebirdTableDetailReader? _reader;
     private readonly FirebirdDdlExecutor? _ddlExecutor;
@@ -196,6 +196,15 @@ public partial class ExceptionDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     /// ALTER EXCEPTION (message) + COMMENT (description) statements (empty → no-op).
     /// Runs through <see cref="FirebirdDdlExecutor"/> (autonomous, auto-committed).
     /// </summary>
+    // ─── ISavableObjectEditor (Save-and-close / Save-and-disconnect WorkGuard) ──
+    // Thin adapter over ExecuteCompileAsync (the ONE save path) — not a second mechanism.
+    public async Task<EditorSaveResult> SaveAsync(CancellationToken cancellationToken = default)
+    {
+        ErrorMessage = null;
+        await ExecuteCompileAsync(cancellationToken).ConfigureAwait(true);
+        return ErrorMessage is null ? new EditorSaveResult(true, null) : new EditorSaveResult(false, ErrorMessage);
+    }
+
     public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {
         if (_ddlExecutor is null) return;

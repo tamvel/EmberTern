@@ -22,7 +22,7 @@ namespace EmberTern.App.ViewModels;
 /// (no Source/Easy mode, no data preview, no fields). Reuse happens at the
 /// reader / DDL-generator / dependency-tree level, not via inheritance.
 /// </summary>
-public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
+public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
 {
     private readonly FirebirdTableDetailReader? _reader;
     private readonly FirebirdDdlReader? _ddlReader;
@@ -204,6 +204,15 @@ public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
     /// of ALTER SEQUENCE / COMMENT statements for what changed (empty → no-op).
     /// Runs through <see cref="FirebirdDdlExecutor"/> (autonomous, auto-committed).
     /// </summary>
+    // ─── ISavableObjectEditor (Save-and-close / Save-and-disconnect WorkGuard) ──
+    // Thin adapter over ExecuteCompileAsync (the ONE save path) — not a second mechanism.
+    public async Task<EditorSaveResult> SaveAsync(CancellationToken cancellationToken = default)
+    {
+        ErrorMessage = null;
+        await ExecuteCompileAsync(cancellationToken).ConfigureAwait(true);
+        return ErrorMessage is null ? new EditorSaveResult(true, null) : new EditorSaveResult(false, ErrorMessage);
+    }
+
     public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {
         if (_ddlExecutor is null) return;

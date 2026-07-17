@@ -32,7 +32,7 @@ namespace EmberTern.App.ViewModels;
 /// "Compile" button assembles the minimum-set of ALTER statements for what changed; a
 /// rename closes + reopens the tab under the new name.
 /// </summary>
-public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
+public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
 {
     private readonly FirebirdTableDetailReader? _reader;
     private readonly FirebirdDdlExecutor? _ddlExecutor;
@@ -266,6 +266,15 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
     /// (empty → no-op). Runs through <see cref="FirebirdDdlExecutor"/> (autonomous,
     /// auto-committed). A rename closes + reopens the tab under the new name.
     /// </summary>
+    // ─── ISavableObjectEditor (Save-and-close / Save-and-disconnect WorkGuard) ──
+    // Thin adapter over ExecuteCompileAsync (the ONE save path) — not a second mechanism.
+    public async Task<EditorSaveResult> SaveAsync(CancellationToken cancellationToken = default)
+    {
+        ErrorMessage = null;
+        await ExecuteCompileAsync(cancellationToken).ConfigureAwait(true);
+        return ErrorMessage is null ? new EditorSaveResult(true, null) : new EditorSaveResult(false, ErrorMessage);
+    }
+
     public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {
         if (_ddlExecutor is null) return;

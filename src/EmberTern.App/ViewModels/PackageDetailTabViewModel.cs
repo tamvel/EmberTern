@@ -29,7 +29,7 @@ namespace EmberTern.App.ViewModels;
 /// the shared <see cref="SqlFormatter"/>), not via inheritance. A package is treated
 /// as a single logical object: ONE Compile that runs the header first, then the body.
 /// </summary>
-public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
+public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
 {
     // Sub-tab indices — must match the TabItem order in PackageDetailTabView.axaml.
     // (Diagnostics is appended LAST so these indices, which are also persisted per tab, never shift.)
@@ -342,6 +342,15 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
 
     [RelayCommand(CanExecute = nameof(CanCompile))]
     private Task Compile() => ExecuteCompileAsync();
+
+    // ─── ISavableObjectEditor (Save-and-close / Save-and-disconnect WorkGuard) ──
+    // Thin adapter over ExecuteCompileAsync (header + body — the ONE save path); not a second mechanism.
+    public async Task<EditorSaveResult> SaveAsync(CancellationToken cancellationToken = default)
+    {
+        ErrorMessage = null;
+        await ExecuteCompileAsync(cancellationToken).ConfigureAwait(true);
+        return ErrorMessage is null ? new EditorSaveResult(true, null) : new EditorSaveResult(false, ErrorMessage);
+    }
 
     /// <summary>
     /// Compiles the package as one logical object: the header (CREATE OR ALTER

@@ -195,6 +195,25 @@ noted.
 
 ## Current state
 
+- **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**
+  The close/disconnect WorkGuard can now **compile every dirty metadata editor in one pass** instead
+  of only listing-and-discarding them. It **reuses the group-recompilation pipeline** (one save
+  mechanism, not a second): each editor's existing compile is wrapped by a thin
+  `ISavableObjectEditor.SaveAsync` adapter (structured pass/fail; editors swallow errors into
+  `ErrorMessage`, so the adapter reads `ErrorMessage is null`), and `RunBatchWithReportAsync` gained
+  an optional `executeAsync` strategy delegate so `SaveDirtyEditorsAsync` drives those `SaveAsync`
+  calls through the **same** batch-results dialog (recompile's SQL path is the unchanged default).
+  **Continue-and-report** (user decision): all dirty editors are attempted; close proceeds only if
+  all succeed, else it aborts and selects the first failed tab — DDL auto-commits per object, so a
+  mid-batch failure never undoes the ones already saved. App close adds **Save and exit**; disconnect
+  is **two-phase** (metadata Save/Discard/Cancel → the unchanged tx Commit/Rollback/Cancel).
+  **Scope includes new objects.** Save order = tab order (a deliberate v1 simplification; dependency
+  ordering is a possible future refinement, not required — continue-and-report + retry covers it).
+  `_bulkSaveInProgress` suppresses the per-compile "recompile dependents?" offer mid-shutdown. New
+  `ISavableObjectEditor` + `EditorSaveResult`; adapters on every object editor;
+  `WorkspaceTabViewModel.SavableEditor`. Build 0/0, tests green (`DataLossGuardTests` +save cases).
+  Full detail: [docs/history/08-...](docs/history/08-data-loss-sidebar-and-searchable-combo.md);
+  gotcha #231 (decide from the loop's tally, not the batch dialog's `IProgress`-lagged counters).
 - **Active branch: `feat/editor-language-frontend`** — holds the editor-language-front-end rebuild
   (Etaps 0–6 + UX Polish incl. P8), the 2026-07-14 **UX & Stabilization Sprint** (transaction/
   attachment model rewrite), **and** a 2026-07-14 **UX Polish follow-up sprint** (below). Not yet

@@ -387,6 +387,27 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         _ => null,
     };
 
+    // The savable object editor backing this tab (or null for non-editor tabs). The
+    // WorkGuard pairs this with UnsavedWork to compile every dirty editor through the
+    // shared group-recompilation results pipeline on "Save and close / Save and
+    // disconnect". Save logic stays in each editor (ISavableObjectEditor.SaveAsync) —
+    // this only exposes the reference.
+    public ISavableObjectEditor? SavableEditor => Kind switch
+    {
+        WorkspaceTabKind.NewTable => NewTable,
+        WorkspaceTabKind.TableDetail => TableDetail,
+        WorkspaceTabKind.ViewDetail => ViewDetail,
+        WorkspaceTabKind.ProcedureDetail => ProcedureDetail,
+        WorkspaceTabKind.TriggerDetail => TriggerDetail,
+        WorkspaceTabKind.FunctionDetail => FunctionDetail,
+        WorkspaceTabKind.GeneratorDetail => GeneratorDetail,
+        WorkspaceTabKind.DomainDetail => DomainDetail,
+        WorkspaceTabKind.PackageDetail => PackageDetail,
+        WorkspaceTabKind.ExceptionDetail => ExceptionDetail,
+        WorkspaceTabKind.IndexDetail => IndexDetail,
+        _ => null,
+    };
+
     [RelayCommand]
     private void Activate() => _owner.SelectTab(this);
 

@@ -23,7 +23,7 @@ namespace EmberTern.App.ViewModels;
 /// NOT a <see cref="SourceObjectDetailTabViewModel"/> subclass). Reuse happens at the
 /// reader / DDL-generator / dependency level, not via inheritance.
 /// </summary>
-public partial class IndexDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
+public partial class IndexDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
 {
     private readonly FirebirdTableDetailReader? _reader;
     private readonly FirebirdDdlExecutor? _ddlExecutor;
@@ -173,6 +173,15 @@ public partial class IndexDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
 
     [RelayCommand(CanExecute = nameof(CanCompile))]
     private Task Compile() => ExecuteCompileAsync();
+
+    // ─── ISavableObjectEditor (Save-and-close / Save-and-disconnect WorkGuard) ──
+    // Thin adapter over ExecuteCompileAsync (the ONE save path) — not a second mechanism.
+    public async Task<EditorSaveResult> SaveAsync(CancellationToken cancellationToken = default)
+    {
+        ErrorMessage = null;
+        await ExecuteCompileAsync(cancellationToken).ConfigureAwait(true);
+        return ErrorMessage is null ? new EditorSaveResult(true, null) : new EditorSaveResult(false, ErrorMessage);
+    }
 
     public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {

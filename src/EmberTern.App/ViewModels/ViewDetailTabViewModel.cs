@@ -25,7 +25,7 @@ namespace EmberTern.App.ViewModels;
 /// (same <see cref="FirebirdTableDetailReader"/> read methods, same
 /// <see cref="TableDetailTabViewModel.BuildDependencyTree"/>), not via inheritance.
 /// </summary>
-public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
+public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
 {
     // Mirrors TableDetail's data-preview knobs — a view's Data tab uses the
     // exact same paged SELECT * infrastructure.
@@ -726,6 +726,15 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         // data preview, DDL, description all re-read from the live catalog.
         await RefreshAsync(cancellationToken).ConfigureAwait(true);
         CompiledExistingObject?.Invoke();
+    }
+
+    // ─── ISavableObjectEditor (Save-and-close / Save-and-disconnect WorkGuard) ──
+    // Thin adapter over ExecuteCompileAsync (the ONE save path) — not a second mechanism.
+    public async Task<EditorSaveResult> SaveAsync(CancellationToken cancellationToken = default)
+    {
+        ErrorMessage = null;
+        await ExecuteCompileAsync(cancellationToken).ConfigureAwait(true);
+        return ErrorMessage is null ? new EditorSaveResult(true, null) : new EditorSaveResult(false, ErrorMessage);
     }
 
     /// <summary>
