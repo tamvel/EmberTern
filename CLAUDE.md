@@ -351,8 +351,9 @@ noted.
   to the D2 baseline — behavior-preserving); smoke clean; the headless `ConnectionExpandBindingProbe` (drives
   `SqlEditorBehavior.Attach` + real key events) green. Gotcha #219 → **resolved by D3**; plan's "Dual wiring
   (until D3)" danger row retired. History: [docs/history/19-...](docs/history/19-firebird-debugger.md) (D3).
-  **D4 (debugger tab MVP) — DONE (2026-07-17; impl + VM-tested, awaits user visual/lab confirmation per the
-  QA rule). First real user value: launch a standalone procedure, set breakpoints, step, watch variables.**
+  **D4 (debugger tab MVP) — DONE + user-confirmed (2026-07-17; manual QA on the live lab passed — launch,
+  stepping, breakpoints, variables all work; debugger felt stable). First real user value: launch a standalone
+  procedure, set breakpoints, step, watch variables.**
   New `WorkspaceTabKind.Debugger` (+ `ActiveDebugger`/`IsDebuggerTabActive` on the notify chain, gotcha #25),
   opened from the sidebar procedure-leaf **"Debug procedure…"** (mirrors Execute; `Metadata.DebugProcedureRequested`
   → `MainWindowViewModel.OnDebugProcedureRequested`), hosted like `ScriptExecutorTabView` and torn down on tab
@@ -376,11 +377,20 @@ noted.
   runs on the server = step-over, 100% faithful §5.3); triggers/packages/local routines/cursors + Watches/Immediate
   are later milestones. Build 0/0; **4744 tests green in one run** (+12 `DebuggerTabVmTests`: prepare/params/
   preflight, launch-paused-at-entry, step/continue/complete, write-back, fault, stop-teardown, breakpoint snap +
-  stop); smoke clean. **Not yet verified live against the lab** (§13 DoD wants simulated-vs-real) and no headless
-  view-attach probe yet — both are follow-ups. History: [docs/history/19-...](docs/history/19-firebird-debugger.md) (D4).
-  **Next session: D5 (expression evaluation — Evaluate/Watches/Immediate) OR a D4 live-lab pass first.** Order stays
-  **risk-first** (P1 → P2 → D1 → D2 → D3 → D4 → D5 …). **Read the plan + your milestone's brief before writing any
-  debugger code.**
+  stop); smoke clean. (No headless view-attach probe yet — a follow-up; the live behaviour is user-confirmed.)
+  History: [docs/history/19-...](docs/history/19-firebird-debugger.md) (D4). **D4 UX-review backlog (user, after
+  first real use — deferred, NOT part of D4):** 8 items to fold into later milestones — first-class Debug entry
+  points (toolbar/procedure-view button + shortcut, PPM as alternative); move transaction-isolation config to
+  global Settings (show only params at launch); **current-line marker too aggressive in dark theme → a subtle
+  blue wash (~10–15%) + a thin left bar, not the amber fill** (a `DebugCurrentLineBrush` re-tune); Variables must
+  distinguish IN/OUT/local by icon/colour/grouping (⇒ D7); more distinct Into/Over/Out icons (VS/Rider-like);
+  an "Edit Parameters…" affordance on a running session (not only at launch); grow the parameter-history feature
+  (pin/recent/group/delete); a richer AST-derived paused status (e.g. "Paused — WHILE loop (line 14)"). Full list:
+  [docs/history/19-...](docs/history/19-firebird-debugger.md) (§"D4 UX review"). **Directive: fix these as UX/theme
+  in the view + tokens; do NOT push logic into the VMs/UI to paper over UX — keep the D1–D4 responsibility split.**
+  See [[feedback-debugger-ux-polish-backlog]].
+  **Next session: D5 (expression evaluation — Evaluate/Watches/Immediate).** Order stays **risk-first**
+  (P1 → P2 → D1 → D2 → D3 → D4 → D5 …). **Read the plan + your milestone's brief before writing any debugger code.**
 - **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**
   The close/disconnect WorkGuard can now **compile every dirty metadata editor in one pass** instead
   of only listing-and-discarding them. It **reuses the group-recompilation pipeline** (one save

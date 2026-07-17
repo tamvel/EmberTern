@@ -706,9 +706,49 @@ cursors, and the Watches/Immediate/Evaluate surfaces are their own later milesto
   variable; an unhandled raise faults; Stop tears the run down and clears; a breakpoint snaps to a step-point
   start and stops Continue at the marked statement.
 - Build 0/0; **4744 tests green in one run**; smoke clean (app launches).
-- **Not yet done (follow-ups):** the §13 DoD wants a **live simulated-vs-real lab run** (needs a server) and a
-  headless view-attach probe in `ConnectionExpandBindingProbe`. Reported honestly as "awaits user confirmation"
-  per the QA rule.
+- **User-confirmed on the live lab (2026-07-17):** a manual pass launched `XXX_ZESTAWIENIE` (a `WHILE` loop with
+  a `SELECT … INTO` and `SUSPEND`), stepped through it, hit breakpoints, and watched variables update — the
+  debugger worked and felt stable. Follow-ups still open: an automated **simulated-vs-real lab comparison** (§13
+  DoD) and a headless view-attach probe in `ConnectionExpandBindingProbe`.
 
-**Next: D5 (Evaluate / Watches / Immediate — one HarnessBuilder mechanism, three surfaces), or a D4 live-lab
-pass first.**
+### D4 UX review — backlog for later milestones (user, after first real use)
+
+The user reviewed D4 in real use and confirmed it works well; the notes below are **explicitly not a D4 change**
+— they are recorded here to be folded into later milestones (UI polish + wherever the debugger grows). The
+standing directive: **address them as UX/theme in the view + theme tokens; never patch UX by pushing logic into
+the ViewModels/UI layer — keep the D1–D4 responsibility split (Core interpreter · Firebird executor · thin VM ·
+view).**
+
+1. **First-class entry points.** The debugger is one of EmberTern's most important features but today launches
+   only from the sidebar context menu ("Debug procedure…"). Add first-category affordances: a Debug button in the
+   procedure view, a bug-icon toolbar button, and a keyboard shortcut — keep PPM as an alternative, not the
+   primary path.
+2. **Transaction config belongs in global Settings.** The per-launch isolation selector is technically right but
+   reads as an advanced knob most users never change (IBExpert doesn't surface it every run). Once global app
+   settings exist, move Debugger transaction options there (isolation, wait/no-wait, read-only, …) and show only
+   the routine's **parameters** at launch. Fine as-is for now.
+3. **Current-line marker is too aggressive (esp. dark theme).** The amber fill dominates the syntax colouring.
+   Re-style to a subtle blue wash (~10–15% opacity) + a thin blue left bar (optionally a margin arrow) — highlight
+   the statement without masking the syntax highlight. This is a `DebugCurrentLineBrush` re-tune (both dicts) +
+   possibly a left-edge draw in `CurrentLineRenderer`; no VM change.
+4. **Variables must show kind.** IN params, OUT params, and locals look identical (name + type only). Distinguish
+   them by icon / icon colour / grouping / sections (e.g. `→ IN`, `← OUT`, `◇ local`). This is the D7 Variables
+   window's job — the VM already knows the kind (`ParameterSymbol.Direction` / `VariableSymbol`), so it's an
+   icon-key + template concern, not new logic.
+5. **Step Into / Over / Out icons too similar.** Adopt a more distinctive, VS/JetBrains-like icon set with clearer
+   colour differentiation so the controls are recognisable at a glance.
+6. **Edit parameters on a running session.** The inline launch-panel model is less convenient than a dialog once
+   running — there's no easy way to change parameters mid-session. Preferred model: first run shows the params;
+   while debugging, an "Edit Parameters…" affordance re-opens them → Restart. (Keeps the panel's "no re-prompt on
+   Restart" while restoring easy editing.)
+7. **Grow parameter history.** The history mechanism is liked; future additions: pin favourites, recent, group by
+   date, delete entries.
+8. **Richer paused status.** "Paused at line 14 — step" is thin; the AST knows the statement kind, so show e.g.
+   "Paused — SELECT INTO (line 14)" / "Paused — WHILE loop (line 14)" / "Paused — FOR SELECT (line 27)". Low
+   priority, pure presentation off the current step node.
+
+**Overall (user):** the debugger architecture looks very good; D4 proved the engine + UI integration work and that
+D3's single `SqlEditorBehavior.Attach` seam paid off. The main area to refine is UX — a natural product stage, not
+an architecture or implementation flaw.
+
+**Next: D5 (Evaluate / Watches / Immediate — one HarnessBuilder mechanism, three surfaces).**

@@ -629,6 +629,15 @@ metadata but **not callable from DSQL outside the package** — so the harness c
 
 Philosophy: **a modern IDE debugger, not a DB admin tool.** Consistent with the rest of EmberTern.
 
+> **⚠ D4 UX-review backlog (user, 2026-07-17).** After the first real use of the D4 tab, the user filed an
+> 8-item UX-polish backlog (first-class Debug entry points; move transaction config to global Settings; a
+> subtler current-line marker — the amber fill is too aggressive in dark theme, wants a ~10–15% blue wash + a
+> thin left bar; variable-kind distinction IN/OUT/local; more distinct step icons; edit-params on a running
+> session; richer parameter history; AST-derived paused status). Full list + the binding directive
+> (**fix UX in the view/theme tokens, never by pushing logic into the debugger VMs/UI — keep the D1–D4 split**)
+> are in `docs/history/19-firebird-debugger.md` §"D4 UX review". Fold these into their natural milestones
+> (variable kinds → D7; the rest → a UI-polish pass); do not pre-build them.
+
 ### 9.1 A separate tab — confirmed
 
 **Debugging is a different activity from editing.** A debug tab is read-only source + runtime state; an editor
