@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1 DONE, D2 seam (a) DONE (2026-07-17).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1 DONE, D2 seams (a)+(b) DONE (2026-07-17).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -273,15 +273,39 @@ noted.
   (attachments must not outlive the profile connection); each deregisters itself on dispose. Pinned by 13
   pure `DebugSessionConnectionTests` (TPB both isolations, the 3 savepoint statement forms, name validation);
   the **live** round-trip is **awaits user confirmation** (needs a server; driver capability already
-  confirmed §15.3 [5]). Build 0/0; **4704 tests green in ONE run** (~8 s); smoke clean.
-  **Parked for the next session — D2 seam (b) + (c) (per the plan's within-milestone order a → b → c):**
-  seam (b) `HarnessBuilder` + `ReadWriteSetAnalyzer` + the §3.4 **R1–R5** rules (pure Core, unit-tested —
-  R1 never inject `NULL`; R2 base types from **metadata**; R3 verbatim frame vars; R4/R5 read/write set from
-  `SemanticModel`, **never** drop a sub-routine declaration); seam (c) `FirebirdDebugExecutor : IDebugExecutor`
-  + the **lab-mandatory** simulated-vs-real fidelity comparison (extend `Lab/setup.sql` with the debugging
-  zoo first). `DebugSessionConnection` is deliberately-parked infrastructure (mitigating #233 — recorded here
-  because nothing calls it until seam c). History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
-  **Next session: D2 seam (b).** Order stays **risk-first** (P1 → P2 → D1 → D2 → D3 …); the wiring
+  confirmed §15.3 [5]).
+  **D2 seam (b) — harness builder + read/write-set analyzer + §3.4 R1–R5 DONE (pure Core, no server).**
+  New `HarnessBuilder` (`EmberTern.Core.Sql.Debugging`): `Build(HarnessRequest) → HarnessResult` generates
+  the anonymous `EXECUTE BLOCK` that is the **one** server mechanism (§3.2/§3.3) as a **pure function** — the
+  fragment text, each variable's verbatim declaration + base type + value, sub-routine declarations and the
+  read/write set are all **inputs** (seam c derives them from metadata + frame; tests supply them), which is
+  what makes the non-negotiable §3.4 rules unit-testable without a server. Rules enforced: **R1** only reads
+  with a non-null value are injected (a declared var is already `NULL`; `V=NULL` crashes a `NOT NULL`
+  domain); **R2** params + `RETURNS` use the variable's **base type** (input; metadata-derived in seam c),
+  never the domain; **R3** frame vars declared **verbatim**; **R4** inject only reads / return only writes;
+  **R5** every in-scope sub-routine declaration carried verbatim, always (after the var declares). Statement
+  vs Expression mode (conditions/watches → `ET_DBG_RESULT`); `ET_P_`/`ET_O_`/`ET_DBG_` prefixes avoid
+  colliding with real names. New `ReadWriteSetAnalyzer.Analyze(statement, model)`: **consumes** the binder's
+  resolved references (rule #1/#2 — never re-parse/re-resolve) — reads = referenced vars/params (safe
+  over-inclusion), writes = leftmost l-value for an assignment / ∅ for an `IF`/`WHILE` condition / reads
+  (superset) otherwise. **Two deliberate boundaries:** the transitive sub-routine call-graph fixpoint is
+  **D9** (meanwhile R5 carries all sub-routine *declarations*, so nothing is lost); the §3.5 inject-all-in-
+  scope fallback is the named primitive `InScopeLocals` (for a Watch on an arbitrary expr, D5), **not** an
+  auto-branch (the binder never signals an unresolved *local*, so it'd be untestable dead code — #233).
+  Pinned by 16 pure tests (11 `HarnessBuilderTests` covering R1–R5 + modes; 5 `ReadWriteSetAnalyzerTests`
+  against the real `SemanticModel`). **Test lesson recorded:** the debugger builds the model from the
+  **strict** `SqlParser.Parse(sql).Root` of a whole routine (`CREATE PROCEDURE` stays one `DdlStatement`
+  with a bound body) — the editor's lenient `SemanticModel.Build(string)` splits a routine apart and binds
+  the body without its declared vars. Build 0/0; tests green (user-verified — full-suite run was slow, so
+  confirmed manually); smoke clean.
+  **Parked for the next session — D2 seam (c):** `FirebirdDebugExecutor : IDebugExecutor` wires D1's
+  interpreter to seam (a)'s `DebugSessionConnection` through this harness, then the **lab-mandatory**
+  simulated-vs-real fidelity comparison (extend `Lab/setup.sql` with the debugging zoo first — nested calls,
+  local routines, cursors, exception handlers, an autonomous-tx routine, a generator user, domain-`NOT NULL`
+  vars). `HarnessBuilder`/`ReadWriteSetAnalyzer`/`DebugSessionConnection` are deliberately-parked pure
+  infrastructure (mitigating #233 — nothing calls them until seam c). History:
+  [docs/history/19-...](docs/history/19-firebird-debugger.md).
+  **Next session: D2 seam (c).** Order stays **risk-first** (P1 → P2 → D1 → D2 → D3 …); the wiring
   consolidation (gotcha #219) sits at **D3**, right before the first debugger UI. **Read the plan + your
   milestone's brief before writing any debugger code.**
 - **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**

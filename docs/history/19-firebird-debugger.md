@@ -386,3 +386,81 @@ the next session: **seam (b)** `HarnessBuilder` + `ReadWriteSetAnalyzer` + the �
 unit-tested) and **seam (c)** `FirebirdDebugExecutor : IDebugExecutor` + the lab-mandatory simulated-vs-real
 fidelity comparison (extend `Lab/setup.sql` with the debugging zoo first). Order within D2: (a) → (b) → (c),
 per the plan.
+
+## D2 — Harness + session connection + executor, seam (b) (2026-07-17)
+
+D2's second seam: the **Evaluation Harness builder** and the **read/write-set analyzer** — the intellectual
+core of D2, and the §3.4 rules R1–R5, all in **pure Core** (zero Avalonia, zero FirebirdSql). Seam (c)
+(`FirebirdDebugExecutor` + the lab-mandatory fidelity proof) is deferred to the next session.
+
+### `HarnessBuilder` — the one server mechanism, as a pure function
+
+`HarnessBuilder.Build(HarnessRequest) → HarnessResult` generates the anonymous `EXECUTE BLOCK` that is the
+**only** server mechanism (§3.2/§3.3) — every step, condition, watch and evaluation is the same builder with
+a different fragment. It is a pure function: the fragment text, each variable's verbatim declaration + base
+type + current value, the sub-routine declarations and the read/write set are all **inputs** (the Firebird
+executor derives them from metadata + the frame in seam c; tests supply them directly). That decoupling is
+exactly what makes the non-negotiable §3.4 rules unit-testable **without a live server** — the rules are
+proven here; fidelity vs real execution is seam (c)'s lab proof. The rules, enforced in `Build`:
+
+- **R1 — never assign an injected `NULL`.** Only reads with a non-null value become a parameter + an
+  injection assignment; a declared variable is already `NULL`, and assigning `NULL` into a `NOT NULL`-domain
+  variable is what crashes real ERP code (the whole reason v1 died on the first procedure).
+- **R2 — parameters and `RETURNS` columns use the variable's BASE type**, never its domain (a domain-typed
+  `RETURNS` re-validates on `SUSPEND` and fails on a legitimately-null write-back). Base types are an input
+  (`HarnessVariable.BaseType`); their derivation from metadata is seam (c)'s job.
+- **R3 — frame variables declared VERBATIM** (`HarnessVariable.Declaration`, copied from source — domain /
+  `NOT NULL` / `CHECK` / default preserved), so the statement's own assignments keep domain semantics.
+- **R4 — inject only the reads, return only the writes.**
+- **R5 — every in-scope sub-routine declaration carried, verbatim, always** (dropping one lets a local
+  `F()` silently resolve to a global `F()` — a §F violation). Emitted after the variable declarations
+  (Firebird's required order).
+
+Statement mode runs the fragment verbatim; Expression mode (conditions / watches) evaluates it into an
+`ET_DBG_RESULT` column of the caller-supplied result type. `HarnessResult` carries the SQL, the ordered
+parameter values (only the injected non-null reads — R1), the `RETURNS`→variable write-back map, and the
+result-column name. Param/return names use distinctive `ET_P_`/`ET_O_`/`ET_DBG_` prefixes (not the spec
+example's terse `P_`/`O_`) so they cannot collide with a real ERP variable name. A statement with no reads
+and no writes is a plain executable block (no `RETURNS`, no `SUSPEND`).
+
+### `ReadWriteSetAnalyzer` — the read/write set from the model
+
+`Analyze(statement, model) → ReadWriteSet` computes the read/write-set-driven injection (§3.5) by
+**consuming the binder's resolved references** (rule #1/#2 — never re-parse, never re-resolve). **Reads** =
+the variable/parameter references in the statement's span (over-inclusion is safe: a variable appearing only
+as an assignment target is harmless to inject, and R1 skips a null anyway). **Writes** = the variables it
+may mutate: an assignment writes exactly its **leftmost l-value** (narrowed precisely); a control-flow
+condition (`IF`/`WHILE`) writes nothing; any other statement's writes are the reads (a correct, chattier
+superset — a single statement changes only variables it references).
+
+Two deliberate boundaries, both documented in the type: the **transitive fixpoint over the sub-routine call
+graph** belongs to **D9** (where local routines become frames) — meanwhile the sub-routine *declarations*
+are always carried in full by the harness (R5), so nothing is silently lost; and the §3.5 **inject-all-in-
+scope** fallback is exposed as the named primitive `InScopeLocals(model, offset)` for a caller that genuinely
+cannot compute a precise set (a Watch on an arbitrary expression, D5) — **not** an auto-branch, because the
+binder never emits an unresolved-*local* signal (an unrecognised bare identifier is not a frame variable —
+it is a column/function/typo, correctly dropped), so an auto-fallback would be untestable dead code (the
+gotcha-#233 lesson: don't ship untested branches).
+
+### Tests
+
+`HarnessBuilderTests` (+11): the injection shape; **R1** (null-valued and absent-valued reads are neither
+parameter nor assignment); **R2** (base type on param + `RETURNS`, never the domain); **R3** (verbatim
+declaration); **R4** (an unreferenced variable is declared but neither injected nor returned); **R5** (sub-
+routine carried verbatim, after the variable declarations); expression mode (result column + no write-backs)
+and its required result type; the plain-executable-block case; auto-terminator. `ReadWriteSetAnalyzerTests`
+(+5) against the **real** `SemanticModel` (strict parse of a whole `CREATE PROCEDURE`, so the body binds
+against the declared scope): assignment reads/writes, the leftmost-l-value target, a condition that reads but
+writes nothing, a plain DML's superset writes, and `InScopeLocals`. **Note recorded (test lesson):** the
+editor's `SemanticModel.Build(string)` uses the *lenient* newline-split parse, which breaks a routine apart
+so its body binds without the declared variables — the debugger must build the model from the **strict**
+`SqlParser.Parse(sql).Root` of the whole routine.
+
+### Verification
+
+Build 0/0. Tests green (user-verified; the full-suite run was slow so it was confirmed manually). Smoke: app
+launches. **D2 seam (b) DONE.** Parked for the next session: **seam (c)** `FirebirdDebugExecutor :
+IDebugExecutor` — wires D1's interpreter to seam (a)'s `DebugSessionConnection` through this harness, then
+the **lab-mandatory** simulated-vs-real fidelity comparison (extend `Lab/setup.sql` with the debugging zoo
+first). `HarnessBuilder`/`ReadWriteSetAnalyzer` are deliberately-parked pure infrastructure (mitigating
+#233 — recorded here because nothing calls them until seam c). Order within D2: (a) → (b) → **(c)**.
