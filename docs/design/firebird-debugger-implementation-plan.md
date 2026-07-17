@@ -53,22 +53,28 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
 - **Zakres.** Parser producer + binder consumer, per Etap 6.9's contract. **Additive only.** Formatter
   convergence is **out of scope** (spec: build grammar depth only when a feature needs it — the
   formatter's current handler layout is not broken).
-- **New.** `Ast/PsqlNodes.cs`: `WhenHandler : PsqlStatement` (condition kind + `Body`),
-  `WhenHandlerKind` enum (`Any` / `ExceptionName` / `GdsCode` / `SqlCode` / `SqlState`);
-  `BlockStatement.Handlers` (+ `Children`).
-- **Mod.** `SqlParser.Psql.cs` (parse the handler section of a block), `Ast/PsqlNodes.cs`,
-  `Ast/AstChildren.cs`, `SemanticBinder.Psql.cs` (bind handler bodies + the exception-name reference).
+- **New.** `Ast/PsqlNodes.cs`: `WhenHandler : PsqlStatement` — **one `WHEN … DO` clause** carrying an
+  **ordered `IReadOnlyList<WhenCondition>`** + `Body`; `WhenCondition` (kind + optional operand — the
+  exception name, gds/sql code, sqlstate literal); `WhenHandlerKind` enum (`Any` / `ExceptionName` /
+  `GdsCode` / `SqlCode` / `SqlState`); `BlockStatement.Handlers` (+ `Children`). **Refined 2026-07-17
+  (decision 3):** Firebird permits a comma-separated condition list per `WHEN`, so a single kind per node
+  is insufficient — a `WhenHandler` holds the whole list, and D1's router matches them in declaration
+  order.
+- **Mod.** `SqlParser.Psql.cs` (parse the handler section of a block + the condition list),
+  `Ast/PsqlNodes.cs`, `SemanticBinder.Psql.cs` (bind handler bodies + the exception-name reference of each
+  `ExceptionName` condition).
 - **Dep.** None (Etap 6.9 is closed).
 - **Ryzyka.**
   - **§0 round-trip.** Handlers must stay in the lossless token stream; an unrecognised handler shape
     **must** fall back to the existing `PsqlLeafKind.Other` valve, never be swallowed.
-  - `WhenHandlerKind` must not be guessed from text — parse the grammar.
+  - `WhenHandlerKind` must not be guessed from text — parse the grammar (recognise by leading keyword).
   - Do **not** touch `SqlFormatter`. Byte-identical output is a hard requirement here.
-- **DoD.** Nodes produced for all handler forms; binder resolves handler bodies against the enclosing
-  scope; formatter output **byte-identical**; §0 differential harness (B0) green; unrecognised shapes
-  still land in `Other`.
-- **Weryfikacja.** Unit tests beside `PsqlAstTests` (one per handler form + a malformed shape → `Other`);
-  the B0 differential corpus extended with handler shapes; `SqlFormatterSafetyTests` unchanged and green.
+- **DoD.** Nodes produced for all handler forms (incl. multi-condition `WHEN`); binder resolves handler
+  bodies against the enclosing scope and references each `EXCEPTION <name>` condition; formatter output
+  **byte-identical**; §0 differential harness (B0) green; unrecognised shapes still land in `Other`.
+- **Weryfikacja.** Unit tests beside `PsqlAstTests` (one per handler form + multi-condition + a malformed
+  shape → `Other` + the binder's exception-name reference); the B0 differential corpus extended with
+  handler shapes; `SqlFormatterSafetyTests` unchanged and green.
 - **Sesje: 1.**
 
 ---

@@ -118,6 +118,14 @@ public static class SqlTestCorpus
         "SELECT CASE WHEN A THEN CASE WHEN B THEN 1 ELSE 2 END ELSE 3 END AS N FROM T",
         "UPDATE T SET S = CASE WHEN X IS NULL THEN 0 ELSE X END WHERE ID = 1",
         "begin v = case when a > 0 then 1 else 0 end; if (case when b then 1 else 0 end = 1) then suspend; end",
+        // PSQL exception handlers — Stage X / P1 (WHEN … DO; all forms, single + multi-condition, block
+        // body, nested handler section, malformed WHEN → the lossless Other valve).
+        "begin insert into t values (1); when any do exception e; end",
+        "begin x = 1; when exception my_exc do x = 2; when sqlcode -803 do x = 3; end",
+        "begin x = 1; when gdscode grant_obj_notfound, gdscode grant_fld_notfound do begin x = 2; exit; end end",
+        "begin insert into t values (1); when sqlstate '23000' do begin exception dup; end when any do exception other; end",
+        "create procedure p as begin for select id from t into :i do begin when any do exit; end end",
+        "begin x = 1; when do x = 2; end",
     };
 
     /// <summary>Representative + structural-construct cases.</summary>

@@ -277,12 +277,47 @@ internal sealed partial class SemanticBinder
         if (body is not null) BindBlock(body, scope, stmt);
     }
 
-    // A BEGIN … END block: its DECLARE section (routine / EXECUTE BLOCK body only) then its statements.
-    // The block's own BEGIN/END keyword tokens carry no references, so they are not scanned.
+    // A BEGIN … END block: its DECLARE section (routine / EXECUTE BLOCK body only), its statements, then
+    // its WHEN … DO exception handlers. The block's own BEGIN/END keyword tokens carry no references, so
+    // they are not scanned.
     private void BindBlock(BlockStatement block, Scope scope, SqlStatement stmt)
     {
         foreach (var decl in block.Declarations) BindDeclaration(decl, scope, stmt);
         foreach (var s in block.Statements) BindPsqlStatement(s, scope, stmt);
+        foreach (var h in block.Handlers) BindWhenHandler(h, scope, stmt);
+    }
+
+    // A WHEN … DO exception handler (Stage X / P1). Each WHEN EXCEPTION <name> condition references a user
+    // exception as a schema object (resolved when metadata knows it, else a plain unresolved occurrence —
+    // the model stays error-tolerant); the other condition kinds (ANY / GDSCODE / SQLCODE / SQLSTATE)
+    // carry no schema reference. The handler body binds against the ENCLOSING scope — Firebird PSQL has no
+    // block-local scopes, so the one RoutineBody scope is the whole body's (the documented simplification
+    // the rest of this binder already relies on). A handler body that is itself a block recurses through
+    // BindBlock, so a nested handler section is bound too.
+    private void BindWhenHandler(WhenHandler handler, Scope scope, SqlStatement stmt)
+    {
+        foreach (var cond in handler.Conditions)
+        {
+            if (cond.Kind == WhenHandlerKind.ExceptionName && ExceptionNameToken(cond) is { } nameTok)
+            {
+                AddReference(nameTok, ResolveObject(FoldedName(nameTok)), ReferenceRole.SchemaObject);
+            }
+        }
+        if (handler.Body is not null) BindPsqlStatement(handler.Body, scope, stmt);
+    }
+
+    // The exception-name token of a WHEN EXCEPTION <name> condition — the first word after the leading
+    // EXCEPTION keyword in the condition's OWN tokens (a bounded read of a leaf's operand, like
+    // DeclNameToken; not a structural re-scan). Null when the name is absent (mid-edit).
+    private static SqlToken? ExceptionNameToken(WhenCondition cond)
+    {
+        var toks = cond.Tokens;
+        for (int k = 0; k < toks.Count; k++)
+        {
+            if (IsWordText(toks[k], "EXCEPTION"))
+                return k + 1 < toks.Count && IsWord(toks[k + 1]) ? toks[k + 1] : (SqlToken?)null;
+        }
+        return null;
     }
 
     // Dispatches one PSQL body statement to the right binding — an AST CONSUMER throughout: subqueries /

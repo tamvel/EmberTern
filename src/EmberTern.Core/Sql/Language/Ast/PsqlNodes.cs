@@ -34,8 +34,9 @@ public enum PsqlLeafKind
     Exception,
     /// <summary><c>RETURN …;</c> (function / EXECUTE BLOCK).</summary>
     Return,
-    /// <summary>Anything else (incl. a subprogram header, a <c>WHEN … DO …</c> handler leaf, or an
-    /// unrecognised fragment — the §0 valve).</summary>
+    /// <summary>Anything else (incl. a subprogram header or an unrecognised fragment — the §0 valve). A
+    /// well-formed <c>WHEN … DO …</c> exception handler is a <see cref="WhenHandler"/> node; only a
+    /// malformed / unrecognised <c>WHEN</c> clause falls back here.</summary>
     Other,
 }
 
@@ -43,9 +44,10 @@ public enum PsqlLeafKind
 /// A <c>BEGIN … END</c> block — the PSQL container. Holds an optional <see cref="Declarations"/> section
 /// (the <c>DECLARE VARIABLE/CURSOR</c>s that precede the outermost <c>BEGIN</c> of a routine /
 /// <c>EXECUTE BLOCK</c> body; empty for a nested block, and empty for an anonymous block whose leading
-/// <c>DECLARE</c>s are separate top-level statements) and the <see cref="Statements"/> between
-/// <c>BEGIN</c> and <c>END</c>. The <c>BEGIN</c>/<c>END</c> keyword tokens belong to this node's own
-/// <see cref="PsqlStatement.Tokens"/>, not to a child.
+/// <c>DECLARE</c>s are separate top-level statements), the <see cref="Statements"/> between
+/// <c>BEGIN</c> and <c>END</c>, and an optional trailing <see cref="Handlers"/> section (the
+/// <c>WHEN … DO</c> exception handlers, Stage X / P1). The <c>BEGIN</c>/<c>END</c> keyword tokens belong
+/// to this node's own <see cref="PsqlStatement.Tokens"/>, not to a child.
 /// </summary>
 public sealed class BlockStatement : PsqlStatement
 {
@@ -56,28 +58,50 @@ public sealed class BlockStatement : PsqlStatement
         int length,
         IReadOnlyList<SqlToken> tokens,
         IReadOnlyList<PsqlStatement> declarations,
-        IReadOnlyList<SqlNode> statements)
+        IReadOnlyList<SqlNode> statements,
+        IReadOnlyList<WhenHandler> handlers)
         : base(start, length, tokens)
     {
         Declarations = declarations;
         Statements = statements;
-        _children = new SqlNode[declarations.Count + statements.Count];
+        Handlers = handlers;
+
+        // Children in source order: the declarations (which always precede BEGIN) first, then the
+        // statements and handlers. In well-formed PSQL every statement precedes every handler, so this is
+        // a concatenation; a malformed trailing WHEN (a lossless Other leaf that lands in Statements) can
+        // interleave, so merge by source position to keep the well-formedness invariant (children in
+        // non-decreasing source order — StructuralAstDifferentialTests).
+        _children = new SqlNode[declarations.Count + statements.Count + handlers.Count];
         int k = 0;
         foreach (var d in declarations) _children[k++] = d;
-        foreach (var s in statements) _children[k++] = s;
+        int si = 0, hi = 0;
+        while (si < statements.Count || hi < handlers.Count)
+        {
+            bool takeStatement = hi >= handlers.Count
+                || (si < statements.Count && statements[si].Start <= handlers[hi].Start);
+            _children[k++] = takeStatement ? statements[si++] : handlers[hi++];
+        }
     }
 
     /// <summary>The <c>DECLARE VARIABLE/CURSOR</c> declarations preceding the outermost <c>BEGIN</c>
     /// (in source order); empty for a nested block or an anonymous block.</summary>
     public IReadOnlyList<PsqlStatement> Declarations { get; }
 
-    /// <summary>The statements between <c>BEGIN</c> and <c>END</c>, in source order. A statement is either
-    /// a PSQL construct (a nested <see cref="BlockStatement"/> / <see cref="IfStatement"/> /
-    /// <see cref="WhileStatement"/> / <see cref="ForSelectStatement"/> / <see cref="PsqlLeafStatement"/>) or
-    /// — for an embedded DSQL statement (SELECT / INSERT / UPDATE / DELETE / MERGE / EXECUTE) — the reused
-    /// top-level statement node (Etap 6.9 / B5, design §3.2), carrying its full query structure; hence the
-    /// element type is <see cref="SqlNode"/>.</summary>
+    /// <summary>The statements between <c>BEGIN</c> and the handler section (or <c>END</c>), in source
+    /// order. A statement is either a PSQL construct (a nested <see cref="BlockStatement"/> /
+    /// <see cref="IfStatement"/> / <see cref="WhileStatement"/> / <see cref="ForSelectStatement"/> /
+    /// <see cref="PsqlLeafStatement"/>) or — for an embedded DSQL statement (SELECT / INSERT / UPDATE /
+    /// DELETE / MERGE / EXECUTE) — the reused top-level statement node (Etap 6.9 / B5, design §3.2),
+    /// carrying its full query structure; hence the element type is <see cref="SqlNode"/>.</summary>
     public IReadOnlyList<SqlNode> Statements { get; }
+
+    /// <summary>The <c>WHEN … DO</c> exception handlers that trail the block's statements (before
+    /// <c>END</c>), in declaration order; empty when the block has none (Stage X / P1). Each is one
+    /// <c>WHEN</c> clause — a <see cref="WhenHandler"/> whose ordered conditions the interpreter matches in
+    /// declaration order (design §3.6). A malformed / unrecognised <c>WHEN</c> is NOT a handler — it stays
+    /// a lossless <see cref="PsqlLeafStatement"/> (<see cref="PsqlLeafKind.Other"/>) in
+    /// <see cref="Statements"/>.</summary>
+    public IReadOnlyList<WhenHandler> Handlers { get; }
 
     /// <inheritdoc/>
     public override IReadOnlyList<SqlNode> Children => _children;
@@ -279,5 +303,107 @@ public sealed class PsqlLeafStatement : PsqlStatement, IExecutableStatement
     /// — each owning its real query / arms. Empty for a leaf with none. The ordinary expression content
     /// stays in <see cref="PsqlStatement.Tokens"/> (structural-depth boundary); a DML/<c>SELECT</c> leaf's
     /// full clause structure is modelled by promoting it to a reused DML statement node (B5), not here.</remarks>
+    public override IReadOnlyList<SqlNode> Children => _children;
+}
+
+// ── Exception handlers — Stage X / P1 (debugger prerequisite; design §3.6) ──────────────────────────
+//
+// A BEGIN…END block may end with a WHEN…DO handler section. Until P1 these were an unstructured
+// PsqlLeafKind.Other token bag, so the future debugger's interpreter — which OWNS exception control flow
+// (like IF/WHILE) — had nothing to read. P1 makes them readable from the tree: one WhenHandler per WHEN
+// clause, each carrying an ordered list of conditions the interpreter matches in declaration order.
+// Additive structural overlay only: the binder consumes these nodes; the formatter is untouched (its PSQL
+// layout is token-based) and the byte-for-byte round-trip still comes from the lossless token stream (§0).
+// Formatter convergence is deliberately out of P1 scope (build grammar depth only when a feature needs it).
+
+/// <summary>The kind of a single <see cref="WhenCondition"/> — the error class one condition of a
+/// <c>WHEN … DO</c> handler matches. Recognised by the leading keyword of the grammar (never guessed from
+/// text): a <c>WHEN</c> whose condition keyword is none of these is not a handler and falls back to the
+/// <see cref="PsqlLeafKind.Other"/> valve.</summary>
+public enum WhenHandlerKind
+{
+    /// <summary><c>WHEN ANY</c> — matches any exception.</summary>
+    Any,
+    /// <summary><c>WHEN EXCEPTION &lt;name&gt;</c> — a named user exception.</summary>
+    ExceptionName,
+    /// <summary><c>WHEN GDSCODE &lt;errcode&gt;</c> — a Firebird GDS error code (symbolic name or number).</summary>
+    GdsCode,
+    /// <summary><c>WHEN SQLCODE &lt;number&gt;</c> — a legacy SQLCODE.</summary>
+    SqlCode,
+    /// <summary><c>WHEN SQLSTATE '&lt;code&gt;'</c> — an SQLSTATE string literal.</summary>
+    SqlState,
+}
+
+/// <summary>
+/// One condition of a <see cref="WhenHandler"/> — a <see cref="Kind"/> plus its operand (kept, like every
+/// leaf interior, in <see cref="Tokens"/>). Firebird lets a single <c>WHEN</c> list several conditions,
+/// comma-separated, sharing one <c>DO</c> body (<c>WHEN GDSCODE a, GDSCODE b, EXCEPTION c DO …</c>), so a
+/// handler owns an ordered list of these. For an <see cref="WhenHandlerKind.ExceptionName"/> condition the
+/// user-exception name is surfaced in <see cref="ExceptionName"/> (the binder references it as a schema
+/// object); the other kinds' operands (a gds/sql code, an SQLSTATE literal) are not schema references and
+/// stay only in <see cref="Tokens"/>.
+/// </summary>
+public sealed class WhenCondition : SqlNode
+{
+    public WhenCondition(
+        int start, int length, IReadOnlyList<SqlToken> tokens, WhenHandlerKind kind, string? exceptionName)
+        : base(start, length)
+    {
+        Tokens = tokens;
+        Kind = kind;
+        ExceptionName = exceptionName;
+    }
+
+    /// <summary>The condition's tokens — its keyword (<c>ANY</c>/<c>EXCEPTION</c>/<c>GDSCODE</c>/
+    /// <c>SQLCODE</c>/<c>SQLSTATE</c>) and operand (§0 backing).</summary>
+    public IReadOnlyList<SqlToken> Tokens { get; }
+
+    /// <summary>The error class this condition matches.</summary>
+    public WhenHandlerKind Kind { get; }
+
+    /// <summary>For a <see cref="WhenHandlerKind.ExceptionName"/> condition, the folded user-exception name
+    /// (or null when the name is absent mid-edit); null for every other kind.</summary>
+    public string? ExceptionName { get; }
+
+    /// <inheritdoc/>
+    public override IReadOnlyList<SqlNode> Children => Array.Empty<SqlNode>();
+}
+
+/// <summary>
+/// A <c>WHEN &lt;condition&gt; [, &lt;condition&gt; …] DO &lt;compound_statement&gt;</c> exception handler —
+/// one <c>WHEN</c> clause (Stage X / P1, design §3.6). Its <see cref="Conditions"/> are matched by the
+/// interpreter in declaration order (left-to-right within the clause; the clauses themselves top-to-bottom
+/// in <see cref="BlockStatement.Handlers"/>); its <see cref="Body"/> is the compound statement run when a
+/// condition matches (a <see cref="BlockStatement"/>, a single PSQL construct, or a reused DSQL statement
+/// node — like any other body, B5). The handler clause is not itself a step point; its body statements are.
+/// A <c>WHEN</c> the parser cannot recognise as this shape is NOT a handler — it stays a lossless
+/// <see cref="PsqlLeafStatement"/> (<see cref="PsqlLeafKind.Other"/>).
+/// </summary>
+public sealed class WhenHandler : PsqlStatement
+{
+    private readonly SqlNode[] _children;
+
+    public WhenHandler(
+        int start, int length, IReadOnlyList<SqlToken> tokens, IReadOnlyList<WhenCondition> conditions, SqlNode? body)
+        : base(start, length, tokens)
+    {
+        Conditions = conditions;
+        Body = body;
+        _children = new SqlNode[conditions.Count + (body is null ? 0 : 1)];
+        int k = 0;
+        for (int i = 0; i < conditions.Count; i++) _children[k++] = conditions[i];
+        if (body is not null) _children[k] = body;
+    }
+
+    /// <summary>The clause's conditions, in declaration order (at least one for a well-formed handler).</summary>
+    public IReadOnlyList<WhenCondition> Conditions { get; }
+
+    /// <summary>The handler body — the compound statement run on a match (a block or a single statement),
+    /// or null on malformed / mid-edit input.</summary>
+    public SqlNode? Body { get; }
+
+    /// <inheritdoc/>
+    /// <remarks>The <see cref="Conditions"/> (in source order) then the <see cref="Body"/> — source order,
+    /// since conditions precede the <c>DO</c> body.</remarks>
     public override IReadOnlyList<SqlNode> Children => _children;
 }

@@ -29,7 +29,7 @@ decided and why*, not just its conclusions.
 |---|---|---|
 | 1 | **Harness never materializes "uninitialized" as an explicit `NULL` assignment.** Harness params/RETURNS use **base types**; frame variables are declared **verbatim**. | Changes Firebird semantics otherwise — and crashes on `NOT NULL` domains. §3.4 |
 | 2 | **Preserve single-request semantics via a SAVEPOINT per simulated frame.** | Firebird's call atomicity is real and observable. §4.5 |
-| 3 | **`WHEN … DO` is control flow, not a feature.** AST deepening is a **prerequisite** to D1. | The client owns control flow; exceptions *are* control flow. §3.6 / P1 |
+| 3 | **`WHEN … DO` is control flow, not a feature.** AST deepening is a **prerequisite** to D1. A `WhenHandler` models one `WHEN` clause with an **ordered list of conditions** (Firebird allows a comma-separated condition list per `WHEN`), matched in declaration order (refined 2026-07-17). | The client owns control flow; exceptions *are* control flow. §3.6 / P1 |
 | 4 | **Do not emulate `CURRENT_TIMESTAMP` & co. Document them as Fidelity Boundaries** — generators included. | Emulation is incomplete by construction and would trade an honest boundary for a hidden one. §12 |
 | 5 | **No "fourth lane". The debugger gets its own connection + transaction, owned by the *session*, not the profile.** | A lane is a per-profile singleton; sessions need independent transactions. §4.1 |
 | 6 | **Evaluate / Watches / Immediate = one HarnessBuilder mechanism, three UI surfaces.** A pin does **not** replace a Watch. | A watch is an *expression*, not a variable. §9.5 |
@@ -277,8 +277,14 @@ explain**. Never guess.
 v1 omitted `WHEN … DO` entirely — the most common PSQL control flow there is. It is **client-owned**, like
 `IF`/`WHILE`, and the interpreter must implement:
 
-- **Handler matching** — `WHEN ANY`, `WHEN EXCEPTION <name>`, `WHEN GDSCODE <x>`, `WHEN SQLCODE <x>`,
-  `WHEN SQLSTATE '<x>'`, in declaration order.
+- **Handler matching** — a `WHEN … DO` clause matches one of `ANY`, `EXCEPTION <name>`, `GDSCODE <x>`,
+  `SQLCODE <x>`, `SQLSTATE '<x>'`. Firebird lets a **single `WHEN` list several conditions**, comma-
+  separated, sharing one `DO` body (`WHEN GDSCODE a, GDSCODE b, EXCEPTION c DO …`); the interpreter tries
+  each condition of each clause **in declaration order** (conditions within a clause left-to-right, clauses
+  top-to-bottom). So the AST models **one `WhenHandler` per `WHEN` clause**, carrying an **ordered list of
+  conditions** (each a kind + its optional operand) plus the body — never a single condition per node
+  (decision 3, refined 2026-07-17). A `WHEN` whose shape the parser cannot recognise as `WHEN <conditions>
+  DO <body>` falls back to the lossless `PsqlLeafKind.Other` valve, never a misleading structured node.
 - **Propagation** — unwind frames until a handler matches; unwinding a frame triggers its savepoint
   rollback (§4.5).
 - **Re-raise** — bare `EXCEPTION;` inside a handler.
@@ -293,9 +299,10 @@ messages.
 
 > **⚠ Prerequisite P1 — AST deepening.** The AST does **not** model handlers: `PsqlLeafKind.Other` is
 > documented as *"a WHEN … DO handler leaf"*, i.e. handlers are an unstructured token bag. **The
-> interpreter cannot read exception control flow from the tree as it stands.** A `WhenHandler` node +
-> `BlockStatement.Handlers` is required **before D1**, following Etap 6.9's contract (parser producer →
-> binder consumer; formatter convergence later, only if a feature needs it).
+> interpreter cannot read exception control flow from the tree as it stands.** A `WhenHandler` node
+> (one per `WHEN` clause, holding an ordered `WhenCondition` list + a body) + `BlockStatement.Handlers`
+> is required **before D1**, following Etap 6.9's contract (parser producer → binder consumer; formatter
+> convergence later, only if a feature needs it).
 
 ### 3.7 Component map
 

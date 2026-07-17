@@ -59,14 +59,15 @@ public static partial class SqlParser
         }
 
         var statements = new List<SqlNode>();
+        var handlers = new List<WhenHandler>();
         if (i < sig.Count && IsBodyWord(sig[i], "BEGIN"))
         {
             i++; // consume BEGIN
             while (i < sig.Count && !IsBodyWord(sig[i], "END"))
             {
                 int before = i;
-                statements.Add(ParsePsqlUnit(sig, ref i));
-                if (i == before) i++; // anti-stall (defensive; ParsePsqlUnit always advances)
+                ParseBodyUnit(sig, ref i, statements, handlers);
+                if (i == before) i++; // anti-stall (defensive; ParseBodyUnit always advances)
             }
             if (i < sig.Count && IsBodyWord(sig[i], "END"))
             {
@@ -79,24 +80,40 @@ public static partial class SqlParser
                 while (i < sig.Count)
                 {
                     int before = i;
-                    statements.Add(ParsePsqlUnit(sig, ref i));
+                    ParseBodyUnit(sig, ref i, statements, handlers);
                     if (i == before) i++;
                 }
             }
         }
         else if (isTopLevel)
         {
-            // No BEGIN (mid-edit / body-only fragment) — parse whatever there is as statements.
+            // No BEGIN (mid-edit / body-only fragment) — parse whatever there is as statements/handlers.
             while (i < sig.Count)
             {
                 int before = i;
-                statements.Add(ParsePsqlUnit(sig, ref i));
+                ParseBodyUnit(sig, ref i, statements, handlers);
                 if (i == before) i++;
             }
         }
 
         var (start, length) = TokenSpan(sig, lo, i);
-        return new BlockStatement(start, length, Sub(sig, lo, i), declarations, statements);
+        return new BlockStatement(start, length, Sub(sig, lo, i), declarations, statements, handlers);
+    }
+
+    // Parses one body unit at i and routes it: a recognised WHEN … DO exception handler goes to
+    // <paramref name="handlers"/>; everything else — a statement, or a malformed/unrecognised WHEN that
+    // fell back to the §0 Other leaf — goes to <paramref name="statements"/>. Advances i by ≥1.
+    private static void ParseBodyUnit(
+        IReadOnlyList<SqlToken> sig, ref int i, List<SqlNode> statements, List<WhenHandler> handlers)
+    {
+        if (IsBodyWord(sig[i], "WHEN"))
+        {
+            var node = ParseWhenHandler(sig, ref i);
+            if (node is WhenHandler wh) handlers.Add(wh);
+            else statements.Add(node); // malformed / unrecognised WHEN → lossless Other leaf
+            return;
+        }
+        statements.Add(ParsePsqlUnit(sig, ref i));
     }
 
     // One PSQL statement (a compound: BEGIN/IF/WHILE/FOR; an embedded DSQL statement reused node; or a
@@ -199,6 +216,101 @@ public static partial class SqlParser
             if (IsBodyWord(t, "AS") && k + 1 < doIdx && IsBodyWord(sig[k + 1], "CURSOR")) { hi = k; break; }
         }
         return ParseQueryRange(sig, lo, hi);
+    }
+
+    // ── Exception handlers (Stage X / P1, design §3.6) ───────────────────────────────────────────
+    //
+    // A WHEN <condition> [, <condition> …] DO <compound_statement> handler at a block's statement
+    // position. A WHEN token can only begin an exception handler here: a CASE's WHEN and a MERGE's WHEN
+    // live INSIDE a leaf/DSQL statement, which ParsePsqlLeaf/Classify consume whole (to their ';' / END),
+    // so they never surface at a body-unit position. Returns a WhenHandler when the shape is recognised;
+    // otherwise falls back to a lossless PsqlLeafStatement (Other) — the §0 valve, mirroring how
+    // ParsePsqlIf falls back on a missing THEN. Never throws; always advances i.
+    private static SqlNode ParseWhenHandler(IReadOnlyList<SqlToken> sig, ref int i)
+    {
+        int lo = i; // at WHEN
+        int doIdx = FindWhenDoIndex(sig, i + 1);
+        if (doIdx < 0) return ParsePsqlLeaf(sig, ref i); // no depth-0 DO before the next WHEN/END → Other
+
+        var conditions = ParseWhenConditions(sig, lo + 1, doIdx);
+        if (conditions is null) return ParsePsqlLeaf(sig, ref i); // condition list not grammar → Other
+
+        i = doIdx + 1; // consume DO
+        SqlNode? body = i < sig.Count ? ParsePsqlUnit(sig, ref i) : null; // compound statement (or mid-edit end)
+        var (start, length) = TokenSpan(sig, lo, i);
+        return new WhenHandler(start, length, Sub(sig, lo, i), conditions, body);
+    }
+
+    // The index of the DO ending a WHEN clause's condition list — the first depth-0 DO at/after `from`,
+    // stopping (⇒ -1) at a depth-0 END or a depth-0 WHEN (the next clause) or end of input first. The
+    // condition list has no DO of its own, so the first depth-0 DO is unambiguously this clause's.
+    private static int FindWhenDoIndex(IReadOnlyList<SqlToken> sig, int from)
+    {
+        int depth = 0;
+        for (int k = from; k < sig.Count; k++)
+        {
+            var t = sig[k];
+            if (t.Kind == TokenKind.LParen) { depth++; continue; }
+            if (t.Kind == TokenKind.RParen) { if (depth > 0) depth--; continue; }
+            if (depth != 0) continue;
+            if (IsBodyWord(t, "DO")) return k;
+            if (IsBodyWord(t, "END") || IsBodyWord(t, "WHEN")) return -1;
+        }
+        return -1;
+    }
+
+    // Parses the condition list of a WHEN clause — the token range [lo, hi) between WHEN and DO — into
+    // WhenConditions (comma-separated, in declaration order). Returns null when the range is empty or ANY
+    // segment's leading keyword is not a recognised condition form (ANY / EXCEPTION / GDSCODE / SQLCODE /
+    // SQLSTATE), so the whole handler then falls back to the Other valve (never a partly-guessed node).
+    private static List<WhenCondition>? ParseWhenConditions(IReadOnlyList<SqlToken> sig, int lo, int hi)
+    {
+        if (lo >= hi) return null;
+        var conditions = new List<WhenCondition>();
+        int depth = 0, segStart = lo;
+        for (int k = lo; k <= hi; k++)
+        {
+            if (k < hi)
+            {
+                var kind = sig[k].Kind;
+                if (kind == TokenKind.LParen) { depth++; continue; }
+                if (kind == TokenKind.RParen) { if (depth > 0) depth--; continue; }
+                if (!(depth == 0 && kind == TokenKind.Comma)) continue;
+            }
+            if (k > segStart)
+            {
+                var cond = ParseOneWhenCondition(sig, segStart, k);
+                if (cond is null) return null; // an unrecognised segment fails the whole handler
+                conditions.Add(cond);
+            }
+            segStart = k + 1;
+        }
+        return conditions.Count > 0 ? conditions : null;
+    }
+
+    // One WHEN condition over [lo, hi) — recognised strictly by its leading keyword (never guessed from
+    // text). Null when the keyword is not one of the five condition forms. The operand (exception name,
+    // gds/sql code, sqlstate literal) stays in the condition's tokens; only an EXCEPTION name is surfaced
+    // (the binder references it as a schema object).
+    private static WhenCondition? ParseOneWhenCondition(IReadOnlyList<SqlToken> sig, int lo, int hi)
+    {
+        if (lo >= hi) return null;
+        var lead = sig[lo];
+        if (lead.Kind is not (TokenKind.Keyword or TokenKind.Identifier)) return null;
+
+        WhenHandlerKind kind;
+        string? exceptionName = null;
+        switch (lead.Text.ToUpperInvariant())
+        {
+            case "ANY": kind = WhenHandlerKind.Any; break;
+            case "EXCEPTION": kind = WhenHandlerKind.ExceptionName; exceptionName = PsqlNameAt(sig, lo + 1); break;
+            case "GDSCODE": kind = WhenHandlerKind.GdsCode; break;
+            case "SQLCODE": kind = WhenHandlerKind.SqlCode; break;
+            case "SQLSTATE": kind = WhenHandlerKind.SqlState; break;
+            default: return null;
+        }
+        var (start, length) = TokenSpan(sig, lo, hi);
+        return new WhenCondition(start, length, Sub(sig, lo, hi), kind, exceptionName);
     }
 
     // A subprogram header (DECLARE PROCEDURE/FUNCTION …) collected up to (exclusive) its body BEGIN.

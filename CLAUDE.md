@@ -196,15 +196,27 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: DESIGNED + PLANNED, implementation NOT started (2026-07-17).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 DONE (2026-07-17).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
-  (milestone briefs, session split, danger zones, **Developer Contract**). **Next milestone: P1** — an
-  additive AST node for `WHEN … DO` handlers (they are currently a `PsqlLeafKind.Other` token bag, so the
-  interpreter has nothing to read); it blocks D1. Then **P2** (FB3+ connect-time version gate — app-wide,
-  deliberately outside the debugger's milestones). Order is **risk-first**: D1/D2 are pure Core+Firebird
-  and need no editor wiring, so the wiring consolidation (gotcha #219) sits at **D3**, right before the
-  first debugger UI. **Read the plan + your milestone's brief before writing any debugger code.**
+  (milestone briefs, session split, danger zones, **Developer Contract**).
+  **P1 (AST: exception handlers) — DONE.** `WHEN … DO` is now readable from the tree: a `WhenHandler`
+  node per `WHEN` clause holding an **ordered `WhenCondition` list** (kind + optional operand) + a `Body`,
+  hung off `BlockStatement.Handlers`. Parser producer (`SqlParser.Psql.cs`) peels the handler section
+  (comma-split condition list, each recognised strictly by leading keyword — `ANY`/`EXCEPTION`/`GDSCODE`/
+  `SQLCODE`/`SQLSTATE`); binder consumer (`SemanticBinder.Psql.cs`) binds each handler body against the
+  enclosing scope and references every `EXCEPTION <name>` condition as a schema object. **Additive only** —
+  `SqlFormatter` untouched (its PSQL layout is token-based), §0 round-trip byte-identical, an unrecognised /
+  malformed `WHEN` still falls back to the lossless `PsqlLeafKind.Other` valve (never a handler, never
+  swallowed). **Refined during P1 (decision 3, ratified by the user):** Firebird allows a comma-separated
+  condition list per `WHEN`, so a single kind per node was insufficient — the model carries the whole list,
+  and D1's router matches them in declaration order (spec + plan updated). Build 0/0; **4639 tests green**
+  (run in two partitions — 4612 + the 27-test `ConnectionExpandBindingProbe` alone — to sidestep the
+  documented full-suite hang #94/#226); smoke clean. History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
+  **Next milestone: P2** (FB3+ connect-time version gate — app-wide, deliberately outside the debugger's
+  milestones), then **D1** (debug engine core — pure Core). Order is **risk-first**: D1/D2 are pure
+  Core+Firebird and need no editor wiring, so the wiring consolidation (gotcha #219) sits at **D3**, right
+  before the first debugger UI. **Read the plan + your milestone's brief before writing any debugger code.**
 - **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**
   The close/disconnect WorkGuard can now **compile every dirty metadata editor in one pass** instead
   of only listing-and-discarding them. It **reuses the group-recompilation pipeline** (one save

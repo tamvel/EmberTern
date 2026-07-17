@@ -216,4 +216,119 @@ public class PsqlAstTests
         Assert.Equal(new[] { nameof(IfStatement), nameof(WhileStatement) }, kinds);
         AssertSpansMapToSource(sql, ddl.Body);
     }
+
+    // ── Stage X / P1: WHEN … DO exception handlers ─────────────────────────────────────────────
+
+    [Fact]
+    public void WhenAny_Handler_IsParsed_StatementStaysAStatement()
+    {
+        const string sql = "begin insert into t values (1); when any do exception e; end";
+        var body = Body(sql);
+        // The preceding INSERT stays a (reused DSQL) statement; the handler is peeled into Handlers.
+        Assert.IsType<InsertStatement>(body.Statements.Single());
+        var handler = Assert.Single(body.Handlers);
+        var cond = Assert.Single(handler.Conditions);
+        Assert.Equal(WhenHandlerKind.Any, cond.Kind);
+        Assert.Null(cond.ExceptionName);
+        Assert.Equal(PsqlLeafKind.Exception, Assert.IsType<PsqlLeafStatement>(handler.Body).Kind);
+        AssertSpansMapToSource(sql, body);
+    }
+
+    [Fact]
+    public void WhenExceptionName_ExposesTheName()
+    {
+        const string sql = "begin x = 1; when exception my_exc do x = 2; end";
+        var handler = Assert.Single(Body(sql).Handlers);
+        var cond = Assert.Single(handler.Conditions);
+        Assert.Equal(WhenHandlerKind.ExceptionName, cond.Kind);
+        Assert.Equal("MY_EXC", cond.ExceptionName);
+    }
+
+    [Fact]
+    public void WhenGdsCode_SqlCode_SqlState_Kinds()
+    {
+        const string sql = "begin x = 1; "
+                         + "when gdscode grant_obj_notfound do x = 2; "
+                         + "when sqlcode -803 do x = 3; "
+                         + "when sqlstate '23000' do x = 4; end";
+        var kinds = Body(sql).Handlers.Select(h => Assert.Single(h.Conditions).Kind).ToArray();
+        Assert.Equal(new[] { WhenHandlerKind.GdsCode, WhenHandlerKind.SqlCode, WhenHandlerKind.SqlState }, kinds);
+    }
+
+    [Fact]
+    public void MultiConditionWhen_KeepsEveryConditionInDeclarationOrder()
+    {
+        // Firebird allows a comma-separated condition list sharing one DO body (decision 3, refined).
+        const string sql = "begin x = 1; when gdscode a, gdscode b, exception c do begin exit; end end";
+        var handler = Assert.Single(Body(sql).Handlers);
+        Assert.Equal(
+            new[] { WhenHandlerKind.GdsCode, WhenHandlerKind.GdsCode, WhenHandlerKind.ExceptionName },
+            handler.Conditions.Select(c => c.Kind).ToArray());
+        Assert.Equal("C", handler.Conditions[2].ExceptionName);
+        Assert.IsType<BlockStatement>(handler.Body);
+        AssertSpansMapToSource(sql, Body(sql));
+    }
+
+    [Fact]
+    public void MultipleHandlerClauses_AreInDeclarationOrder()
+    {
+        const string sql = "begin x = 1; when exception a do x = 2; when any do x = 3; end";
+        var handlers = Body(sql).Handlers;
+        Assert.Equal(2, handlers.Count);
+        Assert.Equal(WhenHandlerKind.ExceptionName, Assert.Single(handlers[0].Conditions).Kind);
+        Assert.Equal(WhenHandlerKind.Any, Assert.Single(handlers[1].Conditions).Kind);
+    }
+
+    [Fact]
+    public void HandlerBodyCanBeABlock()
+    {
+        const string sql = "begin x = 1; when any do begin a = 1; b = 2; end end";
+        var body = Body(sql);
+        var handler = Assert.Single(body.Handlers);
+        var block = Assert.IsType<BlockStatement>(handler.Body);
+        Assert.Equal(2, block.Statements.Count);
+        AssertSpansMapToSource(sql, body);
+    }
+
+    [Fact]
+    public void MalformedWhen_NoDo_FallsBackToOtherLeaf_NotAHandler()
+    {
+        const string sql = "begin x = 1; when any exception e; end"; // no DO → unrecognised shape
+        var body = Body(sql);
+        Assert.Empty(body.Handlers);
+        Assert.Contains(body.Statements.OfType<PsqlLeafStatement>(), s => s.Kind == PsqlLeafKind.Other);
+        Assert.Equal(sql, SqlParser.Parse(sql).Root.ToSourceString()); // §0 — lossless
+    }
+
+    [Fact]
+    public void MalformedWhen_EmptyConditionList_IsNotAHandler()
+    {
+        // WHEN immediately followed by DO — no conditions → the whole clause falls back to a lossless
+        // leaf (never a handler). Its leaf Kind is incidental (ClassifyLeaf sees the '=' and calls it an
+        // assignment); what matters is that it is NOT peeled into Handlers and nothing is dropped.
+        const string sql = "begin x = 1; when do x = 2; end";
+        var body = Body(sql);
+        Assert.Empty(body.Handlers);
+        Assert.Contains(body.Statements, s => sql.Substring(s.Start, s.Length).StartsWith("when", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(sql, SqlParser.Parse(sql).Root.ToSourceString());
+    }
+
+    [Fact]
+    public void UnrecognisedConditionKeyword_FallsBackToOtherLeaf()
+    {
+        const string sql = "begin x = 1; when frobnicate do x = 2; end"; // not a condition form
+        var body = Body(sql);
+        Assert.Empty(body.Handlers);
+        Assert.Equal(sql, SqlParser.Parse(sql).Root.ToSourceString());
+    }
+
+    [Fact]
+    public void Handler_IsPresentInDdlRoutineBody()
+    {
+        const string sql = "create procedure p as begin insert into t values (1); when any do exception e; end";
+        var ddl = Assert.IsType<DdlStatement>(SqlParser.Parse(sql).Root.Statements[0]);
+        var handler = Assert.Single(ddl.Body!.Handlers);
+        Assert.Equal(WhenHandlerKind.Any, Assert.Single(handler.Conditions).Kind);
+        AssertSpansMapToSource(sql, ddl.Body);
+    }
 }

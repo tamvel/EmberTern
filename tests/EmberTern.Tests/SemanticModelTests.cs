@@ -732,4 +732,64 @@ public class SemanticModelTests
         Assert.Single(schemaRefs);
         Assert.Equal(SymbolKind.Procedure, Assert.IsType<SchemaObjectSymbol>(schemaRefs[0].Symbol).Kind);
     }
+
+    // ── Stage X / P1: WHEN … DO exception handlers ─────────────────────────────────────────────
+
+    [Fact]
+    public void WhenExceptionHandler_ReferencesTheExceptionByName()
+    {
+        // A WHEN EXCEPTION <name> handler condition references the user exception as a schema object,
+        // resolved when the catalog knows it — the binder consumes the new WhenHandler node.
+        var meta = new FakeMetadata().Object("MY_EXC", SymbolKind.Exception);
+        const string sql = "create procedure p as begin x = 1; when exception my_exc do x = 2; end";
+        var m = Build(sql, meta);
+        var r = RefAt(m, sql, "my_exc");
+        Assert.NotNull(r);
+        Assert.Equal(ReferenceRole.SchemaObject, r!.Role);
+        Assert.True(r.IsResolved);
+        Assert.Equal(SymbolKind.Exception, r.Symbol!.Kind);
+    }
+
+    [Fact]
+    public void WhenExceptionHandler_UnknownException_IsAnUnresolvedOccurrence()
+    {
+        // Error-tolerant: an unknown exception name is still recorded as a SchemaObject occurrence, just
+        // unresolved (never guessed, never thrown).
+        const string sql = "create procedure p as begin x = 1; when exception no_such_exc do x = 2; end";
+        var m = Build(sql); // no metadata
+        var r = RefAt(m, sql, "no_such_exc");
+        Assert.NotNull(r);
+        Assert.Equal(ReferenceRole.SchemaObject, r!.Role);
+        Assert.False(r.IsResolved);
+    }
+
+    [Fact]
+    public void MultiConditionWhen_ReferencesEachExceptionName()
+    {
+        // Every EXCEPTION condition of a multi-condition WHEN is referenced (GDSCODE operands are not
+        // schema objects → no reference).
+        var meta = new FakeMetadata().Object("E1", SymbolKind.Exception).Object("E2", SymbolKind.Exception);
+        const string sql = "create procedure p as begin x = 1; when exception e1, gdscode grant_obj_notfound, exception e2 do x = 2; end";
+        var m = Build(sql, meta);
+        var r1 = RefAt(m, sql, "e1");
+        var r2 = RefAt(m, sql, "e2");
+        Assert.True(r1 is { Role: ReferenceRole.SchemaObject, IsResolved: true });
+        Assert.True(r2 is { Role: ReferenceRole.SchemaObject, IsResolved: true });
+        // The GDSCODE symbolic operand is NOT a schema reference.
+        Assert.Null(RefAt(m, sql, "grant_obj_notfound"));
+    }
+
+    [Fact]
+    public void HandlerBody_BindsAgainstEnclosingScope()
+    {
+        // A local variable used inside a handler body resolves to the routine's DECLARE (the handler body
+        // binds in the enclosing RoutineBody scope).
+        const string sql = "create procedure p as declare variable v integer; begin x = 1; when any do v = 2; end";
+        var m = Build(sql);
+        // The 'v' inside the handler body resolves to the declared variable.
+        var bodyRef = RefAt(m, sql, "v = 2");
+        Assert.NotNull(bodyRef);
+        Assert.Equal(ReferenceRole.Variable, bodyRef!.Role);
+        Assert.True(bodyRef.IsResolved);
+    }
 }
