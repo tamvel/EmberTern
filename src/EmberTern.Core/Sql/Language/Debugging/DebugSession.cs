@@ -5,17 +5,19 @@ using EmberTern.Core.Sql.Language.Ast;
 namespace EmberTern.Core.Sql.Debugging;
 
 /// <summary>
-/// The debug engine core (milestone D1, seam a) — a client-side interpreter of PSQL <b>control flow</b>
-/// over the AST, driving the server only through <see cref="IDebugExecutor"/>. It never evaluates an
-/// expression, coerces a type, or decides a boolean: it walks blocks / <c>IF</c> / <c>WHILE</c> /
-/// <c>FOR</c> / leaves, asks the executor to run each step point, and decides — as a pure function of
-/// (AST, frames, command) — what to execute next and where to stop. Frames form a real call stack (spec
-/// §5); each frame gets a SAVEPOINT on entry and its release on normal exit (spec §4.5). Pure Core: zero
-/// Avalonia, zero FirebirdSql.
+/// The debug engine core (milestone D1) — a client-side interpreter of PSQL <b>control flow</b> over the
+/// AST, driving the server only through <see cref="IDebugExecutor"/>. It never evaluates an expression,
+/// coerces a type, or decides a boolean: it walks blocks / <c>IF</c> / <c>WHILE</c> / <c>FOR</c> / leaves,
+/// asks the executor to run each step point, and decides — as a pure function of (AST, frames, breakpoints,
+/// command) — what to execute next and where to stop. Frames form a real call stack (spec §5); each frame
+/// gets a SAVEPOINT on entry and its release on normal exit (spec §4.5). Pure Core: zero Avalonia, zero
+/// FirebirdSql.
 /// <para>
-/// <b>Seam a scope:</b> execution + stepping + nested frames + savepoint enter/release. The
-/// <see cref="ExceptionRouter"/>, the unhandled-exit <c>ROLLBACK TO</c>, and breakpoints are seam b — an
-/// unhandled raise here stops the session <see cref="DebugState.Faulted"/> without routing or rollback.
+/// A raised statement/condition is routed through the <see cref="ExceptionRouter"/>: it unwinds frames (each
+/// unhandled frame rolled back to its savepoint, §4.5) until a <c>WHEN … DO</c> handler matches, then
+/// resumes at that handler's body; when nothing catches, every frame — the root included — is rolled back
+/// and the session <see cref="DebugState.Faulted"/>s. Breakpoints (<see cref="Breakpoints"/>) are an
+/// additional stop condition of the run commands.
 /// </para>
 /// </summary>
 public sealed class DebugSession
@@ -24,6 +26,7 @@ public sealed class DebugSession
     private readonly BlockStatement _rootBody;
     private readonly string _rootName;
     private readonly List<Frame> _frames = new();
+    private readonly BreakpointSet _breakpoints = new();
     private readonly List<IReadOnlyDictionary<string, object?>> _emittedRows = new();
     private int _nextFrameId;
     private IExecutableStatement? _currentStep;
@@ -64,8 +67,12 @@ public sealed class DebugSession
     /// <summary>The current frame's depth (1 = root); 0 before start / after completion.</summary>
     public int Depth => _frames.Count;
 
-    /// <summary>The error the session faulted on, or null.</summary>
+    /// <summary>The error the session faulted on, or null (also null after a <c>WHEN</c> handler caught).</summary>
     public DebugError? CurrentError => _error;
+
+    /// <summary>The active breakpoints (offsets of step points). Mutable during the session — add or remove
+    /// while paused; a run command stops at the next step point whose offset is set here.</summary>
+    public BreakpointSet Breakpoints => _breakpoints;
 
     /// <summary>Rows emitted by <c>SUSPEND</c> so far, in order.</summary>
     public IReadOnlyList<IReadOnlyDictionary<string, object?>> EmittedRows => _emittedRows;
@@ -157,10 +164,18 @@ public sealed class DebugSession
         {
             if (ExecuteCurrent(kind))
             {
-                // A statement / condition raised. Seam a stops here (routing + rollback are seam b).
-                State = DebugState.Faulted;
-                StopReason = StopReason.Exception;
-                return;
+                // A statement / condition raised — route it through the handler stack (spec §3.6/§4.5).
+                if (!ExceptionRouter.TryRoute(_frames, _error!, _executor))
+                {
+                    // Nothing caught it: every frame (root included) has been rolled back and popped.
+                    _currentStep = null;
+                    State = DebugState.Faulted;
+                    StopReason = StopReason.Exception;
+                    return;
+                }
+                // Caught: the router repositioned control to the matching handler's body. The exception is
+                // handled, so the session is no longer faulted; fall through to stop/continue per the command.
+                _error = null;
             }
 
             _currentStep = AdvanceToNextStepPoint();
@@ -171,10 +186,11 @@ public sealed class DebugSession
                 return;
             }
 
-            if (StepPlanner.ShouldStop(kind, targetOffset, startDepth, _frames.Count, _currentStep))
+            bool atBreakpoint = _breakpoints.Contains(_currentStep.Start);
+            if (atBreakpoint || StepPlanner.ShouldStop(kind, targetOffset, startDepth, _frames.Count, _currentStep))
             {
                 State = DebugState.Paused;
-                StopReason = StopReason.Step;
+                StopReason = atBreakpoint ? StopReason.Breakpoint : StopReason.Step;
                 return;
             }
         }
@@ -182,7 +198,7 @@ public sealed class DebugSession
 
     // Executes the current step point, advancing the control stack (consuming a leaf / evaluating a
     // condition and pushing the taken branch / fetching a row and pushing the loop body / pushing a frame
-    // for a step-into). Returns true when it raised (seam a: stop, no routing).
+    // for a step-into). Returns true when it raised (the caller then routes it through the ExceptionRouter).
     private bool ExecuteCurrent(StepKind kind)
     {
         var frame = _frames[^1];

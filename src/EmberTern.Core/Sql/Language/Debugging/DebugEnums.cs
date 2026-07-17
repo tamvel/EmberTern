@@ -18,8 +18,9 @@ public enum DebugState
     /// <summary>Finished normally — the root frame ran to completion.</summary>
     Completed,
 
-    /// <summary>Stopped on an exception. In D1 (seam a) an unhandled raise ends the session here; routing
-    /// and frame unwinding are seam b (<c>ExceptionRouter</c>).</summary>
+    /// <summary>Stopped on an <b>unhandled</b> exception — no <c>WHEN … DO</c> handler in any frame matched,
+    /// so the <see cref="ExceptionRouter"/> rolled every frame back to its savepoint (spec §4.5) and the
+    /// session ended here. A raise that a handler catches does NOT reach this state.</summary>
     Faulted,
 }
 
@@ -45,7 +46,7 @@ public enum StepKind
     /// between (Set Next Statement).</summary>
     SetNext,
 
-    /// <summary>Run until the session completes (or, in seam b, hits a breakpoint).</summary>
+    /// <summary>Run until the session completes (or hits a breakpoint / an unhandled exception).</summary>
     Continue,
 }
 
@@ -61,7 +62,7 @@ public enum StopReason
     /// <summary>Stopped after a step command reached the next step point.</summary>
     Step,
 
-    /// <summary>Stopped at a breakpoint (seam b).</summary>
+    /// <summary>Stopped because the next step point's offset is in <see cref="DebugSession.Breakpoints"/>.</summary>
     Breakpoint,
 
     /// <summary>Stopped because a statement raised an exception.</summary>

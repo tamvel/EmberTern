@@ -6,7 +6,8 @@ namespace EmberTern.Core.Sql.Debugging;
 /// The pure stop-decision for stepping: given the command, the depth when the step began, the current
 /// depth, and the next step point, decide whether the session should stop here or keep running. Every step
 /// decision is a pure function of these inputs (the DoD requirement) — no state, no side effects, so it is
-/// trivially unit-testable. Breakpoints (seam b) compose with this; they are not part of it.
+/// trivially unit-testable. Breakpoints compose with this in <see cref="DebugSession"/> (an additional stop
+/// condition); they are deliberately not part of this movement-only decision.
 /// </summary>
 internal static class StepPlanner
 {
@@ -23,7 +24,7 @@ internal static class StepPlanner
             // Step Out runs until the frame we started in has returned (the stack got shallower).
             StepKind.Out => currentDepth < startDepth,
 
-            // Continue runs to completion (seam b adds breakpoints as an additional stop condition).
+            // Continue runs to completion; DebugSession adds breakpoints as an additional stop condition.
             StepKind.Continue => false,
 
             // Run To Cursor stops when the next step point is the target statement.

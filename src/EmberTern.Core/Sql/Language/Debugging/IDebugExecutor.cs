@@ -16,7 +16,7 @@ namespace EmberTern.Core.Sql.Debugging;
 
 /// <summary>An exception's identity, as the driver reports it (spec §3.6: mapping comes from
 /// <c>FbException</c>'s SQLSTATE / GDS codes, never from parsing messages). The <see cref="ExceptionRouter"/>
-/// (seam b) matches these fields against a <see cref="WhenCondition"/>; D1 only carries them.</summary>
+/// matches these fields against a <see cref="WhenCondition"/>.</summary>
 public sealed record DebugError(
     string? ExceptionName = null,
     long? GdsCode = null,
@@ -108,7 +108,14 @@ public interface IDebugExecutor
     /// one savepoint per frame). Named by the frame's <see cref="Frame.SavepointName"/>.</summary>
     void EnterFrameSavepoint(string name);
 
-    /// <summary>Releases a frame's savepoint on its NORMAL exit. (The unhandled-exit <c>ROLLBACK TO</c> is
-    /// seam b, driven by the <see cref="ExceptionRouter"/>.)</summary>
+    /// <summary>Releases a frame's savepoint on its NORMAL exit.</summary>
     void LeaveFrameSavepoint(string name);
+
+    /// <summary>Rolls the debug transaction back to a frame's savepoint on its <b>unhandled</b> exit — an
+    /// exception is propagating out of this simulated frame, so its side effects are undone before the
+    /// caller's handler (or the session fault) observes the database (spec §4.5: a real call is undone
+    /// atomically; a simulated frame reconstructs that with one savepoint per frame). Driven by the
+    /// <see cref="ExceptionRouter"/>. <b>NOT</b> called when a block's own <c>WHEN</c> handler catches —
+    /// there the prior statements must survive; only a frame that fails to catch is rolled back.</summary>
+    void RollbackFrameSavepoint(string name);
 }

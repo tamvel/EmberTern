@@ -244,3 +244,82 @@ session API).
 Build 0/0. Tests: **4676** green in two partitions (4649 non-probe + 27 `ConnectionExpandBindingProbe`
 alone, #94/#226). Smoke: app launches (the engine is pure Core, not yet wired to any UI). No lab needed
 (no server). Seam (b) parked, recorded in CLAUDE.md's "Current state".
+
+## D1 — Debug engine core, seam (b) (2026-07-17)
+
+The second half of D1: **exception routing** (the client-owned other half of control flow, spec §3.6) and
+**breakpoints**. Still pure Core (zero Avalonia, zero FirebirdSql), still driven only through
+`IDebugExecutor`, still proven with a scripted fake — control flow is the part we own, so it is where
+depth is cheapest. Purely additive to `EmberTern.Core.Sql.Language.Debugging`; nothing outside the
+namespace changed.
+
+### `ExceptionRouter` — matching + propagation + unwind
+
+`ExceptionRouter.TryRoute(frames, error, executor)` is the whole of exception control flow. When a
+statement or a control-flow condition raises (the executor reports a `DebugError`), the router:
+
+1. **Searches the innermost frame** for a `WHEN … DO` handler, walking the frame's control stack from the
+   innermost active `BEGIN…END` block outward. For each block it tries its handlers **top-to-bottom**, and
+   each handler's conditions **left-to-right** (Firebird's declaration order, spec §3.6). Matching reads
+   the AST (`WhenHandler`/`WhenCondition` from P1) — **never re-parses**. All five `WHEN` forms are
+   matched: `ANY` (always), `EXCEPTION <name>` (the surfaced folded name), `GDSCODE` (numeric *or*
+   symbolic), `SQLCODE` (signed number), `SQLSTATE` ('literal'). The operands of the last three P1
+   deliberately left in the condition's tokens, so the router reads them from `WhenCondition.Tokens` — a
+   leaf-value read, not structure the AST already owns.
+2. **On a match**, it repositions that frame's control stack so the handler body is the next thing to run:
+   abandon the inner activations (closing any abandoned `FOR SELECT` cursor via `Frame.PopForUnwind`),
+   skip the catching block's remaining statements (`seq.Index = Items.Count`), mark the block
+   `HandlerActive = true` so its own handler body cannot re-enter it, and `PushBranch(handler.Body)`. The
+   catching frame is **not** rolled back — a `WHEN`-handling block's prior statements survive (§4.5,
+   measured).
+3. **On no match in a frame**, it closes that frame's open cursors, `RollbackFrameSavepoint`s it (§4.5 —
+   the simulated frame's side effects are undone atomically, as a real call's would be), pops it, and
+   continues in the caller. When **no frame** catches — the root included — every frame is rolled back and
+   `TryRoute` returns false; the session `Faulted`s (and `CurrentStatement`/`CurrentError` reflect that).
+
+**Re-raise** (`EXCEPTION;` in a handler) needs no special interpreter state: the executor re-raises it and
+the router routes the resulting error like any other. The `HandlerActive` guard is what makes a handler not
+catch its own body's exception — it propagates out to an enclosing block (or frame), exactly as Firebird
+does. This keeps the router **pure control flow**: it never evaluates, coerces, or interprets Firebird
+error semantics — the error's identity is what the driver already reported.
+
+`IDebugExecutor` gained one method for this — `RollbackFrameSavepoint(name)` — the unhandled-exit
+counterpart of the seam-(a) `EnterFrameSavepoint`/`LeaveFrameSavepoint`. The interface is a D1 deliverable
+split across the two seams; this is the only contract change.
+
+### Breakpoints
+
+`BreakpointSet` — a mutable set of step-point **offsets** (`Add`/`Remove`/`Toggle`/`Contains`/`Clear`),
+exposed as `DebugSession.Breakpoints`. The stepping loop stops at the next step point whose offset is set,
+with `StopReason.Breakpoint`; a breakpoint always wins the stop reason over `Step`. The current step is
+never re-stopped on resume (it is executed before the next breakpoint check), and a breakpoint inside a
+callee stops while continuing (depth preserved). Conditional breakpoints / hit counts / break-on-exception
+are D12 — they compose with this set, they are not modelled here.
+
+### The loop
+
+Seam (a)'s "raise → `Faulted`, no routing" was replaced by "raise → `ExceptionRouter.TryRoute`": caught ⇒
+clear the error and fall through to the command's normal stop/continue decision (so Step stops at the
+handler body, Continue runs through it); uncaught ⇒ `Faulted`. Then, before the movement stop decision, the
+loop checks `Breakpoints`. Every decision remains a pure function of (AST, frames, breakpoints, command).
+
+### Tests
+
+`DebugEngineTests` (+15, now 39 total) against the scripted fake: `WHEN ANY` catching in the same block
+(prior statements survive, frame not rolled back); `EXCEPTION <name>` matching and *not* matching (fault +
+rollback); `GDSCODE` by number and by symbol; `SQLCODE` signed; `SQLSTATE` literal; a multi-condition
+`WHEN`; propagation to the caller with the callee frame rolled back and the caller catching; re-raise
+propagating out with the `HandlerActive` guard proven (inner handler does not re-catch its own body); a
+`FOR SELECT` body raising both unhandled (cursor closed + frame rolled back) and handled (cursor closed on
+unwind to the catching block, no frame rollback); and four breakpoint cases (stop, resume-past, removed,
+inside-callee). One test-only gotcha surfaced and is documented in the test: the fake keys outcomes by a
+node's `Start`, which is shared across frames' coordinate spaces (both `begin `-prefixed bodies put their
+first statement at offset 6), so a cross-frame raise test must not run a root leaf at the callee's raising
+offset.
+
+### Verification
+
+Build 0/0. Tests: **4691** green in **one** `dotnet test` run (~6 s). Smoke: app launches (the engine is
+pure Core, not yet wired to any UI). No lab needed (no server — fidelity vs real execution is D2's
+lab-mandatory proof). **D1 is COMPLETE.** Next: **D2** (harness + session connection + executor) — a
+separate session, per the plan's order (P1 → P2 → D1 → D2 → D3 …).

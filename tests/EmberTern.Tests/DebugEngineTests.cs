@@ -9,12 +9,14 @@ using Xunit;
 namespace EmberTern.Tests;
 
 /// <summary>
-/// Stage X — Firebird Debugger, milestone D1 (seam a): the debug engine core. These tests drive
+/// Stage X — Firebird Debugger, milestone D1: the debug engine core. These tests drive
 /// <see cref="DebugSession"/> against a scripted fake <see cref="IDebugExecutor"/> — no server, no UI —
 /// which is the point: control flow is the part the client OWNS, so it is where correctness is cheapest to
 /// pin. They cover step ordering over block / IF / WHILE / FOR / leaf, nested frames (Into/Over/Out),
 /// Continue, Run To Cursor, Set Next Statement, savepoint enter/release at frame boundaries, the scope
-/// chain, SUSPEND rows, and the seam-a fault-on-raise behaviour (routing/rollback are seam b).
+/// chain, SUSPEND rows, and — seam b — exception routing (handler matching per WHEN form, propagation +
+/// frame unwind with savepoint rollback, an unhandled raise faulting after rolling every frame back,
+/// re-raise, a handler not catching its own body's exception, cursor cleanup on unwind) and breakpoints.
 /// </summary>
 public class DebugEngineTests
 {
@@ -126,6 +128,8 @@ public class DebugEngineTests
         public void EnterFrameSavepoint(string name) => Savepoints.Add("enter:" + name);
 
         public void LeaveFrameSavepoint(string name) => Savepoints.Add("leave:" + name);
+
+        public void RollbackFrameSavepoint(string name) => Savepoints.Add("rollback:" + name);
     }
 
     private sealed class FakeCursor : IDebugCursor
@@ -437,10 +441,10 @@ public class DebugEngineTests
         Assert.Equal("a = 1;", Text(sql, s.CurrentStatement!));
     }
 
-    // ── Exceptions (seam a: fault, no routing) + SUSPEND + scope chain ───────────────────────────
+    // ── Exceptions: unhandled fault + SUSPEND + scope chain ──────────────────────────────────────
 
     [Fact]
-    public void RaisedStatement_FaultsSession_WithoutRouting()
+    public void RaisedStatement_NoHandler_FaultsSession_RollsBackFrame()
     {
         const string sql = "begin a = 1; b = 2; end";
         var error = new DebugError(ExceptionName: "MY_EXC", Message: "boom");
@@ -448,10 +452,14 @@ public class DebugEngineTests
         var s = new DebugSession(Body(sql), exec);
         s.Start();
         s.Step(StepKind.Into); // a = 1;
-        s.Step(StepKind.Into); // b = 2; raises
+        s.Step(StepKind.Into); // b = 2; raises → no handler → fault
         Assert.Equal(DebugState.Faulted, s.State);
         Assert.Equal(StopReason.Exception, s.StopReason);
         Assert.Equal("MY_EXC", s.CurrentError!.ExceptionName);
+        Assert.Null(s.CurrentStatement);
+        // The unhandled root frame was rolled back to its savepoint (§4.5), never released.
+        Assert.Contains("rollback:ET_DBG_FRAME_0", exec.Savepoints);
+        Assert.DoesNotContain("leave:ET_DBG_FRAME_0", exec.Savepoints);
     }
 
     [Fact]
@@ -505,5 +513,230 @@ public class DebugEngineTests
         Assert.Equal("ROOT", root.RoutineName);
         Assert.Equal(99, root.Values.Get("V_OUTER"));
         Assert.False(child.Values.Contains("V_OUTER"));   // not shadowed locally
+    }
+
+    // ── Exception routing (seam b): handler matching, propagation, unwind, re-raise ────────────────
+
+    // Runs the raising statement, then steps once more so the caught handler body is reached; returns the
+    // session for assertions. Uses Step Into so we stop at the handler's first statement.
+    private static DebugSession Raise(string sql, string raiseSub, DebugError error, out FakeExecutor exec)
+    {
+        exec = new FakeExecutor().Outcome(Off(sql, raiseSub), StatementOutcome.Raised(error));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        while (s.State == DebugState.Paused && s.CurrentStatement!.Start != Off(sql, raiseSub))
+        {
+            s.Step(StepKind.Into);
+        }
+        s.Step(StepKind.Into); // execute the raising statement → route
+        return s;
+    }
+
+    [Fact]
+    public void WhenAny_CatchesInSameBlock_PriorStatementsSurvive_FrameNotRolledBack()
+    {
+        const string sql = "begin a = 1; b = 2; when any do c = 3; end";
+        var s = Raise(sql, "b = 2", new DebugError(ExceptionName: "X"), out var exec);
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal("c = 3;", Text(sql, s.CurrentStatement!)); // resumed at the handler body
+        Assert.Null(s.CurrentError);                            // caught → no longer faulted
+        s.Step(StepKind.Into);                                  // run the handler → block/frame completes
+        Assert.Equal(DebugState.Completed, s.State);
+        // A WHEN-handled block is NOT rolled back (§4.5 — prior statements survive); the frame is released.
+        Assert.DoesNotContain("rollback:ET_DBG_FRAME_0", exec.Savepoints);
+        Assert.Contains("leave:ET_DBG_FRAME_0", exec.Savepoints);
+    }
+
+    [Fact]
+    public void WhenExceptionName_Matches_ByName()
+    {
+        const string sql = "begin r = 1; when exception my_exc do h = 1; end";
+        var s = Raise(sql, "r = 1", new DebugError(ExceptionName: "MY_EXC"), out _);
+        Assert.Equal("h = 1;", Text(sql, s.CurrentStatement!));
+    }
+
+    [Fact]
+    public void WhenExceptionName_DoesNotMatch_OtherException_Faults()
+    {
+        const string sql = "begin r = 1; when exception my_exc do h = 1; end";
+        var s = Raise(sql, "r = 1", new DebugError(ExceptionName: "OTHER_EXC"), out var exec);
+        Assert.Equal(DebugState.Faulted, s.State);
+        Assert.Contains("rollback:ET_DBG_FRAME_0", exec.Savepoints);
+    }
+
+    [Fact]
+    public void WhenGdsCode_Matches_ByNumber_And_BySymbol()
+    {
+        const string byNumber = "begin r = 1; when gdscode 335544345 do h = 1; end";
+        var s1 = Raise(byNumber, "r = 1", new DebugError(GdsCode: 335544345), out _);
+        Assert.Equal("h = 1;", Text(byNumber, s1.CurrentStatement!));
+
+        const string bySymbol = "begin r = 1; when gdscode lock_conflict do h = 1; end";
+        var s2 = Raise(bySymbol, "r = 1", new DebugError(GdsCode: 335544345, GdsCodeSymbol: "lock_conflict"), out _);
+        Assert.Equal("h = 1;", Text(bySymbol, s2.CurrentStatement!));
+    }
+
+    [Fact]
+    public void WhenSqlCode_Matches_SignedNumber()
+    {
+        const string sql = "begin r = 1; when sqlcode -913 do h = 1; end";
+        var s = Raise(sql, "r = 1", new DebugError(SqlCode: -913), out _);
+        Assert.Equal("h = 1;", Text(sql, s.CurrentStatement!));
+    }
+
+    [Fact]
+    public void WhenSqlState_Matches_StringLiteral()
+    {
+        const string sql = "begin r = 1; when sqlstate '40001' do h = 1; end";
+        var s = Raise(sql, "r = 1", new DebugError(SqlState: "40001"), out _);
+        Assert.Equal("h = 1;", Text(sql, s.CurrentStatement!));
+    }
+
+    [Fact]
+    public void MultiConditionWhen_MatchesAnyListedCondition()
+    {
+        // WHEN GDSCODE 1, EXCEPTION MY_EXC DO … — the second condition catches (declaration order).
+        const string sql = "begin r = 1; when gdscode 1, exception my_exc do h = 1; end";
+        var s = Raise(sql, "r = 1", new DebugError(ExceptionName: "MY_EXC"), out _);
+        Assert.Equal("h = 1;", Text(sql, s.CurrentStatement!));
+    }
+
+    [Fact]
+    public void Exception_PropagatesToCaller_RollsBackCalleeFrame_ThenCallerCatches()
+    {
+        // NB: the fake executor keys outcomes by a node's Start offset, which is shared across frames' own
+        // coordinate spaces — so the root must NOT run a leaf at the callee's raising offset. Starting the
+        // root with the call (the raising `r = 1` at the callee's offset is never executed in the root frame,
+        // only descended into) keeps the two frames' scripted outcomes unambiguous.
+        const string sql = "begin execute procedure p; when any do h = 1; end";
+        const string calleeSql = "begin r = 1; end";
+        var callee = new DebugRoutine("P", Body(calleeSql));
+        var exec = new FakeExecutor()
+            .RoutineAt(Off(sql, "execute procedure p"), callee)
+            .Outcome(Off(calleeSql, "r = 1"), StatementOutcome.Raised(new DebugError(ExceptionName: "X")));
+        var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
+        s.Start();             // at execute procedure p
+        s.Step(StepKind.Into); // into P → r = 1;
+        Assert.Equal(2, s.Depth);
+        s.Step(StepKind.Into); // r = 1; raises → P has no handler → propagate to ROOT's WHEN ANY
+        Assert.Equal(1, s.Depth);
+        Assert.Equal("h = 1;", Text(sql, s.CurrentStatement!));
+        // The callee frame was rolled back to its savepoint on unhandled exit; the catching root frame was not.
+        Assert.Contains("rollback:ET_DBG_FRAME_1", exec.Savepoints);
+        Assert.DoesNotContain("rollback:ET_DBG_FRAME_0", exec.Savepoints);
+    }
+
+    [Fact]
+    public void ReRaiseInHandler_PropagatesOut_HandlerDoesNotCatchItsOwnBody()
+    {
+        // Inner block's WHEN ANY does a bare EXCEPTION; (re-raise) — it must NOT re-catch, it must propagate
+        // to the outer block's WHEN ANY (HandlerActive guard + propagation across nested blocks, one frame).
+        const string sql = "begin begin r = 1; when any do exception; end when any do h = 1; end";
+        var exec = new FakeExecutor()
+            .Outcome(Off(sql, "r = 1"), StatementOutcome.Raised(new DebugError(ExceptionName: "X")))
+            .Outcome(Off(sql, "exception;"), StatementOutcome.Raised(new DebugError(ExceptionName: "X")));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        Assert.Equal("r = 1;", Text(sql, s.CurrentStatement!));
+        s.Step(StepKind.Into); // r raises → inner WHEN ANY catches → at "exception;"
+        Assert.Equal("exception;", Text(sql, s.CurrentStatement!));
+        s.Step(StepKind.Into); // exception; re-raises → inner cannot re-catch → outer WHEN ANY catches
+        Assert.Equal("h = 1;", Text(sql, s.CurrentStatement!));
+        Assert.Null(s.CurrentError);
+        // Same frame throughout — no frame rollback (block-level handling; prior statements survive).
+        Assert.DoesNotContain("rollback:ET_DBG_FRAME_0", exec.Savepoints);
+    }
+
+    [Fact]
+    public void ForSelect_BodyRaisesUnhandled_ClosesCursor_RollsBackFrame()
+    {
+        const string sql = "begin for select id from t into :i do r = 1; end";
+        var exec = new FakeExecutor()
+            .CursorAt(Off(sql, "for select"), Row("I", 1))
+            .Outcome(Off(sql, "r = 1"), StatementOutcome.Raised(new DebugError(ExceptionName: "X")));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        while (s.State == DebugState.Paused && s.CurrentStatement!.Start != Off(sql, "r = 1")) s.Step(StepKind.Into);
+        s.Step(StepKind.Into); // r = 1; raises, no handler → fault
+        Assert.Equal(DebugState.Faulted, s.State);
+        Assert.True(exec.Cursors.Single().Closed);              // the abandoned cursor was closed on unwind
+        Assert.Contains("rollback:ET_DBG_FRAME_0", exec.Savepoints);
+    }
+
+    [Fact]
+    public void ForSelect_BodyRaisesHandled_ClosesCursor_OnUnwindToCatchingBlock()
+    {
+        const string sql = "begin for select id from t into :i do r = 1; when any do h = 1; end";
+        var exec = new FakeExecutor()
+            .CursorAt(Off(sql, "for select"), Row("I", 1))
+            .Outcome(Off(sql, "r = 1"), StatementOutcome.Raised(new DebugError(ExceptionName: "X")));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        while (s.State == DebugState.Paused && s.CurrentStatement!.Start != Off(sql, "r = 1")) s.Step(StepKind.Into);
+        s.Step(StepKind.Into); // r raises → WHEN ANY catches; the loop is abandoned, its cursor closed
+        Assert.Equal("h = 1;", Text(sql, s.CurrentStatement!));
+        Assert.True(exec.Cursors.Single().Closed);
+        Assert.DoesNotContain("rollback:ET_DBG_FRAME_0", exec.Savepoints); // handled in-frame → no rollback
+    }
+
+    // ── Breakpoints (seam b) ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Continue_StopsAtBreakpoint()
+    {
+        const string sql = "begin a = 1; b = 2; c = 3; end";
+        var exec = new FakeExecutor();
+        var s = new DebugSession(Body(sql), exec);
+        s.Breakpoints.Add(Off(sql, "b = 2"));
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(StopReason.Breakpoint, s.StopReason);
+        Assert.Equal("b = 2;", Text(sql, s.CurrentStatement!));
+        Assert.Equal(new[] { Off(sql, "a = 1") }, exec.Executed); // a ran; b not yet (we stop ON it)
+    }
+
+    [Fact]
+    public void Continue_PastBreakpoint_ContinuesToCompletion()
+    {
+        const string sql = "begin a = 1; b = 2; c = 3; end";
+        var exec = new FakeExecutor();
+        var s = new DebugSession(Body(sql), exec);
+        s.Breakpoints.Add(Off(sql, "b = 2"));
+        s.Start();
+        s.Step(StepKind.Continue); // stop at b
+        s.Step(StepKind.Continue); // resume from b → runs to completion (no re-stop on the current one)
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Equal(3, exec.Executed.Count);
+    }
+
+    [Fact]
+    public void Breakpoint_Removed_DoesNotStop()
+    {
+        const string sql = "begin a = 1; b = 2; c = 3; end";
+        var exec = new FakeExecutor();
+        var s = new DebugSession(Body(sql), exec);
+        int bp = Off(sql, "b = 2");
+        Assert.True(s.Breakpoints.Toggle(bp));   // now set
+        Assert.False(s.Breakpoints.Toggle(bp));  // now cleared
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal(DebugState.Completed, s.State);
+    }
+
+    [Fact]
+    public void Breakpoint_InsideCallee_StopsWhileContinuing()
+    {
+        const string sql = "begin execute procedure p; b = 2; end";
+        var callee = new DebugRoutine("P", Body(CalleeSql)); // "begin q1 = 1; q2 = 2; end"
+        var exec = new FakeExecutor().RoutineAt(Off(sql, "execute procedure p"), callee);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.Step(StepKind.Into);                        // into P → q1 = 1;
+        s.Breakpoints.Add(Off(CalleeSql, "q2 = 2"));  // breakpoint inside the callee frame
+        s.Step(StepKind.Continue);
+        Assert.Equal(StopReason.Breakpoint, s.StopReason);
+        Assert.Equal("q2 = 2;", Text(CalleeSql, s.CurrentStatement!));
+        Assert.Equal(2, s.Depth);
     }
 }

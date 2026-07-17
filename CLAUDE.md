@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 DONE (2026-07-17).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1 DONE (2026-07-17).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -226,27 +226,42 @@ noted.
   partitions — 4625 + the 27-test `ConnectionExpandBindingProbe` alone — sidestepping the full-suite hang
   #94/#226); smoke clean. Follow-up (not urgent): the existing `serverMajor >= 3` catalog gates are now
   statically true.
-  **D1 (debug engine core) — seam (a) DONE (pure Core, no server).** New namespace
+  **D1 (debug engine core) — DONE (pure Core, no server; seams a + b both landed).** New namespace
   `EmberTern.Core.Sql.Debugging` (zero Avalonia, zero `FirebirdSql`): `DebugSession` (the interpreter/state
   machine), `Frame` (+ internal control-stack activations + the lexical scope chain), `FrameValues`,
-  `StepPlanner` (pure stop-decision), the enums (`DebugState`/`StepKind`/`StopReason`/`ExecutionStatus`),
-  `DebugError`/`StatementOutcome`/`ConditionOutcome`/`IDebugCursor`/`DebugRoutine`, and `IDebugExecutor` —
-  the **single server seam, contract only** (the precedented rule-#2 exception, like `ISqlMetadataProvider`).
-  The interpreter walks block/`IF`/`WHILE`/`FOR`/leaf control flow and pushes/pops **nested frames** (step
-  into `EXECUTE PROCEDURE` resolves a callee body via the executor; step over runs it on the server), with
-  **Into/Over/Out/Continue/RunToCursor/SetNextStatement**. **Savepoint model from day one** (spec §4.5):
-  `EnterFrameSavepoint` on every frame push (incl. root), `LeaveFrameSavepoint` on normal exit. Every step
-  decision is a pure function of (AST, frames, command). Proven with a **scripted fake executor** — 24
-  `DebugEngineTests` (step ordering, IF/WHILE/FOR, nested frames, savepoint enter/release order, scope
-  chain, SUSPEND rows, RunToCursor, SetNext). Build 0/0; **4676 tests green** (two partitions — 4649 +
-  the 27-test `ConnectionExpandBindingProbe` alone, #94/#226); smoke clean.
-  **Parked for D1 seam (b) — NOT started (per the confirmed 2-session split):** `ExceptionRouter` (handler
-  matching per `WhenCondition` form + frame unwinding), the unhandled-exit `RollbackToSavepoint`, and
-  `BreakpointSet`. Seam (a)'s hooks are in place: an unhandled raise stops the session `Faulted` (no
-  routing yet); the step loop has clean extension points for breakpoints. **Next session: D1 seam (b).**
-  Order stays **risk-first**: D1/D2 are pure Core+Firebird, so the wiring consolidation (gotcha #219) sits
-  at **D3**, right before the first debugger UI. **Read the plan + your milestone's brief before writing
-  any debugger code.** History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
+  `StepPlanner` (pure stop-decision), `ExceptionRouter`, `BreakpointSet`, the enums
+  (`DebugState`/`StepKind`/`StopReason`/`ExecutionStatus`), `DebugError`/`StatementOutcome`/
+  `ConditionOutcome`/`IDebugCursor`/`DebugRoutine`, and `IDebugExecutor` — the **single server seam,
+  contract only** (the precedented rule-#2 exception, like `ISqlMetadataProvider`).
+  **Seam (a):** the interpreter walks block/`IF`/`WHILE`/`FOR`/leaf control flow and pushes/pops **nested
+  frames** (step into `EXECUTE PROCEDURE` resolves a callee body via the executor; step over runs it on the
+  server), with **Into/Over/Out/Continue/RunToCursor/SetNextStatement**. **Savepoint model from day one**
+  (spec §4.5): `EnterFrameSavepoint` on every frame push (incl. root), `LeaveFrameSavepoint` on normal exit.
+  **Seam (b) — exception routing + breakpoints (this session):** `ExceptionRouter.TryRoute` is the whole of
+  exception control flow (spec §3.6) — on a raise it walks the innermost frame's active `BEGIN…END` blocks
+  outward, matching `WHEN … DO` handlers **read from the AST** (`WhenHandler`/`WhenCondition` from P1, never
+  re-parsed) in declaration order (handlers top-to-bottom, conditions left-to-right); **all five forms**
+  (`ANY`/`EXCEPTION <name>`/`GDSCODE` numeric-or-symbolic/`SQLCODE` signed/`SQLSTATE` literal — the last
+  three's operands read from `WhenCondition.Tokens`, where P1 left them). A **caught** exception repositions
+  control to the handler body (abandoning inner activations, skipping the block's remaining statements,
+  marking the block `HandlerActive` so it can't re-catch its own body → **re-raise** propagates out) and the
+  catching frame is **NOT** rolled back (a `WHEN`-handling block's prior statements survive, §4.5). An
+  **unhandled** frame closes its cursors, `RollbackFrameSavepoint`s (new `IDebugExecutor` method — the
+  unhandled-exit counterpart), and pops; when **no frame** catches, every frame incl. the root is rolled
+  back and the session `Faulted`s. `BreakpointSet` (offsets; `Add`/`Remove`/`Toggle`) hangs off
+  `DebugSession.Breakpoints`; a run command stops at the next step point whose offset is set
+  (`StopReason.Breakpoint`, always winning over `Step`). Re-raise needs no special interpreter state (the
+  executor re-raises; the router routes it) — the router stays **pure control flow**, never interpreting
+  Firebird semantics. Every step/route decision is a pure function of (AST, frames, breakpoints, command).
+  Proven with a **scripted fake executor** — **39** `DebugEngineTests` (24 seam-a: step ordering, IF/WHILE/
+  FOR, nested frames, savepoint order, scope chain, SUSPEND, RunToCursor, SetNext; +15 seam-b: matching per
+  form, multi-condition `WHEN`, cross-frame propagation + rollback, re-raise + `HandlerActive` guard, cursor
+  cleanup on both unhandled + handled unwind, four breakpoint cases). Build 0/0; **4691 tests green in ONE
+  run** (~6 s); smoke clean. History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
+  **Next session: D2** (harness + session connection + executor — Firebird; lab-mandatory fidelity proof).
+  Order stays **risk-first** (P1 → P2 → D1 → D2 → D3 …); the wiring consolidation (gotcha #219) sits at
+  **D3**, right before the first debugger UI. **Read the plan + your milestone's brief before writing any
+  debugger code.**
 - **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**
   The close/disconnect WorkGuard can now **compile every dirty metadata editor in one pass** instead
   of only listing-and-discarding them. It **reuses the group-recompilation pipeline** (one save

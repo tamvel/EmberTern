@@ -14,7 +14,7 @@ internal abstract class Activation
 }
 
 // Running Items[Index..] of a block (or a synthetic single-statement branch). Block is non-null for a
-// real BEGIN…END (it carries the WHEN handlers the ExceptionRouter will read in seam b); null for a
+// real BEGIN…END (it carries the WHEN handlers the ExceptionRouter reads on a raise); null for a
 // single-statement IF/loop branch.
 internal sealed class SequenceActivation : Activation
 {
@@ -28,6 +28,11 @@ internal sealed class SequenceActivation : Activation
     public BlockStatement? Block { get; }
     public IReadOnlyList<SqlNode> Items { get; }
     public int Index { get; set; }
+
+    // True once this block's WHEN handler has fired (the ExceptionRouter set it) — the block can no longer
+    // catch, so an exception raised inside its own handler body propagates OUT to an enclosing block, never
+    // back into this WHEN section (Firebird's handler semantics). Only meaningful when Block has handlers.
+    public bool HandlerActive { get; set; }
 }
 
 // A WHILE loop in progress — its header is re-presented as the step point each time control returns here
@@ -148,6 +153,25 @@ public sealed class Frame
     internal void Push(Activation a) => _control.Add(a);
 
     internal void Pop() => _control.RemoveAt(_control.Count - 1);
+
+    // Pops the top activation while an exception unwinds it, closing an abandoned FOR SELECT cursor so it
+    // never leaks (spec §7: the cursor lives on the session connection; Close is idempotent). Used by the
+    // ExceptionRouter when it discards inner activations to reach a catching block.
+    internal void PopForUnwind()
+    {
+        if (Top is ForActivation { Opened: true, Cursor: { } cursor }) cursor.Close();
+        Pop();
+    }
+
+    // Closes every open cursor in this frame — called before the ExceptionRouter drops a whole frame that
+    // failed to catch (its activations are discarded, so their cursors must be closed first).
+    internal void CloseOpenCursors()
+    {
+        foreach (var a in _control)
+        {
+            if (a is ForActivation { Opened: true, Cursor: { } cursor }) cursor.Close();
+        }
+    }
 
     internal IReadOnlyList<Activation> Control => _control;
 
