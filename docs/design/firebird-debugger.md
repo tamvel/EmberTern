@@ -82,6 +82,13 @@ authentication failure.
 
 So the explicit gate is not a removal of support — it **ratifies reality and makes the failure legible**.
 
+> **Status — DONE (P2, 2026-07-17).** `FirebirdConnectionService.IsSupportedServerVersion` (reusing
+> `FirebirdDdlReader.ParseServerMajor`) gates `ConnectAsync` (right after the first attachment opens,
+> before the Metadata/Ddl lanes) and `TestConnectionAsync`, refusing a positively-identified pre-FB3
+> server with a message that names the required version and closing cleanly. It **fails open** on an
+> unparseable version string (a live Srp connection is FB3+ by construction). Live rejection is unverified
+> (no FB2.5 instance); the predicate is table-pinned. See `docs/history/19-firebird-debugger.md`.
+
 > **⚠ Scope note for review.** The gate is **app-wide**, not debugger-scoped, so it is milestone **P2**,
 > deliberately *outside* the debugger's own milestones. It also touches a documented decision: *"Connection
 > errors show the raw server message… do not add hints or interpret error causes."* A **precondition check

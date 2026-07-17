@@ -210,13 +210,26 @@ noted.
   malformed `WHEN` still falls back to the lossless `PsqlLeafKind.Other` valve (never a handler, never
   swallowed). **Refined during P1 (decision 3, ratified by the user):** Firebird allows a comma-separated
   condition list per `WHEN`, so a single kind per node was insufficient — the model carries the whole list,
-  and D1's router matches them in declaration order (spec + plan updated). Build 0/0; **4639 tests green**
-  (run in two partitions — 4612 + the 27-test `ConnectionExpandBindingProbe` alone — to sidestep the
-  documented full-suite hang #94/#226); smoke clean. History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
-  **Next milestone: P2** (FB3+ connect-time version gate — app-wide, deliberately outside the debugger's
-  milestones), then **D1** (debug engine core — pure Core). Order is **risk-first**: D1/D2 are pure
-  Core+Firebird and need no editor wiring, so the wiring consolidation (gotcha #219) sits at **D3**, right
-  before the first debugger UI. **Read the plan + your milestone's brief before writing any debugger code.**
+  and D1's router matches them in declaration order (spec + plan updated). Commit `590b220`.
+  **P2 (server version gate, FB3+) — DONE.** `FirebirdConnectionService` refuses a pre-FB3 server on
+  connect with a legible message (`FirebirdSql.Data.FirebirdClient` is Srp-only ⇒ FB2.5 is already
+  unreachable; the gate ratifies that, decision 8 / spec §1.3). A `post-open precondition check` on
+  `ConnectAsync` (right after the first attachment opens, before Metadata/Ddl — same server ⇒ gating the
+  first covers all) and on `TestConnectionAsync`, closing cleanly (no half-open attachment). Pure predicate
+  `IsSupportedServerVersion` reuses the app's one version parser (`FirebirdDdlReader.ParseServerMajor`) and
+  **fails open on an unparseable version** (a live Srp connection is FB3+ by construction, so 0 ⇒ allow;
+  reject only a positively-identified major 1–2). `MapErrorMessage` untouched (this is a precondition, not
+  error interpretation). The message lives beside `MapErrorMessage` in the Firebird layer, not `UiStrings`
+  — `EmberTern.Firebird` cannot reference `EmberTern.App` (layering); connection-failure messages already
+  live there. **Live rejection is unverified** (no FB2.5 instance; the predicate is table-pinned and the
+  FB5 lab connect path is behaviourally unchanged — FB5 ⇒ allowed). Build 0/0; **4652 tests green** (two
+  partitions — 4625 + the 27-test `ConnectionExpandBindingProbe` alone — sidestepping the full-suite hang
+  #94/#226); smoke clean. Follow-up (not urgent): the existing `serverMajor >= 3` catalog gates are now
+  statically true.
+  **Next milestone: D1** (debug engine core — pure Core, no server). Order is **risk-first**: D1/D2 are
+  pure Core+Firebird and need no editor wiring, so the wiring consolidation (gotcha #219) sits at **D3**,
+  right before the first debugger UI. **Read the plan + your milestone's brief before writing any debugger
+  code.** History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
 - **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**
   The close/disconnect WorkGuard can now **compile every dirty metadata editor in one pass** instead
   of only listing-and-discarding them. It **reuses the group-recompilation pipeline** (one save

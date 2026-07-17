@@ -106,3 +106,65 @@ Build 0 warnings / 0 errors. Tests run in two partitions to sidestep the documen
 pure AST/binder structure over the parser, and the multi-condition `WHEN` grammar is documented Firebird
 syntax (stated as such in the session; the SYSDBA password for a live probe was not available, and
 `isql` cannot reach the repo path anyway — #149).
+
+Committed `590b220`.
+
+---
+
+## P2 — Server version gate (FB3+) (2026-07-17)
+
+**Goal.** Refuse a pre-FB3 server on connect with a legible message (decision 8, spec §1.3). App-wide,
+deliberately **outside** the debugger's own milestones. Free in the sense that it removes nothing that
+works: `FirebirdSql.Data.FirebirdClient` 10.3.4 is **Srp-only**, and FB2.5 authenticates only via
+Legacy_Auth, so FB2.5 is *already* unreachable — today it surfaces as a confusing auth failure; the gate
+turns that into a clear refusal.
+
+### What was built
+
+`FirebirdConnectionService`, two additions (both `internal static`, so the test project can pin them
+without a live server):
+
+- `IsSupportedServerVersion(string? serverVersion)` — reuses the app's **one** version parser,
+  `FirebirdDdlReader.ParseServerMajor` (do not add a second parsing site). It **fails open** on an
+  unparseable version: `ParseServerMajor` returns `0` for a string it cannot read, and a
+  *successfully-opened* connection is FB3+ by construction (the driver only speaks Srp, introduced in
+  FB3), so `0` must not produce a false rejection. It rejects **only** a positively-identified pre-FB3
+  major (1 or 2). Note: `ParseServerMajor` parses the **full** driver `ServerVersion`
+  (`"WI-V5.0.0.1306 Firebird 5.0"`), not a bare `"5.0.3"` — the tests table-drive realistic strings.
+- `UnsupportedServerMessage(string? serverVersion)` — the refusal text, naming the required version
+  ("EmberTern requires Firebird 3.0 or later") and echoing the detected server verbatim.
+
+The gate runs on both open paths:
+- `ConnectAsync` — right after the **first** (Data) attachment opens, **before** the Metadata/Ddl lanes.
+  All three attach to the same server, so gating the first covers all three, and we never open extra
+  attachments to an unsupported server. On refusal the connection is closed cleanly (`CloseAndDisposeAsync`)
+  before throwing `ConnectionFailedException` — no half-open attachment.
+- `TestConnectionAsync` — the same check, so the "Test" button refuses a pre-FB3 server rather than
+  reporting a bare success. The `await using` disposes the connection either way.
+
+### Two decisions worth recording
+
+1. **Precondition, not error interpretation.** The documented rule *"connection errors show the raw server
+   message — never interpret"* stands untouched; `MapErrorMessage` is unchanged. The gate is a check on a
+   fact we know for certain (`ServerVersion`) on an **already-open** connection — it runs before/independently
+   of any server error.
+2. **The message lives in the Firebird layer, not `UiStrings`.** The P2 brief listed `UiStrings (the
+   message)`, but `EmberTern.Firebird` cannot reference `EmberTern.App` (layering: App → Firebird, never
+   the reverse). Connection-failure messages already live in the Firebird layer (`MapErrorMessage`), so the
+   refusal message goes beside it — consistent with the established pattern, zero behavioural/design impact.
+   Flagged in the session, not a design change.
+
+### Verification
+
+- `FirebirdConnectionServiceTests` (+13): a `[Theory]` table-driving `IsSupportedServerVersion` over
+  realistic `ServerVersion` strings (FB1.5/FB2.5 → rejected; FB3/4/5 → allowed; empty/null/garbage →
+  fail-open), plus two message tests (names FB3.0, echoes the detected server / stays readable on null).
+- **Live rejection is unverified** — there is no FB2.5 instance to point at, and (per Developer Contract
+  #11/DoD) this is stated honestly rather than claimed. The predicate is table-pinned; the FB3/4/5 path is
+  behaviourally unchanged (FB5 ⇒ allowed ⇒ the connect flow is exactly as before).
+- Build 0/0. Tests: **4652** green in two partitions (4625 non-probe + 27 `ConnectionExpandBindingProbe`
+  alone, #94/#226). Smoke: app launches cleanly.
+
+**Follow-up (not urgent, per the brief):** the existing `serverMajor >= 3` catalog gates (e.g.
+`StandalonePackageFilter`, the FB5 `RDB$` column gates) are now statically true and could be simplified in
+a later cleanup.

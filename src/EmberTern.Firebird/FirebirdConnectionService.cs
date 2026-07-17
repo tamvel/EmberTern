@@ -139,6 +139,18 @@ public sealed class FirebirdConnectionService : IDisposable
             throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
         }
 
+        // FB3+ precondition gate (decision 8 / spec §1.3) — refuse a pre-FB3 server the moment the FIRST
+        // attachment is open, BEFORE opening the Metadata/Ddl lanes (same server ⇒ same version, so gating
+        // the first covers all three, and we never open extra attachments to an unsupported server). Not
+        // error interpretation: a check on a fact we know, on an already-open connection — MapErrorMessage
+        // stays untouched. Close cleanly so no half-open attachment is left behind.
+        if (!IsSupportedServerVersion(connection.ServerVersion))
+        {
+            var serverVersion = connection.ServerVersion;
+            await CloseAndDisposeAsync(connection).ConfigureAwait(false);
+            throw new ConnectionFailedException(UnsupportedServerMessage(serverVersion));
+        }
+
         _activeConnection = connection;
         _activeProfile = profile;
 
@@ -225,11 +237,21 @@ public sealed class FirebirdConnectionService : IDisposable
         try
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            await connection.CloseAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
+        }
+
+        // Same FB3+ precondition as ConnectAsync (spec §1.3) — a Test against a pre-FB3 server refuses
+        // with the same legible message rather than reporting a bare "success". The `await using` disposes
+        // the connection either way, so nothing is left half-open.
+        var supported = IsSupportedServerVersion(connection.ServerVersion);
+        var serverVersion = connection.ServerVersion;
+        await connection.CloseAsync().ConfigureAwait(false);
+        if (!supported)
+        {
+            throw new ConnectionFailedException(UnsupportedServerMessage(serverVersion));
         }
     }
 
@@ -556,6 +578,30 @@ public sealed class FirebirdConnectionService : IDisposable
         {
             return "<could not parse>";
         }
+    }
+
+    // FB3+ precondition (decision 8 / spec §1.3). EmberTern requires Firebird 3.0 or later (the debugger's
+    // sub-routines/packages are FB3+, and the managed driver is Srp-only so FB2.5 is already unreachable);
+    // this makes a pre-FB3 server a legible refusal instead of a confusing auth failure. Reuses the app's
+    // one version parser (FirebirdDdlReader.ParseServerMajor) rather than adding a second version-parsing
+    // site. Pure over the version string, so it is unit-testable without a live server.
+    //
+    // Fail-OPEN on an unparseable version (ParseServerMajor → 0): a successfully-opened connection is FB3+
+    // by construction (the driver only speaks Srp, introduced in FB3), so a version string we cannot read
+    // must not produce a false rejection — reject ONLY a positively-identified pre-FB3 major (1 or 2).
+    internal static bool IsSupportedServerVersion(string? serverVersion)
+    {
+        var major = FirebirdDdlReader.ParseServerMajor(serverVersion);
+        return major == 0 || major >= 3;
+    }
+
+    // The refusal message for a pre-FB3 server — states the fact and names the required version. Built in
+    // this (Firebird) layer beside MapErrorMessage, the established home for connection-failure messages;
+    // EmberTern.App.UiStrings is unreachable here (App references Firebird, never the reverse).
+    internal static string UnsupportedServerMessage(string? serverVersion)
+    {
+        var v = string.IsNullOrWhiteSpace(serverVersion) ? "unknown" : serverVersion.Trim();
+        return $"Unsupported Firebird server ({v}). EmberTern requires Firebird 3.0 or later.";
     }
 
     internal static string MapErrorMessage(Exception ex, ConnectionProfile profile)
