@@ -351,8 +351,36 @@ noted.
   to the D2 baseline — behavior-preserving); smoke clean; the headless `ConnectionExpandBindingProbe` (drives
   `SqlEditorBehavior.Attach` + real key events) green. Gotcha #219 → **resolved by D3**; plan's "Dual wiring
   (until D3)" danger row retired. History: [docs/history/19-...](docs/history/19-firebird-debugger.md) (D3).
-  **Next session: D4 (debugger tab MVP).** Order stays **risk-first** (P1 → P2 → D1 → D2 → D3 → D4 …).
-  **Read the plan + your milestone's brief before writing any debugger code.**
+  **D4 (debugger tab MVP) — DONE (2026-07-17; impl + VM-tested, awaits user visual/lab confirmation per the
+  QA rule). First real user value: launch a standalone procedure, set breakpoints, step, watch variables.**
+  New `WorkspaceTabKind.Debugger` (+ `ActiveDebugger`/`IsDebuggerTabActive` on the notify chain, gotcha #25),
+  opened from the sidebar procedure-leaf **"Debug procedure…"** (mirrors Execute; `Metadata.DebugProcedureRequested`
+  → `MainWindowViewModel.OnDebugProcedureRequested`), hosted like `ScriptExecutorTabView` and torn down on tab
+  close (rollback + close attachment, §4.4). The tab is a **thin presentation layer** over the proven engine:
+  `DebuggerTabViewModel` parses the routine ONCE (strict whole-routine `SqlParser.Parse` → `SemanticModel`,
+  gotcha #238) to derive the launch panel + step points, then drives D1's `DebugSession` through
+  `IDebugSessionLauncher` (App seam — production `FirebirdDebugSessionLauncher` opens a `DebugSessionConnection`
+  + wires D2's `FirebirdDebugExecutor`; a fake launcher over a scripted `IDebugExecutor` makes the VM
+  server-lessly testable). **Launch panel (§9.2, inline not modal):** typed parameters reuse the Smart-Parameters
+  infrastructure (`ExecuteProcedureDialogViewModel` — typed rows + history + validation + resolve, **no second
+  editor**), an isolation selector (§4.2), and a **pre-flight** (`DebugPreflight`: `DiagnosticsEngine` unresolved
+  names + the §4.6 data-safety boundaries — a lexical scan flags `IN AUTONOMOUS TRANSACTION` / generator use that
+  survive the rollback — + the §F "no step points" refusal). **Stepping:** Into/Over/Out/Continue/Stop(rollback)/
+  Restart + Run-To-Cursor, each engine call on a background thread (sync-over-async executor). **Renderers**
+  (attached alongside D3's one `SqlEditorBehavior.Attach` seam on the read-only source editor, spec §11.1):
+  `CurrentLineRenderer` (translucent-amber current-statement band) + `BreakpointMargin` (clickable red-dot gutter,
+  breakpoints snap to an `IExecutableStatement` — §9.6); repaint via `TextView.Redraw()` (#223). **Keyboard is
+  VS-standard + tab-scoped** — `F5`=Continue here (Execute in the SQL editor; the one deliberate contradiction,
+  §9.7). Basic variables list from the current frame (the rich window is D7). **New theme tokens** `DebugCurrentLineBrush`
+  / `DebugBreakpointBrush` (both dictionaries). **D4 boundaries (§F):** step-into resolves to nothing yet (a call
+  runs on the server = step-over, 100% faithful §5.3); triggers/packages/local routines/cursors + Watches/Immediate
+  are later milestones. Build 0/0; **4744 tests green in one run** (+12 `DebuggerTabVmTests`: prepare/params/
+  preflight, launch-paused-at-entry, step/continue/complete, write-back, fault, stop-teardown, breakpoint snap +
+  stop); smoke clean. **Not yet verified live against the lab** (§13 DoD wants simulated-vs-real) and no headless
+  view-attach probe yet — both are follow-ups. History: [docs/history/19-...](docs/history/19-firebird-debugger.md) (D4).
+  **Next session: D5 (expression evaluation — Evaluate/Watches/Immediate) OR a D4 live-lab pass first.** Order stays
+  **risk-first** (P1 → P2 → D1 → D2 → D3 → D4 → D5 …). **Read the plan + your milestone's brief before writing any
+  debugger code.**
 - **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**
   The close/disconnect WorkGuard can now **compile every dirty metadata editor in one pass** instead
   of only listing-and-discarding them. It **reuses the group-recompilation pipeline** (one save

@@ -208,6 +208,7 @@ public partial class MainWindowViewModel : ViewModelBase
         Metadata.NewObjectRequested += OnNewObjectRequested;
         Metadata.DeleteObjectRequested += OnDeleteObjectRequested;
         Metadata.ExecuteProcedureRequested += OnExecuteProcedureRequested;
+        Metadata.DebugProcedureRequested += OnDebugProcedureRequested;
         Metadata.RecompileGroupRequested += OnRecompileGroupRequested;
         Metadata.SetObjectActiveRequested += OnSetObjectActiveRequested;
         Metadata.BulkSetActiveRequested += OnBulkSetActiveRequested;
@@ -324,6 +325,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveGlobalSearch))]
     [NotifyPropertyChangedFor(nameof(IsScriptExecutorTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveScriptExecutor))]
+    [NotifyPropertyChangedFor(nameof(IsDebuggerTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveDebugger))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(CanExportDdl))]
     [NotifyCanExecuteChangedFor(nameof(ExportDdlCommand))]
@@ -421,6 +424,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsGlobalSearchTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GlobalSearch };
     public GlobalSearchTabViewModel? ActiveGlobalSearch
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GlobalSearch } t ? t.GlobalSearch : null;
+
+    public bool IsDebuggerTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Debugger };
+    public DebuggerTabViewModel? ActiveDebugger
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Debugger } t ? t.Debugger : null;
 
     // Drives the whole editor-toolbar Border's IsVisible so an empty command strip never
     // reserves space above the document tabs. True for every tab kind that exposes at
@@ -4634,6 +4641,8 @@ public partial class MainWindowViewModel : ViewModelBase
             _ = sm.DisposeAsync(); // stop the MON$ poll timer (best-effort)
         else if (tab.Kind == WorkspaceTabKind.ScriptExecutor && tab.ScriptExecutor is { } se)
             se.Detach(); // unsubscribe from the transaction-state event
+        else if (tab.Kind == WorkspaceTabKind.Debugger && tab.Debugger is { } dbg)
+            _ = dbg.DisposeAsync(); // roll back + close the debug session's attachment (§4.4, best-effort)
 
         if (wasSelected && WorkspaceTabs.Count > 0)
         {
@@ -4761,6 +4770,34 @@ public partial class MainWindowViewModel : ViewModelBase
         OnOpenDdlRequested(obj);
         var cmd = ActiveProcedureDetail?.ExecuteProcedureCommand;
         if (cmd is not null && cmd.CanExecute(null)) cmd.Execute(null);
+    }
+
+    // Sidebar "Debug procedure…" (Stage X / D4). Opens a debugger tab for a standalone procedure and kicks
+    // its preparation (fetch source → parse → launch panel). NOT a singleton — the same procedure may be
+    // debugged in two tabs (two sessions). The tab's read-only source + launch panel + stepping live in the
+    // child DebuggerTabViewModel; the debug session's own attachment/transaction is opened only on Launch.
+    private void OnDebugProcedureRequested(MetadataObject obj)
+    {
+        if (obj.Kind != MetadataObjectKind.Procedure) return;
+        if (!_service.IsConnected)
+        {
+            AddMessage(MessageSeverity.Error, UiStrings.DebuggerNoConnection);
+            return;
+        }
+
+        var routineName = obj.Name;
+        var launcher = new EmberTern.App.Debugging.FirebirdDebugSessionLauncher(_service);
+        var debugger = new DebuggerTabViewModel(
+            routineName,
+            ct => FetchObjectDefinitionAsync(routineName, MetadataObjectKind.Procedure),
+            launcher,
+            _parameterHistory,
+            _service.ActiveProfile?.Id);
+
+        var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, routineName, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+        _ = debugger.PrepareAsync();
     }
 
     // ─── Bulk operations (recompile / recompute stats / activate-deactivate) ──

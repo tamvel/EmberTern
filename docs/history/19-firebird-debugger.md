@@ -636,3 +636,79 @@ verified by a **manual QA pass — user-confirmed 2026-07-17**. Gotcha #219 upda
 plan's "Dual wiring (until D3)" danger row retired.
 
 **Next: D4 (debugger tab MVP)** — the first debugger UI, now attaching its renderers through the one seam.
+
+---
+
+## D4 — Debugger tab MVP (2026-07-17)
+
+The first debugger UI: launch a **standalone procedure**, set breakpoints, step, watch variables. Built as
+a **thin presentation layer** over the already-proven engine (D1 interpreter + D2 executor/harness/session),
+per Developer Contract #1–#5 — the tab never evaluates an expression, coerces a type, or re-implements
+Firebird semantics.
+
+### What shipped
+
+- **Tab infrastructure.** `WorkspaceTabKind.Debugger`; `ActiveDebugger`/`IsDebuggerTabActive` on the
+  `_selectedWorkspaceTab` notify chain (gotcha #25); `WorkspaceTabViewModel.CreateDebugger`; hosted in
+  `MainWindow.axaml` exactly like `ScriptExecutorTabView` (a per-kind view gated on `IsDebuggerTabActive`).
+  Opened from the sidebar procedure-leaf **"Debug procedure…"** context item — `MetadataNodeViewModel.DebugProcedure`
+  → `MetadataExplorerViewModel.DebugProcedureRequested` → `MainWindowViewModel.OnDebugProcedureRequested`
+  (mirrors the Execute-procedure chain). Not a singleton (two tabs = two sessions). Torn down on tab close
+  (`CloseTab` → `DebuggerTabViewModel.DisposeAsync` → rollback + close the attachment, §4.4).
+- **`DebuggerTabViewModel`** (App). Parses the routine **once** — the strict whole-routine
+  `SqlParser.Parse(source).Root` → `SemanticModel.Build(...)` → the `DdlStatement.Body` (gotcha #238: a
+  `CREATE PROCEDURE` stays one `DdlStatement` whose body binds with its declares in scope) — to derive the
+  launch panel and the step-point set. Built **without** a metadata provider, so `DiagnosticsEngine`'s
+  object/column categories stay silent (conservative — the routine already compiled). Then drives D1's
+  `DebugSession` through the launcher seam. Every engine call blocks on a wire op (the sync-over-async
+  executor), so stepping runs on `Task.Run` and the awaiting continuation updates observable state.
+- **`IDebugSessionLauncher`** (App seam). The one place App touches the Firebird debug backend, so the VM is
+  server-lessly unit-testable. Production `FirebirdDebugSessionLauncher` opens a `DebugSessionConnection`
+  (`FirebirdConnectionService.CreateDebugSessionAsync`), builds `FirebirdDebugExecutor.CreateAsync`, constructs
+  the `DebugSession` over the body + root parameter values, and `Start()`s it (paused at entry). A test fake
+  builds the session over a scripted `IDebugExecutor` with a no-op teardown.
+- **Launch panel** (`§9.2` — inline, not a modal, because you re-run constantly). Typed parameters **reuse**
+  the Smart-Parameters infrastructure (`ExecuteProcedureDialogViewModel` — typed per-kind rows + persisted
+  history + validation + `Resolve()`), so there is no second parameter editor; its `AcceptCommand` is the
+  resolve/validate/record path, and input-parameter arguments seed the root frame (§9.3). An isolation selector
+  (Read Committed / Snapshot, §4.2). A **pre-flight** (`DebugPreflight`): `DiagnosticsEngine` unresolved-name
+  warnings + a conservative **lexical** scan for the §4.6 data-safety boundaries that survive the debug rollback
+  (`IN AUTONOMOUS TRANSACTION`, `GEN_ID` / `NEXT VALUE FOR`), + the §F "no step points ⇒ cannot start" blocking
+  refusal. The §4.6 warnings ship **with** the MVP, as the plan requires.
+- **Editor surface.** The read-only source editor attaches D3's **one** `SqlEditorBehavior.Attach` seam (intrinsic
+  highlighting/hover over the source), then the debugger renderers alongside it (spec §11.1): `CurrentLineRenderer`
+  (an `IBackgroundRenderer` painting a translucent-amber band over the paused step point) and `BreakpointMargin`
+  (a clickable `AbstractMargin` red-dot gutter). Breakpoints **snap to an `IExecutableStatement`** (§9.6) — the
+  margin/keyboard report the clicked offset, the VM maps it to the nearest step point. Repaint via
+  `TextView.Redraw()`, never `InvalidateVisual()` (gotcha #223).
+- **Stepping + keyboard.** Continue / Step Into / Over / Out / Run-To-Cursor / Stop(rollback) / Restart. Keyboard
+  is VS-standard and **tab-scoped** (`F5`=Continue, `F10`=Over, `F11`=Into, `Shift+F11`=Out, `Shift+F5`=Stop,
+  `Ctrl+Shift+F5`=Restart, `F9`=toggle breakpoint, `Ctrl+F10`=Run-To-Cursor) — tunnelled on the editor so the
+  read-only control never swallows them. `F5`=Continue is the one deliberate contradiction with the app-wide
+  Execute (spec §9.7).
+- **Variables.** A basic list from the current frame — the declared symbols (params then locals) as the roster,
+  the client-side frame as the live values, `<null>` rendered distinctly. The rich window (grouping, change
+  highlight, inline edit, data tips) is D7.
+- **Theme.** New tokens `DebugCurrentLineColor`/`Brush` + `DebugBreakpointColor`/`Brush` in **both** dictionaries.
+
+### Boundaries kept (§F)
+
+Step-into resolves to nothing in D4 (`FirebirdDebugExecutor.ResolveRoutine` → null), so a call runs on the
+server = **step-over**, 100% faithful (§5.3); stepping into a stored/local routine is D8/D9. Triggers, packages,
+cursors, and the Watches/Immediate/Evaluate surfaces are their own later milestones.
+
+### Verification
+
+- **VM unit tests** (`DebuggerTabVmTests`, +12) against a fake launcher over a scripted `IDebugExecutor` — no
+  server: preparation derives the input parameters + readies launch; the pre-flight flags autonomous-tx +
+  generator use; an unsteppable/missing source blocks; launch pauses at entry with the variable roster; Step
+  Over advances the current statement then completes; Continue runs to completion; a write-back updates a
+  variable; an unhandled raise faults; Stop tears the run down and clears; a breakpoint snaps to a step-point
+  start and stops Continue at the marked statement.
+- Build 0/0; **4744 tests green in one run**; smoke clean (app launches).
+- **Not yet done (follow-ups):** the §13 DoD wants a **live simulated-vs-real lab run** (needs a server) and a
+  headless view-attach probe in `ConnectionExpandBindingProbe`. Reported honestly as "awaits user confirmation"
+  per the QA rule.
+
+**Next: D5 (Evaluate / Watches / Immediate — one HarnessBuilder mechanism, three surfaces), or a D4 live-lab
+pass first.**

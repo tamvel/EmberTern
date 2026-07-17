@@ -558,6 +558,9 @@
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextExecuteProcedure}"
                                 Command="{Binding ExecuteProcedureCommand}"
                                 IsVisible="{Binding IsProcedureLeaf}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
+                                Command="{Binding DebugProcedureCommand}"
+                                IsVisible="{Binding IsProcedureLeaf}" />
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
                                 Command="{Binding ActivateCommand}"
                                 IsVisible="{Binding ShowActivate}" />
@@ -1129,6 +1132,9 @@
               <views:ScriptExecutorTabView x:Name="ScriptExecutorView"
                                            DataContext="{Binding ActiveScriptExecutor}"
                                            IsVisible="{Binding DataContext.IsScriptExecutorTabActive, ElementName=RootWindow}" />
+              <views:DebuggerTabView x:Name="DebuggerView"
+                                     DataContext="{Binding ActiveDebugger}"
+                                     IsVisible="{Binding DataContext.IsDebuggerTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query

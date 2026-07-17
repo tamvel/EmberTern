@@ -1,0 +1,216 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:EmberTern.App"
+             xmlns:vm="using:EmberTern.App.ViewModels"
+             xmlns:dbg="using:EmberTern.App.Debugging"
+             xmlns:controls="using:EmberTern.App.Controls"
+             xmlns:ae="using:AvaloniaEdit"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="640"
+             x:Class="EmberTern.App.Views.DebuggerTabView"
+             x:DataType="vm:DebuggerTabViewModel"
+             Background="{DynamicResource BackgroundBrush}"
+             Foreground="{DynamicResource ForegroundBrush}">
+
+  <UserControl.Styles>
+    <Style Selector="TextBox.time-error">
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- Toolbar + status. Stepping commands show only while a session is live (debug view). -->
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="8,5">
+      <DockPanel LastChildFill="True">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4"
+                    IsVisible="{Binding IsDebugViewVisible}">
+          <Button Classes="flat" Content="▶ Continue" FontSize="11"
+                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerContinueTooltip}"
+                  Command="{Binding ContinueCommand}" />
+          <Button Classes="flat" Content="⤵ Into" FontSize="11"
+                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepIntoTooltip}"
+                  Command="{Binding StepIntoCommand}" />
+          <Button Classes="flat" Content="↷ Over" FontSize="11"
+                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepOverTooltip}"
+                  Command="{Binding StepOverCommand}" />
+          <Button Classes="flat" Content="⤴ Out" FontSize="11"
+                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepOutTooltip}"
+                  Command="{Binding StepOutCommand}" />
+          <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+          <Button Classes="flat" Content="■ Stop" FontSize="11"
+                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerStopTooltip}"
+                  Command="{Binding StopCommand}" />
+          <Button Classes="flat" Content="↻ Restart" FontSize="11"
+                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerRestartTooltip}"
+                  Command="{Binding RestartCommand}" />
+        </StackPanel>
+        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                   Margin="10,0,0,0" FontSize="11"
+                   TextTrimming="CharacterEllipsis"
+                   Foreground="{DynamicResource SubtleForegroundBrush}" />
+      </DockPanel>
+    </Border>
+
+    <Panel Grid.Row="1">
+
+      <!-- ── Launch panel ─────────────────────────────────────────────────── -->
+      <ScrollViewer IsVisible="{Binding IsLaunchPanelVisible}" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20,16" Spacing="14" MaxWidth="720" HorizontalAlignment="Left">
+
+          <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchHeader}" Classes="h1" />
+
+          <!-- Parameters -->
+          <StackPanel Spacing="6" DataContext="{Binding Parameters}">
+            <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchParametersHeader}" Classes="field-label" />
+            <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchNoParameters}"
+                       Classes="subtle" FontSize="11"
+                       IsVisible="{Binding !Params.Count}" />
+
+            <!-- History dropdown (only when there is a saved set for this routine). -->
+            <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding HasHistory}" Margin="0,2">
+              <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ProcedureExecuteDialogHistoryLabel}"
+                         Classes="field-label" VerticalAlignment="Center" Margin="0,0,10,0" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding History}"
+                        SelectedItem="{Binding SelectedHistory, Mode=TwoWay}"
+                        HorizontalAlignment="Stretch" FontSize="11">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ParameterHistorySnapshotViewModel">
+                    <StackPanel Spacing="1" Margin="0,2">
+                      <TextBlock Text="{Binding TimestampText}" FontSize="11"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}" />
+                      <TextBlock Text="{Binding PreviewText}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
+
+            <ItemsControl ItemsSource="{Binding Params}" IsVisible="{Binding Params.Count}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ExecuteProcedureParamRowViewModel">
+                  <Grid ColumnDefinitions="180,130,40,*" Margin="0,3" MinHeight="30">
+                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding TypeText}" FontSize="11"
+                               Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
+                    <CheckBox Grid.Column="2" IsChecked="{Binding IsNull, Mode=TwoWay}" VerticalAlignment="Center" />
+                    <Panel Grid.Column="3" VerticalAlignment="Center">
+                      <TextBox IsVisible="{Binding IsSingleLineTextKind}" IsEnabled="{Binding IsValueEnabled}"
+                               Text="{Binding TextValue, Mode=TwoWay}" FontSize="11" />
+                      <TextBox IsVisible="{Binding IsMultilineKind}" IsEnabled="{Binding IsValueEnabled}"
+                               Text="{Binding TextValue, Mode=TwoWay}"
+                               AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" FontSize="11" />
+                      <NumericUpDown IsVisible="{Binding IsNumericKind}" IsEnabled="{Binding IsValueEnabled}"
+                                     Value="{Binding NumericValue, Mode=TwoWay}" FontSize="11" />
+                      <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsDateTimeKind}">
+                        <CalendarDatePicker IsVisible="{Binding IsDateKind}"
+                                            SelectedDate="{Binding DateValue, Mode=TwoWay}"
+                                            IsEnabled="{Binding IsValueEnabled}" />
+                        <TextBox IsVisible="{Binding IsTimeKind}" IsEnabled="{Binding IsValueEnabled}"
+                                 Text="{Binding TimeText, Mode=TwoWay}"
+                                 Classes.time-error="{Binding HasTimeError}"
+                                 Width="92" FontSize="11" />
+                      </StackPanel>
+                      <CheckBox IsVisible="{Binding IsBooleanKind}" IsEnabled="{Binding IsValueEnabled}"
+                                IsChecked="{Binding BoolValue, Mode=TwoWay}" />
+                    </Panel>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <!-- Isolation -->
+          <StackPanel Spacing="6">
+            <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchIsolationLabel}" Classes="field-label" />
+            <ComboBox ItemsSource="{Binding IsolationOptions}"
+                      SelectedIndex="{Binding SelectedIsolationIndex, Mode=TwoWay}"
+                      Width="280" HorizontalAlignment="Left" FontSize="11" />
+            <TextBlock Text="{x:Static app:UiStrings.DebuggerIsolationNote}"
+                       Classes="subtle" FontSize="11" TextWrapping="Wrap" MaxWidth="640" />
+          </StackPanel>
+
+          <!-- Pre-flight -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="{x:Static app:UiStrings.DebuggerPreflightHeader}" Classes="field-label" />
+            <TextBlock Text="{x:Static app:UiStrings.DebuggerPreflightClean}"
+                       Classes="subtle" FontSize="11"
+                       IsVisible="{Binding !Preflight.Count}" />
+            <ItemsControl ItemsSource="{Binding Preflight}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="dbg:DebugPreflightItem">
+                  <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                    <TextBlock Grid.Column="0" Text="{Binding Glyph}" FontSize="11" Margin="0,0,6,0" />
+                    <TextBlock Grid.Column="1" Text="{Binding Message}" FontSize="11" TextWrapping="Wrap" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <Button Classes="primary" HorizontalAlignment="Left"
+                  Content="{x:Static app:UiStrings.DebuggerLaunchButton}"
+                  Command="{Binding LaunchCommand}" />
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- ── Debug view (read-only source + variables) ─────────────────────── -->
+      <Grid IsVisible="{Binding IsDebugViewVisible}" ColumnDefinitions="*,4,280">
+        <ae:TextEditor x:Name="SourceEditor"
+                       Grid.Column="0"
+                       ShowLineNumbers="True"
+                       IsReadOnly="True"
+                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       FontSize="13"
+                       HorizontalScrollBarVisibility="Auto"
+                       VerticalScrollBarVisibility="Auto"
+                       Background="{DynamicResource BackgroundBrush}"
+                       Foreground="{DynamicResource ForegroundBrush}" />
+
+        <GridSplitter Grid.Column="1" Background="{DynamicResource BorderBrush}" />
+
+        <Border Grid.Column="2"
+                Background="{DynamicResource PanelBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1,0,0,0">
+          <Grid RowDefinitions="Auto,*">
+            <Border Grid.Row="0" Padding="8,6"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+              <TextBlock Text="{x:Static app:UiStrings.DebuggerVariablesHeader}"
+                         FontWeight="SemiBold" FontSize="11" />
+            </Border>
+            <TextBlock Grid.Row="1" Margin="10,8"
+                       Text="{x:Static app:UiStrings.DebuggerVariablesEmpty}"
+                       Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                       IsVisible="{Binding !HasVariables}" />
+            <ListBox Grid.Row="1" ItemsSource="{Binding Variables}"
+                     Background="Transparent" BorderThickness="0"
+                     IsVisible="{Binding HasVariables}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:DebugVariableRowViewModel">
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                    <StackPanel Grid.Column="0" Spacing="0">
+                      <TextBlock Text="{Binding Name}" FontSize="11" />
+                      <TextBlock Text="{Binding TypeText}" FontSize="10"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                                 IsVisible="{Binding HasType}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding ValueText}" FontSize="11"
+                               VerticalAlignment="Center"
+                               FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Grid>
+        </Border>
+      </Grid>
+    </Panel>
+  </Grid>
+</UserControl>

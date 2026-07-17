@@ -25,6 +25,7 @@ public enum WorkspaceTabKind
     SessionManager,
     GlobalSearch,
     ScriptExecutor,
+    Debugger,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -326,6 +327,25 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ScriptExecutor = script,
         };
 
+    // The Firebird debugger tab (Stage X / D4) — one per launched routine (NOT a singleton; the same
+    // procedure may be debugged in two tabs = two sessions). Opened from the sidebar "Debug" action; not
+    // persisted (a debug session is transient). The read-only routine source lives in the child VM.
+    public static WorkspaceTabViewModel CreateDebugger(
+        MainWindowViewModel owner, DebuggerTabViewModel debugger, string routineName, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.Debugger,
+            BaseTitle = string.Format(CultureInfo.CurrentCulture, UiStrings.DebuggerTabTitleFormat, routineName),
+            IsClosable = true,
+            ObjectName = routineName,
+            ObjectKind = MetadataObjectKind.Procedure,
+            ConnectionProfileId = connectionProfileId,
+            Icon = string.Empty,
+            IconResourceKey = "AccentBrush",
+            IconGeometryKey = "Icon.Play",
+            Debugger = debugger,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
@@ -353,6 +373,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public SessionManagerTabViewModel? SessionManager { get; private init; }
     public GlobalSearchTabViewModel? GlobalSearch { get; private init; }
     public ScriptExecutorTabViewModel? ScriptExecutor { get; private init; }
+    public DebuggerTabViewModel? Debugger { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]

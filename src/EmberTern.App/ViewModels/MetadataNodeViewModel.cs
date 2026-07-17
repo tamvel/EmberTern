@@ -327,6 +327,16 @@ public partial class MetadataNodeViewModel : ViewModelBase
         }
     }
 
+    // Procedure leaf → Debug (Stage X / D4). Opens a debugger tab for the standalone procedure.
+    [RelayCommand]
+    private void DebugProcedure()
+    {
+        if (IsProcedureLeaf && Object is { } obj)
+        {
+            _owner.RequestDebugProcedure(obj);
+        }
+    }
+
     // Trigger leaf → single activate / deactivate.
     [RelayCommand]
     private void Activate()

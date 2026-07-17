@@ -1671,4 +1671,63 @@ internal static class UiStrings
     public const string EditorMenuComment = "Comment";
     public const string EditorMenuUncomment = "Uncomment";
     public const string EditorMenuFormat = "Format SQL";
+
+    // ─── Debugger (Stage X / D4 — Debugger tab MVP) ───────────────────────────
+    public const string MetadataContextDebugProcedure = "Debug procedure…";
+    public const string DebuggerTabTitleFormat = "Debug: {0}";
+    // Launch panel.
+    public const string DebuggerLaunchHeader = "Launch debug session";
+    public const string DebuggerLaunchParametersHeader = "Input parameters";
+    public const string DebuggerLaunchNoParameters = "This routine takes no input parameters.";
+    public const string DebuggerLaunchIsolationLabel = "Transaction isolation:";
+    public const string DebuggerIsolationReadCommitted = "Read Committed (rec_version)";
+    public const string DebuggerIsolationSnapshot = "Snapshot";
+    public const string DebuggerIsolationNote =
+        "The debug session runs in its own transaction (NOWAIT). It cannot see the SQL editor's " +
+        "uncommitted data and may conflict with it. Everything is rolled back when the session ends.";
+    public const string DebuggerLaunchButton = "Start debugging";
+    public const string DebuggerLaunchPreparing = "Preparing…";
+    // Pre-flight report (§9.2 / §4.6).
+    public const string DebuggerPreflightHeader = "Before you start";
+    public const string DebuggerPreflightClean = "No issues detected.";
+    public const string DebuggerPreflightAutonomousTx =
+        "Contains IN AUTONOMOUS TRANSACTION — work committed there is permanent and survives the debug rollback.";
+    public const string DebuggerPreflightGenerator =
+        "Uses a generator/sequence (GEN_ID / NEXT VALUE FOR) — generator values are consumed permanently and are not restored on rollback.";
+    public const string DebuggerPreflightUnsteppable =
+        "The routine source could not be parsed into step points — debugging cannot start.";
+    // Toolbar / commands.
+    public const string DebuggerContinueTooltip = "Continue (F5)";
+    public const string DebuggerStepIntoTooltip = "Step Into (F11)";
+    public const string DebuggerStepOverTooltip = "Step Over (F10)";
+    public const string DebuggerStepOutTooltip = "Step Out (Shift+F11)";
+    public const string DebuggerRunToCursorTooltip = "Run To Cursor (Ctrl+F10)";
+    public const string DebuggerStopTooltip = "Stop debugging (Shift+F5)";
+    public const string DebuggerRestartTooltip = "Restart (Ctrl+Shift+F5)";
+    public const string DebuggerToggleBreakpointTooltip = "Toggle breakpoint (F9)";
+    // Status line.
+    public const string DebuggerStatusReady = "Ready to launch.";
+    public const string DebuggerStatusPausedFormat = "Paused at line {0} — {1}";
+    public const string DebuggerStatusRunning = "Running…";
+    public const string DebuggerStatusCompleted = "Completed — transaction rolled back.";
+    public const string DebuggerStatusFaultedFormat = "Unhandled exception: {0}";
+    public const string DebuggerStatusStopped = "Stopped — transaction rolled back.";
+    public const string DebuggerStatusLaunchFailedFormat = "Could not start the debug session: {0}";
+    public const string DebuggerStopReasonEntry = "entry";
+    public const string DebuggerStopReasonStep = "step";
+    public const string DebuggerStopReasonBreakpoint = "breakpoint";
+    // Variables panel.
+    public const string DebuggerVariablesHeader = "Variables";
+    public const string DebuggerVariablesEmpty = "No variables in the current frame.";
+    public const string DebuggerVariablesColumnName = "Name";
+    public const string DebuggerVariablesColumnValue = "Value";
+    public const string DebuggerVariablesColumnKind = "Kind";
+    public const string DebuggerVariableNull = "<null>";
+    public const string DebuggerVariableKindParameter = "param";
+    public const string DebuggerVariableKindLocal = "local";
+    // Call stack (single-frame in D4, but the header exists).
+    public const string DebuggerCallStackHeader = "Call stack";
+    // Errors.
+    public const string DebuggerNoConnection = "Connect to a database before debugging.";
+    public const string DebuggerSourceUnavailableFormat = "Could not load the source of {0}.";
 }
