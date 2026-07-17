@@ -1702,6 +1702,37 @@ public partial class MainWindow : Window
     private void OnCopyAllWithHeadersClick(object? sender, RoutedEventArgs e)
         => InvokeCopy(CopyGridMode.AllWithHeaders);
 
+    // The context menu opening is what makes the provenance capture "lazy, on demand": a ~7 ms
+    // SchemaOnly prepare here is imperceptible, whereas paying it on every F5 — to serve a menu the user
+    // usually never opens — would be a silent, across-the-board regression of the editor and its
+    // execution timer. Cached per result set, so only the first open of a given result pays.
+    //
+    // The menu shows immediately and its items settle via binding a few milliseconds later; the click
+    // handler re-checks anyway, so the enabled state is a hint and the click is the authority.
+    private async void OnResultContextMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_currentVm is null) return;
+        await _currentVm.RefreshSqlCopyAvailabilityAsync();
+    }
+
+    private void OnCopyAsInsertClick(object? sender, RoutedEventArgs e)
+        => InvokeCopyAsSql(ExportFormat.InsertScript);
+
+    private void OnCopyAsUpdateClick(object? sender, RoutedEventArgs e)
+        => InvokeCopyAsSql(ExportFormat.UpdateScript);
+
+    private async void InvokeCopyAsSql(ExportFormat format)
+    {
+        if (_currentVm is null) return;
+        // Pass the RIGHT-CLICKED row OBJECT, exactly like the Table Data grid does — not an index
+        // re-derived from it (that reference lookup was an extra failure mode that silently dropped the
+        // copy). Two independent handlers capture the clicked row on a right-click: OnResultCellPointerPressed
+        // (the cell) and OnResultGridPointerPressed (which sets the grid's SelectedItem via an ancestor
+        // walk). Prefer the cell capture, fall back to the selection, so a miss in one still yields the row.
+        var row = _resultCellRow ?? _resultGrid?.SelectedItem as object?[];
+        await _currentVm.CopyRowAsSqlAsync(format, row);
+    }
+
     private async void InvokeCopy(CopyGridMode mode)
     {
         if (_currentVm is null) return;

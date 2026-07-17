@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using EmberTern.Core.Export;
+using EmberTern.Core.Export.Sql;
 
 namespace EmberTern.App.Export;
 
@@ -29,12 +30,20 @@ public sealed class ServerPagedExportSource : IExportDataSource
         RowEstimate allRowsEstimate,
         Func<int, int, CancellationToken, Task<IReadOnlyList<object?[]>>> fetchPage,
         int fetchPageSize,
-        string defaultBaseFileName)
+        string defaultBaseFileName,
+        ResultOrigin? origin = null)
     {
         Columns = columns;
         _currentPage = currentPageRows;
         _fetchPage = fetchPage;
         _fetchPageSize = fetchPageSize;
+
+        // Table Data supplies OriginShape.DirectTable — that grid IS a table, which makes it STRICTLY
+        // SAFER than the SQL Editor: nothing is inferred from a statement, so signal B is satisfied by
+        // construction. View Data supplies its view name and is refused by the catalog check, which is
+        // the correct outcome at this stage.
+        Origin = origin ?? ResultOrigin.None(
+            new ExportUnavailableReason(ExportUnavailableCode.NotATable));
 
         // SelectedRows is not offered — a data grid's selection isn't a meaningful export scope here
         // (the snapshot intent is the current page or the whole set).
@@ -51,6 +60,8 @@ public sealed class ServerPagedExportSource : IExportDataSource
     public IReadOnlyList<ExportColumn> Columns { get; }
 
     public ExportCapabilities Capabilities { get; }
+
+    public ResultOrigin Origin { get; }
 
     public async IAsyncEnumerable<object?[]> GetRowsAsync(ExportScope scope, [EnumeratorCancellation] CancellationToken cancellationToken)
     {

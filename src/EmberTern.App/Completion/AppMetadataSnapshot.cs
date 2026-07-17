@@ -110,7 +110,7 @@ internal sealed class AppMetadataSnapshot : ISqlMetadataProvider
             IsForeignKey = s.IsForeignKey,
             ForeignKeyTable = s.ForeignKeyTable,
             IsComputed = s.IsComputed,
-            IsIdentity = s.IsIdentity,
+            Identity = s.Identity,
         };
 
     // Routine parameters from the VM's routine-param cache captured at build time (M6). Lazily

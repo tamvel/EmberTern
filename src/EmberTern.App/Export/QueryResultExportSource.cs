@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using EmberTern.Core.Export;
+using EmberTern.Core.Export.Sql;
 using EmberTern.Core.Query;
 
 namespace EmberTern.App.Export;
@@ -34,7 +35,8 @@ public sealed class QueryResultExportSource : IExportDataSource
         IReadOnlyList<object?[]> materializedRows,
         bool isPartial,
         Func<CancellationToken, IAsyncEnumerable<object?[]>>? streamAll,
-        string defaultBaseFileName)
+        string defaultBaseFileName,
+        ResultOrigin? origin = null)
     {
         Columns = columns.Select(c => new ExportColumn(c.Name, c.ClrType)).ToList();
         _currentViewRows = currentViewRows;
@@ -42,11 +44,21 @@ public sealed class QueryResultExportSource : IExportDataSource
         _isPartial = isPartial;
         _streamAll = streamAll;
         Capabilities = BuildCapabilities(defaultBaseFileName);
+
+        // Provenance is captured LAZILY and passed in — never derived here. GetSchemaTable() costs ~7 ms,
+        // about 5.6× a small query, so capturing it on every F5 to serve an occasional menu action would
+        // be a silent, across-the-board regression of the SQL Editor and its execution timer. A caller
+        // that has not captured it yet supplies null, and the SQL formats are simply unavailable —
+        // honestly, with a reason.
+        Origin = origin ?? ResultOrigin.None(
+            ExportUnavailableReason.Of(ExportUnavailableCode.StatementNotUnderstood));
     }
 
     public IReadOnlyList<ExportColumn> Columns { get; }
 
     public ExportCapabilities Capabilities { get; }
+
+    public ResultOrigin Origin { get; }
 
     private ExportCapabilities BuildCapabilities(string defaultBaseFileName)
     {

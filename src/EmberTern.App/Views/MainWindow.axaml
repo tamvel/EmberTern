@@ -1430,13 +1430,24 @@
                           VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                           IsVisible="{Binding HasCurrentResult}">
                   <DataGrid.ContextMenu>
-                    <ContextMenu>
+                    <ContextMenu Opening="OnResultContextMenuOpening">
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}"
                                 Click="OnCopyCellClick" />
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}"
                                 Click="OnCopyRowClick" />
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}"
                                 Click="OnCopyRowWithHeadersClick" />
+                      <Separator />
+                      <!-- Disabled-with-a-reason: the tooltip is bound unconditionally and is empty when
+                           the action is available, so a greyed item always says WHY. -->
+                      <MenuItem Header="{x:Static app:UiStrings.GridCopyAsInsert}"
+                                Click="OnCopyAsInsertClick"
+                                IsEnabled="{Binding SqlCopy.CanCopyAsInsert}"
+                                ToolTip.Tip="{Binding SqlCopy.CopyAsInsertTooltip}" />
+                      <MenuItem Header="{x:Static app:UiStrings.GridCopyAsUpdate}"
+                                Click="OnCopyAsUpdateClick"
+                                IsEnabled="{Binding SqlCopy.CanCopyAsUpdate}"
+                                ToolTip.Tip="{Binding SqlCopy.CopyAsUpdateTooltip}" />
                       <Separator />
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}"
                                 Click="OnCopyAllWithHeadersClick" />

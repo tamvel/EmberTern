@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using EmberTern.Core.Export;
+using EmberTern.Core.Export.Sql;
 
 namespace EmberTern.App.Export;
 
@@ -24,12 +25,19 @@ public sealed class RowBufferExportSource : IExportDataSource
         IReadOnlyList<object?[]> currentView,
         IReadOnlyList<object?[]> allRows,
         IReadOnlyList<object?[]>? selectedRows,
-        string defaultBaseFileName)
+        string defaultBaseFileName,
+        ResultOrigin? origin = null)
     {
         Columns = columns;
         _currentView = currentView;
         _allRows = allRows;
         _selectedRows = selectedRows;
+
+        // Default: no provenance. This adapter serves grids whose rows are NOT a table's rows (the
+        // Activity Monitor's ring buffer, procedure results), so the honest answer is a permanent veto
+        // rather than a guess. A caller whose rows genuinely are a table's supplies a real origin.
+        Origin = origin ?? ResultOrigin.None(
+            new ExportUnavailableReason(ExportUnavailableCode.NotATable));
 
         var scopes = new List<ExportScope> { ExportScope.CurrentView, ExportScope.AllRows };
         var estimates = new Dictionary<ExportScope, RowEstimate>
@@ -49,6 +57,8 @@ public sealed class RowBufferExportSource : IExportDataSource
     public IReadOnlyList<ExportColumn> Columns { get; }
 
     public ExportCapabilities Capabilities { get; }
+
+    public ResultOrigin Origin { get; }
 
     public async IAsyncEnumerable<object?[]> GetRowsAsync(ExportScope scope, [EnumeratorCancellation] CancellationToken cancellationToken)
     {

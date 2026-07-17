@@ -3,6 +3,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using EmberTern.Core.Export;
+using EmberTern.Core.Export.Sql;
 using EmberTern.Export.Office;
 
 namespace EmberTern.App.Export;
@@ -59,6 +60,16 @@ public sealed class ExportService
             new DelimitedTextExporter(request.Delimited
                 ?? throw new InvalidOperationException("Delimited options are required for CSV/Text export.")),
         ExportFormat.Clipboard => new ClipboardTextExporter(request.IncludeHeader),
+
+        // The SQL formats need a PROVEN target, exactly as CSV/Text need their options. It is the
+        // caller's to supply because resolving it needs the catalog, which is none of this service's
+        // business — and by the time a request names a SQL format, the proof already exists (the menu
+        // item would otherwise be disabled, with the reason).
+        ExportFormat.InsertScript => new InsertScriptExporter(request.SqlTarget
+            ?? throw new InvalidOperationException("A resolved SQL target is required for INSERT export.")),
+        ExportFormat.UpdateScript => new UpdateScriptExporter(request.SqlTarget
+            ?? throw new InvalidOperationException("A resolved SQL target is required for UPDATE export.")),
+
         _ => throw new NotSupportedException($"Export format '{request.Format}' is not supported."),
     };
 }

@@ -159,6 +159,15 @@ noted.
   data-bearing grids (SQL Results, Procedure/Function Results, Table Data, View Data); client-side
   for materialized grids, SQL push-down for server-paged ones. Export to CSV/TXT/Clipboard/XLSX
   via one shared `EmberTern.Core.Export` framework. *(history: 10, 12)*
+- **SQL Data Export — Copy as INSERT / UPDATE** — right-click a result row → runnable, provably-correct
+  DML (de-aliased via the server's own provenance; UPDATE only on a catalog-verified complete PK, never a
+  partial key → multi-row bug; `OVERRIDING SYSTEM VALUE` for `GENERATED ALWAYS`; InvariantCulture literals;
+  refused-with-a-reason where proof is unavailable). One Core pipeline (`ResultOriginResolver` →
+  `SqlStatementBuilder` → `SqlLiteralWriter`) behind a shared App `SqlCopyController`, live on the **SQL
+  Editor** (E5) and **Table Data** (E6) grids; Procedure/View results stay `NotATable`. Design + as-built:
+  [docs/design/sql-data-export.md](docs/design/sql-data-export.md). **Milestone COMPLETE + user-confirmed
+  (2026-07-17)**, including the follow-up fix for environments that hand every cell back as a `string`
+  (the writer parses each kind strictly under InvariantCulture/ISO, refusing anything ambiguous — §0).
 - **Global Search** — search metadata by name and by source/field/message content
   (server-side `CONTAINING`), 2-panel results with a live DDL preview. *(history: 12)*
 - **Script Executor, Recompile Dependents, Smart SQL Parameters** — run a multi-statement `.sql`

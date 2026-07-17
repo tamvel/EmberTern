@@ -59,7 +59,7 @@ public class ColumnMetadataFlowTests
     [Fact]
     public void GetColumns_PrimaryKeyIdentityComputed_Flow()
     {
-        var pk = new ColumnSpec("ID", "INTEGER", NotNull: true) { IsPrimaryKey = true, IsIdentity = true };
+        var pk = new ColumnSpec("ID", "INTEGER", NotNull: true) { IsPrimaryKey = true, Identity = IdentityKind.ByDefault };
         var comp = new ColumnSpec("FULLNAME", "VARCHAR(100)") { IsComputed = true };
         var snapshot = BuildSnapshot("KONTRAHENT", pk, comp);
 

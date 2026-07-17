@@ -1924,6 +1924,75 @@ public sealed class FirebirdTableDetailReader
     }
 
     /// <summary>
+    /// Captures the server's per-column provenance for the table's data grid — <b>signal A</b> for the
+    /// SQL export formats (Copy as INSERT/UPDATE), read from a prepared <c>SELECT * FROM "table"</c>'s
+    /// <c>GetSchemaTable()</c>. Returns null when it cannot be read (no connection, table dropped), which
+    /// the caller treats as "the formats are unavailable", never as an error.
+    /// <para>
+    /// This is the <b>same schema-table capture the SQL Editor uses</b>
+    /// (<see cref="FirebirdQueryExecutor.CaptureSchemaTableAsync"/>), just on the Table Detail reader's
+    /// <b>Data lane</b> — so both grids feed one <c>ResultOrigin</c> pipeline
+    /// (<c>FirebirdResultOriginReader</c> → <c>FbDbType</c> → <c>SqlValueKind</c>) and there is no second,
+    /// formatted-string type classifier. The shape is <c>SELECT *</c> with no filter/order/paging, because
+    /// provenance (columns, base table, declared types) does not vary with the rows shown; the caller
+    /// declares <c>OriginShape.DirectTable</c>, so the statement is never analysed for shape.
+    /// </para>
+    /// <para>
+    /// <b>Never call this on the data-preview path.</b> <c>GetSchemaTable()</c> costs ~7 ms — several times
+    /// a small query — so it is captured lazily, on the first Copy-as-INSERT/UPDATE, via a
+    /// <see cref="System.Data.CommandBehavior.SchemaOnly"/> prepare (one prepare, no rows). Runs on the Data lane under
+    /// its command lock (one <c>FbConnection</c>, one transaction, commands serialized — gotcha #98/#89),
+    /// attaching to the user's working transaction when one is active.
+    /// </para>
+    /// </summary>
+    public async Task<System.Data.DataTable?> CaptureDataSchemaTableAsync(
+        string tableName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(tableName)) return null;
+
+        FbConnection connection;
+        try
+        {
+            connection = DataConnection();
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+
+        // Capture the lane-resolving lock accessor into a LOCAL once — re-invoking it at release time
+        // would leak one semaphore and over-release another if the lane flipped mid-call (gotcha #98).
+        var commandLock = DataLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            var quoted = tableName.Replace("\"", "\"\"");
+            cmd.CommandText = string.Format(CultureInfo.InvariantCulture, "SELECT * FROM \"{0}\"", quoted);
+            cmd.Transaction = DataTx;
+
+            await using var reader = await cmd.ExecuteReaderAsync(
+                System.Data.CommandBehavior.SchemaOnly, cancellationToken).ConfigureAwait(false);
+            return reader.GetSchemaTable();
+        }
+        catch (FbException)
+        {
+            // The table no longer prepares (dropped, or the transaction rolled back). That is an ordinary
+            // "no provenance available", not an error worth a dialog — the menu item disables with reason.
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    /// <summary>
     /// Returns the row count of the table capped at <paramref name="cap"/>.
     /// Implemented as <c>SELECT COUNT(*) FROM (SELECT FIRST cap 1 AS X ...)</c>
     /// so the engine doesn't scan the whole table on big tables — once it has
