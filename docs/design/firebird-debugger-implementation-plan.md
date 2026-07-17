@@ -1,0 +1,524 @@
+# Stage X — Firebird Debugger: Implementation Plan
+
+**Companion to [firebird-debugger.md](firebird-debugger.md) (DESIGN v2 — the specification).**
+Nothing implemented. This document is the **execution plan**: milestone briefs, session split, danger
+zones, and the Developer Contract.
+
+| Document | Its job |
+|---|---|
+| `firebird-debugger.md` | **WHAT and WHY.** Feasibility, §F Fidelity Law, architecture, boundaries, decisions. The authority on behaviour. |
+| **this file** | **IN WHAT ORDER, and UNDER WHAT RULES.** Per-milestone briefs, how to split sessions, what not to break. |
+
+> **How to start a debugger session.** Read CLAUDE.md → this file's §1 + the milestone brief → the spec
+> sections the brief cites → **§4 Developer Contract**. Do not read the whole spec every session; the
+> briefs cite what each milestone needs.
+
+---
+
+## 1. Session protocol
+
+The project rule is **one milestone per session**. Some milestones need more than one; those are split
+below at an explicit seam, and **every seam is a committable state**.
+
+**Every session ends with, without exception:**
+1. `dotnet build EmberTern.slnx` → **0 warnings / 0 errors** (`TreatWarningsAsErrors=true`).
+2. `dotnet test EmberTern.slnx` → **all green**, in ONE run.
+   ⚠ **Never chain build+test in one command** — they deadlock and hang. Separate tool calls.
+3. **Smoke**: the app launches (`src\EmberTern.App\bin\Debug\net9.0\EmberTern.exe`).
+4. **Lab verification** where the milestone touches engine behaviour (§3.4).
+5. Docs updated *before* closing: narrative → a `docs/history/` file; CLAUDE.md "Current state" → **in
+   place, one bullet**; genuinely new lessons → `docs/gotchas.md`.
+6. A clean, committable tree. **Never leave a milestone half-landed.**
+
+**Branch:** one feature branch for the debugger arc (e.g. `feat/firebird-debugger`), one commit per
+milestone (or per seam). Do not merge to `master` until an arc completes.
+
+**If a session runs out of context mid-milestone:** stop at the nearest seam, land it green, and record
+the parked state in CLAUDE.md's "Current state". Gotcha #233 is the reason this matters: *a correct,
+tested component that nothing calls is indistinguishable from a regression*, and CLAUDE.md is where the
+next session finds out it was parked.
+
+---
+
+## 2. Milestone briefs
+
+Legend: **Dep** = depends on · **New** = new types · **Mod** = existing components modified.
+
+---
+
+### P1 — AST: exception handlers *(prerequisite — blocks D1)*
+
+- **Cel.** Make `WHEN … DO` readable from the tree. The interpreter owns exception control flow (spec
+  §3.6) and today has nothing to read: handlers are an unstructured `PsqlLeafKind.Other` token bag.
+- **Zakres.** Parser producer + binder consumer, per Etap 6.9's contract. **Additive only.** Formatter
+  convergence is **out of scope** (spec: build grammar depth only when a feature needs it — the
+  formatter's current handler layout is not broken).
+- **New.** `Ast/PsqlNodes.cs`: `WhenHandler : PsqlStatement` (condition kind + `Body`),
+  `WhenHandlerKind` enum (`Any` / `ExceptionName` / `GdsCode` / `SqlCode` / `SqlState`);
+  `BlockStatement.Handlers` (+ `Children`).
+- **Mod.** `SqlParser.Psql.cs` (parse the handler section of a block), `Ast/PsqlNodes.cs`,
+  `Ast/AstChildren.cs`, `SemanticBinder.Psql.cs` (bind handler bodies + the exception-name reference).
+- **Dep.** None (Etap 6.9 is closed).
+- **Ryzyka.**
+  - **§0 round-trip.** Handlers must stay in the lossless token stream; an unrecognised handler shape
+    **must** fall back to the existing `PsqlLeafKind.Other` valve, never be swallowed.
+  - `WhenHandlerKind` must not be guessed from text — parse the grammar.
+  - Do **not** touch `SqlFormatter`. Byte-identical output is a hard requirement here.
+- **DoD.** Nodes produced for all handler forms; binder resolves handler bodies against the enclosing
+  scope; formatter output **byte-identical**; §0 differential harness (B0) green; unrecognised shapes
+  still land in `Other`.
+- **Weryfikacja.** Unit tests beside `PsqlAstTests` (one per handler form + a malformed shape → `Other`);
+  the B0 differential corpus extended with handler shapes; `SqlFormatterSafetyTests` unchanged and green.
+- **Sesje: 1.**
+
+---
+
+### P2 — Server version gate (FB3+) *(app-wide — not debugger-scoped)*
+
+- **Cel.** Reject a pre-FB3 server on connect with a clear message (decision 8). Spec §1.3.
+- **Zakres.** Deliberately tiny and **outside** the debugger. **Free**: the driver is Srp-only and FB2.5
+  is Legacy_Auth-only, so FB2.5 is *already* unreachable — this only makes the failure legible.
+- **Mod.** `FirebirdConnectionService` (post-open precondition check), `UiStrings` (the message).
+  Reuse `FirebirdDdlReader.ParseServerMajor(connection.ServerVersion)` — the app's **one** version-parsing
+  site; do not add a second.
+- **Dep.** None.
+- **Ryzyka.**
+  - ⚠ **Do not break the documented rule** *"connection errors show the raw server message — never
+    interpret"*. This is a **precondition check**, not error interpretation: it runs on a successfully
+    opened connection and states a fact we know. Keep `MapErrorMessage` untouched.
+  - Must run on **every** lane's open path, and must not leave a half-open attachment.
+- **DoD.** Connecting to FB3/4/5 unaffected; a sub-FB3 server is refused with a specific message naming
+  the required version; the connection is closed cleanly.
+- **Weryfikacja.** Unit test on the version predicate (a pure function over a version string — table-drive
+  it: `"2.5.9"`, `"3.0.0"`, `"5.0.3"`, malformed). **Live rejection cannot be lab-tested** (no FB2.5
+  instance) — pin the predicate, and state honestly in the session summary that the live path is
+  unverified. *(Follow-up, not urgent: existing `serverMajor >= 3` gates become statically true.)*
+- **Sesje: 1** (small — may share a session with P1 only if both land green separately).
+
+---
+
+### D1 — Debug engine core *(pure Core, no server)*
+
+- **Cel.** The interpreter: frames, scopes, stepping, exception routing, breakpoints — **proven with zero
+  server in the loop.** Control flow is the part we own, therefore the part we can get wrong.
+- **Zakres.** Spec §3.1, §3.6, §3.7, §4.5, §5. **No UI, no Firebird.**
+- **New.** `EmberTern.Core.Sql.Debugging`: `DebugSession` (state machine), `Frame`, `FrameValues`,
+  `StepPlanner` (Into/Over/Out/RunToCursor/SetNext), `ExceptionRouter` (handler matching + unwinding),
+  `BreakpointSet`, `IDebugExecutor` (contract only), `DebugState`/`StepKind`/`StopReason` enums.
+- **Mod.** Nothing existing. **Purely additive** — this is why D1 is first.
+- **Dep.** P1.
+- **Ryzyka.**
+  - **Rule #2** ("no interfaces without two implementations"): `IDebugExecutor` is the **one precedented
+    exception** (`ISqlMetadataProvider` sets it — Core declares the contract it needs). **Do not add a
+    second interface** on this argument without review.
+  - The **frame savepoint model** (spec §4.5) must be in the engine from day one — savepoint on frame
+    entry, rollback-to on unhandled exit, **never per block, never per statement**. Retrofitting it is
+    how v1's silent divergence happened.
+  - Core purity: **zero Avalonia, zero `FirebirdSql`**. If you need a driver type, the design is wrong.
+- **DoD.** Interpreter executes block/`IF`/`WHILE`/`FOR`/leaf control flow and full exception routing
+  against a **fake executor**; every step decision is a pure function of (AST, frame, breakpoints);
+  savepoint enter/rollback events are emitted at frame boundaries.
+- **Weryfikacja.** Headless Core unit tests (`DebugEngineTests`) with a scripted fake `IDebugExecutor`:
+  step ordering, nested frames, handler matching per form, propagation + unwind, re-raise, breakpoint
+  hits, Run-To-Cursor, Set Next Statement. **No lab needed** (no server). This is the milestone where
+  test depth is cheapest — spend it here.
+- **Sesje: 2.** Seam: *(a)* frames + scopes + stepping; *(b)* `ExceptionRouter` + savepoint events +
+  breakpoints.
+
+---
+
+### D2 — Harness + session connection + executor *(Firebird)*
+
+- **Cel.** The server contract: generate the `EXECUTE BLOCK`, run it on a per-session connection, in the
+  debug transaction, with frame savepoints.
+- **Zakres.** Spec §3.2, **§3.4 (R1–R5)**, §3.5, §4.1, §4.2, §4.5.
+- **New.** Core: `HarnessBuilder` (+ `HarnessRequest`/`HarnessResult`), `ReadWriteSetAnalyzer`.
+  Firebird: `FirebirdDebugExecutor : IDebugExecutor`, `DebugSessionConnection` (own `FbConnection` + tx +
+  savepoint API).
+- **Mod.** `FirebirdConnectionService` (session-connection lifecycle: create/dispose, tear down on
+  disconnect). **Do NOT add a `ConnectionRole.Debug`** — decision 5: a session connection is not a lane.
+- **Dep.** D1.
+- **Ryzyka — the highest-risk milestone in the arc.**
+  - **§3.4 R1–R4 are non-negotiable.** Skip `NULL` injection; base types for params/`RETURNS`; frame
+    variables verbatim. v1's naive injection **crashes on ordinary ERP code** (`validation error for
+    variable V, value "*** null ***"`). Base types come from **metadata**, never from string-munging a
+    declaration.
+  - **R5**: *always* carry every in-scope sub-routine declaration, regardless of the read set — otherwise
+    a local `F()` silently resolves to a global `F()`. Worst-class §F violation.
+  - **Never** `BeginTransactionAsync` on `TransactionService` — its early-return is a **join** (#230); the
+    debug session owns its own transaction.
+  - **Never** a bare `IsolationLevel` — explicit `FbTransactionOptions` (#85).
+  - **Type round-trip (FB4+)**: carry driver-native types end-to-end; never convert (`DECFLOAT`/`INT128`).
+    **⚠ Probe blocks FB4+ support** (spec §14).
+- **DoD.** Assignments, `IF`/`WHILE` conditions and DML leaves execute against the lab through the
+  harness; read/write sets narrow the payload; frame savepoints commit/rollback correctly; a
+  domain-`NOT NULL`-typed uninitialized variable **does not crash**.
+- **Weryfikacja.** **Lab-mandatory.** Extend `Lab/setup.sql` with the debugging zoo *(nested calls, local
+  routines/closures, cursors, exception handlers, an autonomous-transaction routine, a generator user,
+  domain-typed `NOT NULL` variables)*. Then: **simulate a routine step-by-step and compare the resulting
+  DB state + outputs to REAL execution of the same routine.** That comparison is the only proof of
+  fidelity (spec §2.1). Plus unit tests on `HarnessBuilder` text generation (pure function).
+- **Sesje: 3.** Seams: *(a)* `DebugSessionConnection` + TPB + savepoints; *(b)* `HarnessBuilder` + §3.4
+  rules (pure, unit-tested); *(c)* `FirebirdDebugExecutor` + lab fidelity comparison.
+
+---
+
+### D3 — Editor-wiring consolidation
+
+- **Cel.** One wiring seam before the first debugger UI. Spec §11.1, gotcha #219.
+- **Zakres.** Consolidate `SqlEditorBehavior.Attach` (object editors) and `MainWindow`'s hand-wiring.
+  **Zero user-visible change.**
+- **Mod.** `SqlEditorBehavior`, `MainWindow(.axaml.cs)`, and every capability's attach site.
+- **Dep.** None technically — **placed here on purpose**: after the risky core is proven, before the debug
+  tab becomes a third host with four new capabilities at once.
+- **Ryzyka — deceptively hard; this is not a mechanical merge.**
+  - The two seams differ by a **real lifecycle**: MainWindow's editor exists *before* its VM; object
+    editors attach *after*. MainWindow deliberately bypasses `subscribeMetadataChanged` because it latched
+    "subscribed" against a null VM and dropped the handler. **Consolidation must first solve "subscribe
+    once the VM arrives."**
+  - Touches every capability on every surface for zero visible value ⇒ under the QA rule this needs **full
+    manual re-verification everywhere** (squiggles, hover, related elements, completion, diagnostics
+    panel, F8 navigation — in *both* the SQL Editor and the object editors, in *both* themes).
+- **DoD.** One attach path; every existing capability verified live on every surface; no behaviour change.
+- **Weryfikacja.** Existing suite green + **a manual pass over every editor surface** (report honestly as
+  "awaits user confirmation" per the QA rule — this cannot be proven by tests alone).
+- **Sesje: 1–2.** Seam: *(a)* solve the VM-arrival subscription; *(b)* migrate the capabilities.
+
+---
+
+### D4 — Debugger tab MVP
+
+- **Cel.** First real user value: launch a **standalone procedure**, set breakpoints, step, see variables.
+- **Zakres.** Spec §9.1, §9.2, §9.3, §9.6, §9.7. Standalone procedures only — no triggers, packages,
+  local routines, cursors.
+- **New.** App: `DebuggerTabViewModel`, `DebuggerTabView`, `DebugLaunchPanelView(Model)`,
+  `BreakpointMargin`, `CurrentLineRenderer` (`IBackgroundRenderer`), `DebugCommands`.
+- **Mod.** `WorkspaceTabViewModel` (new tab kind), `MainWindowViewModel` (open-debugger command + the
+  `IsXxxTabActive` chain — gotcha #25), sidebar context menus (Debug action), `Themes/Colors.axaml`
+  (+ **both** dictionaries), `UiStrings`.
+- **Dep.** D1, D2, D3.
+- **Ryzyka.**
+  - Reuse the **Smart SQL Parameters** infrastructure (`SmartParametersRequest`,
+    `ExecuteProcedureDialogViewModel`, `ProcedureParamRowViewModel`, `QueryParameter`) — **do not build a
+    second typed parameter editor**.
+  - `F5` = Continue is tab-scoped and contradicts the app-wide `F5` = Execute (spec §14 open item).
+  - Renderers mirror `SquiggleRenderer`/`RelatedElementsRenderer`; repaint via `TextView.Redraw()`, **not**
+    `InvalidateVisual()` (gotcha #223).
+  - **Pre-flight warnings** (§4.6 autonomous tx + generators) must ship **with** the MVP, not later —
+    they are a data-safety promise, not polish.
+- **DoD.** Launch → breakpoint → step → stop works on a lab procedure; rollback on session end; pre-flight
+  warnings shown; both themes; keyboard works.
+- **Weryfikacja.** VM unit tests (`DebuggerTabVmTests`); a headless probe **only** inside the existing
+  `ConnectionExpandBindingProbe` class (gotchas #94/#226 — one session per process, shared); **manual lab
+  run** → "awaits user confirmation".
+- **Sesje: 2–3.** Seams: *(a)* tab shell + launch panel + parameters; *(b)* breakpoints + current line +
+  step commands; *(c)* basic variables list.
+
+---
+
+### D5 — Expression evaluation surface
+
+- **Cel.** Evaluate + Watches + Immediate — **one engine, three surfaces** (decision 6). Spec §9.5.
+- **Zakres.** Evaluate selection/hover (`Shift+F9`); Watches panel (persisted per routine); Immediate
+  window.
+- **New.** App: `WatchesPanelViewModel`/`View`, `ImmediateWindowViewModel`/`View`, `EvaluateController`.
+  Core: reuse `HarnessBuilder` — **no new engine**.
+- **Mod.** `HoverInfoEngine` consumer side (hover-evaluate); settings store (watch persistence).
+- **Dep.** D2, D4.
+- **Ryzyka.**
+  - **One mechanism.** If a surface needs "just a small evaluator", the design is being violated.
+  - A watch runs **real SQL in the debug transaction** and can have side effects; auto-re-evaluated
+    watches must be **flagged when not a pure expression**, and every evaluation lands in Executed SQL.
+- **DoD.** All three surfaces route through `HarnessBuilder`; watches survive restart; side-effect flagging
+  present.
+- **Weryfikacja.** Unit tests on the shared path; lab: evaluate an expression calling a stored function and
+  compare to `SELECT <expr> FROM RDB$DATABASE`.
+- **Sesje: 2.** Seam: *(a)* Evaluate + Immediate; *(b)* Watches + persistence. **Placed early on purpose:
+  the Immediate window is the best test instrument for D2's harness.**
+
+---
+
+### D6 — Cursor Bridge
+
+- **Cel.** Step through `FOR SELECT` / `DECLARE CURSOR` bodies with a **real** incremental cursor. Spec §7.
+- **Zakres.** PSQL cursor ↔ DSQL cursor on the session connection, in the debug transaction.
+- **New.** `CursorBridge` (Firebird), `CursorHandle`.
+- **Mod.** `DebugSessionConnection` (**per-wire-operation locking** — see risks), `StepPlanner` (loop
+  iteration), Variables window (Cursors group).
+- **Dep.** D2, D4.
+- **Ryzyka.**
+  - ⚠ **Locking.** Gotcha #236: interleaving is fine, **concurrency is not**. Holding `CommandLock` for a
+    cursor's *lifetime* deadlocks every harness step inside the loop → take it **per wire operation**
+    (each `Read()`, each execute). Capture a lock object **once** per acquire/release pair (#98/#120).
+  - Cursor SQL comes from `ForSelectStatement.Query` / `DeclareCursorStatement.Query` **spans** (B3.1) —
+    never re-derived, never re-parsed.
+  - **Never materialize** the result set (memory + semantics). §F.
+  - **⚠ Probes block this milestone:** `WHERE CURRENT OF` on a named DSQL cursor; cursor interleaving on
+    **FB3/FB4** (verified on FB5 only).
+- **DoD.** Stepping a `FOR SELECT` body iterates a real cursor; nested loops work (two cursors); `INTO`
+  targets land in the frame.
+- **Weryfikacja.** **Lab-mandatory**: a routine looping over a lab table, simulated vs real execution,
+  identical results. Nested-loop case included.
+- **Sesje: 2.**
+
+---
+
+### D7 — Variables window, full
+
+- **Cel.** The most important panel. Spec §9.4.
+- **Zakres.** Grouping/icons, change highlight, inline edit + validation, pins, types, `<null>`, lazy
+  BLOBs, filter, **data tips**.
+- **New.** `VariableRowViewModel`, `VariablesPanelViewModel`/`View`.
+- **Mod.** **`HoverInfoEngine`** — add a `DebugValue` section to the ordered aggregate (`HoverInfo`);
+  `HoverInfoView`; `Themes/Colors.axaml` (both dictionaries).
+- **Dep.** D4.
+- **Ryzyka.**
+  - `HoverInfo` is an **ordered aggregate with no `IHoverProvider`** by deliberate design — extend it, do
+    **not** introduce a provider abstraction (spec §9.4; the "one responsibility, one owner" rule).
+  - VM holds an **icon key string**, never a brush (rule #1 + theme rules).
+  - Inline edit must validate against the declared domain, or the next injection fails (§3.4).
+  - BLOBs **lazily** — reuse the existing value viewer.
+- **DoD.** All of the above live in both themes; data tips show current values; no hardcoded colours.
+- **Weryfikacja.** VM unit tests; manual pass in both themes → "awaits user confirmation".
+- **Sesje: 2.**
+
+---
+
+### D8 — Call stack + nested stored routines
+
+- **Cel.** Frames as data, not windows. Spec §5.
+- **Zakres.** Call Stack panel, **Breadcrumbs** (the shared backlog feature), Peek Frame, frame keyboard
+  nav, simulated-frame indicator, step-into a stored routine.
+- **New.** `CallStackPanelViewModel`/`View`, `FrameRowViewModel`, `BreadcrumbsView` (**shared**, not
+  debugger-local).
+- **Mod.** `NavigationController` (reuse `JumpTo` + Peek), `FirebirdDdlReader` consumer (fetch callee
+  source).
+- **Dep.** D1, D4.
+- **Ryzyka.**
+  - Breadcrumbs is a **backlog feature for the whole editor** — build it as the shared feature; a
+    debugger-local copy is drift.
+  - ⚠ **Do not post caret+selection at `DispatcherPriority.Background`** — gotcha #221: `Input` outranks it,
+    so a held key reads the pre-jump caret. Caret+selection **synchronously**; only scroll+focus posted.
+  - Focus lives on `editor.TextArea`; `editor.Focus()` is a **no-op** (#225).
+  - Step-into = simulation, step-over = real (§5.3) — the indicator is required, not optional.
+- **DoD.** A→B→C stack navigable; selecting a frame repoints editor + variables; breadcrumbs mirror the
+  stack; frame savepoints correct on unwind.
+- **Weryfikacja.** Lab: nested procedures; simulated vs real. VM tests for stack/selection.
+- **Sesje: 2–3.**
+
+---
+
+### D9 — Local procedures & functions 🏁 *(the flagship)*
+
+- **Cel.** Local routines as **real frames** — the capability IBExpert cannot deliver. Spec §6.
+- **Zakres.** Sub-routine frames (interpret — §6.2a) + closure harness (§6.2b) + read/write sets + **R5**.
+- **New.** Little or nothing — **this is the design's central claim**: a local routine is a frame whose
+  lexical parent is the declaring frame, so it falls out of D1+D2+D8.
+- **Mod.** `Frame` scope chain (lexical parent), `ReadWriteSetAnalyzer` (transitive fixpoint over the
+  sub-routine call graph).
+- **Dep.** D1, D2, D8.
+- **Ryzyka.**
+  - ⚠ **BLOCKED until the FB3/FB4 closure probes run** (spec §6.3, §1.4). FB5 sub-routines capture **by
+    reference, read and write** (verified); FB3 documented *no* outer access. **Measure Q2/Q3/Q4 on FB3
+    (port 4050) and FB4 first.** If FB3 differs, the harness must branch on version — surface it, don't
+    silently assume FB5 semantics.
+  - **R5** again: never drop a sub-routine declaration from a harness.
+  - If new abstractions are needed here, **something earlier was built wrong** — stop and reconsider rather
+    than special-casing.
+- **DoD.** Step into a local function/procedure; it appears as a frame with its own variables; outer
+  reads/writes propagate; step-over evaluates via the closure harness with write-back.
+- **Weryfikacja.** **Lab-mandatory**: a routine with local function + local procedure (incl. one mutating
+  an outer variable) — simulated vs real, identical. Plus the FB3/FB4 probe log recorded in the spec §15.
+- **Sesje: 2.**
+
+---
+
+### D10 — Triggers
+
+- **Cel.** Debug a trigger body with user-supplied `NEW`/`OLD`. Spec §8.1.
+- **Zakres.** Action selector, NEW/OLD editor + availability rules, span-based substitution, seed-from-row.
+- **New.** `TriggerContextEditorViewModel`/`View`, `ContextSubstitution` (shared with §3.6's handler
+  context).
+- **Mod.** `HarnessBuilder` (substitution), launch panel.
+- **Dep.** D4, D7.
+- **Ryzyka.**
+  - ⚠ **Substitute by resolved `SymbolReference` span — never text search.** A textual `NEW.X` rewrite
+    corrupts string literals, comments and quoted identifiers. The binder already produced the spans
+    (`RecordAliasSymbol`, `TriggerPredicateSymbol`).
+  - **One substitution engine**, shared with the handler error context (`GDSCODE`/`SQLSTATE`/`RDB$ERROR`).
+  - Availability table (spec §8.1) is engine truth: `OLD` always read-only; `NEW` writable only in BEFORE.
+  - DB-level/DDL triggers **out of scope** — refuse clearly.
+- **DoD.** All trigger kinds launch with correct context availability; multi-action triggers drive the
+  predicates; seed-from-row works.
+- **Weryfikacja.** Lab: the 3 existing triggers; simulated vs real (compare the body's *effects*, since the
+  DML itself is not performed).
+- **Sesje: 2.**
+
+---
+
+### D11 — Packages
+
+- **Cel.** Debug packaged routines, public and private. Spec §8.2.
+- **Zakres.** Public sibling calls (real/step-into); private routines (interpret — not callable from DSQL).
+- **Mod.** Frame source fetch; possibly `PackageSourceScanner` (**existing** — check it before writing a
+  package-body parser).
+- **Dep.** D8, D9.
+- **Ryzyka.**
+  - ⚠ **Probes block this:** is a private package routine callable from an `EXECUTE BLOCK`? Is
+    private-routine source extractable from the body blob? The lab has **no private routine**
+    (`RDB$PRIVATE_FLAG = 0` on both) → **extend `Lab/setup.sql` first**.
+  - A package body is **one source blob** — extracting an individual routine is real parsing, not a
+    lookup. Reuse `PackageSourceScanner`/the AST; do not hand-roll a scanner.
+- **DoD.** Step into public and private package routines; both appear as frames.
+- **Weryfikacja.** Lab (extended with a private routine); simulated vs real.
+- **Sesje: 1–2.**
+
+---
+
+### D12 — Advanced breakpoints
+
+- **Cel.** Cheap, high-value additions *given* the engine. Spec §9.8.
+- **Zakres.** Break on exception; conditional breakpoints + hit counts; data breakpoints; **run to next
+  `SUSPEND`** (+ its result grid).
+- **Mod.** `BreakpointSet`, `StepPlanner`, `ExceptionRouter`, Breakpoints panel.
+- **Dep.** D1, D5 (conditions use the evaluation engine), D12's grid reuses the existing grid.
+- **Ryzyka.** A breakpoint condition is **just an expression** → §9.5's engine. No second evaluator.
+  Conditions can have side effects — same flagging rule as watches.
+- **DoD.** All four modes work; conditions evaluate in the correct frame.
+- **Weryfikacja.** Core unit tests (fake executor) + lab for `SUSPEND`.
+- **Sesje: 2.**
+
+---
+
+### D13 — Fast-forward *(optional)*
+
+- **Cel.** Make loops survivable. Spec §12.1.
+- **Zakres.** Block fusion for breakpoint-free regions; prepared-statement caching.
+- **Dep.** Everything. **Never earlier** — an optimisation over a *trusted* interpreter.
+- **Ryzyka.** Error line mapping degrades to block-relative (`At block line: 3, col: 3`); `SUSPEND` inside a
+  fused region needs care. **Must degrade to per-statement stepping the instant a breakpoint lands
+  inside.** Opt-in.
+- **DoD.** A large loop completes in reasonable time; fidelity unchanged; breakpoint inside → automatic
+  de-fusion.
+- **Weryfikacja.** Lab: a loop routine, fused vs stepped vs real — identical results.
+- **Sesje: 2.** **Build only if real usage asks.**
+
+---
+
+### D14 — Step back via savepoints *(optional)*
+
+- **Cel.** Bounded reverse stepping. Spec §9.8.5.
+- **Zakres.** One savepoint per **step** (vs §4.5's per **frame**) + client frame snapshots; bounded
+  history.
+- **Dep.** Everything.
+- **Ryzyka.** Memory (bound the history; auto-disable in loops/fast-forward). **Cannot** undo
+  `IN AUTONOMOUS TRANSACTION`, generator increments, `EXECUTE STATEMENT ON EXTERNAL`, or side-effecting
+  UDFs — the UI must say so, not imply otherwise.
+- **DoD.** Step back restores DB state + frame within the bound; limits surfaced.
+- **Weryfikacja.** Lab: step forward/back over DML, compare state.
+- **Sesje: 2.** **Build only if real usage asks.**
+
+---
+
+## 3. Danger zones — do not break these
+
+### 3.1 The editor architecture
+
+| Zone | Rule |
+|---|---|
+| **Dual wiring** (until D3) | `SqlEditorBehavior.Attach` serves **object editors**; `MainWindow` hand-wires the **main SQL editor**. A capability added to one **silently misses** the other (this is exactly how S3 shipped with no squiggles). Until D3 lands: **attach in BOTH, verify by grepping call sites** — not by trusting a comment. *(#219)* |
+| **Headless tests** | **ONE `HeadlessUnitTestSession` per process.** Add probes to the existing `ConnectionExpandBindingProbe` class; never `StartNew`. AvaloniaEdit's `KeyBinding` lists are **static** and owned by the first session's thread — any later session throws cross-thread. *(#94/#226)* |
+| **Focus** | `TextEditor` is **not focusable**; `editor.Focus()` is a no-op returning `false`; `IsFocused` is always false. Focus lives on `editor.TextArea`. *(#225)* |
+| **Repaint** | Use `TextView.Redraw()`, not `InvalidateVisual()` — the latter can run before visual lines exist and a diff-guard makes the miss permanent. *(#223)* |
+| **Dispatcher** | Do **not** post caret+selection at `Background`; `Input` outranks it. Caret+selection synchronously; scroll+focus posted. *(#221)* |
+| **Semantic model** | The binder is the **one** name resolver. Never add a second resolver, never re-scan tokens for something the model already knows. Ambient symbols are the seam for out-of-text params/vars *(#218)*. |
+| **AST §0** | The token stream is lossless and the AST is a structural overlay. Anything unrecognised → the existing valve (`PsqlLeafStatement` / `RawStatement`). P1 must keep the formatter **byte-identical**. |
+| **Formatter** | Do **not** touch `SqlFormatter` for the debugger. Grammar depth is built only when a feature needs it; the debugger needs *reading*, not layout. |
+| **VM naming** | `Diagnostics` already resolves to the `EmberTern.App.Diagnostics` **namespace** inside `MainWindowViewModel` — hence `DiagnosticsPanel`. Expect the same class of collision for debugger VMs. |
+| **Tab-active chain** | New tab-kind chrome gates on the `IsXxxTabActive` computed properties and their `NotifyPropertyChangedFor` chain — not a new event *(#25)*. A command gated on a computed value needs explicit notification on **every** mutation path *(#179/#187)*. |
+| **Theme** | Every colour is a token in **both** dictionaries; consume via `{DynamicResource}`; VMs hold **key strings**, never brushes. Zero hardcoded colours. |
+
+### 3.2 Transactions & connections
+
+| Zone | Rule |
+|---|---|
+| **The user's transaction** | The debugger **never** touches the Data lane. `TransactionService.BeginTransactionAsync` early-returns on an active tx — it is a **join**, not a create *(#230)*. A debug rollback on the Data lane would destroy the user's uncommitted work (**rule #11**). |
+| **TPB** | Never a bare `IsolationLevel`; always explicit `FbTransactionOptions` *(#85)*. |
+| **Locking** | Interleaving is fine; **concurrency is not** *(#236)*. Per-wire-operation locking on the session connection. Capture the lock object **once** per acquire/release pair *(#98/#120)*. |
+| **No routing by statement kind** | A classifier may decide whether to refresh the UI; it must **never** decide where/how a statement executes *(#215)*. |
+| **Lanes** | Do **not** add `ConnectionRole.Debug`. A session connection is not a lane (decision 5). |
+
+### 3.3 Fidelity (§F)
+
+Uncertainty ⇒ **stop and explain**. Never guess, never silently `NULL`, never "approximate for now".
+Every boundary in spec §12 is detected and surfaced where possible. **A boundary nobody looked for is
+indistinguishable from a boundary that does not exist** (spec §2.1) — so when in doubt, **probe the
+engine**, don't reason about it.
+
+---
+
+## 4. Developer Contract
+
+**Binding for every debugger implementation session. If a task seems to require breaking one of these,
+stop and raise it — do not work around it.**
+
+**Architecture**
+1. **Never re-parse SQL.** Consume `SqlParser`/the AST. If you are scanning tokens for structure, the AST
+   is missing a node — deepen it (P1-style, per Etap 6.9's contract), don't scan.
+2. **Never duplicate `SemanticModel` logic.** Scopes, symbols and references have one owner. No second
+   resolver, no name-based fallback.
+3. **Never re-implement Firebird semantics client-side.** No expression evaluator, no type system, no
+   collation logic. **The server owns semantics — always.**
+4. **The harness is the only server path.** Every step, condition, watch, evaluation goes through
+   `HarnessBuilder`. No second execution route, no "quick direct query".
+5. **No alternative execution paths.** One interpreter, one executor, one cursor mechanism. If two code
+   paths can produce a value, they will diverge.
+6. **No temporary metadata. Ever.** Not packages, not tables, not GTTs. If a design needs it, the design
+   is wrong (spec §3.8).
+7. **Core stays pure** — `EmberTern.Core.Sql.Debugging`: zero Avalonia, zero `FirebirdSql`.
+8. **Rule #2 holds.** `IDebugExecutor` is the **one** precedented interface exception
+   (`ISqlMetadataProvider`'s pattern). Do not add another on that argument without review.
+
+**Fidelity**
+9. **§F outranks features.** Uncertain ⇒ stop and explain. Never a guessed value, never a silent `NULL` —
+   that is precisely IBExpert's failure.
+10. **Never modify the user's routine.** Rewriting happens **only** inside a generated harness, **only** by
+    resolved `SymbolReference` span, and **never** written back to the database (**rule #11**).
+11. **Verify Firebird behaviour; never infer it.** Every ⚠ in spec §1.4/§14 **blocks its milestone**. Probe
+    against the lab (a copy at an ASCII path — `isql` cannot reach the repo path, #149) and **record the
+    result in spec §15**.
+12. **Fidelity is proven against real execution**, not against the interpreter's self-consistency. Every
+    milestone touching engine behaviour compares simulated vs real on the lab.
+
+**Process**
+13. **One milestone per session**; end green (build 0/0 → tests → smoke), committable, docs updated.
+    **Never chain build+test in one command** — they deadlock.
+14. **Do not pre-build future milestones.** Scope is the brief. Questions about later milestones go in the
+    docs, not the code.
+15. **Never silently change the frozen design.** If implementation reveals the spec is wrong — as the v1
+    review did four times — **stop, report, get a decision, update the spec.** That is the process working,
+    not a failure.
+16. **No transitional names.** No `V2`, `NewX`, `Temp`, `Parser2`. Consolidate to the responsibility name
+    the moment the old implementation dies.
+17. **Reuse before create.** Check `ControlStyles.axaml`, existing VMs/views, existing behaviors, existing
+    tokens. Parallel implementations drift and double the surface.
+18. **Not "fixed" on green alone.** If it can't be verified visually in the running app, report
+    "implementation done — awaits user confirmation". Trace to ground truth; don't guess.
+19. **Assert at the surface.** A unit test proves a rule exists; only a test at the surface proves it is in
+    force. If a component's whole value is being *called*, assert that it is called *(#233)*.
+20. **Delete the workaround you replace.** When a milestone makes an earlier hack redundant, remove it —
+    don't leave a compatibility layer.
+
+---
+
+## 5. Quick reference
+
+| Need | Where |
+|---|---|
+| Behaviour authority | `firebird-debugger.md` (spec v2) |
+| Why a boundary exists | spec §12 + §15 (verification log) |
+| Decisions + rationale | spec §0 |
+| What blocks a milestone | spec §14 + this file's briefs |
+| Editor rules | this file §3.1 + `editor-architecture.md` |
+| Gotchas | `docs/gotchas.md` (#219 wiring, #236 locking, #237 exception atomicity, #94/#226 headless) |
+| Lab | `Lab/setup.sql` — **extend it**, never create throwaway DBs |

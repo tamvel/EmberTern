@@ -23,7 +23,8 @@ verbatim, in the archive below.
 | **`docs/design/editor-ast-deepening.md`** | **Active implementation guide** for **Etap 6.9 — Structural AST Deepening** (the next foundational work: node inventory, migration contract, milestones B0–B5, debugger considerations, formatter convergence, progress matrix). | When working on the parser/AST/binder deepening. |
 | **`docs/design/editor-stage7-diagnostics.md`** | **Active design/vision** for **Stage 7 (Diagnostics)** — engine, model, categories, pipeline, squiggles/panel/nav, milestones, post-Stage-7 Quick Fixes. Consumes Etap 6.9. | When working on Stage 7. |
 | **`docs/design/editor-language-expansion.md`** | **FULLY DELIVERED design** for the code-writing experience that replaced Stage 8 M2 — both halves shipped + user-approved: **Language Completion** (construct completion by natural prefix, Tab + shown hint, grammar-armed, synchronous) + **Typing Ergonomics** (`begin…end` pairing on Enter, `()`/`[]`/`''` pairing, structural auto-indent; Enter stays normal), separate from IntelliSense. §3 documents the as-built ergonomics (incl. what is deliberately NOT done: paren alignment, `IndentLines`); §5 the arming gate; §9.1 the **one-responsibility-one-owner** rule (vocabulary *and* grammatical position). | When working on `Core.Sql.Language.Constructs`, `Core.Sql.Language.Ergonomics`, or the completion/ergonomics wiring. |
-| **`docs/design/firebird-debugger.md`** | **Design only — awaiting review.** The debugger's full design: feasibility (Firebird has **no** debug API — verified), the Fidelity Law §F, the client-interpreter + `EXECUTE BLOCK` harness architecture, the `Debug` 4th lane + transaction model, nested frames/call stack, the local-routine strategy (no temporary metadata), cursor bridge, UI/UX, panels, reuse map, milestones D0–D12, and a live-engine verification log. | When working on the debugger. |
+| **`docs/design/firebird-debugger.md`** | **DESIGN v2 — decisions ratified 2026-07-17; the target implementation spec.** Nothing implemented. Feasibility (Firebird has **no** debug API — verified), the Fidelity Law §F, the client-interpreter + `EXECUTE BLOCK` harness, harness declaration rules, frame savepoints, exception control flow, per-session connection + transaction, nested frames/call stack, local routines (no temporary metadata), cursor bridge, UI/UX, panels, reuse map, prerequisites P1/P2 + milestones D1–D14, Fidelity Boundaries, and a live-engine verification log. | When working on the debugger. |
+| **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. | **Every debugger implementation session — read this + your milestone's brief first.** |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (~190 entries, #1–#202), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -195,6 +196,15 @@ noted.
 
 ## Current state
 
+- **Stage X — Firebird Debugger: DESIGNED + PLANNED, implementation NOT started (2026-07-17).** Spec:
+  [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
+  implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
+  (milestone briefs, session split, danger zones, **Developer Contract**). **Next milestone: P1** — an
+  additive AST node for `WHEN … DO` handlers (they are currently a `PsqlLeafKind.Other` token bag, so the
+  interpreter has nothing to read); it blocks D1. Then **P2** (FB3+ connect-time version gate — app-wide,
+  deliberately outside the debugger's milestones). Order is **risk-first**: D1/D2 are pure Core+Firebird
+  and need no editor wiring, so the wiring consolidation (gotcha #219) sits at **D3**, right before the
+  first debugger UI. **Read the plan + your milestone's brief before writing any debugger code.**
 - **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**
   The close/disconnect WorkGuard can now **compile every dirty metadata editor in one pass** instead
   of only listing-and-discarding them. It **reuses the group-recompilation pipeline** (one save
@@ -1191,16 +1201,40 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   (engine, `Diagnostic` model, severities, categories, pipeline, squiggles/panel/navigation,
   incremental refresh, cancellation, performance, milestones, and post-Stage-7 Quick Fixes). Consumes
   Etap 6.9; explains why Diagnostics comes after AST Deepening.
-- **`docs/design/firebird-debugger.md`** — **Stage X — Firebird Debugger, design only (awaiting
-  review; nothing implemented).** Read before any debugger work. Key established facts: Firebird
-  exposes **no debugging API at any version** (verified — `RDB$DEBUG_INFO` is a BLR→source map,
-  `MON$CALL_STACK` is read-only, `RDB$PROFILER` measures but cannot stop), so every Firebird debugger
-  is a **client-side PSQL interpreter**; EmberTern's owns **control flow** (from the AST) and delegates
-  **all semantics** to the server via a generated anonymous `EXECUTE BLOCK` harness (so no expression
-  AST is needed — the structural-depth boundary holds). Local routines need **no temporary packages**
-  (IBExpert's workaround): stepping into one is just another frame. **⚠ `IN AUTONOMOUS TRANSACTION`
-  work survives the debug session's rollback** — "nothing is persisted" is false for such routines.
-  Recommends the editor-wiring consolidation (gotcha #219) as prerequisite **D0**.
+- **`docs/design/firebird-debugger.md`** — **Stage X — Firebird Debugger. DESIGN v2, decisions ratified
+  2026-07-17; this is the target implementation spec. Nothing implemented.** Read before any debugger
+  work. Key established facts (all measured against the live engine — §15 is the log): Firebird exposes
+  **no debugging API at any version** (`RDB$DEBUG_INFO` is a BLR→source map, `MON$CALL_STACK` is
+  read-only, `RDB$PROFILER` measures but cannot stop), so every Firebird debugger is a **client-side
+  PSQL interpreter**. EmberTern's owns **control flow** (from the AST — incl. exception handlers) and
+  delegates **all semantics** to the server via a generated anonymous `EXECUTE BLOCK` harness, so **no
+  expression AST is needed** (the structural-depth boundary holds). Local routines need **no temporary
+  packages** (IBExpert's workaround): stepping into one is just another frame. **The v1→v2 review
+  falsified four claims** — a per-statement harness does **not** preserve Firebird's **call atomicity**
+  (⇒ a SAVEPOINT per simulated frame), injecting frame state is **not** semantically neutral (a harness
+  that assigns `NULL` into a `NOT NULL`-domain variable **fails on ordinary ERP code**), the **clock** is
+  request-scoped (`CURRENT_TIMESTAMP` diverges while stepping), and **`WHEN … DO` was missing entirely**
+  (⇒ **prerequisite P1**: the AST does not model handlers — they are a `PsqlLeafKind.Other` token bag).
+  **⚠ `IN AUTONOMOUS TRANSACTION` work and generator increments survive the debug rollback** — "nothing
+  is persisted" is false. Debugger scope is **FB3/FB4/FB5 only**; FB2.5 is already unreachable (the
+  driver is Srp-only, FB2.5 is Legacy_Auth-only), so **P2**'s connect-time version gate ratifies reality
+  rather than dropping support. The editor-wiring consolidation (gotcha #219) is **D3**, immediately
+  before the first debugger UI — deliberately *after* the pure Core/Firebird milestones (D1/D2), which
+  need no wiring.
+- **`docs/design/firebird-debugger-implementation-plan.md`** — **the debugger's execution plan; read it
+  (plus your milestone's brief) at the start of every debugger implementation session.** Milestone briefs
+  for **P1** (AST exception handlers — blocks D1), **P2** (FB3+ version gate — app-wide, not
+  debugger-scoped), and **D1–D14**, each with scope / components touched / new types / dependencies /
+  risks / Definition of Done / how to verify (tests + Lab). Also: the **session split** (≈28 sessions,
+  each ending build 0/0 + green tests + smoke + committable, with explicit seams inside the big
+  milestones), the **danger zones** (dual editor wiring #219 until D3, one headless session #94/#226,
+  `TextEditor` not focusable #225, `TextView.Redraw()` #223, dispatcher priority #221, the user's
+  transaction is untouchable, per-wire-operation locking #236), and the **Developer Contract** — 20
+  binding rules (never re-parse SQL, never duplicate `SemanticModel`, never re-implement Firebird
+  semantics, the harness is the only server path, no alternative execution paths, no temporary metadata,
+  §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
+  D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
+  no wiring.
 - **`docs/gotchas.md`** — the complete gotcha catalog (~190 entries), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
