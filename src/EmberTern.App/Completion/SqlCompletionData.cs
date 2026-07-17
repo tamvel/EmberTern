@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -61,7 +62,8 @@ internal sealed class SqlCompletionData : ICompletionData
         string? description = null,
         string? columnType = null,
         string? columnDomain = null,
-        Func<object?>? detailFactory = null)
+        Func<object?>? detailFactory = null,
+        string? matchedPrefix = null)
     {
         Text = text;
         Kind = kind;
@@ -71,7 +73,7 @@ internal sealed class SqlCompletionData : ICompletionData
         // Modern (VS/Rider-style) row: a per-kind icon (reusing the tree/semantic palette) + the
         // name + a subtle ": TYPE : DOMAIN" for columns (P2). The icon conveys the kind, so no
         // fixed-width text kind column is needed — the list reads lighter and more compact.
-        Content = BuildContent(text, kind, columnType, columnDomain);
+        Content = BuildContent(text, kind, columnType, columnDomain, matchedPrefix);
     }
 
     /// <summary>
@@ -85,8 +87,14 @@ internal sealed class SqlCompletionData : ICompletionData
     /// detail pane for the selected item — the same <c>QuickInfoView</c> the Ctrl-hover
     /// tooltip uses, so the two surfaces read identically.
     /// </para>
+    /// <para>
+    /// <paramref name="matchedPrefix"/> is what the user has typed for this list, so the row can show
+    /// <i>why</i> it is here (P2c / the IBExpert cue). Supplied by the caller rather than re-derived,
+    /// because which characters matched is <c>CompletionMatcher</c>'s ruling, not this view's.
+    /// </para>
     /// </summary>
-    public static SqlCompletionData FromItem(CompletionItem item, Func<object?>? detailFactory = null)
+    public static SqlCompletionData FromItem(
+        CompletionItem item, Func<object?>? detailFactory = null, string? matchedPrefix = null)
     {
         var kind = MapKind(item.Kind);
         // Column rows show ": TYPE : DOMAIN"; the type is the item detail, the domain comes from the
@@ -98,7 +106,8 @@ internal sealed class SqlCompletionData : ICompletionData
             columnDomain = (item.Symbol as ColumnSymbol)?.Domain;
         }
         return new SqlCompletionData(
-            item.InsertText, kind, columnType: columnType, columnDomain: columnDomain, detailFactory: detailFactory);
+            item.InsertText, kind, columnType: columnType, columnDomain: columnDomain,
+            detailFactory: detailFactory, matchedPrefix: matchedPrefix);
     }
 
     /// <summary>Pure mapping from the Core completion kind to the editor's display kind.
@@ -135,10 +144,12 @@ internal sealed class SqlCompletionData : ICompletionData
     // Quick Info card when a factory is supplied and yields one; otherwise the plain string.
     public object Description => _detailFactory?.Invoke() ?? _description;
     public SqlCompletionKind Kind { get; }
-    // Schema objects beat keywords on ties; columns beat tables; in-scope locals
-    // beat catalog objects. Higher priority sorts earlier when CompletionList
-    // enables priority ordering — AvaloniaEdit's default sort is alphabetical, so
-    // the real effect of this number is to break ties on equal-prefix matches.
+    // Required by ICompletionData, but INERT: AvaloniaEdit reads Priority only from its own filter/sort
+    // (CompletionList.SelectItemFiltering), which SqlCompletionController switches off so the list renders
+    // in exactly the order Core hands over. Ordering is decided once, in Core — CompletionEngine.PriorityFor
+    // ranks by kind and applies positional boosts, then CompletionMatcher floats an exact match to the top.
+    // Kept in step with that table by hand only because the interface demands a number; treat
+    // CompletionEngine.PriorityFor as the one owner and do not grow a second ranking rule here.
     public double Priority => Kind switch
     {
         SqlCompletionKind.Column => 4.0,
@@ -179,7 +190,33 @@ internal sealed class SqlCompletionData : ICompletionData
         textArea.Document.Replace(completionSegment, insert);
     }
 
-    private static Control BuildContent(string text, SqlCompletionKind kind, string? columnType, string? columnDomain)
+    // The name, with the fragment that matched what the user typed picked out in the match colour — so a
+    // row says why it is in the list (P2c; the cue IBExpert has). Plain TextBlock when nothing is typed
+    // (Ctrl+Space on whitespace), so the no-prefix list carries no meaningless colour.
+    //
+    // The highlight is [0, prefix.Length) because CompletionMatcher's rule is StartsWith — this renders
+    // that ruling, it does not re-decide it. If the matcher ever grows a tier that matches elsewhere
+    // (CamelCase, subsequence), it must report the matched span and this must draw what it reports;
+    // guessing the span here would be a second matching rule, which is what the whole milestone removed.
+    // The StartsWith guard below is only for a caller that passes an unrelated prefix.
+    private static Control BuildName(string text, string? matchedPrefix)
+    {
+        var name = new TextBlock { FontSize = RowFontSize, VerticalAlignment = VerticalAlignment.Center };
+        int matched = matchedPrefix?.Length ?? 0;
+        if (matched == 0 || matched > text.Length
+            || !text.StartsWith(matchedPrefix!, StringComparison.OrdinalIgnoreCase))
+        {
+            name.Text = text;
+            return name;
+        }
+
+        name.Inlines!.Add(new Run(text.Substring(0, matched)) { Foreground = ResolveBrush("CompletionMatchBrush") });
+        if (matched < text.Length) name.Inlines.Add(new Run(text.Substring(matched)));
+        return name;
+    }
+
+    private static Control BuildContent(
+        string text, SqlCompletionKind kind, string? columnType, string? columnDomain, string? matchedPrefix)
     {
         var row = new StackPanel
         {
@@ -204,13 +241,7 @@ internal sealed class SqlCompletionData : ICompletionData
             };
         }
         row.Children.Add(iconSlot);
-
-        row.Children.Add(new TextBlock
-        {
-            Text = text,
-            FontSize = RowFontSize,
-            VerticalAlignment = VerticalAlignment.Center,
-        });
+        row.Children.Add(BuildName(text, matchedPrefix));
 
         // Columns: subtle ": TYPE : DOMAIN" (domain only when the column is domain-typed).
         if (kind == SqlCompletionKind.Column && !string.IsNullOrEmpty(columnType))

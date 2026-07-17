@@ -22,6 +22,12 @@
       <Color x:Key="HoverOverlayColor">#12FFFFFF</Color>
       <Color x:Key="ErrorColor">#F44747</Color>
       <Color x:Key="WarningColor">#E8A020</Color>
+      <!-- The part of a completion row that MATCHED what the user typed (the IBExpert cue). Red on
+           purpose, by user request. Deliberately its own token rather than ErrorColor, which it sits
+           next to in the palette: the two must be free to diverge, because this one means "this is why
+           the row is here" and never "something is wrong". Chosen to stay legible on BOTH surfaces a row
+           can have — the popup's ElevatedPanel and the SelectionColor of the selected row. -->
+      <Color x:Key="CompletionMatchColor">#FF6B6B</Color>
       <Color x:Key="SelectionColor">#094771</Color>
       <Color x:Key="FocusBorderColor">#007FD4</Color>
       <!-- Zebra-stripe tint for DataGrid alternating rows. ARGB: ~5% white on dark. -->
@@ -91,6 +97,7 @@
       <SolidColorBrush x:Key="HoverOverlayBrush" Color="{StaticResource HoverOverlayColor}" />
       <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
       <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
+      <SolidColorBrush x:Key="CompletionMatchBrush" Color="{StaticResource CompletionMatchColor}" />
       <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}" />
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />
@@ -218,6 +225,10 @@
       <Color x:Key="HoverOverlayColor">#10000000</Color>
       <Color x:Key="ErrorColor">#CC2929</Color>
       <Color x:Key="WarningColor">#C77800</Color>
+      <!-- Matched fragment of a completion row — see the Dark dictionary for why this is its own token
+           and not ErrorColor. Darker/denser than the dark theme's red so it carries on the near-white
+           popup and on the pale SelectionColor of the selected row. -->
+      <Color x:Key="CompletionMatchColor">#C42B1C</Color>
       <Color x:Key="SelectionColor">#CCE4F7</Color>
       <Color x:Key="FocusBorderColor">#0078D4</Color>
       <!-- Zebra-stripe tint for DataGrid alternating rows. ARGB: ~5% black on light. -->
@@ -280,6 +291,7 @@
       <SolidColorBrush x:Key="HoverOverlayBrush" Color="{StaticResource HoverOverlayColor}" />
       <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
       <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
+      <SolidColorBrush x:Key="CompletionMatchBrush" Color="{StaticResource CompletionMatchColor}" />
       <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}" />
       <SolidColorBrush x:Key="FocusBorderBrush" Color="{StaticResource FocusBorderColor}" />
       <SolidColorBrush x:Key="RowAlternateBrush" Color="{StaticResource RowAlternateColor}" />

@@ -576,8 +576,8 @@ noted.
   `SqlAliasResolver` is off the editor path (only `PredicateExtractor`/Performance uses it).
   Still deferred: **P5d** a plain-hover info cue — now **folded into the post-Stage-7 "Unified Hover
   Information" backlog item** (do NOT ship P5d separately: it builds the same plain-hover surface, dwell
-  delay and noise budget the unified hover needs — see `editor-stage7-diagnostics.md` §15); **P2c** bold
-  the typed completion-fragment (no clean AvaloniaEdit 12.0.0 path yet). Formatter grammar-depth items now folded into Etap 6.9 as node
+  delay and noise budget the unified hover needs — see `editor-stage7-diagnostics.md` §15). **P2c is DONE**
+  (2026-07-17) — see the Completion Matching bullet. Formatter grammar-depth items now folded into Etap 6.9 as node
   consumers: **CASE** (was inline/verbatim), **nested-query indentation** (no indent model today),
   and eventually **UPDATE SET** / **MERGE … WHEN** if a feature needs them; CREATE-definition headers
   stay verbatim by design. Immediate hygiene noted for Etap 6.9: a literal NUL byte in
@@ -815,27 +815,51 @@ noted.
   `'` pairing kept pending real usage (one-line removal if it annoys). Build 0/0, **4347 green**, smoke
   clean. **M4 Structural Selection remains future; M3 Snippet Engine would now start from scratch** (that
   engine is deleted).
-- **Completion Matching Philosophy — prefix-first IntelliSense — IN PROGRESS (foundation done 2026-07-16).**
-  A separate **Completion** milestone (not Stage 8), inserted at the user's request: interactive completion
-  must be a **prediction engine, not a search engine**. Root cause of today's noise (`sta`→`NR_STATUS`/
-  `DATASTATUS`, `if`→`IIF`/`NULLIF`): the Core engine returns the FULL in-scope set unfiltered, and all
-  live narrowing is AvaloniaEdit's `CompletionList.GetMatchQuality` (private, no hook) which admits
-  **substring** matches. Agreed behaviour: no prefix→all (Ctrl+Space); prefix with ≥1 StartsWith→**only**
-  StartsWith; zero StartsWith→**close** (never Contains); consistent across every kind. **Architecture (user
-  directive):** `CompletionEngine` is the single authority returning the FINAL list; a pure Core
-  **`CompletionMatcher`** owns all filtering/ranking; the **UI is a passive view**; AvaloniaEdit's substring
-  filter is **disabled**. **DONE:** `CompletionMatcher` (Core, pure, `Filter(items, prefix)` — StartsWith-only,
-  exact floated to top, empty→all, zero-match→empty) + `CompletionMatcherTests` (8). Build 0/0, suite green.
-  **It is currently UNUSED** (foundation-first). The **remaining step is entangled and must land atomically**
-  (add a `prefix` param + rewrite the App as a passive view: `IsFiltering=false`, re-query per keystroke,
-  close on empty) and needs **interactive visual QA** of AvaloniaEdit's `IsFiltering=false` rendering/ordering
-  — so it was deliberately deferred to a fresh focused session per the user's "stop at a clean boundary"
-  guidance. **Two things got simpler since:** the "fold snippets into the engine / remap the `Snippet` item
-  kind" work is **gone** (the Etap-5 snippets are deleted — see the Language Completion bullet above), and
-  "close on empty" is **already done** for the empty-window symptom via AvaloniaEdit's own `CurrentList`
-  (gotcha #227) — deliberately NOT via `CompletionMatcher`, which would have imposed prefix-first matching
-  ahead of this milestone. **The exact remaining steps are written up in
-  `docs/history/17-completion-matching-philosophy.md` — a fresh session should execute that.**
+- **Completion Matching Philosophy — prefix-first IntelliSense — COMPLETE (2026-07-17; impl + headless-probe
+  proven, awaits the user's visual confirmation).** A separate **Completion** milestone (not Stage 8):
+  interactive completion is a **prediction engine, not a search engine**. No prefix → all (Ctrl+Space);
+  prefix with ≥1 StartsWith → **only** StartsWith; zero StartsWith → **no window** (never a Contains
+  fallback); identical for every kind. The user re-reported the original symptom (`cont` → every
+  `…CONTRACTOR…` object) as a **regression on 2026-07-17 — it wasn't one**: the foundation had shipped
+  unused, so AvaloniaEdit's substring filter was still the only thing narrowing the list (gotcha #233 — a
+  tested-but-uncalled component looks exactly like a regression, and the green suite is what hides it).
+  **Now wired:** `SqlCompletionController` is a passive view — `IsFiltering = false` kills AvaloniaEdit's
+  substring filter *and* its quality re-sort (**measured**, gotcha #232), every source (baseline, dot,
+  on-demand column warm) routes through `ShowItems` → the one `CompletionMatcher`, and `RefreshOpenWindow`
+  (off `Caret.PositionChanged`, so backspace/paste count too) re-filters the session's cached candidates.
+  **⚠ The refresh MUST re-assign `ListBox.ItemsSource`, never just mutate `CompletionData`** — that is a
+  plain `List<ICompletionData>` and broadcasts no change, so mutation updates the data and **nothing on
+  screen** (the list froze on `ID_AKWIZYTOR` while every collection correctly read `ID_NAGL`). Turning
+  `IsFiltering` off removes AvaloniaEdit's `SelectItemFiltering`, whose fresh-List assignment to
+  `ItemsSource` *was* the refresh mechanism; `Populate` now mirrors that (gotcha #234). Pinned by a probe
+  that types into the **open** window and asserts the **realized containers** — asserting `ItemsSource`
+  reads our own input back and cannot fail (gotcha #235).
+  **Responsibility split — one owner per *question*:** `CompletionEngine` answers "what is legal at this
+  caret" (candidate set — a property of the *position*, fixed for the session); `CompletionMatcher` answers
+  "which of those match what is typed" (a property of the *prefix*). So `CompletionEngine` deliberately did
+  **NOT** get a `prefix` param, contrary to the original directive's letter: a prefix-filtering engine
+  cannot widen on a **backspace** without a per-keystroke re-query — against a debounce-lagged model whose
+  offsets no longer match the caret, or a synchronous whole-document parse (Etap 0 forbids it). **Deleted as
+  now-redundant:** `ApplyInitialFilter` (#200) and `CloseIfNarrowedToNothing` (#227) — taking ownership of
+  the filter removed both workarounds rather than adding to them — plus `BuildColumnDetail` and the warm
+  path's second column-row builder. The planned `IsFiltering=false` fallback design was unnecessary and is
+  not kept. Build 0/0, **4594 green**, smoke clean. As-built + the stale-list follow-up (incl. why six
+  reproductions passed before the right instrument was applied):
+  [docs/history/17-completion-matching-philosophy.md](docs/history/17-completion-matching-philosophy.md).
+  **P2c — matched-fragment highlight — DONE (2026-07-17, user-requested "jak w IBExpert"), and it CLOSED
+  ITSELF as a side effect.** P2c ("bold the typed fragment") was deferred for months as *"no clean
+  AvaloniaEdit 12.0.0 path"* — true only while AvaloniaEdit owned filtering: rows were built once at open
+  and the App never knew the prefix at row-build time. Taking the list over made `Populate` rebuild rows on
+  every prefix change **with the prefix in hand**, so the blocker evaporated. Shipped as colour, not bold
+  (the IBExpert cue the user asked for): `SqlCompletionData.BuildName` splits the name into two `Run`s —
+  matched fragment in the new `CompletionMatchBrush` theme token (both dictionaries; deliberately NOT
+  `ErrorBrush`, which it sits beside in the palette — this means "why this row is here", never "something is
+  wrong"), unmatched tail inherits the row foreground so selection/theme still drive it. Empty prefix →
+  plain text (no meaningless colour on a Ctrl+Space list). **The split renders `CompletionMatcher`'s ruling,
+  it does not re-derive it** — `[0, prefix.Length)` follows from StartsWith; if the matcher ever grows a
+  tier matching elsewhere it must report the span (§9.1's one-owner rule, one level down). Pinned by
+  `CompletionRow_HighlightsMatchedPrefix` (split + the brush is the token + present in both dictionaries).
+  Still open (ranking taste): whether common leading keywords deserve a boost over same-prefix objects.
 - **⚠ MILESTONE-ORDER DECISION (2026-07-16) — the Stage 7 retrospective's "consolidate the editor wiring
   first" recommendation was REVERSED, with reason.** It rested on "both backlog items add per-editor
   surfaces — exactly what the duplication punishes"; that is true of **Quick Fixes** (a light bulb = a new
@@ -934,8 +958,10 @@ separate Performance migration. **Stage 7 (Diagnostics) is COMPLETE** (S1–S6; 
 **has shipped** (see "Current state" above). **Folding and Breadcrumbs** were part of the original "Etap 7
 niceties" and are still **unbuilt**; they consume the same AST and need no further foundation. Remaining
 backlog: **editor-wiring consolidation** (gotcha #219 — recommended as the milestone immediately BEFORE
-Quick Fixes, per §15.4), **Quick Fixes** (`editor-stage7-diagnostics.md` §12), Folding, Breadcrumbs, and
-**P2c** (bold the typed completion fragment — still no clean AvaloniaEdit 12.0.0 path). Nothing is
+Quick Fixes, per §15.4), **Quick Fixes** (`editor-stage7-diagnostics.md` §12), Folding and Breadcrumbs.
+**P2c is DONE** (2026-07-17): its "no clean AvaloniaEdit path" blocker was a *consequence* of AvaloniaEdit
+owning the completion filter, and dissolved the moment the Completion Matching milestone took the list over
+— a reminder that a long-deferred item is worth re-testing after the thing under it changes. Nothing is
 scheduled: next steps are the user's call.
 
 ## Architecture rules — enforce against drift

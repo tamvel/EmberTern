@@ -19,6 +19,15 @@ namespace EmberTern.Core.Sql.Language.Completion;
 /// completion; M4 adds positional context ranking (after FROM → tables first, etc.). Each later
 /// milestone slots in without changing this API or the baseline.
 /// </para>
+/// <para>
+/// <b>Scope of this class — one responsibility, one owner.</b> It answers <i>what is legal at this
+/// caret</i>: the candidate set, kind-ranked and position-boosted. It does <b>not</b> narrow by the
+/// prefix the user has typed — that is <see cref="CompletionMatcher"/>'s single job. The split is
+/// what lets an open list widen again on a backspace: the candidate set is a property of the
+/// <i>position</i> the list opened at and is fixed for that session, while the prefix changes on
+/// every keystroke. Folding the two together would force a re-query (and therefore a whole-document
+/// re-parse, or a debounce-lagged model whose token offsets no longer match the caret) per character.
+/// </para>
 /// </summary>
 public static class CompletionEngine
 {
@@ -26,6 +35,8 @@ public static class CompletionEngine
     /// Returns the completion candidates for <paramref name="offset"/> in
     /// <paramref name="model"/>. Never throws; returns <see cref="CompletionResult.Empty"/> for a
     /// null model. Items are ordered by <see cref="CompletionItem.SortPriority"/> desc then name.
+    /// <para>The result is the <b>unfiltered</b> candidate set — run it through
+    /// <see cref="CompletionMatcher.Filter"/> with the typed prefix to get the list to display.</para>
     /// </summary>
     public static CompletionResult GetCompletions(
         SemanticModel model,
@@ -426,10 +437,15 @@ public static class CompletionEngine
         _ => CompletionItemKind.Unknown,
     };
 
-    // Baseline priority by kind (M4 refines by caret position). In-scope locals rank above catalog
-    // objects (they're the most relevant thing to type here); columns top the list for dot
-    // completion; keywords sit at the bottom so a table beats a keyword on an equal prefix.
-    internal static double PriorityFor(CompletionItemKind kind) => kind switch
+    /// <summary>
+    /// Baseline priority by kind (M4 refines by caret position). In-scope locals rank above catalog
+    /// objects (they're the most relevant thing to type here); columns top the list for dot
+    /// completion; keywords sit at the bottom so a table beats a keyword on an equal prefix.
+    /// <para>Public so a caller that builds an item outside a model query — the App's on-demand column
+    /// warm, whose columns aren't in the metadata snapshot yet — ranks it from THIS table rather than
+    /// keeping a second copy that drifts.</para>
+    /// </summary>
+    public static double PriorityFor(CompletionItemKind kind) => kind switch
     {
         CompletionItemKind.Column => 4.0,
         CompletionItemKind.TableAlias => 3.5,
