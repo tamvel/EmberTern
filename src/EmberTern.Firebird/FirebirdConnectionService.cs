@@ -56,6 +56,11 @@ public sealed class FirebirdConnectionService : IDisposable
     private readonly SemaphoreSlim _metadataCommandLock = new(1, 1);
     private readonly SemaphoreSlim _ddlCommandLock = new(1, 1);
 
+    // Live debug sessions (Stage X / D2, spec §4.1). Each owns its OWN attachment + transaction — decision
+    // 5: a session is not a lane. Tracked here only so disconnect/reconnect tears them down deterministically
+    // (the attachments must not outlive the profile's connection). A session deregisters itself on dispose.
+    private readonly List<DebugSessionConnection> _debugSessions = new();
+
     public bool IsConnected => _activeConnection is { State: System.Data.ConnectionState.Open };
 
     // True when the dedicated DDL attachment (#3) opened. When false we degrade to the Data
@@ -189,12 +194,77 @@ public sealed class FirebirdConnectionService : IDisposable
         ActiveConnectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public async Task DisconnectAsync()
+    /// <summary>
+    /// Opens a dedicated attachment for a new debug session and returns its
+    /// <see cref="DebugSessionConnection"/> (spec §4.1) — its own <see cref="FbConnection"/> and its own
+    /// transaction (begun with the explicit debug TPB, §4.2), independent of the Data/Metadata/Ddl lanes.
+    /// The session is registered so <see cref="DisconnectAsync"/>/<see cref="Dispose"/> tears it down; it
+    /// deregisters itself when disposed. Each session is another attachment — a server connection-limit
+    /// refusal surfaces as a <see cref="ConnectionFailedException"/> (the thinking behind gotcha #89), never
+    /// a broken app.
+    /// </summary>
+    public async Task<DebugSessionConnection> CreateDebugSessionAsync(
+        DebugIsolation isolation, CancellationToken cancellationToken = default)
     {
-        if (_activeConnection is null && _metadataConnection is null && _ddlConnection is null)
+        if (_activeProfile is null || !IsConnected)
+        {
+            throw new InvalidOperationException("No active Firebird connection.");
+        }
+
+        var profile = _activeProfile;
+        var connectionString = BuildConnectionString(profile);
+        var connection = new FbConnection(connectionString);
+        try
+        {
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+            throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
+        }
+
+        var session = new DebugSessionConnection(connection, isolation, this);
+        try
+        {
+            await session.BeginAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await session.DisposeAsync().ConfigureAwait(false); // closes the attachment, no half-open state
+            throw;
+        }
+        _debugSessions.Add(session);
+        return session;
+    }
+
+    // A debug session deregisters itself here on dispose (called from DebugSessionConnection.DisposeAsync).
+    internal void RemoveDebugSession(DebugSessionConnection session) => _debugSessions.Remove(session);
+
+    // Tears down every live debug session — their attachments must not outlive the profile's connection.
+    // Snapshots first because each DisposeAsync deregisters itself (mutating _debugSessions).
+    private async Task TearDownDebugSessionsAsync()
+    {
+        if (_debugSessions.Count == 0)
         {
             return;
         }
+        foreach (var session in _debugSessions.ToArray())
+        {
+            try { await session.DisposeAsync().ConfigureAwait(false); } catch { /* best-effort teardown */ }
+        }
+        _debugSessions.Clear();
+    }
+
+    public async Task DisconnectAsync()
+    {
+        if (_activeConnection is null && _metadataConnection is null && _ddlConnection is null
+            && _debugSessions.Count == 0)
+        {
+            return;
+        }
+
+        await TearDownDebugSessionsAsync().ConfigureAwait(false);
 
         await CloseAndDisposeAsync(_ddlConnection).ConfigureAwait(false);
         _ddlConnection = null;
@@ -484,6 +554,15 @@ public sealed class FirebirdConnectionService : IDisposable
 
     public void Dispose()
     {
+        // Tear down live debug sessions first — their attachments must not outlive the service. Block
+        // best-effort at shutdown; DebugSessionConnection.DisposeAsync uses ConfigureAwait(false) throughout,
+        // so GetResult cannot deadlock on a captured context. Snapshot: each dispose deregisters itself.
+        foreach (var session in _debugSessions.ToArray())
+        {
+            try { session.DisposeAsync().AsTask().GetAwaiter().GetResult(); } catch { /* best-effort */ }
+        }
+        _debugSessions.Clear();
+
         try
         {
             _ddlConnection?.Close();

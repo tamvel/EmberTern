@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1 DONE (2026-07-17).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1 DONE, D2 seam (a) DONE (2026-07-17).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -256,12 +256,34 @@ noted.
   Proven with a **scripted fake executor** — **39** `DebugEngineTests` (24 seam-a: step ordering, IF/WHILE/
   FOR, nested frames, savepoint order, scope chain, SUSPEND, RunToCursor, SetNext; +15 seam-b: matching per
   form, multi-condition `WHEN`, cross-frame propagation + rollback, re-raise + `HandlerActive` guard, cursor
-  cleanup on both unhandled + handled unwind, four breakpoint cases). Build 0/0; **4691 tests green in ONE
-  run** (~6 s); smoke clean. History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
-  **Next session: D2** (harness + session connection + executor — Firebird; lab-mandatory fidelity proof).
-  Order stays **risk-first** (P1 → P2 → D1 → D2 → D3 …); the wiring consolidation (gotcha #219) sits at
-  **D3**, right before the first debugger UI. **Read the plan + your milestone's brief before writing any
-  debugger code.**
+  cleanup on both unhandled + handled unwind, four breakpoint cases).
+  **D2 (harness + session connection + executor) — seam (a) DONE (Firebird; no harness yet).** New
+  `DebugSessionConnection` (`EmberTern.Firebird`): a debug session's **own attachment + one transaction +
+  frame savepoints** (spec §4.1/§4.2/§4.5) — **decision 5: a session is NOT a lane** (no
+  `ConnectionRole.Debug`; two tabs = two sessions = two transactions, impossible on a per-profile lane
+  singleton), and it **never** touches the Data lane (a debug rollback there would destroy the user's
+  uncommitted work, rule #11). TPB **explicit** (#85) via pure `BuildDebugTransactionOptions(DebugIsolation)`
+  — write + (read_committed rec_version | concurrency) + **NOWAIT** (a lock met on the user's Data tx ⇒
+  step-level error at a known line, not a hang); isolation `ReadCommitted`/`Snapshot` user-selectable at
+  launch (§12.4). Frame savepoints: `Set`/`Release`/`RollbackToSavepointAsync` (async counterparts of D1's
+  `IDebugExecutor.Enter/Leave/RollbackFrameSavepoint`, bridged by seam c) — names (`ET_DBG_FRAME_{id}`)
+  validated as bare identifiers; SQL verified through the driver (§15.3 [5]). Per-wire-op locking on the
+  session's own single lock (#31/#98/#120/#236). `FirebirdConnectionService.CreateDebugSessionAsync` opens
+  the attachment + registers the session; `DisconnectAsync`/`Dispose` tear all sessions down deterministically
+  (attachments must not outlive the profile connection); each deregisters itself on dispose. Pinned by 13
+  pure `DebugSessionConnectionTests` (TPB both isolations, the 3 savepoint statement forms, name validation);
+  the **live** round-trip is **awaits user confirmation** (needs a server; driver capability already
+  confirmed §15.3 [5]). Build 0/0; **4704 tests green in ONE run** (~8 s); smoke clean.
+  **Parked for the next session — D2 seam (b) + (c) (per the plan's within-milestone order a → b → c):**
+  seam (b) `HarnessBuilder` + `ReadWriteSetAnalyzer` + the §3.4 **R1–R5** rules (pure Core, unit-tested —
+  R1 never inject `NULL`; R2 base types from **metadata**; R3 verbatim frame vars; R4/R5 read/write set from
+  `SemanticModel`, **never** drop a sub-routine declaration); seam (c) `FirebirdDebugExecutor : IDebugExecutor`
+  + the **lab-mandatory** simulated-vs-real fidelity comparison (extend `Lab/setup.sql` with the debugging
+  zoo first). `DebugSessionConnection` is deliberately-parked infrastructure (mitigating #233 — recorded here
+  because nothing calls it until seam c). History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
+  **Next session: D2 seam (b).** Order stays **risk-first** (P1 → P2 → D1 → D2 → D3 …); the wiring
+  consolidation (gotcha #219) sits at **D3**, right before the first debugger UI. **Read the plan + your
+  milestone's brief before writing any debugger code.**
 - **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**
   The close/disconnect WorkGuard can now **compile every dirty metadata editor in one pass** instead
   of only listing-and-discarding them. It **reuses the group-recompilation pipeline** (one save

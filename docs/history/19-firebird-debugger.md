@@ -323,3 +323,66 @@ Build 0/0. Tests: **4691** green in **one** `dotnet test` run (~6 s). Smoke: app
 pure Core, not yet wired to any UI). No lab needed (no server — fidelity vs real execution is D2's
 lab-mandatory proof). **D1 is COMPLETE.** Next: **D2** (harness + session connection + executor) — a
 separate session, per the plan's order (P1 → P2 → D1 → D2 → D3 …).
+
+## D2 — Harness + session connection + executor, seam (a) (2026-07-17)
+
+D2's first seam: the **debug session connection** — a session's own attachment + transaction + frame
+savepoints (spec §4.1/§4.2/§4.5). Seams (b) `HarnessBuilder`/`ReadWriteSetAnalyzer` and (c)
+`FirebirdDebugExecutor` + the lab-mandatory fidelity proof are **not** in this seam (the full milestone did
+not safely fit the session's remaining context, so it was split at the plan's designated seam boundary and
+this checkpoint landed green).
+
+### `DebugSessionConnection` (EmberTern.Firebird)
+
+A session owns a dedicated `FbConnection` + one `FbTransaction` — **decision 5: a session is not a lane**
+(the Data/Metadata/Ddl lanes are per-profile singletons, but two debug tabs are two sessions are two
+transactions, impossible on one lane). It never touches the Data lane (a debug rollback there would destroy
+the user's uncommitted work, rule #11). The TPB is **explicit** (never a bare `IsolationLevel`, #85):
+`BuildDebugTransactionOptions(DebugIsolation)` → write + (read_committed rec_version | concurrency) +
+**NOWAIT** — `NOWAIT` because the debug transaction *will* meet locks held by the user's Data transaction,
+and a step-level error at a known line beats a silent hang (§4.2). Isolation (`ReadCommitted` / `Snapshot`)
+is user-selectable at launch (§12.4) — a routine normally run under SNAPSHOT sees different data under READ
+COMMITTED, so it is surfaced, never silently defaulted. Mirrors the established per-job pure-static TPB
+builder pattern (`FirebirdDdlExecutor.BuildDdlTransactionOptions`), reuse over a parallel builder.
+
+**Frame savepoints (§4.5)** are the point of this seam: `SetSavepointAsync` (frame entry),
+`ReleaseSavepointAsync` (normal exit), `RollbackToSavepointAsync` (unhandled exit) — the async counterparts
+of D1's `IDebugExecutor.Enter/Leave/RollbackFrameSavepoint`, which seam (c)'s executor will bridge. Names
+come from `Frame.SavepointName` (`ET_DBG_FRAME_{id}`) and are validated as bare SQL identifiers before
+concatenation, so no path can inject through them. `SAVEPOINT` / `RELEASE SAVEPOINT` / `ROLLBACK TO
+SAVEPOINT` are verified working through `FirebirdClient` 10.3.4 (§15.3 probe [5]). Every wire operation is
+serialized on the session's **own** command lock, captured once per acquire/release (#31/#98/#120/#236 — a
+session connection never flips lanes, so it is a single lock; interleaving fine, concurrency not). `CommitAsync`
+(the rare explicit `Commit debug transaction`, §4.4) / `RollbackAsync` (the default at session end) / an
+idempotent `DisposeAsync` that rolls back then closes the attachment and deregisters.
+
+### Lifecycle in `FirebirdConnectionService`
+
+`CreateDebugSessionAsync(DebugIsolation)` opens a fresh attachment from the active profile, begins the
+session transaction, registers it, and returns the `DebugSessionConnection`; a connection-limit refusal
+surfaces as `ConnectionFailedException` (the thinking behind #89), never a broken app. Sessions are tracked
+in `_debugSessions` **only** so `DisconnectAsync`/`Dispose` tear them down deterministically — their
+attachments must not outlive the profile's connection (spec §4.1); each session deregisters itself on
+dispose (`RemoveDebugSession`). `DisconnectAsync` tears sessions down first (async, proper rollback);
+`Dispose` blocks best-effort (safe: `DisposeAsync` uses `ConfigureAwait(false)` throughout, so `GetResult`
+cannot deadlock on a captured context). **No `ConnectionRole.Debug`** was added (decision 5) — a session
+connection is not a lane, so it sidesteps the lane machinery (`GetCommandLock(role)`, the accessor hazard)
+entirely.
+
+### Tests
+
+`DebugSessionConnectionTests` (+13, pure — mirrors `TransactionTpbTests`): the debug TPB for both
+isolations (READ COMMITTED = write/read_committed/rec_version/nowait, never Wait/Concurrency; SNAPSHOT =
+write/concurrency/nowait, never ReadCommitted/Wait); the three savepoint statement forms; and savepoint-name
+validation (bare identifiers accepted, empty / leading-digit / spaces / injection rejected, and
+`SavepointStatement` throws on a bad name). The **live** round-trip (open → begin → savepoint set/rollback-
+to/release → commit/rollback → teardown) needs a real server and is **awaits user confirmation** per the QA
+rule (the driver capability itself is already confirmed, §15.3 [5]).
+
+### Verification
+
+Build 0/0. Tests: **4704** green in one run (~8 s). Smoke: app launches. **D2 seam (a) DONE.** Parked for
+the next session: **seam (b)** `HarnessBuilder` + `ReadWriteSetAnalyzer` + the §3.4 R1–R5 rules (pure Core,
+unit-tested) and **seam (c)** `FirebirdDebugExecutor : IDebugExecutor` + the lab-mandatory simulated-vs-real
+fidelity comparison (extend `Lab/setup.sql` with the debugging zoo first). Order within D2: (a) → (b) → (c),
+per the plan.
