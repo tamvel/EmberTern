@@ -9,8 +9,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Export;
 using EmberTern.Core.Export;
+using EmberTern.Core.Export.Sql;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Firebird;
 
 namespace EmberTern.App.ViewModels;
@@ -1634,6 +1636,75 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
             async (page, size, ct) => (await reader.GetDataPreviewAsync(TableName, page, size, orderBy, filter, ct).ConfigureAwait(false)).Rows,
             ServerPagedExportSource.DefaultFetchPageSize,
             TableName);
+    }
+
+    // ── Copy as INSERT / UPDATE (E6) ──────────────────────────────────────────
+    // The SAME shared controller + coordinator the SQL Editor grid uses — one mechanism, no re-derived
+    // copy. Table Data is the safe case: the grid IS a table, so it declares OriginShape.DirectTable and
+    // nothing is inferred from a statement. Provenance (columns + declared types) is captured lazily via
+    // the reader's Data-lane schema seam and cached for the tab's life (it never changes with page /
+    // filter / sort), so the ~7 ms cost lands on the first Copy, never on data load.
+
+    /// <summary>The copy controller for the Dane grid, bound by its context menu
+    /// (<c>SqlCopy.CanCopyAsInsert</c> / <c>SqlCopy.CopyAsInsertTooltip</c>). Null until
+    /// <see cref="EnableSqlCopy"/> supplies the catalog — a system/read-only table or a reader-less test
+    /// VM leaves it null and the menu items stay disabled.</summary>
+    public SqlCopyController? SqlCopy { get; private set; }
+
+    /// <summary>Turns on Copy-as-INSERT/UPDATE for this table by supplying signal C (the catalog snapshot)
+    /// and the column warmer — the same two the SQL Editor coordinator uses. Called once at construction
+    /// for a writable table; a no-op without a reader.</summary>
+    internal void EnableSqlCopy(Func<ISqlMetadataProvider> catalog, Func<string, Task> warmColumns)
+    {
+        if (_reader is not { } reader || SqlCopy is not null) return;
+
+        SqlCopy = new SqlCopyController(new SqlCopyCoordinator(
+            ct => CaptureDirectOriginAsync(reader, ct),
+            catalog)
+        {
+            WarmColumns = warmColumns,
+        });
+        OnPropertyChanged(nameof(SqlCopy));
+    }
+
+    private async Task<ResultOrigin> CaptureDirectOriginAsync(FirebirdTableDetailReader reader, CancellationToken cancellationToken)
+    {
+        var schema = await reader.CaptureDataSchemaTableAsync(TableName, cancellationToken).ConfigureAwait(true);
+        if (schema is null)
+        {
+            // The table no longer prepares (dropped, tx rolled back) — honest "no provenance", the menu
+            // item disables with a reason rather than erroring.
+            return ResultOrigin.None(ExportUnavailableReason.Of(ExportUnavailableCode.StatementNotUnderstood));
+        }
+
+        return new ResultOrigin(
+            FirebirdResultOriginReader.ReadColumnOrigins(schema),
+            new OriginShape.DirectTable(TableName));
+    }
+
+    /// <summary>Re-evaluates whether the copy actions are available — called when the Dane grid's context
+    /// menu opens (the gesture that makes the lazy schema capture "on demand").</summary>
+    public Task RefreshSqlCopyAvailabilityAsync(CancellationToken cancellationToken = default)
+        => SqlCopy?.RefreshAvailabilityAsync(HasDataResult, cancellationToken) ?? Task.CompletedTask;
+
+    /// <summary>Builds the right-clicked row as INSERT/UPDATE. On refusal, surfaces the reason in the edit
+    /// status (the same red status the row editors use) and returns null; on success returns the formatted
+    /// SQL for the view to place on the clipboard.</summary>
+    public async Task<string?> CopyRowAsSqlAsync(ExportFormat format, object?[] row, CancellationToken cancellationToken = default)
+    {
+        if (SqlCopy is not { } copy) return null;
+
+        var built = await copy.BuildFormattedAsync(format, row, cancellationToken).ConfigureAwait(true);
+        if (!built.IsBuilt)
+        {
+            EditStatusMessage = built.Text;
+            OnPropertyChanged(nameof(HasEditStatusMessage));
+            return null;
+        }
+
+        EditStatusMessage = string.Empty;
+        OnPropertyChanged(nameof(HasEditStatusMessage));
+        return built.Text;
     }
 
     // ─── Pagination commands ──────────────────────────────────────────────

@@ -261,12 +261,16 @@ public class MetadataReaderTests
     [Theory]
     [InlineData(3)]
     [InlineData(5)]
-    public void ColumnsSqlFor_Fb3Plus_DetectsIdentityViaIdentityType(int serverMajor)
+    public void ColumnsSqlFor_Fb3Plus_ProjectsTheRawIdentityType(int serverMajor)
     {
-        // FB3+ identity columns are detected from RDB$IDENTITY_TYPE.
+        // FB3+ reads RDB$IDENTITY_TYPE — and projects its RAW VALUE, not a 0/1 "is it one?" flag: the
+        // value IS the ALWAYS (0) / BY DEFAULT (1) distinction, and Firebird rejects an INSERT naming a
+        // GENERATED ALWAYS column without OVERRIDING SYSTEM VALUE. Collapsing it to a bool — as this
+        // query used to — discarded the only fact that tells generated DML which form is legal.
         var sql = FirebirdMetadataReader.ColumnsSqlFor(serverMajor);
         Assert.Contains("RDB$IDENTITY_TYPE", sql);
-        Assert.Contains("IS_IDENTITY", sql);
+        Assert.Contains("AS IDENTITY_TYPE", sql);
+        Assert.DoesNotContain("CASE WHEN rf.RDB$IDENTITY_TYPE IS NOT NULL", sql); // the discarded-fact form
     }
 
     [Fact]
@@ -277,7 +281,9 @@ public class MetadataReaderTests
         // so the reader ordinals stay identical across versions.
         var sql = FirebirdMetadataReader.ColumnsSqlFor(2);
         Assert.DoesNotContain("RDB$IDENTITY_TYPE", sql);
-        Assert.Contains("CAST(0 AS INTEGER) AS IS_IDENTITY", sql);
+        // NULL, not 0: on FB3+ the projected value is the identity TYPE, where 0 means ALWAYS. A
+        // constant 0 here would report every FB2.5 column as a GENERATED ALWAYS identity.
+        Assert.Contains("CAST(NULL AS SMALLINT) AS IDENTITY_TYPE", sql);
     }
 
     [Theory]

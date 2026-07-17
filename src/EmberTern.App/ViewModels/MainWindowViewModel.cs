@@ -4241,6 +4241,11 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
             _ = LoadTableListAsync(detail.SetAvailableTables);
+            // Copy-as-INSERT/UPDATE on the Dane grid — the SAME catalog snapshot + column warmer the SQL
+            // Editor's coordinator uses, so both grids resolve through one mechanism (E6).
+            detail.EnableSqlCopy(
+                CreateMetadataSnapshot,
+                async t => await EnsureColumnsAsync(t).ConfigureAwait(true));
         }
         return detail;
     }
@@ -5398,6 +5403,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
             CurrentResult = result;
             CurrentResultVersionTag = Guid.NewGuid().ToString("N");
+            // These rows are a different result now: the cached provenance describes the PREVIOUS
+            // statement, and reusing it would resolve this grid against the wrong table.
+            ResetSqlCopy();
 
             var ms = (long)result.Elapsed.TotalMilliseconds;
             if (result.HasResultSet)
@@ -5713,6 +5721,75 @@ public partial class MainWindowViewModel : ViewModelBase
             default:
                 return null;
         }
+    }
+
+    // ── Copy as INSERT / UPDATE ───────────────────────────────────────────────
+    // The shared SqlCopyController owns the availability flags + tooltips + build flow; this VM keeps ONE
+    // controller for the SQL Editor grid (the same controller the Table Data grid uses — one mechanism,
+    // not a re-derived copy). Its coordinator caches the ~7 ms provenance capture, so the first right-click
+    // pays for it and every later question is free; Reset() re-arms it when a new statement runs.
+    private SqlCopyController? _sqlCopy;
+
+    /// <summary>The SQL Editor grid's copy controller. Bound by the results context menu
+    /// (<c>SqlCopy.CanCopyAsInsert</c> / <c>SqlCopy.CopyAsInsertTooltip</c>).</summary>
+    public SqlCopyController SqlCopy
+    {
+        get => _sqlCopy ??= new SqlCopyController(new SqlCopyCoordinator(
+            () => _lastResultSql,
+            CreateMetadataSnapshot,
+            () => _executor)
+        {
+            WarmColumns = async table => await EnsureColumnsAsync(table).ConfigureAwait(true),
+        });
+        // Test seam only: lets a headless test inject a controller whose coordinator resolves without a
+        // live connection, so the SQL-Editor copy path (build → clipboard → message) can be exercised.
+        internal set => _sqlCopy = value;
+    }
+
+    /// <summary>Drops the cached provenance — the rows are a different result now.</summary>
+    private void ResetSqlCopy() => SqlCopy.Reset();
+
+    /// <summary>Re-evaluates whether the SQL copy actions are available. Called when the grid's context
+    /// menu opens — that gesture is what makes the lazy capture "on demand" without ever touching the F5
+    /// path, where the same 7 ms would be an across-the-board regression.</summary>
+    public Task RefreshSqlCopyAvailabilityAsync(CancellationToken cancellationToken = default)
+        => SqlCopy.RefreshAvailabilityAsync(CurrentResult is { HasResultSet: true }, cancellationToken);
+
+    /// <summary>Copies the right-clicked <b>row</b> as an INSERT or UPDATE. Takes the row object itself —
+    /// exactly like the Table Data grid — rather than an index into <see cref="CurrentResult"/>: the view
+    /// already holds the clicked <c>object?[]</c>, so re-deriving its index (a reference lookup that a
+    /// re-fetch/re-page can silently miss) only adds a failure mode. Re-checks availability through the
+    /// controller rather than trusting the menu's enabled state — that flag is a hint computed a moment
+    /// ago, this is the authority, and a wrong statement must never reach the clipboard.</summary>
+    public async Task<bool> CopyRowAsSqlAsync(ExportFormat format, object?[]? row, CancellationToken cancellationToken = default)
+    {
+        // Never fail silently: if the row could not be captured, say so rather than doing nothing (the
+        // symptom that hid an earlier row-resolution bug).
+        if (row is null)
+        {
+            AddMessage(MessageSeverity.Warning, UiStrings.GridCopyNoRow);
+            return false;
+        }
+
+        var built = await SqlCopy.BuildFormattedAsync(format, row, cancellationToken).ConfigureAwait(true);
+        if (!built.IsBuilt)
+        {
+            // Say why, in the Messages panel. The user asked for something EmberTern will not do; silence
+            // would leave them to guess, which is exactly what naming the obstacle exists to prevent.
+            AddMessage(MessageSeverity.Warning, built.Text);
+            return false;
+        }
+
+        if (ClipboardWriteRequested is { } write)
+        {
+            await write(built.Text).ConfigureAwait(true);
+        }
+
+        AddMessage(MessageSeverity.Info, string.Format(
+            CultureInfo.CurrentCulture,
+            UiStrings.GridCopiedToClipboardFormat,
+            format == ExportFormat.UpdateScript ? UiStrings.GridCopiedUpdateLabel : UiStrings.GridCopiedInsertLabel));
+        return true;
     }
 
     public async Task<bool> CopyGridAsync(CopyGridMode mode, int rowIndex, int columnIndex)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -30,6 +31,71 @@ public sealed class FirebirdQueryExecutor
     /// <summary>Preview row cap used by the legacy string overloads (F5 / proc / func / script).
     /// Full uses <see cref="ExecutionRequest.FullSafetyCeiling"/> instead.</summary>
     public int RowLimit { get; init; } = DefaultRowLimit;
+
+    /// <summary>
+    /// Captures the server's per-column provenance for <paramref name="sql"/> — signal A for the SQL
+    /// export formats. Returns null when it cannot be read (no connection, or the statement will not
+    /// prepare), which the caller treats as "the formats are unavailable", never as an error to show.
+    /// <para>
+    /// <b>Never call this on the execution path.</b> <c>GetSchemaTable()</c> costs ~7 ms — about 5.6× a
+    /// small query — so doing it on every F5 to serve an occasional menu action would be a silent,
+    /// across-the-board regression of the editor and its execution timer. It runs lazily, on the first
+    /// Copy-as-INSERT/UPDATE, and <see cref="CommandBehavior.SchemaOnly"/> means one prepare and no rows:
+    /// the grid already holds the data, so only the SHAPE is re-derived.
+    /// </para>
+    /// <para>
+    /// Runs on the <b>Data lane</b> — the attachment that ran the query — under its command lock, because
+    /// one <c>FbConnection</c> allows one transaction at a time and concurrent commands must be
+    /// serialized. Deliberately NOT the Metadata lane: a statement may reference an object created but
+    /// not yet committed in the Data lane's transaction, which is invisible to any other attachment, so a
+    /// Metadata-lane prepare would fail exactly when the user is iterating on new DDL.
+    /// </para>
+    /// </summary>
+    public async Task<System.Data.DataTable?> CaptureSchemaTableAsync(
+        string sql,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return null;
+
+        FbConnection connection;
+        try
+        {
+            connection = _transactionService?.RequireOpenConnection() ?? _connectionService.RequireOpenConnection();
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+
+        // Capture the lane-resolving lock accessor into a LOCAL once — re-invoking it at release time
+        // would leak one semaphore and over-release another if the lane flipped mid-call (gotcha #98).
+        var commandLock = _transactionService?.CommandLock ?? _connectionService.CommandLock;
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            if (_transactionService?.ActiveTransaction is { } tx) cmd.Transaction = tx;
+
+            await using var reader = await cmd.ExecuteReaderAsync(
+                CommandBehavior.SchemaOnly, cancellationToken).ConfigureAwait(false);
+            return reader.GetSchemaTable();
+        }
+        catch (FbException)
+        {
+            // The statement no longer prepares (the object was dropped, the transaction rolled back, …).
+            // That is a perfectly ordinary "no provenance available", not an error worth a dialog.
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
 
     public Task<QueryResult> ExecuteAsync(string sql, CancellationToken cancellationToken = default)
         => ExecuteCoreAsync(new ExecutionRequest { Sql = sql, PreviewLimit = RowLimit }, null, null, cancellationToken);

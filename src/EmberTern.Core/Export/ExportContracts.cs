@@ -17,6 +17,20 @@ public interface IExportDataSource
 {
     IReadOnlyList<ExportColumn> Columns { get; }
     ExportCapabilities Capabilities { get; }
+
+    /// <summary>
+    /// Where these rows came from — the facts the SQL formats need to prove which table (if any) they
+    /// belong to. <b>Facts only, never a verdict</b>: a source says what it knows and
+    /// <c>ResultOriginResolver</c> decides.
+    /// <para>
+    /// <b>Required on purpose.</b> A source that cannot supply provenance must say so explicitly
+    /// (<c>ResultOrigin.None(reason)</c> — an honest, permanent veto for procedure results), rather than
+    /// omit it. Making this a compile error is the point: a new grid cannot silently ship without
+    /// answering, and "silently missed a seam" is a mistake this codebase has made before.
+    /// </para>
+    /// </summary>
+    Sql.ResultOrigin Origin { get; }
+
     IAsyncEnumerable<object?[]> GetRowsAsync(ExportScope scope, CancellationToken cancellationToken);
 }
 

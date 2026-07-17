@@ -7,6 +7,7 @@ using EmberTern.App.Export;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Export;
 using EmberTern.Core.Query;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Firebird;
 using Xunit;
 
@@ -218,6 +219,73 @@ public class ExportConsumersTests
 
         Assert.True(notified);
         Assert.True(vm.CanExportData);
+    }
+
+    // ── Table Data Copy-as-INSERT/UPDATE wiring (E6) ─────────────────────────
+    // The shared SqlCopyController mechanism is proven in SqlCopyControllerTests; here we only pin the
+    // Table VM's adapter wiring: a table with no catalog has no controller (menu disabled), and enabling
+    // it produces one that refuses honestly (with a reason) when provenance cannot be captured — never a
+    // crash, never a silent enable.
+    [Fact]
+    public void TableDetail_WithoutEnableSqlCopy_HasNoController()
+    {
+        using var svc = new FirebirdConnectionService();
+        var vm = new TableDetailTabViewModel("T", new FirebirdTableDetailReader(svc), null)
+        {
+            DataResult = DataQueryResult(1),
+        };
+        Assert.Null(vm.SqlCopy);
+    }
+
+    [Fact]
+    public async Task TableDetail_CopyRowAsSql_WithoutController_ReturnsNull()
+    {
+        using var svc = new FirebirdConnectionService();
+        var vm = new TableDetailTabViewModel("T", new FirebirdTableDetailReader(svc), null)
+        {
+            DataResult = DataQueryResult(1),
+        };
+        Assert.Null(await vm.CopyRowAsSqlAsync(ExportFormat.InsertScript, new object?[] { "x", 1 }));
+    }
+
+    [Fact]
+    public void TableDetail_EnableSqlCopy_WithoutReader_StaysNull()
+    {
+        var vm = new TableDetailTabViewModel("T"); // reader-less
+        vm.EnableSqlCopy(() => new EmptyCatalog(), _ => Task.CompletedTask);
+        Assert.Null(vm.SqlCopy);
+    }
+
+    // With a reader but no live connection the schema capture returns null → the origin is "not
+    // understood" → both actions disable with a reason. This is the honest offline outcome; the enabled
+    // case needs a live engine (covered by SqlCopyControllerTests + the live probe).
+    [Fact]
+    public async Task TableDetail_EnableSqlCopy_RefusesWhenProvenanceUnavailable()
+    {
+        using var svc = new FirebirdConnectionService();
+        var vm = new TableDetailTabViewModel("T", new FirebirdTableDetailReader(svc), null)
+        {
+            DataResult = DataQueryResult(1),
+        };
+        vm.EnableSqlCopy(() => new EmptyCatalog(), _ => Task.CompletedTask);
+        Assert.NotNull(vm.SqlCopy);
+
+        await vm.RefreshSqlCopyAvailabilityAsync();
+
+        Assert.False(vm.SqlCopy!.CanCopyAsInsert);
+        Assert.False(vm.SqlCopy.CanCopyAsUpdate);
+        Assert.NotEqual(string.Empty, vm.SqlCopy.CopyAsInsertTooltip);
+    }
+
+    private sealed class EmptyCatalog : ISqlMetadataProvider
+    {
+        public ObjectMetadata? FindObject(string name) => null;
+        public System.Collections.Generic.IReadOnlyList<ColumnMetadata> GetColumns(string tableOrView)
+            => System.Array.Empty<ColumnMetadata>();
+        public System.Collections.Generic.IReadOnlyList<RoutineParameterMetadata> GetRoutineParameters(string routine)
+            => System.Array.Empty<RoutineParameterMetadata>();
+        public System.Collections.Generic.IReadOnlyList<ObjectMetadata> AllObjects()
+            => System.Array.Empty<ObjectMetadata>();
     }
 
     // ── Procedure / Function exec-result export (Bug 2) ──────────────────────

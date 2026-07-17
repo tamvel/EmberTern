@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER VERIFICATION TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Deliberately NOT listed in EmberTern.slnx, whose <Project> entries are explicit (no globs), so
+    `dotnet build EmberTern.slnx` and `dotnet test EmberTern.slnx` neither build nor run this. That is
+    the point: the probe needs a live Firebird server and a password, which the test suite must never
+    need — the suite is hermetic and runs in seconds, and it stays that way.
+
+    TargetFramework / Nullable / ImplicitUsings / TreatWarningsAsErrors are inherited from the repo's
+    Directory.Build.props: the probe is held to the same bar as shipped code, because a probe that
+    misreports is worse than no probe.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The driver EmberTern itself uses — the probe must exercise the SAME wire path as the app,
+         not a different client, or it would be measuring something we do not ship. -->
+    <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.4" />
+    <!-- Relative, so the probe works from any clone. It references the REAL Core and Firebird
+         assemblies — literal writer, provenance capture, resolver, statement builder — because a probe
+         with its own copy of the logic it is verifying would prove nothing. -->
+    <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
+  </ItemGroup>
+
+</Project>

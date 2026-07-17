@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql.Language.QuickInfo;
 using EmberTern.Core.Sql.Language.Semantics;
 using Xunit;
@@ -151,7 +152,7 @@ public class QuickInfoEngineTests
     {
         var meta = new FakeMetadata()
             .Col("T", new ColumnMetadata("C1", "INTEGER") { IsComputed = true })
-            .Col("T", new ColumnMetadata("C2", "INTEGER") { IsIdentity = true });
+            .Col("T", new ColumnMetadata("C2", "INTEGER") { Identity = IdentityKind.ByDefault });
         const string sql = "select t.c1, t.c2 from t";
         Assert.Equal("Computed", Fact(At(sql, In(sql, "c1"), meta)!, "Generated"));
         Assert.Equal("Identity", Fact(At(sql, In(sql, "c2"), meta)!, "Generated"));

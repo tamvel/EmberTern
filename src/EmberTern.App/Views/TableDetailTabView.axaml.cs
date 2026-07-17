@@ -10,6 +10,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
@@ -484,6 +485,35 @@ public partial class TableDetailTabView : UserControl
     // "snapshot the whole table" intent); the dialog lets the user switch to the current page.
     private async void OnDataExportClick(object? sender, RoutedEventArgs e)
         => await ExportDialog.LaunchAsync(this, _currentVm?.BuildDataExportSource(), ExportScope.AllRows);
+
+    // ── Copy as INSERT / UPDATE (E6) ──────────────────────────────────────────
+    // Menu-opening is what makes the provenance capture "on demand": the first open pays a ~7 ms
+    // SchemaOnly prepare on the Data lane; it is cached for the tab's life. The items settle via binding
+    // a few ms later; the click handler re-checks through the controller, so the enabled state is a hint
+    // and the click is the authority.
+    private async void OnDataContextMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_currentVm is null) return;
+        await _currentVm.RefreshSqlCopyAvailabilityAsync();
+    }
+
+    private void OnDataCopyAsInsertClick(object? sender, RoutedEventArgs e)
+        => _ = CopyRowAsSqlAsync(ExportFormat.InsertScript);
+
+    private void OnDataCopyAsUpdateClick(object? sender, RoutedEventArgs e)
+        => _ = CopyRowAsSqlAsync(ExportFormat.UpdateScript);
+
+    private async Task CopyRowAsSqlAsync(ExportFormat format)
+    {
+        // The right-clicked row (captured in OnDataCellPointerPressed) is the target — never the grid's
+        // selection or view coordinates. The VM builds + formats the statement (or reports the refusal in
+        // its edit status); the clipboard write stays here in the view.
+        if (_currentVm is null || _dataNullRow is null) return;
+        var sql = await _currentVm.CopyRowAsSqlAsync(format, _dataNullRow);
+        if (sql is null) return;
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is not null) await clipboard.SetTextAsync(sql);
+    }
 
     private void OnDataExcludeValueClick(object? sender, RoutedEventArgs e)
     {

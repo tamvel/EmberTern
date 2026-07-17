@@ -30,7 +30,7 @@ public enum ExportScope
 
 /// <summary>The serialization + destination, chosen as one thing (there is no separate File/Clipboard
 /// destination control — the format determines it): Excel / CSV / Text write a file, Clipboard copies
-/// text. The SQL-Script family is added in a later etap.</summary>
+/// text, the SQL-Script family copies runnable DML.</summary>
 public enum ExportFormat
 {
     /// <summary>Excel workbook (.xlsx) — the headline format; typed cells; file-only (never clipboard).</summary>
@@ -38,6 +38,46 @@ public enum ExportFormat
     Csv,
     Text,
     Clipboard,
+
+    /// <summary><c>INSERT INTO … VALUES (…)</c> per row. Unlike every format above, this one can be
+    /// <b>unavailable for a given result</b> — it must prove which table the rows belong to first — which
+    /// is what <see cref="FormatAvailability"/> exists for.</summary>
+    InsertScript,
+
+    /// <summary><c>UPDATE … SET … WHERE &lt;verified key&gt;</c> per row. Needs a key it has proven
+    /// identifies exactly one row, so it is unavailable strictly more often than
+    /// <see cref="InsertScript"/>.</summary>
+    UpdateScript,
+}
+
+/// <summary>
+/// Whether one format can run on one result, and if not, why. <see cref="ExportCapabilities"/> gates
+/// <em>scopes</em>; this gates <em>formats</em>, and it is the difference between a greyed-out menu item
+/// and a greyed-out menu item that <b>says why</b>.
+/// <para>
+/// Saying why is the whole design: a result that combines four tables cannot yield one INSERT, and the
+/// alternative — emitting <c>INSERT INTO TABLE_NAME (…)</c> for the user to fix — generates code that is
+/// known to be wrong, which the project's rules forbid twice over. Naming the actual obstacle teaches the
+/// tool's model instead; it is also strictly more information than the placeholder conveys.
+/// </para>
+/// </summary>
+public sealed record FormatAvailability
+{
+    private FormatAvailability(bool isAvailable, Sql.ExportUnavailableReason? reason)
+    {
+        IsAvailable = isAvailable;
+        Reason = reason;
+    }
+
+    public static readonly FormatAvailability Available = new(true, null);
+
+    public static FormatAvailability Unavailable(Sql.ExportUnavailableReason reason) => new(false, reason);
+
+    public bool IsAvailable { get; }
+
+    /// <summary>Non-null exactly when unavailable. A structured reason, never a message — App maps it to
+    /// <c>UiStrings</c> (rule #1: Core has no UI strings).</summary>
+    public Sql.ExportUnavailableReason? Reason { get; }
 }
 
 /// <summary>A row-count hint for a scope, shown up front in the dialog. <see cref="Count"/> null =
@@ -93,6 +133,13 @@ public sealed record ExportRequest
     public required ExportScope Scope { get; init; }
     public DelimitedTextOptions? Delimited { get; init; }
     public bool IncludeHeader { get; init; } = true;
+
+    /// <summary>The proven target for <see cref="ExportFormat.InsertScript"/> /
+    /// <see cref="ExportFormat.UpdateScript"/> — mirrors how <see cref="Delimited"/> carries the options
+    /// CSV/Text require. The <em>caller</em> resolves it, because resolving needs the catalog and the
+    /// export service has no business knowing about metadata; by the time a request names a SQL format,
+    /// the proof already exists.</summary>
+    public Sql.TargetResolution.Resolved? SqlTarget { get; init; }
 }
 
 /// <summary>The result of a completed export, returned to the caller so it can report

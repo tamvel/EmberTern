@@ -1010,7 +1010,7 @@
               <!-- Per-cell "Set NULL" (edit-only) + filter-from-cell (always). The
                    right-clicked row/column are resolved in OnDataCellPointerPressed;
                    Set NULL enables by nullability, Contains by text category. -->
-              <ContextMenu>
+              <ContextMenu Opening="OnDataContextMenuOpening">
                 <MenuItem x:Name="SetNullMenuItem"
                           Header="{x:Static app:UiStrings.DataEditSetNull}"
                           Click="OnSetCellNullClick"
@@ -1020,6 +1020,18 @@
                 <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnDataExcludeValueClick" />
                 <MenuItem x:Name="DataFilterContainsItem"
                           Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnDataFilterContainsClick" />
+                <Separator />
+                <!-- Copy the right-clicked row as runnable DML. Disabled-with-a-reason: the tooltip is
+                     bound unconditionally and is empty when the action is available, so a greyed item
+                     always says WHY (design §5/§6). SqlCopy is null on a read-only table → both stay off. -->
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyAsInsert}"
+                          Click="OnDataCopyAsInsertClick"
+                          IsEnabled="{Binding SqlCopy.CanCopyAsInsert}"
+                          ToolTip.Tip="{Binding SqlCopy.CopyAsInsertTooltip}" />
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyAsUpdate}"
+                          Click="OnDataCopyAsUpdateClick"
+                          IsEnabled="{Binding SqlCopy.CanCopyAsUpdate}"
+                          ToolTip.Tip="{Binding SqlCopy.CopyAsUpdateTooltip}" />
                 <Separator />
                 <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Click="OnDataExportClick" />
               </ContextMenu>

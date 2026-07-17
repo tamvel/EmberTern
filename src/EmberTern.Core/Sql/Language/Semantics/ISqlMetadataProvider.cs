@@ -102,7 +102,15 @@ public sealed record ColumnMetadata(string Name, string Type)
     public bool IsForeignKey { get; init; }
     public string? ForeignKeyTable { get; init; }
     public bool IsComputed { get; init; }
-    public bool IsIdentity { get; init; }
+
+    /// <summary>How the column's identity value is generated. ALWAYS vs BY DEFAULT decides whether
+    /// generated DML must emit <c>OVERRIDING SYSTEM VALUE</c> — see
+    /// <see cref="EmberTern.Core.Metadata.IdentityKind"/>.</summary>
+    public EmberTern.Core.Metadata.IdentityKind Identity { get; init; }
+
+    /// <summary><c>true</c> when the column is an identity column. Derived from <see cref="Identity"/>,
+    /// never stored beside it.</summary>
+    public bool IsIdentity => Identity != EmberTern.Core.Metadata.IdentityKind.None;
 }
 
 /// <summary>Rich-but-optional metadata about a routine parameter.</summary>

@@ -382,6 +382,54 @@ internal static class UiStrings
     public const string GridCopiedCellLabel = "cell";
     public const string GridCopiedRowLabel = "row";
     public const string GridCopiedRowsFormat = "{0} rows";
+
+    // ── Copy as INSERT / UPDATE ───────────────────────────────────────────────
+    // A disabled item here always carries a REASON (see SqlCopyReasonText): naming the actual obstacle
+    // teaches the tool's model, and it is strictly more information than the alternative — generating
+    // INSERT INTO TABLE_NAME (…) for the user to fix — could ever convey.
+    public const string GridCopyAsInsert = "Copy as INSERT";
+    public const string GridCopyAsUpdate = "Copy as UPDATE";
+    public const string GridCopiedInsertLabel = "row as INSERT";
+    public const string GridCopiedUpdateLabel = "row as UPDATE";
+    public const string GridCopyNoRow = "Copy as SQL: right-click a data row first — no row is selected.";
+
+    // The reasons. Three kinds of claim, and the wording keeps them apart on purpose: what the QUERY
+    // cannot be, what EMBERTERN cannot do yet, and what is merely not ready.
+    public const string SqlCopyUnavailablePrefix = "unavailable";
+    public const string SqlCopyReasonSetOperation =
+        "the result is a UNION, so EmberTern cannot tell which table each row came from";
+    public const string SqlCopyReasonMultipleTablesFormat = "the result combines {0} tables ({1})";
+    public const string SqlCopyReasonJoinFormat =
+        "the result is a join ({0}), so a row is not one table's row";
+    public const string SqlCopyReasonAggregate = "the rows are aggregates, not table rows";
+    public const string SqlCopyReasonNoSourceTable = "no column in the result comes from a table";
+    public const string SqlCopyReasonDuplicateColumnFormat =
+        "{0} appears twice in the result";
+    public const string SqlCopyReasonUnknownObjectFormat = "{0} is not in the catalog";
+    public const string SqlCopyReasonNotATableFormat = "{0} is a {1}, not a table";
+    public const string SqlCopyReasonViewFormat =
+        "{0} is a view; EmberTern does not generate DML for views yet";
+    // A CURRENT LIMITATION of EmberTern's analysis — never worded as a property of SQL.
+    public const string SqlCopyReasonCte =
+        "EmberTern cannot yet trace which table a CTE reads";
+    public const string SqlCopyReasonNotUnderstood =
+        "EmberTern could not analyse this statement";
+    // TRANSIENT — the user's response is to wait, not to change anything.
+    public const string SqlCopyReasonCatalogNotLoadedFormat =
+        "{0}'s metadata is still loading";
+    public const string SqlCopyReasonUnknownColumnFormat =
+        "{0} is not in the cached metadata — commit the DDL, or reconnect to refresh it";
+    public const string SqlCopyReasonNoPrimaryKeyFormat =
+        "{0} has no primary key, so a single row cannot be identified";
+    public const string SqlCopyReasonIncompletePkFormat =
+        "this needs the complete primary key; {0} is not in the result";
+    public const string SqlCopyReasonNoWritableColumnsFormat = "{0} has no writable columns here";
+    public const string SqlCopyReasonKeyValueIsNullFormat = "{0} is NULL in this row and cannot identify it";
+    public const string SqlCopyReasonValueNotRenderableFormat =
+        "{0}'s value has no exact SQL literal, and EmberTern will not write an approximation";
+    public const string SqlCopyReasonValueTooLargeFormat = "{0}'s value is too large for an SQL literal";
+    public const string SqlCopyReasonStatementTooLongFormat =
+        "the statement would exceed Firebird's size limit";
     // Context-menu toggle for grid column layout — when checked, columns auto-size to
     // content and manual widths aren't remembered; when unchecked, manual widths persist.
     public const string GridAutoFitColumns = "Auto-fit columns";
