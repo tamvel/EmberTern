@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -1565,6 +1566,198 @@ public sealed class ConnectionExpandBindingProbe
             Assert.Same(Res("IconColor_Procedure"), procPainted);
 
             window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Completion Matching Philosophy — the objective pin for "Core owns filtering, the UI shows exactly
+    // that". It reproduces the user's 2026-07-17 report verbatim: typing "cont" listed every object merely
+    // CONTAINING the text (XXX_PS_CONTRACTORMAP, GEN_XXX_PS_CONTRACTORMAP, MON$CONTEXT_VARIABLES, the
+    // FK_/PK_ indices) beside the keywords that genuinely start with it.
+    //
+    // This has to be a headless probe, not a Core unit test. CompletionMatcher's rule was already unit-
+    // tested and correct while the bug was live — nothing called it, and the real filter was AvaloniaEdit's
+    // substring-admitting GetMatchQuality. So the only assertion that can catch the regression class is one
+    // made against the REAL CompletionWindow: what does the rendered list actually hold.
+    [Fact]
+    public async System.Threading.Tasks.Task Completion_PrefixFirst_ListsOnlyStartsWithMatches()
+    {
+        var session = SharedSession;
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 400, Height = 200 };
+            var window = new Window { Width = 500, Height = 320, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // The reported catalog: names that merely CONTAIN "cont", none of which start with it.
+            var objects = new[]
+            {
+                new MetadataObject("XXX_PS_CONTRACTORMAP", MetadataObjectKind.Table),
+                new MetadataObject("XXX_PS_CONTRACTORADDRESSMAP", MetadataObjectKind.Table),
+                new MetadataObject("GEN_XXX_PS_CONTRACTORMAP", MetadataObjectKind.Generator),
+                new MetadataObject("GEN_XXX_PS_CONTRACTORADDRESSMAP", MetadataObjectKind.Generator),
+                new MetadataObject("PK_XXX_PS_CONTRACTORMAP", MetadataObjectKind.Index),
+                new MetadataObject("FK_XXX_PS_CONTRACTORMAP_3", MetadataObjectKind.Index),
+                new MetadataObject("MON$CONTEXT_VARIABLES", MetadataObjectKind.Table),
+                // A name that DOES start with the prefix — proves the list isn't just empty.
+                new MetadataObject("CONTRACT_LINES", MetadataObjectKind.Table),
+            };
+            var snapshot = AppMetadataSnapshot.Build(
+                objects,
+                new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<ColumnSpec>>(
+                    System.StringComparer.OrdinalIgnoreCase));
+
+            var controller = new SqlCompletionController(editor, () => snapshot);
+
+            // Types like the Language Completion probe above: a real 0 → end caret change, so
+            // Caret.PositionChanged fires exactly as it does while typing (gotcha #94 — do not inject keys).
+            void Type(string text)
+            {
+                editor.SelectionLength = 0;
+                editor.Document.Text = string.Empty;
+                editor.CaretOffset = 0;
+                Dispatcher.UIThread.RunJobs();
+                editor.Document.Text = text;
+                editor.CaretOffset = text.Length;
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            // Ctrl+Space at the caret — the deliberate trigger, which bypasses the idle auto-popup timer.
+            void CtrlSpace()
+            {
+                editor.TextArea.RaiseEvent(new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = Key.Space,
+                    KeyModifiers = KeyModifiers.Control,
+                });
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            Type("cont");
+            CtrlSpace();
+
+            var visible = controller.VisibleItemsForTest;
+            log.AppendLine($"[1] 'cont' → {visible.Count} rows: {string.Join(", ", visible)}");
+
+            Assert.NotEmpty(visible);
+            // The heart of the report: NOTHING that merely contains the text.
+            Assert.All(visible, t => Assert.StartsWith("cont", t, StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain("XXX_PS_CONTRACTORMAP", visible);
+            Assert.DoesNotContain("GEN_XXX_PS_CONTRACTORMAP", visible);
+            Assert.DoesNotContain("MON$CONTEXT_VARIABLES", visible);
+            Assert.DoesNotContain("FK_XXX_PS_CONTRACTORMAP_3", visible);
+            // The keywords the user explicitly wants kept, plus the object that genuinely starts with it.
+            Assert.Contains("CONTAINING", visible);
+            Assert.Contains("CONTINUE", visible);
+            Assert.Contains("CONTRACT_LINES", visible);
+
+            // Every row the user can SEE — not just the collection we handed over. Both must agree: the
+            // list going stale on screen while its data reads correctly is precisely the 2026-07-17
+            // regression (CompletionData is a plain List and broadcasts no change, so a mutation after
+            // Show() updates the data and nothing else).
+            Assert.Equal(visible, controller.RenderedRowsForTest);
+
+            // Now the REFRESH path: keep typing INTO THE OPEN WINDOW, one character at a time, exactly as
+            // a user does. `Type` above cannot test this — it clears the document, which closes the window,
+            // so each step there was a fresh open. That gap is why the stale-list bug shipped.
+            editor.TextArea.PerformTextInput("i"); // "cont" → "conti"
+            for (var i = 0; i < 3; i++) Dispatcher.UIThread.RunJobs();
+            var narrowed = controller.RenderedRowsForTest;
+            log.AppendLine($"[2] typed 'i' → 'conti' → {narrowed.Count} rendered rows: {string.Join(", ", narrowed)}");
+            Assert.Equal(controller.VisibleItemsForTest, narrowed);
+            Assert.All(narrowed, t => Assert.StartsWith("conti", t, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains("CONTINUE", narrowed);
+            Assert.DoesNotContain("CONTAINING", narrowed);
+
+            // A backspace must WIDEN it again — the reason the session keeps the unfiltered candidate set
+            // rather than letting the engine return an already-filtered list.
+            editor.Document.Remove(editor.CaretOffset - 1, 1); // "conti" → "cont"
+            for (var i = 0; i < 3; i++) Dispatcher.UIThread.RunJobs();
+            var widened = controller.RenderedRowsForTest;
+            log.AppendLine($"[3] backspace → 'cont' → {widened.Count} rendered rows: {string.Join(", ", widened)}");
+            Assert.Contains("CONTAINING", widened);
+            Assert.Contains("CONTINUE", widened);
+
+            // Zero StartsWith matches → no list at all. Never a Contains fallback, which is exactly what
+            // would resurrect the report: "tractor" must not surface XXX_PS_CONTRACTORMAP.
+            Type("tractor");
+            CtrlSpace();
+            log.AppendLine($"[3] 'tractor' → popup open = {controller.IsPopupOpen}, rows = {controller.VisibleItemsForTest.Count}");
+            Assert.Empty(controller.VisibleItemsForTest);
+
+            // Ctrl+Space with no prefix still offers everything in scope (the rule is prefix-first, not
+            // prefix-required).
+            Type("");
+            CtrlSpace();
+            var all = controller.VisibleItemsForTest;
+            log.AppendLine($"[4] no prefix → {all.Count} rows");
+            Assert.Contains("XXX_PS_CONTRACTORMAP", all);
+            Assert.Contains("CONTAINING", all);
+
+            controller.Detach();
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // P2c — the matched fragment of a row is picked out in the match colour (the IBExpert cue). Pins the
+    // SPLIT and the colour source: the run boundary must follow CompletionMatcher's StartsWith ruling, and
+    // the colour must come from the theme token (a hardcoded brush would break the Light/Dark rule and no
+    // build could catch it). Needs the headless session — it resolves a real brush from App resources.
+    [Fact]
+    public async System.Threading.Tasks.Task CompletionRow_HighlightsMatchedPrefix()
+    {
+        var session = SharedSession;
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            static TextBlock NameBlock(SqlCompletionData d)
+                => ((StackPanel)d.Content).Children.OfType<TextBlock>().First();
+
+            var item = new EmberTern.Core.Sql.Language.Completion.CompletionItem(
+                "CONTAINING", "CONTAINING", EmberTern.Core.Sql.Language.Completion.CompletionItemKind.Keyword, 1.0);
+
+            // Typed "con" → "con" in the match colour, "TAINING" in the default foreground.
+            var withPrefix = NameBlock(SqlCompletionData.FromItem(item, null, "con"));
+            var runs = withPrefix.Inlines!.OfType<Run>().ToList();
+            log.AppendLine($"[1] runs = {string.Join(" | ", runs.Select(r => $"'{r.Text}' fg={r.Foreground}"))}");
+            Assert.Equal(2, runs.Count);
+            Assert.Equal("CON", runs[0].Text);       // case-insensitive match, catalog casing preserved
+            Assert.Equal("TAINING", runs[1].Text);
+
+            // The highlight brush IS the theme token — not a look-alike literal — and only the matched run
+            // carries it.
+            var expected = Application.Current!.Resources.TryGetResource(
+                "CompletionMatchBrush", Application.Current.ActualThemeVariant, out var brush) ? brush : null;
+            Assert.NotNull(expected);
+            Assert.Same(expected, runs[0].Foreground);
+            Assert.NotSame(expected, runs[1].Foreground);
+
+            // The token must exist in BOTH dictionaries (styling rule 3) — a one-theme token is a bug.
+            foreach (var variant in new[] { ThemeVariant.Dark, ThemeVariant.Light })
+            {
+                Assert.True(
+                    Application.Current.Resources.TryGetResource("CompletionMatchBrush", variant, out var v) && v is IBrush,
+                    $"CompletionMatchBrush must resolve in the {variant} dictionary");
+            }
+
+            // No prefix (Ctrl+Space on whitespace) → plain text, no meaningless colour on every row.
+            var noPrefix = NameBlock(SqlCompletionData.FromItem(item, null, ""));
+            log.AppendLine($"[2] no prefix → Text='{noPrefix.Text}' inlines={noPrefix.Inlines?.Count ?? 0}");
+            Assert.Equal("CONTAINING", noPrefix.Text);
+            Assert.True(noPrefix.Inlines is null || noPrefix.Inlines.Count == 0);
+
+            // A fully-typed name is all match — one run, no empty tail.
+            var wholeRuns = NameBlock(SqlCompletionData.FromItem(item, null, "containing")).Inlines!.OfType<Run>().ToList();
+            Assert.Single(wholeRuns);
+            Assert.Equal("CONTAINING", wholeRuns[0].Text);
         }, CancellationToken.None);
 
         _out.WriteLine(log.ToString());

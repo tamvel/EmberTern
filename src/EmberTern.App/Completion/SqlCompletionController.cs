@@ -84,6 +84,11 @@ internal sealed class SqlCompletionController
     private bool _readySubscribed;
     private readonly DispatcherTimer _autoPopup;
     private CompletionWindow? _window;
+    // The open list's candidate set — what CompletionEngine said is legal at the position the window
+    // opened at, BEFORE prefix filtering. Held for the window's lifetime because the prefix is the only
+    // thing a keystroke changes: narrowing re-filters this set, and a backspace widens back out of it,
+    // with no engine re-query (see RefreshOpenWindow). Cleared when the window closes.
+    private IReadOnlyList<CompletionItem> _sessionCandidates = Array.Empty<CompletionItem>();
     // The unified Parameter Helper (design §28) — the ONE parameter-info surface, driven by
     // SignatureHelpEngine, shown both while typing an argument list (here) and on a double-click on a
     // value (NavigationController delegates to TryShowParameterHelperAt). Replaces the old M7
@@ -210,6 +215,57 @@ internal sealed class SqlCompletionController
     /// </summary>
     public bool IsPopupOpen => _window is not null || _parameterHelper.IsOpen || _quickInfo?.IsOpen == true;
 
+    /// <summary>
+    /// The rows the list is bound to render, in display order — empty when no list is open. Reads the inner
+    /// ListBox's <c>ItemsSource</c>, i.e. the view the control was actually handed, not our candidate set.
+    /// <para>
+    /// Pair it with <see cref="RenderedRowsForTest"/>. This one alone is NOT sufficient evidence: because
+    /// <c>CompletionData</c> is a plain List, it is possible for this to read perfectly while the screen
+    /// shows something else entirely — which is exactly the bug that shipped.
+    /// </para>
+    /// </summary>
+    internal IReadOnlyList<string> VisibleItemsForTest
+    {
+        get
+        {
+            var rendered = _window?.CompletionList.ListBox?.ItemsSource;
+            if (rendered is null) return Array.Empty<string>();
+            var result = new List<string>();
+            foreach (var row in rendered)
+            {
+                if (row is ICompletionData d) result.Add(d.Text);
+            }
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// The rows actually REALIZED in the list's visual tree — what the user's eyes get. The only hook that
+    /// can prove the control re-rendered rather than merely being told to.
+    /// <para>
+    /// Virtualized, so for a long list this is only the realized window; assert it on small fixtures. It
+    /// exists because <c>CompletionData</c> is a plain <c>List&lt;ICompletionData&gt;</c> that broadcasts no
+    /// change: mutate it after Show() and this keeps reporting the OLD rows while
+    /// <see cref="VisibleItemsForTest"/> reports the new ones. That divergence is the regression this hook
+    /// is here to catch.
+    /// </para>
+    /// </summary>
+    internal IReadOnlyList<string> RenderedRowsForTest
+    {
+        get
+        {
+            var listBox = _window?.CompletionList.ListBox;
+            if (listBox is null) return Array.Empty<string>();
+            listBox.UpdateLayout(); // settle realization, so this reads the finished tree and not a pending one
+            var result = new List<string>();
+            for (int i = 0; i < listBox.ItemCount; i++)
+            {
+                if (listBox.ContainerFromIndex(i) is ContentControl { Content: ICompletionData d }) result.Add(d.Text);
+            }
+            return result;
+        }
+    }
+
     /// <summary>Notifies the controller that the App's loaded metadata set changed (a category
     /// finished loading — prefetch/expand/refresh), scheduling a coalesced model rebuild so late-loaded
     /// objects (views / selectable procedures used in FROM) start resolving. Public so a host that
@@ -333,14 +389,9 @@ internal sealed class SqlCompletionController
             return;
         }
 
-        // Window already open — AvaloniaEdit's CompletionList narrows by the typed prefix on its own (the
-        // caret moved before this event, so its filter has already run). All we add is: if that left
-        // nothing, don't sit there as an empty rectangle.
-        if (_window is not null)
-        {
-            CloseIfNarrowedToNothing();
-            return;
-        }
+        // Window already open — the caret moved before this event, so RefreshOpenWindow has already
+        // re-filtered the list against the new prefix (and closed it if nothing matches).
+        if (_window is not null) return;
 
         // Typing into a dot prefix (e.g. "N.I" after "I") while the window is closed:
         // keep the column flavor. Cache-only (no whole-document parse on the
@@ -542,33 +593,129 @@ internal sealed class SqlCompletionController
         return model;
     }
 
-    private bool ShowItems(int startOffset, int endOffset, IReadOnlyList<CompletionItem> items)
+    // Opens the list for a candidate set. The set is what the ENGINE says is legal here; which of those
+    // the user actually sees is the MATCHER's call (prefix-first — see OpenWindow). Zero matches means no
+    // popup at all: a name that merely contains the typed text is not a prediction, and offering one is
+    // what made "cont" list XXX_PS_CONTRACTORMAP.
+    private bool ShowItems(int startOffset, int endOffset, IReadOnlyList<CompletionItem> candidates)
     {
-        if (items.Count == 0) return false;
+        if (candidates.Count == 0) return false;
+
+        var prefix = PrefixOf(startOffset);
+        var visible = CompletionMatcher.Filter(candidates, prefix);
+        if (visible.Count == 0) return false;
 
         var window = OpenWindow(startOffset, endOffset);
-        var data = window.CompletionList.CompletionData;
-        foreach (var item in items)
+        Populate(window, visible, prefix);
+        // Before Show(): the window is live from that moment, so a refresh reaching RefreshOpenWindow must
+        // never find an empty candidate set and mistake it for "nothing matches" — which would close the
+        // list we are opening.
+        _sessionCandidates = candidates;
+        if (!FinishWindow(window))
         {
-            data.Add(SqlCompletionData.FromItem(item, () => BuildItemDetail(item)));
+            _sessionCandidates = Array.Empty<CompletionItem>();
+            return false;
         }
-        return FinishWindow(window);
+        SelectFirst(window);
+        return true;
     }
 
     private void ShowColumns(int startOffset, int endOffset, IReadOnlyList<ColumnSpec> columns, string table)
     {
         if (columns.Count == 0) return;
 
-        var window = OpenWindow(startOffset, endOffset);
-        var data = window.CompletionList.CompletionData;
-        foreach (var col in columns)
+        var items = new List<CompletionItem>(columns.Count);
+        foreach (var col in columns) items.Add(ToColumnItem(col, table));
+        ShowItems(startOffset, endOffset, items);
+    }
+
+    // A warmed column (fetched on demand for a dot target the metadata snapshot didn't have yet) becomes
+    // the SAME CompletionItem the engine builds for a cached one — same kind, same priority, same rich
+    // ColumnSymbol payload. So the warm path renders its rows, filters its prefix and builds its detail
+    // pane through exactly one set of code, instead of the second column-row builder this used to be.
+    private static CompletionItem ToColumnItem(ColumnSpec c, string table)
+    {
+        var symbol = new ColumnSymbol(c.Name)
         {
-            var c = col; // capture per-item for the lazy detail factory
-            data.Add(new SqlCompletionData(
-                c.Name, SqlCompletionKind.Column, columnType: c.Type, columnDomain: c.Domain,
-                detailFactory: () => BuildColumnDetail(c, table)));
+            OwningTable = table,
+            DataType = c.Type,
+            Domain = c.Domain,
+            Nullable = !c.NotNull,
+        };
+        return new CompletionItem(
+            c.Name, c.Name, CompletionItemKind.Column,
+            CompletionEngine.PriorityFor(CompletionItemKind.Column), c.Type, symbol);
+    }
+
+    // The text between the replaced segment's start and the caret — the prefix this list is predicting
+    // for. Empty for Ctrl+Space on whitespace or straight after a qualifier dot, which the matcher reads
+    // as "no prediction to make — show everything in scope".
+    private string PrefixOf(int startOffset)
+    {
+        var doc = _editor.Document;
+        if (doc is null) return string.Empty;
+        int caret = _editor.CaretOffset;
+        return startOffset >= 0 && caret > startOffset && caret <= doc.TextLength
+            ? doc.GetText(startOffset, caret - startOffset)
+            : string.Empty;
+    }
+
+    // Fills the window's list with exactly <paramref name="visible"/>.
+    //
+    // ⚠ CompletionList.CompletionData is a plain List<ICompletionData>, NOT an ObservableCollection — so
+    // mutating it after the window is shown notifies the ListBox of NOTHING. The rows keep whatever was
+    // bound when the template applied, while the collection quietly says something else (that is exactly
+    // how the list froze on `ID_AKWIZYTOR` while the data underneath already read `ID_NAGL`).
+    // AvaloniaEdit never mutates it either: its own filter assigns a fresh List to ListBox.ItemsSource,
+    // and that assignment IS its refresh. We do the same — CompletionData stays the authoritative set
+    // (AvaloniaEdit's SelectItemWithStart indexes into it, so the two must stay content-identical) and the
+    // ListBox gets a snapshot of it. Before Show() there is no ListBox yet; the template then binds
+    // CompletionData itself, which is already correct.
+    private void Populate(CompletionWindow window, IReadOnlyList<CompletionItem> visible, string prefix)
+    {
+        var data = window.CompletionList.CompletionData;
+        data.Clear();
+        foreach (var item in visible)
+        {
+            var captured = item; // per-item capture for the lazy detail factory
+            data.Add(SqlCompletionData.FromItem(captured, () => BuildItemDetail(captured), prefix));
         }
-        FinishWindow(window);
+        if (window.CompletionList.ListBox is { } listBox) listBox.ItemsSource = new List<ICompletionData>(data);
+    }
+
+    // Every visible item starts with the prefix, so the best prediction is simply the first — the matcher
+    // already floated an exact match to the top. Only call once the window is shown: the selection lives
+    // on the templated inner ListBox.
+    private static void SelectFirst(CompletionWindow window)
+    {
+        var data = window.CompletionList.CompletionData;
+        if (data.Count > 0) window.CompletionList.SelectedItem = data[0];
+    }
+
+    // Keeps the open list honest as the prefix grows (typing) or shrinks (backspace). Re-filters THIS
+    // session's candidate set through the one matcher; nothing left → close, rather than sit there as an
+    // empty rectangle that still owns Tab/Enter.
+    //
+    // It deliberately does NOT re-ask the engine. The candidate set is fixed for the session (a prefix
+    // narrows what is legal at the position the list opened at — it doesn't change it), so re-querying
+    // would buy nothing and cost correctness: the cached model is debounce-lagged, so its token offsets
+    // no longer line up with the caret, and forcing a fresh parse per keystroke is exactly the whole-
+    // document work the per-character path must never do (Etap 0).
+    private void RefreshOpenWindow()
+    {
+        if (_window is not { } window) return;
+        if (_editor.Document is null) return;
+        if (_editor.CaretOffset < window.StartOffset) return; // out of range — the window closes itself
+
+        var prefix = PrefixOf(window.StartOffset);
+        var visible = CompletionMatcher.Filter(_sessionCandidates, prefix);
+        if (visible.Count == 0)
+        {
+            window.Close(); // → Closed → _window = null
+            return;
+        }
+        Populate(window, visible, prefix);
+        SelectFirst(window);
     }
 
     // ── Quick Info detail pane (M5, design §8A) ──────────────────────────────────────────────
@@ -581,18 +728,6 @@ internal sealed class SqlCompletionController
     {
         var info = ResolveItemQuickInfo(item);
         return info is null ? null : QuickInfoView.Build(info, _editor.ActualThemeVariant);
-    }
-
-    private object? BuildColumnDetail(ColumnSpec col, string table)
-    {
-        var symbol = new ColumnSymbol(col.Name)
-        {
-            OwningTable = table,
-            DataType = col.Type,
-            Domain = col.Domain,
-            Nullable = !col.NotNull,
-        };
-        return QuickInfoView.Build(QuickInfoEngine.ForSymbol(symbol, _language.Model?.Metadata), _editor.ActualThemeVariant);
     }
 
     private QuickInfo? ResolveItemQuickInfo(CompletionItem item)
@@ -707,7 +842,16 @@ internal sealed class SqlCompletionController
         if (_quickInfo is { IsOpen: true } p) p.IsOpen = false;
     }
 
-    private void OnCaretPositionChanged(object? sender, EventArgs e) => HideQuickInfo();
+    // The caret moving is the ONE signal that the typed prefix may have changed — it covers typing,
+    // backspace, delete, paste and a click, where TextEntered covers only typing. The document is always
+    // consistent with the caret by the time this runs (AvaloniaEdit's own CompletionWindow reads the
+    // prefix off the document in this same event), so the refresh needs no dispatcher post and no timing
+    // assumption.
+    private void OnCaretPositionChanged(object? sender, EventArgs e)
+    {
+        HideQuickInfo();
+        RefreshOpenWindow();
+    }
 
     private CompletionWindow OpenWindow(int startOffset, int endOffset)
     {
@@ -720,60 +864,42 @@ internal sealed class SqlCompletionController
             _window.Close();
             _window = null;
         }
-        return new NonFocusClosingCompletionWindow(_editor.TextArea)
+        var window = new NonFocusClosingCompletionWindow(_editor.TextArea)
         {
             StartOffset = startOffset,
             EndOffset = endOffset,
             CloseAutomatically = true,
         };
+
+        // The list is OURS, end to end: Core decides membership and order (CompletionEngine names what is
+        // legal here, CompletionMatcher picks what matches the prefix) and this controller displays exactly
+        // that — a passive view.
+        //
+        // AvaloniaEdit's built-in filter has to be off for that to hold. Its match scale (the private
+        // CompletionList.GetMatchQuality) accepts exact → StartsWith → CamelCase → **substring**, and
+        // anything scoring ≥ 1 is shown. That last tier makes the list a search engine over the catalog:
+        // typing "cont" surfaces GEN_XXX_PS_CONTRACTORMAP and MON$CONTEXT_VARIABLES. Interactive
+        // completion is a PREDICTION engine — it offers what the user is plausibly typing, which is a
+        // prefix relationship. Substring lookup is Global Search: a different workflow, a different window.
+        //
+        // With IsFiltering off, SelectItem() degrades to a selection move (SelectItemWithStart) and the
+        // inner ListBox renders CompletionData verbatim — our set, our order. RefreshOpenWindow then owns
+        // narrowing for the rest of the session.
+        window.CompletionList.IsFiltering = false;
+        return window;
     }
 
     private bool FinishWindow(CompletionWindow window)
     {
         if (window.CompletionList.CompletionData.Count == 0) return false;
-        window.Closed += (_, _) => _window = null;
+        window.Closed += (_, _) =>
+        {
+            _window = null;
+            _sessionCandidates = Array.Empty<CompletionItem>();
+        };
         _window = window;
         window.Show();
-        // The guard above tests the UNFILTERED candidate set; the initial filter below can still narrow
-        // it to nothing, which is how an empty bordered rectangle ended up on screen ("begi", once BEGIN
-        // became Typing Ergonomics' word and no name matched either). Only meaningful when a filter
-        // actually ran — with no prefix typed, CurrentList is not the list's state yet.
-        if (ApplyInitialFilter(window) && window.CompletionList.CurrentList.Count == 0)
-        {
-            window.Close();   // → Closed → _window = null
-            return false;
-        }
         return true;
-    }
-
-    // AvaloniaEdit's CompletionWindow filters the list ONLY on a subsequent CaretPositionChanged — a
-    // window opened with text already typed before the caret (StartOffset < caret) shows the FULL,
-    // UNFILTERED list until the caret next moves. That was the "looks like nothing was typed" bug:
-    // "n.nrdok|" + Ctrl+Space listed every column instead of narrowing to NRDOK. We apply the initial
-    // filter to the already-typed prefix (StartOffset..caret) ourselves so the list narrows on open.
-    // No-op when nothing is typed (a fresh "n.|" / Ctrl+Space on whitespace) → the full list stands.
-    /// <returns>True when a prefix was present and the list was actually filtered.</returns>
-    private bool ApplyInitialFilter(CompletionWindow window)
-    {
-        var doc = _editor.Document;
-        if (doc is null) return false;
-        int start = window.StartOffset;
-        int caret = _editor.CaretOffset;
-        if (caret > start && start >= 0 && caret <= doc.TextLength)
-        {
-            window.CompletionList.SelectItem(doc.GetText(start, caret - start));
-            return true;
-        }
-        return false;
-    }
-
-    // A list that has narrowed to nothing is pure noise: an empty bordered rectangle over the code that
-    // still owns Tab/Enter. AvaloniaEdit leaves it open, so we close it. Asks CurrentList — AvaloniaEdit's
-    // OWN filtered view — rather than re-deriving its match rule, so what we test is exactly what it would
-    // draw. (Prefix-first narrowing of that rule is the separate Completion Matching milestone.)
-    private void CloseIfNarrowedToNothing()
-    {
-        if (_window is { } w && w.CompletionList.CurrentList.Count == 0) w.Close();
     }
 
     // ── Parameter Helper (design §28) — the ONE parameter-info surface ─────────────────────────

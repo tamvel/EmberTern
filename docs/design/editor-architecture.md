@@ -20,8 +20,8 @@
 > Signature Help, Snippets, Navigation (Ctrl+hover/Ctrl+Click, Peek Definition, safe local
 > rename, find references), semantic highlighting, and Quick Info all built as *clients* of that
 > one model. After Etap 6 the user reviewed the result against IBExpert, **endorsed the
-> architecture**, and filed a UX Polish Phase backlog (P1–P9); most of it is done, with formatter
-> polish (P8) and two small items (P5d, P2c) explicitly deferred. **Etap 7 (diagnostics, folding,
+> architecture**, and filed a UX Polish Phase backlog (P1–P9); it is now **all done** — the last two
+> deferrals, P5d and P2c, shipped on 2026-07-16/17. **Etap 7 (diagnostics, folding,
 > breadcrumbs, bracket-matching) does not start until the user formally closes the UX Polish
 > Phase.**
 
@@ -753,7 +753,7 @@ snippets trigger correctly inside a bare `BEGIN…END` body and an ad-hoc `EXECU
 conservative, contrast-computed theme pass fixed the two specifically-reported low-contrast
 cases — the dark DML keyword color and the light built-in-function color).
 
-**Completed (P8) / deferred (P5d, P2c):**
+**Completed (P8; P5d and P2c have since shipped too — see their entries below):**
 - **P8 — formatter polish — DONE + architecturally closed (2026-07-13 → 2026-07-14).** The largest
   UX-Polish item, delivered in seven steps (Krok 0 Safety → §F list builder → INSERT → UPDATE OR
   INSERT → long-line wrapping → EXECUTE BLOCK → FOR SELECT), each its own commit with build + tests +
@@ -936,10 +936,24 @@ cases — the dark DML keyword color and the light built-in-function color).
   Ctrl-only per §9.4; that is exactly what shipped, with the diagnostics section included so the surface,
   its 350 ms dwell and its noise budget were built and tuned **once**. §9.4 is confirmed, not amended:
   **plain hover = information, Ctrl = actionability.** This item is closed.
-- **P2c — bold the typed fragment in each completion row.** Re-confirmed not cleanly doable on
-  AvaloniaEdit 12.0.0: `CompletionList` exposes no per-item matched-range to a custom `Content`.
-  Needs either a custom `CompletionListBox` item template or a controller-side re-render of every
-  visible row on each filter keystroke (fragile). Do it only when it can be done without a hack.
+- **P2c — highlight the typed fragment in each completion row — DONE (2026-07-17).** Deferred for months
+  as "not cleanly doable on AvaloniaEdit 12.0.0: `CompletionList` exposes no per-item matched-range to a
+  custom `Content`; it would need a custom item template or **a controller-side re-render of every visible
+  row on each filter keystroke (fragile)**." That diagnosis was accurate — and note it named the eventual
+  solution and rejected it. What changed is the ground under it: the **Completion Matching Philosophy**
+  milestone took the list away from AvaloniaEdit (`IsFiltering = false`), so a per-keystroke re-render of
+  the visible rows stopped being a hack and became *the* architecture — `SqlCompletionController.Populate`
+  rebuilds the rows on every prefix change and has the prefix in hand. There was no matched-range to
+  extract from AvaloniaEdit any more, because AvaloniaEdit no longer does the matching.
+  <br>Shipped as **colour rather than bold** (the IBExpert cue, user-requested): `SqlCompletionData.BuildName`
+  splits the name into a matched `Run` in the `CompletionMatchBrush` theme token (both dictionaries; kept
+  distinct from `ErrorBrush` on purpose — it means "why this row is here", never "something is wrong") and
+  an unmatched tail that inherits the row foreground, so theme and selection still drive it. Empty prefix →
+  plain text. The `[0, prefix.Length)` split **renders `CompletionMatcher`'s StartsWith ruling rather than
+  re-deriving it**; a future non-prefix tier must report its span instead (§9.1 one-owner, one level down).
+  <br>**Lesson worth keeping:** a deferral reason can be a fact about a *dependency*, not about the item.
+  When the dependency changed, nobody re-tested the deferral — it took a user asking for the feature. Items
+  parked as "impossible" deserve a re-read whenever the layer they blamed gets rewritten.
 
 ### 15.3 Post-polish bug-fix sprint (2026-07-11) — status
 
