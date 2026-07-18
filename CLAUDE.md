@@ -414,9 +414,17 @@ noted.
   non-thread-safe `DebugSession` is never touched concurrently). New `DebugExecutedSqlRowViewModel`;
   `DebuggerTabViewModel` gained `ExecutedSql`/`ImmediateInput`/`ImmediateAsStatement`/`EvaluateImmediateCommand`/
   `EvaluateSelectionAsync`; `DebuggerTabView` gained the bottom Immediate/Executed-SQL panel + Shift+F9. All
-  theme tokens; **no new colours; no UX polish** (the D4 UX backlog stays deferred). Build 0/0; **4755 tests
-  green in one run** (+5 `DebugEngineTests`, +6 `DebuggerTabVmTests`); smoke clean. History:
-  [docs/history/19-...](docs/history/19-firebird-debugger.md) (D5 seam a). **Next session: D5 seam (b) —
+  theme tokens; **no new colours; no UX polish** (the D4 UX backlog stays deferred). **Post-QA follow-ups
+  (2026-07-18, view/discoverability only — no engine/architecture change):** the Immediate input is **no
+  longer auto-cleared** after evaluation (kept for tweak-and-re-run) with an inline **Clear (✕)** button; and
+  a **Debug button on the Procedure editor toolbar** (right of Run Procedure, new `Icon.Bug`) **reusing the
+  one launch path** — `OnDebugProcedureRequested` extracted `OpenDebuggerForProcedure(routineName)`, the
+  procedure VM raises a `DebugRequested` intent (mirrors `RunExecuteRequested`), `DebugProcedureCommand` gated
+  on `!IsNew`. **Trigger/Package Debug buttons were requested but NOT added** — the debugger supports
+  standalone procedures only (triggers = D10, packages later); a button there would be a dead entry point, so
+  it ships *with* its enabling milestone. Build 0/0; **4756 tests green in one run** (+5 `DebugEngineTests`,
+  +6 `DebuggerTabVmTests`); smoke clean. History: [docs/history/19-...](docs/history/19-firebird-debugger.md)
+  (D5 seam a + follow-ups). **Next session: D5 seam (b) —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
   (P1 → P2 → D1 → D2 → D3 → D4 → D5 …). **Read the plan + your milestone's brief before writing any debugger code.**

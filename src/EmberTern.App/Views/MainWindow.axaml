@@ -988,10 +988,15 @@
                       Command="{Binding ActiveViewDetail.FormatSqlCommand}" IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
-              <!-- Procedure: execute / format / comment / uncomment -->
+              <!-- Procedure: execute / debug / format / comment / uncomment -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureExecuteTooltip}"
                       Command="{Binding ActiveProcedureDetail.ExecuteProcedureCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+              </Button>
+              <!-- Debugger entry point (Stage X / D5) — same launch as the sidebar "Debug procedure…". -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureDebugTooltip}"
+                      Command="{Binding ActiveProcedureDetail.DebugProcedureCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Bug}" Foreground="{DynamicResource InfoIconBrush}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveProcedureDetail.FormatSqlCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">

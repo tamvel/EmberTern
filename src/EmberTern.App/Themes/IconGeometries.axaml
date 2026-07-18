@@ -21,6 +21,8 @@
   <StreamGeometry x:Key="Icon.Stop">M6 6 H18 V18 H6 Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.Pause">M10 4 V20 M14 4 V20</StreamGeometry>
   <StreamGeometry x:Key="Icon.Activity">M22 12 H18 L15 21 L9 3 L6 12 H2</StreamGeometry>
+  <!-- Lucide bug — the debugger launch entry point (procedure editor toolbar). -->
+  <StreamGeometry x:Key="Icon.Bug">m8 2 1.88 1.88 M14.12 3.88 16 2 M9 7.13v-1a3.003 3.003 0 1 1 6 0v1 M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6 M12 20v-9 M6.53 9C4.6 8.8 3 7.1 3 5 M6 13H2 M3 21c0-2.1 1.7-3.9 3.8-4 M20.97 5c0 2.1-1.6 3.8-3.5 4 M22 13h-4 M17.2 17c2.1.1 3.8 1.9 3.8 4</StreamGeometry>
   <StreamGeometry x:Key="Icon.Check">M5 12.5 L10 17.5 L19 6.5</StreamGeometry>
   <StreamGeometry x:Key="Icon.Undo">M10 8 L5 12.5 L10 17 M5 12.5 H15 A4.5 4.5 0 0 1 15 21.5</StreamGeometry>
   <StreamGeometry x:Key="Icon.Plus">M12 5 V19 M5 12 H19</StreamGeometry>

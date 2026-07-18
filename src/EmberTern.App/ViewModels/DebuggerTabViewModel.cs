@@ -129,7 +129,12 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// <see cref="ImmediateAsStatement"/>) evaluated against the current frame (D5, spec §9.5).</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(EvaluateImmediateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ClearImmediateCommand))]
+    [NotifyPropertyChangedFor(nameof(HasImmediateInput))]
     private string _immediateInput = string.Empty;
+
+    /// <summary>True when the Immediate input has text — drives the inline Clear (✕) affordance.</summary>
+    public bool HasImmediateInput => !string.IsNullOrEmpty(ImmediateInput);
 
     /// <summary>When set, the Immediate input is run as a PSQL statement against the live frame (its
     /// write-back is applied to the frame); otherwise it is evaluated as an expression (spec §9.5).</summary>
@@ -366,17 +371,19 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
                                 && !string.IsNullOrWhiteSpace(ImmediateInput);
 
     /// <summary>Evaluates the Immediate input against the current frame (expression by default, or a statement
-    /// when <see cref="ImmediateAsStatement"/> is set). The result lands in the Executed SQL audit log.</summary>
+    /// when <see cref="ImmediateAsStatement"/> is set). The result lands in the Executed SQL audit log. The
+    /// input is intentionally <b>kept</b> after evaluation so the user can tweak and re-run the same
+    /// expression (the common debugger workflow) — <see cref="ClearImmediateCommand"/> clears it on demand.</summary>
     [RelayCommand(CanExecute = nameof(CanEvaluate))]
     private async Task EvaluateImmediateAsync()
     {
-        var fragment = ImmediateInput;
         var kind = ImmediateAsStatement ? EvaluationKind.Statement : EvaluationKind.Expression;
-        if (await EvaluateFragmentAsync(fragment, kind).ConfigureAwait(true))
-        {
-            ImmediateInput = string.Empty; // REPL-style: clear on a successful issue
-        }
+        await EvaluateFragmentAsync(ImmediateInput, kind).ConfigureAwait(true);
     }
+
+    /// <summary>Clears the Immediate input (the inline ✕ affordance).</summary>
+    [RelayCommand(CanExecute = nameof(HasImmediateInput))]
+    private void ClearImmediate() => ImmediateInput = string.Empty;
 
     /// <summary>Evaluate (Shift+F9): evaluates a source selection as an expression against the current frame.
     /// Routes through the SAME engine as the Immediate window (decision 6 — one engine, three surfaces); the
@@ -387,13 +394,13 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     // anything itself — the engine is DebugSession.Evaluate (Core), run off the UI thread (the executor is
     // sync-over-async, like stepping). Phase → Busy for the duration gives mutual exclusion with stepping via
     // the existing state machine (a step can't start while Busy, and evaluation requires Paused), so the
-    // non-thread-safe DebugSession is never touched concurrently. Returns true when the evaluation was issued.
-    private async Task<bool> EvaluateFragmentAsync(string fragment, EvaluationKind kind)
+    // non-thread-safe DebugSession is never touched concurrently.
+    private async Task EvaluateFragmentAsync(string fragment, EvaluationKind kind)
     {
         var session = Session;
         if (session is null || Phase != DebuggerPhase.Paused || string.IsNullOrWhiteSpace(fragment))
         {
-            return false;
+            return;
         }
 
         Phase = DebuggerPhase.Busy;
@@ -415,9 +422,6 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         // The session is still paused at the same step; restore Paused + refresh the frame (a statement may
         // have written frame variables via the live write-back).
         RefreshFromSession();
-        // "Issued and succeeded" — a server raise (result.Success == false) keeps the input so the user can
-        // edit and retry; only a clean evaluation clears it.
-        return result?.Success == true;
     }
 
     private void AddExecutedSql(DebugExecutedSqlRowViewModel row)

@@ -4140,6 +4140,8 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
         detail.RunExecuteRequested = RunProcedureExecuteAsync;
+        // Editor-toolbar Debug entry point (Stage X / D5) — reuses the one debugger-launch path.
+        detail.DebugRequested = () => OpenDebuggerForProcedure(detail.ProcedureName);
         // Its OWN Performance context — analyzes only this procedure tab's Execute.
         detail.PerformanceContext = CreatePerformanceContext();
         // Lazy column loader for the Variables grid's merged Domain/Column picker.
@@ -4779,13 +4781,20 @@ public partial class MainWindowViewModel : ViewModelBase
     private void OnDebugProcedureRequested(MetadataObject obj)
     {
         if (obj.Kind != MetadataObjectKind.Procedure) return;
+        OpenDebuggerForProcedure(obj.Name);
+    }
+
+    // The one debugger-launch path, reused by the sidebar "Debug procedure…" and the procedure editor's
+    // Debug toolbar button (Stage X / D5) — the button is only an additional entry point, not new logic.
+    private void OpenDebuggerForProcedure(string routineName)
+    {
+        if (string.IsNullOrWhiteSpace(routineName)) return;
         if (!_service.IsConnected)
         {
             AddMessage(MessageSeverity.Error, UiStrings.DebuggerNoConnection);
             return;
         }
 
-        var routineName = obj.Name;
         var launcher = new EmberTern.App.Debugging.FirebirdDebugSessionLauncher(_service);
         var debugger = new DebuggerTabViewModel(
             routineName,

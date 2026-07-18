@@ -273,7 +273,7 @@ public class DebuggerTabVmTests
     }
 
     [Fact]
-    public async Task Immediate_Expression_AppendsResultToExecutedSql_AndClearsInput()
+    public async Task Immediate_Expression_AppendsResultToExecutedSql_AndKeepsInput()
     {
         var exec = new FakeExecutor().Eval("a + b", EvaluationResult.Ok("EXECUTE BLOCK ...", 7, null));
         var vm = await LaunchedAsync(exec);
@@ -288,7 +288,21 @@ public class DebuggerTabVmTests
         Assert.Equal("7", row.ResultText);
         Assert.False(row.IsError);
         Assert.Equal("EXECUTE BLOCK ...", row.Sql); // the harness is kept for the §10.3 audit
-        Assert.Empty(vm.ImmediateInput);            // cleared on a clean evaluation
+        Assert.Equal("a + b", vm.ImmediateInput);   // kept — so the user can tweak and re-run
+    }
+
+    [Fact]
+    public async Task ClearImmediate_EmptiesTheInput()
+    {
+        var vm = await LaunchedAsync(new FakeExecutor());
+        vm.ImmediateInput = "a + b";
+        Assert.True(vm.HasImmediateInput);
+        Assert.True(vm.ClearImmediateCommand.CanExecute(null));
+
+        vm.ClearImmediateCommand.Execute(null);
+        Assert.Empty(vm.ImmediateInput);
+        Assert.False(vm.HasImmediateInput);
+        Assert.False(vm.ClearImmediateCommand.CanExecute(null));
     }
 
     [Fact]

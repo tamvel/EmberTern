@@ -824,6 +824,37 @@ be pure indirection over `Task.Run` + a collection append. So evaluation is a fe
 a server, per the QA rule) — the §9.5 verification is: evaluate an expression calling a stored function and
 compare to `SELECT <expr> FROM RDB$DATABASE`. Manual QA checklist prepared.
 
+### Follow-ups after manual QA (2026-07-18, same session)
+
+Two small UX/discoverability changes the user asked for after trying seam (a) — **no engine/architecture
+change** (the D1–D5 responsibility split is untouched):
+
+1. **Immediate input is no longer auto-cleared after a successful evaluation.** The typical workflow is
+   experimenting with the *same* expression and tweaking it, so clearing forced re-typing. Now the input is
+   **kept**, and a small inline **Clear (✕)** button (inside the text box, right-aligned, visible only when
+   there is text) clears it on demand (`ClearImmediateCommand`, gated on `HasImmediateInput`). Pure
+   view/VM-presentation: `EvaluateFragmentAsync` dropped its "did it succeed → clear" return; the row/audit
+   logic is unchanged. (+1 test: `ClearImmediate_EmptiesTheInput`; the former "clears input" assertion became
+   "keeps input".)
+2. **Debugger entry point on the Procedure editor toolbar** — a bug-icon button immediately right of the
+   existing Run Procedure button, **reusing the one launch path**. `MainWindowViewModel.OnDebugProcedureRequested`
+   was refactored to extract `OpenDebuggerForProcedure(routineName)` (the sidebar handler now calls it), and
+   the procedure detail VM raises a new `DebugRequested` intent (mirroring `RunExecuteRequested`) wired by the
+   host to `OpenDebuggerForProcedure(detail.ProcedureName)`. `DebugProcedureCommand` is gated on
+   `!IsNew` (an uncompiled New-procedure tab can't be debugged — mirrors `CanExecuteProcedure`); both inputs
+   are fixed at construction, so no change-notification is needed. New `Icon.Bug` (Lucide) + `ProcedureDebugTooltip`.
+   **No new debug logic** — it is only an additional entry point onto the existing `DebuggerTabViewModel` launch.
+
+**Deferred (flagged to the user): Debug buttons on the Trigger / Package editors.** The user also asked for
+these, but the debugger's current scope is **standalone procedures only** (D4/D5). Triggers (NEW/OLD context,
+no input params) are **D10**; package members need package-qualified resolution (a later milestone);
+`OnDebugProcedureRequested`/`FirebirdDebugMetadata` handle only `MetadataObjectKind.Procedure`. Adding a Debug
+button there now would be a **dead entry point** (a broken promise, against the QA/honesty rules), so it was
+**not** added — it belongs with the milestone that makes those debuggable. Functions likewise (not yet
+supported). Recommendation recorded: add each editor's Debug entry point *with* its enabling milestone.
+
+Build 0/0; **4756 tests green in one run**; smoke clean.
+
 **Next: D5 seam (b) — Watches panel + per-routine persistence** (auto-re-evaluate after each step through the
 same `DebugSession.Evaluate`; flag a watch that is not a pure expression; persist per routine). **D6+ not
 started.**

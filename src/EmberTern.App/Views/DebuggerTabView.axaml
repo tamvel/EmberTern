@@ -231,15 +231,25 @@
             </Border>
 
             <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="8,6">
-              <TextBox Grid.Column="0"
-                       Text="{Binding ImmediateInput, Mode=TwoWay}"
-                       Watermark="{x:Static app:UiStrings.DebuggerImmediateWatermark}"
-                       FontSize="11" FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       VerticalContentAlignment="Center">
-                <TextBox.KeyBindings>
-                  <KeyBinding Gesture="Enter" Command="{Binding EvaluateImmediateCommand}" />
-                </TextBox.KeyBindings>
-              </TextBox>
+              <Panel Grid.Column="0">
+                <TextBox Text="{Binding ImmediateInput, Mode=TwoWay}"
+                         Watermark="{x:Static app:UiStrings.DebuggerImmediateWatermark}"
+                         Padding="6,4,26,4"
+                         FontSize="11" FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                         VerticalContentAlignment="Center">
+                  <TextBox.KeyBindings>
+                    <KeyBinding Gesture="Enter" Command="{Binding EvaluateImmediateCommand}" />
+                  </TextBox.KeyBindings>
+                </TextBox>
+                <!-- Inline Clear (✕): keeps the input after evaluation, clears on demand. -->
+                <Button Classes="icon" Width="18" Height="18" Padding="0" Margin="0,0,4,0"
+                        HorizontalAlignment="Right" VerticalAlignment="Center"
+                        IsVisible="{Binding HasImmediateInput}"
+                        ToolTip.Tip="{x:Static app:UiStrings.DebuggerImmediateClearTooltip}"
+                        Command="{Binding ClearImmediateCommand}">
+                  <controls:SvgIcon Data="{StaticResource Icon.X}" Width="12" Height="12" />
+                </Button>
+              </Panel>
               <CheckBox Grid.Column="1" Margin="8,0"
                         IsChecked="{Binding ImmediateAsStatement, Mode=TwoWay}"
                         Content="{x:Static app:UiStrings.DebuggerImmediateAsStatement}"
