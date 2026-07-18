@@ -85,21 +85,26 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         Func<CancellationToken, Task<string?>> sourceProvider,
         IDebugSessionLauncher launcher,
         ParameterHistoryStore? historyStore = null,
-        string? connectionId = null)
+        string? connectionId = null,
+        WatchStore? watchStore = null)
     {
         RoutineName = routineName ?? throw new ArgumentNullException(nameof(routineName));
         _sourceProvider = sourceProvider ?? throw new ArgumentNullException(nameof(sourceProvider));
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _historyStore = historyStore;
         _connectionId = connectionId;
+        _watchStore = watchStore;
         Preflight = new ObservableCollection<DebugPreflightItem>();
         Variables = new ObservableCollection<DebugVariableRowViewModel>();
         ExecutedSql = new ObservableCollection<DebugExecutedSqlRowViewModel>();
+        Watches = new ObservableCollection<WatchRowViewModel>();
         StatusText = UiStrings.DebuggerLaunchPreparing;
+        LoadWatches();
     }
 
     private readonly ParameterHistoryStore? _historyStore;
     private readonly string? _connectionId;
+    private readonly WatchStore? _watchStore;
 
     /// <summary>The routine being debugged (a standalone procedure in D4).</summary>
     public string RoutineName { get; }
@@ -143,6 +148,20 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
     /// <summary>True while a session is live and there are audit rows to show.</summary>
     public bool HasExecutedSql => ExecutedSql.Count > 0;
+
+    /// <summary>The Watches (D5 seam b, spec §9.5) — expressions re-evaluated after every step through the
+    /// one engine (<see cref="DebugSession.Evaluate"/>). Persisted per routine via <see cref="WatchStore"/>.</summary>
+    public ObservableCollection<WatchRowViewModel> Watches { get; }
+
+    public bool HasWatches => Watches.Count > 0;
+
+    /// <summary>The new-watch input.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddWatchCommand))]
+    [NotifyPropertyChangedFor(nameof(HasWatchInput))]
+    private string _watchInput = string.Empty;
+
+    public bool HasWatchInput => !string.IsNullOrWhiteSpace(WatchInput);
 
     /// <summary>Isolation options for the launch selector: index 0 = Read Committed, 1 = Snapshot (§4.2).</summary>
     public IReadOnlyList<string> IsolationOptions { get; } = new[]
@@ -315,6 +334,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         }
 
         ApplyBreakpointsToSession();
+        await EvaluateWatchesAsync().ConfigureAwait(true); // show watch values immediately at entry
         RefreshFromSession();
     }
 
@@ -360,8 +380,10 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             Phase = DebuggerPhase.Faulted;
             StatusText = string.Format(CultureInfo.CurrentCulture, UiStrings.DebuggerStatusFaultedFormat, ex.Message);
             RefreshVariables();
+            ResetWatches();
             return;
         }
+        await EvaluateWatchesAsync().ConfigureAwait(true); // auto re-evaluate every watch at the new pause (§9.5)
         RefreshFromSession();
     }
 
@@ -419,8 +441,9 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             ? DebugExecutedSqlRowViewModel.ForException(fragment, failure)
             : DebugExecutedSqlRowViewModel.ForResult(fragment, kind, result!));
 
-        // The session is still paused at the same step; restore Paused + refresh the frame (a statement may
-        // have written frame variables via the live write-back).
+        // The session is still paused at the same step; a statement may have changed the frame, so re-evaluate
+        // the watches too, then restore Paused + refresh the frame (the live write-back).
+        await EvaluateWatchesAsync().ConfigureAwait(true);
         RefreshFromSession();
     }
 
@@ -441,6 +464,95 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         OnPropertyChanged(nameof(HasExecutedSql));
     }
 
+    // ── Watches (D5 seam b — expressions re-evaluated after every step, §9.5) ───────────────────────
+
+    /// <summary>Adds the <see cref="WatchInput"/> as a watch (flagged if not a pure expression), persists the
+    /// list, and evaluates it immediately when paused. The watch is an expression re-evaluated after every
+    /// step through the one engine — no separate evaluation mechanism (D5 risk #1).</summary>
+    [RelayCommand(CanExecute = nameof(HasWatchInput))]
+    private async Task AddWatchAsync()
+    {
+        var expression = WatchInput.Trim();
+        if (expression.Length == 0) return;
+
+        var row = new WatchRowViewModel(expression, WatchSideEffectDetector.HasSideEffect(expression));
+        Watches.Add(row);
+        WatchInput = string.Empty;
+        OnPropertyChanged(nameof(HasWatches));
+        SaveWatches();
+
+        // Show a value at once if we are stopped at a frame; otherwise it stays "—" until the next pause.
+        if (Phase == DebuggerPhase.Paused)
+        {
+            await EvaluateWatchesAsync().ConfigureAwait(true);
+            RefreshFromSession();
+        }
+    }
+
+    /// <summary>Removes a watch and persists the list.</summary>
+    [RelayCommand]
+    private void RemoveWatch(WatchRowViewModel? row)
+    {
+        if (row is null || !Watches.Remove(row)) return;
+        OnPropertyChanged(nameof(HasWatches));
+        SaveWatches();
+    }
+
+    private void LoadWatches()
+    {
+        var saved = _watchStore?.Get(_connectionId, RoutineName) ?? Array.Empty<string>();
+        foreach (var expression in saved)
+        {
+            Watches.Add(new WatchRowViewModel(expression, WatchSideEffectDetector.HasSideEffect(expression)));
+        }
+        OnPropertyChanged(nameof(HasWatches));
+    }
+
+    private void SaveWatches()
+        => _watchStore?.Save(_connectionId, RoutineName, Watches.Select(w => w.Expression).ToList());
+
+    // Re-evaluates every watch against the current frame, off the UI thread (each is a wire op, like a step).
+    // Callers invoke it only while Phase == Busy (right after a pause-producing engine op), so the
+    // non-thread-safe DebugSession is never touched concurrently. When the session is not paused (completed /
+    // faulted), the watches reset to the "—" placeholder — there is no live frame to evaluate against.
+    private async Task EvaluateWatchesAsync()
+    {
+        var session = Session;
+        if (session is null || Watches.Count == 0) return;
+
+        if (session.State != DebugState.Paused)
+        {
+            foreach (var w in Watches) w.Reset();
+            return;
+        }
+
+        var expressions = Watches.Select(w => w.Expression).ToList();
+        var results = await Task.Run(() => EvaluateWatchExpressions(session, expressions)).ConfigureAwait(true);
+        for (int i = 0; i < results.Count && i < Watches.Count; i++)
+        {
+            Watches[i].Apply(results[i]);
+        }
+    }
+
+    // Evaluates each expression (in order) as an expression through the one engine. Runs on a background
+    // thread; the session stays paused throughout (the caller holds Phase == Busy, so no step intervenes).
+    private static IReadOnlyList<EvaluationResult?> EvaluateWatchExpressions(
+        DebugSession session, IReadOnlyList<string> expressions)
+    {
+        var results = new List<EvaluationResult?>(expressions.Count);
+        foreach (var expression in expressions)
+        {
+            try { results.Add(session.Evaluate(expression, EvaluationKind.Expression)); }
+            catch { results.Add(null); }
+        }
+        return results;
+    }
+
+    private void ResetWatches()
+    {
+        foreach (var w in Watches) w.Reset();
+    }
+
     // ── Stop / Restart ──────────────────────────────────────────────────────────────────────────
 
     private bool CanStopOrRestart => _run is not null
@@ -454,6 +566,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         Variables.Clear();
         OnPropertyChanged(nameof(HasVariables));
         ClearExecutedSql();
+        ResetWatches(); // keep the (persisted) watch rows, clear their live values
         Phase = DebuggerPhase.Idle;
         StatusText = UiStrings.DebuggerStatusStopped;
     }

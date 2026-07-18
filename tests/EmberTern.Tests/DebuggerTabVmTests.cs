@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EmberTern.App.Debugging;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Settings;
 using EmberTern.Core.Sql.Debugging;
 using EmberTern.Core.Sql.Language.Ast;
 using EmberTern.Firebird;
@@ -373,5 +375,106 @@ public class DebuggerTabVmTests
         await vm.StopCommand.ExecuteAsync(null);
         Assert.False(vm.HasExecutedSql);
         Assert.Empty(vm.ExecutedSql);
+    }
+
+    // ── Watches (D5 seam b, §9.5) ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AddWatch_WhenPaused_EvaluatesImmediately_AndClearsInput()
+    {
+        var exec = new FakeExecutor().Eval("a + b", EvaluationResult.Ok("sql", 42, null));
+        var vm = await LaunchedAsync(exec);
+
+        vm.WatchInput = "a + b";
+        await vm.AddWatchCommand.ExecuteAsync(null);
+
+        var row = Assert.Single(vm.Watches);
+        Assert.Equal("a + b", row.Expression);
+        Assert.True(row.Evaluated);
+        Assert.Equal("42", row.ValueText);
+        Assert.False(row.IsError);
+        Assert.Empty(vm.WatchInput);
+        Assert.True(vm.HasWatches);
+    }
+
+    [Fact]
+    public async Task Watch_ReEvaluates_AfterEachStep()
+    {
+        var exec = new FakeExecutor().Eval("v", EvaluationResult.Ok("sql", 1, null));
+        var vm = await LaunchedAsync(exec);
+        vm.WatchInput = "v";
+        await vm.AddWatchCommand.ExecuteAsync(null);
+        Assert.Equal("1", vm.Watches[0].ValueText);
+
+        exec.Eval("v", EvaluationResult.Ok("sql", 2, null)); // the value changes at the next frame
+        await vm.StepOverCommand.ExecuteAsync(null);
+
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.Equal("2", vm.Watches[0].ValueText); // auto re-evaluated at the new pause
+    }
+
+    [Fact]
+    public async Task AddWatch_FlagsSideEffect_ForNonPureExpression()
+    {
+        var vm = await LaunchedAsync(new FakeExecutor());
+        vm.WatchInput = "update t set x = 1";
+        await vm.AddWatchCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Watches[0].HasSideEffect);
+    }
+
+    [Fact]
+    public async Task RemoveWatch_RemovesTheRow()
+    {
+        var vm = await LaunchedAsync(new FakeExecutor());
+        vm.WatchInput = "a";
+        await vm.AddWatchCommand.ExecuteAsync(null);
+        var row = Assert.Single(vm.Watches);
+
+        vm.RemoveWatchCommand.Execute(row);
+        Assert.Empty(vm.Watches);
+        Assert.False(vm.HasWatches);
+    }
+
+    [Fact]
+    public async Task Stop_ResetsWatchValues_ButKeepsRows()
+    {
+        var exec = new FakeExecutor().Eval("a", EvaluationResult.Ok("sql", 5, null));
+        var vm = await LaunchedAsync(exec);
+        vm.WatchInput = "a";
+        await vm.AddWatchCommand.ExecuteAsync(null);
+        Assert.True(vm.Watches[0].Evaluated);
+
+        await vm.StopCommand.ExecuteAsync(null);
+        Assert.Single(vm.Watches);             // the (persisted) row is kept
+        Assert.False(vm.Watches[0].Evaluated); // its live value is reset
+    }
+
+    [Fact]
+    public async Task Watches_Persist_PerRoutine_AcrossVmInstances()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "EmberTern-tests-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new WatchStore(dir);
+            var vm1 = new DebuggerTabViewModel(
+                "SP_TEST", _ => Task.FromResult<string?>(Sql), new FakeLauncher(new FakeExecutor()),
+                historyStore: null, connectionId: "c1", watchStore: store);
+            await vm1.PrepareAsync();
+            await vm1.LaunchCommand.ExecuteAsync(null);
+            vm1.WatchInput = "a + b";
+            await vm1.AddWatchCommand.ExecuteAsync(null);
+
+            // A fresh VM for the same (connection, routine) loads the persisted watch in its ctor.
+            var vm2 = new DebuggerTabViewModel(
+                "SP_TEST", _ => Task.FromResult<string?>(Sql), new FakeLauncher(new FakeExecutor()),
+                historyStore: null, connectionId: "c1", watchStore: store);
+            Assert.Single(vm2.Watches);
+            Assert.Equal("a + b", vm2.Watches[0].Expression);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
     }
 }

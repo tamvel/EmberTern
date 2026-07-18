@@ -1745,4 +1745,14 @@ internal static class UiStrings
     public const string DebuggerEvalKindStatement = "statement";
     public const string DebuggerEvalStatementOk = "(statement ran)";
     public const string DebuggerEvalErrorUnknown = "evaluation failed";
+    // Watches panel (D5 seam b, §9.5).
+    public const string DebuggerWatchesHeader = "Watches";
+    public const string DebuggerWatchWatermark = "Watch an expression…";
+    public const string DebuggerWatchAddButton = "Add";
+    public const string DebuggerWatchAddTooltip = "Add a watch (re-evaluated after every step)";
+    public const string DebuggerWatchRemoveTooltip = "Remove watch";
+    public const string DebuggerWatchesEmpty = "No watches. Add an expression to re-evaluate after every step.";
+    public const string DebuggerWatchNotEvaluated = "—";
+    public const string DebuggerWatchSideEffectTooltip =
+        "This watch is not a pure expression — it runs real SQL in the debug transaction each time it is re-evaluated, and may have side effects.";
 }

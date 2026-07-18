@@ -422,9 +422,29 @@ noted.
   procedure VM raises a `DebugRequested` intent (mirrors `RunExecuteRequested`), `DebugProcedureCommand` gated
   on `!IsNew`. **Trigger/Package Debug buttons were requested but NOT added** — the debugger supports
   standalone procedures only (triggers = D10, packages later); a button there would be a dead entry point, so
-  it ships *with* its enabling milestone. Build 0/0; **4756 tests green in one run** (+5 `DebugEngineTests`,
-  +6 `DebuggerTabVmTests`); smoke clean. History: [docs/history/19-...](docs/history/19-firebird-debugger.md)
-  (D5 seam a + follow-ups). **Next session: D5 seam (b) —
+  it ships *with* its enabling milestone. History: [docs/history/19-...](docs/history/19-firebird-debugger.md)
+  (D5 seam a + follow-ups).
+  **D5 seam (b) — Watches — DONE (2026-07-18; impl, live watch evaluation awaits user confirmation). D5 IS
+  COMPLETE.** The third §9.5 surface: expressions **re-evaluated after every step** through the **same**
+  `DebugSession.Evaluate` (Watches add **no** evaluation mechanism — risk #1). The tab VM calls
+  `EvaluateWatchesAsync()` after each pause (step / launch / an Immediate that may have mutated the frame)
+  **while `Phase==Busy`** (mutual exclusion with stepping via the state machine; each watch a wire op on
+  `Task.Run`); not-paused → rows reset to `—`. New mutable `WatchRowViewModel` (value updates each pause).
+  **Persistence per routine:** new Core `WatchStore` (section facade over the shared `settings.dat`, owns
+  `UserSettings.DebugWatches`, additive — no schema bump), loaded in the VM ctor, saved on add/remove;
+  `MainWindowViewModel` wires one on the same dir+protector as `ParameterHistoryStore`. **Side-effect flag:**
+  new pure Core `WatchSideEffectDetector` **reuses the one `SqlLexer`** (no new parser) to flag a watch whose
+  tokens contain a side-effecting keyword (`INSERT`/`UPDATE`/`DELETE`/`MERGE`/`EXECUTE`/`POST_EVENT`) — a
+  bare-token match, so a keyword in a string/quoted-identifier never trips it; a conservative lexical warning
+  cue (`±` + tooltip), not semantic analysis. UI: the right panel splits Variables (top) + Watches (bottom).
+  **Deviation (documented, as seam a):** no standalone `WatchesPanelViewModel` — the collection + loop live on
+  `DebuggerTabViewModel` (a separate panel VM would tightly couple to the session/eval/persistence for no
+  gain); `WatchRowViewModel` is the row VM. **User backlog (recorded, NOT D5):** Immediate should pre-validate
+  **syntax** locally via the existing `EditorLanguageService` (Lexer+Parser+Diagnostics) before the
+  `EXECUTE BLOCK` — reuse the Language Service, syntax-only locally, semantics/execution stay the server's.
+  Build 0/0; **4782 tests green in one run** (+6 `WatchStore`, +14 `WatchSideEffectDetector`, +6
+  `DebuggerTabVmTests`); smoke clean. History: [docs/history/19-...](docs/history/19-firebird-debugger.md)
+  (D5 seam b). **Next milestone: D6 (Cursor Bridge). D6+ not started.** **Next session: D5 seam (b) —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
   (P1 → P2 → D1 → D2 → D3 → D4 → D5 …). **Read the plan + your milestone's brief before writing any debugger code.**

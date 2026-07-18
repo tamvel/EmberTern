@@ -241,15 +241,23 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
   compare to `SELECT <expr> FROM RDB$DATABASE`.
 - **Sesje: 2.** Seam: *(a)* Evaluate + Immediate; *(b)* Watches + persistence. **Placed early on purpose:
   the Immediate window is the best test instrument for D2's harness.**
-- **STATUS — seam (a) DONE (2026-07-18; live evaluation awaits user confirmation). Seam (b) NOT started.**
+- **STATUS — D5 COMPLETE (2026-07-18; live evaluation awaits user confirmation).**
   The one engine is **Core**: `EvaluationModels` + `IDebugExecutor.Evaluate` + `DebugSession.Evaluate`
   (arbitrary fragment → §3.5 `InScopeLocals` inject; Firebird executor reuses the D2 harness). **Deviation
-  (documented):** no App `EvaluateController` — the real "one engine" is `DebugSession.Evaluate`; the App
-  orchestration is thin enough to live on the VM (as stepping is), so a controller would be pure indirection.
-  Shipped: Immediate window (expression / "as statement"), Evaluate (Shift+F9), the **Executed SQL audit**
-  (§10.3 — every evaluation lands here, harness SQL visible). Build 0/0; 4755 green (+11); smoke clean.
-  Seam (b) is the next session: Watches panel + per-routine persistence + auto-re-evaluate + non-pure-watch
-  flag, all through the same `DebugSession.Evaluate`.
+  (documented):** no App `EvaluateController`/`WatchesPanelViewModel` — the real "one engine" is
+  `DebugSession.Evaluate`; the App orchestration (evaluate + the watch re-eval loop) is thin enough to live on
+  `DebuggerTabViewModel` (as stepping is), so separate controller/panel VMs would be pure indirection.
+  - **Seam (a) — Evaluate + Immediate + Executed SQL audit** (§10.3 — every evaluation lands there, harness
+    SQL visible). Immediate window (expression / "as statement" → live-frame write-back), Evaluate (Shift+F9).
+    Post-QA: input kept (not auto-cleared) + inline Clear (✕); procedure-editor Debug toolbar button (reuses
+    the one launch path).
+  - **Seam (b) — Watches.** Re-evaluated after every pause through the **same** `DebugSession.Evaluate` (no
+    second evaluator); persisted per routine (`WatchStore` over `settings.dat`); non-pure watches flagged via
+    `WatchSideEffectDetector` (reuses the one `SqlLexer`, no new parser). `WatchRowViewModel` (mutable row).
+  Build 0/0; **4782 tests green**; smoke clean. **Next milestone: D6 (Cursor Bridge).**
+  **Backlog (user, recorded — NOT D5):** Immediate should pre-validate **syntax** locally via the existing
+  `EditorLanguageService` before the `EXECUTE BLOCK` (reuse the Language Service; syntax-only locally;
+  semantics/execution stay the server's).
 
 ---
 

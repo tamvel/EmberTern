@@ -36,6 +36,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly ConnectionProfileStore _store;
     private readonly FolderStore _folderStore;
     private readonly ParameterHistoryStore _parameterHistory;
+    private readonly WatchStore _watchStore;
     private FolderState _folderState = new();
     private readonly FirebirdConnectionService _service;
     // Data lane (connection #1): SQL Editor F5, data preview/edit.
@@ -149,6 +150,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // Same settings.dat + protector as the other section facades (gotcha #88) so
         // Execute Procedure/Function parameter history persists in the shared file.
         _parameterHistory = new ParameterHistoryStore(
+            System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
+        // Same shared settings.dat — debugger Watch expressions persist per routine (Stage X / D5).
+        _watchStore = new WatchStore(
             System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
         _folderState = _folderStore.Load();
         _service = service;
@@ -4801,7 +4805,8 @@ public partial class MainWindowViewModel : ViewModelBase
             ct => FetchObjectDefinitionAsync(routineName, MetadataObjectKind.Procedure),
             launcher,
             _parameterHistory,
-            _service.ActiveProfile?.Id);
+            _service.ActiveProfile?.Id,
+            _watchStore);
 
         var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, routineName, _service.ActiveProfile?.Id);
         WorkspaceTabs.Add(tab);

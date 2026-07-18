@@ -855,6 +855,76 @@ supported). Recommendation recorded: add each editor's Debug entry point *with* 
 
 Build 0/0; **4756 tests green in one run**; smoke clean.
 
-**Next: D5 seam (b) — Watches panel + per-routine persistence** (auto-re-evaluate after each step through the
-same `DebugSession.Evaluate`; flag a watch that is not a pure expression; persist per routine). **D6+ not
-started.**
+### Backlog (user, 2026-07-18 — NOT part of D5; do not implement now)
+
+**Immediate should pre-validate syntax locally before hitting the server.** Today an invalid Immediate
+expression is sent to Firebird and the user sees a server SQL error. The user would prefer Immediate to run
+the entered text through the **existing `EditorLanguageService` (Lexer + Parser + Diagnostics)** *before*
+issuing the `EXECUTE BLOCK`, so **syntax** errors are caught locally (no round-trip). Constraints: **reuse the
+existing Language Service** — do **not** build a separate debugger parser/validator; **syntax** errors are
+caught locally, **semantic + execution** errors stay the server's responsibility (the harness). A future UX
+improvement, explicitly not D5. Recorded here per the user's request.
+
+## D5 — Expression evaluation surface, seam (b): Watches (2026-07-18). **D5 IS COMPLETE.**
+
+**Cel:** the third surface of §9.5's *one engine, three surfaces* — **Watches**: expressions re-evaluated
+after every step, persisted per routine, with the non-pure ones flagged.
+
+### One engine — Watches add no evaluation mechanism (D5 risk #1)
+Every watch is evaluated through the **same** `DebugSession.Evaluate(expression, Expression)` built in seam
+(a). The tab VM re-evaluates all watches after each pause; there is **no** separate watch evaluator.
+- **Auto re-evaluation.** After every pause-producing engine op — a step (`RunStepAsync`), launch/entry
+  (`LaunchAsync`), and an Immediate run that may have mutated the frame (`EvaluateFragmentAsync`) — the VM
+  calls `EvaluateWatchesAsync()` **while `Phase == Busy`**, so the non-thread-safe `DebugSession` is never
+  touched concurrently (the same mutual-exclusion-via-state-machine rule as seam a). Each watch is a wire op,
+  run on a background thread (`Task.Run`), then the row values are applied on the UI thread. When the session
+  is not paused (completed/faulted) the rows reset to the `—` placeholder — there is no live frame.
+- **`WatchRowViewModel`** (App) — unlike the other read-only row VMs it is **mutable** (`ObservableObject`):
+  its `ValueText`/`IsError`/`Evaluated` update each pause; `Expression` and the side-effect flag are fixed.
+
+### Persistence per routine
+New Core `WatchStore` (`EmberTern.Core.Settings`) — a section facade over the shared `settings.dat`
+(mirroring `ParameterHistoryStore`), owning `UserSettings.DebugWatches` (one `DebugWatchEntry` per
+`(ConnectionId, ObjectName)`; additive property, **no schema bump** — an old file simply has none). The VM
+**loads** watches in its ctor (they show, unevaluated, before launch) and **saves** the whole list on every
+add/remove. `MainWindowViewModel` builds one `WatchStore` on the same directory+protector as
+`ParameterHistoryStore` and passes it to the debugger tab. Stop keeps the (persisted) rows and only resets
+their live values.
+
+### Side-effect flagging (§9.5 guard)
+New pure Core `WatchSideEffectDetector.HasSideEffect(fragment)` — an auto-re-evaluated watch runs real SQL in
+the debug transaction, so a watch that is **not a pure expression** is flagged. It **reuses the one
+`SqlLexer`** (Developer Contract — no new parser) and looks for a side-effecting keyword among the fragment's
+**tokens** (`INSERT`/`UPDATE`/`DELETE`/`MERGE`/`EXECUTE`/`POST_EVENT`); a keyword only matches as a bare
+token, so a string literal (`'please UPDATE'`) or a quoted identifier (`"UPDATE"`) never trips it. It is a
+deliberately conservative **lexical warning cue**, not semantic analysis (a UDF with hidden side effects is
+inherently the server's domain). The flagged rows show a `±` marker with an explanatory tooltip. (This is the
+minimal honest flag; the user's separate backlog item — richer pre-validation via `EditorLanguageService` —
+stays deferred.)
+
+### UI
+The right panel splits into **Variables** (top) + **Watches** (bottom, own splitter): a watch input (Enter =
+Add) + Add button, and the list — each row `± | expression / value | ✕`, value in `SubtleForegroundBrush`
+(or `ErrorBrush` on a raise), the `✕` removing via the tab VM's `RemoveWatchCommand` (ancestor binding). All
+theme tokens; no new colours.
+
+### Deviation from the plan (documented, same rationale as seam a)
+No standalone `WatchesPanelViewModel` — the Watches collection + input + add/remove + the re-evaluation loop
+live on `DebuggerTabViewModel`, consistent with `Variables`/`ExecutedSql` and the seam-a `EvaluateController`
+decision (a separate panel VM would need the session + the evaluation path + persistence — tight coupling to
+the tab VM for no gain). `WatchRowViewModel` is the per-row VM.
+
+### Tests (+26)
+- `WatchStoreTests` (+6): round-trip across instances (in order), replace, empty removes, per-routine, blank
+  key disables.
+- `WatchSideEffectDetectorTests` (+14): pure expressions (incl. a scalar subquery, an equality, a keyword in
+  a string) not flagged; DML/EXECUTE/POST_EVENT/MERGE flagged; case-insensitive; blank.
+- `DebuggerTabVmTests` (+6): add-when-paused evaluates immediately + clears input; re-evaluates after each
+  step; side-effect flag; remove; Stop resets values but keeps rows; watches persist per routine across VM
+  instances.
+
+**Build 0/0; 4782 tests green in one run; smoke clean. Live evaluation of watches awaits user confirmation**
+(needs a server; the shared engine's live fidelity is the same as seam a's). Manual QA checklist prepared.
+
+**D5 IS COMPLETE** — Evaluate + Immediate + Watches, all on the one `HarnessBuilder`/`DebugSession.Evaluate`
+engine (decision 6). **Next milestone: D6 (Cursor Bridge). D6+ not started.**
