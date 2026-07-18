@@ -67,6 +67,13 @@ public sealed class Frame
 {
     private readonly List<Activation> _control = new();
 
+    // The names this frame's routine DECLARES (its parameters + its body's DECLARE VARIABLEs), folded. Used to
+    // decide, during a scope-chain walk (spec §6 closures), which frame OWNS a name — so a not-yet-assigned
+    // local resolves/writes in the frame that declares it, and an inner local correctly shadows a like-named
+    // outer variable. Distinct from Values (assigned values): a declared local is "owned" here from frame
+    // entry, even before its first assignment. Empty is harmless — resolution then falls back to Values.
+    private readonly HashSet<string> _declaredNames = new(System.StringComparer.OrdinalIgnoreCase);
+
     internal Frame(
         int id,
         string routineName,
@@ -90,6 +97,19 @@ public sealed class Frame
         Source = source;
         Model = model;
         SavepointName = $"ET_DBG_FRAME_{id}";
+
+        // Record the declared names (params + body local variables) so the closure scope chain resolves and
+        // writes into the correct frame even before a variable is assigned (spec §6). Params: the seeded input
+        // values + the output parameter names. Locals: the body's DECLARE VARIABLE section.
+        if (initialValues is not null)
+        {
+            foreach (var name in initialValues.Keys) _declaredNames.Add(name);
+        }
+        foreach (var name in OutputParameterNames) _declaredNames.Add(name);
+        foreach (var d in body.Declarations)
+        {
+            if (d is DeclareVariableStatement { Name: { } vn } && vn.Length > 0) _declaredNames.Add(vn);
+        }
         // Start executing the body's statements. The body's own DECLAREs are not executed — declared
         // variables begin null (their values arrive via injection/assignment); initialValues seeds params.
         _control.Add(new SequenceActivation(body, body.Statements, 0));
@@ -162,7 +182,7 @@ public sealed class Frame
     {
         for (var f = this; f is not null; f = f.LexicalParent)
         {
-            if (f.Values.Contains(name))
+            if (f.Owns(name))
             {
                 value = f.Values.Get(name);
                 return true;
@@ -178,7 +198,7 @@ public sealed class Frame
     {
         for (var f = this; f is not null; f = f.LexicalParent)
         {
-            if (f.Values.Contains(name))
+            if (f.Owns(name))
             {
                 f.Values.Set(name, value);
                 return;
@@ -186,6 +206,11 @@ public sealed class Frame
         }
         Values.Set(name, value);
     }
+
+    // True when this frame owns the name: it either DECLARES it (a parameter / body local — owned from entry,
+    // even before assignment, so a not-yet-assigned local shadows a like-named outer var and its write stays
+    // here) or already holds an assigned value for it. The scope-chain walk stops at the first owning frame.
+    private bool Owns(string name) => _declaredNames.Contains(name) || Values.Contains(name);
 
     // ── Control stack (internal — the interpreter drives these) ──────────────────────────────────
 

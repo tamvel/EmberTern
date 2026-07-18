@@ -638,21 +638,40 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     // Every in-scope variable is declared in the harness (verbatim, R3); its current value (if any) rides
     // along so HarnessBuilder can inject the reads (R1 skips a null/absent value). Over-declaring a variable
     // the fragment does not use is harmless — the read/write set narrows what is injected/returned (§3.5).
-    private static IReadOnlyList<HarnessVariable> BindValues(RoutineContext ctx, Frame frame)
+    // <para>
+    // <b>Closure capture (D9 seam b, §6.2b).</b> A local sub-routine's frame is a closure over the declaring
+    // frame (FB5), so a statement in its body may reference an OUTER variable. Those variables are NOT in this
+    // frame's own templates, so — beyond this frame's own declarations — every ancestor frame's variables up
+    // the lexical chain (<see cref="Frame.LexicalParent"/>) are also declared here (verbatim) with their
+    // current value, so the harness can declare + inject + write them back. An inner declaration SHADOWS a
+    // like-named outer (first-seen wins, this frame first). For a non-closure frame (lexical parent null — the
+    // root, a stored callee) the chain loop does nothing, so this is behaviourally identical to before.
+    // </para>
+    private IReadOnlyList<HarnessVariable> BindValues(RoutineContext ctx, Frame frame)
     {
         var bound = new List<HarnessVariable>(ctx.VariableTemplates.Count);
-        foreach (var template in ctx.VariableTemplates)
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddTemplates(ctx.VariableTemplates, frame, bound, seen);
+        for (var f = frame.LexicalParent; f is not null; f = f.LexicalParent)
         {
-            if (frame.TryResolveValue(template.Name, out var value))
+            if (_contexts.TryGetValue(f.Body, out var parentCtx))
             {
-                bound.Add(template with { Value = value, HasValue = true });
-            }
-            else
-            {
-                bound.Add(template);
+                AddTemplates(parentCtx.VariableTemplates, frame, bound, seen);
             }
         }
         return bound;
+    }
+
+    private static void AddTemplates(
+        IReadOnlyList<HarnessVariable> templates, Frame frame, List<HarnessVariable> bound, HashSet<string> seen)
+    {
+        foreach (var template in templates)
+        {
+            if (!seen.Add(template.Name)) continue; // an inner declaration shadows a like-named outer one
+            bound.Add(frame.TryResolveValue(template.Name, out var value)
+                ? template with { Value = value, HasValue = true }
+                : template);
+        }
     }
 
     private static IReadOnlyDictionary<string, object?> SnapshotOutputs(RoutineContext ctx, Frame frame)

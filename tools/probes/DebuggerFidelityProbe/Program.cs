@@ -16,8 +16,10 @@ using FirebirdSql.Data.FirebirdClient;
 // the SIMULATED output (the emitted SUSPEND row / the callee frame roster) to REAL execution of the same
 // routines. D8: a 3-level STORED chain (SP_DBG_ROOT → SP_DBG_MID → SP_DBG_LEAF). D9 seam a part 2: a LOCAL
 // sub-procedure (SP_DBG_LOCAL → ADD_TAX) — step into a local DECLARE PROCEDURE as a real frame, with a local
-// DECLARE FUNCTION exercised server-side. The authority is the engine, not us (Developer Contract #12:
-// fidelity is proven against real execution).
+// DECLARE FUNCTION exercised server-side. D9 seam b: a local procedure that reads+writes an OUTER variable
+// (SP_DBG_CLOSURE → BUMP) — closure capture over the declaring frame (FB5), the closure write reaching the
+// parent frame. The authority is the engine, not us (Developer Contract #12: fidelity is proven against real
+// execution).
 //
 //   $env:ET_LAB_PWD = "<local dev SYSDBA password>"
 //   dotnet run --project tools\probes\DebuggerFidelityProbe
@@ -163,6 +165,23 @@ try
     else
         Fail("simulated vs real TOTAL", $"sim {simLocal} vs real {realLocal}");
     Console.WriteLine($"      (TRIPLE(5)=15 server-side; step into ADD_TAX(15): BONUS=100 → WITH_TAX=115 → TOTAL, expected 115)");
+
+    // ── 5. Closure capture — step into a local proc that reads+writes an outer var (D9 seam b) ──
+    Head("5. SP_DBG_CLOSURE(5) — step INTO local BUMP twice; it reads+writes the OUTER var ACC (FB5 closure)");
+    var cloRoot = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["SEED"] = 5 };
+    var clo = await SimulateAsync("SP_DBG_CLOSURE", cloRoot);
+    int? realClo = AsInt(await RealScalarAsync("SELECT TOTAL FROM SP_DBG_CLOSURE(5)"));
+    int? simClo = clo.Rows.Count > 0 ? AsInt(clo.Rows[0]["TOTAL"]) : null;
+
+    if (clo.MaxDepth == 2) Pass("closure depth == 2 (stepped into BUMP)"); else Fail("closure depth", $"{clo.MaxDepth}");
+    if (clo.Frames.SequenceEqual(new[] { "SP_DBG_CLOSURE", "BUMP" }))
+        Pass("closure frame chain", string.Join(" → ", clo.Frames));
+    else Fail("closure frame chain", string.Join(" → ", clo.Frames));
+    if (simClo is not null && simClo == realClo)
+        Pass("SIMULATED TOTAL == REAL", $"sim {simClo} == real {realClo}");
+    else
+        Fail("simulated vs real TOTAL", $"sim {simClo} vs real {realClo}");
+    Console.WriteLine($"      (BUMP captures outer ACC by reference: 5 → 15 → 25 → TOTAL, expected 25 — the closure write reaches the parent frame)");
 }
 catch (Exception ex)
 {

@@ -1592,3 +1592,80 @@ Build 0/0; **4852 tests green** (+4 `PsqlDeclarationExtractorTests` for `Extract
 fidelity proven. One commit. **Next: D9 seam (b)** — the closure harness (inject captured outer variables into a
 local routine frame) + the transitive read/write-set fixpoint over the sub-routine call graph, so a local
 routine that reads/writes an *outer* variable (an FB5 closure) steps faithfully.
+
+## D9 — Local Procedures & Functions (the flagship) — seam (b) Part 1: closure capture for stepped-INTO frames (2026-07-18)
+
+**Step Into a local routine whose body READS and WRITES an OUTER variable — an FB5 closure over the declaring
+frame (§6.1/§6.2b) — now works, proven simulated == real on the lab.** Seam (a) made a local `DECLARE
+PROCEDURE` a real frame but the zoo was *self-contained* (no outer-variable references). Seam (b) closes the
+closure: a sub-routine statement that touches an outer variable now injects it, and its mutation reaches the
+parent frame.
+
+The key realisation: **the D1 scope-chain mechanism (`Frame.LexicalParent` walk in `TryResolveValue`/
+`SetResolvedValue`) already existed and was tested** (`LocalCallee_IsAClosure_ResolvesAndWritesOuterVariable`).
+What was missing was (a) the interpreter *using* it when applying a statement's write-back, (b) the harness
+*declaring + injecting* the captured outer variables, and (c) correct *ownership* of a name during the walk.
+Three focused changes, **no new abstraction** (Contract: if D9 needs a new abstraction, something earlier was
+built wrong — it did not).
+
+### 1. Core `Frame` — declared-names for correct ownership (shadowing)
+
+`TryResolveValue`/`SetResolvedValue` previously decided "which frame owns this name" by `Values.Contains(name)`
+— true only once a variable is *assigned*. That mis-handles two cases: a not-yet-assigned outer variable
+written from inside a sub-routine (would leak to the wrong frame), and an inner local **shadowing** a like-named
+outer (an unassigned inner local would resolve to the outer). Fix: `Frame` now records its **declared names**
+(its parameters + its body's `DECLARE VARIABLE`s) at construction, and the walk uses
+`Owns(name) = _declaredNames.Contains(name) || Values.Contains(name)`. A declared local is owned from frame
+entry, so it stops the walk (shadowing) and receives its own writes. Empty declared-names (the fake-driven D1
+tests, whose bodies have no `DECLARE`s) fall back to the old Values-only behaviour — so every existing test is
+unaffected.
+
+### 2. Core `DebugSession` — route write-backs up the closure chain
+
+The interpreter applied a statement's write-back with `frame.Values.Apply(outcome.Writes)` — writing only the
+*callee* frame. For a closure statement writing a captured outer variable, that created a spurious callee local
+and left the parent stale (a §F bug). New private `ApplyWrites(frame, writes)` routes each write through
+`frame.SetResolvedValue`, which walks the lexical chain to the **owning** frame. Applied at all three write-back
+sites (statement outcome, `FOR SELECT` `INTO`, the Immediate window). For a non-closure frame (no lexical
+parent) `SetResolvedValue` writes locally — behaviourally identical to the old direct apply, so nothing else
+changes.
+
+### 3. Firebird `FirebirdDebugExecutor.BindValues` — declare the captured outer variables
+
+The harness for a sub-routine statement previously declared only the frame's **own** templates. A closure
+statement references outer variables that aren't there → the harness fragment references an undeclared variable
+→ SQL error. `BindValues` now, beyond the frame's own templates, walks `frame.LexicalParent` and declares
+**every ancestor frame's variables** (verbatim R3, current value resolved through the chain), so the harness can
+declare + inject the captured reads (R1) and return the captured writes. An inner declaration **shadows** a
+like-named outer (first-seen wins, this frame first). For a non-closure frame the chain loop does nothing, so
+D2–D8 harnesses are byte-identical. **No fixpoint is needed for step-INTO**: the statement's own references are
+precise (`ReadWriteSetAnalyzer.Analyze` surfaces the outer reference via the shared enclosing model), so exactly
+the touched outer variables are injected/written.
+
+### Lab + live fidelity (§F)
+
+`Lab/setup.sql` +`SP_DBG_CLOSURE(SEED)`: a local `PROCEDURE BUMP` with **no** parameters that does
+`ACC = ACC + 10`, where `ACC` is the enclosing routine's variable — a read+write closure capture. Called twice;
+`TOTAL = ACC`. FB5-only by construction (FB3 sub-routines are closed scopes and can't compile an outer reference,
+§6.3), which is exactly why the lab is FB5. Rebuilt the `.fdb` (#149). `DebuggerFidelityProbe` **extended**:
+the real executor Step-Into'd `BUMP` twice → depth 2, chain `SP_DBG_CLOSURE → BUMP`, **simulated `TOTAL = 25` ==
+real `25`** (ACC 5 → 15 → 25 — each closure write reaching the parent frame). D8 + seam-a cases unchanged. ALL
+PASS.
+
+### Boundary — seam (b) Part 2 (NOT done)
+
+A **step-OVER** of a local call **with direct arguments** — `EXECUTE PROCEDURE p(x) RETURNING_VALUES y` — whose
+callee `p` also mutates OTHER outer variables (not `x`/`y`) still drops those mutations: `Analyze` returns the
+precise `{x, y}` set (non-empty, so the `InScopeLocals` fallback does not fire), and the callee's *hidden*
+captured writes are neither injected nor returned. Closing that is the **transitive read/write-set fixpoint over
+the sub-routine call graph** (spec §3.5), which is D9 seam (b) Part 2. Two things already keep the common cases
+correct meanwhile: a **no-argument** local call has no direct refs → the `InScopeLocals` fallback injects/returns
+all in-scope locals (correct, chattier), and **R5** carries every sub-routine declaration verbatim (seam a Part
+2) so the call binds to the local. And **step-INTO is fully correct** — the flagship capability (a local routine
+as a real, steppable frame with real closure variables) works.
+
+### Result
+
+Build 0/0; **4853 tests green** (+1 `DebugEngineTests` pinning the interpreter's closure write-back routing);
+smoke clean; live fidelity proven. One commit. **Next: D9 seam (b) Part 2** — the transitive read/write-set
+fixpoint over the sub-routine call graph.

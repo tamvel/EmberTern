@@ -370,6 +370,28 @@ BEGIN
   SUSPEND;
 END^
 
+/* D9 seam (b) — closure capture: a local PROCEDURE BUMP that READS and WRITES an OUTER variable (ACC),
+   proving Step Into a local routine whose body captures the declaring frame's variable (an FB5 closure,
+   §6.1/§6.2b). The debugger declares + injects + writes back the captured outer variable in BUMP's harness,
+   and the closure write reaches the parent frame. FB3 could not compile this (closed scopes, §6.3) — the lab
+   is FB5, so this is a legitimate zoo member. SP_DBG_CLOSURE(5): ACC=5, BUMP→15, BUMP→25 => TOTAL = 25. */
+CREATE PROCEDURE SP_DBG_CLOSURE(SEED INTEGER)
+RETURNS (TOTAL INTEGER)
+AS
+  DECLARE VARIABLE ACC INTEGER;
+  DECLARE PROCEDURE BUMP
+  AS
+  BEGIN
+    ACC = ACC + 10;
+  END
+BEGIN
+  ACC = SEED;
+  EXECUTE PROCEDURE BUMP;
+  EXECUTE PROCEDURE BUMP;
+  TOTAL = ACC;
+  SUSPEND;
+END^
+
 SET TERM ; ^
 
 /* ---------- Triggers (PSQL) ----------------------------------------

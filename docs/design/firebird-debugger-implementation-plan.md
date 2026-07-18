@@ -407,8 +407,14 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
   into the harness (`RoutineContext.SubRoutines`) so a local **function** is exercised server-side (step-over —
   it is expression-embedded, never an `EXECUTE PROCEDURE` step point). Lab zoo +`SP_DBG_LOCAL`; `DebuggerFidelityProbe`
   extended — **sim `TOTAL=115` == real** (Step Into `ADD_TAX`, depth 2). Build 0/0; **4852 green**; smoke clean.
-  **Local routines are SELF-CONTAINED here; the closure harness (outer-variable injection) + transitive
-  read/write-set fixpoint are seam (b) — NOT yet started.**
+  **Seam (b) Part 1 — closure capture for stepped-INTO frames (2026-07-18):** Step Into a local routine whose
+  body reads+writes an OUTER variable (an FB5 closure). Core `Frame` gained declared-names (own scope for correct
+  shadowing); `DebugSession` routes write-backs up the closure chain (`SetResolvedValue`); Firebird `BindValues`
+  declares captured ancestor variables in the harness. No fixpoint needed (step-into refs are precise via the
+  shared model). Lab +`SP_DBG_CLOSURE`; probe **sim `TOTAL=25` == real** (BUMP: ACC 5→15→25, the closure write
+  reaching the parent). Build 0/0; **4853 green**; smoke clean. **Seam (b) Part 2 — the transitive read/write-set
+  fixpoint over the sub-routine call graph — NOT started** (needed for step-OVER of a local call with direct args
+  whose callee mutates other outer vars; a no-arg call is already covered by the `InScopeLocals` fallback + R5).
 
 ---
 

@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D8 DONE (D2 live-fidelity-verified; D8 = call stack + nested stored routines + frame navigation, complete 2026-07-18, awaits visual confirmation). D9 (local procedures & functions — the flagship) STARTED: §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) Part 1 DONE (AST + parser + binder + extractor R5 carry — pure Core); seam (a) Part 2 DONE + live-fidelity-verified 2026-07-18 (Step Into a local `DECLARE PROCEDURE` works as a real frame — sim==real on the lab). Next: D9 seam (b) (closure harness + transitive read/write-set fixpoint).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D8 DONE (D2 live-fidelity-verified; D8 = call stack + nested stored routines + frame navigation, complete 2026-07-18, awaits visual confirmation). D9 (local procedures & functions — the flagship) STARTED: §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) Part 1 DONE (AST + parser + binder + extractor R5 carry — pure Core); seam (a) Part 2 DONE + live-fidelity-verified (Step Into a local `DECLARE PROCEDURE` — sim==real); seam (b) Part 1 DONE + live-fidelity-verified 2026-07-18 (closure capture — Step Into a local routine that reads+writes an OUTER variable; the closure write reaches the parent frame; sim==real). Next: D9 seam (b) Part 2 (transitive read/write-set fixpoint for step-OVER of a local call with direct args that touches other outer vars).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -673,10 +673,34 @@ noted.
   (`tools/probes/DebuggerFidelityProbe` extended, not duplicated): the real executor Step-Into'd `ADD_TAX` —
   depth 2, frame chain `SP_DBG_LOCAL → ADD_TAX`, **simulated `TOTAL=115` == real `115`** (arg seeding +
   `RETURNING_VALUES` + the local function server-side), ALL PASS; D8's stored-chain cases unchanged. Build 0/0;
-  **4852 tests green** (+4 `PsqlDeclarationExtractorTests` for `ExtractSignature`); smoke clean. **Next: D9 seam
-  (b)** — closure harness (inject captured outer variables into a local routine frame) + transitive
-  read/write-set fixpoint over the sub-routine call graph. History:
-  [docs/history/19-...](docs/history/19-firebird-debugger.md) (D9 gate + seam a Part 1 + Part 2). See [[feedback-debugger-ux-polish-backlog]].
+  **4852 tests green** (+4 `PsqlDeclarationExtractorTests` for `ExtractSignature`); smoke clean.
+  **D9 seam (b) Part 1 — closure capture for stepped-INTO frames DONE + live-fidelity-verified (2026-07-18).
+  Step Into a local routine whose body READS and WRITES an OUTER variable (an FB5 closure over the declaring
+  frame) — proven sim==real on the lab.** Three coordinated changes, all reusing existing architecture (no new
+  abstraction — the D8 `Frame.LexicalParent` chain already models closures): **(1) Core `Frame`** gained a
+  declared-names set (params + body `DECLARE VARIABLE`s) so the scope-chain walk (`TryResolveValue`/
+  `SetResolvedValue`) knows which frame **owns** a name from entry — a not-yet-assigned local resolves/writes in
+  its declaring frame and correctly **shadows** a like-named outer variable (`Owns(name) = declares(name) ||
+  Values.Contains(name)`; empty = old Values-only behaviour, so the fake-driven D1 tests are unaffected).
+  **(2) Core `DebugSession`** routes every statement/cursor/Immediate write-back through the closure chain (new
+  `ApplyWrites` → `frame.SetResolvedValue`), so a write to a captured outer variable lands in the **declaring**
+  frame, not as a spurious callee local (previously `frame.Values.Apply` wrote only the callee frame — a §F bug
+  for a closure). Identical to the old direct apply for a non-closure frame (no lexical parent). **(3) Firebird
+  `FirebirdDebugExecutor.BindValues`** is closure-aware: beyond the frame's own templates it declares **every
+  ancestor frame's variables up the lexical chain** (verbatim R3, current value resolved through the chain),
+  so the harness for a sub-routine statement can declare + inject + write back a captured outer variable; an
+  inner declaration shadows a like-named outer (first-seen wins). The read/write set for such a statement is
+  already precise (`Analyze` surfaces the outer reference via the shared enclosing model) — **no fixpoint
+  needed for step-INTO**. **Lab zoo +`SP_DBG_CLOSURE`** (a local `PROCEDURE BUMP` reading+writing outer `ACC`;
+  FB5-only by construction — FB3 closed scopes can't compile it, §6.3); `DebuggerFidelityProbe` extended:
+  Step-Into'd `BUMP` twice — depth 2, `SP_DBG_CLOSURE → BUMP`, **sim `TOTAL=25` == real `25`** (ACC 5→15→25,
+  the closure write reaching the parent), ALL PASS. Build 0/0; **4853 tests green** (+1 `DebugEngineTests`
+  pinning the interpreter's write-back routing); smoke clean. **⚠ Boundary — seam (b) Part 2 (NOT done):** a
+  **step-OVER** of a local call **with direct arguments** (`EXECUTE PROCEDURE p(x) RETURNING_VALUES y`) whose
+  callee mutates OTHER outer variables (not `x`/`y`) still drops those mutations — the transitive read/write-set
+  **fixpoint over the sub-routine call graph** is Part 2. (A no-arg local call already over-includes correctly
+  via the §3.5 `InScopeLocals` fallback + R5; step-INTO is fully correct.) History:
+  [docs/history/19-...](docs/history/19-firebird-debugger.md) (D9 gate + seam a + seam b Part 1). See [[feedback-debugger-ux-polish-backlog]].
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

@@ -1174,3 +1174,25 @@ own local `BONUS`); body: `ACC = TRIPLE(BASE); EXECUTE PROCEDURE ADD_TAX(:ACC) R
 > `RDB$PROCEDURE_PARAMETERS` row exists for a local routine). D8's stored-chain cases (§15.6) unchanged.
 > **Scope:** the sub-routines are self-contained; **outer-variable closures are D9 seam (b)** (the closure
 > harness + transitive read/write-set fixpoint) — not yet implemented.
+
+### 15.9 D9 seam (b) Part 1 — closure capture (stepped-into), simulated vs real (FB5 lab)
+
+Run with the real `FirebirdDebugExecutor` on the FB5 lab (`tools/probes/DebuggerFidelityProbe`, extended). Lab
+routine **`SP_DBG_CLOSURE(SEED)`**: a local `PROCEDURE BUMP` (no params) doing `ACC = ACC + 10`, where `ACC` is
+the *enclosing* routine's variable — a read+write **closure capture** over the declaring frame. Called twice;
+`TOTAL = ACC`.
+
+| # | Assertion | Result |
+|---|---|---|
+| 1 | Step Into descends into the local closure procedure (depth) | **depth 2** ✔ |
+| 2 | Frame chain | `SP_DBG_CLOSURE → BUMP` ✔ |
+| 3 | **Simulated `TOTAL` == real** (`SELECT TOTAL FROM SP_DBG_CLOSURE(5)`) | **sim 25 == real 25** ✔ |
+
+> **Verdict — a local routine that reads *and* writes a captured outer variable steps into a real frame with
+> full fidelity:** the harness declares + injects the captured `ACC` (from the parent frame up the lexical
+> chain), the server computes `ACC + 10`, and the write-back is routed to the **declaring** frame (`ACC`: 5 →
+> 15 → 25). This is FB5-only by construction — an FB3 sub-routine referencing an outer variable does not compile
+> (§6.3), so no such routine can exist on FB3; a closed FB3 frame is therefore 100% faithful by construction.
+> **Boundary:** a **step-OVER** of a local call with direct arguments whose callee mutates *other* outer
+> variables still needs the transitive read/write-set fixpoint (**D9 seam (b) Part 2** — not implemented);
+> step-INTO and no-argument step-OVER (via the `InScopeLocals` fallback + R5) are correct.

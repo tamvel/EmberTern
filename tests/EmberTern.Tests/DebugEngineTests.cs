@@ -566,6 +566,35 @@ public class DebugEngineTests
     }
 
     [Fact]
+    public void StepInto_LocalClosure_StatementWriteBack_RoutesToTheDeclaringFrame()
+    {
+        // D9 seam b: the INTERPRETER routes a stepped statement's write-back through the closure chain — a
+        // write to a captured OUTER variable lands in the declaring (parent) frame, not as a spurious local in
+        // the callee frame. (LocalCallee_IsAClosure above proves the Frame mechanism; this proves the engine
+        // uses it when applying a statement outcome.)
+        const string sql = "begin acc = 1; execute procedure bump; end";
+        const string calleeSql = "begin\n  acc = acc + 10;\nend"; // distinct offsets from the root (no fake-key clash)
+        var callee = new DebugRoutine("BUMP", Body(calleeSql));
+        var exec = new FakeExecutor()
+            .Outcome(Off(sql, "acc = 1"), StatementOutcome.Normal(Row("ACC", 5)))
+            .RoutineAt(Off(sql, "execute procedure bump"), callee, asLocalClosure: true)
+            .Outcome(Off(calleeSql, "acc = acc + 10"), StatementOutcome.Normal(Row("ACC", 15)));
+        var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
+        s.Start();
+        var root = s.CurrentFrame!; // hold the ROOT frame — the write must persist there after it pops
+        Assert.Equal("ROOT", root.RoutineName);
+        s.Step(StepKind.Into); // acc = 1 → ROOT.ACC = 5
+        s.Step(StepKind.Into); // step INTO BUMP (closure over ROOT)
+        var child = s.CurrentFrame!;
+        Assert.Equal("BUMP", child.RoutineName);
+
+        s.Step(StepKind.Into); // run acc = acc + 10 inside BUMP → write-back ACC=15 must route to ROOT
+
+        Assert.Equal(15, root.Values.Get("ACC")); // the closure write reached the parent frame
+        Assert.False(child.Values.Contains("ACC")); // NOT captured as a callee local
+    }
+
+    [Fact]
     public void StepInto_ReturningValues_WritesCalleeOutputsIntoCallerVariables()
     {
         // EXECUTE PROCEDURE P RETURNING_VALUES :x, :y — on P's NORMAL return, P's output parameters (O1, O2)

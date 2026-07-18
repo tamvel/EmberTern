@@ -196,9 +196,19 @@ public sealed class DebugSession
         var result = _executor.Evaluate(request, frame);
         if (kind == EvaluationKind.Statement && result.Success && result.Writes is { Count: > 0 })
         {
-            frame.Values.Apply(result.Writes); // the Immediate window operates on the live frame (§9.5)
+            ApplyWrites(frame, result.Writes); // the Immediate window operates on the live frame (§9.5)
         }
         return result;
+    }
+
+    // Applies a statement/cursor write-back set to the frame, routing each variable to the frame that OWNS it
+    // up the lexical (closure) scope chain — a write to a captured outer variable lands in the declaring frame,
+    // a write to a local lands here (spec §6.2b). For a non-closure frame (no lexical parent) every write lands
+    // here, identical to a direct FrameValues.Apply.
+    private static void ApplyWrites(Frame frame, IReadOnlyDictionary<string, object?>? writes)
+    {
+        if (writes is null) return;
+        foreach (var kv in writes) frame.SetResolvedValue(kv.Key, kv.Value);
     }
 
     // ── The stepping loop ────────────────────────────────────────────────────────────────────────
@@ -277,7 +287,7 @@ public sealed class DebugSession
                 var fa = (ForActivation)frame.Top!;
                 if (!fa.Opened) { fa.Cursor = _executor.OpenCursor(f, frame); fa.Opened = true; }
                 var row = fa.Cursor!.FetchNext();
-                if (row is not null) { frame.Values.Apply(row); frame.PushBranch(f.Body); }
+                if (row is not null) { ApplyWrites(frame, row); frame.PushBranch(f.Body); }
                 else { fa.Cursor.Close(); frame.Pop(); } // ForActivation done
                 return false;
             }
@@ -308,7 +318,7 @@ public sealed class DebugSession
                         if (outcome.Writes is not null) _emittedRows.Add(outcome.Writes);
                         return false;
                     default:
-                        frame.Values.Apply(outcome.Writes);
+                        ApplyWrites(frame, outcome.Writes);
                         return false;
                 }
             }
