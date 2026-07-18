@@ -353,7 +353,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             exec, callerFrame, layout.InputParameters, cancellationToken).ConfigureAwait(false);
 
         Register(body, source, model, layout.Variables, layout.OutputParameters);
-        return new DebugRoutine(name, body, initialValues, layout.OutputParameters, lexicalParent: null);
+        return new DebugRoutine(name, body, initialValues, layout.OutputParameters, lexicalParent: null, source: source);
     }
 
     // Reconstructs the callee's CREATE OR ALTER PROCEDURE source on the DEBUG session (its own attachment +

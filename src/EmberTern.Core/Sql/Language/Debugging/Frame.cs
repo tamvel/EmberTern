@@ -74,7 +74,8 @@ public sealed class Frame
         Frame? lexicalParent,
         IExecutableStatement? callSite,
         IReadOnlyDictionary<string, object?>? initialValues,
-        IReadOnlyList<string>? outputParameterNames = null)
+        IReadOnlyList<string>? outputParameterNames = null,
+        string? source = null)
     {
         Id = id;
         RoutineName = routineName;
@@ -84,6 +85,7 @@ public sealed class Frame
         CallSite = callSite;
         Values = new FrameValues(initialValues);
         OutputParameterNames = outputParameterNames ?? System.Array.Empty<string>();
+        Source = source;
         SavepointName = $"ET_DBG_FRAME_{id}";
         // Start executing the body's statements. The body's own DECLAREs are not executed — declared
         // variables begin null (their values arrive via injection/assignment); initialValues seeds params.
@@ -98,6 +100,13 @@ public sealed class Frame
 
     /// <summary>The body this frame interprets.</summary>
     public BlockStatement Body { get; }
+
+    /// <summary>This routine's full source text (the span backing of <see cref="Body"/> and
+    /// <see cref="CallSite"/>), for the UI to show <b>this</b> frame's routine when the call stack selects it
+    /// (spec §5.2) and to compute its line numbers; null when the source was not supplied (the fake-driven
+    /// engine tests). The root frame's source is the launched routine's; a stepped-into callee's is the
+    /// fetched callee source.</summary>
+    public string? Source { get; }
 
     /// <summary>The <b>call-stack</b> parent — the frame that pushed this one (the caller). Walked by the
     /// call stack (spec §5) and the exception unwinder; null for the root. Distinct from

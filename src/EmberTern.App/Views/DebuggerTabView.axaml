@@ -517,6 +517,44 @@
                   </ListBox>
                 </Grid>
               </TabItem>
+
+              <!-- Call Stack (D8, spec §5) — frames innermost-first; the current frame is marked, a
+                   Step-Into (simulated) frame carries the △ indicator (§5.3). Display-only in this
+                   increment; frame-selection navigation is a follow-up. -->
+              <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabCallStack}">
+                <Grid IsVisible="{Binding !IsBottomPanelCollapsed}" Margin="0,2,0,0">
+                  <TextBlock Margin="10,6"
+                             Text="{x:Static app:UiStrings.DebuggerCallStackEmpty}"
+                             Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                             IsVisible="{Binding !HasCallStack}" />
+                  <ListBox ItemsSource="{Binding CallStack}"
+                           Background="Transparent" BorderThickness="0"
+                           IsVisible="{Binding HasCallStack}">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:DebugFrameRowViewModel">
+                        <Grid ColumnDefinitions="14,*,Auto,Auto" Margin="0,1">
+                          <!-- current-frame marker -->
+                          <TextBlock Grid.Column="0" Text="▶" FontSize="9"
+                                     Foreground="{DynamicResource AccentBrush}"
+                                     VerticalAlignment="Center"
+                                     IsVisible="{Binding IsCurrent}" />
+                          <TextBlock Grid.Column="1" Text="{Binding RoutineName}" FontSize="11"
+                                     FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="2" Text="{Binding LineText}" FontSize="10"
+                                     Foreground="{DynamicResource SubtleForegroundBrush}"
+                                     Margin="8,0,0,0" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="3" Text="{x:Static app:UiStrings.DebuggerCallStackSimulatedGlyph}"
+                                     FontSize="10" Foreground="{DynamicResource SubtleForegroundBrush}"
+                                     Margin="8,0,2,0" VerticalAlignment="Center"
+                                     ToolTip.Tip="{x:Static app:UiStrings.DebuggerCallStackSimulatedTooltip}"
+                                     IsVisible="{Binding IsSimulated}" />
+                        </Grid>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                </Grid>
+              </TabItem>
             </TabControl>
           </Grid>
         </Border>

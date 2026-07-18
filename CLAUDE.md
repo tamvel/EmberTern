@@ -567,8 +567,21 @@ noted.
   chain `SP_DBG_LEAF`/`SP_DBG_MID`/`SP_DBG_ROOT`; the real executor Step-Into'd it — **depth 3 (`ROOT→MID→LEAF`),
   simulated `RESULT=112` == real `112`** (arg seeding + `RETURNING_VALUES` faithful across 3 frames), ALL PASS.
   Build 0/0; tests green (user-confirmed); smoke clean; no new unit tests (value = live fidelity, Contract #12).
-  **Next: D8 seam (c)** — Call Stack panel / Breadcrumbs (shared) / frame-nav / simulated-frame indicator / Peek
-  Frame UI over the now-real call stack. Gotchas #241/#242. See [[feedback-debugger-ux-polish-backlog]].
+  **D8 seam (c) part 1 — Call Stack panel (display-only) DONE (2026-07-18; awaits visual confirmation).** A new
+  bottom `TabItem` (joining Immediate/Executed SQL/Watches) lists frames **innermost-first** from
+  `DebugSession.CallStack`: routine name, position **line** (current statement for the innermost frame, **call
+  site** for a caller — computed against **that frame's own source**), current-frame marker (▶), and the
+  **simulated-frame indicator** (△ + tooltip) on any Step-Into frame (§5.3; root unmarked). Small Core enabler
+  `Frame.Source`/`DebugRoutine.Source`/`DebugSession(rootSource)` — a frame carries its routine's text so its
+  line resolves (and its source can later be shown). `DebugFrameRowViewModel` (immutable), rebuilt each pause by
+  `RebuildCallStack` (reads the engine stack, never touches the session); cleared when not paused. **Display-only
+  by design — frame-selection navigation (repoint editor+variables) needs the callee's own model roster surfaced
+  to the VM (it lives in the executor's per-routine context, not the VM's root model), so it + Breadcrumbs
+  (shared editor feature) + Peek Frame are seam (c) part 2.** Build 0/0; +1 `DebuggerTabVmTests` (126-test
+  debugger subset green; full run hangs in this env — run manually); smoke clean.
+  **Next: D8 seam (c) part 2** — surface per-frame model roster to the VM → frame-selection repoints
+  source+variables; Breadcrumbs (build as the shared editor feature); Peek Frame (reuse Peek Definition);
+  `Ctrl+Alt+Up/Down` frame nav. Gotchas #241/#242. See [[feedback-debugger-ux-polish-backlog]].
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

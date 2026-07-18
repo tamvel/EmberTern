@@ -1304,3 +1304,28 @@ Build 0/0; tests green (user-confirmed — the full run is slow in this env); sm
 (the value is the live fidelity proof, which a unit test structurally cannot give — Contract #12). **D8 seams
 (a) + (b) COMPLETE.** Remaining for D8: seam (c) — the Call Stack panel / Breadcrumbs / frame-nav UI over this
 now-real call stack.
+
+### D8 seam (c) part 1 — Call Stack panel (display-only) (2026-07-18; awaits visual confirmation)
+
+The first UI over the now-real call stack: a **Call Stack** panel (a new bottom `TabItem`, joining
+Immediate / Executed SQL / Watches). It lists frames **innermost-first** (`DebugSession.CallStack`), each row
+showing the routine name, its position **line** (the current statement for the innermost frame, the **call
+site** for a caller — computed against **that frame's own source**, which is why the small Core enabler
+`Frame.Source` / `DebugRoutine.Source` / `DebugSession(rootSource)` was added: a frame carries its routine's
+text so its line resolves and, later, its source can be shown), the current-frame marker (▶), and the
+**simulated-frame indicator** (△ + tooltip) on any frame reached by Step Into — interpreted, so it can differ
+from real execution (§5.3; the root is not marked). `DebugFrameRowViewModel` (immutable row), rebuilt each
+pause by `RebuildCallStack` (presentation only — it reads the engine's stack, never touches the session);
+cleared when not paused.
+
+**Deliberately display-only (documented seam-c boundary).** Full frame-selection **navigation** (selecting a
+caller frame repoints the editor source **and** the Variables panel) needs the callee's **own semantic-model
+roster** (its params/locals with kinds + declared types) surfaced to the VM — the roster lives in the
+executor's per-routine context (D8 seam b part 1), not in the VM's single root model — so it is real
+infrastructure, not a mechanical add. That, plus **Breadcrumbs** (a *shared* editor feature, not a
+debugger-local copy) and **Peek Frame** (reuse Peek Definition), are **seam (c) part 2**. This part gives the
+primary value now — you SEE the A→B→C stack with the simulation indicator — as a clean, green increment.
+
+Build 0/0; +1 `DebuggerTabVmTests` (`CallStack_ShowsRootFrame_WhilePaused_ClearedOnStop`; the debugger subset
+of 126 tests green — the full run hangs in this env, run manually); smoke clean. **Awaits the user's visual
+confirmation** (UI, per the QA rule).

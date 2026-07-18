@@ -1745,7 +1745,14 @@ internal static class UiStrings
     public const string DebuggerBottomTabImmediate = "Immediate";
     public const string DebuggerBottomTabExecutedSql = "Executed SQL";
     public const string DebuggerBottomTabWatches = "Watches";
+    public const string DebuggerBottomTabCallStack = "Call Stack";
     public const string DebuggerBottomPanelCollapseTooltip = "Collapse / expand the panel";
+    // Call Stack panel (D8, spec §5).
+    public const string DebuggerCallStackEmpty = "No call stack — not paused.";
+    public const string DebuggerCallStackLineFormat = "line {0}";
+    public const string DebuggerCallStackSimulatedGlyph = "△";
+    public const string DebuggerCallStackSimulatedTooltip =
+        "Simulated frame — reached by Step Into (interpreted), which can differ from real execution.";
     // Expression evaluation — Evaluate / Immediate / Executed SQL (D5, spec §9.5 / §10.3).
     public const string DebuggerImmediateHeader = "Immediate / Executed SQL";
     public const string DebuggerImmediateWatermark = "Evaluate an expression against the current frame…";

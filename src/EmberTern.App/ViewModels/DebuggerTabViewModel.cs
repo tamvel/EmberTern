@@ -102,6 +102,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         _localsGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupLocals);
         ExecutedSql = new ObservableCollection<DebugExecutedSqlRowViewModel>();
         Watches = new ObservableCollection<WatchRowViewModel>();
+        CallStack = new ObservableCollection<DebugFrameRowViewModel>();
         StatusText = UiStrings.DebuggerLaunchPreparing;
         LoadWatches();
     }
@@ -182,6 +183,15 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     public ObservableCollection<WatchRowViewModel> Watches { get; }
 
     public bool HasWatches => Watches.Count > 0;
+
+    /// <summary>The call stack (Stage X / D8, spec §5.2) — frames innermost-first, rebuilt each pause. A
+    /// callee reached by Step Into carries the simulated-frame indicator (§5.3). Presentation-only: it reads
+    /// the engine's <see cref="DebugSession.CallStack"/>; frame-selection navigation (repoint source +
+    /// variables), Peek Frame and Breadcrumbs are a follow-up (seam c part 2).</summary>
+    public ObservableCollection<DebugFrameRowViewModel> CallStack { get; }
+
+    /// <summary>True while there is a call stack to show (a live paused session with at least one frame).</summary>
+    public bool HasCallStack => CallStack.Count > 0;
 
     /// <summary>The new-watch input.</summary>
     [ObservableProperty]
@@ -722,6 +732,39 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         }
 
         RefreshVariables();
+        RebuildCallStack();
+    }
+
+    // Rebuilds the Call Stack panel from the engine's call stack (innermost-first). Each frame shows its
+    // routine, its position line (the current statement for the innermost frame, the call site for a caller —
+    // computed against THAT frame's own source, spec §5.2) and the simulated-frame indicator (a callee reached
+    // by Step Into = interpreted, §5.3). Cleared when the session is not paused (no live stack). Presentation
+    // only — it never touches the session; selecting a frame to repoint the editor/variables is seam c part 2.
+    private void RebuildCallStack()
+    {
+        var session = Session;
+        CallStack.Clear();
+        if (session is null || session.State != DebugState.Paused)
+        {
+            OnPropertyChanged(nameof(HasCallStack));
+            return;
+        }
+
+        var stack = session.CallStack; // innermost first
+        int currentStart = session.CurrentStatement?.Start ?? -1;
+        for (int i = 0; i < stack.Count; i++)
+        {
+            var frame = stack[i];
+            bool isCurrent = i == 0;
+            int offset = isCurrent ? currentStart : (frame.CallSite?.Start ?? -1);
+            int line = offset >= 0 ? LineOf(frame.Source, offset) : 0;
+            string lineText = line > 0
+                ? string.Format(CultureInfo.CurrentCulture, UiStrings.DebuggerCallStackLineFormat, line)
+                : string.Empty;
+            CallStack.Add(new DebugFrameRowViewModel(
+                frame.Id, frame.RoutineName, lineText, isCurrent, isSimulated: frame.CallSite is not null));
+        }
+        OnPropertyChanged(nameof(HasCallStack));
     }
 
     // Refreshes the Variables panel after a pause. The roster (row identity) is rebuilt only when the frame
@@ -935,7 +978,9 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         VariableGroups.Clear();
         _previousValues = null;
         _previousFrameId = null;
+        CallStack.Clear();
         OnPropertyChanged(nameof(HasVariables));
+        OnPropertyChanged(nameof(HasCallStack));
     }
 
     // Null-tolerant value equality for change-highlighting (null and DBNull are equivalent "no value").
@@ -954,9 +999,10 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         DebugMarkersChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private int LineOf(int offset)
+    private int LineOf(int offset) => LineOf(_source, offset);
+
+    private static int LineOf(string? src, int offset)
     {
-        var src = _source;
         if (src is null || offset <= 0) return 1;
         int line = 1;
         int end = Math.Min(offset, src.Length);

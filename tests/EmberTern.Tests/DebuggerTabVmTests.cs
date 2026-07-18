@@ -82,7 +82,7 @@ public class DebuggerTabVmTests
         public Task<DebugRunHandle> LaunchAsync(DebugLaunchSpec spec, CancellationToken cancellationToken = default)
         {
             LastSpec = spec;
-            var session = new DebugSession(spec.Body, _executor, spec.RoutineName, spec.RootValues);
+            var session = new DebugSession(spec.Body, _executor, spec.RoutineName, spec.RootValues, spec.Source);
             session.Start();
             return Task.FromResult(new DebugRunHandle(session, () => { Disposed = true; return ValueTask.CompletedTask; }));
         }
@@ -167,6 +167,26 @@ public class DebuggerTabVmTests
         // The roster is the declared symbols: params A, B, output R, local V.
         Assert.Contains(vm.Variables, r => r.Name == "A");
         Assert.Contains(vm.Variables, r => r.Name == "V");
+    }
+
+    [Fact]
+    public async Task CallStack_ShowsRootFrame_WhilePaused_ClearedOnStop()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        // Paused at entry → a single-frame call stack: the launched routine, current, not simulated.
+        Assert.True(vm.HasCallStack);
+        var frame = Assert.Single(vm.CallStack);
+        Assert.Equal("SP_TEST", frame.RoutineName);
+        Assert.True(frame.IsCurrent);
+        Assert.False(frame.IsSimulated);          // the root frame is not a step-into simulation (§5.3)
+        Assert.False(string.IsNullOrEmpty(frame.LineText)); // line computed from the frame's own source
+
+        await vm.StopCommand.ExecuteAsync(null);
+        Assert.False(vm.HasCallStack);
+        Assert.Empty(vm.CallStack);
     }
 
     [Fact]

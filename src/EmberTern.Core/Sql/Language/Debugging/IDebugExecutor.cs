@@ -74,13 +74,15 @@ public sealed class DebugRoutine
         BlockStatement body,
         IReadOnlyDictionary<string, object?>? initialValues = null,
         IReadOnlyList<string>? outputParameterNames = null,
-        Frame? lexicalParent = null)
+        Frame? lexicalParent = null,
+        string? source = null)
     {
         Name = name;
         Body = body;
         InitialValues = initialValues;
         OutputParameterNames = outputParameterNames ?? System.Array.Empty<string>();
         LexicalParent = lexicalParent;
+        Source = source;
     }
 
     /// <summary>The callee's name (for the call stack / breadcrumbs).</summary>
@@ -88,6 +90,10 @@ public sealed class DebugRoutine
 
     /// <summary>The callee's body — a <see cref="BlockStatement"/> the interpreter runs as a new frame.</summary>
     public BlockStatement Body { get; }
+
+    /// <summary>The callee's full source text (for the call-stack UI to show its routine + compute lines);
+    /// null when unavailable. Flows onto the pushed <see cref="Frame.Source"/>.</summary>
+    public string? Source { get; }
 
     /// <summary>The argument values bound into the new frame's scope (the callee's input parameters, seeded
     /// from the call's evaluated arguments), or null.</summary>
