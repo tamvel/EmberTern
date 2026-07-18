@@ -1702,6 +1702,7 @@ internal static class UiStrings
     public const string DebuggerStepOverTooltip = "Step Over (F10)";
     public const string DebuggerStepOutTooltip = "Step Out (Shift+F11)";
     public const string DebuggerRunToCursorTooltip = "Run To Cursor (Ctrl+F10)";
+    public const string DebuggerRunToCursorMenu = "Run to Cursor";
     public const string DebuggerStopTooltip = "Stop debugging (Shift+F5)";
     public const string DebuggerRestartTooltip = "Restart (Ctrl+Shift+F5)";
     public const string DebuggerToggleBreakpointTooltip = "Toggle breakpoint (F9)";

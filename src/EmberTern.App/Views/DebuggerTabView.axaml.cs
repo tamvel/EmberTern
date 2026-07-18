@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
@@ -50,7 +51,14 @@ public partial class DebuggerTabView : UserControl
         if (_editor is not null)
         {
             _editor.AddHandler(KeyDownEvent, OnEditorKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            _editor.AddHandler(PointerPressedEvent, OnEditorPointerPressed, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         }
+        // The GridSplitter marks PointerPressed as handled (it captures the pointer to drag), so a normal
+        // XAML/bubbling handler never sees it — hence handledEventsToo, to snapshot the panel height at the
+        // gesture start before any drag (see OnBottomSplitterPointerPressed).
+        this.FindControl<GridSplitter>("BottomSplitter")?.AddHandler(
+            Avalonia.Input.InputElement.PointerPressedEvent, OnBottomSplitterPointerPressed,
+            Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
     private void InitializeComponent() => Avalonia.Markup.Xaml.AvaloniaXamlLoader.Load(this);
@@ -250,6 +258,21 @@ public partial class DebuggerTabView : UserControl
     {
         if (_editor is null || _vm is null) return;
         _ = _vm.RunToCursorAsync(_editor.CaretOffset);
+    }
+
+    // Toolbar button + editor context-menu entry for Run To Cursor — both route to the SAME RunToCursor()
+    // (which reads the editor caret), so no debugger logic is duplicated; only new discoverable UI.
+    private void OnRunToCursorClick(object? sender, RoutedEventArgs e) => RunToCursor();
+
+    // Right-click moves the caret to the clicked position (like VS) so the context-menu "Run to Cursor"
+    // targets the line under the pointer, not a stale caret. Reuses the point→offset pattern from
+    // NavigationController; caret is settable on a read-only editor.
+    private void OnEditorPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_editor?.Document is null) return;
+        if (!e.GetCurrentPoint(_editor).Properties.IsRightButtonPressed) return;
+        if (_editor.GetPositionFromPoint(e.GetPosition(_editor)) is { } tvp)
+            _editor.CaretOffset = _editor.Document.GetOffset(tvp.Location);
     }
 
     private void ApplyEditorTheme()
