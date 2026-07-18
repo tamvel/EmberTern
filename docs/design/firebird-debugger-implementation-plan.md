@@ -394,6 +394,21 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
 - **Weryfikacja.** **Lab-mandatory**: a routine with local function + local procedure (incl. one mutating
   an outer variable) — simulated vs real, identical. Plus the FB3/FB4 probe log recorded in the spec §15.
 - **Sesje: 2.**
+- **STATUS — §6.3 gate MEASURED + seam (a) DONE (2026-07-18).** Gate (spec §15.7): FB3 sub-routines CLOSED,
+  FB5 true closures ⇒ `LexicalParent` branches on server major. **Seam (a) Part 1** (pure Core): AST
+  `SubroutineDeclaration` + `BlockStatement.LocalRoutines`, parser producer, binder nested scope, extractor R5
+  carry — `ResolveRoutine` still null (staged). **Seam (a) Part 2** (runtime + live fidelity):
+  `ResolveRoutine` resolves a **local `DECLARE PROCEDURE`** to a real frame — `TryFindLocalProcedure` walks the
+  lexical chain, `BuildLocalRoutineAsync` reuses the already-parsed `Body` (no source fetch) + the D8
+  argument-seeding harness + `RETURNING_VALUES` write-back; `LexicalParent` by server major (FB5 declaring
+  frame / FB3+FB4 null). New metadata path `FirebirdDebugMetadata.BuildLocalRoutineFrameVariablesAsync` — a
+  local routine has no `RDB$PROCEDURE_PARAMETERS` row, so param/`RETURNS` types come from the AST header (new
+  pure-Core `PsqlDeclarationExtractor.ExtractSignature`, R3 verbatim + R2 base-type derivation). **R5** wired
+  into the harness (`RoutineContext.SubRoutines`) so a local **function** is exercised server-side (step-over —
+  it is expression-embedded, never an `EXECUTE PROCEDURE` step point). Lab zoo +`SP_DBG_LOCAL`; `DebuggerFidelityProbe`
+  extended — **sim `TOTAL=115` == real** (Step Into `ADD_TAX`, depth 2). Build 0/0; **4852 green**; smoke clean.
+  **Local routines are SELF-CONTAINED here; the closure harness (outer-variable injection) + transitive
+  read/write-set fixpoint are seam (b) — NOT yet started.**
 
 ---
 

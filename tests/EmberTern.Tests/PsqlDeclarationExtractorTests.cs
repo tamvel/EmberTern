@@ -132,4 +132,102 @@ public class PsqlDeclarationExtractorTests
         // has none of its own here.
         Assert.Empty(decls.Locals);
     }
+
+    // ── ExtractSignature (Stage X / D9 seam a part 2) ────────────────────────────────────────────────
+    // A local sub-routine is not a catalog object, so the debugger reads its parameter/RETURNS types from the
+    // AST header (there is no RDB$PROCEDURE_PARAMETERS row). These pin that pure extraction.
+
+    [Fact]
+    public void ExtractSignature_ReadsInputAndOutputParams_OfALocalProcedure()
+    {
+        const string sql = """
+            create procedure p (base integer) returns (total integer) as
+            declare procedure add_tax (amount integer, rate numeric(15,2)) returns (with_tax integer) as
+              declare variable bonus integer;
+            begin
+              with_tax = amount + bonus;
+            end
+            begin
+              execute procedure add_tax(base, 10) returning_values total;
+            end
+            """;
+        var (body, source) = Build(sql);
+        var sub = body.LocalRoutines.Single();
+
+        var sig = PsqlDeclarationExtractor.ExtractSignature(sub, source);
+
+        Assert.Equal(new[] { "AMOUNT", "RATE" }, sig.Inputs.Select(p => p.Name));
+        Assert.Equal(new[] { "integer", "numeric(15,2)" }, sig.Inputs.Select(p => p.TypeSpec)); // parametrised whole
+        Assert.Equal(new[] { "WITH_TAX" }, sig.Outputs.Select(p => p.Name));
+        Assert.Equal("integer", sig.Outputs.Single().TypeSpec);
+    }
+
+    [Fact]
+    public void ExtractSignature_YieldsNoOutputs_ForALocalFunction()
+    {
+        const string sql = """
+            create procedure p (n integer) returns (r integer) as
+            declare function triple (x integer) returns integer as
+            begin
+              return x * 3;
+            end
+            begin
+              r = triple(n);
+            end
+            """;
+        var (body, source) = Build(sql);
+        var fn = body.LocalRoutines.Single();
+
+        var sig = PsqlDeclarationExtractor.ExtractSignature(fn, source);
+
+        Assert.Equal(new[] { "X" }, sig.Inputs.Select(p => p.Name));
+        // A local function's single RETURNS <type> is not a named output parameter (its value returns via RETURN).
+        Assert.Empty(sig.Outputs);
+    }
+
+    [Fact]
+    public void ExtractSignature_HandlesANoParameterProcedure()
+    {
+        const string sql = """
+            create procedure p returns (r integer) as
+            declare procedure sp returns (o integer) as
+            begin
+              o = 1;
+            end
+            begin
+              execute procedure sp returning_values r;
+            end
+            """;
+        var (body, source) = Build(sql);
+        var sub = body.LocalRoutines.Single();
+
+        var sig = PsqlDeclarationExtractor.ExtractSignature(sub, source);
+
+        Assert.Empty(sig.Inputs);
+        Assert.Equal(new[] { "O" }, sig.Outputs.Select(p => p.Name));
+    }
+
+    [Fact]
+    public void ExtractSignature_KeepsADomainParamType_ForR2Resolution()
+    {
+        // A parameter typed by a user domain comes back as the bare domain name — the Firebird layer resolves
+        // its base type from RDB$FIELDS (R2), exactly as it does for a domain-typed local variable.
+        const string sql = """
+            create procedure p (base integer) returns (total integer) as
+            declare procedure charge (amount d_amount) returns (net d_amount) as
+            begin
+              net = amount;
+            end
+            begin
+              execute procedure charge(base) returning_values total;
+            end
+            """;
+        var (body, source) = Build(sql);
+        var sub = body.LocalRoutines.Single();
+
+        var sig = PsqlDeclarationExtractor.ExtractSignature(sub, source);
+
+        Assert.Equal("d_amount", sig.Inputs.Single().TypeSpec);
+        Assert.Equal("d_amount", sig.Outputs.Single().TypeSpec);
+    }
 }

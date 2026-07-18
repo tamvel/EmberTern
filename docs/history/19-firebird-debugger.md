@@ -1511,3 +1511,84 @@ resolves a local call to an interpreted frame (`Frame.LexicalParent` by server m
 declaring frame), `FirebirdDebugMetadata` derives the callee's param base types (R2), and lab fidelity proves
 simulated == real for a stepped local call. Then **seam (b)** — the closure harness + transitive read/write-set
 fixpoint over the sub-routine call graph.
+
+## D9 — Local Procedures & Functions (the flagship) — seam (a) Part 2: local-procedure step-into runtime + live fidelity (2026-07-18)
+
+**DoD met: Step Into a local `DECLARE PROCEDURE` works as a real debugger frame, proven simulated == real on
+the lab.** Part 1 laid the pure-Core foundation (AST `SubroutineDeclaration` + `BlockStatement.LocalRoutines`,
+binder nested scope, extractor R5 carry) but left `ResolveRoutine` returning `null` for a local call (staged,
+gotcha #233). Part 2 is the runtime that turns a local `EXECUTE PROCEDURE` into a real frame.
+
+### 1. `ResolveRoutine` — resolve a LOCAL sub-procedure before any server fetch
+
+`FirebirdDebugExecutor.ResolveRoutine` now tries a **local** sub-procedure *first* (before the D8 stored-source
+fetch and before the D11 dotted-name step-over):
+
+- **`TryFindLocalProcedure(name, frame)`** walks the **lexical scope chain** (`frame`, then `frame.LexicalParent`,
+  …) exactly as name resolution does (spec §6), checking each frame's `Body.LocalRoutines` for a
+  `SubroutineDeclaration { Kind: Procedure, Body: not null }` whose name matches (case-insensitive). It returns
+  the declaration **and the declaring frame** (the callee's lexical parent). A local **function** is never here
+  (it is called inside an expression, not as an `EXECUTE PROCEDURE` step point); a forward declaration (null
+  body) is skipped (not runnable).
+- **`BuildLocalRoutineAsync`** builds the callee frame from the **already-parsed** `routine.Body` — **no source
+  fetch**, because a local routine's body is part of the enclosing routine's AST. It reuses the D8
+  argument-seeding harness (`SeedInputParametersAsync` — Contract #4, no second evaluator) to evaluate the
+  call's arguments in the caller frame and seed the callee's input params, then returns a `DebugRoutine` sharing
+  the **enclosing** `Source` + `Model` (a local routine's spans and its scope live in the enclosing routine, not
+  a separate compilation unit) — distinct from a D8 **stored** callee, which gets its own fetched source/model.
+- **`LexicalParent` by server major (the §6.3 gate):** `FirebirdDdlReader.ParseServerMajor` ⇒ **FB5** → the
+  declaring frame (a true closure), **FB3/FB4** → `null` (a closed scope; FB4 conservative, a documented §F
+  boundary — closure semantics unverified there). This reuses the D8 `Frame.LexicalParent`/`Parent` split
+  (gotcha #241) — **no new abstraction**, exactly as the plan's D9 brief predicted.
+
+### 2. The one new metadata path — a local routine is not a catalog object
+
+A local `DECLARE PROCEDURE` has **no `RDB$PROCEDURE_PARAMETERS` row**, so its parameter and `RETURNS` types
+cannot be read from the catalog. New `FirebirdDebugMetadata.BuildLocalRoutineFrameVariablesAsync` derives them
+from the **AST header** instead, via a new pure-Core primitive:
+
+- **`PsqlDeclarationExtractor.ExtractSignature(SubroutineDeclaration, source)`** reads the sub-routine's input
+  params + `RETURNS (…)` output params from **its own header tokens** (before the body's `BEGIN`), returning
+  `SubroutineParam(Name, TypeSpec)` lists (Contract #1 — consume the AST, never re-parse). A local **function**'s
+  single `RETURNS <type>` yields no output parameter (its value returns via `RETURN`). The type-spec scanner
+  (`TypeSpecBetween`) was factored out of the existing `TypeSpecOf` so both share one paren-aware "type up to
+  `NOT`/`CHECK`/`DEFAULT`/`COLLATE`/`=`/terminator" reader.
+- Each param is then declared **verbatim** with its written type (R3 — a domain keeps its semantics) and its
+  **base type** derived from `RDB$FIELDS` (R2, reusing `ResolveBaseTypeAsync` — a domain resolves, a builtin is
+  itself), exactly as a stored routine's params are, only sourced from the AST rather than the catalog. Body
+  locals extract as usual.
+
+### 3. R5 wired into the harness — a local function runs faithfully server-side
+
+`RoutineContext` gained a `SubRoutines` field (R5): the routine's in-scope local sub-routine declarations,
+computed once from `PsqlDeclarationExtractor.Extract` in `Register` and threaded into **every** `HarnessRequest`
+(step, condition, evaluate, argument-seed). So a statement that calls a local `TRIPLE()`/`ADD_TAX()` has those
+declarations in its `EXECUTE BLOCK` and binds to the **local**, never a like-named global (a §F violation). This
+is what lets a local **function** be exercised faithfully as a **step-over** (the server runs it). Empty for a
+routine with no sub-routines (all D2–D8 routines) — no harness change there, no regression.
+
+### 4. Scope boundary (seam a part 2)
+
+The local routines here are **self-contained** — no outer-variable references. Outer-variable **closure
+injection** (the closure harness) and the **transitive read/write-set fixpoint** over the sub-routine call graph
+are **seam (b)**, deliberately not started. A self-contained routine does not exercise the closure, so on FB5 the
+`LexicalParent = declaring frame` is set correctly (forward-looking) but behaviourally inert; an FB5 local
+routine that *did* reference an outer variable would surface a harness error (the outer var isn't in the callee's
+own frame templates) rather than a silent wrong value — the honest §F stop until seam (b) wires injection.
+
+### 5. Lab + live fidelity (§F — mandatory)
+
+`Lab/setup.sql` gained **`SP_DBG_LOCAL(BASE)`**: a local `DECLARE FUNCTION TRIPLE` + a local `DECLARE PROCEDURE
+ADD_TAX` (input param `AMOUNT`, output `WITH_TAX`, its own local `BONUS`), the main body doing
+`ACC = TRIPLE(BASE); EXECUTE PROCEDURE ADD_TAX(:ACC) RETURNING_VALUES :TOTAL; SUSPEND;`. Rebuilt the `.fdb` at an
+ASCII path and copied in (gotcha #149). `DebuggerFidelityProbe` was **extended** (not duplicated): the real
+`FirebirdDebugExecutor` Step-Into'd `SP_DBG_LOCAL(5)` → **depth 2**, frame chain `SP_DBG_LOCAL → ADD_TAX`,
+**simulated `TOTAL = 115` == real `115`** (TRIPLE(5)=15 server-side; ADD_TAX(15): BONUS=100 → WITH_TAX=115 →
+TOTAL). D8's stored-chain cases unchanged. **ALL PASS.**
+
+### Result
+
+Build 0/0; **4852 tests green** (+4 `PsqlDeclarationExtractorTests` for `ExtractSignature`); smoke clean; live
+fidelity proven. One commit. **Next: D9 seam (b)** — the closure harness (inject captured outer variables into a
+local routine frame) + the transitive read/write-set fixpoint over the sub-routine call graph, so a local
+routine that reads/writes an *outer* variable (an FB5 closure) steps faithfully.

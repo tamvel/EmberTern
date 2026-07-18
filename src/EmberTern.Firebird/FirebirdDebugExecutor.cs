@@ -74,7 +74,8 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         string Source,
         SemanticModel Model,
         IReadOnlyList<HarnessVariable> VariableTemplates,
-        HashSet<string> OutputParameters);
+        HashSet<string> OutputParameters,
+        IReadOnlyList<string> SubRoutines);
 
     private FirebirdDebugExecutor(DebugSessionConnection session, Encoding fallback)
     {
@@ -119,8 +120,13 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         IReadOnlyList<HarnessVariable> templates, IReadOnlyList<string> outputs)
     {
         if (_contexts.ContainsKey(body)) return;
+        // R5 (§3.4): the routine's in-scope local sub-routine declarations, carried verbatim into every harness
+        // for this routine so a statement that calls a local F()/P() binds to the local, never a like-named
+        // global (a §F violation). Empty for a routine with no sub-routines (all D2–D8 routines) — no harness
+        // change there. Extracted from the AST the parser already built (Contract #1).
+        var subRoutines = PsqlDeclarationExtractor.Extract(body, source).SubRoutines;
         _contexts[body] = new RoutineContext(
-            source, model, templates, new HashSet<string>(outputs, StringComparer.OrdinalIgnoreCase));
+            source, model, templates, new HashSet<string>(outputs, StringComparer.OrdinalIgnoreCase), subRoutines);
     }
 
     // The context for the routine the given frame activates — keyed by its Body. Every step / condition /
@@ -157,6 +163,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             Variables = BindValues(ctx, frame),
             Reads = reads,
             Writes = writes,
+            SubRoutines = ctx.SubRoutines,
         };
 
         try
@@ -186,6 +193,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             ExpressionResultType = BooleanResultType,
             Variables = BindValues(ctx, frame),
             Reads = reads,
+            SubRoutines = ctx.SubRoutines,
         };
 
         try
@@ -228,6 +236,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             Variables = BindValues(ctx, frame),
             Reads = names,
             Writes = expression ? Array.Empty<string>() : names, // an expression writes nothing; a statement may
+            SubRoutines = ctx.SubRoutines,
         });
 
         try
@@ -314,6 +323,24 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     {
         if (call is not ExecuteProcedureStatement exec) return null;
         if (string.IsNullOrWhiteSpace(exec.ProcedureName)) return null;
+
+        // D9: a LOCAL sub-procedure visible from this frame's lexical scope resolves to a real frame WITHOUT a
+        // server source fetch — its body is already parsed (part of the enclosing routine's AST) and its
+        // parameter types come from the AST header (a local routine is not a catalog object). A local FUNCTION
+        // is never here (it is called inside an expression, not as an EXECUTE PROCEDURE step point).
+        if (TryFindLocalProcedure(exec.ProcedureName!, frame) is { } local)
+        {
+            try
+            {
+                return Await(BuildLocalRoutineAsync(
+                    exec, frame, local.Declaration, local.DeclaringFrame, CancellationToken.None));
+            }
+            catch (FbException)
+            {
+                return null; // param base-type derivation unreadable → step over in place (§5.3), never guess
+            }
+        }
+
         // A dotted (package.procedure) callee is D11 — step over it for now (§F: faithful, just no descent).
         if (exec.ProcedureName!.Contains('.')) return null;
 
@@ -325,6 +352,65 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         {
             return null; // callee source / metadata unreadable → step over in place (§5.3), never guess
         }
+    }
+
+    // Finds a LOCAL sub-procedure named <paramref name="name"/> visible from <paramref name="frame"/>, walking
+    // the lexical scope chain (this frame's routine body, then its declaring frame's, …) exactly as name
+    // resolution does (spec §6). Returns the declaration + the frame that declares it (the callee's lexical
+    // parent). Only a PROCEDURE with a real Body qualifies: a local FUNCTION is called in an expression (never
+    // an EXECUTE PROCEDURE step point), and a forward declaration (null body) is not runnable — the real
+    // definition carries the body.
+    private static (SubroutineDeclaration Declaration, Frame DeclaringFrame)? TryFindLocalProcedure(
+        string name, Frame frame)
+    {
+        for (var f = frame; f is not null; f = f.LexicalParent)
+        {
+            foreach (var r in f.Body.LocalRoutines)
+            {
+                if (r.Kind == SubroutineKind.Procedure && r.Body is not null
+                    && string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (r, f);
+                }
+            }
+        }
+        return null;
+    }
+
+    private async Task<DebugRoutine?> BuildLocalRoutineAsync(
+        ExecuteProcedureStatement exec, Frame callerFrame, SubroutineDeclaration routine, Frame declaringFrame,
+        CancellationToken cancellationToken)
+    {
+        var body = routine.Body!;
+        var callerCtx = Ctx(callerFrame);
+
+        // Frame templates from the AST header (params + RETURNS) + the sub-routine body's locals — NOT from
+        // RDB$PROCEDURE_PARAMETERS (a local routine is not a catalog object; this is the one new metadata path
+        // of D9 seam a part 2). Source + model are the ENCLOSING routine's: a local sub-routine's spans live in
+        // the enclosing source, and its scope is a child of the enclosing model's scope tree.
+        var layout = await FirebirdDebugMetadata
+            .BuildLocalRoutineFrameVariablesAsync(_session, routine, callerCtx.Source, cancellationToken)
+            .ConfigureAwait(false);
+
+        // Evaluate the call's arguments in the CALLER frame (the SAME harness as a step, Contract #4) → seed the
+        // callee's input parameters positionally (the D8 mechanism, reused unchanged).
+        var initialValues = await SeedInputParametersAsync(
+            exec, callerFrame, layout.InputParameters, cancellationToken).ConfigureAwait(false);
+
+        Register(body, callerCtx.Source, callerCtx.Model, layout.Variables, layout.OutputParameters);
+
+        // §6.3 closure gate (MEASURED — spec §15.7): FB3 sub-routines are CLOSED scopes (LexicalParent = null,
+        // like a stored callee — an outer reference won't even compile there, so a closed frame is 100% faithful
+        // by construction); FB5 are true closures (LexicalParent = the declaring frame — outer reads/writes
+        // resolve up the chain). FB4 is treated as closed (conservative — a documented §F boundary, unverified).
+        // A self-contained local routine (seam a part 2's zoo — no outer-variable references) does not exercise
+        // the closure, so the choice is behaviourally inert here but set correctly for seam b's closure harness.
+        int serverMajor = FirebirdDdlReader.ParseServerMajor(_session.Connection.ServerVersion);
+        Frame? lexicalParent = serverMajor >= 5 ? declaringFrame : null;
+
+        return new DebugRoutine(
+            routine.Name ?? "(local routine)", body, initialValues, layout.OutputParameters,
+            lexicalParent: lexicalParent, source: callerCtx.Source, model: callerCtx.Model);
     }
 
     private async Task<DebugRoutine?> ResolveRoutineAsync(
@@ -420,6 +506,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             Variables = variables,
             Reads = reads,
             Writes = argNames,
+            SubRoutines = callerCtx.SubRoutines, // an argument may call a local F()/P() (R5)
         });
 
         var run = await RunHarnessAsync(harness, cancellationToken).ConfigureAwait(false);

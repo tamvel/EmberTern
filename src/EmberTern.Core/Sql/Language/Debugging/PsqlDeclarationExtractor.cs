@@ -23,6 +23,22 @@ public sealed record RoutineDeclarations(
     IReadOnlyList<LocalDeclaration> Locals,
     IReadOnlyList<string> SubRoutines);
 
+/// <summary>One parameter of a local sub-routine header (Stage X / D9 seam a part 2): its folded
+/// <see cref="Name"/> and its declared <see cref="TypeSpec"/> (the tokens after the name — a domain name or a
+/// builtin, possibly parametrised). A local sub-routine does <b>not</b> exist in <c>RDB$PROCEDURE_PARAMETERS</c>
+/// (it is not a catalog object), so the debugger derives its parameter types from this AST header instead — the
+/// one new metadata source of D9 seam a part 2. The base-type resolution (R2) around it is the Firebird
+/// layer's concern.</summary>
+public sealed record SubroutineParam(string Name, string TypeSpec);
+
+/// <summary>A local sub-routine's signature read from its AST header (Stage X / D9): the ordered input
+/// parameters and — for a <c>PROCEDURE</c> — the <c>RETURNS (…)</c> output parameters. A local
+/// <c>FUNCTION</c>'s single <c>RETURNS &lt;type&gt;</c> yields no output parameters (its value returns via
+/// <c>RETURN</c>, not a named output), so <see cref="Outputs"/> is empty for a function.</summary>
+public sealed record SubroutineSignature(
+    IReadOnlyList<SubroutineParam> Inputs,
+    IReadOnlyList<SubroutineParam> Outputs);
+
 /// <summary>
 /// Extracts a routine frame's variable declarations from its parsed body (Stage X / D2 seam c). Pure Core:
 /// a function of the <see cref="BlockStatement"/> body plus the routine <c>source</c> text (needed to slice
@@ -90,18 +106,123 @@ public static class PsqlDeclarationExtractor
         if (i < toks.Count && IsWord(toks[i], "VARIABLE")) i++;
         if (i >= toks.Count) return string.Empty;
         i++; // consume the name token
+        return TypeSpecBetween(toks, i, toks.Count, source);
+    }
 
-        int typeStart = i;
-        int typeEndExclusive = i;
+    /// <summary>Reads a local sub-routine's signature (Stage X / D9 seam a part 2) from its AST header — the
+    /// tokens before the body's <c>BEGIN</c> (from <c>DECLARE PROCEDURE/FUNCTION name</c> onward). A local
+    /// sub-routine is not a catalog object (<c>RDB$PROCEDURE_PARAMETERS</c> has no row for it), so this is the
+    /// debugger's <b>only</b> source for its parameter and <c>RETURNS</c> types. Same shape as a top-level
+    /// routine header, parsed from tokens (Architecture rule #1 — consume the AST, never re-parse). A
+    /// <c>FUNCTION</c>'s single <c>RETURNS &lt;type&gt;</c> yields no output parameters.</summary>
+    public static SubroutineSignature ExtractSignature(SubroutineDeclaration routine, string source)
+    {
+        ArgumentNullException.ThrowIfNull(routine);
+        ArgumentNullException.ThrowIfNull(source);
+
+        var t = routine.Tokens;
+        int hi = HeaderEndIndex(t, routine.Body);
+        int k = 0;
+        if (k < hi && IsWord(t[k], "DECLARE")) k++;
+        if (k < hi && (IsWord(t[k], "PROCEDURE") || IsWord(t[k], "FUNCTION"))) k++;
+        while (k < hi && (IsNameToken(t[k]) || t[k].Kind == TokenKind.Dot)) k++; // the sub-routine name
+
+        var inputs = new List<SubroutineParam>();
+        var outputs = new List<SubroutineParam>();
+
+        if (k < hi && t[k].Kind == TokenKind.LParen)
+        {
+            int close = MatchParen(t, k, hi);
+            ParseParamSegments(t, k + 1, close, source, inputs);
+            k = close + 1;
+        }
+        if (k < hi && IsWord(t[k], "RETURNS"))
+        {
+            k++;
+            if (k < hi && t[k].Kind == TokenKind.LParen)
+            {
+                int close = MatchParen(t, k, hi);
+                ParseParamSegments(t, k + 1, close, source, outputs);
+            }
+            // else: a local FUNCTION's single return type — no named output parameter (RETURN yields it).
+        }
+
+        return new SubroutineSignature(inputs, outputs);
+    }
+
+    // The header ends where the body block begins (the first token at/after body.Start); a forward
+    // declaration (null body) has header = the whole token run.
+    private static int HeaderEndIndex(IReadOnlyList<SqlToken> toks, BlockStatement? body)
+    {
+        if (body is null) return toks.Count;
+        for (int i = 0; i < toks.Count; i++)
+        {
+            if (toks[i].Start >= body.Start) return i;
+        }
+        return toks.Count;
+    }
+
+    // The index of the RParen matching the LParen at open, within [open, hi); hi when unbalanced (mid-edit).
+    private static int MatchParen(IReadOnlyList<SqlToken> toks, int open, int hi)
+    {
         int depth = 0;
-        for (; i < toks.Count; i++)
+        for (int i = open; i < hi; i++)
+        {
+            if (toks[i].Kind == TokenKind.LParen) depth++;
+            else if (toks[i].Kind == TokenKind.RParen) { if (--depth == 0) return i; }
+        }
+        return hi;
+    }
+
+    // Splits the param list [lo, hi) at top-level commas; each segment is `name <typeSpec>…` (a trailing
+    // NOT NULL / default is not part of the type — TypeSpecBetween stops before it). Skips a segment with no
+    // name token (a trailing comma / mid-edit noise).
+    private static void ParseParamSegments(
+        IReadOnlyList<SqlToken> toks, int lo, int hi, string source, List<SubroutineParam> into)
+    {
+        int depth = 0, segStart = lo;
+        for (int i = lo; i <= hi; i++)
+        {
+            bool atEnd = i == hi;
+            var kind = atEnd ? TokenKind.Comma : toks[i].Kind;
+            if (!atEnd && kind == TokenKind.LParen) { depth++; continue; }
+            if (!atEnd && kind == TokenKind.RParen) { if (depth > 0) depth--; continue; }
+            if (depth == 0 && kind == TokenKind.Comma)
+            {
+                AddParamSegment(toks, segStart, i, source, into);
+                segStart = i + 1;
+            }
+        }
+    }
+
+    private static void AddParamSegment(
+        IReadOnlyList<SqlToken> toks, int segLo, int segHi, string source, List<SubroutineParam> into)
+    {
+        int ni = segLo;
+        while (ni < segHi && !IsNameToken(toks[ni])) ni++;
+        if (ni >= segHi) return;
+        string name = FoldName(toks[ni]);
+        string typeSpec = TypeSpecBetween(toks, ni + 1, segHi, source);
+        if (name.Length == 0 || typeSpec.Length == 0) return;
+        into.Add(new SubroutineParam(name, typeSpec));
+    }
+
+    // The declared type portion of a token range [from, toExclusive): everything up to the first top-level
+    // Semicolon / Comma / NOT / CHECK / DEFAULT / COLLATE / '=', paren-aware (a parametrised type is captured
+    // whole). Shared by TypeSpecOf (a DECLARE VARIABLE) and the sub-routine param scanner.
+    private static string TypeSpecBetween(IReadOnlyList<SqlToken> toks, int from, int toExclusive, string source)
+    {
+        int typeStart = from;
+        int typeEndExclusive = from;
+        int depth = 0;
+        for (int i = from; i < toExclusive; i++)
         {
             var t = toks[i];
             if (t.Kind == TokenKind.LParen) { depth++; typeEndExclusive = i + 1; continue; }
             if (t.Kind == TokenKind.RParen) { if (depth > 0) depth--; typeEndExclusive = i + 1; continue; }
             if (depth == 0)
             {
-                if (t.Kind == TokenKind.Semicolon) break;
+                if (t.Kind is TokenKind.Semicolon or TokenKind.Comma) break;
                 if (IsWord(t, "NOT") || IsWord(t, "CHECK") || IsWord(t, "DEFAULT") || IsWord(t, "COLLATE")) break;
                 if (t.Kind == TokenKind.Operator && t.Text == "=") break;
             }
@@ -113,6 +234,22 @@ public static class PsqlDeclarationExtractor
         int e = toks[typeEndExclusive - 1].End;
         if (s < 0 || e > source.Length || e <= s) return string.Empty;
         return source.Substring(s, e - s);
+    }
+
+    private static bool IsNameToken(SqlToken t)
+        => t.Kind is TokenKind.Identifier or TokenKind.QuotedIdentifier;
+
+    // Firebird folds an unquoted name to upper-case; a quoted identifier keeps its literal case (the quotes
+    // stripped). Matches the frame's variable-name convention.
+    private static string FoldName(SqlToken t)
+    {
+        if (t.Kind == TokenKind.QuotedIdentifier)
+        {
+            var s = t.Text;
+            if (s.Length >= 2 && s[0] == '"' && s[^1] == '"') return s.Substring(1, s.Length - 2).Replace("\"\"", "\"");
+            return s;
+        }
+        return t.Text.ToUpperInvariant();
     }
 
     private static string Slice(string source, SqlNode node)

@@ -340,6 +340,36 @@ BEGIN
   SUSPEND;
 END^
 
+/* D9 (Local procedures & functions — the flagship): a routine with a local FUNCTION (TRIPLE) and a
+   local PROCEDURE (ADD_TAX), proving STEP INTO a local sub-procedure as a real debugger frame — argument
+   seeding (ACC → AMOUNT) + RETURNING_VALUES write-back (WITH_TAX → TOTAL), a local variable inside the
+   sub-procedure (BONUS), and a local function exercised server-side (a faithful step-over, carried into the
+   harness verbatim as R5). Each sub-routine is SELF-CONTAINED (no outer-variable closure — that is D9
+   seam b); the local procedure's parameters have no RDB$PROCEDURE_PARAMETERS row, so the debugger derives
+   their types from the AST header. SP_DBG_LOCAL(5): TRIPLE(5)=15, ADD_TAX(15): BONUS=100, WITH_TAX=115
+   => TOTAL = 115. */
+CREATE PROCEDURE SP_DBG_LOCAL(BASE INTEGER)
+RETURNS (TOTAL INTEGER)
+AS
+  DECLARE FUNCTION TRIPLE(N INTEGER) RETURNS INTEGER
+  AS
+  BEGIN
+    RETURN N * 3;
+  END
+  DECLARE PROCEDURE ADD_TAX(AMOUNT INTEGER) RETURNS (WITH_TAX INTEGER)
+  AS
+    DECLARE VARIABLE BONUS INTEGER;
+  BEGIN
+    BONUS = 100;
+    WITH_TAX = AMOUNT + BONUS;
+  END
+  DECLARE VARIABLE ACC INTEGER;
+BEGIN
+  ACC = TRIPLE(BASE);
+  EXECUTE PROCEDURE ADD_TAX(:ACC) RETURNING_VALUES :TOTAL;
+  SUSPEND;
+END^
+
 SET TERM ; ^
 
 /* ---------- Triggers (PSQL) ----------------------------------------

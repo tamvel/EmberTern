@@ -1153,3 +1153,24 @@ it pushes a local-routine frame:
 
 The server major is already available (`FirebirdDdlReader.ParseServerMajor`, reused by P2's connect gate), so
 the branch is a single predicate at frame construction, not a new code path through the interpreter.
+
+### 15.8 D9 seam (a) Part 2 — local-procedure step-into fidelity (simulated vs real, FB5 lab)
+
+Run with the real `FirebirdDebugExecutor` on the FB5 lab (`tools/probes/DebuggerFidelityProbe`, extended — not
+a new probe; Developer Contract #12: fidelity is proven against real execution). Lab routine **`SP_DBG_LOCAL`**:
+a local `DECLARE FUNCTION TRIPLE` + a local `DECLARE PROCEDURE ADD_TAX` (input `AMOUNT`, output `WITH_TAX`, its
+own local `BONUS`); body: `ACC = TRIPLE(BASE); EXECUTE PROCEDURE ADD_TAX(:ACC) RETURNING_VALUES :TOTAL; SUSPEND;`.
+
+| # | Assertion | Result |
+|---|---|---|
+| 1 | Step Into descends into the **local** procedure (depth) | **depth 2** ✔ |
+| 2 | Frame chain | `SP_DBG_LOCAL → ADD_TAX` ✔ |
+| 3 | **Simulated `TOTAL` == real** (`SELECT TOTAL FROM SP_DBG_LOCAL(5)`) | **sim 115 == real 115** ✔ |
+
+> **Verdict — a local `DECLARE PROCEDURE` steps into a real frame with full fidelity:** argument seeding
+> (`ACC` → `AMOUNT`, via the D8 harness), its own local (`BONUS`), `RETURNING_VALUES` write-back (`WITH_TAX` →
+> `TOTAL`), and the local **function** `TRIPLE` exercised server-side (a step-over, carried into the harness
+> verbatim as R5). The local routine's param/`RETURNS` types were derived from the **AST header** (no
+> `RDB$PROCEDURE_PARAMETERS` row exists for a local routine). D8's stored-chain cases (§15.6) unchanged.
+> **Scope:** the sub-routines are self-contained; **outer-variable closures are D9 seam (b)** (the closure
+> harness + transitive read/write-set fixpoint) — not yet implemented.

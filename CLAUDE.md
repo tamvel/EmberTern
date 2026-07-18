@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D8 DONE (D2 live-fidelity-verified; D8 = call stack + nested stored routines + frame navigation, complete 2026-07-18, awaits visual confirmation). D9 (local procedures & functions — the flagship) STARTED: §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) Part 1 DONE (AST `SubroutineDeclaration` + `BlockStatement.LocalRoutines`, parser producer, binder nested scope, extractor R5 carry — pure Core, no runtime change). Next: D9 seam (a) Part 2 (runtime: ResolveRoutine + local frames + LexicalParent-by-version + lab fidelity).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D8 DONE (D2 live-fidelity-verified; D8 = call stack + nested stored routines + frame navigation, complete 2026-07-18, awaits visual confirmation). D9 (local procedures & functions — the flagship) STARTED: §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) Part 1 DONE (AST + parser + binder + extractor R5 carry — pure Core); seam (a) Part 2 DONE + live-fidelity-verified 2026-07-18 (Step Into a local `DECLARE PROCEDURE` works as a real frame — sim==real on the lab). Next: D9 seam (b) (closure harness + transitive read/write-set fixpoint).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -643,11 +643,40 @@ noted.
   editor stays permissive). Extractor: `RoutineDeclarations.SubRoutines` now filled verbatim (R5). **No runtime
   change — `ResolveRoutine` still returns null for a local call (step-over in place, §5.3).** Build 0/0; **4848
   tests green** (+7 `PsqlAstTests`, +2 `SemanticModelTests`, +1 `PsqlDeclarationExtractorTests`, +4 corpus
-  shapes); smoke clean. **Next: D9 seam (a) Part 2** — `FirebirdDebugExecutor.ResolveRoutine` resolves a local
-  call to a real interpreted frame (`LexicalParent` by server major — FB3 null / FB5 declaring frame),
-  `FirebirdDebugMetadata` derives callee param base types (R2), + lab fidelity; then **seam (b)** — closure
-  harness + transitive read/write-set fixpoint over the sub-routine call graph. History:
-  [docs/history/19-...](docs/history/19-firebird-debugger.md) (D9 gate + seam a Part 1). See [[feedback-debugger-ux-polish-backlog]].
+  shapes); smoke clean.
+  **D9 seam (a) Part 2 — local-procedure step-into runtime + live fidelity DONE (2026-07-18). Step Into a
+  local `DECLARE PROCEDURE` now works as a real debugger frame — proven simulated==real on the lab.**
+  `FirebirdDebugExecutor.ResolveRoutine` now resolves a local sub-procedure **before** any server source fetch:
+  a new `TryFindLocalProcedure` walks the frame's lexical chain (`f.Body.LocalRoutines`, then `LexicalParent`'s,
+  … — spec §6) for a `SubroutineDeclaration { Kind: Procedure, Body: not null }` whose name matches; a match →
+  `BuildLocalRoutineAsync` builds the callee frame from the **already-parsed** `Body` (no source fetch — the
+  body is part of the enclosing routine's AST), seeds its input params through the **same** D8 argument-seeding
+  harness (Contract #4 — no second path), and returns a `DebugRoutine` sharing the **enclosing** source + model
+  (a local routine's spans + scope live in the enclosing routine, not a separate compilation). **`LexicalParent`
+  by server major (§6.3 gate):** `ParseServerMajor` ⇒ FB5 → the declaring frame (true closure), FB3/FB4 → null
+  (closed scope; FB4 conservative, a documented §F boundary). **The one new metadata path** —
+  `FirebirdDebugMetadata.BuildLocalRoutineFrameVariablesAsync`: a local routine is **not** a catalog object
+  (no `RDB$PROCEDURE_PARAMETERS` row), so its parameter + `RETURNS` types come from the **AST header** via new
+  pure-Core `PsqlDeclarationExtractor.ExtractSignature` (params/RETURNS read from the sub-routine's own tokens,
+  Contract #1 — never re-parse), each declared verbatim (R3) with its base type derived from `RDB$FIELDS`
+  (R2, reusing `ResolveBaseTypeAsync` — a domain param resolves, a builtin is itself); body locals as usual.
+  **R5 wired into the harness** (`RoutineContext.SubRoutines`, computed once from `PsqlDeclarationExtractor.Extract`
+  and threaded into every `HarnessRequest`): a routine's local sub-routine declarations are carried verbatim so
+  a statement that calls a local **function** (or procedure) binds to the local — a local `DECLARE FUNCTION` is
+  exercised faithfully server-side as a step-over (it is called inside an expression, never an
+  `EXECUTE PROCEDURE` step point, so it is not step-into'd). **Scope boundary (seam a part 2):** the local
+  routines are **self-contained** — outer-variable **closure injection** (the closure harness) + the transitive
+  read/write-set fixpoint over the sub-routine call graph are **seam (b)**; a self-contained local routine does
+  not exercise the closure, so the `LexicalParent` choice is behaviourally inert here but set correctly for
+  seam (b). **Lab zoo +`SP_DBG_LOCAL`** (`Lab/setup.sql` + rebuilt `.fdb`, #149): a local function `TRIPLE` +
+  local procedure `ADD_TAX` (param seeding, `RETURNING_VALUES`, its own local `BONUS`). **Live fidelity PROVEN**
+  (`tools/probes/DebuggerFidelityProbe` extended, not duplicated): the real executor Step-Into'd `ADD_TAX` —
+  depth 2, frame chain `SP_DBG_LOCAL → ADD_TAX`, **simulated `TOTAL=115` == real `115`** (arg seeding +
+  `RETURNING_VALUES` + the local function server-side), ALL PASS; D8's stored-chain cases unchanged. Build 0/0;
+  **4852 tests green** (+4 `PsqlDeclarationExtractorTests` for `ExtractSignature`); smoke clean. **Next: D9 seam
+  (b)** — closure harness (inject captured outer variables into a local routine frame) + transitive
+  read/write-set fixpoint over the sub-routine call graph. History:
+  [docs/history/19-...](docs/history/19-firebird-debugger.md) (D9 gate + seam a Part 1 + Part 2). See [[feedback-debugger-ux-polish-backlog]].
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

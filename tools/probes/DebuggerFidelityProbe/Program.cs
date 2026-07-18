@@ -12,10 +12,12 @@ using FirebirdSql.Data.FirebirdClient;
 
 // DEVELOPER VERIFICATION TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
 //
-// Stage X / D8 — nested stored-routine step-into fidelity. Drives the REAL FirebirdDebugExecutor through
-// a 3-level chain (SP_DBG_ROOT → SP_DBG_MID → SP_DBG_LEAF) with Step Into, and compares the SIMULATED
-// output (the emitted SUSPEND row / the callee frame roster) to REAL execution of the same routines. The
-// authority is the engine, not us (Developer Contract #12: fidelity is proven against real execution).
+// Stage X / D8 + D9 — step-into fidelity. Drives the REAL FirebirdDebugExecutor with Step Into and compares
+// the SIMULATED output (the emitted SUSPEND row / the callee frame roster) to REAL execution of the same
+// routines. D8: a 3-level STORED chain (SP_DBG_ROOT → SP_DBG_MID → SP_DBG_LEAF). D9 seam a part 2: a LOCAL
+// sub-procedure (SP_DBG_LOCAL → ADD_TAX) — step into a local DECLARE PROCEDURE as a real frame, with a local
+// DECLARE FUNCTION exercised server-side. The authority is the engine, not us (Developer Contract #12:
+// fidelity is proven against real execution).
 //
 //   $env:ET_LAB_PWD = "<local dev SYSDBA password>"
 //   dotnet run --project tools\probes\DebuggerFidelityProbe
@@ -144,6 +146,23 @@ try
     else
         Fail("simulated vs real RESULT", $"sim {simRoot} vs real {realRoot}");
     Console.WriteLine($"      (arg seeding + RETURNING_VALUES across 3 levels: LEAF(5)=6, MID=12, ROOT=112)");
+
+    // ── 4. Local sub-procedure step-into (D9 seam a part 2) ──────────────────
+    Head("4. SP_DBG_LOCAL(5) — step INTO local PROCEDURE ADD_TAX; local FUNCTION TRIPLE runs server-side");
+    var localRoot = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["BASE"] = 5 };
+    var loc = await SimulateAsync("SP_DBG_LOCAL", localRoot);
+    int? realLocal = AsInt(await RealScalarAsync("SELECT TOTAL FROM SP_DBG_LOCAL(5)"));
+    int? simLocal = loc.Rows.Count > 0 ? AsInt(loc.Rows[0]["TOTAL"]) : null;
+
+    if (loc.MaxDepth == 2) Pass("local depth == 2 (stepped into ADD_TAX)"); else Fail("local depth", $"{loc.MaxDepth}");
+    if (loc.Frames.SequenceEqual(new[] { "SP_DBG_LOCAL", "ADD_TAX" }))
+        Pass("local frame chain", string.Join(" → ", loc.Frames));
+    else Fail("local frame chain", string.Join(" → ", loc.Frames));
+    if (simLocal is not null && simLocal == realLocal)
+        Pass("SIMULATED TOTAL == REAL", $"sim {simLocal} == real {realLocal}");
+    else
+        Fail("simulated vs real TOTAL", $"sim {simLocal} vs real {realLocal}");
+    Console.WriteLine($"      (TRIPLE(5)=15 server-side; step into ADD_TAX(15): BONUS=100 → WITH_TAX=115 → TOTAL, expected 115)");
 }
 catch (Exception ex)
 {

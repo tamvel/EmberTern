@@ -89,6 +89,68 @@ internal static class FirebirdDebugMetadata
         return new DebugFrameLayout(result, outputs, inputs);
     }
 
+    /// <summary>Builds the frame variable templates for a <b>local</b> sub-routine (Stage X / D9 seam a part
+    /// 2). A local <c>DECLARE PROCEDURE/FUNCTION</c> is <b>not</b> a catalog object — it has no
+    /// <c>RDB$PROCEDURE_PARAMETERS</c> row — so its parameter and <c>RETURNS</c> types come from the parsed AST
+    /// header (<see cref="PsqlDeclarationExtractor.ExtractSignature"/>), the one new metadata source of this
+    /// milestone. Each parameter is declared <b>verbatim</b> from its written type (R3) and its <b>base type</b>
+    /// derived (R2, from <c>RDB$FIELDS</c> when the written type is a domain, else the builtin itself) — exactly
+    /// as a stored routine's parameters are, only sourced from the AST rather than the catalog. Locals come from
+    /// the sub-routine body as usual.</summary>
+    public static async Task<DebugFrameLayout> BuildLocalRoutineFrameVariablesAsync(
+        DebugSessionConnection session,
+        SubroutineDeclaration routine,
+        string source,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(routine);
+        ArgumentNullException.ThrowIfNull(source);
+        if (routine.Body is null)
+        {
+            throw new NotSupportedException(
+                "Debug (D9): a forward-declared local sub-routine has no body to step into.");
+        }
+
+        var result = new List<HarnessVariable>();
+        var outputs = new List<string>();
+        var inputs = new List<HarnessVariable>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var sig = PsqlDeclarationExtractor.ExtractSignature(routine, source);
+        foreach (var p in sig.Inputs)
+        {
+            if (!seen.Add(p.Name)) continue;
+            var v = await BuildLocalParamAsync(session, p, cancellationToken).ConfigureAwait(false);
+            result.Add(v);
+            inputs.Add(v); // ordered input params — a step-into seeds these (D8 mechanism, reused)
+        }
+        foreach (var p in sig.Outputs)
+        {
+            if (!seen.Add(p.Name)) continue;
+            var v = await BuildLocalParamAsync(session, p, cancellationToken).ConfigureAwait(false);
+            result.Add(v);
+            outputs.Add(p.Name);
+        }
+        foreach (var local in PsqlDeclarationExtractor.Extract(routine.Body, source).Locals)
+        {
+            if (!seen.Add(local.Name)) continue;
+            string baseType = await ResolveBaseTypeAsync(session, local.TypeSpec, local.Name, cancellationToken).ConfigureAwait(false);
+            result.Add(new HarnessVariable(local.Name, local.Verbatim, baseType));
+        }
+
+        return new DebugFrameLayout(result, outputs, inputs);
+    }
+
+    // A local sub-routine parameter has no catalog row: declare it VERBATIM with its AST-written type (R3 — a
+    // domain keeps its semantics), base type derived for the harness parameter / RETURNS column (R2).
+    private static async Task<HarnessVariable> BuildLocalParamAsync(
+        DebugSessionConnection session, SubroutineParam p, CancellationToken cancellationToken)
+    {
+        string baseType = await ResolveBaseTypeAsync(session, p.TypeSpec, p.Name, cancellationToken).ConfigureAwait(false);
+        return new HarnessVariable(p.Name, $"DECLARE {p.Name} {p.TypeSpec.Trim()};", baseType);
+    }
+
     // ── Parameters (RDB$PROCEDURE_PARAMETERS) ───────────────────────────────────────────────────────
 
     private static async Task<List<(HarnessVariable Variable, bool IsOutput)>> ReadProcedureParametersAsync(
