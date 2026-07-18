@@ -450,6 +450,37 @@ public class DebuggerTabVmTests
         Assert.False(vm.Watches[0].Evaluated); // its live value is reset
     }
 
+    // ── Bottom-panel layout (presentation) ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ToggleBottomPanel_FlipsCollapsedState()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        Assert.False(vm.IsBottomPanelCollapsed);
+
+        vm.ToggleBottomPanelCommand.Execute(null);
+        Assert.True(vm.IsBottomPanelCollapsed);
+        vm.ToggleBottomPanelCommand.Execute(null);
+        Assert.False(vm.IsBottomPanelCollapsed);
+    }
+
+    [Fact]
+    public async Task LatestEvaluation_TracksNewestEvaluation_AndClearsOnStop()
+    {
+        var exec = new FakeExecutor().Eval("a + b", EvaluationResult.Ok("sql", 7, null));
+        var vm = await LaunchedAsync(exec);
+        Assert.False(vm.HasLatestEvaluation);
+
+        vm.ImmediateInput = "a + b";
+        await vm.EvaluateImmediateCommand.ExecuteAsync(null);
+        Assert.True(vm.HasLatestEvaluation);
+        Assert.Equal("a + b", vm.LatestEvaluation!.Fragment);
+
+        await vm.StopCommand.ExecuteAsync(null);
+        Assert.False(vm.HasLatestEvaluation);
+    }
+
     [Fact]
     public async Task Watches_Persist_PerRoutine_AcrossVmInstances()
     {

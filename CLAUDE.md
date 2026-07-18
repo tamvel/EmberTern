@@ -444,7 +444,21 @@ noted.
   `EXECUTE BLOCK` — reuse the Language Service, syntax-only locally, semantics/execution stay the server's.
   Build 0/0; **4782 tests green in one run** (+6 `WatchStore`, +14 `WatchSideEffectDetector`, +6
   `DebuggerTabVmTests`); smoke clean. History: [docs/history/19-...](docs/history/19-firebird-debugger.md)
-  (D5 seam b). **Next milestone: D6 (Cursor Bridge). D6+ not started.** **Next session: D5 seam (b) —
+  (D5 seam b).
+  **Debugger panel layout redesign — DONE (2026-07-18; UX only, no debugger logic change; live layout awaits
+  user confirmation).** Done *before* D6+ adds panels (cheaper now). Analysis: future panels (Call Stack /
+  Breakpoints / Output / result grid) are **width-hungry**, so — **right panel = Variables only** (primary
+  inspection, full height, 300px); **bottom = a full-width, collapsible `TabControl`** (`bottom-tab` style,
+  like the SQL editor) with **Immediate / Executed SQL / Watches** (a future panel = one `TabItem`). Full-width
+  bottom (not under-editor-only) mirrors the SQL results panel + serves the width-hungry tabs; Variables get
+  full height when the bottom is collapsed. **Collapse** = a chevron over the tab strip toggling the bottom
+  grid **row height** (Auto ↔ pixel) in code-behind (`ApplyBottomPanel`, mirroring `MainWindow`); tab contents
+  bind `IsVisible` to `!IsBottomPanelCollapsed` so Auto measures to the strip only. Immediate (REPL: input +
+  latest result inline via new `LatestEvaluation`) vs Executed SQL (full audit) are non-redundant. New VM
+  **presentation** members only: `IsBottomPanelCollapsed`/`ToggleBottomPanelCommand`, `LatestEvaluation`;
+  `DebugSession`/`Evaluate`/`WatchStore`/`WatchSideEffectDetector` + Watches persistence/auto-re-eval untouched.
+  Build 0/0; **4784 tests green** (+2 presentation); smoke clean. **Next milestone: D6 (Cursor Bridge). D6+ not
+  started.** **Next session: D5 seam (b) —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
   (P1 → P2 → D1 → D2 → D3 → D4 → D5 …). **Read the plan + your milestone's brief before writing any debugger code.**

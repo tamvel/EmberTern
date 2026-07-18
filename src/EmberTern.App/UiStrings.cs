@@ -1731,6 +1731,11 @@ internal static class UiStrings
     public const string DebuggerNoConnection = "Connect to a database before debugging.";
     public const string ProcedureDebugTooltip = "Debug procedure";
     public const string DebuggerSourceUnavailableFormat = "Could not load the source of {0}.";
+    // Bottom tabbed panel (D5 layout redesign) — extensible: Call Stack / Breakpoints / Output join later.
+    public const string DebuggerBottomTabImmediate = "Immediate";
+    public const string DebuggerBottomTabExecutedSql = "Executed SQL";
+    public const string DebuggerBottomTabWatches = "Watches";
+    public const string DebuggerBottomPanelCollapseTooltip = "Collapse / expand the panel";
     // Expression evaluation — Evaluate / Immediate / Executed SQL (D5, spec §9.5 / §10.3).
     public const string DebuggerImmediateHeader = "Immediate / Executed SQL";
     public const string DebuggerImmediateWatermark = "Evaluate an expression against the current frame…";

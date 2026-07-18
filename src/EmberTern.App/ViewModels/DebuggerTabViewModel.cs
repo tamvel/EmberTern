@@ -149,6 +149,14 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// <summary>True while a session is live and there are audit rows to show.</summary>
     public bool HasExecutedSql => ExecutedSql.Count > 0;
 
+    /// <summary>The most recent evaluation (newest row) — shown inline on the Immediate tab so it stays a
+    /// self-contained REPL, while the Executed SQL tab keeps the full audit history. Presentation only.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLatestEvaluation))]
+    private DebugExecutedSqlRowViewModel? _latestEvaluation;
+
+    public bool HasLatestEvaluation => LatestEvaluation is not null;
+
     /// <summary>The Watches (D5 seam b, spec §9.5) — expressions re-evaluated after every step through the
     /// one engine (<see cref="DebugSession.Evaluate"/>). Persisted per routine via <see cref="WatchStore"/>.</summary>
     public ObservableCollection<WatchRowViewModel> Watches { get; }
@@ -215,6 +223,16 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     public bool IsDebugViewVisible => !IsLaunchPanelVisible;
     public bool IsPaused => Phase == DebuggerPhase.Paused;
     public bool HasVariables => Variables.Count > 0;
+
+    /// <summary>Presentation state (not debug logic): whether the bottom tabbed panel (Immediate / Executed
+    /// SQL / Watches, and future Call Stack / Breakpoints / Output) is collapsed so the editor + Variables get
+    /// the full height. The view owns the row-height mechanics (mirrors the SQL results panel).</summary>
+    [ObservableProperty]
+    private bool _isBottomPanelCollapsed;
+
+    /// <summary>Collapses / expands the bottom tabbed panel.</summary>
+    [RelayCommand]
+    private void ToggleBottomPanel() => IsBottomPanelCollapsed = !IsBottomPanelCollapsed;
 
     // ── Preparation ───────────────────────────────────────────────────────────────────────────────
 
@@ -454,11 +472,13 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         {
             ExecutedSql.RemoveAt(ExecutedSql.Count - 1);
         }
+        LatestEvaluation = row;
         OnPropertyChanged(nameof(HasExecutedSql));
     }
 
     private void ClearExecutedSql()
     {
+        LatestEvaluation = null;
         if (ExecutedSql.Count == 0) return;
         ExecutedSql.Clear();
         OnPropertyChanged(nameof(HasExecutedSql));

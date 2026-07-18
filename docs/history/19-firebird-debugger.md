@@ -927,4 +927,40 @@ the tab VM for no gain). `WatchRowViewModel` is the per-row VM.
 (needs a server; the shared engine's live fidelity is the same as seam a's). Manual QA checklist prepared.
 
 **D5 IS COMPLETE** — Evaluate + Immediate + Watches, all on the one `HarnessBuilder`/`DebugSession.Evaluate`
-engine (decision 6). **Next milestone: D6 (Cursor Bridge). D6+ not started.**
+engine (decision 6).
+
+## D5 — Debugger panel layout redesign (2026-07-18; UX only, no debugger logic change)
+
+After manual QA the user asked for a **layout redesign before D6+ adds more panels** (cheaper now than later).
+**Presentation only** — `DebugSession` / `Evaluate` / `WatchStore` / `WatchSideEffectDetector` and all Watches
+functionality (persistence, auto-re-evaluation) are untouched; only the view + two presentation VM properties
+changed.
+
+**Analysis / decision (endorsed the user's proposal with one refinement).** Future debugger panels — Call
+Stack, Breakpoints, Output, the selectable-procedure result grid — are **width-hungry** (tables / logs), not
+height-hungry. So:
+- **Right panel = Variables only** (the primary inspection surface, full editor height — widened to 300).
+- **Bottom panel = a full-width, collapsible `TabControl`** (`bottom-tab` style, exactly like the SQL editor)
+  with **Immediate / Executed SQL / Watches**; a new tab (Call Stack / Breakpoints / Output) is one `TabItem`.
+  **Refinement over "bottom under the editor only":** the bottom spans the **full width** (under editor +
+  Variables) — it mirrors the SQL results panel the user referenced (same collapse intuition) and serves the
+  width-hungry future tabs; Variables get the full height whenever the bottom is collapsed (the common
+  focused-stepping state). The one conscious trade-off (Variables always-visible on the right, Watches as one
+  bottom tab) follows the user's stated priority; docking is a separate future concern, not precluded.
+- **Collapse** mirrors the SQL results panel: a chevron overlays the tab strip (`ChevronsDown` collapse /
+  `ChevronsUp` expand, bound to `IsBottomPanelCollapsed`); the view toggles the bottom grid **row height**
+  between the remembered (draggable) pixel height and **Auto** in code-behind (`ApplyBottomPanel`, mirroring
+  `MainWindow.ApplyResultsRowForActiveTab`). Each tab's content binds `IsVisible` to `!IsBottomPanelCollapsed`,
+  so an Auto row measures to just the tab strip — collapsed → editor + Variables reclaim the height.
+
+**Immediate vs Executed SQL split (non-redundant).** The Immediate tab is a self-contained REPL: the input +
+the **latest** result inline (new presentation prop `LatestEvaluation` = newest audit row); the Executed SQL
+tab is the **full audit history**. New VM presentation members only: `IsBottomPanelCollapsed` +
+`ToggleBottomPanelCommand`, `LatestEvaluation` (+ `HasLatestEvaluation`). Watches moved verbatim into its tab
+(same input + list + `±` flag + `✕` remove).
+
+Build 0/0; **4784 tests green** (+2 presentation: toggle-collapse, latest-evaluation-tracks-and-clears); smoke
+clean. The live layout (collapse, tab switching, ancestor `RemoveWatchCommand` binding) **awaits user
+confirmation** (the debugger tab renders only against a live DB).
+
+**Next milestone: D6 (Cursor Bridge). D6+ not started.**

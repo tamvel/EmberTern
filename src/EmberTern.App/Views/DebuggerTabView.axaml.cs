@@ -27,10 +27,19 @@ public partial class DebuggerTabView : UserControl
     private DebuggerTabViewModel? _vm;
     private bool _attached;
 
+    // Bottom tabbed panel (Immediate / Executed SQL / Watches) collapse — mirrors the SQL results panel's
+    // row-height toggle (MainWindow). Collapsed → the row goes Auto (only the tab strip shows), the editor +
+    // Variables reclaim the height; expanded → the remembered (draggable) pixel height. Presentation only.
+    private RowDefinition? _bottomRow;
+    private double _bottomHeight = 220;
+    private const double MinBottomHeight = 80;
+
     public DebuggerTabView()
     {
         InitializeComponent();
         _editor = this.FindControl<TextEditor>("SourceEditor");
+        var layout = this.FindControl<Grid>("DebugLayout");
+        if (layout is not null && layout.RowDefinitions.Count > 2) _bottomRow = layout.RowDefinitions[2];
         ApplyEditorTheme();
         ActualThemeVariantChanged += (_, _) => ApplyEditorTheme();
         DataContextChanged += OnDataContextChanged;
@@ -76,11 +85,36 @@ public partial class DebuggerTabView : UserControl
         }
         SyncEditorText();
         RepaintMarkers();
+        ApplyBottomPanel();
     }
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(DebuggerTabViewModel.SourceText)) SyncEditorText();
+        else if (e.PropertyName == nameof(DebuggerTabViewModel.IsBottomPanelCollapsed)) ApplyBottomPanel();
+    }
+
+    // Toggles the bottom-panel row between its remembered pixel height (expanded) and Auto (collapsed → just
+    // the tab strip). The tab contents bind IsVisible to !IsBottomPanelCollapsed, so an Auto row measures to
+    // the strip only. Mirrors MainWindow's ApplyResultsRowForActiveTab.
+    private void ApplyBottomPanel()
+    {
+        if (_bottomRow is null) return;
+        bool collapsed = _vm?.IsBottomPanelCollapsed ?? false;
+        if (collapsed)
+        {
+            if (_bottomRow.Height.IsAbsolute && _bottomRow.Height.Value > 0)
+            {
+                _bottomHeight = _bottomRow.Height.Value; // remember the (possibly dragged) height for restore
+            }
+            _bottomRow.MinHeight = 0;
+            _bottomRow.Height = GridLength.Auto;
+        }
+        else
+        {
+            _bottomRow.MinHeight = MinBottomHeight;
+            _bottomRow.Height = new GridLength(_bottomHeight);
+        }
     }
 
     private void OnDebugMarkersChanged(object? sender, EventArgs e) => RepaintMarkers();
