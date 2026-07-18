@@ -32,8 +32,15 @@ internal static class HoverInfoView
     {
         var panel = new StackPanel { Spacing = 0 };
 
+        // Data tip first (spec §9.4): in a paused debugger the live value is the reason you hovered.
+        if (hover.DebugValue is { } dv)
+        {
+            panel.Children.Add(BuildDebugValue(dv, theme));
+        }
+
         if (hover.HasDiagnostics)
         {
+            if (hover.DebugValue is not null) panel.Children.Add(Divider(theme));
             panel.Children.Add(BuildDiagnostics(hover, theme));
         }
 
@@ -41,19 +48,45 @@ internal static class HoverInfoView
         {
             // A divider only when both sections are present — the common squiggle case has no Quick Info
             // at all (an unknown object's reference is unresolved), and a lone section needs no rule.
-            if (hover.HasDiagnostics)
-            {
-                panel.Children.Add(new Border
-                {
-                    Height = 1,
-                    Margin = new Thickness(0, 7, 0, 6),
-                    Background = Brush("BorderBrush", theme),
-                });
-            }
+            if (hover.HasDiagnostics || hover.DebugValue is not null) panel.Children.Add(Divider(theme));
             panel.Children.Add(QuickInfoView.BuildContent(info, theme));
         }
 
         return QuickInfoView.Card(panel, theme);
+    }
+
+    private static Border Divider(ThemeVariant theme) => new()
+    {
+        Height = 1,
+        Margin = new Thickness(0, 7, 0, 6),
+        Background = Brush("BorderBrush", theme),
+    };
+
+    // The data tip: "NAME = value" — the variable's live value in the paused frame. A null value renders in
+    // the subtle foreground (distinct), a real value in the default foreground; the name is accented so it
+    // reads as "this identifier".
+    private static Control BuildDebugValue(DebugHoverValue dv, ThemeVariant theme)
+    {
+        var row = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 6 };
+        row.Children.Add(new TextBlock
+        {
+            Text = dv.Name,
+            FontSize = 12,
+            FontFamily = new FontFamily("Cascadia Code,Consolas,Menlo,monospace"),
+            Foreground = Brush("AccentBrush", theme),
+        });
+        row.Children.Add(new TextBlock { Text = "=", FontSize = 12, Foreground = Brush("SubtleForegroundBrush", theme) });
+        row.Children.Add(new TextBlock
+        {
+            Text = dv.ValueText,
+            FontSize = 12,
+            FontFamily = new FontFamily("Cascadia Code,Consolas,Menlo,monospace"),
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = QuickInfoView.ContentMaxWidth,
+            FontStyle = dv.IsNull ? FontStyle.Italic : FontStyle.Normal,
+            Foreground = Brush(dv.IsNull ? "SubtleForegroundBrush" : "ForegroundBrush", theme),
+        });
+        return row;
     }
 
     // One line per finding: a severity-coloured code, then the message. Kept deliberately plainer than

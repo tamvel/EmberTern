@@ -1080,3 +1080,46 @@ hides the splitter, so it works. **Fix:** defer the toggle — `Dispatcher.UIThr
 `OnBottomSplitterDoubleTapped` — so it runs after the gesture completes, making the double-click behave exactly
 like the button. Gotcha #240 (both parts). Build 0/0; 4797 green; smoke clean; live behaviour awaits user
 confirmation.
+
+---
+
+## D7 — Variables window, full (2026-07-18)
+
+The basic D4 list becomes the rich window of spec §9.4. Split into two seams; both build green.
+
+**Seam (a) — grouping / kinds / change-highlight / pins / filter.** `DebugVariableRowViewModel` was rewritten
+as a *mutable* row updated **in place** across steps, so pins, group expansion and selection survive a step.
+`Variables` stays the flat roster; new `VariableGroups` is its grouped + filtered presentation over the *same*
+row instances (one roster, two projections — no duplicated logic). New `DebugVariableGroupViewModel` (Header /
+Rows / IsExpanded). Groups shipped: **Pinned / Parameters / Locals**, reusing persistent group instances so
+IsExpanded survives the per-step rebuild; empty groups are hidden. `Context` (triggers, D10) and `Cursors`
+(needs cursor surfacing) are deliberately **not** shipped as empty groups (gotcha #233). Each row carries a
+kind glyph (⬤ IN / ◑ OUT / ○ local) coloured by a theme **key string** via `IconBrushConverter` (never a
+brush — rule #1); the declared type; a distinct `<null>` (subtle + italic); and per-step change-highlight
+(new `DebugVariableChangedBrush`, both dictionaries) computed by reusing `FrameValues.Snapshot()` with the
+baseline reset on frame-identity change. Type-to-filter mirrors the sidebar. `TogglePin` moves a row to the
+top Pinned group (session-scoped; not a Watch — §9.5).
+
+**Seam (b) — inline edit + data tips + lazy BLOBs.**
+- **Data tips** (§9.4): a `DebugValue` section was added to the ordered aggregate `HoverInfo` (no
+  `IHoverProvider` — extended, per rule #2). `HoverInfoEngine.GetHover` gained an *optional*
+  `Func<string, DebugHoverValue?>? debugValueLookup` (default null → the SQL/object editors are unaffected);
+  it is an **input**, so the no-analysis guarantee still holds by signature. Threaded through
+  `NavigationController.Attach` and `SqlEditorBehavior.Attach` (both optional, default null);
+  `DebuggerTabView` supplies a lookup that reads the paused frame's value from the VM's roster (the same rows
+  the panel shows — one truth), gated to the paused state. The card renders the data tip **first** (in a
+  paused debugger the value is the reason you hovered), reusing the existing `QuickInfoView` chrome. A
+  colon/at-sigil is stripped when a reference is unresolved.
+- **Inline edit** (§9.4 "trivial — the frame is client-side truth"): double-click a value → a text box
+  (Enter commits, Esc cancels). Setting is `frame.SetResolvedValue`; the only real work is
+  `TryParseEditedValue`, a best-effort typed parse (InvariantCulture, prefers the value's CLR type, else the
+  type name). A parse failure keeps the box open with a red border — **shape validated at edit time; the real
+  domain CHECK still surfaces on the next injection** (§3.4/§F — never a guessed value). The edit box is
+  seeded from the value's **full untruncated** raw string, never the possibly-truncated display text (§0).
+- **Lazy BLOBs**: a binary BLOB (`byte[]`) renders as a `[BLOB · N B]` placeholder and is **not** text-editable
+  (`IsEditable`); a long text value is truncated inline (256 chars) while staying fully editable. A dedicated
+  "…→ value viewer" popup is a documented follow-up — no reusable viewer exists to wire yet.
+
+Build 0/0; **4807 tests green** (+4 seam a: grouping / change / pins / filter; +3 seam b hover; +3 seam b
+inline edit). Smoke clean. Live behaviour (data tips, inline edit, change-highlight against a real session)
+**awaits user confirmation**. **D7 DONE. Next: D8 (Call stack + nested stored routines).**

@@ -284,10 +284,30 @@
                                                IsVisible="{Binding HasType}" />
                                   </StackPanel>
 
-                                  <TextBlock Grid.Column="3" Text="{Binding ValueText}" FontSize="11"
-                                             VerticalAlignment="Center" Margin="6,0,0,0"
-                                             Classes.var-null="{Binding IsNull}"
-                                             FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
+                                  <!-- Value: label normally; double-click swaps in a text box for inline
+                                       edit (Enter commits, Escape cancels; a red border flags a parse error —
+                                       the real domain CHECK still surfaces on the next injection, §3.4). -->
+                                  <Panel Grid.Column="3" Margin="6,0,0,0" VerticalAlignment="Center"
+                                         DoubleTapped="OnVariableValueDoubleTapped">
+                                    <TextBlock Text="{Binding ValueText}" FontSize="11"
+                                               IsVisible="{Binding !IsEditing}"
+                                               Classes.var-null="{Binding IsNull}"
+                                               ToolTip.Tip="{x:Static app:UiStrings.DebuggerVariableEditTooltip}"
+                                               FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
+                                    <TextBox Text="{Binding EditText, Mode=TwoWay}" FontSize="11"
+                                             IsVisible="{Binding IsEditing}" MinWidth="80"
+                                             Classes.time-error="{Binding HasEditError}"
+                                             FontFamily="Cascadia Code,Consolas,Menlo,monospace">
+                                      <TextBox.KeyBindings>
+                                        <KeyBinding Gesture="Enter"
+                                                    Command="{Binding #RootControl.((vm:DebuggerTabViewModel)DataContext).CommitEditCommand}"
+                                                    CommandParameter="{Binding}" />
+                                        <KeyBinding Gesture="Escape"
+                                                    Command="{Binding #RootControl.((vm:DebuggerTabViewModel)DataContext).CancelEditCommand}"
+                                                    CommandParameter="{Binding}" />
+                                      </TextBox.KeyBindings>
+                                    </TextBox>
+                                  </Panel>
                                 </Grid>
                               </Border>
                             </DataTemplate>

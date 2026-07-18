@@ -845,6 +845,87 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         RebuildVariableGroups();
     }
 
+    // ── Inline edit (spec §9.4 — "trivial here: the frame is client-side truth") ────────────────────
+    // Setting the value IS trivial (frame.SetResolvedValue); the only real work is parsing the typed text.
+    // We validate the shape at edit time (below); the real domain CHECK still surfaces on the next injection
+    // (§3.4) — never guessed, never silently coerced.
+
+    [RelayCommand]
+    private void BeginEdit(DebugVariableRowViewModel? row)
+    {
+        if (row is null || !IsPaused || !row.IsEditable) return;
+        row.BeginEdit();
+    }
+
+    [RelayCommand]
+    private static void CancelEdit(DebugVariableRowViewModel? row) => row?.CancelEdit();
+
+    [RelayCommand]
+    private void CommitEdit(DebugVariableRowViewModel? row)
+    {
+        if (row is null || !row.IsEditing) return;
+        var frame = Session?.CurrentFrame;
+        if (frame is null) { row.CancelEdit(); return; }
+
+        if (!TryParseEditedValue(row.EditText, row.RawValue, row.TypeText, out var value))
+        {
+            row.HasEditError = true; // stay in edit mode; the shape didn't parse for the declared type
+            return;
+        }
+
+        // Client-side truth: write it into the frame (the next harness injection re-reads it), then reflect
+        // it in the row without marking a step-change, and re-baseline so the next step compares correctly.
+        frame.SetResolvedValue(row.Name, value);
+        row.Update(hasValue: true, value, changed: false);
+        row.CancelEdit();
+        _previousValues ??= new System.Collections.Generic.Dictionary<string, object?>(System.StringComparer.OrdinalIgnoreCase);
+        _previousValues[row.Name] = value;
+    }
+
+    // Best-effort typed parse of the edited text for the declared type (InvariantCulture, matching the harness
+    // literal convention). Prefers the current value's CLR type; otherwise classifies by the type name. An
+    // empty box (or "<null>") clears to null. Returns false when the text does not parse for the type — the
+    // caller keeps the box open and flags the error rather than injecting a guessed value (§F).
+    private static bool TryParseEditedValue(string? text, object? current, string typeText, out object? value)
+    {
+        value = null;
+        text = text?.Trim() ?? string.Empty;
+        if (text.Length == 0 || string.Equals(text, UiStrings.DebuggerVariableNull, System.StringComparison.OrdinalIgnoreCase))
+            return true; // null
+
+        var ci = CultureInfo.InvariantCulture;
+        // Prefer the runtime type the frame already holds; fall back to a coarse type-name classification.
+        var t = current?.GetType();
+        string type = typeText.ToUpperInvariant();
+
+        bool Is(params string[] names) => System.Array.Exists(names, n => type.StartsWith(n, System.StringComparison.Ordinal));
+
+        try
+        {
+            if (t == typeof(int) || (t is null && Is("INTEGER", "INT")))
+            { if (int.TryParse(text, System.Globalization.NumberStyles.Integer, ci, out var i)) { value = i; return true; } return false; }
+            if (t == typeof(long) || (t is null && Is("BIGINT")))
+            { if (long.TryParse(text, System.Globalization.NumberStyles.Integer, ci, out var l)) { value = l; return true; } return false; }
+            if (t == typeof(short) || (t is null && Is("SMALLINT")))
+            { if (short.TryParse(text, System.Globalization.NumberStyles.Integer, ci, out var s)) { value = s; return true; } return false; }
+            if (t == typeof(decimal) || (t is null && Is("NUMERIC", "DECIMAL", "DECFLOAT")))
+            { if (decimal.TryParse(text, System.Globalization.NumberStyles.Number, ci, out var m)) { value = m; return true; } return false; }
+            if (t == typeof(double) || (t is null && Is("DOUBLE", "FLOAT")))
+            { if (double.TryParse(text, System.Globalization.NumberStyles.Float, ci, out var d)) { value = d; return true; } return false; }
+            if (t == typeof(float))
+            { if (float.TryParse(text, System.Globalization.NumberStyles.Float, ci, out var f)) { value = f; return true; } return false; }
+            if (t == typeof(bool) || (t is null && Is("BOOLEAN")))
+            { if (bool.TryParse(text, out var b)) { value = b; return true; } return false; }
+            if (t == typeof(System.DateTime) || (t is null && Is("DATE", "TIME", "TIMESTAMP")))
+            { if (System.DateTime.TryParse(text, ci, System.Globalization.DateTimeStyles.None, out var dt)) { value = dt; return true; } return false; }
+            // CHAR/VARCHAR/TEXT and anything else: take the text verbatim.
+            value = text;
+            return true;
+        }
+        catch (System.FormatException) { return false; }
+        catch (System.OverflowException) { return false; }
+    }
+
     private void ClearVariables()
     {
         Variables.Clear();

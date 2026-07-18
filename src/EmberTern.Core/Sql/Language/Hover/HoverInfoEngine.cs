@@ -32,22 +32,42 @@ public static class HoverInfoEngine
     /// <param name="diagnostics">The cached, version-matched diagnostics of <paramref name="model"/>.
     /// An input, never recomputed — pass <c>DiagnosticsEngine</c>'s existing result.</param>
     /// <param name="offset">The document offset under the pointer.</param>
-    public static HoverInfo? GetHover(SemanticModel model, IReadOnlyList<Diagnostic> diagnostics, int offset)
+    /// <param name="debugValueLookup">Optional data-tip source (spec §9.4): given a variable/parameter name,
+    /// returns its live value in the paused frame, or null. An <em>input</em> — like <paramref name="diagnostics"/>,
+    /// the engine never computes it, so the no-analysis guarantee still holds. Null (the default) outside a
+    /// debug session, so the SQL editor is unaffected.</param>
+    public static HoverInfo? GetHover(
+        SemanticModel model,
+        IReadOnlyList<Diagnostic> diagnostics,
+        int offset,
+        Func<string, DebugHoverValue?>? debugValueLookup = null)
     {
         if (model is null) return null;
         diagnostics ??= Array.Empty<Diagnostic>();
 
-        // The gate is "a resolved symbol OR a diagnostic" — NOT symbol resolution, which is what a
-        // symbol-shaped hover would key on. The most common unified case has no Quick Info at all: an
+        // The gate is "a resolved symbol OR a diagnostic OR a debug value" — NOT symbol resolution, which is
+        // what a symbol-shaped hover would key on. The most common unified case has no Quick Info at all: an
         // unknown object's reference did not resolve, so GetQuickInfo returns null exactly where ET0001
         // fires. Keying on the symbol would blind the hover to precisely the errors it exists to explain.
         var reference = model.ReferenceAt(offset);
         var info = QuickInfo.QuickInfoEngine.GetQuickInfo(model, offset);
         var hits = DiagnosticsAt(diagnostics, offset);
 
-        if (info is null && hits.Count == 0) return null;
+        // Data tip: only for a variable/parameter occurrence, and only when the caller has a value for it.
+        DebugHoverValue? debugValue = null;
+        if (debugValueLookup is not null
+            && reference is { Role: ReferenceRole.Variable or ReferenceRole.Parameter })
+        {
+            // Prefer the resolved symbol's name; fall back to the occurrence text with any ':'/'@' sigil
+            // stripped (an unresolved colon-form reference's Text carries the sigil, e.g. ":v").
+            var name = reference.Symbol?.Name ?? reference.Text.TrimStart(':', '@');
+            debugValue = debugValueLookup(name);
+        }
 
-        return new HoverInfo(ApplicableSpan(reference, info, hits, offset), hits, info);
+        if (info is null && hits.Count == 0 && debugValue is null) return null;
+
+        return new HoverInfo(
+            ApplicableSpan(reference, info, hits, debugValue, offset), hits, info, debugValue);
     }
 
     /// <summary>
@@ -73,13 +93,14 @@ public static class HoverInfoEngine
     // 5-char column reference must still re-query when the pointer leaves the column, because the
     // content genuinely differs there. Mirrors ReferenceAt's narrowest-wins tie-break.
     private static TextSpan ApplicableSpan(
-        SymbolReference? reference, QuickInfo.QuickInfo? info, IReadOnlyList<Diagnostic> hits, int offset)
+        SymbolReference? reference, QuickInfo.QuickInfo? info, IReadOnlyList<Diagnostic> hits,
+        DebugHoverValue? debugValue, int offset)
     {
         TextSpan? best = null;
 
-        // Only when the symbol actually produced a section: an unresolved reference contributes no
-        // content, so its span must not shrink the region this hover claims to describe.
-        if (info is not null && reference is not null) best = reference.Span;
+        // Only when the reference actually produced a section (Quick Info or a data tip): an unresolved
+        // reference contributes no content, so its span must not shrink the region this hover describes.
+        if ((info is not null || debugValue is not null) && reference is not null) best = reference.Span;
 
         foreach (var d in hits)
         {

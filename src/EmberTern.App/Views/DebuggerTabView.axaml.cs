@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -67,8 +68,9 @@ public partial class DebuggerTabView : UserControl
         if (this.FindAncestorOfType<Window>()?.DataContext is not MainWindowViewModel mainVm) return;
 
         // Intrinsic editor block via the one D3 seam (highlighting/hover/related elements over the read-only
-        // source). Then the debugger renderers, per the D3 architecture (spec §11.1).
-        SqlEditorBehavior.Attach(_editor, mainVm);
+        // source). The debugger adds a data-tip source (spec §9.4) so a plain hover over a variable shows its
+        // live frame value — read from the VM's roster at hover time, never the server. Then the renderers.
+        SqlEditorBehavior.Attach(_editor, mainVm, debugValueLookup: DebugValueFor);
         CurrentLineRenderer.Attach(_editor, () => (_vm?.CurrentStart, _vm?.CurrentLength));
         _margin = new BreakpointMargin(
             () => _vm?.BreakpointOffsets ?? Array.Empty<int>(),
@@ -171,6 +173,38 @@ public partial class DebuggerTabView : UserControl
             group.IsExpanded = !group.IsExpanded;
             e.Handled = true;
         }
+    }
+
+    // Data-tip source for the unified hover (spec §9.4): the paused frame's value for a variable/parameter,
+    // read from the VM's roster (the same rows the Variables panel shows — one truth). Null when not paused,
+    // so a hover outside a live session shows no data tip. Pure lookup; never touches the server.
+    private EmberTern.Core.Sql.Language.Hover.DebugHoverValue? DebugValueFor(string name)
+    {
+        var vm = _vm;
+        if (vm is null || !vm.IsPaused) return null;
+        foreach (var row in vm.Variables)
+        {
+            if (string.Equals(row.Name, name, StringComparison.OrdinalIgnoreCase))
+                return new EmberTern.Core.Sql.Language.Hover.DebugHoverValue(row.Name, row.ValueText, row.IsNull);
+        }
+        return null;
+    }
+
+    // Double-click a variable's value → inline edit (spec §9.4). Begins the edit on the row, then focuses +
+    // selects the swapped-in text box so the user can type immediately. Guarded to the paused state by the
+    // command; a view concern, so it reaches the row via its DataContext.
+    private void OnVariableValueDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (_vm is null || (sender as Control)?.DataContext is not DebugVariableRowViewModel row) return;
+        if (!_vm.BeginEditCommand.CanExecute(row)) return;
+        _vm.BeginEditCommand.Execute(row);
+        if (sender is Panel panel)
+        {
+            var box = panel.GetVisualDescendants().OfType<TextBox>().FirstOrDefault();
+            if (box is not null)
+                Dispatcher.UIThread.Post(() => { box.Focus(); box.SelectAll(); }, DispatcherPriority.Background);
+        }
+        e.Handled = true;
     }
 
     private void OnDebugMarkersChanged(object? sender, EventArgs e) => RepaintMarkers();

@@ -118,6 +118,10 @@ internal sealed class NavigationController
     // at the clicked offset and returns whether that offset is a parameter site; null → no helper wired.
     private readonly Func<int, bool>? _showParameterHelper;
 
+    // Data-tip source for a paused debug session (spec §9.4): given a variable/parameter name, its live
+    // frame value, or null. Null on every non-debugger surface (the SQL editor is unaffected).
+    private readonly Func<string, DebugHoverValue?>? _debugValueLookup;
+
     private NavigationController(
         TextEditor editor,
         Func<SemanticModel?> model,
@@ -126,7 +130,8 @@ internal sealed class NavigationController
         Func<string, MetadataObjectKind, bool> openSchemaObject,
         Func<string, bool> openByName,
         Func<string, MetadataObjectKind, Task<string?>>? fetchDefinition,
-        Func<int, bool>? showParameterHelper)
+        Func<int, bool>? showParameterHelper,
+        Func<string, DebugHoverValue?>? debugValueLookup)
     {
         _editor = editor;
         _model = model;
@@ -136,6 +141,7 @@ internal sealed class NavigationController
         _openByName = openByName;
         _fetchDefinition = fetchDefinition;
         _showParameterHelper = showParameterHelper;
+        _debugValueLookup = debugValueLookup;
         _underline = new UnderlineRenderer(editor);
 
         _hoverDwell = new DispatcherTimer { Interval = HoverDwell };
@@ -156,6 +162,8 @@ internal sealed class NavigationController
     /// (M5); null → Peek shows only local declarations.</param>
     /// <param name="showParameterHelper">Shows the unified Parameter Helper at a double-clicked offset
     /// (returns whether it is a parameter site); null → double-click only does name-based open.</param>
+    /// <param name="debugValueLookup">Data-tip source for a paused debug session (spec §9.4): variable name →
+    /// its live frame value; null (the default) on non-debugger surfaces.</param>
     public static NavigationController Attach(
         TextEditor editor,
         Func<SemanticModel?> model,
@@ -164,11 +172,12 @@ internal sealed class NavigationController
         Func<string, MetadataObjectKind, bool> openSchemaObject,
         Func<string, bool> openByName,
         Func<string, MetadataObjectKind, Task<string?>>? fetchDefinition = null,
-        Func<int, bool>? showParameterHelper = null)
+        Func<int, bool>? showParameterHelper = null,
+        Func<string, DebugHoverValue?>? debugValueLookup = null)
     {
         var c = new NavigationController(
             editor, model, diagnostics, isOtherPopupOpen, openSchemaObject, openByName,
-            fetchDefinition, showParameterHelper);
+            fetchDefinition, showParameterHelper, debugValueLookup);
         editor.TextArea.TextView.BackgroundRenderers.Add(c._underline);
 
         // Ctrl+Click — tunneled so it runs before AvaloniaEdit's own selection handling, letting us
@@ -313,8 +322,9 @@ internal sealed class NavigationController
         var model = _model();
         if (offset is null || model is null) return;
 
-        // Pure lookup over two already-computed results — no parse, no analysis on the pointer path.
-        var hover = HoverInfoEngine.GetHover(model, _diagnostics(), offset.Value);
+        // Pure lookup over already-computed results — no parse, no analysis on the pointer path. The debug
+        // value lookup (when wired) reads the paused frame's client-side truth, not the server.
+        var hover = HoverInfoEngine.GetHover(model, _diagnostics(), offset.Value, _debugValueLookup);
         if (hover is null) return;
         ShowHover(hover);
     }

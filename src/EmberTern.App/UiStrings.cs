@@ -1733,6 +1733,8 @@ internal static class UiStrings
     public const string DebuggerVariableGroupLocals = "Locals";
     public const string DebuggerVariableFilterWatermark = "Filter variables…";
     public const string DebuggerVariablePinTooltip = "Pin to top / unpin";
+    public const string DebuggerVariableEditTooltip = "Double-click to edit (Enter to apply, Esc to cancel)";
+    public const string DebuggerVariableBlobFormat = "[BLOB · {0} B]";
     // Call stack (single-frame in D4, but the header exists).
     public const string DebuggerCallStackHeader = "Call stack";
     // Errors.

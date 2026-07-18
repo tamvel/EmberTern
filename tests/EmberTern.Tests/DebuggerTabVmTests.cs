@@ -281,6 +281,60 @@ public class DebuggerTabVmTests
     }
 
     [Fact]
+    public async Task InlineEdit_CommitsValidValue_ToTheFrame()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        var v = vm.Variables.First(r => r.Name == "V");
+        vm.BeginEditCommand.Execute(v);
+        Assert.True(v.IsEditing);
+
+        v.EditText = "123";
+        vm.CommitEditCommand.Execute(v);
+
+        Assert.False(v.IsEditing);
+        Assert.False(v.HasEditError);
+        Assert.Equal("123", v.ValueText);
+        // Stepping over "r = v" now reads the injected V (the frame holds it) — proven via the write-back path
+        // is unnecessary here; the row reflects the committed value, which is the client-side frame truth.
+    }
+
+    [Fact]
+    public async Task InlineEdit_RejectsUnparsableValue_ForTypedVariable()
+    {
+        var vm = Vm(Sql, new FakeExecutor().Write(Off("v = a + b"), new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["V"] = 7 }), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        await vm.StepOverCommand.ExecuteAsync(null); // V is now an int (7)
+
+        var v = vm.Variables.First(r => r.Name == "V");
+        vm.BeginEditCommand.Execute(v);
+        v.EditText = "not-an-integer";
+        vm.CommitEditCommand.Execute(v);
+
+        // Shape validation at edit time: rejected, still editing, value unchanged (§F — never a guessed value).
+        Assert.True(v.IsEditing);
+        Assert.True(v.HasEditError);
+        Assert.Equal("7", v.ValueText);
+    }
+
+    [Fact]
+    public async Task InlineEdit_BinaryBlob_IsNotEditable()
+    {
+        var vm = Vm(Sql, new FakeExecutor().Write(Off("v = a + b"), new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["V"] = new byte[] { 1, 2, 3 } }), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        await vm.StepOverCommand.ExecuteAsync(null);
+
+        var v = vm.Variables.First(r => r.Name == "V");
+        Assert.False(v.IsEditable);
+        vm.BeginEditCommand.Execute(v);
+        Assert.False(v.IsEditing); // begin is a no-op for a binary BLOB (it is viewed, not text-edited)
+    }
+
+    [Fact]
     public async Task UnhandledRaise_Faults()
     {
         var vm = Vm(Sql, new FakeExecutor().Raise(Off("v = a + b")), out _);

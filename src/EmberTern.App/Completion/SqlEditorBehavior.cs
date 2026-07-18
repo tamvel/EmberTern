@@ -38,7 +38,8 @@ internal static class SqlEditorBehavior
         TextEditor editor,
         MainWindowViewModel vm,
         Func<string?>? contextTableProvider = null,
-        Func<IReadOnlyList<Symbol>>? ambientSymbols = null)
+        Func<IReadOnlyList<Symbol>>? ambientSymbols = null,
+        Func<string, EmberTern.Core.Sql.Language.Hover.DebugHoverValue?>? debugValueLookup = null)
     {
         var completion = new SqlCompletionController(
             editor,
@@ -86,7 +87,10 @@ internal static class SqlEditorBehavior
             word => vm.TryOpenDdlForWord(word),
             (name, kind) => vm.FetchObjectDefinitionAsync(name, kind),
             // Double-click on a value → the unified Parameter Helper (owned by the completion controller).
-            showParameterHelper: offset => completion.TryShowParameterHelperAt(offset));
+            showParameterHelper: offset => completion.TryShowParameterHelperAt(offset),
+            // Debugger data tips (spec §9.4): the paused frame's value for the variable under the pointer.
+            // Null on every non-debugger surface, so the SQL/object editors are unaffected.
+            debugValueLookup: debugValueLookup);
 
         // Stage 7 / S3: diagnostic squiggles — a wavy underline under each Diagnostic the pure-Core
         // DiagnosticsEngine produced, computed on the same background pass the completion controller

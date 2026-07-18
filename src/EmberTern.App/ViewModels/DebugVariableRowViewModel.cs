@@ -63,6 +63,14 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
     /// <summary>The raw current value (the client-side frame truth), for data tips / inline edit (seam b).</summary>
     public object? RawValue { get; private set; }
 
+    /// <summary>Max characters rendered inline for a value — longer values are truncated with an ellipsis so a
+    /// large text BLOB never materializes a megabyte into the panel/hover (lazy, spec §9.4).</summary>
+    private const int MaxInlineLength = 256;
+
+    /// <summary>False for a binary BLOB (a <see cref="byte"/>[]) — it is inspected, not text-edited. Text
+    /// values (incl. long ones) stay editable via their full, untruncated raw string.</summary>
+    public bool IsEditable => RawValue is not byte[];
+
     /// <summary>The current value formatted for display (<c>&lt;null&gt;</c> for an unset/null variable).</summary>
     [ObservableProperty]
     private string _valueText = UiStrings.DebuggerVariableNull;
@@ -79,6 +87,44 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
     [ObservableProperty]
     private bool _isPinned;
 
+    /// <summary>True while the value cell is being inline-edited (the view swaps the label for a text box).</summary>
+    [ObservableProperty]
+    private bool _isEditing;
+
+    /// <summary>The in-progress edit text (bound to the inline text box).</summary>
+    [ObservableProperty]
+    private string _editText = string.Empty;
+
+    /// <summary>True when the last commit attempt failed to parse for the declared type (validate at edit
+    /// time; the real domain CHECK still surfaces on the next injection — spec §9.4 / §3.4).</summary>
+    [ObservableProperty]
+    private bool _hasEditError;
+
+    /// <summary>Enters inline-edit mode, seeding the box with the value's FULL untruncated text (never the
+    /// possibly-truncated <see cref="ValueText"/> — committing that back would silently corrupt the value, §0).</summary>
+    public void BeginEdit()
+    {
+        EditText = RawEditString();
+        HasEditError = false;
+        IsEditing = true;
+    }
+
+    // The full, untruncated invariant string of the raw value (empty for null) — the edit round-trips this,
+    // not the display text.
+    private string RawEditString() => RawValue switch
+    {
+        null => string.Empty,
+        System.IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+        var v => v.ToString() ?? string.Empty,
+    };
+
+    /// <summary>Leaves inline-edit mode without applying.</summary>
+    public void CancelEdit()
+    {
+        IsEditing = false;
+        HasEditError = false;
+    }
+
     /// <summary>Refreshes the live value + change cue in place (identity is untouched).</summary>
     public void Update(bool hasValue, object? value, bool changed)
     {
@@ -94,10 +140,19 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
         {
             return UiStrings.DebuggerVariableNull;
         }
-        return value switch
+        // Binary BLOB: never materialize the bytes as text — show a lazy placeholder (a value viewer is a
+        // later addition; this keeps the panel/hover cheap and honest).
+        if (value is byte[] bytes)
+        {
+            return string.Format(CultureInfo.InvariantCulture, UiStrings.DebuggerVariableBlobFormat, bytes.Length);
+        }
+        string text = value switch
         {
             System.IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
             _ => value.ToString() ?? UiStrings.DebuggerVariableNull,
         };
+        // Truncate a very long value inline (a large text BLOB) — the full value is still editable (BeginEdit
+        // reads the raw value), so this is display-only and loses nothing.
+        return text.Length > MaxInlineLength ? text.Substring(0, MaxInlineLength) + "…" : text;
     }
 }

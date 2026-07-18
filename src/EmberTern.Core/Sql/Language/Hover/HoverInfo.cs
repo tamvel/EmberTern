@@ -24,11 +24,19 @@ public sealed class HoverInfo
     /// <param name="span">The region this exact content is valid for — see <see cref="Span"/>.</param>
     /// <param name="diagnostics">The findings at the offset, in <see cref="DiagnosticsEngine"/> order.</param>
     /// <param name="info">The semantic Quick Info, or null when nothing resolved there.</param>
-    public HoverInfo(TextSpan span, IReadOnlyList<Diagnostic> diagnostics, QuickInfo.QuickInfo? info)
+    /// <param name="debugValue">The live debugger value for the variable/parameter at the offset (a data tip,
+    /// spec §9.4), or null outside a paused debug session / for a non-variable. Rendered first — in a paused
+    /// debugger the current value is the reason you hovered.</param>
+    public HoverInfo(
+        TextSpan span,
+        IReadOnlyList<Diagnostic> diagnostics,
+        QuickInfo.QuickInfo? info,
+        DebugHoverValue? debugValue = null)
     {
         Span = span;
         Diagnostics = diagnostics ?? System.Array.Empty<Diagnostic>();
         Info = info;
+        DebugValue = debugValue;
     }
 
     /// <summary>
@@ -63,6 +71,22 @@ public sealed class HoverInfo
     /// namespace, and from a sibling namespace the bare name binds to the namespace.</remarks>
     public QuickInfo.QuickInfo? Info { get; }
 
+    /// <summary>
+    /// The live debugger data tip for the variable/parameter under the pointer — its current value in the
+    /// paused frame — or null when there is no debug session, the pointer is not on a frame variable, or the
+    /// caller supplied no value lookup. The FIRST section of the card (spec §9.4): "you inspect where you are
+    /// looking." Supplied by the caller (a lookup delegate), never computed here — so, like <see cref="Diagnostics"/>,
+    /// the no-analysis rule holds by construction.
+    /// </summary>
+    public DebugHoverValue? DebugValue { get; }
+
     /// <summary>True when there is at least one diagnostic to explain.</summary>
     public bool HasDiagnostics => Diagnostics.Count > 0;
 }
+
+/// <summary>A debugger data tip — the current value of a frame variable/parameter, already formatted by the
+/// caller (the App owns value formatting; Core just carries the strings). Pure data.</summary>
+/// <param name="Name">The variable/parameter name.</param>
+/// <param name="ValueText">The value formatted for display (<c>&lt;null&gt;</c> for an unset/null value).</param>
+/// <param name="IsNull">True when the value is null/unset.</param>
+public sealed record DebugHoverValue(string Name, string ValueText, bool IsNull);
