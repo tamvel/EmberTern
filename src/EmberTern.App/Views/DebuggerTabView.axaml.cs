@@ -33,6 +33,10 @@ public partial class DebuggerTabView : UserControl
     private RowDefinition? _bottomRow;
     private double _bottomHeight = 220;
     private const double MinBottomHeight = 80;
+    // The panel height captured at the START of a splitter gesture (before the splitter drags it). Used so a
+    // double-click on the splitter — which is only a toggle affordance — cannot let its spurious micro-drag
+    // pollute the remembered height that collapse restores from.
+    private double? _splitterGestureHeight;
 
     public DebuggerTabView()
     {
@@ -133,13 +137,25 @@ public partial class DebuggerTabView : UserControl
         e.Handled = true;
     }
 
-    // Double-click the resize bar toggles collapse too — same ToggleBottomPanelCommand. The splitter is only
-    // visible while expanded (IsVisible bound to !IsBottomPanelCollapsed), so this always collapses; re-expand
-    // is the header-strip double-click above. A standard, unambiguous gesture (double-click a splitter to
-    // collapse the panel it sizes) — no separate mechanism.
+    // On the first press of a splitter gesture, snapshot the panel height BEFORE the splitter starts dragging
+    // it — this is the pre-gesture height a following double-click must preserve. (A real drag also lands here
+    // and just leaves the snapshot unused.)
+    private void OnBottomSplitterPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.ClickCount == 1 && _bottomRow?.Height is { IsAbsolute: true, Value: > 0 } h)
+            _splitterGestureHeight = h.Value;
+    }
+
+    // Double-click the resize bar toggles collapse too — the SAME ToggleBottomPanelCommand (one collapse
+    // logic). The splitter is only visible while expanded, so this always collapses; re-expand is the header
+    // double-click. The double-click makes the splitter micro-drag the row first, so we restore the pre-gesture
+    // height before toggling — then collapse remembers the right height and re-expand returns to it (not to the
+    // spurious drag height).
     private void OnBottomSplitterDoubleTapped(object? sender, TappedEventArgs e)
     {
         if (_vm is null) return;
+        if (_splitterGestureHeight is { } h && _bottomRow is not null)
+            _bottomRow.Height = new GridLength(h);
         Invoke(_vm.ToggleBottomPanelCommand);
         e.Handled = true;
     }

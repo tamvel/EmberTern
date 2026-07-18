@@ -221,6 +221,7 @@
                       HorizontalAlignment="Stretch"
                       Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding !IsBottomPanelCollapsed}"
+                      PointerPressed="OnBottomSplitterPointerPressed"
                       DoubleTapped="OnBottomSplitterDoubleTapped" />
 
         <!-- ── Bottom tabbed panel (full width, collapsible) ──────────────────────────
