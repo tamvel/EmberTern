@@ -148,19 +148,15 @@ public partial class DebuggerTabView : UserControl
         e.Handled = true;
     }
 
-    // Double-click the resize bar toggles collapse too — the SAME ToggleBottomPanelCommand (one collapse
-    // logic). The toggle is DEFERRED to run after the splitter's pointer gesture finishes: collapsing hides
-    // the splitter (its IsVisible binds to !IsBottomPanelCollapsed), and doing that synchronously — while this
-    // very splitter is still handling the double-tap gesture — leaves the collapse half-applied (the SQL
-    // editor's splitter double-click works precisely because maximize/restore never hides the splitter). Once
-    // deferred, the double-click behaves exactly like the collapse button, which always worked. ApplyBottomPanel
-    // re-normalizes both rows, so the gesture's spurious micro-drag is absorbed; no per-gesture snapshot needed.
+    // Double-click the resize bar toggles collapse — structurally identical to MainWindow's
+    // OnResultsSplitterDoubleTapped (synchronous flag toggle → ApplyBottomPanel sets both rows). The splitter
+    // is always visible (its visibility no longer depends on the state it toggles), so it never hides itself
+    // mid-gesture; the double-click therefore toggles reliably in both directions and needs no deferral.
     private void OnBottomSplitterDoubleTapped(object? sender, TappedEventArgs e)
     {
-        var vm = _vm;
-        if (vm is null) return;
+        if (_vm is null) return;
+        Invoke(_vm.ToggleBottomPanelCommand);
         e.Handled = true;
-        Dispatcher.UIThread.Post(() => Invoke(vm.ToggleBottomPanelCommand));
     }
 
     // Click a Variables group header to expand/collapse it. A view concern (presentation), so it flips the

@@ -40,12 +40,14 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
 
     public bool HasType => TypeText.Length > 0;
 
-    /// <summary>The kind glyph (⬤ IN / ◑ OUT / ○ local) — mirrors the spec §9.4 tree.</summary>
+    /// <summary>The kind glyph — a distinct SHAPE per kind (triangle IN / diamond OUT / circle local) so the
+    /// kind reads at a glance; paired with a distinct colour (<see cref="KindBrushKey"/>). Cursor variables get
+    /// their own glyph/colour when a later milestone surfaces them.</summary>
     public string KindGlyph => Kind switch
     {
-        DebugVariableKind.ParameterIn => "⬤",   // ⬤
-        DebugVariableKind.ParameterOut => "◑",  // ◑
-        _ => "○",                                // ○
+        DebugVariableKind.ParameterIn => "▸",   // input parameter
+        DebugVariableKind.ParameterOut => "◆",  // output / RETURNS
+        _ => "●",                                // local
     };
 
     /// <summary>Localized kind label (IN / OUT / local).</summary>
@@ -56,9 +58,14 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
         _ => UiStrings.DebuggerVariableKindLocal,
     };
 
-    /// <summary>Theme-token key for the kind glyph colour (resolved via <see cref="IconBrushConverter"/>):
-    /// parameters use the accent, locals the subtle foreground.</summary>
-    public string KindBrushKey => Kind == DebugVariableKind.Local ? "SubtleForegroundBrush" : "AccentBrush";
+    /// <summary>Theme-token key for the kind glyph colour (resolved via <see cref="IconBrushConverter"/>): a
+    /// distinct hue per kind — IN blue, OUT amber, local green — so kinds are distinguishable at a glance.</summary>
+    public string KindBrushKey => Kind switch
+    {
+        DebugVariableKind.ParameterIn => "DebugParamInBrush",
+        DebugVariableKind.ParameterOut => "DebugParamOutBrush",
+        _ => "DebugLocalBrush",
+    };
 
     /// <summary>The raw current value (the client-side frame truth), for data tips / inline edit (seam b).</summary>
     public object? RawValue { get; private set; }

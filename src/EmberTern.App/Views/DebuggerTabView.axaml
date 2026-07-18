@@ -251,23 +251,24 @@
                             <DataTemplate x:DataType="vm:DebugVariableRowViewModel">
                               <Border Classes.var-changed="{Binding IsChanged}" Padding="4,1" Margin="0,0,0,1">
                                 <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,1">
-                                  <!-- Pin-to-top toggle (★ pinned / ☆ not) — not a Watch (§9.5). -->
+                                  <!-- Pin-to-top toggle — gold ★ pinned / faint ☆ not, so it never blends into
+                                       the kind glyph beside it. Not a Watch (§9.5). -->
                                   <Button Grid.Column="0" Classes="icon" Width="18" Height="18" Padding="0"
-                                          VerticalAlignment="Center"
+                                          VerticalAlignment="Center" Margin="0,0,4,0"
                                           ToolTip.Tip="{x:Static app:UiStrings.DebuggerVariablePinTooltip}"
                                           Command="{Binding #RootControl.((vm:DebuggerTabViewModel)DataContext).TogglePinCommand}"
                                           CommandParameter="{Binding}">
                                     <Panel>
-                                      <TextBlock Text="★" FontSize="11" Foreground="{DynamicResource AccentBrush}"
+                                      <TextBlock Text="★" FontSize="12" Foreground="{DynamicResource DebugPinBrush}"
                                                  IsVisible="{Binding IsPinned}" />
-                                      <TextBlock Text="☆" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}"
-                                                 IsVisible="{Binding !IsPinned}" />
+                                      <TextBlock Text="☆" FontSize="12" Foreground="{DynamicResource SubtleForegroundBrush}"
+                                                 Opacity="0.6" IsVisible="{Binding !IsPinned}" />
                                     </Panel>
                                   </Button>
 
-                                  <!-- Kind glyph (⬤ IN / ◑ OUT / ○ local), themed by the row's key string. -->
-                                  <TextBlock Grid.Column="1" Text="{Binding KindGlyph}" FontSize="9"
-                                             VerticalAlignment="Center" Margin="2,0,6,0"
+                                  <!-- Kind glyph — distinct shape + colour per kind (spec §9.4). -->
+                                  <TextBlock Grid.Column="1" Text="{Binding KindGlyph}" FontSize="10"
+                                             VerticalAlignment="Center" Margin="2,0,8,0"
                                              ToolTip.Tip="{Binding KindLabel}">
                                     <TextBlock.Foreground>
                                       <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -322,12 +323,15 @@
           </Border>
         </Grid>
 
-        <!-- Resize handle (hidden while the bottom panel is collapsed). -->
+        <!-- Resize handle. ALWAYS visible while the debug view is shown — exactly like the SQL editor's
+             results splitter (IsVisible=IsQueryTabActive), whose visibility is independent of what its
+             double-click does. Binding it to !IsBottomPanelCollapsed (the state its OWN double-click toggles)
+             made the splitter hide itself mid-action; double-click then always re-expands from the still-
+             present handle. Same pattern as MainWindow's ResultsSplitter. -->
         <GridSplitter Grid.Row="1" x:Name="BottomSplitter" Height="4"
                       ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
                       HorizontalAlignment="Stretch"
                       Background="{DynamicResource BorderBrush}"
-                      IsVisible="{Binding !IsBottomPanelCollapsed}"
                       DoubleTapped="OnBottomSplitterDoubleTapped" />
 
         <!-- ── Bottom tabbed panel (full width, collapsible) ──────────────────────────

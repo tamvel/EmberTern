@@ -58,6 +58,15 @@
       <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4). -->
       <Color x:Key="DebugVariableChangedColor">#33C8A000</Color>
       <SolidColorBrush x:Key="DebugVariableChangedBrush" Color="{StaticResource DebugVariableChangedColor}" />
+      <!-- Variables panel: per-kind glyph colours (distinct hues for fast recognition) + the pin (gold). -->
+      <Color x:Key="DebugParamInColor">#5B9BD5</Color>
+      <Color x:Key="DebugParamOutColor">#E8A020</Color>
+      <Color x:Key="DebugLocalColor">#4EC994</Color>
+      <Color x:Key="DebugPinColor">#F2C94C</Color>
+      <SolidColorBrush x:Key="DebugParamInBrush"  Color="{StaticResource DebugParamInColor}" />
+      <SolidColorBrush x:Key="DebugParamOutBrush" Color="{StaticResource DebugParamOutColor}" />
+      <SolidColorBrush x:Key="DebugLocalBrush"    Color="{StaticResource DebugLocalColor}" />
+      <SolidColorBrush x:Key="DebugPinBrush"      Color="{StaticResource DebugPinColor}" />
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
@@ -268,6 +277,15 @@
       <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4). -->
       <Color x:Key="DebugVariableChangedColor">#3FE0B000</Color>
       <SolidColorBrush x:Key="DebugVariableChangedBrush" Color="{StaticResource DebugVariableChangedColor}" />
+      <!-- Variables panel: per-kind glyph colours (distinct hues for fast recognition) + the pin (gold). -->
+      <Color x:Key="DebugParamInColor">#2D6BBF</Color>
+      <Color x:Key="DebugParamOutColor">#C77800</Color>
+      <Color x:Key="DebugLocalColor">#1A7F4B</Color>
+      <Color x:Key="DebugPinColor">#C99700</Color>
+      <SolidColorBrush x:Key="DebugParamInBrush"  Color="{StaticResource DebugParamInColor}" />
+      <SolidColorBrush x:Key="DebugParamOutBrush" Color="{StaticResource DebugParamOutColor}" />
+      <SolidColorBrush x:Key="DebugLocalBrush"    Color="{StaticResource DebugLocalColor}" />
+      <SolidColorBrush x:Key="DebugPinBrush"      Color="{StaticResource DebugPinColor}" />
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or

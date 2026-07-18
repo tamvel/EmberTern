@@ -1143,3 +1143,32 @@ behaved as expected), the user filed three UX items for later sessions:
 
 Per the standing directive ([[feedback-debugger-ux-polish-backlog]]): fix these as UX/theme in the view +
 tokens; never push logic into the VMs to paper over UX.
+
+### Post-D7 bugfixes (2026-07-18) — splitter (real root cause), Variables icons, pin
+
+Three UX bugfixes before D8 (user-reported after D7 manual QA).
+
+**1. GridSplitter double-click — the ACTUAL root cause (parts 1+2 were wrong places).** Earlier this session
+re-normalized both rows (part 1) and deferred the toggle off the gesture (part 2); neither fixed it. The user
+directed: stop iterating, find the SQL Editor's mechanism, reuse the exact pattern, refactor if needed. The
+structural divergence, found by that comparison: the debugger bound the **splitter's own `IsVisible` to
+`!IsBottomPanelCollapsed`** — the very state the splitter's double-click toggles, so the control was entangled
+with its own action. MainWindow's results splitter keeps its visibility on an **independent** condition
+(`IsQueryTabActive`), never on what `ToggleResultsMaximized` does. Fix: the debugger splitter is now **always
+visible** while the debug view shows (it already lives inside a host gated on that), and the double-click
+handler is synchronous — structurally identical to `OnResultsSplitterDoubleTapped`. The `Dispatcher.Post`
+deferral from part 2 was removed. Gotcha #240 (part 3 = the real fix). Awaits live confirmation.
+
+**2. Variables kind icons — distinct shape + colour per kind.** IN and OUT previously shared the accent colour
+and near-identical dot glyphs, so every row read the same. Now each kind has a distinct SHAPE — ▸ IN / ◆ OUT /
+● local — AND a distinct hue via dedicated theme tokens (both dictionaries): `DebugParamInBrush` (blue),
+`DebugParamOutBrush` (amber), `DebugLocalBrush` (green). The row VM's `KindGlyph`/`KindBrushKey` map per kind;
+the colour is still a theme **key string** resolved through `IconBrushConverter` (never a brush — rule #1).
+Cursor variables get their own glyph/token when a later milestone surfaces them.
+
+**3. Pinned star.** The pinned ★ shared the accent colour with the kind glyph beside it, so they blended. Now
+the pinned star is **gold** (`DebugPinBrush`, both dictionaries), the unpinned ☆ is faint (subtle + 0.6 opacity),
+both a touch larger, with a 4px gap added between the pin button and the kind glyph.
+
+Build 0/0; **4807 green** (no test changes — no test asserts glyph/colour strings); smoke clean. UX awaits the
+user's visual confirmation.

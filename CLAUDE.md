@@ -490,10 +490,12 @@ noted.
   sets both rows every toggle** (top → star, bottom → Auto/pixel), exactly like `ApplyResultsRowForActiveTab`;
   the `_splitterGestureHeight` workaround + its `PointerPressed` handler are **deleted** (full re-normalization
   absorbs the double-click micro-drag, as the SQL editor's maximize/restore does). Gotcha #240. Build 0/0, 4797
-  green, smoke clean. **⚠ STILL NOT RIGHT (user, 2026-07-18):** after both parts the double-click is still not
-  identical to the SQL Editor. **Directive: stop iterating locally** — a dedicated session should **reuse the
-  SQL Editor's existing results-panel collapse mechanism** verbatim rather than patch further. Left OPEN; see
-  [[feedback-debugger-ux-polish-backlog]] (D7-1) + `docs/history/19` §"D7 UX backlog".
+  green, smoke clean. **Root cause finally found (part 3, 2026-07-18):** parts 1+2 fixed the wrong place; the
+  real bug was binding the **splitter's own `IsVisible` to `!IsBottomPanelCollapsed`** — the state its own
+  double-click toggles (self-entangled). MainWindow's results splitter keeps visibility on an **independent**
+  condition (`IsQueryTabActive`). Fix: debugger splitter is now **always visible** while the debug view shows +
+  synchronous toggle (identical to `OnResultsSplitterDoubleTapped`); the `Dispatcher.Post` deferral removed.
+  Gotcha #240 part 3. Awaits live confirmation.
   **D7 (Variables window, full) — DONE + user-confirmed (2026-07-18; grouping/filter/pin/edit/live-update all
   verified on the live lab).** The basic D4
   list becomes the rich window (spec §9.4). **Seam (a):** rows grouped **Pinned / Parameters / Locals** (kind
@@ -512,10 +514,11 @@ noted.
   surfaces on next injection (§3.4/§F); the box seeds from the full untruncated raw value (§0). **Lazy BLOBs**
   — a binary `byte[]` shows `[BLOB · N B]` and is not editable; long text truncates inline (256) but edits
   full; a dedicated value-viewer popup is a documented follow-up (no reusable viewer exists). Build 0/0,
-  **4807 green** (+10), smoke clean. **User UX backlog (deferred, NOT to implement ad hoc — [[feedback-debugger-ux-polish-backlog]]
-  D7-2/D7-3):** Variables kind icons are too similar (all read as dots) — distinguish Parameters / Returns(OUT)
-  / Locals / Cursor-vars by distinct icons or clearly different colours; the Pinned ★ blends into the kind
-  glyph — different colour (e.g. yellow) / more spacing / a pin icon. **Next: D8 (Call stack + nested stored routines).**
+  **4807 green** (+10), smoke clean. **Post-D7 UX bugfixes DONE (2026-07-18, awaits live confirm):** Variables
+  kind icons now distinct SHAPE + hue per kind (▸ IN blue / ◆ OUT amber / ● local green — dedicated
+  `DebugParamInBrush`/`DebugParamOutBrush`/`DebugLocalBrush` tokens, both dicts); the Pinned star is now **gold**
+  (`DebugPinBrush`) with more spacing so it no longer blends into the kind glyph; and the splitter double-click
+  root-cause fix above. **Next: D8 (Call stack + nested stored routines).**
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
