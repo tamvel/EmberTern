@@ -1637,8 +1637,10 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         foreach (var tab in WorkspaceTabs)
         {
-            // The Security Manager and Activity Monitor are live tools, not persisted.
-            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch or WorkspaceTabKind.ScriptExecutor) continue;
+            // Live tools + transient sessions are never persisted. A Debugger tab is a
+            // transient debug session (rolled back on close), not a document — it must not
+            // be captured (else an empty tab is "restored" on the next launch of the app).
+            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch or WorkspaceTabKind.ScriptExecutor or WorkspaceTabKind.Debugger) continue;
 
             if (tab.Kind == WorkspaceTabKind.Query)
             {
@@ -2091,6 +2093,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 _ = sm.DisposeAsync(); // stop the MON$ poll timer on disconnect (best-effort)
             else if (t.Kind == WorkspaceTabKind.ScriptExecutor && t.ScriptExecutor is { } se)
                 se.Detach(); // unsubscribe from the transaction-state event
+            else if (t.Kind == WorkspaceTabKind.Debugger && t.Debugger is { } dbg)
+                _ = dbg.DisposeAsync(); // roll back + close the debug session's attachment (§4.4) — a debug tab is bound to this DB (best-effort)
         }
         WorkspaceTabs.Clear();
         _tabActivationHistory.Clear();

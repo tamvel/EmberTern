@@ -964,3 +964,31 @@ clean. The live layout (collapse, tab switching, ancestor `RemoveWatchCommand` b
 confirmation** (the debugger tab renders only against a live DB).
 
 **Next milestone: D6 (Cursor Bridge). D6+ not started.**
+
+## Debugger tab UX follow-up — transient tab + double-click-to-collapse (2026-07-18)
+
+Two small IDE-behaviour fixes surfaced during manual QA, landed as one commit *before* starting D6 (cheaper
+now, before D6 adds panels/state). No debugger logic changed.
+
+1. **Debugger tabs are session-transient — never persisted.** With a debugger tab open, closing the app then
+   relaunching "restored" an empty tab. Root cause: `MainWindowViewModel.SnapshotCurrentTabs` skipped only the
+   live-tool kinds (SecurityManager/TraceMonitor/SessionManager/GlobalSearch/ScriptExecutor); a `Debugger` tab
+   fell through to the final `else` and was captured as a `CoreTabKind.Ddl` tab (routine name + empty DDL),
+   which re-opened as an empty tab on the next launch. Fix: add `WorkspaceTabKind.Debugger` to that skip-list —
+   a debug session is transient (rolled back on close), not a document. Consequences, all now correct: **app
+   close** → not captured → **restart** restores nothing; **disconnect** already clears every visible tab, and
+   `ClearWorkspaceTabs` now also tears the debug session down (`DisposeAsync` = §4.4 rollback + close the
+   session's attachment) the same way it disposes the monitors — so a debug tab bound to the disconnected DB is
+   closed *and* its attachment released. No new architecture — the tab was already `IsClosable`, already torn
+   down on explicit tab-close (`RequestCloseTabAsync`); this only stops it leaking into persisted state and
+   adds the disconnect teardown. Pinned by `WorkspacePersistenceVmTests.DebuggerTab_IsTransient_NotCaptured`.
+2. **Double-click the bottom panel's tab strip to collapse/expand.** A second, more natural affordance beside
+   the chevron button, reusing the **same** `ToggleBottomPanelCommand` (no second mechanism). Handled on the
+   bottom `Border`'s `DoubleTapped` in `DebuggerTabView`: when expanded, only a double-tap whose source has a
+   `TabItem` ancestor toggles (so double-clicking panel *content* — rows, inputs — is left alone; the selected
+   content lives in the TabControl's ContentPresenter, not under a `TabItem`); when collapsed only the strip is
+   visible, so any double-tap on the bar expands it. A double-tap that lands on the chevron `Button` is ignored
+   (the button owns its own click). Presentation-only; view + `DoubleTapped` wiring only.
+
+Build 0/0; **4785 tests green** (+1); smoke clean. Live behaviour (transient tab across restart/disconnect,
+double-click collapse) awaits user confirmation (the debugger tab renders only against a live DB).

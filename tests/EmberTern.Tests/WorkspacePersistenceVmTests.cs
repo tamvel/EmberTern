@@ -1,6 +1,9 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using EmberTern.App.Debugging;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
@@ -272,6 +275,33 @@ public class WorkspacePersistenceVmTests
 
         Assert.Equal(2, harness.Main.WorkspaceTabs.Count);
         Assert.Equal(VmTabKind.Query, harness.Main.WorkspaceTabs[0].Kind);
+    }
+
+    [Fact]
+    public void DebuggerTab_IsTransient_NotCaptured()
+    {
+        using var harness = new Harness();
+        harness.Main.ApplyActiveConnectionChange("A");
+        var dbg = new DebuggerTabViewModel(
+            "SP_X",
+            _ => Task.FromResult<string?>("create procedure sp_x as begin end"),
+            new NoopLauncher());
+        harness.Main.WorkspaceTabs.Add(WorkspaceTabViewModel.CreateDebugger(harness.Main, dbg, "SP_X", "A"));
+
+        var state = harness.Main.CaptureWorkspace();
+
+        // The debugger tab is a transient session, not a document — only the Query tab is captured,
+        // so nothing is "restored" on the next app launch.
+        Assert.Single(state.Workspaces["A"].Tabs);
+        Assert.Equal(CoreTabKind.Query, state.Workspaces["A"].Tabs[0].Kind);
+        Assert.DoesNotContain(state.Workspaces["A"].Tabs, t => t.ObjectName == "SP_X");
+    }
+
+    // A launcher that is never invoked: the test only opens the tab, it never launches a session (no server).
+    private sealed class NoopLauncher : IDebugSessionLauncher
+    {
+        public Task<DebugRunHandle> LaunchAsync(DebugLaunchSpec spec, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class Harness : IDisposable

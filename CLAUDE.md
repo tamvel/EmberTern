@@ -458,7 +458,17 @@ noted.
   **presentation** members only: `IsBottomPanelCollapsed`/`ToggleBottomPanelCommand`, `LatestEvaluation`;
   `DebugSession`/`Evaluate`/`WatchStore`/`WatchSideEffectDetector` + Watches persistence/auto-re-eval untouched.
   Build 0/0; **4784 tests green** (+2 presentation); smoke clean. **Next milestone: D6 (Cursor Bridge). D6+ not
-  started.** **Next session: D5 seam (b) —
+  started.**
+  **Debugger tab UX follow-up — DONE (2026-07-18; live behaviour awaits user confirmation).** Two small IDE
+  fixes, one commit, before D6: (1) **debugger tabs are session-transient** — `SnapshotCurrentTabs` skipped only
+  the live-tool kinds, so a `Debugger` tab fell through and was persisted as a `Ddl` tab → an empty tab was
+  "restored" on next launch; adding `WorkspaceTabKind.Debugger` to the skip-list means app-close captures
+  nothing (restart restores nothing), and `ClearWorkspaceTabs` now also `DisposeAsync`-tears-down the debug
+  session on **disconnect** (§4.4 rollback + close attachment) like the monitors. (2) **double-click the bottom
+  panel's tab strip** toggles collapse via the **same** `ToggleBottomPanelCommand` (view `DoubleTapped`; toggles
+  only on a `TabItem`-ancestor hit when expanded, any bar hit when collapsed, ignores the chevron button). Pinned
+  by `DebuggerTab_IsTransient_NotCaptured`; build 0/0, 4785 green. History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
+  **Next session: D5 seam (b) —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
   (P1 → P2 → D1 → D2 → D3 → D4 → D5 …). **Read the plan + your milestone's brief before writing any debugger code.**

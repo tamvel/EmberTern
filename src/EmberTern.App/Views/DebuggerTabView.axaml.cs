@@ -117,6 +117,22 @@ public partial class DebuggerTabView : UserControl
         }
     }
 
+    // Double-click the bottom panel's header bar (the tab strip) to toggle collapse — a second, more natural
+    // affordance beside the chevron button. Reuses the SAME logic (ToggleBottomPanelCommand); no separate
+    // mechanism. When expanded, only a double-tap on a tab header toggles, so double-clicking the panel's
+    // content (rows, inputs) is left alone; when collapsed only the strip is visible, so any double-tap on the
+    // bar expands it. The chevron button owns its own click, so a double-tap that lands on it is ignored here.
+    private void OnBottomPanelDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (_vm is null) return;
+        var source = e.Source as Visual;
+        if (source?.FindAncestorOfType<Button>() is not null) return;
+        bool onStrip = _vm.IsBottomPanelCollapsed || source?.FindAncestorOfType<TabItem>() is not null;
+        if (!onStrip) return;
+        Invoke(_vm.ToggleBottomPanelCommand);
+        e.Handled = true;
+    }
+
     private void OnDebugMarkersChanged(object? sender, EventArgs e) => RepaintMarkers();
 
     private void SyncEditorText()
