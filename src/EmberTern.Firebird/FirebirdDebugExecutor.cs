@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FirebirdSql.Data.FirebirdClient;
@@ -27,11 +28,12 @@ namespace EmberTern.Firebird;
 /// from a message). Frame savepoints (§4.5) delegate to the session.
 /// </para>
 /// <para>
-/// <b>Boundaries (§F — explained, not guessed):</b> stepping <em>into</em> a routine
-/// (<see cref="ResolveRoutine"/>) is not yet resolved, so a call runs on the server in place — which is
-/// <em>step-over</em> and 100% faithful (§5.3); nested stored routines are D8, local routines D9. A
-/// <c>FOR SELECT</c> cursor (<see cref="OpenCursor"/>) is stepped through the Cursor Bridge (D6, §7); a
-/// <c>FOR EXECUTE STATEMENT</c> dynamic cursor is refused with a clear message.
+/// <b>Boundaries (§F — explained, not guessed):</b> stepping <em>into</em> a standalone <c>EXECUTE
+/// PROCEDURE</c> resolves the callee for a real frame (<see cref="ResolveRoutine"/>, D8 — fetch/parse/seed);
+/// a call it cannot faithfully descend into (a package/qualified name — D11, a local sub-routine — D9, or a
+/// callee whose source/metadata cannot be read) runs on the server in place, which is <em>step-over</em> and
+/// 100% faithful (§5.3). A <c>FOR SELECT</c> cursor (<see cref="OpenCursor"/>) is stepped through the Cursor
+/// Bridge (D6, §7); a <c>FOR EXECUTE STATEMENT</c> dynamic cursor is refused with a clear message.
 /// </para>
 /// <para>
 /// <b>Threading.</b> <see cref="IDebugExecutor"/> is synchronous (D1's frozen contract); the session is async.
@@ -53,7 +55,12 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     // cast to VARCHAR (e.g. a binary BLOB) raises and is surfaced as the error, never silently guessed (§F).
     private const string EvaluationResultType = "VARCHAR(8191) CHARACTER SET UTF8";
 
+    // A synthetic result-variable name for one evaluated call argument (D8 step-into). ET_-prefixed so it
+    // cannot collide with a real ERP variable (same convention as HarnessBuilder's ET_P_/ET_O_).
+    private const string ArgVarPrefix = "ET_ARG_";
+
     private readonly DebugSessionConnection _session;
+    private readonly Encoding _fallback;
 
     // Per-routine context, keyed by the routine's body node (Stage X / D8): the interpreter runs a call stack
     // of frames, each an activation of a routine whose source / model / variable templates / outputs differ.
@@ -69,30 +76,37 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         IReadOnlyList<HarnessVariable> VariableTemplates,
         HashSet<string> OutputParameters);
 
-    private FirebirdDebugExecutor(DebugSessionConnection session) => _session = session;
+    private FirebirdDebugExecutor(DebugSessionConnection session, Encoding fallback)
+    {
+        _session = session;
+        _fallback = fallback;
+    }
 
     /// <summary>Creates the executor for a standalone routine (the root frame): resolves its frame variable
     /// templates (verbatim declarations R3 + base types R2) from metadata once, then registers its context.
     /// <paramref name="source"/> is the routine's full source (the span backing for fragments + declarations),
     /// <paramref name="body"/> its parsed body (the context key), <paramref name="model"/> its semantic model
-    /// (the read/write sets consume it).</summary>
+    /// (the read/write sets consume it). <paramref name="fallback"/> is the source-blob decode fallback
+    /// (UTF-8-first, then this) used when a stepped-into callee's source is reconstructed (D8).</summary>
     public static async Task<FirebirdDebugExecutor> CreateAsync(
         DebugSessionConnection session,
         string? routineName,
         string source,
         BlockStatement body,
         SemanticModel model,
+        Encoding fallback,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(body);
         ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(fallback);
 
         var layout = await FirebirdDebugMetadata
             .BuildFrameVariablesAsync(session, routineName, body, source, cancellationToken)
             .ConfigureAwait(false);
-        var executor = new FirebirdDebugExecutor(session);
+        var executor = new FirebirdDebugExecutor(session, fallback);
         executor.Register(body, source, model, layout.Variables, layout.OutputParameters);
         return executor;
     }
@@ -286,9 +300,163 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     }
 
     /// <inheritdoc/>
-    /// <remarks>D2: a call is not resolved for step-into, so the interpreter runs it in place on the server —
-    /// which is step-over (100% faithful, §5.3). Step-into a stored routine is D8, a local routine D9.</remarks>
-    public DebugRoutine? ResolveRoutine(IExecutableStatement call, Frame frame) => null;
+    /// <remarks>D8 (§5): resolves a standalone <c>EXECUTE PROCEDURE</c> call for step-into — fetches the
+    /// callee's source (<see cref="FirebirdDdlReader"/>, on the debug session), parses it into a body +
+    /// semantic model (gotcha #238: the whole <c>CREATE PROCEDURE</c>, so its declares are in scope), resolves
+    /// its frame variable templates (R2/R3) via <see cref="FirebirdDebugMetadata"/>, <b>evaluates the call's
+    /// arguments in the CALLER frame through a typed harness</b> to seed the callee's input parameters, and
+    /// registers the callee's context. Returns null — so the interpreter runs the call in place (step-over,
+    /// 100% faithful §5.3) — for any call it cannot faithfully descend into: a non-<c>EXECUTE PROCEDURE</c>
+    /// step point, a call with no readable name, a package/qualified name (D11), or a callee whose source /
+    /// metadata cannot be read or parsed. A local sub-routine (a closure) is D9; here every resolved callee is
+    /// a <b>stored</b> routine (a closed scope — <see cref="DebugRoutine.LexicalParent"/> stays null).</remarks>
+    public DebugRoutine? ResolveRoutine(IExecutableStatement call, Frame frame)
+    {
+        if (call is not ExecuteProcedureStatement exec) return null;
+        if (string.IsNullOrWhiteSpace(exec.ProcedureName)) return null;
+        // A dotted (package.procedure) callee is D11 — step over it for now (§F: faithful, just no descent).
+        if (exec.ProcedureName!.Contains('.')) return null;
+
+        try
+        {
+            return Await(ResolveRoutineAsync(exec, frame, CancellationToken.None));
+        }
+        catch (FbException)
+        {
+            return null; // callee source / metadata unreadable → step over in place (§5.3), never guess
+        }
+    }
+
+    private async Task<DebugRoutine?> ResolveRoutineAsync(
+        ExecuteProcedureStatement exec, Frame callerFrame, CancellationToken cancellationToken)
+    {
+        string name = exec.ProcedureName!;
+        string source = await LoadProcedureSourceAsync(name, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(source)) return null;
+
+        // Strict whole-routine parse (gotcha #238): CREATE PROCEDURE stays one DdlStatement whose Body is
+        // bound with its declares in scope. Null body (not a PSQL procedure / unparsed) → step over.
+        var model = SemanticModel.Build(SqlParser.Parse(source).Root);
+        BlockStatement? body = null;
+        foreach (var st in model.Syntax.Statements)
+        {
+            if (st is DdlStatement { Body: { } b }) { body = b; break; }
+        }
+        if (body is null) return null;
+
+        var layout = await FirebirdDebugMetadata
+            .BuildFrameVariablesAsync(_session, name, body, source, cancellationToken)
+            .ConfigureAwait(false);
+
+        // Evaluate the call's arguments in the CALLER frame (typed as the callee's input params) → seed them.
+        var initialValues = await SeedInputParametersAsync(
+            exec, callerFrame, layout.InputParameters, cancellationToken).ConfigureAwait(false);
+
+        Register(body, source, model, layout.Variables, layout.OutputParameters);
+        return new DebugRoutine(name, body, initialValues, layout.OutputParameters, lexicalParent: null);
+    }
+
+    // Reconstructs the callee's CREATE OR ALTER PROCEDURE source on the DEBUG session (its own attachment +
+    // transaction), holding the session command lock across the multi-command reconstruction (#98/#120/#236 —
+    // captured once). Reading committed procedure source on the debug tx is consistent with the session's
+    // isolation and keeps everything on the one debug attachment.
+    private async Task<string> LoadProcedureSourceAsync(string name, CancellationToken cancellationToken)
+    {
+        int serverMajor = FirebirdDdlReader.ParseServerMajor(_session.Connection.ServerVersion);
+        var gate = _session.CommandLock;
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await FirebirdDdlReader.BuildProcedureSourceAsync(
+                _session.Connection, _session.Transaction, name, serverMajor, _fallback, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    // Evaluates each call argument in the CALLER frame — through the SAME harness as a step (no second
+    // evaluator, Contract #4) — assigning it to a synthetic result variable typed as the corresponding callee
+    // INPUT parameter's base type (R2), so the server computes each argument with full fidelity (types,
+    // evaluation order, NULL) and returns it typed. The values seed the callee frame's input parameters
+    // positionally. Over-injects the caller's in-scope locals (§3.5 safe fallback) so any variable an
+    // argument references is present. Zips to the shorter of (args, input params): a call omitting trailing
+    // defaulted params seeds only the provided ones (the rest start unset — a documented §F boundary, since a
+    // parameter default is evaluated by the callee's own signature, not reconstructed here).
+    private async Task<IReadOnlyDictionary<string, object?>?> SeedInputParametersAsync(
+        ExecuteProcedureStatement exec, Frame callerFrame,
+        IReadOnlyList<HarnessVariable> inputParameters, CancellationToken cancellationToken)
+    {
+        int n = Math.Min(exec.Arguments.Count, inputParameters.Count);
+        if (n == 0) return null;
+
+        var callerCtx = Ctx(callerFrame);
+
+        // Synthetic result variables (ET_ARG_i), typed as the callee input params, plus the caller's own
+        // variables (so the argument expressions resolve). The synthetic vars are the write set; the caller's
+        // in-scope locals are the read set (injected).
+        var variables = new List<HarnessVariable>(BindValues(callerCtx, callerFrame));
+        var argNames = new string[n];
+        var fragment = new StringBuilder();
+        for (int i = 0; i < n; i++)
+        {
+            string argVar = ArgVarPrefix + i;
+            argNames[i] = argVar;
+            string baseType = inputParameters[i].BaseType;
+            variables.Add(new HarnessVariable(argVar, $"DECLARE {argVar} {baseType};", baseType));
+            string argText = RewriteColonRefsToBare(
+                callerCtx.Source, exec.Tokens, exec.Arguments[i].Start, exec.Arguments[i].Length);
+            fragment.Append(argVar).Append(" = ").Append(argText.Trim()).Append(';');
+        }
+
+        var reads = ReadWriteSetAnalyzer.InScopeLocals(callerCtx.Model, exec.Start);
+        var harness = HarnessBuilder.Build(new HarnessRequest
+        {
+            Fragment = fragment.ToString(),
+            Mode = HarnessMode.Statement,
+            Variables = variables,
+            Reads = reads,
+            Writes = argNames,
+        });
+
+        var run = await RunHarnessAsync(harness, cancellationToken).ConfigureAwait(false);
+
+        var seeded = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < n; i++)
+        {
+            object? value = run.Writes is { } w && w.TryGetValue(argNames[i], out var v) ? v : null;
+            seeded[inputParameters[i].Name] = value;
+        }
+        return seeded;
+    }
+
+    // Rewrites a call argument's source text for use as the RHS of a PSQL assignment in the seeding harness:
+    // each :name / @name frame-variable reference (a Parameter token — Firebird's unambiguous variable syntax
+    // in a call's argument list) is rewritten to its BARE name, because the colon/at form is a SQL error in a
+    // PSQL expression (verified live: `x = :y;` → SQL -104 "token unknown"). Rewritten BY SPAN over the
+    // statement's own tokens (never text search — a ':' inside a string literal is a String token, untouched),
+    // mirroring CursorBridge's colon rewrite (there → positional '?'; here → bare name). Everything else is
+    // copied verbatim, so a literal / arithmetic argument (SP(:P + 1, 10)) is preserved exactly.
+    private static string RewriteColonRefsToBare(
+        string source, IReadOnlyList<SqlToken> tokens, int argStart, int argLength)
+    {
+        int start = Math.Clamp(argStart, 0, source.Length);
+        int end = Math.Clamp(argStart + argLength, start, source.Length);
+        var sb = new StringBuilder(end - start + 8);
+        int cursor = start;
+        foreach (var tok in tokens)
+        {
+            if (tok.Kind != TokenKind.Parameter || tok.Start < start || tok.End > end) continue;
+            if (tok.Start < cursor) continue; // defensive: disjoint tokens, should not overlap
+            sb.Append(source, cursor, tok.Start - cursor);
+            sb.Append(tok.Text.TrimStart(':', '@')); // the bare variable name
+            cursor = tok.End;
+        }
+        sb.Append(source, cursor, end - cursor);
+        return sb.ToString();
+    }
 
     /// <inheritdoc/>
     public void EnterFrameSavepoint(string name) => Await(_session.SetSavepointAsync(name));
@@ -411,10 +579,12 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
 
     // ── Source spans ────────────────────────────────────────────────────────────────────────────────
 
-    private static string Slice(string source, SqlNode node)
+    private static string Slice(string source, SqlNode node) => Slice(source, node.Start, node.Length);
+
+    private static string Slice(string source, int nodeStart, int nodeLength)
     {
-        int start = Math.Clamp(node.Start, 0, source.Length);
-        int length = Math.Clamp(node.Length, 0, source.Length - start);
+        int start = Math.Clamp(nodeStart, 0, source.Length);
+        int length = Math.Clamp(nodeLength, 0, source.Length - start);
         return source.Substring(start, length);
     }
 

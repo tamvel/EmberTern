@@ -32,8 +32,11 @@ internal sealed class FirebirdDebugSessionLauncher : IDebugSessionLauncher
             .ConfigureAwait(false);
         try
         {
+            // The source-blob decode fallback (UTF-8-first, then the connection charset) for reconstructing a
+            // stepped-into callee's source (D8) — the same resolution the metadata readers use.
+            var fallback = EmberTern.Core.Connections.CharsetCatalog.Resolve(_service.ActiveProfile?.Charset);
             var executor = await FirebirdDebugExecutor
-                .CreateAsync(connection, spec.RoutineName, spec.Source, spec.Body, spec.Model, cancellationToken)
+                .CreateAsync(connection, spec.RoutineName, spec.Source, spec.Body, spec.Model, fallback, cancellationToken)
                 .ConfigureAwait(false);
 
             var session = new DebugSession(spec.Body, executor, spec.RoutineName, spec.RootValues);

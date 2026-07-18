@@ -548,12 +548,27 @@ noted.
   `CreateAsync`; a callee will register in `ResolveRoutine` (part 2). Recursion correct for free (same body →
   one context; per-frame values on the `Frame`). **`ResolveRoutine` still returns null** → no callee frame
   pushed, single-routine path unchanged → 4813 green, live behaviour identical.
-  **Next: D8 seam (b) part 2** — implement `ResolveRoutine` (fetch+parse+metadata the callee via
-  `FirebirdDdlReader`, evaluate the call's arguments through a typed Statement-mode harness against the caller
-  frame → seed the callee input params, register the callee context) + **mandatory lab fidelity** (extend
-  `Lab/setup.sql` with nested procedures; simulated vs real, §F) — a focused session (highest-risk milestone).
-  Then seam (c) — Call Stack panel / Breadcrumbs (shared) / frame-nav / simulated-frame indicator / Peek Frame
-  UI. See [[feedback-debugger-ux-polish-backlog]].
+  **D8 seam (b) part 2 — `ResolveRoutine` + argument seeding + live fidelity DONE (2026-07-18). D8 DoD MET —
+  Step Into a stored procedure works, proven simulated-vs-real on the lab.** `FirebirdDebugExecutor.ResolveRoutine`
+  now resolves a standalone `EXECUTE PROCEDURE` to a real frame: (1) **fetches the callee source** on the debug
+  session via a new internal `FirebirdDdlReader.BuildProcedureSourceAsync` seam (reuses the one CREATE-OR-ALTER
+  reconstruction — Contract #17); (2) **parses** it (gotcha #238 strict whole-`CREATE PROCEDURE`) → model + body;
+  (3) resolves frame templates (R2/R3) + the ordered **input** params (`DebugFrameLayout.InputParameters`);
+  (4) **evaluates the call's arguments in the CALLER frame through the SAME harness** (Contract #4 — no second
+  evaluator): a Statement-mode `EXECUTE BLOCK` assigning each argument to a synthetic `ET_ARG_i` **typed as the
+  callee's i-th input-param base type** (R2) → seeds the callee input params positionally; (5) registers the
+  callee context, returns a `DebugRoutine` (stored ⇒ `LexicalParent = null`, closed scope). The interpreter's
+  `ApplyReturningValues` (seam a) binds the callee's outputs into the caller's `RETURNING_VALUES` on return.
+  **Unresolvable call → step-over in place, 100% faithful §5.3** (non-EXECUTE-PROCEDURE, no name, package/qualified
+  = D11, local sub-routine = D9, unreadable source). **§F boundary caught by probing not reasoning (gotcha #242):**
+  `:name` is a SQL error as a PSQL assignment RHS (SQL -104, query-only syntax), so `RewriteColonRefsToBare`
+  rewrites `:name`/`@name` → bare name **by span** over the tokens (mirrors CursorBridge #239; there → `?`, here →
+  bare). **Lab fidelity (mandated §2.1 proof, `tools/probes/DebuggerFidelityProbe`, spec §15.6):** lab zoo +3-level
+  chain `SP_DBG_LEAF`/`SP_DBG_MID`/`SP_DBG_ROOT`; the real executor Step-Into'd it — **depth 3 (`ROOT→MID→LEAF`),
+  simulated `RESULT=112` == real `112`** (arg seeding + `RETURNING_VALUES` faithful across 3 frames), ALL PASS.
+  Build 0/0; tests green (user-confirmed); smoke clean; no new unit tests (value = live fidelity, Contract #12).
+  **Next: D8 seam (c)** — Call Stack panel / Breadcrumbs (shared) / frame-nav / simulated-frame indicator / Peek
+  Frame UI over the now-real call stack. Gotchas #241/#242. See [[feedback-debugger-ux-polish-backlog]].
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

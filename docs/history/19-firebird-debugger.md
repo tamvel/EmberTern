@@ -1261,3 +1261,46 @@ parse + metadata the callee, evaluate its arguments through the harness, registe
 against real execution in a focused session.
 
 Build 0/0; **4813 green**; smoke clean.
+
+### D8 seam (b) part 2 — `ResolveRoutine` + argument seeding + live fidelity (2026-07-18). **D8 DoD MET.**
+
+The capability that makes the call stack real: **Step Into a stored procedure**. `FirebirdDebugExecutor.ResolveRoutine`
+now, for a standalone `EXECUTE PROCEDURE`:
+1. **fetches the callee's source** on the DEBUG session (its own attachment + tx) — a new internal
+   `FirebirdDdlReader.BuildProcedureSourceAsync(connection, tx, …)` seam reusing the exact CREATE-OR-ALTER
+   reconstruction the metadata readers use (Contract #17: no second DDL builder), holding the session command
+   lock across the multi-command build (#98/#120/#236);
+2. **parses it** the same way the launch path does (gotcha #238: the strict whole-`CREATE PROCEDURE` parse, so
+   the body's declares are in scope) → `SemanticModel` + `BlockStatement` body;
+3. **resolves its frame variable templates** (R2/R3) via `FirebirdDebugMetadata` — now also returning the
+   ordered **input** parameters (`DebugFrameLayout.InputParameters`);
+4. **evaluates the call's arguments in the CALLER frame** through the SAME harness as a step (Contract #4 — no
+   second evaluator): a Statement-mode `EXECUTE BLOCK` declaring the caller's variables (injecting its
+   in-scope reads, §3.5) and assigning each argument expression to a synthetic `ET_ARG_i` **typed as the
+   callee's i-th input param base type** (R2), so the server computes each argument with full fidelity and
+   returns it typed → the values seed the callee frame's input parameters positionally;
+5. **registers the callee's context** (multi-routine map from part 1) and returns a `DebugRoutine` (a stored
+   routine ⇒ `LexicalParent = null`, a closed scope — gotcha #241).
+
+The interpreter (D8 seam a) then pushes the callee frame; on its normal return `ApplyReturningValues` binds
+its outputs into the caller's `RETURNING_VALUES` targets. **Every unresolvable call runs in place = step-over,
+100% faithful (§5.3):** a non-`EXECUTE PROCEDURE` step, a call with no readable name, a package/qualified name
+(D11), a local sub-routine (D9), or a callee whose source/metadata can't be read (`FbException` → null).
+
+**§F live boundary caught by probing, not reasoning (gotcha #242):** the argument-seeding harness first tried
+`ET_ARG_0 = :P;` — and a quick live test showed `:name` is a **SQL error** as a PSQL assignment RHS (SQL -104;
+the colon form is query-only). Fix: `RewriteColonRefsToBare` rewrites each `:name`/`@name` (a `Parameter`
+token) to its bare name **by span** over the statement's tokens (a colon inside a string literal is a `String`
+token, untouched) — mirroring the Cursor Bridge's span rewrite (gotcha #239; there → `?`, here → bare name).
+
+**Lab fidelity — the mandated §2.1 proof (`tools/probes/DebuggerFidelityProbe`, spec §15.6).** Extended the lab
+zoo with a 3-level chain — `SP_DBG_LEAF` (`Q = P + 1`, executable), `SP_DBG_MID` (calls LEAF, `Q = T*2`),
+`SP_DBG_ROOT` (calls MID, `RESULT = T + 100`, selectable). The real executor drove `DebugSession` Step Into
+through it: **depth reached 3 (`SP_DBG_ROOT → SP_DBG_MID → SP_DBG_LEAF`), and the simulated `RESULT = 112`
+equalled real execution's `112`** — arg seeding + `RETURNING_VALUES` write-back faithful across three frames.
+**ALL PASS.**
+
+Build 0/0; tests green (user-confirmed — the full run is slow in this env); smoke clean. No new unit tests
+(the value is the live fidelity proof, which a unit test structurally cannot give — Contract #12). **D8 seams
+(a) + (b) COMPLETE.** Remaining for D8: seam (c) — the Call Stack panel / Breadcrumbs / frame-nav UI over this
+now-real call stack.

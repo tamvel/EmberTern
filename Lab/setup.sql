@@ -309,6 +309,37 @@ BEGIN
   END
 END^
 
+/* D8 (Call stack + nested stored routines): a THREE-level call chain proving step-into a stored
+   procedure — argument seeding (each level passes its param down) and RETURNING_VALUES write-back
+   (each callee's output binds into the caller's local). SP_DBG_LEAF and SP_DBG_MID are EXECUTABLE
+   (no SUSPEND → called via EXECUTE PROCEDURE); SP_DBG_ROOT is selectable.
+   SP_DBG_ROOT(5): LEAF(5)=6, MID=6*2=12, ROOT=12+100=112 => RESULT = 112. */
+CREATE PROCEDURE SP_DBG_LEAF(P INTEGER)
+RETURNS (Q INTEGER)
+AS
+BEGIN
+  Q = P + 1;
+END^
+
+CREATE PROCEDURE SP_DBG_MID(P INTEGER)
+RETURNS (Q INTEGER)
+AS
+  DECLARE VARIABLE T INTEGER;
+BEGIN
+  EXECUTE PROCEDURE SP_DBG_LEAF(:P) RETURNING_VALUES :T;
+  Q = T * 2;
+END^
+
+CREATE PROCEDURE SP_DBG_ROOT(P INTEGER)
+RETURNS (RESULT INTEGER)
+AS
+  DECLARE VARIABLE T INTEGER;
+BEGIN
+  EXECUTE PROCEDURE SP_DBG_MID(:P) RETURNING_VALUES :T;
+  RESULT = T + 100;
+  SUSPEND;
+END^
+
 SET TERM ; ^
 
 /* ---------- Triggers (PSQL) ----------------------------------------

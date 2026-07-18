@@ -1080,3 +1080,19 @@ Bridge drove `DebugSession` through the two new lab cursor procs; outputs compar
 | **[16]** | `SP_DBG_NESTED` — nested `FOR SELECT` (outer `ORDERS`, inner `ORDER_ITEMS WHERE ORDER_ID = :V_OID`) | sim `(1000,2),(1001,1)` == real | **Two cursors open simultaneously**; inner cursor injects the outer frame's local; DoD met. |
 
 *(The `20` vs `20.00` display difference is numeric scale only — the values are equal.)*
+
+### 15.6 D8 seam (b) — nested stored-routine step-into fidelity (simulated vs real, FB5 lab)
+
+The real `FirebirdDebugExecutor` (with D8's `ResolveRoutine`) drove `DebugSession` **Step Into** through a
+3-level lab chain; outputs + call depth compared to real execution (`tools/probes/DebuggerFidelityProbe`, the
+mandated §2.1 proof). Lab zoo extended with `SP_DBG_LEAF` / `SP_DBG_MID` / `SP_DBG_ROOT` (`Lab/setup.sql`,
+`.fdb` rebuilt).
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **[17]** | **Is `:P` valid as the RHS of a PSQL assignment?** (`x = :y;` in an `EXECUTE BLOCK` body) | **SQL -104, "token unknown" at the `:`** | The colon form is a query-only syntax; the argument-seeding harness must rewrite `:name`/`@name` → **bare** name (by span, like the Cursor Bridge). Gotcha #242. |
+| **[18]** | `SP_DBG_MID(5)` — Step Into `SP_DBG_LEAF`, argument seeding + `RETURNING_VALUES` write-back | depth **2**, chain `SP_DBG_MID → SP_DBG_LEAF`; real `Q = 12` | Step-into resolves a stored callee to a real frame; the arg (`:P`) is evaluated in the caller and seeds the callee input param; the callee's output binds back into the caller's local. |
+| **[19]** | `SP_DBG_ROOT(5)` — the **A→B→C** DoD chain (`ROOT → MID → LEAF`), `SUSPEND RESULT` | depth **3**, chain `SP_DBG_ROOT → SP_DBG_MID → SP_DBG_LEAF`; **simulated `RESULT = 112` == real `112`** | Nested frames, argument seeding and `RETURNING_VALUES` write-back are faithful across three levels (`LEAF(5)=6`, `MID=12`, `ROOT=112`). D8's DoD met. |
+
+*(Every resolved callee is a **stored** routine → a closed scope, `LexicalParent = null` (gotcha #241); a
+package/qualified callee — D11 — and a local sub-routine — D9 — still step over in place, 100% faithful §5.3.)*

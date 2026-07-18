@@ -325,6 +325,19 @@ public sealed class FirebirdDdlReader
     }
 
     /// <summary>
+    /// Reconstructs a standalone procedure's full <c>CREATE OR ALTER PROCEDURE</c> source on a
+    /// <b>caller-supplied</b> connection + transaction (Stage X / D8: the debugger reads a stepped-into
+    /// callee's source on its own debug session, holding the session's command lock across the multi-command
+    /// build). Reuses the exact reconstruction of <see cref="FetchProcedureSourceAsync"/> — this is only a
+    /// seam so the debugger can drive it on the debug attachment/tx instead of the metadata lane, avoiding a
+    /// second DDL reconstruction. The caller serializes wire access (this issues several reads and does not
+    /// lock).
+    /// </summary>
+    internal static Task<string> BuildProcedureSourceAsync(
+        FbConnection connection, FbTransaction? tx, string name, int serverMajor, Encoding fallback, CancellationToken ct)
+        => BuildProcedureDdlAsync(connection, tx, name, serverMajor, fallback, ct);
+
+    /// <summary>
     /// Fetches a procedure's BODY alone — <c>RDB$PROCEDURE_SOURCE</c> is exactly
     /// the text after <c>AS</c> (the DECLARE…BEGIN…END), with no header. This is
     /// what Procedure Detail Easy mode edits, alongside catalog-derived params, so

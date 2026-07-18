@@ -10,12 +10,14 @@ using EmberTern.Core.Sql.Language.Ast;
 
 namespace EmberTern.Firebird;
 
-/// <summary>The resolved layout of a debug frame's variables: the harness variable templates (values unset)
+/// <summary>The resolved layout of a debug frame's variables: the harness variable templates (values unset),
+/// the ordered <b>input</b> parameters (a step-into seeds these positionally from the call's arguments — D8),
 /// and the names of the <b>output</b> parameters (a <c>SUSPEND</c> emits their current values as the output
-/// row). Stage X / D2 seam c.</summary>
+/// row; a return binds them into the caller's <c>RETURNING_VALUES</c>). Stage X / D2 seam c + D8.</summary>
 internal sealed record DebugFrameLayout(
     IReadOnlyList<HarnessVariable> Variables,
-    IReadOnlyList<string> OutputParameters);
+    IReadOnlyList<string> OutputParameters,
+    IReadOnlyList<HarnessVariable> InputParameters);
 
 /// <summary>
 /// Resolves a debug session's <b>frame variable templates</b> — the harness's <see cref="HarnessVariable"/>
@@ -51,6 +53,7 @@ internal static class FirebirdDebugMetadata
 
         var result = new List<HarnessVariable>();
         var outputs = new List<string>();
+        var inputs = new List<HarnessVariable>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (!string.IsNullOrWhiteSpace(routineName))
@@ -66,6 +69,10 @@ internal static class FirebirdDebugMetadata
                 {
                     outputs.Add(variable.Name);
                 }
+                else
+                {
+                    inputs.Add(variable); // ordered input params — a step-into seeds these (D8)
+                }
             }
         }
 
@@ -79,7 +86,7 @@ internal static class FirebirdDebugMetadata
             result.Add(new HarnessVariable(local.Name, local.Verbatim, baseType));
         }
 
-        return new DebugFrameLayout(result, outputs);
+        return new DebugFrameLayout(result, outputs, inputs);
     }
 
     // ── Parameters (RDB$PROCEDURE_PARAMETERS) ───────────────────────────────────────────────────────
