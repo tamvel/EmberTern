@@ -16,10 +16,11 @@ using FirebirdSql.Data.FirebirdClient;
 // the SIMULATED output (the emitted SUSPEND row / the callee frame roster) to REAL execution of the same
 // routines. D8: a 3-level STORED chain (SP_DBG_ROOT → SP_DBG_MID → SP_DBG_LEAF). D9 seam a part 2: a LOCAL
 // sub-procedure (SP_DBG_LOCAL → ADD_TAX) — step into a local DECLARE PROCEDURE as a real frame, with a local
-// DECLARE FUNCTION exercised server-side. D9 seam b: a local procedure that reads+writes an OUTER variable
-// (SP_DBG_CLOSURE → BUMP) — closure capture over the declaring frame (FB5), the closure write reaching the
-// parent frame. The authority is the engine, not us (Developer Contract #12: fidelity is proven against real
-// execution).
+// DECLARE FUNCTION exercised server-side. D9 seam b Part 1: a local procedure that reads+writes an OUTER
+// variable (SP_DBG_CLOSURE → BUMP) — closure capture over the declaring frame (FB5), stepped INTO. D9 seam b
+// Part 2: the transitive read/write-set fixpoint — a local FUNCTION / PROCEDURE that reads+writes an outer
+// variable NOT named at the call site (SP_DBG_CLOSURE_FN / SP_DBG_CLOSURE_OVER), stepped OVER. The authority is
+// the engine, not us (Developer Contract #12: fidelity is proven against real execution).
 //
 //   $env:ET_LAB_PWD = "<local dev SYSDBA password>"
 //   dotnet run --project tools\probes\DebuggerFidelityProbe
@@ -75,9 +76,11 @@ try
         return await cmd.ExecuteScalarAsync();
     }
 
-    // Simulate a standalone routine end-to-end via Step Into and return (emitted rows, max depth, frame names).
+    // Simulate a standalone routine end-to-end and return (emitted rows, max depth, frame names). `step`
+    // selects the movement command driven each pause — Into descends into resolvable local/stored calls;
+    // Over runs a call in place (exercising the step-over harness + the D9 seam b Part 2 read/write fixpoint).
     async Task<(IReadOnlyList<IReadOnlyDictionary<string, object?>> Rows, int MaxDepth, List<string> Frames)>
-        SimulateAsync(string routine, Dictionary<string, object?> rootValues)
+        SimulateAsync(string routine, Dictionary<string, object?> rootValues, StepKind step = StepKind.Into)
     {
         string source = await reader.FetchProcedureSourceAsync(new MetadataObject(routine, MetadataObjectKind.Procedure));
         var model = SemanticModel.Build(SqlParser.Parse(source).Root);
@@ -97,7 +100,7 @@ try
             {
                 if (dbg.Depth > maxDepth) maxDepth = dbg.Depth;
                 if (dbg.CurrentFrame is { } f && !frames.Contains(f.RoutineName)) frames.Add(f.RoutineName);
-                dbg.Step(StepKind.Into);
+                dbg.Step(step);
                 if (++guard > 5000) throw new Exception("runaway stepping");
             }
             if (dbg.State == DebugState.Faulted)
@@ -182,6 +185,32 @@ try
     else
         Fail("simulated vs real TOTAL", $"sim {simClo} vs real {realClo}");
     Console.WriteLine($"      (BUMP captures outer ACC by reference: 5 → 15 → 25 → TOTAL, expected 25 — the closure write reaches the parent frame)");
+
+    // ── 6. Transitive fixpoint — local FUNCTION with a HIDDEN capture, step OVER (D9 seam b Part 2) ──
+    Head("6. SP_DBG_CLOSURE_FN(5) — a local FUNCTION reads+writes outer HIDDEN, not named at the call site");
+    var fnRoot = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["SEED"] = 5 };
+    var fn = await SimulateAsync("SP_DBG_CLOSURE_FN", fnRoot); // a function call in a leaf runs server-side (step over)
+    int? realFn = AsInt(await RealScalarAsync("SELECT TOTAL FROM SP_DBG_CLOSURE_FN(5)"));
+    int? simFn = fn.Rows.Count > 0 ? AsInt(fn.Rows[0]["TOTAL"]) : null;
+    if (fn.MaxDepth == 1) Pass("fn depth == 1 (function runs server-side, not stepped into)"); else Fail("fn depth", $"{fn.MaxDepth}");
+    if (simFn is not null && simFn == realFn)
+        Pass("SIMULATED TOTAL == REAL", $"sim {simFn} == real {realFn}");
+    else
+        Fail("simulated vs real TOTAL", $"sim {simFn} vs real {realFn}");
+    Console.WriteLine($"      (fixpoint injects+returns the HIDDEN capture the call never names: 5 → BUMP_HIDDEN(10)=15 → TOTAL, expected 15)");
+
+    // ── 7. Transitive fixpoint — local PROCEDURE with a HIDDEN capture, explicit Step OVER ──────────
+    Head("7. SP_DBG_CLOSURE_OVER(5) — Step OVER a local PROCEDURE that reads+writes outer HIDDEN");
+    var ovRoot = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["SEED"] = 5 };
+    var ov = await SimulateAsync("SP_DBG_CLOSURE_OVER", ovRoot, StepKind.Over); // Step OVER the call → harness
+    int? realOv = AsInt(await RealScalarAsync("SELECT TOTAL FROM SP_DBG_CLOSURE_OVER(5)"));
+    int? simOv = ov.Rows.Count > 0 ? AsInt(ov.Rows[0]["TOTAL"]) : null;
+    if (ov.MaxDepth == 1) Pass("over depth == 1 (call stepped over, not into)"); else Fail("over depth", $"{ov.MaxDepth}");
+    if (simOv is not null && simOv == realOv)
+        Pass("SIMULATED TOTAL == REAL", $"sim {simOv} == real {realOv}");
+    else
+        Fail("simulated vs real TOTAL", $"sim {simOv} vs real {realOv}");
+    Console.WriteLine($"      (fixpoint injects+returns HIDDEN across the EXECUTE PROCEDURE the call never names: 5 → ACCUMULATE(10)=15 → TOTAL, expected 15)");
 }
 catch (Exception ex)
 {

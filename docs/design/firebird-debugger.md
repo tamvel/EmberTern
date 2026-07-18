@@ -524,6 +524,13 @@ in the call stack, with real variables, steppable line by line** — which IBExp
 Carry the sub-routine declarations verbatim (**always** — R5), inject the captured read set, read mutated
 captures back. Verified (Q5): 36 / 6, side effect and evaluation order both correct.
 
+> **✅ DELIVERED (D9 seam b, 2026-07-18).** Part 1 — step *into* a local routine that reads+writes an outer
+> variable (closure capture over the declaring frame; the write reaches the parent frame). Part 2 — the
+> **transitive read/write-set fixpoint** (`SubroutineCatalog` + `ReadWriteSetAnalyzer.Analyze`'s optional
+> catalog arg) so a step-*over* of a local call injects the callee's captured read set (even a variable the call
+> site does not name) and reads its mutated captures back. Both proven simulated == real (§15.8/§15.9/§15.10).
+> Local routines are real, steppable frames with real closure variables — the capability IBExpert cannot deliver.
+
 ### 6.3 ✅ Version gate — MEASURED (2026-07-18); resolved
 
 §6.1 was measured on **FB5.0.3 only**; this gate re-measured Q2/Q3/Q4 on **FB3.0.13 (port 4050)** with
@@ -954,7 +961,7 @@ next. Foundation-first; never big-bang.
 | **D6 ✅** | **Cursor Bridge** | `FOR SELECT` incremental stepping via a real DSQL cursor (§7); per-wire-op locking; colon-only injection (§15.5). **DONE** (nested cursors + fidelity proven; `WHERE CURRENT OF`/`DECLARE CURSOR` explicit cursors are follow-ups). | `FOR SELECT` is in nearly every real procedure — D4 isn't truly usable without it. Before the flashier work. |
 | **D7** | **Variables window, full** | Grouping/icons, change highlight, inline edit + validation, pins, types, `<null>`, lazy BLOBs, filter, **data tips**. | The most important panel, once there is state worth showing. |
 | **D8** | **Call stack + nested stored routines** | Frames, stack panel, **Breadcrumbs** (shared feature), Peek Frame, frame keyboard nav, simulated-frame indicator. | Nesting needs a working single frame first. |
-| **D9** | **Local procedures & functions** 🏁 | Sub-routine frames (§6.2a) + closure harness (§6.2b) + read/write sets + **R5**. **§6.3 gate DONE (§15.7): frame `LexicalParent` branches on version — FB3 `null`, FB5 declaring frame.** | **The flagship.** Falls out of D1+D2+D8 — the design's central claim. |
+| **D9** ✅ | **Local procedures & functions** 🏁 | **COMPLETE (2026-07-18).** Sub-routine frames (§6.2a) + closure harness (§6.2b) + the transitive read/write-set fixpoint + **R5**. §6.3 gate (§15.7): frame `LexicalParent` branches on version. Step-into + step-over faithful, sim==real (§15.8–§15.10). | **The flagship — DELIVERED.** Real, steppable local-routine frames with real closure variables; IBExpert cannot do this. |
 | **D10** | **Triggers** | Action selector, NEW/OLD editor + availability rules, span-based substitution, seed-from-row. | Independent surface; needs D4+D7. |
 | **D11** | **Packages** | Public + private routines (§8.2). **Extend the lab with a private routine first.** | Smallest remaining surface. |
 | **D12** | **Advanced breakpoints** | Break on exception, conditional + hit counts, data breakpoints, **run to next `SUSPEND`** (+ its result grid). | Cheap *given* the engine; pure additions. |
@@ -1194,5 +1201,24 @@ the *enclosing* routine's variable — a read+write **closure capture** over the
 > 15 → 25). This is FB5-only by construction — an FB3 sub-routine referencing an outer variable does not compile
 > (§6.3), so no such routine can exist on FB3; a closed FB3 frame is therefore 100% faithful by construction.
 > **Boundary:** a **step-OVER** of a local call with direct arguments whose callee mutates *other* outer
-> variables still needs the transitive read/write-set fixpoint (**D9 seam (b) Part 2** — not implemented);
-> step-INTO and no-argument step-OVER (via the `InScopeLocals` fallback + R5) are correct.
+> variables still needs the transitive read/write-set fixpoint (**D9 seam (b) Part 2** — see §15.10).
+
+### 15.10 D9 seam (b) Part 2 — transitive fixpoint (step-over a local call with a hidden capture), simulated vs real (FB5 lab)
+
+Run with the real `FirebirdDebugExecutor` on the FB5 lab (`tools/probes/DebuggerFidelityProbe`, extended — the
+simulator gained a `StepKind` parameter). Two lab routines exercise a callee that reads+writes an OUTER variable
+`HIDDEN` **not named at the call site** (the call passes only the literal `10`): **`SP_DBG_CLOSURE_FN`** (a local
+`FUNCTION`, `TOTAL = BUMP_HIDDEN(10)` — a function call in a leaf runs server-side, a natural step-over) and
+**`SP_DBG_CLOSURE_OVER`** (a local `PROCEDURE`, `EXECUTE PROCEDURE ACCUMULATE(10) RETURNING_VALUES :TOTAL`,
+driven with explicit Step Over).
+
+| # | Case | Assertion | Result |
+|---|---|---|---|
+| 6 | `SP_DBG_CLOSURE_FN(5)` | function runs server-side (depth 1); **sim `TOTAL` == real** | **sim 15 == real 15** ✔ |
+| 7 | `SP_DBG_CLOSURE_OVER(5)` | call stepped over (depth 1); **sim `TOTAL` == real** | **sim 15 == real 15** ✔ |
+
+> **Verdict — the transitive read/write-set fixpoint makes a step-over of a local call with a hidden capture
+> faithful:** the call-graph analysis injects the outer `HIDDEN` the callee reads and returns the value it wrote,
+> even though the call site names only `10`. Without it, `HIDDEN` would be injected as `NULL` and its mutation
+> dropped (sim ≠ real). This closes D9: **local procedures and functions step faithfully both into (§15.8/§15.9)
+> and over (§15.10)** — the flagship capability.

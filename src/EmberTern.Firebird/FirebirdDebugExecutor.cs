@@ -155,7 +155,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         }
 
         var node = AsNode(statement);
-        var (reads, writes) = ResolveReadWrite(ctx, node);
+        var (reads, writes) = ResolveReadWrite(ctx, node, frame);
         var request = new HarnessRequest
         {
             Fragment = Slice(ctx.Source, node),
@@ -185,7 +185,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
 
         var ctx = Ctx(frame);
         var node = AsNode(owner);
-        var (reads, _) = ResolveReadWrite(ctx, node);
+        var (reads, _) = ResolveReadWrite(ctx, node, frame);
         var request = new HarnessRequest
         {
             Fragment = ConditionExpression(ctx.Source, node),
@@ -622,15 +622,35 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     // the INTO write-back (the variable the statement exists to set) — a §F divergence. So when the model
     // surfaces nothing, fall back to §3.5's named "inject all in-scope" primitive (correct, chattier), never
     // a guess. A statement that genuinely touches no local (e.g. bare EXCEPTION) is over-included harmlessly.
-    private static (IReadOnlyList<string> Reads, IReadOnlyList<string> Writes) ResolveReadWrite(RoutineContext ctx, SqlNode node)
+    private static (IReadOnlyList<string> Reads, IReadOnlyList<string> Writes) ResolveReadWrite(
+        RoutineContext ctx, SqlNode node, Frame frame)
     {
-        var rw = ReadWriteSetAnalyzer.Analyze(node, ctx.Model);
+        // D9 seam b Part 2: pass the in-scope local sub-routine catalog so a statement that CALLS a local
+        // routine folds in that callee's transitively-captured variables (§3.5). For a routine with no local
+        // sub-routines the catalog is empty and Analyze is exactly the direct-reference set (D2–D8 unchanged).
+        var rw = ReadWriteSetAnalyzer.Analyze(node, ctx.Model, BuildSubroutineCatalog(frame));
         if (rw.Reads.Count == 0 && rw.Writes.Count == 0)
         {
             var all = ReadWriteSetAnalyzer.InScopeLocals(ctx.Model, node.Start);
             return (all, all);
         }
         return (rw.Reads, rw.Writes);
+    }
+
+    // The local sub-routines in scope at the frame — its own routine body's, then each enclosing (lexical)
+    // frame's, up the closure chain (spec §6). Nearest scope first (an inner declaration shadows a like-named
+    // outer). Empty for a routine that declares none (D2–D8), so the fixpoint is a no-op there.
+    private static SubroutineCatalog BuildSubroutineCatalog(Frame frame)
+    {
+        List<SubroutineDeclaration>? routines = null;
+        for (var f = frame; f is not null; f = f.LexicalParent)
+        {
+            foreach (var r in f.Body.LocalRoutines)
+            {
+                (routines ??= new List<SubroutineDeclaration>()).Add(r);
+            }
+        }
+        return routines is null ? SubroutineCatalog.Empty : new SubroutineCatalog(routines);
     }
 
     // ── Frame → harness variables ───────────────────────────────────────────────────────────────────

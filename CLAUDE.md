@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D8 DONE (D2 live-fidelity-verified; D8 = call stack + nested stored routines + frame navigation, complete 2026-07-18, awaits visual confirmation). D9 (local procedures & functions — the flagship) STARTED: §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) Part 1 DONE (AST + parser + binder + extractor R5 carry — pure Core); seam (a) Part 2 DONE + live-fidelity-verified (Step Into a local `DECLARE PROCEDURE` — sim==real); seam (b) Part 1 DONE + live-fidelity-verified 2026-07-18 (closure capture — Step Into a local routine that reads+writes an OUTER variable; the closure write reaches the parent frame; sim==real). Next: D9 seam (b) Part 2 (transitive read/write-set fixpoint for step-OVER of a local call with direct args that touches other outer vars).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D9 DONE. D9 (local procedures & functions — THE FLAGSHIP) COMPLETE + live-fidelity-verified 2026-07-18: local routines are real, steppable debugger frames with real closure variables (the capability IBExpert cannot deliver). §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) = local-routine step-into (AST + parser + binder + extractor R5; runtime ResolveRoutine + AST-header param types); seam (b) = closures — Part 1 closure capture for step-INTO (read+write an OUTER var, the write reaching the parent frame), Part 2 the transitive read/write-set fixpoint over the sub-routine call graph for step-OVER (a local call whose callee captures an outer var not named at the call site). All proven sim==real on the lab. Next milestone: D10 (Triggers).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -701,6 +701,34 @@ noted.
   **fixpoint over the sub-routine call graph** is Part 2. (A no-arg local call already over-includes correctly
   via the §3.5 `InScopeLocals` fallback + R5; step-INTO is fully correct.) History:
   [docs/history/19-...](docs/history/19-firebird-debugger.md) (D9 gate + seam a + seam b Part 1). See [[feedback-debugger-ux-polish-backlog]].
+  **D9 seam (b) Part 2 — transitive read/write-set fixpoint DONE + live-fidelity-verified (2026-07-18). D9 IS
+  COMPLETE.** Closes the last gap: a **step-OVER** of a local call (`EXECUTE PROCEDURE p(x) RETURNING_VALUES y`,
+  or a local function call `z = f(x)` inside a leaf — always a step-over) whose callee captures an OUTER
+  variable **not named at the call site** now injects that capture and reads its mutation back. New pure-Core
+  `SubroutineCatalog` (name → `SubroutineDeclaration`, built by the executor from `BlockStatement.LocalRoutines`
+  up the lexical chain) is an **optional** third argument to `ReadWriteSetAnalyzer.Analyze` (default null =
+  today's direct-reference set, so D2–D8 are byte-identical): when a statement calls an in-scope local
+  sub-routine, the analyzer folds in that callee's **transitively-referenced captured** variables — the callee's
+  own body references (span-collected from `model.References`, which is inherently transitive for a **nested**
+  sub-routine whose body lies within its parent's span) plus, recursively, every catalog sibling it calls (a
+  **visited set** terminates mutual recursion) — then keeps only the ones **in scope at the call site**
+  (`InScopeLocals`, so the callee's own params/locals drop out) and adds them to **both** reads and writes
+  (over-inclusion is §F-safe: a returned-but-unchanged value writes itself back; an injected-but-unused value is
+  harmless). **Reuses the binder for variable references** (Architecture rule #2 intact) — the only new signal
+  is *call detection*, a conservative **name-membership** check of the statement's tokens against the
+  AST-authoritative catalog (not a variable resolver; the AST models the call graph but the binder does not yet
+  resolve local calls as symbols — the seam-a-part-1 note), which covers both an `EXECUTE PROCEDURE` proc call
+  and an expression-embedded function call. The executor threads the catalog through `ResolveReadWrite` for the
+  statement + condition harnesses (D5 `Evaluate` already uses the `InScopeLocals` superset — no change). **Lab
+  zoo +`SP_DBG_CLOSURE_FN`** (a local function capturing `HIDDEN`) **+`SP_DBG_CLOSURE_OVER`** (a local procedure
+  capturing `HIDDEN`, stepped OVER); `DebuggerFidelityProbe` extended (`SimulateAsync` gained a `StepKind`
+  param): **sim `TOTAL=15` == real `15`** for both — the hidden capture injected + written back across the
+  call, ALL PASS. Build 0/0; **4856 tests green** (+3 `ReadWriteSetAnalyzerTests`: function capture with the
+  in-scope filter, transitivity across the call graph, null/empty-catalog = direct set); smoke clean.
+  **D9 — the flagship — is COMPLETE:** local procedures and functions are real, steppable debugger frames with
+  real closure variables (step-into *and* step-over faithful), the capability IBExpert cannot deliver. **Next
+  milestone: D10 (Triggers).** History: [docs/history/19-...](docs/history/19-firebird-debugger.md)
+  (D9 gate + seam a + seam b Parts 1 & 2). See [[feedback-debugger-ux-polish-backlog]].
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

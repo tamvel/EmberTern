@@ -1669,3 +1669,75 @@ as a real, steppable frame with real closure variables) works.
 Build 0/0; **4853 tests green** (+1 `DebugEngineTests` pinning the interpreter's closure write-back routing);
 smoke clean; live fidelity proven. One commit. **Next: D9 seam (b) Part 2** — the transitive read/write-set
 fixpoint over the sub-routine call graph.
+
+## D9 — Local Procedures & Functions (the flagship) — seam (b) Part 2: the transitive read/write-set fixpoint (2026-07-18). 🏁 D9 COMPLETE
+
+**Closes the last gap: a step-OVER of a local call whose callee captures an OUTER variable NOT named at the call
+site now injects that capture and reads its mutation back — proven simulated == real on the lab.** Seam (b)
+Part 1 handled step-*into* (the callee's own statements directly reference the outer var, so `Analyze` surfaces
+it). Part 2 handles step-*over*: the call `EXECUTE PROCEDURE p(x) RETURNING_VALUES y` (or a local **function**
+call `z = f(x)` inside a leaf — always a step-over) hides the callee's captures behind the call site, so the
+statement's direct read/write set (`{x, y}`) drops them. The fix is the spec §3.5 **fixpoint over the
+sub-routine call graph**.
+
+### The mechanism (reusing existing architecture, no parallel path)
+
+New pure-Core **`SubroutineCatalog`** (`Sql/Language/Debugging/SubroutineCatalog.cs`): the authoritative name →
+`SubroutineDeclaration` map of the in-scope local sub-routines, built by the executor from
+`BlockStatement.LocalRoutines` up the lexical (closure) chain. It is *scope*, not a resolver.
+
+`ReadWriteSetAnalyzer.Analyze` gained an **optional** third argument `SubroutineCatalog? subroutines = null` —
+so every existing caller (and D2–D8) is byte-identical (the direct-reference set). When a catalog is supplied
+and the statement **calls** an in-scope local sub-routine, `FoldTransitiveCaptures`:
+
+1. **Detects the call** — `CalledSubroutines` scans the statement's tokens for an identifier whose folded name
+   is a catalog key. A conservative **name-membership** check (over-detection only adds a callee's captures =
+   safe), covering both an `EXECUTE PROCEDURE` proc call and an expression-embedded function call. This is *not*
+   a variable resolver — variable references still come only from the binder (Architecture rule #2); the AST
+   models the call graph but the binder does not yet resolve local calls as symbols (the seam-a-part-1 note), so
+   this token-membership check is the pragmatic call-site detector at the structural-depth boundary.
+2. **Collects the callee's transitively-referenced variables** — `CollectTransitiveReferencedVars` unions every
+   Variable/Parameter reference in the callee body's span (from `model.References` — **reuses the binder**), which
+   is *inherently transitive for a nested sub-routine* (its body lies within the parent's span), and recurses
+   into every catalog sibling the callee calls. A **visited set** terminates mutual recursion.
+3. **Keeps only the captures visible at the call site** — intersect with `InScopeLocals(model, call.Start)`, so
+   the callee's own params/locals (out of scope here) drop out and only the outer captures remain.
+4. **Adds them to both reads and writes.** Over-inclusion is §F-safe: a returned-but-unchanged variable writes
+   its own value back; an injected-but-unused value is harmless (R1 skips a null anyway).
+
+The executor threads the catalog through `ResolveReadWrite` (built once per statement via
+`BuildSubroutineCatalog(frame)`), so both the statement harness (`ExecuteStatement`) and the condition harness
+(`EvaluateCondition`) get the fixpoint. D5 `Evaluate` already uses the `InScopeLocals` superset, so it needs no
+change. **BindValues already declares the frame's + ancestors' variables (seam b Part 1)** — so the fixpoint
+only widens what is *injected/returned*, never what is *declared*; the captured variable is already in the
+harness, it just now gets its value.
+
+### Why this is precise, not "inject everything"
+
+The old empty-set fallback (`InScopeLocals` as both reads+writes) already made a **no-argument** local call
+correct, but a call **with** direct arguments has a non-empty precise set and skipped the fallback — dropping the
+hidden captures. The fixpoint targets exactly the callee's captures (e.g. a 10 MB BLOB variable the call does not
+touch is *not* shipped both ways every step — the §3.5 perf motivation), rather than widening to all in-scope
+locals.
+
+### Lab + live fidelity (§F)
+
+`Lab/setup.sql` +**`SP_DBG_CLOSURE_FN`** (a local `FUNCTION BUMP_HIDDEN` that reads+writes the outer `HIDDEN`;
+the call `TOTAL = BUMP_HIDDEN(10)` names only the literal 10) and +**`SP_DBG_CLOSURE_OVER`** (a local
+`PROCEDURE ACCUMULATE` that reads+writes `HIDDEN`; stepped OVER). Rebuilt the `.fdb` (#149).
+`DebuggerFidelityProbe` extended — `SimulateAsync` gained a `StepKind` parameter so a routine can be driven with
+Step Over:
+- **Case 6** (`SP_DBG_CLOSURE_FN`, function via natural step-over): depth 1, **sim `TOTAL = 15` == real `15`**.
+- **Case 7** (`SP_DBG_CLOSURE_OVER`, procedure, explicit `StepKind.Over`): depth 1, **sim `TOTAL = 15` == real
+  `15`**.
+
+Without the fixpoint both would simulate `NULL`/stale (HIDDEN injected as NULL, its mutation dropped). ALL PASS;
+D8 + seam-a + seam-b-Part-1 cases unchanged.
+
+### Result — 🏁 the flagship is complete
+
+Build 0/0; **4856 tests green** (+3 `ReadWriteSetAnalyzerTests`: a called function's captured outer var folded in
+while its own param is filtered out; transitivity across the call graph; null/empty catalog = the direct set);
+smoke clean; live fidelity proven. One commit. **D9 is COMPLETE — local procedures and functions are real,
+steppable debugger frames with real closure variables (step-into *and* step-over faithful), the capability
+IBExpert cannot deliver.** Next milestone: **D10 (Triggers)**.

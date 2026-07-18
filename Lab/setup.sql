@@ -392,6 +392,48 @@ BEGIN
   SUSPEND;
 END^
 
+/* D9 seam (b) Part 2 — transitive read/write-set fixpoint (Step OVER a local call with a HIDDEN capture).
+   A local FUNCTION BUMP_HIDDEN reads+writes the outer variable HIDDEN, which is NOT mentioned at the call
+   site (the call passes only the literal 10). Without the call-graph fixpoint the debugger would inject
+   HIDDEN as NULL and drop its mutation; with it, HIDDEN is injected + written back. Exercised as a natural
+   step-over (a function call inside a leaf runs server-side). SP_DBG_CLOSURE_FN(5): HIDDEN=5, BUMP_HIDDEN(10)
+   => HIDDEN=15, returns 15 => TOTAL = 15. */
+CREATE PROCEDURE SP_DBG_CLOSURE_FN(SEED INTEGER)
+RETURNS (TOTAL INTEGER)
+AS
+  DECLARE VARIABLE HIDDEN INTEGER;
+  DECLARE FUNCTION BUMP_HIDDEN(DELTA INTEGER) RETURNS INTEGER
+  AS
+  BEGIN
+    HIDDEN = HIDDEN + DELTA;
+    RETURN HIDDEN;
+  END
+BEGIN
+  HIDDEN = SEED;
+  TOTAL = BUMP_HIDDEN(10);
+  SUSPEND;
+END^
+
+/* D9 seam (b) Part 2 — the same fixpoint for a local PROCEDURE stepped OVER. ACCUMULATE reads+writes the
+   outer HIDDEN (a hidden capture — the call passes only the literal 10 and returns into TOTAL). Proven with
+   Step Over on the call. SP_DBG_CLOSURE_OVER(5): HIDDEN=5, ACCUMULATE(10) => HIDDEN=15, RESULT=15
+   => TOTAL = 15. */
+CREATE PROCEDURE SP_DBG_CLOSURE_OVER(SEED INTEGER)
+RETURNS (TOTAL INTEGER)
+AS
+  DECLARE VARIABLE HIDDEN INTEGER;
+  DECLARE PROCEDURE ACCUMULATE(DELTA INTEGER) RETURNS (RESULT INTEGER)
+  AS
+  BEGIN
+    HIDDEN = HIDDEN + DELTA;
+    RESULT = HIDDEN;
+  END
+BEGIN
+  HIDDEN = SEED;
+  EXECUTE PROCEDURE ACCUMULATE(10) RETURNING_VALUES :TOTAL;
+  SUSPEND;
+END^
+
 SET TERM ; ^
 
 /* ---------- Triggers (PSQL) ----------------------------------------

@@ -122,6 +122,103 @@ public class ReadWriteSetAnalyzerTests
         end
         """;
 
+    // ── Transitive fixpoint over the sub-routine call graph (D9 seam b Part 2) ───────────────────────
+
+    private static (SemanticModel Model, BlockStatement Body) BuildBody(string sql)
+    {
+        var model = SemanticModel.Build(SqlParser.Parse(sql).Root);
+        var ddl = model.Syntax.Statements.OfType<DdlStatement>().First();
+        return (model, ddl.Body!);
+    }
+
+    private const string FnCaptureSql = """
+        create procedure p (seed integer) returns (total integer) as
+        declare variable hidden integer;
+        declare function bump_hidden (delta integer) returns integer
+        as
+        begin
+          hidden = hidden + delta;
+          return hidden;
+        end
+        begin
+          hidden = seed;
+          total = bump_hidden(10);
+        end
+        """;
+
+    [Fact]
+    public void Fixpoint_FoldsInACalledFunctionsCapturedOuterVar_ButNotItsOwnParams()
+    {
+        var (model, body) = BuildBody(FnCaptureSql);
+        var catalog = new SubroutineCatalog(body.LocalRoutines);
+        var call = body.Statements.OfType<PsqlLeafStatement>().First(s =>
+            FnCaptureSql.Substring(s.Start, s.Length).StartsWith("total =", System.StringComparison.OrdinalIgnoreCase));
+
+        var direct = ReadWriteSetAnalyzer.Analyze(call, model);           // no catalog → direct refs only
+        var folded = ReadWriteSetAnalyzer.Analyze(call, model, catalog);  // with the call-graph fixpoint
+
+        // Direct: HIDDEN is NOT named at the call site (only the literal 10 and the target TOTAL) → dropped.
+        Assert.DoesNotContain("HIDDEN", direct.Reads);
+        Assert.DoesNotContain("HIDDEN", direct.Writes);
+        // Folded: the fixpoint injects + returns the captured HIDDEN the callee reads+writes.
+        Assert.Contains("HIDDEN", folded.Reads);
+        Assert.Contains("HIDDEN", folded.Writes);
+        // The callee's OWN parameter (DELTA) is out of scope at the call site → the in-scope filter drops it.
+        Assert.DoesNotContain("DELTA", folded.Reads);
+        Assert.DoesNotContain("DELTA", folded.Writes);
+    }
+
+    private const string TransitiveSql = """
+        create procedure p (seed integer) returns (total integer) as
+        declare variable hidden integer;
+        declare procedure inner_p
+        as
+        begin
+          hidden = hidden + 1;
+        end
+        declare procedure outer_p
+        as
+        begin
+          execute procedure inner_p;
+        end
+        begin
+          hidden = seed;
+          execute procedure outer_p;
+          total = hidden;
+        end
+        """;
+
+    [Fact]
+    public void Fixpoint_IsTransitive_AcrossTheSubRoutineCallGraph()
+    {
+        var (model, body) = BuildBody(TransitiveSql);
+        var catalog = new SubroutineCatalog(body.LocalRoutines);
+        var call = body.Statements.OfType<ExecuteProcedureStatement>().First(); // execute procedure outer_p
+
+        var folded = ReadWriteSetAnalyzer.Analyze(call, model, catalog);
+
+        // outer_p (no captures of its own) calls inner_p, which mutates the outer HIDDEN — the fixpoint reaches
+        // it through the call graph, so the harness for `execute procedure outer_p` injects + returns HIDDEN.
+        Assert.Contains("HIDDEN", folded.Reads);
+        Assert.Contains("HIDDEN", folded.Writes);
+    }
+
+    [Fact]
+    public void Fixpoint_NoCatalog_IsTheDirectSet_Unchanged()
+    {
+        var (model, body) = BuildBody(FnCaptureSql);
+        var call = body.Statements.OfType<PsqlLeafStatement>().First(s =>
+            FnCaptureSql.Substring(s.Start, s.Length).StartsWith("total =", System.StringComparison.OrdinalIgnoreCase));
+
+        var withNull = ReadWriteSetAnalyzer.Analyze(call, model, subroutines: null);
+        var withEmpty = ReadWriteSetAnalyzer.Analyze(call, model, SubroutineCatalog.Empty);
+
+        // Null / empty catalog ⇒ exactly the direct-reference behaviour (D2–D8 unchanged).
+        Assert.DoesNotContain("HIDDEN", withNull.Reads);
+        Assert.DoesNotContain("HIDDEN", withEmpty.Reads);
+        Assert.Equal(withNull.Reads.OrderBy(x => x), withEmpty.Reads.OrderBy(x => x));
+    }
+
     [Fact]
     public void SelectInto_SurfacesNoLocalRefs_SoTheFallbackIsInScopeLocals()
     {

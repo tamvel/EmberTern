@@ -413,8 +413,14 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
   declares captured ancestor variables in the harness. No fixpoint needed (step-into refs are precise via the
   shared model). Lab +`SP_DBG_CLOSURE`; probe **sim `TOTAL=25` == real** (BUMP: ACC 5→15→25, the closure write
   reaching the parent). Build 0/0; **4853 green**; smoke clean. **Seam (b) Part 2 — the transitive read/write-set
-  fixpoint over the sub-routine call graph — NOT started** (needed for step-OVER of a local call with direct args
-  whose callee mutates other outer vars; a no-arg call is already covered by the `InScopeLocals` fallback + R5).
+  fixpoint over the sub-routine call graph — DONE (2026-07-18).** New pure-Core `SubroutineCatalog` + an optional
+  arg to `ReadWriteSetAnalyzer.Analyze`: a statement that calls an in-scope local sub-routine folds in that
+  callee's transitively-captured variables (span-collected from `model.References` — reuses the binder, rule #2;
+  call detection is a conservative name-membership check against the AST catalog), keeping only those in scope at
+  the call site, added to both reads+writes (over-inclusion §F-safe). Lab +`SP_DBG_CLOSURE_FN`/`SP_DBG_CLOSURE_OVER`;
+  probe **sim `TOTAL=15` == real** for a local function and a local procedure stepped OVER with a hidden capture.
+  Build 0/0; **4856 green**; smoke clean. **🏁 D9 IS COMPLETE — local routines are real, steppable frames with
+  real closure variables (step-into + step-over faithful). Next: D10 (Triggers).**
 
 ---
 
