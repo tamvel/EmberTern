@@ -1123,3 +1123,23 @@ top Pinned group (session-scoped; not a Watch — §9.5).
 Build 0/0; **4807 tests green** (+4 seam a: grouping / change / pins / filter; +3 seam b hover; +3 seam b
 inline edit). Smoke clean. Live behaviour (data tips, inline edit, change-highlight against a real session)
 **awaits user confirmation**. **D7 DONE. Next: D8 (Call stack + nested stored routines).**
+
+### D7 UX backlog (user, 2026-07-18 — deferred, NOT to implement ad hoc)
+
+After confirming D7 works (grouping, filtering, pinning, inline edit, live value updates while stepping all
+behaved as expected), the user filed three UX items for later sessions:
+
+1. **GridSplitter double-click — still not identical to the main SQL Editor.** Two fixes shipped this session
+   (re-normalize both rows — gotcha #240 part 1; `Dispatcher.Post` the collapse off the splitter gesture —
+   part 2) and it is still not right. **Directive: stop iterating on the current implementation.** The user
+   believes the project already contains the correct mechanism (the SQL Editor's results-panel
+   collapse/maximize) and wants a **dedicated session to reuse that exact mechanism** rather than more local
+   patches. Left open.
+2. **Variables icons too similar** — every row reads as a dot. Distinguish **Parameters / Returns(OUT) /
+   Locals / Cursor variables** (cursors land in a later milestone) with distinct **icons or clearly different
+   colours**, not near-identical glyphs.
+3. **Pinned star blends into the kind glyph** — consider a different colour (e.g. yellow), more spacing from
+   the kind glyph, or a **pin icon** instead of the star.
+
+Per the standing directive ([[feedback-debugger-ux-polish-backlog]]): fix these as UX/theme in the view +
+tokens; never push logic into the VMs to paper over UX.

@@ -490,8 +490,12 @@ noted.
   sets both rows every toggle** (top → star, bottom → Auto/pixel), exactly like `ApplyResultsRowForActiveTab`;
   the `_splitterGestureHeight` workaround + its `PointerPressed` handler are **deleted** (full re-normalization
   absorbs the double-click micro-drag, as the SQL editor's maximize/restore does). Gotcha #240. Build 0/0, 4797
-  green, smoke clean.
-  **D7 (Variables window, full) — DONE (2026-07-18; live behaviour awaits user confirmation).** The basic D4
+  green, smoke clean. **⚠ STILL NOT RIGHT (user, 2026-07-18):** after both parts the double-click is still not
+  identical to the SQL Editor. **Directive: stop iterating locally** — a dedicated session should **reuse the
+  SQL Editor's existing results-panel collapse mechanism** verbatim rather than patch further. Left OPEN; see
+  [[feedback-debugger-ux-polish-backlog]] (D7-1) + `docs/history/19` §"D7 UX backlog".
+  **D7 (Variables window, full) — DONE + user-confirmed (2026-07-18; grouping/filter/pin/edit/live-update all
+  verified on the live lab).** The basic D4
   list becomes the rich window (spec §9.4). **Seam (a):** rows grouped **Pinned / Parameters / Locals** (kind
   glyph ⬤IN/◑OUT/○local coloured by a theme key string via `IconBrushConverter` — never a brush), declared
   types, distinct `<null>`, per-step **change-highlight** (reuses `FrameValues.Snapshot()`, new
@@ -508,7 +512,10 @@ noted.
   surfaces on next injection (§3.4/§F); the box seeds from the full untruncated raw value (§0). **Lazy BLOBs**
   — a binary `byte[]` shows `[BLOB · N B]` and is not editable; long text truncates inline (256) but edits
   full; a dedicated value-viewer popup is a documented follow-up (no reusable viewer exists). Build 0/0,
-  **4807 green** (+10), smoke clean. **Next: D8 (Call stack + nested stored routines).**
+  **4807 green** (+10), smoke clean. **User UX backlog (deferred, NOT to implement ad hoc — [[feedback-debugger-ux-polish-backlog]]
+  D7-2/D7-3):** Variables kind icons are too similar (all read as dots) — distinguish Parameters / Returns(OUT)
+  / Locals / Cursor-vars by distinct icons or clearly different colours; the Pinned ★ blends into the kind
+  glyph — different colour (e.g. yellow) / more spacing / a pin icon. **Next: D8 (Call stack + nested stored routines).**
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
