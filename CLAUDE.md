@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D8 DONE (D2 live-fidelity-verified; D8 = call stack + nested stored routines + frame navigation, complete 2026-07-18, awaits visual confirmation). Next: D9 (local procedures & functions — the flagship).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D8 DONE (D2 live-fidelity-verified; D8 = call stack + nested stored routines + frame navigation, complete 2026-07-18, awaits visual confirmation). D9 (local procedures & functions — the flagship) STARTED: §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version). Next: D9 seam a.** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -603,6 +603,28 @@ noted.
   switches source+roster, caller-frame repoint+marker, `Ctrl+Alt+Up/Down` walk, root-scoped breakpoints, Peek);
   full suite green (run manually — the full `dotnet test` hangs in this env, #94/#226); smoke clean. Gotchas
   #241/#242/#243. See [[feedback-debugger-ux-polish-backlog]].
+  **D9 (Local procedures & functions — the flagship) — STARTED; §6.3 closure version gate MEASURED + RESOLVED
+  (2026-07-18). No production code yet — this is the mandatory pre-implementation probe.** The plan makes
+  §6.3 a hard blocker: §6.1 measured sub-routine closure semantics on **FB5.0 only**, and FB3 historically
+  documented sub-routines as having *no* outer-variable access — if FB3 differs, the closure harness must
+  branch on version. Measured with a new out-of-solution probe `tools/probes/Fb3ClosureProbe` (raw
+  `EXECUTE BLOCK` against a throwaway scratch DB per instance — **no EmberTern interpreter**, so it measures
+  the *engine*): **FB3.0.13 sub-routines are CLOSED scopes** (an outer var is rejected at compile, SQL -206
+  "Column unknown") — FB3 is genuinely *simpler*, no closures; **FB5.0.3 sub-routines are true closures**
+  (read + write, **by reference** — Q2=6, Q3=(5,99), Q4=77, confirming §6.1). **FB4 unverified** (not
+  installed — only FB3.0+FB5.0 listening; recorded like P2's FB2.5 / D6's §15.5). **D9 consequence — no new
+  abstraction:** the D8 `Frame.LexicalParent` split (gotcha #241) already models both worlds, so D9 only picks
+  the lexical parent by server major (`FirebirdDdlReader.ParseServerMajor`, reused from P2) when it pushes a
+  local-routine frame — **FB3 → `LexicalParent = null`** (closed, *forced correct*: an outer-referencing
+  sub-routine can't even compile in the DB on FB3, so a closed frame is 100% faithful by construction; harness
+  injects only the call arguments), **FB5 → `LexicalParent = declaring frame`** (outer reads/writes resolve up
+  the chain; harness injects the read set R1–R4 + carries the decl verbatim R5 + reads writes back), **FB4 →
+  conservative**, a documented §F boundary. Pure gate work — no production code touched ⇒ build 0/0 + tests
+  unaffected. Spec §6.3 resolved, §15.7 log added, compatibility/open-items/roadmap rows updated; plan D9 risk
+  resolved. **Next: D9 seam a** — `FirebirdDebugExecutor.ResolveRoutine` resolves a local `DECLARE PROCEDURE/
+  FUNCTION` call to a real interpreted frame (§6.2a), `LexicalParent` by version; then **seam b** — closure
+  harness + transitive read/write-set fixpoint over the sub-routine call graph + R5. History:
+  [docs/history/19-...](docs/history/19-firebird-debugger.md) (D9 gate). See [[feedback-debugger-ux-polish-backlog]].
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

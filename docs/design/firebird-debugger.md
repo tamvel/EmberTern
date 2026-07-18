@@ -105,7 +105,7 @@ So the explicit gate is not a removal of support — it **ratifies reality and m
 | `EXECUTE BLOCK` (the harness) | ✔ | ✔ | ✔ | FB2.0+. |
 | Sub-routines (`DECLARE PROCEDURE/FUNCTION`) | ✔ | ✔ | ✔ | FB3+. The reason FB2.5 is out. |
 | Packages | ✔ | ✔ | ✔ | FB3+. |
-| **Sub-routine closures over outer variables** | **⚠ VERIFY** | **⚠ VERIFY** | ✔ verified | **Blocks D9.** FB3 documented sub-routines as *unable* to access outer variables. If true, FB3 is *simpler* (no closures). §6.3 |
+| **Sub-routine closures over outer variables** | ✘ **measured: NO** (closed scope, SQL -206) | **⚠ VERIFY** | ✔ verified | **§6.3 gate RESOLVED (2026-07-18, §15.7).** FB3 closed ⇒ frame `LexicalParent = null`; FB5 closures ⇒ declaring frame. Harness branches on version. FB4 unverified. |
 | Savepoints (`SAVEPOINT` / `ROLLBACK TO`) | ✔ | ✔ | ✔ verified | Frame atomicity (§4.5). |
 | Multiple cursors + interleaved commands per attachment | ⚠ verify | ⚠ verify | ✔ verified | Cursor Bridge (§7). Driver-level; expected uniform. |
 | `DECFLOAT`, `INT128`, `TIME ZONE` types | — | ⚠ | ⚠ | Round-trip fidelity risk (§12.6). |
@@ -524,11 +524,26 @@ in the call stack, with real variables, steppable line by line** — which IBExp
 Carry the sub-routine declarations verbatim (**always** — R5), inject the captured read set, read mutated
 captures back. Verified (Q5): 36 / 6, side effect and evaluation order both correct.
 
-### 6.3 ⚠ Version gate — blocks D9
+### 6.3 ✅ Version gate — MEASURED (2026-07-18); resolved
 
-§6.1 was measured on **FB5.0.3 only**. FB3 documented sub-routines as **unable** to access outer variables;
-if true, FB3 is *simpler* (no closures) and the closure harness is FB4+/FB5. **Measure Q2/Q3/Q4 on FB3 and
-FB4 before implementing D9** (FB3 is installed locally on port 4050). Recorded as a gate, not an assumption.
+§6.1 was measured on **FB5.0.3 only**; this gate re-measured Q2/Q3/Q4 on **FB3.0.13 (port 4050)** with
+`tools/probes/Fb3ClosureProbe` (raw `EXECUTE BLOCK`, full log in **§15.7**). **Result:**
+
+- **FB3 sub-routines are CLOSED scopes** — an outer variable is rejected at compile time (SQL **-206**
+  "Column unknown"). FB3 is genuinely *simpler*: no closures.
+- **FB5 sub-routines are true closures** — read + write, **by reference** (confirms §6.1: `6`, `5→99`, `77`).
+- **FB4 unverified** (not installed) — a documented §F boundary; re-run the probe when an FB4 instance exists.
+
+**D9 consequence — the harness / interpreter branches on server version when it pushes a local-routine
+frame** (no new abstraction — the D8 `Frame.LexicalParent` split, gotcha #241, already models it):
+
+| Server | Local-routine frame `LexicalParent` | Closure harness (§6.2b) captures |
+|---|---|---|
+| **FB3** | **`null`** (closed — *forced correct*: an outer-referencing sub-routine can't even compile in the DB) | none — inject **only** the call arguments |
+| **FB5** | **declaring frame** (outer reads/writes resolve up the chain) | inject the read set (R1–R4) + carry the decl verbatim (R5) + read writes back |
+| **FB4** | unverified — treat conservatively at the boundary | — |
+
+The branch is one predicate on `FirebirdDdlReader.ParseServerMajor` (reused from P2) at frame construction.
 
 ---
 
@@ -896,7 +911,9 @@ Each is **named, detected where possible, and surfaced**. None is silently appro
    execution.** IBExpert has the identical constraint and doesn't say so.
 10. **Domain `CHECK` on injection** (§3.4/R2). Base-typed harness parameters skip domain validation *on
     injection*; the user's own assignments still validate (R3). Accepted trade (decision 1).
-11. **FB3/FB4 closure semantics unverified** (§6.3, §1.4) — a gate on D9, not an assumption.
+11. **FB3 closure semantics measured; FB4 unverified** (§6.3/§15.7, 2026-07-18). FB3 sub-routines are
+    **closed** (no outer access, SQL -206); FB5 are **closures**; FB4 not installed. The frame's
+    `LexicalParent` branches on server major — not an assumption. FB4 is a documented §F boundary.
 12. **Unparseable source.** If a routine's source does not yield step points (the `RawStatement`/§0 valve),
     the debugger **refuses to start, with the reason** — it never debugs a partial understanding.
 
@@ -937,7 +954,7 @@ next. Foundation-first; never big-bang.
 | **D6 ✅** | **Cursor Bridge** | `FOR SELECT` incremental stepping via a real DSQL cursor (§7); per-wire-op locking; colon-only injection (§15.5). **DONE** (nested cursors + fidelity proven; `WHERE CURRENT OF`/`DECLARE CURSOR` explicit cursors are follow-ups). | `FOR SELECT` is in nearly every real procedure — D4 isn't truly usable without it. Before the flashier work. |
 | **D7** | **Variables window, full** | Grouping/icons, change highlight, inline edit + validation, pins, types, `<null>`, lazy BLOBs, filter, **data tips**. | The most important panel, once there is state worth showing. |
 | **D8** | **Call stack + nested stored routines** | Frames, stack panel, **Breadcrumbs** (shared feature), Peek Frame, frame keyboard nav, simulated-frame indicator. | Nesting needs a working single frame first. |
-| **D9** | **Local procedures & functions** 🏁 | Sub-routine frames (§6.2a) + closure harness (§6.2b) + read/write sets + **R5**. **Run §6.3's FB3/FB4 probes first.** | **The flagship.** Falls out of D1+D2+D8 — the design's central claim. |
+| **D9** | **Local procedures & functions** 🏁 | Sub-routine frames (§6.2a) + closure harness (§6.2b) + read/write sets + **R5**. **§6.3 gate DONE (§15.7): frame `LexicalParent` branches on version — FB3 `null`, FB5 declaring frame.** | **The flagship.** Falls out of D1+D2+D8 — the design's central claim. |
 | **D10** | **Triggers** | Action selector, NEW/OLD editor + availability rules, span-based substitution, seed-from-row. | Independent surface; needs D4+D7. |
 | **D11** | **Packages** | Public + private routines (§8.2). **Extend the lab with a private routine first.** | Smallest remaining surface. |
 | **D12** | **Advanced breakpoints** | Break on exception, conditional + hit counts, data breakpoints, **run to next `SUSPEND`** (+ its result grid). | Cheap *given* the engine; pure additions. |
@@ -957,7 +974,9 @@ next. Foundation-first; never big-bang.
 ## 14. Open items
 
 **Probes that block a milestone (measure — never infer):**
-- **§6.3 / §1.4** — sub-routine outer-variable capture on **FB3 / FB4** (probes Q2/Q3/Q4). **Blocks D9.**
+- ~~**§6.3 / §1.4** — sub-routine outer-variable capture on **FB3 / FB4** (probes Q2/Q3/Q4).~~ **RESOLVED
+  (§15.7, 2026-07-18):** FB3 = **closed** (SQL -206); FB5 = **closures** (read+write byref). FB4 unverified
+  (not installed). D9's frame `LexicalParent` branches on server major (FB3 `null`, FB5 declaring frame).
 - **§8.2** — private package routine callable from `EXECUTE BLOCK`? Source extractable from the body blob?
   **Blocks D11.**
 - ~~**§7** — `WHERE CURRENT OF` on a named DSQL cursor.~~ **RESOLVED (§15.5 [12]):** unsupported cross-context
@@ -1096,3 +1115,41 @@ mandated §2.1 proof). Lab zoo extended with `SP_DBG_LEAF` / `SP_DBG_MID` / `SP_
 
 *(Every resolved callee is a **stored** routine → a closed scope, `LexicalParent = null` (gotcha #241); a
 package/qualified callee — D11 — and a local sub-routine — D9 — still step over in place, 100% faithful §5.3.)*
+
+### 15.7 D9 — the §6.3 closure version gate (FB3 @ 4050 + FB5 @ 3050)
+
+Run **before** implementing D9 (`tools/probes/Fb3ClosureProbe`, raw `EXECUTE BLOCK` on a throwaway scratch
+DB per instance — **no EmberTern interpreter**: this measures the *engine*, per Developer Contract "verify,
+don't infer"). It resolves the §6.3 gate: §6.1 measured closures on **FB5.0 only**; FB3 historically
+documented sub-routines as having **no** outer access. **FB4 unavailable** (only FB3.0 + FB5.0 installed) —
+recorded unverified, the same posture as P2's FB2.5 and D6's §15.5 [11].
+
+| # | Question | FB 3.0.13 | FB 5.0.3 | Consequence |
+|---|---|---|---|---|
+| **Q2** | Sub-**function** *reads* an outer variable (`RETURN OUTER_V + 1`, `OUTER_V = 5`) | **REJECTED** — SQL **-206** "Column unknown `OUTER_V`" at compile | **COMPILED** — `RESULT = 6` | The outer var is **out of scope** in an FB3 sub-routine; it is a **true closure** in FB5. |
+| **Q3** | Sub-function sees the outer var **mutated** between calls (5 then 99) | **REJECTED** (-206) | **COMPILED** — `R1 = 5, R2 = 99` | FB5 capture is **by reference**, not by value. |
+| **Q4** | Sub-**procedure** *writes* an outer variable (`OUTER_V = 77`) | **REJECTED** (-206) | **COMPILED** — `RESULT = 77` | FB5 writes **propagate back** to the parent frame. |
+
+> **Verdict — FB3 sub-routines are CLOSED scopes; FB5 sub-routines are true closures (read + write, by
+> reference).** The gate anticipated this exactly ("if true, FB3 is *simpler* — no closures").
+
+**Design consequence (drives D9 — no new abstraction; §6.2 holds).** The D8 `Frame.LexicalParent` split
+(gotcha #241) already models both worlds, so D9 only has to *pick* the lexical parent by server version when
+it pushes a local-routine frame:
+
+- **FB3 → `LexicalParent = null`** (closed scope, exactly like a stored callee). This is not merely
+  "simpler" — it is *forced correct*: a sub-routine that references an outer variable **cannot compile in the
+  database on FB3** (-206), so no stored FB3 routine can contain one; a closed frame therefore reproduces the
+  engine with 100% fidelity by construction. The closure harness (§6.2b) injects **only the call arguments** —
+  there are no captures.
+- **FB5 → `LexicalParent = declaring frame`** (§6.1/§6.2b): outer reads/writes resolve up the scope chain
+  against `FrameValues`, and the step-over harness injects the captured read set (R1–R4) + carries the
+  sub-routine declaration verbatim (R5) + reads mutated captures back. The carried declaration references the
+  parent's variables, which the harness declares at the enclosing level — so FB5's by-reference capture makes
+  the harness work with no extra machinery.
+- **FB4 → unverified.** Treat conservatively at the version boundary (a documented §F boundary until an FB4
+  instance is available); re-run `Fb3ClosureProbe` against port `4050`-equivalent when one is. Recommendation
+  recorded in §6.3.
+
+The server major is already available (`FirebirdDdlReader.ParseServerMajor`, reused by P2's connect gate), so
+the branch is a single predicate at frame construction, not a new code path through the interpreter.

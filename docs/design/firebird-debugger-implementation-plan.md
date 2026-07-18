@@ -380,10 +380,12 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
   sub-routine call graph).
 - **Dep.** D1, D2, D8.
 - **Ryzyka.**
-  - ⚠ **BLOCKED until the FB3/FB4 closure probes run** (spec §6.3, §1.4). FB5 sub-routines capture **by
-    reference, read and write** (verified); FB3 documented *no* outer access. **Measure Q2/Q3/Q4 on FB3
-    (port 4050) and FB4 first.** If FB3 differs, the harness must branch on version — surface it, don't
-    silently assume FB5 semantics.
+  - ✅ **Gate MEASURED (2026-07-18, `Fb3ClosureProbe`, spec §15.7).** FB3.0.13 sub-routines are **CLOSED
+    scopes** (outer var rejected, SQL -206); FB5.0.3 are **true closures** (read+write by ref, confirms
+    §6.1). FB4 unverified (not installed). **⇒ the frame's `LexicalParent` branches on server major**
+    (`ParseServerMajor`): FB3 → `null` (like a stored callee); FB5 → declaring frame. FB4 conservative,
+    a documented §F boundary. No new abstraction — the D8 `LexicalParent` split (gotcha #241) already models
+    both. Do **not** assume FB5 semantics on FB3.
   - **R5** again: never drop a sub-routine declaration from a harness.
   - If new abstractions are needed here, **something earlier was built wrong** — stop and reconsider rather
     than special-casing.

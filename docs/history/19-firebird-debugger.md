@@ -1391,3 +1391,56 @@ stack; frame savepoints (unchanged from D1) are correct on unwind. Build 0/0; **
 callee; full suite green (run manually — the full `dotnet test` hangs in this env, #94/#226); smoke clean.
 **Awaits the user's visual confirmation** (UI, per the QA rule). Gotchas #241/#242/#243. **Next: D9 — local
 procedures & functions (the flagship).**
+
+---
+
+## D9 — Local Procedures & Functions (the flagship) — the §6.3 closure version gate (2026-07-18)
+
+D9's first, mandatory unit is the spec **§6.3 version gate**: §6.1 measured sub-routine closure semantics on
+**FB5.0 only**, and FB3 historically documented sub-routines as having *no* access to outer variables. The
+plan makes this a hard blocker — *"Run §6.3's FB3/FB4 probes first"* — because if FB3 differs, the D9 closure
+harness must branch on server version. Verify, don't infer (Developer Contract).
+
+**The probe** (`tools/probes/Fb3ClosureProbe`, raw `EXECUTE BLOCK` against a throwaway scratch DB on each
+instance — deliberately **no EmberTern interpreter**, so it measures the *engine*, not the shipped code):
+three anonymous blocks, each declaring an outer variable and a sub-routine that reads it (Q2), sees it mutated
+between calls (Q3), or writes it (Q4). FB3 on port 4050, FB5 on 3050. FB4 is **not installed** in this
+environment (only FB3.0 + FB5.0 listening), recorded unverified — the same honest posture as P2's FB2.5 and
+D6's §15.5 [11].
+
+**Result (decisive):**
+
+| | FB 3.0.13 | FB 5.0.3 |
+|---|---|---|
+| Q2 sub-fn *reads* outer | **REJECTED** — SQL -206 "Column unknown `OUTER_V`" at compile | **COMPILED** — `RESULT = 6` |
+| Q3 sees outer *mutated* (byref) | **REJECTED** (-206) | **COMPILED** — `R1 = 5, R2 = 99` |
+| Q4 sub-proc *writes* outer | **REJECTED** (-206) | **COMPILED** — `RESULT = 77` |
+
+**FB3 sub-routines are CLOSED scopes; FB5 sub-routines are true closures (read + write, by reference).**
+Exactly what §6.3 anticipated ("if true, FB3 is *simpler* — no closures").
+
+**Why this is elegant, not a complication.** The D8 `Frame.LexicalParent` split (gotcha #241) already models
+both worlds — D8 gave stored callees `LexicalParent = null` (closed) and *reserved* `LexicalParent = declaring
+frame` for D9 local routines. The gate simply tells D9 which to pick, by server major:
+
+- **FB3 → `LexicalParent = null`.** Not just "simpler" — *forced correct*: a sub-routine that references an
+  outer variable **cannot compile in the database on FB3** (-206), so no stored FB3 routine can contain one; a
+  closed frame reproduces the engine with 100% fidelity by construction. The step-over closure harness injects
+  **only the call arguments** — there are no captures.
+- **FB5 → `LexicalParent = declaring frame`.** Outer reads/writes resolve up the scope chain against
+  `FrameValues`; the harness injects the captured read set (R1–R4), carries the sub-routine declaration
+  verbatim (R5), and reads mutated captures back. The carried declaration references the parent's variables,
+  which the harness declares at the enclosing level — FB5's by-reference capture makes it work with no extra
+  machinery.
+- **FB4 → unverified**, a documented §F boundary; re-run `Fb3ClosureProbe` against an FB4 instance when one
+  exists.
+
+The branch is a single predicate on `FirebirdDdlReader.ParseServerMajor` (already reused from P2's connect
+gate) at frame construction — **no new abstraction**, matching the plan's "New: little or nothing."
+
+**State.** Pure gate work: a new out-of-solution probe + design-doc updates (spec §6.3 resolved, §15.7 log
+added, compatibility matrix + open-items + roadmap rows updated; plan D9 risk resolved). **No production code
+touched** ⇒ build 0/0 and the test suite are unaffected. Committed as the D9 gate. **Next session: D9 seam a**
+— `FirebirdDebugExecutor.ResolveRoutine` resolves a local `DECLARE PROCEDURE/FUNCTION` call to a real frame
+(interpret §6.2a), picking `LexicalParent` by version; then seam b — the closure harness + transitive
+read/write-set fixpoint over the sub-routine call graph + R5. See the handoff at the end of this session.
