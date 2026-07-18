@@ -97,6 +97,15 @@ public interface IDebugExecutor
     /// <c>IF</c>/<c>WHILE</c> node) against <paramref name="frame"/>'s values.</summary>
     ConditionOutcome EvaluateCondition(IExecutableStatement owner, Frame frame);
 
+    /// <summary>Evaluates a <b>user-supplied fragment</b> against <paramref name="frame"/> (spec §9.5 — the
+    /// Evaluate / Watches / Immediate surfaces). It is the SAME harness mechanism as a step: the fragment
+    /// becomes a generated <c>EXECUTE BLOCK</c>, run in the debug transaction, and the server computes
+    /// everything. The fragment has no AST node, so the injected read/write set is the §3.5 "inject all
+    /// in-scope" primitive (<see cref="ReadWriteSetAnalyzer.InScopeLocals"/>). The returned
+    /// <see cref="EvaluationResult"/> carries the value (Expression), the frame write-back (Statement) and
+    /// the generated SQL (the Executed-SQL audit, §10.3). There is no second evaluator (D5 risk #1).</summary>
+    EvaluationResult Evaluate(EvaluationRequest request, Frame frame);
+
     /// <summary>Opens the cursor of a <c>FOR SELECT</c> loop against <paramref name="frame"/>'s values.</summary>
     IDebugCursor OpenCursor(ForSelectStatement loop, Frame frame);
 

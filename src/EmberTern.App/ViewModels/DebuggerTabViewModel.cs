@@ -94,6 +94,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         _connectionId = connectionId;
         Preflight = new ObservableCollection<DebugPreflightItem>();
         Variables = new ObservableCollection<DebugVariableRowViewModel>();
+        ExecutedSql = new ObservableCollection<DebugExecutedSqlRowViewModel>();
         StatusText = UiStrings.DebuggerLaunchPreparing;
     }
 
@@ -117,6 +118,26 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
     /// <summary>The current frame's variables (basic list — D4).</summary>
     public ObservableCollection<DebugVariableRowViewModel> Variables { get; }
+
+    /// <summary>The Executed SQL audit log (D5, spec §10.3) — every expression evaluation / Immediate run,
+    /// newest first. The trust anchor of a simulator (§F): the generated harness SQL is kept visible.</summary>
+    public ObservableCollection<DebugExecutedSqlRowViewModel> ExecutedSql { get; }
+
+    private const int ExecutedSqlCap = 200;
+
+    /// <summary>The Immediate window input — an expression (default) or a statement (see
+    /// <see cref="ImmediateAsStatement"/>) evaluated against the current frame (D5, spec §9.5).</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(EvaluateImmediateCommand))]
+    private string _immediateInput = string.Empty;
+
+    /// <summary>When set, the Immediate input is run as a PSQL statement against the live frame (its
+    /// write-back is applied to the frame); otherwise it is evaluated as an expression (spec §9.5).</summary>
+    [ObservableProperty]
+    private bool _immediateAsStatement;
+
+    /// <summary>True while a session is live and there are audit rows to show.</summary>
+    public bool HasExecutedSql => ExecutedSql.Count > 0;
 
     /// <summary>Isolation options for the launch selector: index 0 = Read Committed, 1 = Snapshot (§4.2).</summary>
     public IReadOnlyList<string> IsolationOptions { get; } = new[]
@@ -143,6 +164,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     [NotifyCanExecuteChangedFor(nameof(StepOutCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(RestartCommand))]
+    [NotifyCanExecuteChangedFor(nameof(EvaluateImmediateCommand))]
     private DebuggerPhase _phase = DebuggerPhase.Preparing;
 
     [ObservableProperty]
@@ -272,6 +294,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
         var spec = new DebugLaunchSpec(_source, _body, _model, RoutineName, rootValues, Isolation);
 
+        ClearExecutedSql(); // a fresh session starts a fresh audit log
         Phase = DebuggerPhase.Busy;
         StatusText = UiStrings.DebuggerStatusRunning;
         try
@@ -337,6 +360,83 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         RefreshFromSession();
     }
 
+    // ── Expression evaluation (Evaluate / Immediate — D5, spec §9.5) ────────────────────────────────
+
+    private bool CanEvaluate => Phase == DebuggerPhase.Paused && Session is not null
+                                && !string.IsNullOrWhiteSpace(ImmediateInput);
+
+    /// <summary>Evaluates the Immediate input against the current frame (expression by default, or a statement
+    /// when <see cref="ImmediateAsStatement"/> is set). The result lands in the Executed SQL audit log.</summary>
+    [RelayCommand(CanExecute = nameof(CanEvaluate))]
+    private async Task EvaluateImmediateAsync()
+    {
+        var fragment = ImmediateInput;
+        var kind = ImmediateAsStatement ? EvaluationKind.Statement : EvaluationKind.Expression;
+        if (await EvaluateFragmentAsync(fragment, kind).ConfigureAwait(true))
+        {
+            ImmediateInput = string.Empty; // REPL-style: clear on a successful issue
+        }
+    }
+
+    /// <summary>Evaluate (Shift+F9): evaluates a source selection as an expression against the current frame.
+    /// Routes through the SAME engine as the Immediate window (decision 6 — one engine, three surfaces); the
+    /// result lands in the same Executed SQL log.</summary>
+    public Task EvaluateSelectionAsync(string fragment) => EvaluateFragmentAsync(fragment, EvaluationKind.Expression);
+
+    // The one App-side evaluation path shared by Immediate and Evaluate(Shift+F9). It never evaluates
+    // anything itself — the engine is DebugSession.Evaluate (Core), run off the UI thread (the executor is
+    // sync-over-async, like stepping). Phase → Busy for the duration gives mutual exclusion with stepping via
+    // the existing state machine (a step can't start while Busy, and evaluation requires Paused), so the
+    // non-thread-safe DebugSession is never touched concurrently. Returns true when the evaluation was issued.
+    private async Task<bool> EvaluateFragmentAsync(string fragment, EvaluationKind kind)
+    {
+        var session = Session;
+        if (session is null || Phase != DebuggerPhase.Paused || string.IsNullOrWhiteSpace(fragment))
+        {
+            return false;
+        }
+
+        Phase = DebuggerPhase.Busy;
+        EvaluationResult? result = null;
+        string? failure = null;
+        try
+        {
+            result = await Task.Run(() => session.Evaluate(fragment, kind)).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            failure = ex.Message;
+        }
+
+        AddExecutedSql(failure is not null
+            ? DebugExecutedSqlRowViewModel.ForException(fragment, failure)
+            : DebugExecutedSqlRowViewModel.ForResult(fragment, kind, result!));
+
+        // The session is still paused at the same step; restore Paused + refresh the frame (a statement may
+        // have written frame variables via the live write-back).
+        RefreshFromSession();
+        // "Issued and succeeded" — a server raise (result.Success == false) keeps the input so the user can
+        // edit and retry; only a clean evaluation clears it.
+        return result?.Success == true;
+    }
+
+    private void AddExecutedSql(DebugExecutedSqlRowViewModel row)
+    {
+        ExecutedSql.Insert(0, row); // newest first
+        while (ExecutedSql.Count > ExecutedSqlCap)
+        {
+            ExecutedSql.RemoveAt(ExecutedSql.Count - 1);
+        }
+        OnPropertyChanged(nameof(HasExecutedSql));
+    }
+
+    private void ClearExecutedSql()
+    {
+        if (ExecutedSql.Count == 0) return;
+        ExecutedSql.Clear();
+        OnPropertyChanged(nameof(HasExecutedSql));
+    }
+
     // ── Stop / Restart ──────────────────────────────────────────────────────────────────────────
 
     private bool CanStopOrRestart => _run is not null
@@ -349,6 +449,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         SetCurrentMarker(null, null);
         Variables.Clear();
         OnPropertyChanged(nameof(HasVariables));
+        ClearExecutedSql();
         Phase = DebuggerPhase.Idle;
         StatusText = UiStrings.DebuggerStatusStopped;
     }

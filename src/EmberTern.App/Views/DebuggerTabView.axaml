@@ -160,51 +160,129 @@
         </StackPanel>
       </ScrollViewer>
 
-      <!-- ── Debug view (read-only source + variables) ─────────────────────── -->
-      <Grid IsVisible="{Binding IsDebugViewVisible}" ColumnDefinitions="*,4,280">
-        <ae:TextEditor x:Name="SourceEditor"
-                       Grid.Column="0"
-                       ShowLineNumbers="True"
-                       IsReadOnly="True"
-                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="13"
-                       HorizontalScrollBarVisibility="Auto"
-                       VerticalScrollBarVisibility="Auto"
-                       Background="{DynamicResource BackgroundBrush}"
-                       Foreground="{DynamicResource ForegroundBrush}" />
+      <!-- ── Debug view (read-only source + variables + Immediate/Executed SQL) ─── -->
+      <Grid IsVisible="{Binding IsDebugViewVisible}" RowDefinitions="*,4,190">
 
-        <GridSplitter Grid.Column="1" Background="{DynamicResource BorderBrush}" />
+        <!-- Source editor + variables -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,4,280">
+          <ae:TextEditor x:Name="SourceEditor"
+                         Grid.Column="0"
+                         ShowLineNumbers="True"
+                         IsReadOnly="True"
+                         FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                         FontSize="13"
+                         HorizontalScrollBarVisibility="Auto"
+                         VerticalScrollBarVisibility="Auto"
+                         Background="{DynamicResource BackgroundBrush}"
+                         Foreground="{DynamicResource ForegroundBrush}" />
 
-        <Border Grid.Column="2"
+          <GridSplitter Grid.Column="1" Background="{DynamicResource BorderBrush}" />
+
+          <Border Grid.Column="2"
+                  Background="{DynamicResource PanelBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}"
+                  BorderThickness="1,0,0,0">
+            <Grid RowDefinitions="Auto,*">
+              <Border Grid.Row="0" Padding="8,6"
+                      BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                <TextBlock Text="{x:Static app:UiStrings.DebuggerVariablesHeader}"
+                           FontWeight="SemiBold" FontSize="11" />
+              </Border>
+              <TextBlock Grid.Row="1" Margin="10,8"
+                         Text="{x:Static app:UiStrings.DebuggerVariablesEmpty}"
+                         Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                         IsVisible="{Binding !HasVariables}" />
+              <ListBox Grid.Row="1" ItemsSource="{Binding Variables}"
+                       Background="Transparent" BorderThickness="0"
+                       IsVisible="{Binding HasVariables}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DebugVariableRowViewModel">
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                      <StackPanel Grid.Column="0" Spacing="0">
+                        <TextBlock Text="{Binding Name}" FontSize="11" />
+                        <TextBlock Text="{Binding TypeText}" FontSize="10"
+                                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                                   IsVisible="{Binding HasType}" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="1" Text="{Binding ValueText}" FontSize="11"
+                                 VerticalAlignment="Center"
+                                 FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </Grid>
+          </Border>
+        </Grid>
+
+        <GridSplitter Grid.Row="1" Height="4" HorizontalAlignment="Stretch"
+                      Background="{DynamicResource BorderBrush}" />
+
+        <!-- Immediate window + Executed SQL audit log (D5, spec §9.5 / §10.3) -->
+        <Border Grid.Row="2"
                 Background="{DynamicResource PanelBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1,0,0,0">
-          <Grid RowDefinitions="Auto,*">
+                BorderThickness="0,1,0,0">
+          <Grid RowDefinitions="Auto,Auto,*">
             <Border Grid.Row="0" Padding="8,6"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-              <TextBlock Text="{x:Static app:UiStrings.DebuggerVariablesHeader}"
+              <TextBlock Text="{x:Static app:UiStrings.DebuggerImmediateHeader}"
                          FontWeight="SemiBold" FontSize="11" />
             </Border>
-            <TextBlock Grid.Row="1" Margin="10,8"
-                       Text="{x:Static app:UiStrings.DebuggerVariablesEmpty}"
+
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="8,6">
+              <TextBox Grid.Column="0"
+                       Text="{Binding ImmediateInput, Mode=TwoWay}"
+                       Watermark="{x:Static app:UiStrings.DebuggerImmediateWatermark}"
+                       FontSize="11" FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       VerticalContentAlignment="Center">
+                <TextBox.KeyBindings>
+                  <KeyBinding Gesture="Enter" Command="{Binding EvaluateImmediateCommand}" />
+                </TextBox.KeyBindings>
+              </TextBox>
+              <CheckBox Grid.Column="1" Margin="8,0"
+                        IsChecked="{Binding ImmediateAsStatement, Mode=TwoWay}"
+                        Content="{x:Static app:UiStrings.DebuggerImmediateAsStatement}"
+                        ToolTip.Tip="{x:Static app:UiStrings.DebuggerImmediateAsStatementTooltip}"
+                        FontSize="11" VerticalAlignment="Center" />
+              <Button Grid.Column="2" Classes="flat" FontSize="11"
+                      Content="{x:Static app:UiStrings.DebuggerImmediateEvaluateButton}"
+                      Command="{Binding EvaluateImmediateCommand}" />
+            </Grid>
+
+            <TextBlock Grid.Row="2" Margin="10,6"
+                       Text="{x:Static app:UiStrings.DebuggerImmediateEmpty}"
                        Classes="subtle" FontSize="11" TextWrapping="Wrap"
-                       IsVisible="{Binding !HasVariables}" />
-            <ListBox Grid.Row="1" ItemsSource="{Binding Variables}"
+                       IsVisible="{Binding !HasExecutedSql}" />
+            <ListBox Grid.Row="2" ItemsSource="{Binding ExecutedSql}"
                      Background="Transparent" BorderThickness="0"
-                     IsVisible="{Binding HasVariables}">
+                     IsVisible="{Binding HasExecutedSql}">
               <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:DebugVariableRowViewModel">
-                  <Grid ColumnDefinitions="*,Auto" Margin="0,1">
-                    <StackPanel Grid.Column="0" Spacing="0">
-                      <TextBlock Text="{Binding Name}" FontSize="11" />
-                      <TextBlock Text="{Binding TypeText}" FontSize="10"
-                                 Foreground="{DynamicResource SubtleForegroundBrush}"
-                                 IsVisible="{Binding HasType}" />
-                    </StackPanel>
-                    <TextBlock Grid.Column="1" Text="{Binding ValueText}" FontSize="11"
-                               VerticalAlignment="Center"
-                               FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
-                  </Grid>
+                <DataTemplate x:DataType="vm:DebugExecutedSqlRowViewModel">
+                  <!-- The row's tooltip carries the generated harness SQL (the §10.3/§F audit). -->
+                  <StackPanel Spacing="1" Margin="0,2" ToolTip.Tip="{Binding Sql}">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <TextBlock Grid.Column="0" Text="{Binding TimestampText}" FontSize="10"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,0,6,0"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding Fragment}" FontSize="11"
+                                 FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="2" Text="{Binding SideEffectGlyph}" FontSize="11"
+                                 Foreground="{DynamicResource WarningBrush}"
+                                 VerticalAlignment="Center" />
+                    </Grid>
+                    <TextBlock Text="{Binding ResultText}" FontSize="11"
+                               FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                               TextWrapping="Wrap" Margin="0,0,0,0"
+                               IsVisible="{Binding IsError}"
+                               Foreground="{DynamicResource ErrorBrush}" />
+                    <TextBlock Text="{Binding ResultText}" FontSize="11"
+                               FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding !IsError}"
+                               Foreground="{DynamicResource ForegroundBrush}" />
+                  </StackPanel>
                 </DataTemplate>
               </ListBox.ItemTemplate>
             </ListBox>

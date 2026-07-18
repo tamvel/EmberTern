@@ -1730,4 +1730,17 @@ internal static class UiStrings
     // Errors.
     public const string DebuggerNoConnection = "Connect to a database before debugging.";
     public const string DebuggerSourceUnavailableFormat = "Could not load the source of {0}.";
+    // Expression evaluation — Evaluate / Immediate / Executed SQL (D5, spec §9.5 / §10.3).
+    public const string DebuggerImmediateHeader = "Immediate / Executed SQL";
+    public const string DebuggerImmediateWatermark = "Evaluate an expression against the current frame…";
+    public const string DebuggerImmediateAsStatement = "as statement";
+    public const string DebuggerImmediateAsStatementTooltip =
+        "Run the text as a PSQL statement against the live frame (may assign variables). Off: evaluate it as an expression.";
+    public const string DebuggerImmediateEvaluateButton = "Evaluate";
+    public const string DebuggerEvaluateSelectionTooltip = "Evaluate the selected expression (Shift+F9)";
+    public const string DebuggerImmediateEmpty = "No evaluations yet. Evaluate an expression, or select one in the source and press Shift+F9.";
+    public const string DebuggerEvalKindExpression = "expression";
+    public const string DebuggerEvalKindStatement = "statement";
+    public const string DebuggerEvalStatementOk = "(statement ran)";
+    public const string DebuggerEvalErrorUnknown = "evaluation failed";
 }

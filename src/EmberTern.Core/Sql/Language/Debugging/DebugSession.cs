@@ -163,6 +163,36 @@ public sealed class DebugSession
         return false;
     }
 
+    // ── Expression evaluation (spec §9.5 — Evaluate / Watches / Immediate) ────────────────────────
+
+    /// <summary>Evaluates a <b>user-supplied fragment</b> against the current frame — the one engine behind
+    /// the Evaluate / Watches / Immediate surfaces (decision 6). Requires the session be <b>Paused</b> (there
+    /// is a live frame only while paused). An <see cref="EvaluationKind.Expression"/> yields a value and
+    /// mutates nothing; an <see cref="EvaluationKind.Statement"/> runs against the live frame and its
+    /// write-back is applied to that frame (the Immediate window operates on the live frame, spec §9.5). It
+    /// is pure orchestration — the server work is the executor's harness (the same mechanism as a step); this
+    /// method never evaluates, coerces, or interprets anything itself. The returned result carries the
+    /// generated SQL for the Executed-SQL audit (§10.3).</summary>
+    public EvaluationResult Evaluate(string fragment, EvaluationKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(fragment))
+        {
+            throw new ArgumentException("The fragment to evaluate must be non-empty.", nameof(fragment));
+        }
+        EnsurePaused();
+
+        var frame = _frames[^1];
+        int scopeOffset = _currentStep?.Start ?? frame.Body.Start;
+        var request = new EvaluationRequest(fragment.Trim(), kind, scopeOffset);
+
+        var result = _executor.Evaluate(request, frame);
+        if (kind == EvaluationKind.Statement && result.Success && result.Writes is { Count: > 0 })
+        {
+            frame.Values.Apply(result.Writes); // the Immediate window operates on the live frame (§9.5)
+        }
+        return result;
+    }
+
     // ── The stepping loop ────────────────────────────────────────────────────────────────────────
 
     private void RunStepping(StepKind kind, int? targetOffset)

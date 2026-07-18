@@ -114,6 +114,19 @@ public class DebugEngineTests
             return ConditionOutcome.Of(_defaultCondition);
         }
 
+        // ── D5 evaluation surface ──
+        private readonly Dictionary<string, EvaluationResult> _evals = new(StringComparer.OrdinalIgnoreCase);
+        public List<EvaluationRequest> Evaluations { get; } = new();
+
+        public FakeExecutor EvalReturns(string fragment, EvaluationResult result) { _evals[fragment] = result; return this; }
+
+        public EvaluationResult Evaluate(EvaluationRequest request, Frame frame)
+        {
+            Evaluations.Add(request);
+            if (_evals.TryGetValue(request.Fragment, out var scripted)) return scripted;
+            return EvaluationResult.Ok($"/*eval*/ {request.Fragment}", request.Fragment, null);
+        }
+
         public IDebugCursor OpenCursor(ForSelectStatement loop, Frame frame)
         {
             var rows = _cursorRows.TryGetValue(loop.Start, out var r) ? r : new List<IReadOnlyDictionary<string, object?>>();
@@ -738,5 +751,74 @@ public class DebugEngineTests
         Assert.Equal(StopReason.Breakpoint, s.StopReason);
         Assert.Equal("q2 = 2;", Text(CalleeSql, s.CurrentStatement!));
         Assert.Equal(2, s.Depth);
+    }
+
+    // ── D5: expression evaluation (Evaluate / Watches / Immediate — one engine, §9.5) ──────────────
+
+    [Fact]
+    public void Evaluate_Expression_ReturnsValue_AndDoesNotMutateFrame()
+    {
+        const string sql = "begin a = 1; b = 2; end";
+        var exec = new FakeExecutor().EvalReturns("a + b", EvaluationResult.Ok("/*sql*/", 3, null));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start(); // paused at entry
+
+        var result = s.Evaluate("a + b", EvaluationKind.Expression);
+
+        Assert.True(result.Success);
+        Assert.Equal(3, result.Value);
+        Assert.False(result.HadWriteBack);
+        // The request carried Expression mode and the current step's offset for in-scope resolution.
+        var req = Assert.Single(exec.Evaluations);
+        Assert.Equal(EvaluationKind.Expression, req.Kind);
+        Assert.Equal(s.CurrentStatement!.Start, req.ScopeOffset);
+    }
+
+    [Fact]
+    public void Evaluate_Statement_AppliesWriteBack_ToLiveFrame()
+    {
+        const string sql = "begin a = 1; end";
+        var writes = Row("V", 42);
+        var exec = new FakeExecutor().EvalReturns("v = 42", EvaluationResult.Ok("/*sql*/", null, writes));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+
+        var result = s.Evaluate("v = 42", EvaluationKind.Statement);
+
+        Assert.True(result.HadWriteBack);
+        Assert.True(s.CurrentFrame!.TryResolveValue("V", out var v));
+        Assert.Equal(42, v); // the Immediate statement mutated the live frame (§9.5)
+    }
+
+    [Fact]
+    public void Evaluate_ExpressionMode_NeverAppliesWriteBack()
+    {
+        const string sql = "begin a = 1; end";
+        // Even if the executor (wrongly) returned writes, an Expression must not mutate the frame.
+        var exec = new FakeExecutor().EvalReturns("a", EvaluationResult.Ok("/*sql*/", 1, Row("A", 999)));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+
+        s.Evaluate("a", EvaluationKind.Expression);
+
+        Assert.False(s.CurrentFrame!.TryResolveValue("A", out _)); // untouched
+    }
+
+    [Fact]
+    public void Evaluate_WhenNotPaused_Throws()
+    {
+        const string sql = "begin a = 1; end";
+        var s = new DebugSession(Body(sql), new FakeExecutor());
+        // Not started → not paused.
+        Assert.Throws<InvalidOperationException>(() => s.Evaluate("a", EvaluationKind.Expression));
+    }
+
+    [Fact]
+    public void Evaluate_EmptyFragment_Throws()
+    {
+        const string sql = "begin a = 1; end";
+        var s = new DebugSession(Body(sql), new FakeExecutor());
+        s.Start();
+        Assert.Throws<ArgumentException>(() => s.Evaluate("   ", EvaluationKind.Expression));
     }
 }

@@ -389,7 +389,36 @@ noted.
   [docs/history/19-...](docs/history/19-firebird-debugger.md) (§"D4 UX review"). **Directive: fix these as UX/theme
   in the view + tokens; do NOT push logic into the VMs/UI to paper over UX — keep the D1–D4 responsibility split.**
   See [[feedback-debugger-ux-polish-backlog]].
-  **Next session: D5 (expression evaluation — Evaluate/Watches/Immediate).** Order stays **risk-first**
+  **D5 (expression evaluation — Evaluate / Watches / Immediate) — seam (a) DONE (2026-07-18; impl, live
+  evaluation awaits user confirmation). Seam (b) NOT started.** §9.5 decision 6: **one engine, three
+  surfaces** — every surface is *literally the harness with a user-supplied fragment* (D5 risk #1: no second
+  evaluator). **The one engine is Core:** new `EvaluationModels.cs` (`EvaluationKind` Expression|Statement,
+  `EvaluationRequest`, `EvaluationResult` — carries the generated `Sql`, the §10.3/§F audit anchor) +
+  **`IDebugExecutor.Evaluate(request, frame)`** (a new method on the one server seam; an arbitrary fragment
+  has **no AST node**, so its read/write set is the §3.5 **`ReadWriteSetAnalyzer.InScopeLocals`** primitive —
+  exactly what D2 carved out named for "a Watch on an arbitrary expression") + **`DebugSession.Evaluate(
+  fragment, kind)`** (pure orchestration: requires Paused, delegates to the executor against `CurrentFrame`,
+  applies a Statement's write-back to the live frame — the Immediate window operates *on the live frame*). The
+  Firebird executor builds the harness with the machinery it already had; an arbitrary expression's result
+  column is a wide `VARCHAR(8191) CHARACTER SET UTF8` (unknown type → server casts to text; a value that
+  can't cast raises + is surfaced, never guessed, §F). **Deviation from the plan (documented, Contract):** no
+  App `EvaluateController` — the real "one engine" is `DebugSession.Evaluate`; the App orchestration
+  (`Task.Run` + audit append) is thin enough to live on the VM, exactly as stepping is orchestrated (a
+  controller would be pure indirection; precedent: D3 chose "solve the lifecycle" over the plan's letter).
+  **Two inline surfaces shipped:** the **Immediate window** (input + Enter = evaluate; an "as statement"
+  checkbox → runs a PSQL statement against the live frame with write-back) and **Evaluate (Shift+F9** — the
+  source selection / identifier-at-caret as an expression), both routing through the same engine, both landing
+  in the **Executed SQL audit log** (§10.3 — newest-first, capped 200, the generated harness SQL kept on the
+  row tooltip; a statement is always flagged `±` side-effect-capable). Evaluation runs on `Task.Run` with
+  **Phase→Busy** for the duration → mutual exclusion with stepping via the existing state machine (the
+  non-thread-safe `DebugSession` is never touched concurrently). New `DebugExecutedSqlRowViewModel`;
+  `DebuggerTabViewModel` gained `ExecutedSql`/`ImmediateInput`/`ImmediateAsStatement`/`EvaluateImmediateCommand`/
+  `EvaluateSelectionAsync`; `DebuggerTabView` gained the bottom Immediate/Executed-SQL panel + Shift+F9. All
+  theme tokens; **no new colours; no UX polish** (the D4 UX backlog stays deferred). Build 0/0; **4755 tests
+  green in one run** (+5 `DebugEngineTests`, +6 `DebuggerTabVmTests`); smoke clean. History:
+  [docs/history/19-...](docs/history/19-firebird-debugger.md) (D5 seam a). **Next session: D5 seam (b) —
+  Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
+  `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
   (P1 → P2 → D1 → D2 → D3 → D4 → D5 …). **Read the plan + your milestone's brief before writing any debugger code.**
 - **Save-and-close / Save-and-disconnect — DONE + user-confirmed (2026-07-17).**
   The close/disconnect WorkGuard can now **compile every dirty metadata editor in one pass** instead

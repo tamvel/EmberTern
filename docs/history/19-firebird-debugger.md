@@ -752,3 +752,78 @@ D3's single `SqlEditorBehavior.Attach` seam paid off. The main area to refine is
 an architecture or implementation flaw.
 
 **Next: D5 (Evaluate / Watches / Immediate — one HarnessBuilder mechanism, three surfaces).**
+
+## D5 — Expression evaluation surface, seam (a): Evaluate + Immediate (2026-07-18)
+
+**Cel (§9.5, decision 6):** expression evaluation as **one engine, three surfaces** (Evaluate / Watches /
+Immediate). This seam ships **Evaluate + Immediate + the Executed SQL audit**; **Watches + per-routine
+persistence is seam (b)** (the plan splits D5 into two sessions — this is session one, stopped at the
+architectural seam with the repo green).
+
+### The one engine (Core) — no second evaluator (D5 risk #1)
+Every surface is *literally the harness with a user-supplied fragment* (§3.2/§3.3), so nothing new evaluates
+anything:
+- **`EvaluationModels.cs`** (`EmberTern.Core.Sql.Debugging`): `EvaluationKind` (Expression | Statement),
+  `EvaluationRequest` (fragment + kind + `ScopeOffset`), `EvaluationResult` (the generated `Sql` — the
+  §10.3/§F audit anchor — plus `Value` / `Error` / `Writes`, with `HasError`/`HadWriteBack`).
+- **`IDebugExecutor.Evaluate(request, frame)`** — a **new method on the one server seam**. An arbitrary
+  fragment has **no AST node**, so its injected read/write set is the §3.5 **`ReadWriteSetAnalyzer.InScopeLocals`**
+  primitive — which is *exactly* why D2 carved that out named ("a Watch on an arbitrary expression the model
+  did not bind — D5"). The fake scripts it; the Firebird executor implements it with the machinery it already
+  had.
+- **`DebugSession.Evaluate(fragment, kind)`** — the pure orchestration face the VM talks to. Requires
+  **Paused** (a live frame exists only while paused), delegates to the executor against `CurrentFrame`, and
+  for **Statement** mode applies the write-back to the live frame (the Immediate window operates *on the live
+  frame*, §9.5). It never evaluates/coerces/interprets anything itself.
+- **`FirebirdDebugExecutor.Evaluate`** — builds a `HarnessRequest` (Expression → result column, Statement →
+  verbatim + write-back), reusing `BindValues`/`RunHarnessAsync`. An arbitrary expression has **no known
+  type** (unlike an `IF`/`WHILE` condition, which is `BOOLEAN`), so the result column is a wide
+  `VARCHAR(8191) CHARACTER SET UTF8` — the server casts the value to text and we surface it as text (typed,
+  per-kind inspection of a *declared* variable is the Variables window, D7). A value that cannot cast (a
+  binary BLOB) raises and is surfaced as the error, never guessed (§F).
+
+### Deviation from the plan (Developer Contract): no `EvaluateController`
+The plan named an App-side `EvaluateController`. **The real "one engine" is Core's `DebugSession.Evaluate`;**
+the App orchestration (background-thread run + append to the audit log) is thin enough to live on the VM —
+exactly as *stepping* is orchestrated today (`Task.Run` + `RefreshFromSession`). A separate controller would
+be pure indirection over `Task.Run` + a collection append. So evaluation is a few methods on
+`DebuggerTabViewModel`, and seam (b)'s Watches refresh loop will call the same `DebugSession.Evaluate` from
+`RefreshFromSession`. (Precedent: D3 chose "solve the lifecycle" over the plan's letter, documented.)
+
+### App — the two inline surfaces + the audit log
+- **`DebugExecutedSqlRowViewModel`** — one Executed-SQL entry (spec §10.3): fragment, kind label, result
+  text (value / statement note / error), the **generated harness SQL kept visible** (the row's tooltip), a
+  timestamp, and an `IsError` / `HasSideEffect` flag. A **statement is always flagged `±`** (it ran real SQL
+  in the debug transaction — side-effect-capable by nature, §9.5); an expression never is. The precise
+  "which variables changed" is the Variables panel's job (it reflects the applied write-back), not the audit
+  flag's.
+- **`DebuggerTabViewModel`** — added `ExecutedSql` (newest-first, capped at 200), `ImmediateInput` +
+  `ImmediateAsStatement`, `EvaluateImmediateCommand` (gated on Paused + non-empty input), and the shared
+  `EvaluateFragmentAsync(fragment, kind)` used by both Immediate and Evaluate(Shift+F9). Evaluation runs on
+  `Task.Run` with **Phase → Busy for the duration**, which gives mutual exclusion with stepping *via the
+  existing state machine* (a step can't start while Busy; evaluation requires Paused) — so the non-thread-safe
+  `DebugSession` is never touched concurrently. A clean evaluation clears the input (REPL-style); a **server
+  raise keeps it** so the user can edit and retry. The audit log is cleared on Launch (fresh session) and
+  Stop.
+- **`DebuggerTabView`** — a bottom panel (below a horizontal splitter): the Immediate input (Enter =
+  evaluate) + an "as statement" checkbox + an Evaluate button, and the Executed SQL list (fragment + result,
+  error rows in `ErrorBrush`, `±` in `WarningBrush`, harness SQL on the row tooltip). **Shift+F9** in the
+  source editor evaluates the selection (or the identifier under the caret) as an expression through the same
+  engine (spec §9.7). All theme tokens; no new colours; no UX polish (the D4 UX backlog stays deferred).
+
+### Tests (+11)
+- `DebugEngineTests` (+5): expression returns a value and does not mutate the frame; statement applies
+  write-back to the live frame; expression mode never applies write-back (even if the executor returned
+  writes); evaluate-when-not-paused throws; empty fragment throws. The fake grew a scriptable `Evaluate`.
+- `DebuggerTabVmTests` (+6): Immediate expression appends the result + clears input; Immediate statement
+  flags the side effect + updates live variables + passes Statement mode; a server error shows an error row +
+  **keeps** the input; Evaluate(selection) routes through the same engine; the command is disabled when not
+  paused; Stop clears the audit log. The fake grew a scriptable `Evaluate`.
+
+**Build 0/0; 4755 tests green in one run; smoke clean.** **Live evaluation awaits user confirmation** (needs
+a server, per the QA rule) — the §9.5 verification is: evaluate an expression calling a stored function and
+compare to `SELECT <expr> FROM RDB$DATABASE`. Manual QA checklist prepared.
+
+**Next: D5 seam (b) — Watches panel + per-routine persistence** (auto-re-evaluate after each step through the
+same `DebugSession.Evaluate`; flag a watch that is not a pure expression; persist per routine). **D6+ not
+started.**

@@ -50,6 +50,18 @@ public class DebuggerTabVmTests
         }
 
         public ConditionOutcome EvaluateCondition(IExecutableStatement owner, Frame frame) => ConditionOutcome.True;
+
+        private readonly Dictionary<string, EvaluationResult> _evals = new(StringComparer.OrdinalIgnoreCase);
+        public List<EvaluationRequest> Evaluations { get; } = new();
+        public FakeExecutor Eval(string fragment, EvaluationResult result) { _evals[fragment] = result; return this; }
+        public EvaluationResult Evaluate(EvaluationRequest request, Frame frame)
+        {
+            Evaluations.Add(request);
+            return _evals.TryGetValue(request.Fragment, out var r)
+                ? r
+                : EvaluationResult.Ok($"/*eval*/ {request.Fragment}", request.Fragment, null);
+        }
+
         public IDebugCursor OpenCursor(ForSelectStatement loop, Frame frame) => throw new NotSupportedException();
         public DebugRoutine? ResolveRoutine(IExecutableStatement call, Frame frame) => null;
         public void EnterFrameSavepoint(string name) { }
@@ -248,5 +260,104 @@ public class DebuggerTabVmTests
         await vm.ContinueCommand.ExecuteAsync(null);
         Assert.Equal(DebuggerPhase.Paused, vm.Phase);
         Assert.Equal(Off("r = v"), vm.CurrentStart);
+    }
+
+    // ── Expression evaluation (Evaluate / Immediate — D5, §9.5) ────────────────────────────────────
+
+    private static async Task<DebuggerTabViewModel> LaunchedAsync(IDebugExecutor executor)
+    {
+        var vm = Vm(Sql, executor, out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        return vm;
+    }
+
+    [Fact]
+    public async Task Immediate_Expression_AppendsResultToExecutedSql_AndClearsInput()
+    {
+        var exec = new FakeExecutor().Eval("a + b", EvaluationResult.Ok("EXECUTE BLOCK ...", 7, null));
+        var vm = await LaunchedAsync(exec);
+
+        vm.ImmediateInput = "a + b";
+        await vm.EvaluateImmediateCommand.ExecuteAsync(null);
+
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.True(vm.HasExecutedSql);
+        var row = Assert.Single(vm.ExecutedSql);
+        Assert.Equal("a + b", row.Fragment);
+        Assert.Equal("7", row.ResultText);
+        Assert.False(row.IsError);
+        Assert.Equal("EXECUTE BLOCK ...", row.Sql); // the harness is kept for the §10.3 audit
+        Assert.Empty(vm.ImmediateInput);            // cleared on a clean evaluation
+    }
+
+    [Fact]
+    public async Task Immediate_Statement_FlagsSideEffect_AndUpdatesLiveVariables()
+    {
+        var writes = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["V"] = 99 };
+        var exec = new FakeExecutor().Eval("v = 99", EvaluationResult.Ok("EXECUTE BLOCK ...", null, writes));
+        var vm = await LaunchedAsync(exec);
+
+        vm.ImmediateAsStatement = true;
+        vm.ImmediateInput = "v = 99";
+        await vm.EvaluateImmediateCommand.ExecuteAsync(null);
+
+        var row = Assert.Single(vm.ExecutedSql);
+        Assert.True(row.HasSideEffect);
+        var v = vm.Variables.First(r => r.Name == "V");
+        Assert.Equal("99", v.ValueText); // the live frame was updated (§9.5)
+        // The engine got Statement mode.
+        Assert.Equal(EvaluationKind.Statement, exec.Evaluations.Single().Kind);
+    }
+
+    [Fact]
+    public async Task Immediate_ServerError_ShowsErrorRow_AndKeepsInput()
+    {
+        var exec = new FakeExecutor().Eval("bad expr", EvaluationResult.Failed("EXECUTE BLOCK ...", new DebugError(Message: "boom")));
+        var vm = await LaunchedAsync(exec);
+
+        vm.ImmediateInput = "bad expr";
+        await vm.EvaluateImmediateCommand.ExecuteAsync(null);
+
+        var row = Assert.Single(vm.ExecutedSql);
+        Assert.True(row.IsError);
+        Assert.Equal("boom", row.ResultText);
+        Assert.Equal("bad expr", vm.ImmediateInput); // kept so the user can edit and retry
+    }
+
+    [Fact]
+    public async Task EvaluateSelection_RoutesThroughTheSameEngine()
+    {
+        var exec = new FakeExecutor().Eval("a", EvaluationResult.Ok("EXECUTE BLOCK ...", 1, null));
+        var vm = await LaunchedAsync(exec);
+
+        await vm.EvaluateSelectionAsync("a"); // Shift+F9 path (selection)
+
+        var req = Assert.Single(exec.Evaluations);
+        Assert.Equal(EvaluationKind.Expression, req.Kind);
+        Assert.Equal("1", vm.ExecutedSql.Single().ResultText);
+    }
+
+    [Fact]
+    public async Task Immediate_CannotEvaluate_WhenNotPaused()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync(); // ReadyToLaunch, not paused
+        vm.ImmediateInput = "a + b";
+        Assert.False(vm.EvaluateImmediateCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Stop_ClearsExecutedSql()
+    {
+        var exec = new FakeExecutor().Eval("a", EvaluationResult.Ok("sql", 1, null));
+        var vm = await LaunchedAsync(exec);
+        vm.ImmediateInput = "a";
+        await vm.EvaluateImmediateCommand.ExecuteAsync(null);
+        Assert.True(vm.HasExecutedSql);
+
+        await vm.StopCommand.ExecuteAsync(null);
+        Assert.False(vm.HasExecutedSql);
+        Assert.Empty(vm.ExecutedSql);
     }
 }

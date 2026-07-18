@@ -45,6 +45,13 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
 {
     private const string BooleanResultType = "BOOLEAN";
 
+    // The result-column type for an arbitrary user expression (D5 / §9.5). An arbitrary expression has no
+    // known type (unlike an IF/WHILE condition, which is BOOLEAN), so the server casts the evaluated value to
+    // a wide UTF8 VARCHAR and we surface it as text — the honest general choice for a display surface
+    // (typed, per-kind inspection of a declared variable is the Variables window, D7). A value that cannot
+    // cast to VARCHAR (e.g. a binary BLOB) raises and is surfaced as the error, never silently guessed (§F).
+    private const string EvaluationResultType = "VARCHAR(8191) CHARACTER SET UTF8";
+
     private readonly DebugSessionConnection _session;
     private readonly string _source;
     private readonly SemanticModel _model;
@@ -152,6 +159,53 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         {
             return ConditionOutcome.Raised(DebugErrorMapper.FromFirebird(ex));
         }
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>D5 (§9.5): the user fragment is run through the SAME harness as a step — the one engine
+    /// behind Evaluate / Watches / Immediate. It has no AST node, so the injected read/write set is the §3.5
+    /// "inject all in-scope" primitive (<see cref="ReadWriteSetAnalyzer.InScopeLocals"/>). An Expression is
+    /// evaluated into a text result column; a Statement runs verbatim and its frame write-back is returned
+    /// (the session applies it — the Immediate window operates on the live frame).</remarks>
+    public EvaluationResult Evaluate(EvaluationRequest request, Frame frame)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(frame);
+
+        var names = ReadWriteSetAnalyzer.InScopeLocals(_model, request.ScopeOffset);
+        if (names.Count == 0)
+        {
+            // At/before an offset with no locals in scope — inject every known frame variable (still §3.5).
+            names = AllTemplateNames();
+        }
+
+        bool expression = request.Kind == EvaluationKind.Expression;
+        var harness = HarnessBuilder.Build(new HarnessRequest
+        {
+            Fragment = request.Fragment,
+            Mode = expression ? HarnessMode.Expression : HarnessMode.Statement,
+            ExpressionResultType = expression ? EvaluationResultType : null,
+            Variables = BindValues(frame),
+            Reads = names,
+            Writes = expression ? Array.Empty<string>() : names, // an expression writes nothing; a statement may
+        });
+
+        try
+        {
+            var run = Await(RunHarnessAsync(harness, CancellationToken.None));
+            return EvaluationResult.Ok(harness.Sql, run.ResultValue, run.Writes);
+        }
+        catch (FbException ex)
+        {
+            return EvaluationResult.Failed(harness.Sql, DebugErrorMapper.FromFirebird(ex));
+        }
+    }
+
+    private IReadOnlyList<string> AllTemplateNames()
+    {
+        var names = new List<string>(_variableTemplates.Count);
+        foreach (var t in _variableTemplates) names.Add(t.Name);
+        return names;
     }
 
     /// <inheritdoc/>

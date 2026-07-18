@@ -125,10 +125,37 @@ public partial class DebuggerTabView : UserControl
             case Key.F10: Invoke(_vm.StepOverCommand); break;
             case Key.F11 when shift: Invoke(_vm.StepOutCommand); break;
             case Key.F11: Invoke(_vm.StepIntoCommand); break;
+            case Key.F9 when shift: EvaluateSelection(); break;
             case Key.F9: ToggleBreakpointAtCaret(); break;
             default: return;
         }
         e.Handled = true;
+    }
+
+    // Evaluate (Shift+F9, spec §9.7): evaluate the current selection — or, if there is none, the identifier
+    // under the caret — as an expression against the current frame. The result lands in the Executed SQL log.
+    // This is a presentation convenience; it extracts a text fragment only, never any SQL semantics (the
+    // engine is DebugSession.Evaluate).
+    private void EvaluateSelection()
+    {
+        if (_editor is null || _vm is null) return;
+        var fragment = _editor.SelectedText;
+        if (string.IsNullOrWhiteSpace(fragment)) fragment = IdentifierAtCaret();
+        if (!string.IsNullOrWhiteSpace(fragment)) _ = _vm.EvaluateSelectionAsync(fragment);
+    }
+
+    // The identifier/qualified name straddling the caret (letters/digits/_/$/.), or empty. A best-effort
+    // fallback so Shift+F9 without a selection still evaluates the symbol the caret is on.
+    private string IdentifierAtCaret()
+    {
+        if (_editor?.Document is not { } doc) return string.Empty;
+        var text = doc.Text;
+        int caret = _editor.CaretOffset;
+        static bool IsPart(char c) => char.IsLetterOrDigit(c) || c is '_' or '$' or '.';
+        int start = caret, end = caret;
+        while (start > 0 && IsPart(text[start - 1])) start--;
+        while (end < text.Length && IsPart(text[end])) end++;
+        return end > start ? text.Substring(start, end - start) : string.Empty;
     }
 
     private static void Invoke(System.Windows.Input.ICommand command)
