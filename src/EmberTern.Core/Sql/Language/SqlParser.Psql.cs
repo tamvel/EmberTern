@@ -16,11 +16,13 @@ namespace EmberTern.Core.Sql.Language;
 // source order — and no token is ever dropped (round-trip is token-based). Anything not recognised as a
 // compound construct becomes a PsqlLeafStatement (the PSQL-level §0 valve). Never throws.
 //
-// Scope (B1, this step): wired into AnonymousBlockStatement only — the body-only editor surface.
-// EXECUTE BLOCK and CREATE PROCEDURE/FUNCTION/TRIGGER definition bodies are wired in a later step (they
-// reuse this same parser after skipping their header to the body). Local subprograms (package bodies)
-// and the deep DML/query interior of leaves are later milestones (B3/B5); until then they ride the leaf
-// valve, losslessly.
+// Scope: wired into AnonymousBlockStatement, EXECUTE BLOCK, and CREATE PROCEDURE/FUNCTION/TRIGGER
+// definition bodies (the latter reuse this parser after skipping their header to the body). A local
+// DECLARE PROCEDURE/FUNCTION sub-routine is now a real SubroutineDeclaration node in
+// BlockStatement.LocalRoutines, carrying its own body block (Stage X / D9 — so the debugger interprets it
+// as a nested frame instead of stepping through its body as the enclosing routine's main flow). A PACKAGE
+// body's subprogram list and the deep DML/query interior of leaves are separate milestones; until then
+// they ride the leaf valve, losslessly.
 public static partial class SqlParser
 {
     /// <summary>Parses an anonymous PSQL block's significant-token slice (the <c>BEGIN … END</c> shape a
@@ -50,12 +52,10 @@ public static partial class SqlParser
     {
         int lo = i;
         var declarations = new List<PsqlStatement>();
+        var localRoutines = new List<SubroutineDeclaration>();
         if (isTopLevel)
         {
-            while (i < sig.Count && IsDeclarationStart(sig, i))
-            {
-                declarations.Add(ParsePsqlDeclaration(sig, ref i));
-            }
+            ParseDeclarationSection(sig, ref i, declarations, localRoutines);
         }
 
         var statements = new List<SqlNode>();
@@ -97,7 +97,100 @@ public static partial class SqlParser
         }
 
         var (start, length) = TokenSpan(sig, lo, i);
-        return new BlockStatement(start, length, Sub(sig, lo, i), declarations, statements, handlers);
+        return new BlockStatement(start, length, Sub(sig, lo, i), declarations, statements, handlers, localRoutines);
+    }
+
+    // The declaration section preceding a routine / EXECUTE BLOCK / sub-routine body's outermost BEGIN:
+    // DECLARE VARIABLE / DECLARE CURSOR declarations and DECLARE PROCEDURE/FUNCTION local sub-routines
+    // (Stage X / D9), in source order — Firebird permits either order. Consumes every leading DECLARE and
+    // stops at the first non-DECLARE token (the BEGIN, or end of input). Each parse advances i, so no stall.
+    private static void ParseDeclarationSection(
+        IReadOnlyList<SqlToken> sig, ref int i,
+        List<PsqlStatement> declarations, List<SubroutineDeclaration> localRoutines)
+    {
+        while (i < sig.Count && IsBodyWord(sig[i], "DECLARE"))
+        {
+            if (IsLocalRoutineStart(sig, i)) localRoutines.Add(ParseSubroutineDeclaration(sig, ref i));
+            else declarations.Add(ParsePsqlDeclaration(sig, ref i));
+        }
+    }
+
+    // A local sub-routine's body: its own DECLARE section (local variables — and, defensively for
+    // losslessness, any nested sub-routine, which Firebird actually rejects) then a single BEGIN … END.
+    // Parsed BLOCK-SCOPED — it stops at its own matching END and is NOT lenient, so it never swallows the
+    // enclosing routine's main BEGIN (the way the isTopLevel path folds trailing tokens would). Never throws.
+    private static BlockStatement ParseScopedBlockBody(IReadOnlyList<SqlToken> sig, ref int i)
+    {
+        int lo = i;
+        var declarations = new List<PsqlStatement>();
+        var localRoutines = new List<SubroutineDeclaration>();
+        ParseDeclarationSection(sig, ref i, declarations, localRoutines);
+
+        var statements = new List<SqlNode>();
+        var handlers = new List<WhenHandler>();
+        if (i < sig.Count && IsBodyWord(sig[i], "BEGIN"))
+        {
+            i++; // consume BEGIN
+            while (i < sig.Count && !IsBodyWord(sig[i], "END"))
+            {
+                int before = i;
+                ParseBodyUnit(sig, ref i, statements, handlers);
+                if (i == before) i++;
+            }
+            if (i < sig.Count && IsBodyWord(sig[i], "END"))
+            {
+                i++; // consume END
+                if (i < sig.Count && sig[i].Kind == TokenKind.Semicolon) i++; // optional terminator
+            }
+        }
+        var (start, length) = TokenSpan(sig, lo, i);
+        return new BlockStatement(start, length, Sub(sig, lo, i), declarations, statements, handlers, localRoutines);
+    }
+
+    // A local DECLARE PROCEDURE/FUNCTION name (…) [RETURNS …] AS <body> sub-routine (Stage X / D9, the
+    // flagship). Its span covers the WHOLE sub-routine (header + body) like every other compound node — the
+    // Body child nests inside. The header ends at the first depth-0 AS (⇒ a body follows) or the first
+    // depth-0 ';' (⇒ a forward declaration, no body); parens shield a parameter default's own AS/';'. The
+    // body (declarations + BEGIN … END) is parsed block-scoped (ParseScopedBlockBody), so a sub-routine's
+    // own local variable declarations — which each end in ';' — are NOT mistaken for the header's forward-
+    // declaration terminator. Never throws; always advances i.
+    private static SubroutineDeclaration ParseSubroutineDeclaration(IReadOnlyList<SqlToken> sig, ref int i)
+    {
+        int lo = i; // at DECLARE
+        var kind = i + 1 < sig.Count && IsBodyWord(sig[i + 1], "FUNCTION")
+            ? SubroutineKind.Function : SubroutineKind.Procedure;
+        string? name = PsqlNameAt(sig, i + 2); // DECLARE PROCEDURE|FUNCTION <name>
+
+        int depth = 0, asIdx = -1, semiIdx = -1;
+        int k = i + 1;
+        for (; k < sig.Count; k++)
+        {
+            var t = sig[k];
+            if (t.Kind == TokenKind.LParen) { depth++; continue; }
+            if (t.Kind == TokenKind.RParen) { if (depth > 0) depth--; continue; }
+            if (depth != 0) continue;
+            if (IsBodyWord(t, "AS")) { asIdx = k; break; }
+            if (t.Kind == TokenKind.Semicolon) { semiIdx = k; break; } // forward declaration
+        }
+
+        BlockStatement? body = null;
+        if (asIdx >= 0)
+        {
+            i = asIdx + 1; // consume through AS; the body (declarations + BEGIN … END) follows
+            body = ParseScopedBlockBody(sig, ref i);
+        }
+        else if (semiIdx >= 0)
+        {
+            i = semiIdx + 1; // forward declaration — consume through its ';'
+        }
+        else
+        {
+            i = sig.Count; // mid-edit: no AS and no ';' — fold the rest into the header, losslessly
+        }
+        if (i == lo) i++; // never stall (defensive)
+
+        var (start, length) = TokenSpan(sig, lo, i);
+        return new SubroutineDeclaration(start, length, Sub(sig, lo, i), kind, name, body);
     }
 
     // Parses one body unit at i and routes it: a recognised WHEN … DO exception handler goes to
@@ -133,12 +226,15 @@ public static partial class SqlParser
                 case "FOR": return ParsePsqlFor(sig, ref i);
             }
 
-            // A local subprogram header (DECLARE PROCEDURE/FUNCTION …) — mirror the formatter: the
-            // header is a leaf up to (exclusive) its body BEGIN, which then parses as the next unit.
+            // A local sub-routine (DECLARE PROCEDURE/FUNCTION …) appearing at a statement position — valid
+            // Firebird declares these only in the pre-BEGIN section (ParseDeclarationSection consumes them
+            // there), so reaching one here is mid-edit or malformed; model it uniformly as a
+            // SubroutineDeclaration (header + body) so a stray one is never split into an orphan header + a
+            // bare body sibling. Lands in the block's Statements (SubroutineDeclaration is a PsqlStatement).
             if (up == "DECLARE" && i + 1 < sig.Count
                 && (IsBodyWord(sig[i + 1], "PROCEDURE") || IsBodyWord(sig[i + 1], "FUNCTION")))
             {
-                return ParsePsqlHeaderLeaf(sig, ref i);
+                return ParseSubroutineDeclaration(sig, ref i);
             }
         }
 
@@ -389,20 +485,6 @@ public static partial class SqlParser
         return new WhenCondition(start, length, Sub(sig, lo, hi), kind, exceptionName);
     }
 
-    // A subprogram header (DECLARE PROCEDURE/FUNCTION …) collected up to (exclusive) its body BEGIN.
-    private static PsqlStatement ParsePsqlHeaderLeaf(IReadOnlyList<SqlToken> sig, ref int i)
-    {
-        int lo = i;
-        while (i < sig.Count && !IsBodyWord(sig[i], "BEGIN") && sig[i].Kind != TokenKind.Semicolon)
-        {
-            i++;
-        }
-        if (i < sig.Count && sig[i].Kind == TokenKind.Semicolon) i++; // a forward-decl form ends at ';'
-        if (i == lo) i++; // never stall
-        var (start, length) = TokenSpan(sig, lo, i);
-        return new PsqlLeafStatement(start, length, Sub(sig, lo, i), PsqlLeafKind.Other);
-    }
-
     // A leaf statement — collected up to and INCLUDING its terminating top-level ';' (a CASE…END has no
     // ';' so it is collected whole, exactly like the formatter's CollectPsqlStatement).
     //
@@ -501,10 +583,11 @@ public static partial class SqlParser
 
     // ── Classification / helpers ────────────────────────────────────────────────────────────────
 
-    // A DECLARE that begins a variable/cursor declaration (NOT a DECLARE PROCEDURE/FUNCTION subprogram).
-    private static bool IsDeclarationStart(IReadOnlyList<SqlToken> sig, int i)
+    // A DECLARE PROCEDURE/FUNCTION local sub-routine (Stage X / D9) — as opposed to a DECLARE VARIABLE/CURSOR.
+    private static bool IsLocalRoutineStart(IReadOnlyList<SqlToken> sig, int i)
         => IsBodyWord(sig[i], "DECLARE")
-           && !(i + 1 < sig.Count && (IsBodyWord(sig[i + 1], "PROCEDURE") || IsBodyWord(sig[i + 1], "FUNCTION")));
+           && i + 1 < sig.Count
+           && (IsBodyWord(sig[i + 1], "PROCEDURE") || IsBodyWord(sig[i + 1], "FUNCTION"));
 
     // First top-level (paren-depth 0) AS keyword separating a routine/EXECUTE-BLOCK header from its body;
     // -1 if none. A CAST(x AS type) AS sits at depth > 0, so it is never mistaken for the body separator.

@@ -34,9 +34,10 @@ public enum PsqlLeafKind
     Exception,
     /// <summary><c>RETURN …;</c> (function / EXECUTE BLOCK).</summary>
     Return,
-    /// <summary>Anything else (incl. a subprogram header or an unrecognised fragment — the §0 valve). A
-    /// well-formed <c>WHEN … DO …</c> exception handler is a <see cref="WhenHandler"/> node; only a
-    /// malformed / unrecognised <c>WHEN</c> clause falls back here.</summary>
+    /// <summary>Anything else (an unrecognised fragment — the §0 valve). A well-formed <c>WHEN … DO …</c>
+    /// exception handler is a <see cref="WhenHandler"/> node and a well-formed local
+    /// <c>DECLARE PROCEDURE/FUNCTION</c> is a <see cref="SubroutineDeclaration"/> node (Stage X / D9); only a
+    /// malformed / unrecognised <c>WHEN</c> or sub-routine header falls back here.</summary>
     Other,
 }
 
@@ -59,21 +60,32 @@ public sealed class BlockStatement : PsqlStatement
         IReadOnlyList<SqlToken> tokens,
         IReadOnlyList<PsqlStatement> declarations,
         IReadOnlyList<SqlNode> statements,
-        IReadOnlyList<WhenHandler> handlers)
+        IReadOnlyList<WhenHandler> handlers,
+        IReadOnlyList<SubroutineDeclaration>? localRoutines = null)
         : base(start, length, tokens)
     {
         Declarations = declarations;
+        LocalRoutines = localRoutines ?? System.Array.Empty<SubroutineDeclaration>();
         Statements = statements;
         Handlers = handlers;
 
-        // Children in source order: the declarations (which always precede BEGIN) first, then the
-        // statements and handlers. In well-formed PSQL every statement precedes every handler, so this is
-        // a concatenation; a malformed trailing WHEN (a lossless Other leaf that lands in Statements) can
-        // interleave, so merge by source position to keep the well-formedness invariant (children in
-        // non-decreasing source order — StructuralAstDifferentialTests).
-        _children = new SqlNode[declarations.Count + statements.Count + handlers.Count];
+        // Children in source order: the declaration section (DECLARE VARIABLE/CURSOR + local sub-routines,
+        // all preceding the outermost BEGIN) first, then the statements and handlers. Firebird permits a
+        // DECLARE VARIABLE and a local DECLARE PROCEDURE/FUNCTION in either order, so the two declaration
+        // lists are MERGED by source position (Stage X / D9) — not concatenated — or a variable declared
+        // after a sub-routine would break source order. In well-formed PSQL every statement precedes every
+        // handler, so the statement tail is likewise a merge by source position (a malformed trailing WHEN —
+        // a lossless Other leaf that lands in Statements — can interleave). Non-decreasing source order is the
+        // well-formedness invariant (StructuralAstDifferentialTests).
+        _children = new SqlNode[declarations.Count + LocalRoutines.Count + statements.Count + handlers.Count];
         int k = 0;
-        foreach (var d in declarations) _children[k++] = d;
+        int di = 0, ri = 0;
+        while (di < declarations.Count || ri < LocalRoutines.Count)
+        {
+            bool takeDecl = ri >= LocalRoutines.Count
+                || (di < declarations.Count && declarations[di].Start <= LocalRoutines[ri].Start);
+            _children[k++] = takeDecl ? (SqlNode)declarations[di++] : LocalRoutines[ri++];
+        }
         int si = 0, hi = 0;
         while (si < statements.Count || hi < handlers.Count)
         {
@@ -86,6 +98,16 @@ public sealed class BlockStatement : PsqlStatement
     /// <summary>The <c>DECLARE VARIABLE/CURSOR</c> declarations preceding the outermost <c>BEGIN</c>
     /// (in source order); empty for a nested block or an anonymous block.</summary>
     public IReadOnlyList<PsqlStatement> Declarations { get; }
+
+    /// <summary>The <c>DECLARE PROCEDURE/FUNCTION … AS BEGIN … END</c> local sub-routine declarations of this
+    /// (routine / <c>EXECUTE BLOCK</c>) body, in source order — Stage X / D9 (the flagship). Each is a named
+    /// unit carrying its own <see cref="SubroutineDeclaration.Body"/>, so the debugger interprets a local
+    /// routine as a real frame (spec §6) instead of the interpreter stepping through its body as if it were
+    /// the enclosing routine's main flow. Empty for a body with no sub-routines, and always empty for a nested
+    /// block (Firebird declares sub-routines only at a routine's top level). They sit between
+    /// <see cref="Declarations"/> and <see cref="Statements"/> in <see cref="Children"/>. Additive overlay;
+    /// §0 round-trip is unchanged (the tokens still live in the flat stream).</summary>
+    public IReadOnlyList<SubroutineDeclaration> LocalRoutines { get; }
 
     /// <summary>The statements between <c>BEGIN</c> and the handler section (or <c>END</c>), in source
     /// order. A statement is either a PSQL construct (a nested <see cref="BlockStatement"/> /
@@ -285,6 +307,69 @@ public sealed class DeclareCursorStatement : PsqlStatement
     /// <see cref="QueryNode"/>, or null when unrecognised. An additive overlay;
     /// <see cref="PsqlStatement.Tokens"/> still round-trips (§0).</summary>
     public QueryNode? Query { get; }
+
+    /// <inheritdoc/>
+    public override IReadOnlyList<SqlNode> Children => _children;
+}
+
+/// <summary>Whether a <see cref="SubroutineDeclaration"/> is a local <c>PROCEDURE</c> (called with
+/// <c>EXECUTE PROCEDURE</c>, may have <c>RETURNS (…)</c> output parameters) or a local <c>FUNCTION</c>
+/// (called in an expression, returns a single value via <c>RETURN</c>).</summary>
+public enum SubroutineKind
+{
+    /// <summary>A local <c>DECLARE PROCEDURE name (…) [RETURNS (…)] AS BEGIN … END</c>.</summary>
+    Procedure,
+    /// <summary>A local <c>DECLARE FUNCTION name (…) RETURNS &lt;type&gt; AS BEGIN … END</c>.</summary>
+    Function,
+}
+
+/// <summary>
+/// A local <c>DECLARE PROCEDURE/FUNCTION name (…) [RETURNS …] AS &lt;body&gt;</c> sub-routine declaration —
+/// Stage X / D9 (the flagship). This node models the STRUCTURE the debugger needs: a named unit whose
+/// <see cref="Body"/> is a real <see cref="BlockStatement"/> the interpreter runs as a nested frame (spec
+/// §6.2a — "a local routine is not a special case; it is a frame whose lexical parent is the declaring
+/// frame"). Before D9 the header was a lossless <see cref="PsqlLeafKind.Other"/> leaf and the body a bare
+/// sibling <see cref="BlockStatement"/> mixed into the enclosing body's <see cref="BlockStatement.Statements"/>
+/// — so the interpreter would have stepped onto the (unrunnable) header and through the body as main flow.
+/// Grouping them here (into <see cref="BlockStatement.LocalRoutines"/>, out of <see cref="BlockStatement.Statements"/>)
+/// fixes that.
+/// <para>
+/// The node's span (and its <see cref="PsqlStatement.Tokens"/>) cover the <b>whole</b> sub-routine — its
+/// header AND its <see cref="Body"/> — like every other compound node (a <see cref="BlockStatement"/> /
+/// <see cref="IfStatement"/> also span their children), so the <see cref="Body"/> child's span nests inside
+/// (the well-formedness invariant). The header is the token run before the body's <c>BEGIN</c> (from
+/// <c>DECLARE</c> up to, exclusive, the body block — or up to the terminating <c>;</c> of a forward
+/// declaration): it carries the parameter / <c>RETURNS</c> lists, which the binder and the debugger's
+/// signature extractor read verbatim from those tokens (R2/R3) rather than as re-modelled tree fields —
+/// mirroring how a <see cref="DeclareVariableStatement"/> keeps its type in tokens. Additive overlay; §0
+/// round-trip is unchanged.
+/// </para>
+/// </summary>
+public sealed class SubroutineDeclaration : PsqlStatement
+{
+    private readonly SqlNode[] _children;
+
+    public SubroutineDeclaration(
+        int start, int length, IReadOnlyList<SqlToken> tokens, SubroutineKind kind, string? name, BlockStatement? body)
+        : base(start, length, tokens)
+    {
+        Kind = kind;
+        Name = name;
+        Body = body;
+        _children = body is null ? System.Array.Empty<SqlNode>() : new SqlNode[] { body };
+    }
+
+    /// <summary>Whether this is a local procedure or a local function.</summary>
+    public SubroutineKind Kind { get; }
+
+    /// <summary>The sub-routine's name (unquoted upper-cased to match resolution; quoted kept as written),
+    /// or null when it could not be read (mid-edit).</summary>
+    public string? Name { get; }
+
+    /// <summary>The sub-routine's body block (the <c>BEGIN … END</c> after its header's <c>AS</c>), or null
+    /// for a forward declaration (<c>DECLARE PROCEDURE name (…) [RETURNS …];</c> with no body — the real
+    /// definition supplies the body). The interpreter runs this as a nested frame (spec §6).</summary>
+    public BlockStatement? Body { get; }
 
     /// <inheritdoc/>
     public override IReadOnlyList<SqlNode> Children => _children;

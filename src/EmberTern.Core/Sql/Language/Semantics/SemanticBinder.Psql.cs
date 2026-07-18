@@ -283,8 +283,52 @@ internal sealed partial class SemanticBinder
     private void BindBlock(BlockStatement block, Scope scope, SqlStatement stmt)
     {
         foreach (var decl in block.Declarations) BindDeclaration(decl, scope, stmt);
+        foreach (var routine in block.LocalRoutines) BindLocalRoutine(routine, scope, stmt);
         foreach (var s in block.Statements) BindPsqlStatement(s, scope, stmt);
         foreach (var h in block.Handlers) BindWhenHandler(h, scope, stmt);
+    }
+
+    // A local DECLARE PROCEDURE/FUNCTION sub-routine (Stage X / D9). It introduces the FIRST genuine nested
+    // scope in a PSQL body: its own parameters + RETURNS outputs + local variable declarations live in a
+    // CHILD of the declaring scope, and its body binds against that child. Two consequences fall out of the
+    // scope tree for free: the sub-routine's own symbols resolve inside it, and — because Resolve walks to
+    // the parent — an outer variable also resolves (the FB5 closure). On FB3 a sub-routine is a CLOSED scope
+    // (an outer reference won't even compile), but that is a RUNTIME distinction the debugger honours via its
+    // LexicalParent-by-version choice (D9 seam b); the static editor model has no server version and stays
+    // permissive here, consistent with the diagnostics engine's "prefer silence over false positives". The
+    // sub-routine's NAME is not declared as a callable symbol yet (resolving a local call is D9 seam b).
+    private void BindLocalRoutine(SubroutineDeclaration routine, Scope scope, SqlStatement stmt)
+    {
+        var child = scope.NewChild(ScopeKind.RoutineBody, StatementSpan(routine), stmt);
+
+        // Header (params + RETURNS) — read from the sub-routine's own tokens, before its body's BEGIN. Same
+        // shape as a top-level routine header, so the same list binders apply.
+        var t = routine.Tokens;
+        int hi = routine.Body is { } body ? HeaderEnd(t, body) : t.Count;
+        int k = 0;
+        if (k < hi && IsKeyword(At(t, k), "DECLARE")) k++;
+        if (k < hi && (IsKeyword(At(t, k), "PROCEDURE") || IsKeyword(At(t, k), "FUNCTION"))) k++;
+        while (k < hi && (IsNameToken(At(t, k)) || At(t, k).Kind == TokenKind.Dot)) k++; // the sub-routine name
+
+        if (At(t, k).Kind == TokenKind.LParen)
+        {
+            int close = SkipParens(t, k, hi);
+            BindParamList(t, k + 1, close - 1, child, stmt, ParameterDirection.Input);
+            k = close;
+        }
+        if (IsKeyword(At(t, k), "RETURNS"))
+        {
+            k++;
+            if (At(t, k).Kind == TokenKind.LParen)
+            {
+                int close = SkipParens(t, k, hi);
+                BindParamList(t, k + 1, close - 1, child, stmt, ParameterDirection.Output);
+            }
+            // else: a local function's single return type — nothing to bind here.
+        }
+
+        // The body (its own DECLARE section + BEGIN … END) binds against the child scope.
+        BindBody(routine.Body, child, stmt);
     }
 
     // A WHEN … DO exception handler (Stage X / P1). Each WHEN EXCEPTION <name> condition references a user

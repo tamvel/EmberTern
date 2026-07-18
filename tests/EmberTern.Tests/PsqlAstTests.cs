@@ -429,4 +429,103 @@ public class PsqlAstTests
         Assert.Equal(WhenHandlerKind.Any, Assert.Single(handler.Conditions).Kind);
         AssertSpansMapToSource(sql, ddl.Body);
     }
+
+    // ── Stage X / D9 seam (a): local DECLARE PROCEDURE/FUNCTION sub-routines ────────────────────
+
+    private static BlockStatement RoutineBody(string sql)
+    {
+        var ddl = Assert.IsType<DdlStatement>(SqlParser.Parse(sql).Root.Statements[0]);
+        Assert.NotNull(ddl.Body);
+        return ddl.Body!;
+    }
+
+    [Fact]
+    public void LocalProcedure_IsASubroutineDeclaration_OutOfStatementsAndDeclarations()
+    {
+        const string sql = "create procedure outer_p (n integer) returns (r integer) as "
+                         + "declare procedure local_p (a integer) returns (o integer) as "
+                         + "begin o = a * 2; end "
+                         + "begin execute procedure local_p(n) returning_values r; end";
+        var body = RoutineBody(sql);
+
+        var sub = Assert.Single(body.LocalRoutines);
+        Assert.Equal(SubroutineKind.Procedure, sub.Kind);
+        Assert.Equal("LOCAL_P", sub.Name);
+        Assert.NotNull(sub.Body);
+        // Its body holds its own assignment — the header did not leak into it.
+        Assert.Equal(PsqlLeafKind.Assignment, Assert.IsType<PsqlLeafStatement>(sub.Body!.Statements.Single()).Kind);
+        // A sub-routine is neither a variable declaration nor a body statement.
+        Assert.Empty(body.Declarations);
+        Assert.IsType<ExecuteProcedureStatement>(body.Statements.Single());
+        AssertSpansMapToSource(sql, body);
+    }
+
+    [Fact]
+    public void LocalFunction_IsASubroutineDeclaration()
+    {
+        const string sql = "create procedure p as "
+                         + "declare function f (a integer) returns integer as begin return a + 1; end "
+                         + "begin end";
+        var sub = Assert.Single(RoutineBody(sql).LocalRoutines);
+        Assert.Equal(SubroutineKind.Function, sub.Kind);
+        Assert.Equal("F", sub.Name);
+        Assert.Equal(PsqlLeafKind.Return, Assert.IsType<PsqlLeafStatement>(sub.Body!.Statements.Single()).Kind);
+    }
+
+    [Fact]
+    public void LocalRoutine_WithOwnLocalVariable_HeaderNotTruncatedAtDeclareSemicolon()
+    {
+        // The sub-routine's own "declare variable tmp integer;" ends in ';' — the header boundary must be the
+        // top-level AS, not that ';', or the body (and the local variable) would be lost.
+        const string sql = "create procedure p as "
+                         + "declare procedure sp (a integer) returns (o integer) as "
+                         + "declare variable tmp integer; "
+                         + "begin tmp = a * 2; o = tmp; end "
+                         + "begin end";
+        var sub = Assert.Single(RoutineBody(sql).LocalRoutines);
+        Assert.NotNull(sub.Body);
+        var tmp = Assert.IsType<DeclareVariableStatement>(sub.Body!.Declarations.Single());
+        Assert.Equal("TMP", tmp.Name);
+        Assert.Equal(2, sub.Body.Statements.Count);
+    }
+
+    [Fact]
+    public void LocalRoutine_ForwardDeclaration_HasNoBody()
+    {
+        // A forward declaration (";", no body) enables mutual recursion; the real definition supplies the body.
+        const string sql = "create procedure p as "
+                         + "declare procedure sp (a integer) returns (o integer); "
+                         + "declare procedure sp (a integer) returns (o integer) as begin o = a; end "
+                         + "begin end";
+        var routines = RoutineBody(sql).LocalRoutines;
+        Assert.Equal(2, routines.Count);
+        Assert.Null(routines[0].Body);    // forward declaration
+        Assert.NotNull(routines[1].Body); // the real definition
+    }
+
+    [Fact]
+    public void DeclarationsAndLocalRoutines_InterleaveInSourceOrder()
+    {
+        const string sql = "create procedure p as "
+                         + "declare variable v1 integer; "
+                         + "declare procedure sp as begin end "
+                         + "declare variable v2 integer; "
+                         + "begin end";
+        var body = RoutineBody(sql);
+        Assert.Equal(2, body.Declarations.Count);
+        Assert.Single(body.LocalRoutines);
+        // Children (declarations + local routines merged) must be in non-decreasing source order.
+        int prev = int.MinValue;
+        foreach (var c in body.Children) { Assert.True(c.Start >= prev, "children out of source order"); prev = c.Start; }
+        AssertSpansMapToSource(sql, body);
+    }
+
+    [Fact]
+    public void LocalRoutine_RoundTripsByteForByte()
+    {
+        const string sql = "create procedure p as "
+                         + "declare procedure sp (a integer) returns (o integer) as begin o = a * 2; end "
+                         + "begin execute procedure sp(1) returning_values r; end";
+        Assert.Equal(sql, SqlParser.Parse(sql).Root.ToSourceString());
+    }
 }

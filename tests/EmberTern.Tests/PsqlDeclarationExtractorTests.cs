@@ -90,14 +90,46 @@ public class PsqlDeclarationExtractorTests
     }
 
     [Fact]
-    public void Extract_DoesNotCarrySubRoutines_InD2()
+    public void Extract_CarriesNoSubRoutines_ForARoutineWithoutAny()
     {
         var (body, source) = Build(Sql);
 
         var decls = PsqlDeclarationExtractor.Extract(body, source);
 
-        // R5's carrier exists but is empty in D2 — a D2 routine has no in-scope sub-routine declarations in
-        // the DECLARE section (they are D9), so nothing is lost.
+        // R5's carrier is empty when the routine declares no local sub-routines — nothing to lose.
         Assert.Empty(decls.SubRoutines);
+    }
+
+    [Fact]
+    public void Extract_CarriesLocalSubRoutines_Verbatim_ForR5()
+    {
+        // Stage X / D9: a local DECLARE PROCEDURE/FUNCTION is carried into the harness 1:1 (R5), so a call
+        // in this frame binds to the local, never a like-named global. The verbatim slice includes the body.
+        const string sql = """
+            create procedure p (n integer) returns (r integer) as
+            declare procedure sp (a integer) returns (o integer) as
+            begin
+              o = a * 2;
+            end
+            declare function f (a integer) returns integer as
+            begin
+              return a + 1;
+            end
+            begin
+              execute procedure sp(n) returning_values r;
+            end
+            """;
+        var (body, source) = Build(sql);
+
+        var decls = PsqlDeclarationExtractor.Extract(body, source);
+
+        Assert.Equal(2, decls.SubRoutines.Count);
+        Assert.StartsWith("declare procedure sp (a integer) returns (o integer) as", decls.SubRoutines[0]);
+        Assert.Contains("o = a * 2;", decls.SubRoutines[0]);
+        Assert.StartsWith("declare function f (a integer) returns integer as", decls.SubRoutines[1]);
+        Assert.Contains("return a + 1;", decls.SubRoutines[1]);
+        // The sub-routine's own local variables are NOT lifted into the enclosing frame's Locals — the frame
+        // has none of its own here.
+        Assert.Empty(decls.Locals);
     }
 }

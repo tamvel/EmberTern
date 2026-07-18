@@ -500,6 +500,60 @@ public class SemanticModelTests
         Assert.Contains(scope.Symbols, s => s is CursorSymbol { Name: "CUR" });
     }
 
+    // ── Stage X / D9 seam (a): a local DECLARE PROCEDURE/FUNCTION gets its own nested scope ──────
+
+    // A local sub-routine introduces the first genuine nested scope in a PSQL body: its params + RETURNS
+    // outputs + local variables live in a CHILD of the declaring scope, and do NOT leak out.
+    [Fact]
+    public void LocalRoutine_GetsItsOwnNestedScope_WithParamsAndLocals_ThatDoNotLeakOut()
+    {
+        const string sql =
+            "create procedure p (n integer) returns (r integer) as\n" +
+            "declare procedure sp (a integer) returns (o integer) as\n" +
+            "declare variable tmp integer;\n" +
+            "begin\n" +
+            "  tmp = a * 2;\n" +
+            "  o = tmp;\n" +
+            "end\n" +
+            "begin\n" +
+            "  execute procedure sp(n) returning_values r;\n" +
+            "end";
+        var m = Build(sql);
+
+        var routineScopes = m.RootScope.DescendantsAndSelf().Where(s => s.Kind == ScopeKind.RoutineBody).ToList();
+        Assert.Equal(2, routineScopes.Count); // the outer routine + the local sub-routine
+
+        var subScope = routineScopes.Single(s => s.Symbols.Any(sym => sym is ParameterSymbol { Name: "A" }));
+        Assert.Contains(subScope.Symbols, s => s is ParameterSymbol { Name: "A", Direction: ParameterDirection.Input });
+        Assert.Contains(subScope.Symbols, s => s is ParameterSymbol { Name: "O", Direction: ParameterDirection.Output });
+        Assert.Contains(subScope.Symbols, s => s is VariableSymbol { Name: "TMP" });
+
+        // The outer routine's scope does not own the sub-routine's params/locals — they don't leak out.
+        var outerScope = routineScopes.Single(s => s.Symbols.Any(sym => sym is ParameterSymbol { Name: "N" }));
+        Assert.DoesNotContain(outerScope.Symbols, s => s is ParameterSymbol { Name: "A" });
+        Assert.DoesNotContain(outerScope.Symbols, s => s is VariableSymbol { Name: "TMP" });
+    }
+
+    // A reference inside a local sub-routine's body resolves to the sub-routine's OWN parameter.
+    [Fact]
+    public void LocalRoutine_BodyReference_ResolvesToItsOwnParameter()
+    {
+        const string sql =
+            "create procedure p (n integer) returns (r integer) as\n" +
+            "declare procedure sp (a integer) returns (o integer) as\n" +
+            "begin\n" +
+            "  o = a * 2;\n" +
+            "end\n" +
+            "begin\n" +
+            "  r = n;\n" +
+            "end";
+        var m = Build(sql);
+
+        var aRef = RefAt(m, sql, "a * 2")!;
+        Assert.Equal(ReferenceRole.Parameter, aRef.Role);
+        Assert.Equal("A", aRef.Symbol!.Name);
+    }
+
     [Fact]
     public void CreateView_BindsItsQuery_AndDeclaresTheView()
     {

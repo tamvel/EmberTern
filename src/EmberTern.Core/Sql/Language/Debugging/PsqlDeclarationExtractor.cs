@@ -15,9 +15,10 @@ namespace EmberTern.Core.Sql.Debugging;
 public sealed record LocalDeclaration(string Name, string Verbatim, string TypeSpec);
 
 /// <summary>The declarations in scope for a routine frame (spec §3.4/§3.5): the frame's local variables
-/// (verbatim, R3) and its in-scope sub-routine declarations (verbatim, R5). D2 populates
-/// <see cref="Locals"/>; <see cref="SubRoutines"/> stays empty until D9 (local routines), which is why it is
-/// modelled here but not yet filled — see the remark on <see cref="PsqlDeclarationExtractor.Extract"/>.</summary>
+/// (verbatim, R3) and its in-scope local sub-routine declarations (verbatim, R5). <see cref="Locals"/> is the
+/// body's <c>DECLARE VARIABLE</c> section; <see cref="SubRoutines"/> is its <c>DECLARE PROCEDURE/FUNCTION</c>
+/// local sub-routines (Stage X / D9), carried 1:1 so a call in this frame binds to the local, not a like-named
+/// global. Empty for a routine that declares no sub-routines.</summary>
 public sealed record RoutineDeclarations(
     IReadOnlyList<LocalDeclaration> Locals,
     IReadOnlyList<string> SubRoutines);
@@ -30,14 +31,14 @@ public sealed record RoutineDeclarations(
 /// section (<see cref="BlockStatement.Declarations"/>). The Firebird executor (seam c) adds the base type
 /// (R2, from metadata) and current values (from the frame) around these declarations.
 /// <para>
-/// <b>Bounded to D2 on purpose.</b> A <c>DECLARE … CURSOR</c> is the Cursor Bridge's concern (D6) and a local
-/// <c>DECLARE PROCEDURE/FUNCTION</c> sub-routine is D9's flagship — and, by the parser's contract, a local
-/// sub-routine header is <b>not</b> in <see cref="BlockStatement.Declarations"/> anyway (only
-/// <c>DECLARE VARIABLE</c>/<c>CURSOR</c> are). So <see cref="RoutineDeclarations.SubRoutines"/> is empty here;
-/// R5 (carry every in-scope sub-routine declaration, always) is honoured trivially in D2 because a D2 routine
-/// has none in this section, and is filled in D9 when the sub-routine scope is modelled. Cursors are skipped
-/// (not declared into the harness) — a D2 routine that steps a <c>FOR SELECT</c> hits the executor's cursor
-/// boundary, not this extractor.
+/// <b>Two declaration kinds, both verbatim.</b> Local variables come from
+/// <see cref="BlockStatement.Declarations"/> (the <c>DECLARE VARIABLE</c> section, R3); local sub-routines come
+/// from <see cref="BlockStatement.LocalRoutines"/> (the <c>DECLARE PROCEDURE/FUNCTION</c> declarations, R5 —
+/// Stage X / D9), each carried 1:1 into <see cref="RoutineDeclarations.SubRoutines"/> so a call in this frame
+/// binds to the local, never a like-named global (a §F violation). The base-type derivation the harness needs
+/// around each declaration is the Firebird layer's concern (R2, from metadata); this stays pure verbatim
+/// extraction. A <c>DECLARE … CURSOR</c> is skipped (the Cursor Bridge's concern, D6) — a routine that steps a
+/// <c>FOR SELECT</c> hits the executor's cursor boundary, not this extractor.
 /// </para>
 /// </summary>
 public static class PsqlDeclarationExtractor
@@ -57,7 +58,19 @@ public static class PsqlDeclarationExtractor
                 locals.Add(new LocalDeclaration(v.Name!, Slice(source, v), TypeSpecOf(v, source)));
             }
         }
-        return new RoutineDeclarations(locals, Array.Empty<string>());
+
+        // R5: every in-scope local sub-routine, carried VERBATIM (header + body) — the parser groups these
+        // into BlockStatement.LocalRoutines (Stage X / D9), out of Declarations. The harness re-declares each
+        // one 1:1 so a statement in this frame that calls a local F()/P() resolves to the local, never a
+        // like-named global (a §F violation). The base-type derivation + per-sub-routine frame layout the
+        // callee frames need live in the Firebird layer (D9 seam b), not here — this is the pure verbatim
+        // carry, mirroring how a local variable is carried verbatim.
+        var subRoutines = new List<string>();
+        foreach (var r in body.LocalRoutines)
+        {
+            subRoutines.Add(Slice(source, r));
+        }
+        return new RoutineDeclarations(locals, subRoutines);
     }
 
     /// <summary>The declared type portion of a <c>DECLARE [VARIABLE] name &lt;type&gt; …</c> — the source

@@ -1444,3 +1444,70 @@ touched** ⇒ build 0/0 and the test suite are unaffected. Committed as the D9 g
 — `FirebirdDebugExecutor.ResolveRoutine` resolves a local `DECLARE PROCEDURE/FUNCTION` call to a real frame
 (interpret §6.2a), picking `LexicalParent` by version; then seam b — the closure harness + transitive
 read/write-set fixpoint over the sub-routine call graph + R5. See the handoff at the end of this session.
+
+## D9 — Local Procedures & Functions (the flagship) — seam (a) Part 1: AST deepening + binder + extractor (2026-07-18)
+
+The plan's D9 seam (a) is *"`ResolveRoutine` resolves a local `DECLARE PROCEDURE/FUNCTION` to a real
+interpreted frame"* — but the moment we started it, the spec §6.2a assumption ("just interpret the local
+routine's body") proved too optimistic against the **existing AST**: a local sub-routine was **not modelled
+at all**. Its header (`DECLARE PROCEDURE p (…) … AS`) was a lossless `PsqlLeafKind.Other` leaf and its body a
+bare sibling `BlockStatement` — both dropped into the enclosing body's flat `Statements`. Two consequences,
+each fatal to a faithful step-into: the interpreter would step **onto the unrunnable header** and **through
+the sub-routine's body as if it were the enclosing routine's main flow**; and `ResolveRoutine` would have to
+**re-scan tokens** to recover the callee's structure — a direct **Contract #1** violation ("the parser owns
+structure; the executor never re-derives it"). So — exactly as D8 seam (a) deepened the AST for `ExecuteProcedure`
+arguments/`RETURNING_VALUES` before its Firebird seam — D9 seam (a) is split: **Part 1 (this) = pure Core AST
++ binder + extractor foundation; Part 2 = the runtime** (`ResolveRoutine`, local frames, `FirebirdDebugMetadata`,
+`LexicalParent`-by-version, lab fidelity). Part 1 changes **no runtime behaviour** — `ResolveRoutine` still
+returns `null` for a local call (⇒ step-over in place, 100% faithful §5.3), so the live debugger is byte-identical.
+
+**AST (Contract #1 — additive overlay, §0 unchanged).** New `SubroutineDeclaration : PsqlStatement` (+
+`SubroutineKind` procedure/function) in `Ast/PsqlNodes.cs`: a named unit carrying `Kind`, `Name`, and a real
+`Body` (a `BlockStatement`, or `null` for a forward declaration). Its span (and `Tokens`) cover the **whole**
+sub-routine — header *and* body — like every other compound node, so the `Body` child nests (the
+well-formedness invariant); the header is the token run before the body's `BEGIN`, from which the binder/
+extractor read the signature verbatim (R2/R3), never re-modelled as tree fields. `BlockStatement` gained a
+new `LocalRoutines` list (between `Declarations` and `Statements`); its `Children` now **merge** declarations
++ local routines **by source position** (Firebird permits `DECLARE VARIABLE` and `DECLARE PROCEDURE` in either
+order), so children stay in non-decreasing source order.
+
+**Parser producer (`SqlParser.Psql.cs`).** The pre-`BEGIN` declaration loop was factored into `ParseDeclarationSection`,
+which now consumes **both** `DECLARE VARIABLE/CURSOR` (→ `Declarations`) and `DECLARE PROCEDURE/FUNCTION` (→
+`LocalRoutines`, via the new `ParseSubroutineDeclaration`). The **load-bearing subtlety**: a sub-routine's
+header ends at its first depth-0 `AS` (⇒ a body follows) or depth-0 `;` (⇒ a forward declaration) — **not** at
+the first `;`, because the sub-routine's own `declare variable tmp integer;` ends in a `;` too; scanning to
+that would truncate the header and lose the body. The body is parsed by the new `ParseScopedBlockBody` —
+declarations + one `BEGIN … END`, **block-scoped (non-lenient)**, so it stops at its own matching `END` and
+never swallows the enclosing routine's main `BEGIN` (the way the `isTopLevel` path folds trailing tokens
+would). `ParsePsqlUnit` now routes a stray `DECLARE PROCEDURE/FUNCTION` at a statement position (mid-edit /
+malformed — Firebird declares these only pre-`BEGIN`) through the **same** `ParseSubroutineDeclaration`, so the
+now-dead `ParsePsqlHeaderLeaf` and the now-unused `IsDeclarationStart` were **deleted** (replaced by
+`IsLocalRoutineStart`) — no dead code.
+
+**Binder (`SemanticBinder.Psql.cs`) — the first genuine nested scope in a PSQL body.** `BindBlock` now binds
+`block.LocalRoutines` via a new `BindLocalRoutine`: a **child `RoutineBody` scope** per sub-routine, its
+header params + `RETURNS` outputs + local variables declared into it (reusing the same `BindParamList` /
+`BindBody` the top-level routine uses), the body bound against that child. Two things fall out of the scope
+tree for free: the sub-routine's own symbols resolve inside it, and — because `Resolve` walks to the parent —
+an outer variable also resolves (the **FB5 closure**). On FB3 a sub-routine is a **closed scope**, but that is
+a *runtime* distinction the debugger honours in Part 2 via `LexicalParent`-by-version; the static editor model
+has no server version and stays permissive here (consistent with the diagnostics engine's "prefer silence over
+false positives"). The sub-routine **name** is not yet a callable symbol — resolving a local call is Part 2.
+
+**Extractor (`PsqlDeclarationExtractor`).** `RoutineDeclarations.SubRoutines` — modelled in D2 but always
+empty — is now **filled**: each `block.LocalRoutines` entry sliced verbatim (header + body) for **R5** (the
+harness re-declares each 1:1 so a call in the frame binds to the local, never a like-named global — a §F
+violation if dropped). The per-sub-routine base-type derivation + frame layout the callee frames need stay the
+Firebird layer's job (Part 2).
+
+**Tests / verification.** +7 `PsqlAstTests` (local procedure/function shape, own-local-variable header-not-
+truncated, forward declaration, interleaved decls+routines in source order, byte round-trip), +2
+`SemanticModelTests` (nested scope with non-leaking params/locals; a body reference resolving to the
+sub-routine's own param), +1 `PsqlDeclarationExtractorTests` (verbatim R5 carry) + the stale "InD2" test
+renamed, +4 `SqlTestCorpus` shapes feeding the §0 differential harness (round-trip + well-formedness). Build
+0/0; **4848 tests green** (4821 + the 27-test `ConnectionExpandBindingProbe` in its own partition, #94/#226);
+smoke clean. One commit. **Next: D9 seam (a) Part 2** — the runtime: `FirebirdDebugExecutor.ResolveRoutine`
+resolves a local call to an interpreted frame (`Frame.LexicalParent` by server major — FB3 `null` / FB5
+declaring frame), `FirebirdDebugMetadata` derives the callee's param base types (R2), and lab fidelity proves
+simulated == real for a stepped local call. Then **seam (b)** — the closure harness + transitive read/write-set
+fixpoint over the sub-routine call graph.
