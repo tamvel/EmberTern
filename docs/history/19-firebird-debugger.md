@@ -1160,8 +1160,9 @@ handler is synchronous — structurally identical to `OnResultsSplitterDoubleTap
 deferral from part 2 was removed. Gotcha #240 (part 3 = the real fix). Awaits live confirmation.
 
 **2. Variables kind icons — distinct shape + colour per kind.** IN and OUT previously shared the accent colour
-and near-identical dot glyphs, so every row read the same. Now each kind has a distinct SHAPE — ▸ IN / ◆ OUT /
-● local — AND a distinct hue via dedicated theme tokens (both dictionaries): `DebugParamInBrush` (blue),
+and near-identical dot glyphs, so every row read the same. Now each kind has a distinct SHAPE — ▶ IN / ◆ OUT /
+● local (all full-size black shapes → equal optical mass; the initial small ▸ read lighter and was bumped to
+▶) — AND a distinct hue via dedicated theme tokens (both dictionaries): `DebugParamInBrush` (blue),
 `DebugParamOutBrush` (amber), `DebugLocalBrush` (green). The row VM's `KindGlyph`/`KindBrushKey` map per kind;
 the colour is still a theme **key string** resolved through `IconBrushConverter` (never a brush — rule #1).
 Cursor variables get their own glyph/token when a later milestone surfaces them.

@@ -515,7 +515,7 @@ noted.
   — a binary `byte[]` shows `[BLOB · N B]` and is not editable; long text truncates inline (256) but edits
   full; a dedicated value-viewer popup is a documented follow-up (no reusable viewer exists). Build 0/0,
   **4807 green** (+10), smoke clean. **Post-D7 UX bugfixes DONE (2026-07-18, awaits live confirm):** Variables
-  kind icons now distinct SHAPE + hue per kind (▸ IN blue / ◆ OUT amber / ● local green — dedicated
+  kind icons now distinct SHAPE + hue per kind (▶ IN blue / ◆ OUT amber / ● local green — dedicated
   `DebugParamInBrush`/`DebugParamOutBrush`/`DebugLocalBrush` tokens, both dicts); the Pinned star is now **gold**
   (`DebugPinBrush`) with more spacing so it no longer blends into the kind glyph; and the splitter double-click
   root-cause fix above. **Next: D8 (Call stack + nested stored routines).**

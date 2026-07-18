@@ -45,7 +45,9 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
     /// their own glyph/colour when a later milestone surfaces them.</summary>
     public string KindGlyph => Kind switch
     {
-        DebugVariableKind.ParameterIn => "▸",   // input parameter
+        // Full-size black shapes so all three carry equal optical mass (the small "▸" U+25B8 read lighter
+        // than the diamond/circle — use the full "▶" U+25B6 instead; same concept, same colour).
+        DebugVariableKind.ParameterIn => "▶",   // input parameter
         DebugVariableKind.ParameterOut => "◆",  // output / RETURNS
         _ => "●",                                // local
     };
