@@ -212,11 +212,14 @@ public sealed class ForSelectStatement : PsqlStatement, IExecutableStatement
     private readonly SqlNode[] _children;
 
     public ForSelectStatement(
-        int start, int length, IReadOnlyList<SqlToken> tokens, SqlNode? body, QueryNode? query = null)
+        int start, int length, IReadOnlyList<SqlToken> tokens, SqlNode? body, QueryNode? query = null,
+        IReadOnlyList<string>? intoTargets = null, string? cursorName = null)
         : base(start, length, tokens)
     {
         Body = body;
         Query = query;
+        IntoTargets = intoTargets ?? Array.Empty<string>();
+        CursorName = cursorName;
         _children = AstChildren.Of(query, body);
     }
 
@@ -228,6 +231,19 @@ public sealed class ForSelectStatement : PsqlStatement, IExecutableStatement
     /// <summary>The loop body (a block or a single statement — a PSQL construct or a reused DSQL statement
     /// node, B5), or null on malformed input.</summary>
     public SqlNode? Body { get; }
+
+    /// <summary>The <c>INTO &lt;var-list&gt;</c> target variable names, in order, folded to the resolution
+    /// convention (unquoted upper-cased; quoted kept as written) so they key straight into the frame's
+    /// values. Empty when the loop has no <c>INTO</c> (a <c>… AS CURSOR c DO … FETCH</c> loop, or malformed).
+    /// The Cursor Bridge (D6) maps each fetched result column to these targets positionally. An additive
+    /// overlay produced by the parser (Stage X / D6a); <see cref="PsqlStatement.Tokens"/> still round-trips.</summary>
+    public IReadOnlyList<string> IntoTargets { get; }
+
+    /// <summary>The <c>AS CURSOR &lt;name&gt;</c> cursor name (folded), or null when the loop is unnamed.
+    /// Used by D6 to detect a positioned <c>WHERE CURRENT OF &lt;name&gt;</c> in the body — a §F boundary the
+    /// Cursor Bridge cannot honour (a separately-opened DSQL cursor name is not visible cross-context, probed
+    /// live on FB3/FB5). Additive overlay; the tokens still round-trip.</summary>
+    public string? CursorName { get; }
 
     /// <inheritdoc/>
     public override IReadOnlyList<SqlNode> Children => _children;

@@ -93,6 +93,62 @@ public class PsqlAstTests
         AssertSpansMapToSource(sql, body);
     }
 
+    // ── D6a: FOR SELECT INTO targets + AS CURSOR name (additive AST overlay) ──────────────────────────
+
+    private static ForSelectStatement For(string sql)
+        => Assert.IsType<ForSelectStatement>(Body(sql).Statements.Single());
+
+    [Fact]
+    public void ForSelect_IntoTargets_ColonForm_ExtractedAndFolded()
+    {
+        var loop = For("begin for select id, val from t where owner = :p into :a, :b do suspend; end");
+        Assert.Equal(new[] { "A", "B" }, loop.IntoTargets);
+        Assert.Null(loop.CursorName);
+    }
+
+    [Fact]
+    public void ForSelect_IntoTargets_BareForm_ExtractedAndFolded()
+    {
+        var loop = For("begin for select id, val from t into a, b do suspend; end");
+        Assert.Equal(new[] { "A", "B" }, loop.IntoTargets);
+    }
+
+    [Fact]
+    public void ForSelect_AsCursor_NameExtracted_NoInto()
+    {
+        var loop = For("begin for select id from t as cursor c do suspend; end");
+        Assert.Empty(loop.IntoTargets);
+        Assert.Equal("C", loop.CursorName);
+    }
+
+    [Fact]
+    public void ForSelect_IntoAndCursor_BothExtracted_EitherOrder()
+    {
+        var a = For("begin for select id from t into :x as cursor c do suspend; end");
+        Assert.Equal(new[] { "X" }, a.IntoTargets);
+        Assert.Equal("C", a.CursorName);
+
+        var b = For("begin for select id from t as cursor c into :x do suspend; end");
+        Assert.Equal(new[] { "X" }, b.IntoTargets);
+        Assert.Equal("C", b.CursorName);
+    }
+
+    [Fact]
+    public void ForSelect_SubqueryInWhere_IntoNotLeakedFromSubquery()
+    {
+        // A subquery's own (would-be) INTO/columns must not leak: the depth-0 INTO is the loop's.
+        var loop = For("begin for select id from t where id in (select x from u) into :a do suspend; end");
+        Assert.Equal(new[] { "A" }, loop.IntoTargets);
+    }
+
+    [Fact]
+    public void ForSelect_NoInto_NoCursor_Empty()
+    {
+        var loop = For("begin for select id from t do suspend; end");
+        Assert.Empty(loop.IntoTargets);
+        Assert.Null(loop.CursorName);
+    }
+
     [Fact]
     public void NestedBegin_ProducesNestedBlock()
     {

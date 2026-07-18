@@ -192,10 +192,86 @@ public static partial class SqlParser
         if (doIdx < 0) return ParsePsqlLeaf(sig, ref i);
 
         var cursor = ParseForCursorQuery(sig, lo + 1, doIdx); // B3.1: FOR SELECT/WITH → real QueryNode
+        var (intoTargets, cursorName) = ParseForIntoAndCursor(sig, lo + 1, doIdx); // D6a
         i = doIdx + 1;
         var body = ParsePsqlUnit(sig, ref i);
         var (start, length) = TokenSpan(sig, lo, i);
-        return new ForSelectStatement(start, length, Sub(sig, lo, i), body, cursor);
+        return new ForSelectStatement(start, length, Sub(sig, lo, i), body, cursor, intoTargets, cursorName);
+    }
+
+    // The [INTO <var-list>] and [AS CURSOR <name>] clauses of a FOR loop, from the range [lo, doIdx) after
+    // FOR up to DO (both located at paren depth 0 so a subquery's own clauses never leak out — the same rule
+    // ParseForCursorQuery uses to end the query). Order-independent: Firebird permits either INTO or AS CURSOR
+    // first. INTO targets are the depth-0 comma-separated variable references up to the next depth-0 boundary
+    // (the other clause, or DO); each is folded to the resolution convention so it keys into the frame values.
+    // A missing clause yields (empty, null) — additive, never throws (D6a).
+    private static (IReadOnlyList<string> Into, string? Cursor) ParseForIntoAndCursor(
+        IReadOnlyList<SqlToken> sig, int lo, int doIdx)
+    {
+        int intoIdx = -1, cursorNameIdx = -1;
+        int depth = 0;
+        for (int k = lo; k < doIdx; k++)
+        {
+            var t = sig[k];
+            if (t.Kind == TokenKind.LParen) { depth++; continue; }
+            if (t.Kind == TokenKind.RParen) { if (depth > 0) depth--; continue; }
+            if (depth != 0) continue;
+            if (intoIdx < 0 && IsBodyWord(t, "INTO")) intoIdx = k;
+            else if (cursorNameIdx < 0 && IsBodyWord(t, "AS") && k + 1 < doIdx && IsBodyWord(sig[k + 1], "CURSOR"))
+                cursorNameIdx = k + 2;
+        }
+
+        string? cursor = cursorNameIdx >= 0 && cursorNameIdx < doIdx ? PsqlNameAt(sig, cursorNameIdx) : null;
+
+        IReadOnlyList<string> into = Array.Empty<string>();
+        if (intoIdx >= 0)
+        {
+            // The INTO list ends at the next depth-0 boundary after it (AS CURSOR, if it follows) or DO.
+            int hi = doIdx;
+            if (cursorNameIdx > intoIdx) hi = cursorNameIdx - 2; // back up to the AS token
+            into = ParseForIntoTargets(sig, intoIdx + 1, hi);
+        }
+        return (into, cursor);
+    }
+
+    // Splits the INTO target range [lo, hi) at paren depth 0 by commas and reads each segment's variable name
+    // (a bare identifier, a :name/@name parameter, or a quoted identifier). Folds to the resolution convention.
+    private static IReadOnlyList<string> ParseForIntoTargets(IReadOnlyList<SqlToken> sig, int lo, int hi)
+    {
+        var names = new List<string>();
+        int depth = 0, segStart = lo;
+        for (int k = lo; k <= hi; k++)
+        {
+            bool atEnd = k == hi;
+            if (!atEnd)
+            {
+                var t = sig[k];
+                if (t.Kind == TokenKind.LParen) { depth++; continue; }
+                if (t.Kind == TokenKind.RParen) { if (depth > 0) depth--; continue; }
+                if (!(depth == 0 && t.Kind == TokenKind.Comma)) continue;
+            }
+            var name = ForTargetName(sig, segStart, k);
+            if (name is not null) names.Add(name);
+            segStart = k + 1;
+        }
+        return names.Count == 0 ? Array.Empty<string>() : names;
+    }
+
+    // The variable name of one INTO target segment [lo, hi) — the first name-ish token, folded. Handles the
+    // :name / @name parameter form (the colon/at is stripped) in addition to bare and quoted identifiers.
+    private static string? ForTargetName(IReadOnlyList<SqlToken> sig, int lo, int hi)
+    {
+        for (int k = lo; k < hi; k++)
+        {
+            var t = sig[k];
+            switch (t.Kind)
+            {
+                case TokenKind.QuotedIdentifier: return t.Value;
+                case TokenKind.Identifier or TokenKind.Keyword: return t.Text.ToUpperInvariant();
+                case TokenKind.Parameter: return t.Text.TrimStart(':', '@').ToUpperInvariant();
+            }
+        }
+        return null;
     }
 
     // The cursor query of a FOR loop — the range from just after FOR to the first depth-0 INTO or
