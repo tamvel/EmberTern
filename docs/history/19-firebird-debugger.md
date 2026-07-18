@@ -992,3 +992,51 @@ now, before D6 adds panels/state). No debugger logic changed.
 
 Build 0/0; **4785 tests green** (+1); smoke clean. Live behaviour (transient tab across restart/disconnect,
 double-click collapse) awaits user confirmation (the debugger tab renders only against a live DB).
+
+## D6 — Cursor Bridge (2026-07-18)
+
+`FOR SELECT` bodies now step through a **real, incremental DSQL cursor** instead of the D2 hard stop. Landed
+in two seams after the spec-mandated probes.
+
+**Probes first (§F "verify, don't infer", spec §15.5).** Three probes ran before any code:
+- **Binder for `FOR SELECT`** (point B, empirical): bare local refs in the query *are* surfaced
+  (`role=Variable/Parameter`); colon `:name` refs are **not** (a single `Parameter` token, #238). Initially
+  read as "existing architecture suffices."
+- **Cursor interleaving on FB3** (managed driver): harness stmt while a cursor is open, resume, two cursors —
+  **all succeed**, mirroring FB5 §15.3. Cursor Bridge feasible on FB3 + FB5. **FB4 unavailable** (only FB3.0 +
+  FB5.0 installed) → unverified, recorded honestly (P2's FB2.5 posture).
+- **`WHERE CURRENT OF`** on a separately-opened DSQL cursor: **fails**, SQL -504 "cursor not found in the
+  current context"; `FbCommand.CursorName` not settable. → a §F boundary, not in D6's DoD.
+
+**D6a — AST deepening (commit `5f7d222`).** `ForSelectStatement` gained `IntoTargets` (ordered, folded INTO
+variable names) + `CursorName` (`AS CURSOR c`), parsed order-independently at paren depth 0. The interpreter
+maps a fetched row's columns onto `IntoTargets` positionally; `CursorName` lets a `WHERE CURRENT OF` be
+detected. Additive overlay — tokens round-trip (§0), binder + formatter untouched. Per Developer Contract #1
+(don't token-scan the Firebird layer for structure that belongs in the AST). +6 `PsqlAstTests`.
+
+**D6b — the bridge.** Pure Core `CursorBridge` (mirrors `HarnessBuilder`: `Build(source, loop) →
+CursorQueryPlan` — the DSQL SELECT with frame refs rewritten to positional `?`, the ordered parameter names,
+the INTO targets) + Firebird `CursorHandle : IDebugCursor` (holds the real `FbDataReader` open across steps,
+**per-wire-op** command locking #236 — the lock is taken per fetch/close, never for the cursor's lifetime, so
+harness steps inside the loop don't deadlock) + `FirebirdDebugExecutor.OpenCursor` glue (binds the plan's
+parameter names from the frame, opens the reader; `FOR EXECUTE STATEMENT` → a clear §F refusal). +5
+`CursorBridgeTests` (pure).
+
+**The design correction (§F caught it live).** The first cut rewrote *every* frame ref the binder surfaced —
+bare **and** colon. Live fidelity broke it: `SP_DBG_CURSOR` both `RETURNS (LINE_NO …)` and does
+`SELECT LINE_NO …`, and the binder resolves the SELECT-list **column** `LINE_NO` to the output **parameter**
+(locals shadow columns), so the column was rewritten to `?` → `SELECT ?, …` → **SQL -804 "Data type
+unknown"**. This was invisible to the pure unit tests (valid-looking SQL) — only the sim-vs-real run exposed
+it. **Fix:** rewrite **only the colon/`@` form** (`:name`/`@name` — Firebird's unambiguous variable syntax in
+a query, a native DSQL bind once extracted); a bare name is a **column** and is left verbatim. This also
+dropped the `SemanticModel` dependency from `CursorBridge` entirely. Gotcha #239.
+
+**Lab zoo + fidelity (spec §15.5, the §2.1 proof).** `Lab/setup.sql` gained `SP_DBG_CURSOR` (single
+`FOR SELECT` over `ORDER_ITEMS`, colon-param WHERE, INTO targets, running-sum body, SUSPEND per row) and
+`SP_DBG_NESTED` (nested `FOR SELECT`, two simultaneous cursors, inner WHERE injects the outer frame's local).
+The real executor drove `DebugSession` through them; outputs matched real execution exactly — including a
+**fully stepped** run of `SP_DBG_CURSOR(1000)` (10 steps, per-step cursor fetch) and the nested case.
+
+Build 0/0; **4797 tests green** (+11: 6 D6a AST, 5 CursorBridge); smoke clean; live fidelity proven. The
+in-app stepping UX (breakpoints inside a loop body, Variables reflecting INTO targets live) awaits user
+confirmation (renders only against a live DB). **Next: D7 (Variables window, full).**

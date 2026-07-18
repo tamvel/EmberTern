@@ -27,10 +27,11 @@ namespace EmberTern.Firebird;
 /// from a message). Frame savepoints (§4.5) delegate to the session.
 /// </para>
 /// <para>
-/// <b>D2 boundaries (§F — explained, not guessed):</b> stepping <em>into</em> a routine
+/// <b>Boundaries (§F — explained, not guessed):</b> stepping <em>into</em> a routine
 /// (<see cref="ResolveRoutine"/>) is not yet resolved, so a call runs on the server in place — which is
 /// <em>step-over</em> and 100% faithful (§5.3); nested stored routines are D8, local routines D9. A
-/// <c>FOR SELECT</c> cursor (<see cref="OpenCursor"/>) is the Cursor Bridge, D6 — met here with a clear stop.
+/// <c>FOR SELECT</c> cursor (<see cref="OpenCursor"/>) is stepped through the Cursor Bridge (D6, §7); a
+/// <c>FOR EXECUTE STATEMENT</c> dynamic cursor is refused with a clear message.
 /// </para>
 /// <para>
 /// <b>Threading.</b> <see cref="IDebugExecutor"/> is synchronous (D1's frozen contract); the session is async.
@@ -209,9 +210,55 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     }
 
     /// <inheritdoc/>
+    /// <remarks>D6 (§7): the loop's cursor query is opened as a <b>real DSQL cursor</b> on the session
+    /// connection, in the debug transaction, and fetched one row per iteration (the Cursor Bridge). The query
+    /// text + bind parameters are built purely by <see cref="CursorBridge"/> (frame refs rewritten to
+    /// positional <c>?</c> by resolved span); the ordered parameter names are bound from the current frame
+    /// here. A <c>FOR EXECUTE STATEMENT</c> (no static <see cref="ForSelectStatement.Query"/>) is a §F boundary
+    /// — refused with a clear message rather than guessed.</remarks>
     public IDebugCursor OpenCursor(ForSelectStatement loop, Frame frame)
-        => throw new NotSupportedException(
-            "Debug (D2): stepping a FOR SELECT cursor is the Cursor Bridge (D6). Step over the loop instead.");
+    {
+        ArgumentNullException.ThrowIfNull(loop);
+        ArgumentNullException.ThrowIfNull(frame);
+        if (loop.Query is null)
+            throw new NotSupportedException(
+                "Debug (D6): a FOR EXECUTE STATEMENT (dynamic) cursor cannot be stepped — step over the loop.");
+
+        var plan = CursorBridge.Build(_source, loop);
+        var values = new object?[plan.ParameterNames.Count];
+        for (int i = 0; i < values.Length; i++)
+        {
+            frame.TryResolveValue(plan.ParameterNames[i], out var value);
+            values[i] = value;
+        }
+        return Await(OpenCursorAsync(plan, values, CancellationToken.None));
+    }
+
+    private async Task<IDebugCursor> OpenCursorAsync(CursorQueryPlan plan, object?[] values, CancellationToken cancellationToken)
+    {
+        var gate = _session.CommandLock; // capture once (#98/#120) — one wire op (the OPEN), then released
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        FbCommand? cmd = null;
+        try
+        {
+            cmd = _session.Connection.CreateCommand();
+            cmd.CommandText = plan.Sql;
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = _session.Transaction;
+            foreach (var v in values) cmd.Parameters.Add(new FbParameter { Value = v ?? DBNull.Value });
+            var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            return new CursorHandle(_session, cmd, reader, plan.IntoTargets);
+        }
+        catch
+        {
+            if (cmd is not null) await cmd.DisposeAsync().ConfigureAwait(false); // don't leak the command on a failed open
+            throw;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
 
     /// <inheritdoc/>
     /// <remarks>D2: a call is not resolved for step-into, so the interpreter runs it in place on the server —

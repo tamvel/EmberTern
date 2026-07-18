@@ -468,7 +468,20 @@ noted.
   panel's tab strip** toggles collapse via the **same** `ToggleBottomPanelCommand` (view `DoubleTapped`; toggles
   only on a `TabItem`-ancestor hit when expanded, any bar hit when collapsed, ignores the chevron button). Pinned
   by `DebuggerTab_IsTransient_NotCaptured`; build 0/0, 4785 green. History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
-  **Next session: D5 seam (b) —
+  **D6 (Cursor Bridge) — DONE (2026-07-18; in-app stepping UX awaits user confirmation). `FOR SELECT` bodies
+  step through a real incremental DSQL cursor.** Probes first (§F): FB3+FB5 cursor interleaving verified live
+  (FB4 unavailable → unrecorded); `WHERE CURRENT OF` on a separately-opened DSQL cursor is unsupported
+  cross-context (SQL -504) → a §F boundary, honest step error, not in DoD. **D6a** — additive AST: `ForSelectStatement.IntoTargets`
+  (ordered folded INTO names) + `CursorName`, parsed order-independently (Contract #1 — don't token-scan the
+  Firebird layer for structure). **D6b** — pure Core `CursorBridge` (`Build(source, loop) → CursorQueryPlan`,
+  mirrors `HarnessBuilder`) + Firebird `CursorHandle : IDebugCursor` (real `FbDataReader` held open across
+  steps, **per-wire-op** locking #236) + `FirebirdDebugExecutor.OpenCursor`. **§F correction caught live:** the
+  first cut rewrote every binder-surfaced frame ref (bare + colon) → a `SELECT LINE_NO` column that shadows a
+  `RETURNS (LINE_NO)` output param got rewritten to `?` → SQL -804; fix = rewrite **only** the colon/`@` form
+  (unambiguous variable syntax; a bare name is a column), gotcha #239. Lab zoo +`SP_DBG_CURSOR`/`SP_DBG_NESTED`;
+  **sim-vs-real fidelity proven** incl. a fully-stepped run + nested cursors (spec §15.5). Build 0/0, **4797
+  green** (+11), smoke clean. **Next: D7 (Variables window, full).** History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
+  **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
   (P1 → P2 → D1 → D2 → D3 → D4 → D5 …). **Read the plan + your milestone's brief before writing any debugger code.**

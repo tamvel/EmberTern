@@ -265,6 +265,50 @@ BEGIN
   SUSPEND;
 END^
 
+/* D6 (Cursor Bridge): a single FOR SELECT over ORDER_ITEMS. Exercises a colon-param WHERE
+   (:P_ORDER, a native DSQL bind), INTO colon targets mapped positionally, a body that reads
+   /writes a running-sum local, and SUSPEND emitting one row per iteration.
+   SP_DBG_CURSOR(1000) => (1, 20.00, 20.00), (2, 25.50, 45.50); (1001) => (1, 20.00, 20.00). */
+CREATE PROCEDURE SP_DBG_CURSOR(P_ORDER INTEGER)
+RETURNS (LINE_NO INTEGER, AMOUNT NUMERIC(15,2), RUNNING NUMERIC(15,2))
+AS
+  DECLARE VARIABLE V_SUM NUMERIC(15,2);
+BEGIN
+  V_SUM = 0;
+  FOR SELECT LINE_NO, QTY * UNIT_PRICE
+      FROM ORDER_ITEMS
+      WHERE ORDER_ID = :P_ORDER
+      ORDER BY LINE_NO
+      INTO :LINE_NO, :AMOUNT DO
+  BEGIN
+    V_SUM = V_SUM + AMOUNT;
+    RUNNING = V_SUM;
+    SUSPEND;
+  END
+END^
+
+/* D6 (Cursor Bridge): NESTED FOR SELECT — two cursors open simultaneously (outer ORDERS, inner
+   ORDER_ITEMS per order). The inner cursor's WHERE references the outer frame's local (:V_OID),
+   proving frame injection + concurrent cursors (probe [4]).
+   SP_DBG_NESTED => (1000, 2), (1001, 1). */
+CREATE PROCEDURE SP_DBG_NESTED
+RETURNS (ORDER_ID INTEGER, ITEM_COUNT INTEGER)
+AS
+  DECLARE VARIABLE V_OID INTEGER;
+  DECLARE VARIABLE V_LINE INTEGER;
+  DECLARE VARIABLE V_CNT INTEGER;
+BEGIN
+  FOR SELECT ORDER_ID FROM ORDERS ORDER BY ORDER_ID INTO :V_OID DO
+  BEGIN
+    V_CNT = 0;
+    FOR SELECT LINE_NO FROM ORDER_ITEMS WHERE ORDER_ID = :V_OID INTO :V_LINE DO
+      V_CNT = V_CNT + 1;
+    ORDER_ID = V_OID;
+    ITEM_COUNT = V_CNT;
+    SUSPEND;
+  END
+END^
+
 SET TERM ; ^
 
 /* ---------- Triggers (PSQL) ----------------------------------------

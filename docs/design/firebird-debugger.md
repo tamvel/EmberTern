@@ -566,10 +566,17 @@ per iteration and assign the `INTO` targets into the frame client-side.
 **Directly enabled by AST work already done:** `ForSelectStatement.Query` and `DeclareCursorStatement.Query`
 are real `QueryNode`s with exact token spans (Etap 6.9 / B3.1) — the cursor's SQL is extractable verbatim.
 
-**Open sub-problems for D6:** `FOR SELECT … AS CURSOR c` with `WHERE CURRENT OF c` (positioned DML on a named
-DSQL cursor — **verify**); explicit `DECLARE … CURSOR` + `OPEN`/`FETCH`/`CLOSE` (same bridge, user-driven).
-**The real constraint is not the driver — it is §12.7** (a cursor query that calls a routine we are stepping
-into).
+**D6 as built (colon-only injection):** the pure `CursorBridge` builds the DSQL cursor SELECT from
+`ForSelectStatement.Query`'s span, rewriting **only the `:name`/`@name` parameter form** to positional `?`
+(the unambiguous variable-reference syntax; a bare name is a column — §15.5 / gotcha #239), and `IntoTargets`
+(D6a) map the fetched columns onto the frame. `CursorHandle` (Firebird) holds the real `FbDataReader` open
+across steps with **per-wire-op** locking. Nested `FOR SELECT` and fidelity are proven (§15.5).
+
+**Open sub-problems (follow-ups, not in D6's DoD):** `FOR SELECT … AS CURSOR c` with `WHERE CURRENT OF c` —
+positioned DML on a named DSQL cursor is **unsupported cross-context** (§15.5 [12], SQL -504); it surfaces as
+an honest step error (the AST now carries `CursorName` to detect it). Explicit `DECLARE … CURSOR` +
+`OPEN`/`FETCH`/`CLOSE` (same bridge, user-driven) is a later milestone. **The real constraint is not the
+driver — it is §12.7** (a cursor query that calls a routine we are stepping into).
 
 ---
 
@@ -927,7 +934,7 @@ next. Foundation-first; never big-bang.
 | **D3** | **Editor-wiring consolidation** | §11.1 — one seam; solve "subscribe once the VM arrives". | **Moved from v1's D0.** Now it lands immediately before the first UI, where it actually pays. |
 | **D4** | **Debugger tab MVP** | Tab shell, launch panel + parameters (reuse), breakpoint gutter, current-line, Continue/Stop/Restart/Step, basic variables. **Standalone procedures only.** | First real user value. Everything after is depth. |
 | **D5** | **Expression evaluation surface** | Evaluate + Watches + Immediate on **one** engine (§9.5). | **Early on purpose:** the best test instrument for D2's harness, and immediate user value. |
-| **D6** | **Cursor Bridge** | `FOR SELECT` + `DECLARE CURSOR` incremental stepping (§7); the per-wire-operation locking rule. | `FOR SELECT` is in nearly every real procedure — D4 isn't truly usable without it. Before the flashier work. |
+| **D6 ✅** | **Cursor Bridge** | `FOR SELECT` incremental stepping via a real DSQL cursor (§7); per-wire-op locking; colon-only injection (§15.5). **DONE** (nested cursors + fidelity proven; `WHERE CURRENT OF`/`DECLARE CURSOR` explicit cursors are follow-ups). | `FOR SELECT` is in nearly every real procedure — D4 isn't truly usable without it. Before the flashier work. |
 | **D7** | **Variables window, full** | Grouping/icons, change highlight, inline edit + validation, pins, types, `<null>`, lazy BLOBs, filter, **data tips**. | The most important panel, once there is state worth showing. |
 | **D8** | **Call stack + nested stored routines** | Frames, stack panel, **Breadcrumbs** (shared feature), Peek Frame, frame keyboard nav, simulated-frame indicator. | Nesting needs a working single frame first. |
 | **D9** | **Local procedures & functions** 🏁 | Sub-routine frames (§6.2a) + closure harness (§6.2b) + read/write sets + **R5**. **Run §6.3's FB3/FB4 probes first.** | **The flagship.** Falls out of D1+D2+D8 — the design's central claim. |
@@ -953,8 +960,10 @@ next. Foundation-first; never big-bang.
 - **§6.3 / §1.4** — sub-routine outer-variable capture on **FB3 / FB4** (probes Q2/Q3/Q4). **Blocks D9.**
 - **§8.2** — private package routine callable from `EXECUTE BLOCK`? Source extractable from the body blob?
   **Blocks D11.**
-- **§7** — `WHERE CURRENT OF` on a named DSQL cursor. **Blocks D6.**
-- **§1.4** — cursor interleaving verified on FB5; confirm on **FB3/FB4**. **Blocks D6.**
+- ~~**§7** — `WHERE CURRENT OF` on a named DSQL cursor.~~ **RESOLVED (§15.5 [12]):** unsupported cross-context
+  (SQL -504) — a §F boundary, surfaced as an honest step error; not in D6's DoD.
+- ~~**§1.4** — cursor interleaving verified on FB5; confirm on **FB3/FB4**.~~ **RESOLVED (§15.5 [11]):** FB3 +
+  FB5 verified; FB4 unverified (no instance).
 - **§12.8** — `DECFLOAT` / `INT128` / `TIME ZONE` / array round-trip fidelity through the driver. **Blocks
   FB4+ support of D2.**
 
@@ -1038,3 +1047,36 @@ set is therefore empty, which would drop the `INTO` write-back. **Resolution:** 
 nothing, never a wrong narrow set (gotcha #238). Precise narrowing stays in force for every statement whose
 refs the binder does surface. (A future binder deepening that surfaces reused-`SELECT`/`INTO` refs would let
 the fallback stop firing — pinned by `ReadWriteSetAnalyzerTests.SelectInto_SurfacesNoLocalRefs_*`.)
+
+### 15.5 D6 — Cursor Bridge (driver probes + fidelity, FB3 @ 4050 + FB5 @ 3050)
+
+Probes run before implementing D6 (managed driver, `FirebirdClient` 10.3.4). **FB4 unavailable** (only FB3.0 +
+FB5.0 installed) — recorded unverified, same posture as P2's FB2.5.
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **[11]** | Cursor interleaving on **FB3** (harness stmt while a cursor is open; resume; two cursors at once) | **all SUCCESS** — mirrors FB5 §15.3 [1]–[4] | **Cursor Bridge feasible on FB3 and FB5.** FB4 unverified (no instance). |
+| **[12]** | `WHERE CURRENT OF <name>` on a separately-opened DSQL cursor | **fails** — SQL -504 "Cursor … not found in the current context"; `FbCommand.CursorName` not settable | Positioned DML on a bridged cursor is **not** supportable cross-context — a §F boundary (§7). Not in D6's DoD; a body `WHERE CURRENT OF` surfaces as an honest step-level error. |
+| **[13]** | Does the binder surface local refs for a `FOR SELECT` query? | **bare** refs yes (`role=Variable/Parameter`, in-query); **colon `:name`** no (a single `Parameter` token, #238) | Point B: bare refs *are* surfaced — but see the finding below. |
+
+**Finding (drove the design — §F "verify, don't infer").** The first cut rewrote **every** frame reference the
+binder surfaced (bare + colon) to a `?` parameter. Live fidelity caught it: a routine that both
+`RETURNS (LINE_NO …)` **and** does `SELECT LINE_NO …` has the binder resolve the SELECT-list **column**
+`LINE_NO` to the output **parameter** (locals shadow columns in its resolution order), so the column was
+rewritten to `?` → `SELECT ?, …` → **SQL -804 "Data type unknown"**. **Resolution:** `CursorBridge` rewrites
+**only the colon/`@` parameter form** (`:name`/`@name` — a `Parameter` token, Firebird's *unambiguous*
+variable-reference syntax in a query, and a native DSQL bind once extracted). A **bare** identifier in a query
+is a **column** in DSQL and is left verbatim — matching Firebird's own disambiguation. A bare local ref that
+Firebird would resolve as a variable is rare, ambiguous, and surfaces as an honest step-level "column unknown"
+if it cannot bind, never a silent wrong result (§F: correctness over reach). Gotcha #239.
+
+**Fidelity (simulated vs real, FB5 lab — the mandated §2.1 proof).** The real `FirebirdDebugExecutor` + Cursor
+Bridge drove `DebugSession` through the two new lab cursor procs; outputs compared to real execution.
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **[14]** | `SP_DBG_CURSOR(1000)` — single `FOR SELECT` over `ORDER_ITEMS`, **fully stepped** (Step Into per row) | sim `(1,20,20),(2,25.5,45.5)` == real; 10 steps, `Completed` | Per-step real-cursor fetch; `:P_ORDER` bound; INTO targets land in the frame; running-sum body correct. |
+| **[15]** | `SP_DBG_CURSOR(1001)` | sim `(1,20,20)` == real | Second parameter value; single-row cursor. |
+| **[16]** | `SP_DBG_NESTED` — nested `FOR SELECT` (outer `ORDERS`, inner `ORDER_ITEMS WHERE ORDER_ID = :V_OID`) | sim `(1000,2),(1001,1)` == real | **Two cursors open simultaneously**; inner cursor injects the outer frame's local; DoD met. |
+
+*(The `20` vs `20.00` display difference is numeric scale only — the values are equal.)*

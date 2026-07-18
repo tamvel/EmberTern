@@ -283,6 +283,17 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
 - **Weryfikacja.** **Lab-mandatory**: a routine looping over a lab table, simulated vs real execution,
   identical results. Nested-loop case included.
 - **Sesje: 2.**
+- **STATUS — D6 COMPLETE (2026-07-18; in-app stepping UX awaits user confirmation).** Probes first: FB3+FB5
+  interleaving verified live (FB4 no instance); `WHERE CURRENT OF` unsupported cross-context (SQL -504) → a §F
+  boundary, honest step error, out of DoD (spec §15.5). **D6a** (added, not in the original brief): additive
+  AST `ForSelectStatement.IntoTargets` + `CursorName` (Contract #1 — structure belongs in the AST, not a
+  token-scan in the Firebird layer). **D6b**: pure Core `CursorBridge` (`Build(source, loop) →
+  CursorQueryPlan`, mirrors `HarnessBuilder`) + Firebird `CursorHandle : IDebugCursor` (real `FbDataReader`
+  held open, **per-wire-op** locking #236) + `OpenCursor` glue. **§F correction (live -804):** rewrite **only**
+  the `:name`/`@name` form (a bare name is a column — a `SELECT LINE_NO` shadowing `RETURNS (LINE_NO)` broke
+  otherwise; gotcha #239). Lab zoo +`SP_DBG_CURSOR`/`SP_DBG_NESTED`; sim-vs-real proven incl. a fully-stepped
+  run + nested cursors. Build 0/0; **4797 green** (+11); smoke clean. **`DECLARE CURSOR` explicit
+  OPEN/FETCH/CLOSE + `WHERE CURRENT OF` support are follow-ups, not D6.**
 
 ---
 
