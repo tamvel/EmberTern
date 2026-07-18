@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using EmberTern.Core.Sql.Language.Ast;
+using EmberTern.Core.Sql.Language.Semantics;
 
 namespace EmberTern.Core.Sql.Debugging;
 
@@ -27,6 +28,7 @@ public sealed class DebugSession
     private readonly string _rootName;
     private readonly IReadOnlyDictionary<string, object?>? _rootValues;
     private readonly string? _rootSource;
+    private readonly SemanticModel? _rootModel;
     private readonly List<Frame> _frames = new();
     private readonly BreakpointSet _breakpoints = new();
     private readonly List<IReadOnlyDictionary<string, object?>> _emittedRows = new();
@@ -43,13 +45,15 @@ public sealed class DebugSession
         IDebugExecutor executor,
         string? rootName = null,
         IReadOnlyDictionary<string, object?>? rootValues = null,
-        string? rootSource = null)
+        string? rootSource = null,
+        SemanticModel? rootModel = null)
     {
         _rootBody = rootBody ?? throw new ArgumentNullException(nameof(rootBody));
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _rootName = string.IsNullOrEmpty(rootName) ? "(anonymous block)" : rootName!;
         _rootValues = rootValues;
         _rootSource = rootSource;
+        _rootModel = rootModel;
         State = DebugState.Ready;
         StopReason = StopReason.NotStarted;
     }
@@ -100,7 +104,7 @@ public sealed class DebugSession
         }
 
         PushFrame(_rootName, _rootBody, parent: null, lexicalParent: null, callSite: null,
-            initialValues: _rootValues, outputParameterNames: null, source: _rootSource);
+            initialValues: _rootValues, outputParameterNames: null, source: _rootSource, model: _rootModel);
         _currentStep = AdvanceToNextStepPoint();
         if (_currentStep is null)
         {
@@ -289,7 +293,7 @@ public sealed class DebugSession
                 {
                     AdvanceSequence(frame); // consume the call in the caller's block
                     PushFrame(routine.Name, routine.Body, parent: frame, lexicalParent: routine.LexicalParent,
-                        callSite: step, routine.InitialValues, routine.OutputParameterNames, routine.Source);
+                        callSite: step, routine.InitialValues, routine.OutputParameterNames, routine.Source, routine.Model);
                     return false;
                 }
 
@@ -360,10 +364,10 @@ public sealed class DebugSession
     private void PushFrame(
         string name, BlockStatement body, Frame? parent, Frame? lexicalParent, IExecutableStatement? callSite,
         IReadOnlyDictionary<string, object?>? initialValues, IReadOnlyList<string>? outputParameterNames,
-        string? source)
+        string? source, SemanticModel? model)
     {
         var frame = new Frame(
-            _nextFrameId++, name, body, parent, lexicalParent, callSite, initialValues, outputParameterNames, source);
+            _nextFrameId++, name, body, parent, lexicalParent, callSite, initialValues, outputParameterNames, source, model);
         _frames.Add(frame);
         _executor.EnterFrameSavepoint(frame.SavepointName); // SAVEPOINT on frame entry (§4.5)
     }

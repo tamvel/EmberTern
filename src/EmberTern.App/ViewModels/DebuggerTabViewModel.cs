@@ -103,6 +103,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         ExecutedSql = new ObservableCollection<DebugExecutedSqlRowViewModel>();
         Watches = new ObservableCollection<WatchRowViewModel>();
         CallStack = new ObservableCollection<DebugFrameRowViewModel>();
+        Breadcrumbs = new ObservableCollection<string>();
         StatusText = UiStrings.DebuggerLaunchPreparing;
         LoadWatches();
     }
@@ -140,10 +141,23 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     private readonly DebugVariableGroupViewModel _parametersGroup;
     private readonly DebugVariableGroupViewModel _localsGroup;
 
-    // Change-highlighting state: the frame's values as of the previous pause, and the frame it belonged to.
-    // A new frame identity resets the baseline so the first pause in a frame marks nothing "changed".
+    // Change-highlighting state: the innermost frame's values as of the previous STEP, and the frame they
+    // belonged to. A new innermost-frame identity resets the baseline so the first pause in a frame marks
+    // nothing "changed". Only the step path updates this — browsing a caller frame never disturbs it.
     private System.Collections.Generic.Dictionary<string, object?>? _previousValues;
     private int? _previousFrameId;
+
+    // The frame the Variables roster (row identity) currently reflects. Separate from the change baseline
+    // above: browsing to a caller rebuilds the roster for that frame, but must NOT reset the step baseline.
+    private int? _rosterFrameId;
+
+    // The frame the UI is inspecting (spec §5.2) — drives SourceText, the current-line marker and the
+    // Variables roster. Defaults to the innermost (current) frame on every pause; the call stack / breadcrumbs
+    // / Ctrl+Alt+Up/Down repoint it to a caller without touching the engine (navigation, not execution).
+    private Frame? _selectedFrame;
+    // Guards the two selection controls (call-stack SelectedItem, breadcrumb SelectedIndex) from re-entering
+    // selection while ApplySelectedFrame syncs them — the frame is the one truth, the controls only mirror it.
+    private bool _syncingFrameSelection;
 
     /// <summary>The Executed SQL audit log (D5, spec §10.3) — every expression evaluation / Immediate run,
     /// newest first. The trust anchor of a simulator (§F): the generated harness SQL is kept visible.</summary>
@@ -185,13 +199,49 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     public bool HasWatches => Watches.Count > 0;
 
     /// <summary>The call stack (Stage X / D8, spec §5.2) — frames innermost-first, rebuilt each pause. A
-    /// callee reached by Step Into carries the simulated-frame indicator (§5.3). Presentation-only: it reads
-    /// the engine's <see cref="DebugSession.CallStack"/>; frame-selection navigation (repoint source +
-    /// variables), Peek Frame and Breadcrumbs are a follow-up (seam c part 2).</summary>
+    /// callee reached by Step Into carries the simulated-frame indicator (§5.3). Selecting a row repoints the
+    /// editor source, current-line marker and Variables to that frame (<see cref="SelectedFrameRow"/>); the
+    /// breadcrumb bar and Ctrl+Alt+Up/Down are the other two ways in — all route through the one
+    /// <see cref="SelectFrame"/>. It reads the engine's <see cref="DebugSession.CallStack"/>; navigation never
+    /// touches the session (it is structural, not execution).</summary>
     public ObservableCollection<DebugFrameRowViewModel> CallStack { get; }
 
     /// <summary>True while there is a call stack to show (a live paused session with at least one frame).</summary>
     public bool HasCallStack => CallStack.Count > 0;
+
+    /// <summary>The selected call-stack row (bound two-way to the Call Stack list's SelectedItem). A user pick
+    /// routes to <see cref="SelectFrame"/>; a programmatic sync (a new pause / breadcrumb / keyboard) sets it
+    /// under <see cref="_syncingFrameSelection"/>.</summary>
+    [ObservableProperty]
+    private DebugFrameRowViewModel? _selectedFrameRow;
+
+    /// <summary>The id of the inspected frame (spec §5.2) — the current-line marker + Variables reflect it.</summary>
+    [ObservableProperty]
+    private int _selectedFrameId = -1;
+
+    /// <summary>The breadcrumb path (Stage X / D8) — the call stack read <b>outermost→innermost</b>
+    /// (ROOT › … › current), mirroring the stack (the reverse of <see cref="CallStack"/>). Fed to the shared
+    /// <see cref="EmberTern.App.Controls.BreadcrumbBar"/>; clicking a crumb selects that frame.</summary>
+    public ObservableCollection<string> Breadcrumbs { get; }
+
+    /// <summary>The selected breadcrumb index (bound two-way to the breadcrumb bar). Maps to a frame through
+    /// the outermost→innermost order; a user pick routes to <see cref="SelectFrame"/>.</summary>
+    [ObservableProperty]
+    private int _selectedBreadcrumbIndex = -1;
+
+    partial void OnSelectedFrameRowChanged(DebugFrameRowViewModel? value)
+    {
+        if (_syncingFrameSelection || value is null) return;
+        SelectFrame(value.FrameId);
+    }
+
+    partial void OnSelectedBreadcrumbIndexChanged(int value)
+    {
+        if (_syncingFrameSelection || value < 0 || value >= Breadcrumbs.Count) return;
+        // Breadcrumbs are outermost→innermost; CallStack is innermost-first. Map across.
+        int callIndex = CallStack.Count - 1 - value;
+        if (callIndex >= 0 && callIndex < CallStack.Count) SelectFrame(CallStack[callIndex].FrameId);
+    }
 
     /// <summary>The new-watch input.</summary>
     [ObservableProperty]
@@ -242,8 +292,17 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     public int? CurrentStart { get; private set; }
     public int? CurrentLength { get; private set; }
 
-    /// <summary>The breakpoint step-point offsets — the BreakpointMargin reads this.</summary>
-    public IReadOnlyCollection<int> BreakpointOffsets => _breakpoints;
+    /// <summary>The breakpoint step-point offsets — the BreakpointMargin reads this. Breakpoints belong to the
+    /// launched (root) routine; while the editor shows a <em>different</em> frame's source (a stepped-into
+    /// callee, or a selected caller other than the root) the offsets are in a different coordinate space, so
+    /// none are surfaced (nested-routine breakpoints are a later milestone — D12). Stepping still works fully;
+    /// only breakpoint editing + Run-To-Cursor are root-source-scoped.</summary>
+    public IReadOnlyCollection<int> BreakpointOffsets => IsViewingRootSource ? _breakpoints : Array.Empty<int>();
+
+    // True while the editor shows the launched routine's own source — i.e. no frame is selected yet, or the
+    // selected frame IS the root (its body is the parsed root body). Breakpoints + Run-To-Cursor act only then.
+    private bool IsViewingRootSource
+        => _selectedFrame is null || (_body is not null && ReferenceEquals(_selectedFrame.Body, _body));
 
     /// <summary>Raised when the current-statement marker or the breakpoint set changes, so the view can
     /// repaint the renderers (via <c>TextView.Redraw()</c>, never <c>InvalidateVisual()</c> — gotcha #223).</summary>
@@ -413,7 +472,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// A no-op when the offset does not map to a step point.</summary>
     public Task RunToCursorAsync(int caretOffset)
     {
-        if (!CanStep) return Task.CompletedTask;
+        if (!CanStep || !IsViewingRootSource) return Task.CompletedTask; // targets root step points (see above)
         var target = StepPointAtOrAfter(caretOffset);
         return target is null ? Task.CompletedTask : RunStepAsync(s => s.RunToCursor(target.Value));
     }
@@ -434,7 +493,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         {
             Phase = DebuggerPhase.Faulted;
             StatusText = string.Format(CultureInfo.CurrentCulture, UiStrings.DebuggerStatusFaultedFormat, ex.Message);
-            RefreshVariables();
+            ClearVariables(); // an unexpected engine crash: no live frame to inspect
             ResetWatches();
             return;
         }
@@ -644,6 +703,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// maps to no step point is a no-op.</summary>
     public void ToggleBreakpointAt(int caretOffset)
     {
+        if (!IsViewingRootSource) return; // breakpoints are the root routine's; a callee/caller view is D12
         var target = StepPointAtOrAfter(caretOffset);
         if (target is null) return;
 
@@ -703,22 +763,26 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         switch (session.State)
         {
             case DebugState.Paused:
-                var step = session.CurrentStatement;
-                SetCurrentMarker(step?.Start, step?.Length);
+                // Reset the inspected frame to the innermost (current) frame on every pause; the call stack /
+                // breadcrumbs / keyboard repoint it afterwards without a step.
+                _selectedFrame = session.CurrentFrame;
                 Phase = DebuggerPhase.Paused;
+                var step = session.CurrentStatement;
+                int line = step is null ? 0 : LineOf(session.CurrentFrame?.Source ?? _source, step.Start);
                 StatusText = string.Format(
                     CultureInfo.CurrentCulture, UiStrings.DebuggerStatusPausedFormat,
-                    step is null ? 0 : LineOf(step.Start), StopReasonText(session.StopReason));
-                break;
+                    line, StopReasonText(session.StopReason));
+                RebuildCallStack();
+                RebuildBreadcrumbs();
+                if (session.CurrentFrame is { } current) ApplySelectedFrame(current, computeChanges: true);
+                return;
 
             case DebugState.Completed:
-                SetCurrentMarker(null, null);
                 Phase = DebuggerPhase.Completed;
                 StatusText = UiStrings.DebuggerStatusCompleted;
                 break;
 
             case DebugState.Faulted:
-                SetCurrentMarker(null, null);
                 Phase = DebuggerPhase.Faulted;
                 var err = session.CurrentError;
                 StatusText = string.Format(
@@ -728,18 +792,20 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
             default:
                 Phase = DebuggerPhase.Busy;
-                break;
+                return;
         }
 
-        RefreshVariables();
-        RebuildCallStack();
+        // Completed / Faulted: no live stack to inspect.
+        SetCurrentMarker(null, null);
+        ClearVariables();
     }
 
-    // Rebuilds the Call Stack panel from the engine's call stack (innermost-first). Each frame shows its
-    // routine, its position line (the current statement for the innermost frame, the call site for a caller —
-    // computed against THAT frame's own source, spec §5.2) and the simulated-frame indicator (a callee reached
-    // by Step Into = interpreted, §5.3). Cleared when the session is not paused (no live stack). Presentation
-    // only — it never touches the session; selecting a frame to repoint the editor/variables is seam c part 2.
+    // Rebuilds the Call Stack rows from the engine's call stack (innermost-first). Each frame shows its
+    // routine, its position line (the current statement for the innermost frame; for a caller, the call site
+    // of its child — the statement in THIS frame's own source that pushed the frame below it, spec §5.2) and
+    // the simulated-frame indicator (a callee reached by Step Into = interpreted, §5.3). Cleared when the
+    // session is not paused (no live stack). It reads the session, never drives it; selection is applied by
+    // ApplySelectedFrame (the one place source / marker / variables / selection are set together).
     private void RebuildCallStack()
     {
         var session = Session;
@@ -756,7 +822,9 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         {
             var frame = stack[i];
             bool isCurrent = i == 0;
-            int offset = isCurrent ? currentStart : (frame.CallSite?.Start ?? -1);
+            // Position in THIS frame's own source: innermost → the current step; a caller → the call site of
+            // its child (stack[i-1] was pushed by a statement in stack[i]).
+            int offset = isCurrent ? currentStart : (stack[i - 1].CallSite?.Start ?? -1);
             int line = offset >= 0 ? LineOf(frame.Source, offset) : 0;
             string lineText = line > 0
                 ? string.Format(CultureInfo.CurrentCulture, UiStrings.DebuggerCallStackLineFormat, line)
@@ -767,52 +835,178 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         OnPropertyChanged(nameof(HasCallStack));
     }
 
-    // Refreshes the Variables panel after a pause. The roster (row identity) is rebuilt only when the frame
-    // changes; within a frame the rows are updated IN PLACE (so pins / expansion / selection survive a step),
-    // with change-highlighting computed against the previous pause's values.
-    private void RefreshVariables()
+    // Builds the breadcrumb path — the call stack read outermost→innermost (the reverse of CallStack), so it
+    // reads left-to-right as the call chain (ROOT › … › current). Mirrors the stack; a follow of the same data.
+    private void RebuildBreadcrumbs()
     {
-        var frame = Session?.CurrentFrame;
-        if (frame is null || _model is null)
+        Breadcrumbs.Clear();
+        var session = Session;
+        if (session is null || session.State != DebugState.Paused)
+        {
+            SelectedBreadcrumbIndex = -1;
+            return;
+        }
+        var stack = session.CallStack; // innermost first
+        for (int i = stack.Count - 1; i >= 0; i--) Breadcrumbs.Add(stack[i].RoutineName);
+    }
+
+    // ── Frame selection (spec §5.2 — the call stack, breadcrumbs and Ctrl+Alt+Up/Down all route here) ──────
+
+    /// <summary>Ctrl+Alt+Up (delta -1) / Ctrl+Alt+Down (delta +1): moves the frame selection up/down the Call
+    /// Stack list (which shows the innermost frame at the top). A no-op with no stack. Sets the selected row,
+    /// whose change handler routes to <see cref="SelectFrame"/>.</summary>
+    public void MoveFrameSelection(int delta)
+    {
+        if (CallStack.Count == 0) return;
+        int index = SelectedFrameRow is null ? 0 : CallStack.IndexOf(SelectedFrameRow);
+        if (index < 0) index = 0;
+        int next = Math.Clamp(index + delta, 0, CallStack.Count - 1);
+        if (next != index) SelectedFrameRow = CallStack[next];
+    }
+
+    // A user picked a frame (call-stack row / breadcrumb / keyboard). Repoints the inspection view to it; a
+    // no-op when not paused or already selected. Navigation only — it never touches the session.
+    private void SelectFrame(int frameId)
+    {
+        if (_syncingFrameSelection) return;
+        var session = Session;
+        if (session is null || session.State != DebugState.Paused) return;
+        var frame = FindFrame(session, frameId);
+        if (frame is null || ReferenceEquals(frame, _selectedFrame)) return;
+        ApplySelectedFrame(frame, computeChanges: false);
+    }
+
+    // The ONE place source + current-line marker + Variables + both selection controls are set together, so a
+    // frame and everything mirroring it can never disagree. computeChanges is true only on a step pause (the
+    // innermost frame) — browsing a caller shows values with no change-highlight and never disturbs the step
+    // baseline.
+    private void ApplySelectedFrame(Frame frame, bool computeChanges)
+    {
+        _selectedFrame = frame;
+        SelectedFrameId = frame.Id;
+
+        var (offset, length) = FramePosition(frame);
+        // Source first (the view sets the editor text synchronously on the property change), then the marker
+        // (its offset is in THIS frame's source, so the renderer reads the freshly-set document).
+        SourceText = frame.Source ?? _source ?? string.Empty;
+        SetCurrentMarker(offset, length);
+        ShowFrameVariables(frame, computeChanges);
+
+        _syncingFrameSelection = true;
+        SelectedFrameRow = CallStack.FirstOrDefault(r => r.FrameId == frame.Id);
+        SelectedBreadcrumbIndex = BreadcrumbIndexForFrame(frame.Id);
+        _syncingFrameSelection = false;
+    }
+
+    // The frame's current execution position, in its OWN source's coordinate space: the innermost frame → the
+    // current step point; a caller → the call site of its child (a statement in this frame). Null when unknown.
+    private (int? Offset, int? Length) FramePosition(Frame frame)
+    {
+        var session = Session;
+        if (session is null) return (null, null);
+        if (ReferenceEquals(frame, session.CurrentFrame))
+        {
+            var step = session.CurrentStatement;
+            return (step?.Start, step?.Length);
+        }
+        var stack = session.CallStack; // innermost first
+        for (int i = 0; i < stack.Count; i++)
+        {
+            if (stack[i].Id == frame.Id)
+            {
+                var callSite = i > 0 ? stack[i - 1].CallSite : null; // the call in THIS frame that pushed its child
+                return (callSite?.Start, callSite?.Length);
+            }
+        }
+        return (null, null);
+    }
+
+    private int BreadcrumbIndexForFrame(int frameId)
+    {
+        // CallStack innermost-first → breadcrumb index (outermost→innermost) = Count-1 - callStackIndex.
+        for (int i = 0; i < CallStack.Count; i++)
+        {
+            if (CallStack[i].FrameId == frameId) return CallStack.Count - 1 - i;
+        }
+        return -1;
+    }
+
+    private static Frame? FindFrame(DebugSession session, int frameId)
+    {
+        foreach (var f in session.CallStack)
+        {
+            if (f.Id == frameId) return f;
+        }
+        return null;
+    }
+
+    /// <summary>Peek Frame (spec §5): a frame's routine source + the line it is currently at, for an inline
+    /// preview (double-click a call-stack row) without changing the inspected frame. Null when not paused /
+    /// the frame is gone. Pure read of the session's frames.</summary>
+    public DebugFramePeek? GetFramePeek(int frameId)
+    {
+        var session = Session;
+        if (session is null || session.State != DebugState.Paused) return null;
+        var frame = FindFrame(session, frameId);
+        if (frame is null) return null;
+        string source = frame.Source ?? _source ?? string.Empty;
+        var (offset, _) = FramePosition(frame);
+        int line = offset is { } o ? LineOf(source, o) : 0;
+        return new DebugFramePeek(frame.RoutineName, source, line);
+    }
+
+    // Shows a frame's variables. The roster (row identity) is rebuilt only when the inspected frame changes;
+    // within a frame the rows are updated IN PLACE (so pins / expansion / selection survive). The roster comes
+    // from the frame's OWN model (its declared parameters + locals, spec §5.2), the frame holds the live
+    // values. computeChanges (the step path, innermost frame) highlights values that changed since the frame's
+    // previous step and re-baselines; browsing a caller (computeChanges false) never disturbs the step baseline.
+    private void ShowFrameVariables(Frame frame, bool computeChanges)
+    {
+        var model = frame.Model ?? _model;
+        if (model is null)
         {
             ClearVariables();
             return;
         }
 
-        // A new frame identity → fresh roster + no change baseline (nothing is "changed" on first entry).
-        if (frame.Id != _previousFrameId)
+        // A different inspected frame → fresh roster.
+        if (frame.Id != _rosterFrameId)
         {
-            BuildRoster(frame);
-            _previousFrameId = frame.Id;
-            _previousValues = null;
+            BuildRoster(model);
+            _rosterFrameId = frame.Id;
         }
 
+        bool haveBaseline = computeChanges && _previousValues is not null && _previousFrameId == frame.Id;
         foreach (var row in Variables)
         {
             bool hasValue = frame.TryResolveValue(row.Name, out var value);
-            bool changed = _previousValues is not null
-                && _previousValues.TryGetValue(row.Name, out var prev)
+            bool changed = haveBaseline
+                && _previousValues!.TryGetValue(row.Name, out var prev)
                 && !ValuesEqual(prev, hasValue ? value : null);
             row.Update(hasValue, value, changed);
         }
 
-        // The baseline for the NEXT pause is this pause's values.
-        _previousValues = new System.Collections.Generic.Dictionary<string, object?>(System.StringComparer.OrdinalIgnoreCase);
-        foreach (var row in Variables)
+        if (computeChanges)
         {
-            _previousValues[row.Name] = frame.TryResolveValue(row.Name, out var v) ? v : null;
+            // The step baseline for the NEXT step is this frame's current values.
+            _previousValues = new System.Collections.Generic.Dictionary<string, object?>(System.StringComparer.OrdinalIgnoreCase);
+            foreach (var row in Variables)
+            {
+                _previousValues[row.Name] = frame.TryResolveValue(row.Name, out var v) ? v : null;
+            }
+            _previousFrameId = frame.Id;
         }
 
         RebuildVariableGroups();
     }
 
-    // Rebuilds the flat roster from the semantic model (parameters first in declaration order, then locals) —
-    // the model is the roster, the frame holds the live values. A variable present in the frame but declared
-    // nowhere in the model is not shown (the declared symbols are the roster).
-    private void BuildRoster(Frame frame)
+    // Rebuilds the flat roster from the frame's semantic model (parameters first in declaration order, then
+    // locals) — the model is the roster, the frame holds the live values. A variable present in the frame but
+    // declared nowhere in the model is not shown (the declared symbols are the roster).
+    private void BuildRoster(SemanticModel model)
     {
         Variables.Clear();
-        var symbols = _model!.AllSymbols
+        var symbols = model.AllSymbols
             .Where(s => s is ParameterSymbol or VariableSymbol)
             .OrderBy(s => s is ParameterSymbol ? 0 : 1)
             .ThenBy(s => s.DeclarationSpan?.Start ?? int.MaxValue);
@@ -978,7 +1172,15 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         VariableGroups.Clear();
         _previousValues = null;
         _previousFrameId = null;
+        _rosterFrameId = null;
+        _selectedFrame = null;
+        SelectedFrameId = -1;
         CallStack.Clear();
+        Breadcrumbs.Clear();
+        _syncingFrameSelection = true;
+        SelectedFrameRow = null;
+        SelectedBreadcrumbIndex = -1;
+        _syncingFrameSelection = false;
         OnPropertyChanged(nameof(HasVariables));
         OnPropertyChanged(nameof(HasCallStack));
     }
@@ -1033,3 +1235,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
     public async ValueTask DisposeAsync() => await TeardownRunAsync().ConfigureAwait(false);
 }
+
+/// <summary>The content of a Peek Frame preview (Stage X / D8, spec §5): a frame's routine name, its full
+/// source and the 1-based line it is currently executing (0 = unknown).</summary>
+public sealed record DebugFramePeek(string RoutineName, string Source, int CurrentLine);

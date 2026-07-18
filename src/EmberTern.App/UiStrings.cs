@@ -1753,6 +1753,7 @@ internal static class UiStrings
     public const string DebuggerCallStackSimulatedGlyph = "△";
     public const string DebuggerCallStackSimulatedTooltip =
         "Simulated frame — reached by Step Into (interpreted), which can differ from real execution.";
+    public const string DebuggerCallStackPeekHeaderFormat = "{0} — line {1}";
     // Expression evaluation — Evaluate / Immediate / Executed SQL (D5, spec §9.5 / §10.3).
     public const string DebuggerImmediateHeader = "Immediate / Executed SQL";
     public const string DebuggerImmediateWatermark = "Evaluate an expression against the current frame…";

@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -29,6 +30,7 @@ public partial class DebuggerTabView : UserControl
     private BreakpointMargin? _margin;
     private DebuggerTabViewModel? _vm;
     private bool _attached;
+    private Popup? _peekPopup; // Peek Frame flyout, created lazily on first double-click of a call-stack row
 
     // Bottom tabbed panel (Immediate / Executed SQL / Watches) collapse — same mechanism as the SQL results
     // panel (MainWindow.ApplyResultsRowForActiveTab): ApplyBottomPanel is the ONE re-normalization point, and
@@ -235,6 +237,7 @@ public partial class DebuggerTabView : UserControl
         if (_vm is null) return;
         bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        bool alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
 
         switch (e.Key)
         {
@@ -247,9 +250,110 @@ public partial class DebuggerTabView : UserControl
             case Key.F11: Invoke(_vm.StepIntoCommand); break;
             case Key.F9 when shift: EvaluateSelection(); break;
             case Key.F9: ToggleBreakpointAtCaret(); break;
+            // Ctrl+Alt+Up/Down move the frame selection up/down the call stack (VS/Rider-standard, spec §5.2).
+            case Key.Up when ctrl && alt: _vm.MoveFrameSelection(-1); break;
+            case Key.Down when ctrl && alt: _vm.MoveFrameSelection(+1); break;
             default: return;
         }
         e.Handled = true;
+    }
+
+    // Peek Frame (spec §5): double-click a call-stack row to preview that frame's source inline — without
+    // changing which frame the editor is pinned to (single-click already navigates). A transient, light-
+    // dismissed card (the same visual pattern as NavigationController's Peek Definition, kept debugger-local
+    // because that peek is private to the editor navigation controller).
+    private void OnCallStackDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (_vm is null) return;
+        var row = (e.Source as Visual)?.FindAncestorOfType<ListBoxItem>()?.DataContext as DebugFrameRowViewModel;
+        if (row is null) return;
+        var peek = _vm.GetFramePeek(row.FrameId);
+        if (peek is null) return;
+        ShowFramePeek(peek);
+        e.Handled = true;
+    }
+
+    private void ShowFramePeek(DebugFramePeek peek)
+    {
+        EnsurePeekPopup();
+        string header = peek.CurrentLine > 0
+            ? string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                UiStrings.DebuggerCallStackPeekHeaderFormat, peek.RoutineName, peek.CurrentLine)
+            : peek.RoutineName;
+        _peekPopup!.Child = BuildPeekCard(header, peek.Source);
+        _peekPopup.IsOpen = false;
+        _peekPopup.IsOpen = true;
+    }
+
+    private void EnsurePeekPopup()
+    {
+        if (_peekPopup is not null) return;
+        _peekPopup = new Popup
+        {
+            PlacementTarget = this,
+            Placement = PlacementMode.Center,
+            IsLightDismissEnabled = true,
+        };
+        ((ISetLogicalParent)_peekPopup).SetParent(this);
+    }
+
+    private Control BuildPeekCard(string header, string source)
+    {
+        var stack = new StackPanel { Spacing = 4 };
+        stack.Children.Add(new TextBlock
+        {
+            Text = header,
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 11,
+            Foreground = Brush("ForegroundBrush"),
+        });
+        var body = new TextBox
+        {
+            Text = source,
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.NoWrap,
+            FontFamily = new FontFamily("Cascadia Code,Consolas,Menlo,monospace"),
+            FontSize = 12,
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Foreground = Brush("ForegroundBrush"),
+        };
+        var scroll = new ScrollViewer
+        {
+            Content = body,
+            MaxHeight = 320,
+            MaxWidth = 640,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+        stack.Children.Add(scroll);
+        var border = new Border
+        {
+            Child = stack,
+            Padding = new Thickness(10),
+            BorderThickness = new Thickness(1),
+            Background = Brush("ElevatedPanelBrush"),
+            BorderBrush = Brush("BorderBrush"),
+        };
+        border.AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (e.Key == Key.Escape) { ClosePeek(); e.Handled = true; }
+        }, RoutingStrategies.Tunnel);
+        return border;
+    }
+
+    // Resolve a theme brush against the current variant (mirrors ApplyEditorTheme) — the peek card is
+    // transient, so a snapshot brush is fine (no live theme-toggle re-bind needed).
+    private IBrush? Brush(string key)
+    {
+        var theme = ActualThemeVariant;
+        return Application.Current?.Resources.TryGetResource(key, theme, out var res) == true && res is IBrush b ? b : null;
+    }
+
+    private void ClosePeek()
+    {
+        if (_peekPopup is { IsOpen: true } p) p.IsOpen = false;
     }
 
     // Evaluate (Shift+F9, spec §9.7): evaluate the current selection — or, if there is none, the identifier

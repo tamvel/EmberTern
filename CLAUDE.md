@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1 DONE, D2 COMPLETE — seams (a)+(b)+(c) DONE + live-fidelity-verified (2026-07-17).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D8 DONE (D2 live-fidelity-verified; D8 = call stack + nested stored routines + frame navigation, complete 2026-07-18, awaits visual confirmation). Next: D9 (local procedures & functions — the flagship).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -579,9 +579,30 @@ noted.
   to the VM (it lives in the executor's per-routine context, not the VM's root model), so it + Breadcrumbs
   (shared editor feature) + Peek Frame are seam (c) part 2.** Build 0/0; +1 `DebuggerTabVmTests` (126-test
   debugger subset green; full run hangs in this env — run manually); smoke clean.
-  **Next: D8 seam (c) part 2** — surface per-frame model roster to the VM → frame-selection repoints
-  source+variables; Breadcrumbs (build as the shared editor feature); Peek Frame (reuse Peek Definition);
-  `Ctrl+Alt+Up/Down` frame nav. Gotchas #241/#242. See [[feedback-debugger-ux-polish-backlog]].
+  **D8 seam (c) part 2 — frame navigation DONE (2026-07-18; awaits visual confirmation). D8 IS COMPLETE.**
+  The call stack is now navigable: selecting a frame (Call Stack row / breadcrumb / `Ctrl+Alt+Up/Down`)
+  repoints the editor **source**, current-line **marker** and **Variables roster** to *that* frame (spec §5.2),
+  and the editor auto-follows the innermost frame after a Step Into (the reported "editor stayed on the parent"
+  gap). **Per-frame model surfaced (Contract #1 — no re-parse):** the callee's `SemanticModel` is threaded onto
+  the frame exactly as `Source` already was — new `Frame.Model` / `DebugRoutine.Model` / `DebugSession(rootModel)`,
+  filled by the launcher (`spec.Model`) for the root and by `ResolveRoutine` (the model it already built) for a
+  callee; the Variables panel projects **that frame's own** roster, so a callee's locals show and the caller's
+  don't. **The VM has ONE selection truth** (`ApplySelectedFrame`) that sets source + marker + variables + both
+  selection controls together (`SelectedFrameRow` ⇄ `SelectedBreadcrumbIndex`, guarded), so a frame and
+  everything mirroring it can't disagree; selection is **navigation only** — it never touches the session
+  (`_selectedFrame` resets to the innermost on every pause). **Caller line corrected** (seam-c-part-1 bug): a
+  caller's current line is the call site of its **child** (`stack[i-1].CallSite`, a statement in *this* frame's
+  own source), not the frame's own call site (which is in its *parent's* source) — see gotcha #243. **Breadcrumbs
+  = a genuinely shared, generic `EmberTern.App.Controls.BreadcrumbBar`** (segments + two-way `SelectedIndex`, no
+  debugger knowledge; the debugger is its first consumer), mirroring the stack outermost→innermost. **Peek Frame**
+  = double-click a call-stack row → a transient card previewing that frame's source (a debugger-local card, since
+  the editor's Peek Definition is private to `NavigationController`). **Breakpoints stay root-routine-scoped**
+  (`BreakpointOffsets`/`ToggleBreakpointAt`/`RunToCursorAsync` gated to `IsViewingRootSource`) — while the editor
+  shows a callee/other-caller source the offsets are a different coordinate space, so none are surfaced;
+  nested-routine breakpoints are D12. Stepping is unaffected. Build 0/0; **+5 `DebuggerTabVmTests`** (step-into
+  switches source+roster, caller-frame repoint+marker, `Ctrl+Alt+Up/Down` walk, root-scoped breakpoints, Peek);
+  full suite green (run manually — the full `dotnet test` hangs in this env, #94/#226); smoke clean. Gotchas
+  #241/#242/#243. See [[feedback-debugger-ux-polish-backlog]].
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

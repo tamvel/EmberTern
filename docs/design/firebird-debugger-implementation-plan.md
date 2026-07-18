@@ -352,9 +352,21 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
   used a stored-proc call as a scope-chain proxy was split into an honest stored (closed) + local (closure, D9
   mechanism) pair. Build 0/0; **4813 green** (+6); smoke clean. `ResolveRoutine` still returns null in prod →
   **no callee frame is pushed yet** (gotcha #233: staged, not a regression — recorded here + in CLAUDE.md).
-  **Next: seam (b)** — Firebird `ResolveRoutine` (multi-routine executor context: fetch/parse/metadata the
-  callee, evaluate arguments via the harness) + **lab fidelity** (nested procedures, simulated vs real); then
-  **seam (c)** — Call Stack panel + Breadcrumbs (shared) + frame nav + simulated-frame indicator + Peek Frame.
+- **STATUS — seam (b) DONE (2026-07-18).** Firebird `ResolveRoutine` (multi-routine executor context:
+  fetch/parse/metadata the callee, seed args via the harness) + **lab fidelity** proven (`ROOT→MID→LEAF`,
+  simulated == real). See CLAUDE.md for detail.
+- **STATUS — seam (c) DONE (2026-07-18; awaits visual confirmation). D8 IS COMPLETE.** Part 1: Call Stack panel
+  (display-only). Part 2: **frame navigation** — the call stack / breadcrumbs / `Ctrl+Alt+Up/Down` repoint the
+  editor source + current-line marker + Variables to the selected frame (spec §5.2), and the editor auto-follows
+  the innermost frame after Step Into. Per-frame roster surfaced by threading the callee `SemanticModel` onto
+  `Frame.Model` (Contract #1 — no re-parse; exactly as `Source` is threaded). One selection truth
+  (`ApplySelectedFrame`); navigation never touches the session. **Breadcrumbs = a generic shared
+  `EmberTern.App.Controls.BreadcrumbBar`** (the debugger is its first consumer). Peek Frame = a transient
+  double-click card. Breakpoints stay root-routine-scoped (a callee/other-caller view surfaces none — D12).
+  Caller-line bug fixed (child's `CallSite`, in this frame's own source — gotcha #243). +5 `DebuggerTabVmTests`;
+  build 0/0; full suite green (run manually — full `dotnet test` hangs, #94/#226); smoke clean. **DoD met: A→B
+  stack navigable; selecting a frame repoints editor + variables; breadcrumbs mirror the stack.** Next: **D9**
+  (local procedures & functions — the flagship). Gotchas #241/#242/#243.
 
 ---
 

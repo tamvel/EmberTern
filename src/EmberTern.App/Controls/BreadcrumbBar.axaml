@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:EmberTern.App.Controls"
+             x:Class="EmberTern.App.Controls.BreadcrumbBar"
+             x:DataType="controls:BreadcrumbBar">
+
+  <UserControl.Styles>
+    <!-- A crumb reads as plain text; the selected one is emphasised, the rest are subtle and only
+         gain the accent on hover — theme tokens only, no literals. -->
+    <Style Selector="Button.crumb">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="4,1" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+    </Style>
+    <Style Selector="Button.crumb:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Button.crumb:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.crumb.selected">
+      <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </UserControl.Styles>
+
+  <ItemsControl x:Name="Items">
+    <ItemsControl.ItemsPanel>
+      <ItemsPanelTemplate>
+        <StackPanel Orientation="Horizontal" />
+      </ItemsPanelTemplate>
+    </ItemsControl.ItemsPanel>
+    <ItemsControl.ItemTemplate>
+      <DataTemplate x:DataType="controls:BreadcrumbSegment">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="›" FontSize="11" Margin="1,0" VerticalAlignment="Center"
+                     Foreground="{DynamicResource SubtleForegroundBrush}"
+                     IsVisible="{Binding ShowSeparator}" />
+          <Button Classes="crumb" Classes.selected="{Binding IsSelected}"
+                  Content="{Binding Text}" Click="OnCrumbClick" />
+        </StackPanel>
+      </DataTemplate>
+    </ItemsControl.ItemTemplate>
+  </ItemsControl>
+</UserControl>

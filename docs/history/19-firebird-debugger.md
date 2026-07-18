@@ -1329,3 +1329,65 @@ primary value now — you SEE the A→B→C stack with the simulation indicator 
 Build 0/0; +1 `DebuggerTabVmTests` (`CallStack_ShowsRootFrame_WhilePaused_ClearedOnStop`; the debugger subset
 of 126 tests green — the full run hangs in this env, run manually); smoke clean. **Awaits the user's visual
 confirmation** (UI, per the QA rule).
+
+### D8 seam (c) part 2 — frame navigation (2026-07-18; awaits visual confirmation). **D8 IS COMPLETE.**
+
+The display-only panel becomes navigable. First real use of the Call Stack surfaced two gaps that share one
+cause: after a Step Into (1) the editor **stayed on the parent's source** instead of following the callee, and
+(2) the Variables panel kept showing the **root routine's roster** — so a callee's own locals were missing and
+the caller's like-named variables lingered. Both are "the UI is pinned to the root, not the current frame."
+
+**Per-frame model, surfaced without a re-parse (Developer Contract #1).** The roster the Variables panel
+projects is a property of a *routine* — its declared parameters (with IN/OUT direction) and locals, with types
+— which needs the routine's whole `SemanticModel` (parameters come from the `CREATE` header, not the body). The
+root's model lives on the VM; a callee's was built by `FirebirdDebugExecutor.ResolveRoutine` and lived only in
+its private per-routine context. Rather than re-parse the callee source in the VM (Contract #1 forbids it, and
+it duplicates work), the model is **threaded onto the frame exactly as `Source` already is** — a new
+`Frame.Model` / `DebugRoutine.Model` / `DebugSession(rootModel)`, filled by the launcher (`spec.Model`) for the
+root and by `ResolveRoutine` (the very model it already built) for a callee. The interpreter never reads it;
+it is carried for the UI, precedent set by `Frame.Source`. The Variables panel now builds its roster from
+`frame.Model` (falling back to the VM's root model when a frame carries none — the fake-driven tests), so it
+shows **that frame's** parameters + locals.
+
+**One selection truth.** The VM gained a `_selectedFrame` (the inspected frame, reset to the innermost on every
+pause) and a single `ApplySelectedFrame(frame, computeChanges)` that sets **everything together** — `SourceText`
+(→ the frame's source), the current-line marker (→ the frame's position in *its own* source), the Variables
+roster + values, and both selection controls (`SelectedFrameRow` for the Call Stack list, `SelectedBreadcrumbIndex`
+for the breadcrumb bar) under a `_syncingFrameSelection` guard. So a frame and everything mirroring it cannot
+disagree, and the three ways to pick a frame — a Call Stack row, a breadcrumb, `Ctrl+Alt+Up/Down` — all route
+through the one `SelectFrame`. Selection is **navigation, never execution**: it reads `DebugSession.CallStack`
+and never touches the session, and the change-highlight step-baseline is only updated on the innermost-frame
+step path (`computeChanges: true`), so browsing a caller never disturbs it.
+
+**Caller-line bug fixed (seam c part 1).** A caller's "current line" is the call it made into its child —
+`stack[i-1].CallSite`, a statement in **this** frame's source — not `frame.CallSite`, whose offset is in the
+*parent's* source. Part 1 used the latter (measured against this frame's text), a latent mismatch that only
+looked right when two routines shared layout. See gotcha #243: an offset only means something against the exact
+source it came from, so switching the shown document must switch the marker offset to that document's space in
+the same step.
+
+**Breadcrumbs are a genuinely shared control**, not a debugger-local copy (the plan's directive). New
+`EmberTern.App.Controls.BreadcrumbBar` (`.axaml` + code-behind) is generic — an `ItemsSource` of arbitrary
+items (each rendered by `ToString`) + a two-way `SelectedIndex`, "›"-separated clickable segments, theme tokens
+only, zero debugger knowledge — with the debugger as its first consumer (fed the call stack outermost→innermost,
+so it reads left-to-right as the call chain). Any editor surface can reuse it.
+
+**Peek Frame** is a transient card (double-click a call-stack row) previewing that frame's routine source
+without changing the pinned frame — a debugger-local card, because the editor's Peek Definition is private to
+`NavigationController` (reusing the *pattern*, not the private impl).
+
+**Breakpoints stay root-routine-scoped.** They belong to the launched routine; while the editor shows a
+different frame's source (a stepped-into callee, or a selected caller other than the root) the breakpoint
+offsets are in a different coordinate space, so `BreakpointOffsets` surfaces none and `ToggleBreakpointAt` /
+`RunToCursorAsync` no-op (gated on `IsViewingRootSource`). Stepping (Into/Over/Out/Continue) is unaffected;
+nested-routine breakpoints are D12. To manage breakpoints you view the root frame — which frame selection makes
+one click away.
+
+**DoD met:** an A→B stack is navigable; selecting a frame repoints editor + variables; breadcrumbs mirror the
+stack; frame savepoints (unchanged from D1) are correct on unwind. Build 0/0; **+5 `DebuggerTabVmTests`**
+(`StepInto_PushesCalleeFrame_SwitchesSourceAndRoster`, `SelectingCallerFrame_RepointsSourceRosterAndMarker`,
+`MoveFrameSelection_WalksTheStack_BothDirections`, `Breakpoints_AreRootScoped_HiddenWhileViewingACallee`,
+`StepInto_PeekFrame_ReturnsCalleeSource`) driven by a fake executor whose `ResolveRoutine` returns a real parsed
+callee; full suite green (run manually — the full `dotnet test` hangs in this env, #94/#226); smoke clean.
+**Awaits the user's visual confirmation** (UI, per the QA rule). Gotchas #241/#242/#243. **Next: D9 — local
+procedures & functions (the flagship).**

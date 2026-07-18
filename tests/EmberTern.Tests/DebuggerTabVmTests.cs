@@ -8,7 +8,9 @@ using EmberTern.App.Debugging;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Settings;
 using EmberTern.Core.Sql.Debugging;
+using EmberTern.Core.Sql.Language;
 using EmberTern.Core.Sql.Language.Ast;
+using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Firebird;
 using Xunit;
 
@@ -65,7 +67,15 @@ public class DebuggerTabVmTests
         }
 
         public IDebugCursor OpenCursor(ForSelectStatement loop, Frame frame) => throw new NotSupportedException();
-        public DebugRoutine? ResolveRoutine(IExecutableStatement call, Frame frame) => null;
+
+        // Step-into: a scripted callee (set via WithCallee) resolved for any EXECUTE PROCEDURE step point,
+        // else null (run in place = step-over). Enough to exercise the multi-frame VM (call stack, per-frame
+        // roster/source, breadcrumbs, frame nav) without a server.
+        private DebugRoutine? _callee;
+        public FakeExecutor WithCallee(DebugRoutine callee) { _callee = callee; return this; }
+        public DebugRoutine? ResolveRoutine(IExecutableStatement call, Frame frame)
+            => call is ExecuteProcedureStatement ? _callee : null;
+
         public void EnterFrameSavepoint(string name) { }
         public void LeaveFrameSavepoint(string name) { }
         public void RollbackFrameSavepoint(string name) { }
@@ -82,7 +92,8 @@ public class DebuggerTabVmTests
         public Task<DebugRunHandle> LaunchAsync(DebugLaunchSpec spec, CancellationToken cancellationToken = default)
         {
             LastSpec = spec;
-            var session = new DebugSession(spec.Body, _executor, spec.RoutineName, spec.RootValues, spec.Source);
+            var session = new DebugSession(
+                spec.Body, _executor, spec.RoutineName, spec.RootValues, spec.Source, spec.Model);
             session.Start();
             return Task.FromResult(new DebugRunHandle(session, () => { Disposed = true; return ValueTask.CompletedTask; }));
         }
@@ -624,6 +635,133 @@ public class DebuggerTabVmTests
 
         await vm.StopCommand.ExecuteAsync(null);
         Assert.False(vm.HasLatestEvaluation);
+    }
+
+    // ── D8 seam (c) part 2 — call stack navigation + per-frame roster/source ────────────────────────
+
+    // A root that immediately calls a stored callee, and the callee source. Stepping Into the call pushes a
+    // second frame, so the VM has a real A→B stack to navigate.
+    private const string RootSql = """
+        create procedure sp_root (a integer) returns (r integer) as
+        begin
+          execute procedure sp_leaf(:a) returning_values :r;
+        end
+        """;
+
+    private const string LeafSql = """
+        create procedure sp_leaf (p integer) returns (q integer) as
+        declare w integer;
+        begin
+          q = p;
+          w = q;
+        end
+        """;
+
+    // Builds a fake executor whose ResolveRoutine returns SP_LEAF (parsed into a real body + model + source),
+    // so a Step Into pushes a genuine second frame carrying the callee's own model (the roster the panel
+    // projects, spec §5.2) and source.
+    private static FakeExecutor NestedExecutor()
+    {
+        var leafModel = SemanticModel.Build(SqlParser.Parse(LeafSql).Root);
+        var leafBody = leafModel.Syntax.Statements.OfType<DdlStatement>().First(d => d.Body is not null).Body!;
+        var callee = new DebugRoutine(
+            "SP_LEAF", leafBody, initialValues: null, outputParameterNames: new[] { "Q" },
+            lexicalParent: null, source: LeafSql, model: leafModel);
+        return new FakeExecutor().WithCallee(callee);
+    }
+
+    private static async Task<DebuggerTabViewModel> LaunchedNestedAsync()
+    {
+        var launcher = new FakeLauncher(NestedExecutor());
+        var vm = new DebuggerTabViewModel("SP_ROOT", _ => Task.FromResult<string?>(RootSql), launcher);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null); // paused at the EXECUTE PROCEDURE (the first step point)
+        await vm.StepIntoCommand.ExecuteAsync(null); // step into SP_LEAF → a second frame
+        return vm;
+    }
+
+    [Fact]
+    public async Task StepInto_PushesCalleeFrame_SwitchesSourceAndRoster()
+    {
+        var vm = await LaunchedNestedAsync();
+
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        // Two frames, innermost-first: SP_LEAF (current, simulated) then SP_ROOT (caller).
+        Assert.Equal(2, vm.CallStack.Count);
+        Assert.Equal("SP_LEAF", vm.CallStack[0].RoutineName);
+        Assert.True(vm.CallStack[0].IsCurrent);
+        Assert.True(vm.CallStack[0].IsSimulated);       // reached by Step Into (§5.3)
+        Assert.Equal("SP_ROOT", vm.CallStack[1].RoutineName);
+        Assert.False(vm.CallStack[1].IsCurrent);
+
+        // The editor now shows the CALLEE's source, and Variables project the CALLEE's own roster.
+        Assert.Equal(LeafSql, vm.SourceText);
+        Assert.Contains(vm.Variables, r => r.Name == "P");
+        Assert.Contains(vm.Variables, r => r.Name == "W");
+        Assert.DoesNotContain(vm.Variables, r => r.Name == "A"); // A/R belong to the caller, not this frame
+
+        // Breadcrumbs mirror the stack, outermost→innermost, current = last.
+        Assert.Equal(new[] { "SP_ROOT", "SP_LEAF" }, vm.Breadcrumbs);
+        Assert.Equal(1, vm.SelectedBreadcrumbIndex);
+    }
+
+    [Fact]
+    public async Task SelectingCallerFrame_RepointsSourceRosterAndMarker()
+    {
+        var vm = await LaunchedNestedAsync();
+
+        // Select the caller (SP_ROOT) row.
+        vm.SelectedFrameRow = vm.CallStack[1];
+
+        Assert.Equal(RootSql, vm.SourceText);                                  // source switched back
+        Assert.Contains(vm.Variables, r => r.Name == "A");                     // caller's roster
+        Assert.DoesNotContain(vm.Variables, r => r.Name == "P");
+        // The current-line marker is the call site (where SP_ROOT called SP_LEAF), in SP_ROOT's own source.
+        Assert.Equal(RootSql.IndexOf("execute procedure", StringComparison.Ordinal), vm.CurrentStart);
+        Assert.Equal(0, vm.SelectedBreadcrumbIndex);                           // SP_ROOT = outermost crumb
+    }
+
+    [Fact]
+    public async Task MoveFrameSelection_WalksTheStack_BothDirections()
+    {
+        var vm = await LaunchedNestedAsync(); // selection starts at the innermost frame (SP_LEAF)
+
+        vm.MoveFrameSelection(+1); // down the list → the caller SP_ROOT
+        Assert.Equal(RootSql, vm.SourceText);
+        Assert.Same(vm.CallStack[1], vm.SelectedFrameRow);
+
+        vm.MoveFrameSelection(-1); // back up → the callee SP_LEAF
+        Assert.Equal(LeafSql, vm.SourceText);
+        Assert.Same(vm.CallStack[0], vm.SelectedFrameRow);
+    }
+
+    [Fact]
+    public async Task Breakpoints_AreRootScoped_HiddenWhileViewingACallee()
+    {
+        var launcher = new FakeLauncher(NestedExecutor());
+        var vm = new DebuggerTabViewModel("SP_ROOT", _ => Task.FromResult<string?>(RootSql), launcher);
+        await vm.PrepareAsync();
+        vm.ToggleBreakpointAt(RootSql.IndexOf("execute procedure", StringComparison.Ordinal));
+        Assert.Single(vm.BreakpointOffsets); // set while viewing the root
+
+        await vm.LaunchCommand.ExecuteAsync(null);
+        await vm.StepIntoCommand.ExecuteAsync(null); // now viewing the callee
+        Assert.Empty(vm.BreakpointOffsets);          // root breakpoints are not surfaced on the callee source
+
+        vm.SelectedFrameRow = vm.CallStack[1];        // back to the root frame
+        Assert.Single(vm.BreakpointOffsets);          // visible again
+    }
+
+    [Fact]
+    public async Task StepInto_PeekFrame_ReturnsCalleeSource()
+    {
+        var vm = await LaunchedNestedAsync();
+
+        var peek = vm.GetFramePeek(vm.CallStack[0].FrameId);
+        Assert.NotNull(peek);
+        Assert.Equal("SP_LEAF", peek!.RoutineName);
+        Assert.Equal(LeafSql, peek.Source);
+        Assert.True(peek.CurrentLine > 0);
     }
 
     [Fact]

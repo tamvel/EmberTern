@@ -179,24 +179,36 @@
 
         <!-- Top: source editor | splitter | Variables (right, tall — the primary inspection surface) -->
         <Grid Grid.Row="0" ColumnDefinitions="*,4,300">
-          <ae:TextEditor x:Name="SourceEditor"
-                         Grid.Column="0"
-                         ShowLineNumbers="True"
-                         IsReadOnly="True"
-                         FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                         FontSize="13"
-                         HorizontalScrollBarVisibility="Auto"
-                         VerticalScrollBarVisibility="Auto"
-                         Background="{DynamicResource BackgroundBrush}"
-                         Foreground="{DynamicResource ForegroundBrush}">
-            <ae:TextEditor.ContextMenu>
-              <ContextMenu>
-                <MenuItem Header="{x:Static app:UiStrings.DebuggerRunToCursorMenu}"
-                          IsEnabled="{Binding IsPaused}"
-                          Click="OnRunToCursorClick" />
-              </ContextMenu>
-            </ae:TextEditor.ContextMenu>
-          </ae:TextEditor>
+          <!-- Editor column: a breadcrumb path over the source. The breadcrumb mirrors the call stack
+               (outermost→innermost) and clicking a crumb selects that frame (spec §5.2), exactly like the
+               Call Stack panel — both drive the one SelectedBreadcrumbIndex / SelectedFrameRow selection. -->
+          <Grid Grid.Column="0" RowDefinitions="Auto,*">
+            <Border Grid.Row="0" IsVisible="{Binding HasCallStack}"
+                    Background="{DynamicResource PanelBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1" Padding="6,2">
+              <controls:BreadcrumbBar ItemsSource="{Binding Breadcrumbs}"
+                                      SelectedIndex="{Binding SelectedBreadcrumbIndex, Mode=TwoWay}" />
+            </Border>
+            <ae:TextEditor x:Name="SourceEditor"
+                           Grid.Row="1"
+                           ShowLineNumbers="True"
+                           IsReadOnly="True"
+                           FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                           FontSize="13"
+                           HorizontalScrollBarVisibility="Auto"
+                           VerticalScrollBarVisibility="Auto"
+                           Background="{DynamicResource BackgroundBrush}"
+                           Foreground="{DynamicResource ForegroundBrush}">
+              <ae:TextEditor.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="{x:Static app:UiStrings.DebuggerRunToCursorMenu}"
+                            IsEnabled="{Binding IsPaused}"
+                            Click="OnRunToCursorClick" />
+                </ContextMenu>
+              </ae:TextEditor.ContextMenu>
+            </ae:TextEditor>
+          </Grid>
 
           <GridSplitter Grid.Column="1" Background="{DynamicResource BorderBrush}" />
 
@@ -519,8 +531,8 @@
               </TabItem>
 
               <!-- Call Stack (D8, spec §5) — frames innermost-first; the current frame is marked, a
-                   Step-Into (simulated) frame carries the △ indicator (§5.3). Display-only in this
-                   increment; frame-selection navigation is a follow-up. -->
+                   Step-Into (simulated) frame carries the △ indicator (§5.3). Selecting a row repoints the
+                   editor + Variables to that frame; double-click peeks its source inline (Peek Frame). -->
               <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabCallStack}">
                 <Grid IsVisible="{Binding !IsBottomPanelCollapsed}" Margin="0,2,0,0">
                   <TextBlock Margin="10,6"
@@ -528,8 +540,10 @@
                              Classes="subtle" FontSize="11" TextWrapping="Wrap"
                              IsVisible="{Binding !HasCallStack}" />
                   <ListBox ItemsSource="{Binding CallStack}"
+                           SelectedItem="{Binding SelectedFrameRow, Mode=TwoWay}"
                            Background="Transparent" BorderThickness="0"
-                           IsVisible="{Binding HasCallStack}">
+                           IsVisible="{Binding HasCallStack}"
+                           DoubleTapped="OnCallStackDoubleTapped">
                     <ListBox.ItemTemplate>
                       <DataTemplate x:DataType="vm:DebugFrameRowViewModel">
                         <Grid ColumnDefinitions="14,*,Auto,Auto" Margin="0,1">

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using EmberTern.Core.Sql.Language.Ast;
+using EmberTern.Core.Sql.Language.Semantics;
 
 namespace EmberTern.Core.Sql.Debugging;
 
@@ -75,7 +76,8 @@ public sealed class Frame
         IExecutableStatement? callSite,
         IReadOnlyDictionary<string, object?>? initialValues,
         IReadOnlyList<string>? outputParameterNames = null,
-        string? source = null)
+        string? source = null,
+        SemanticModel? model = null)
     {
         Id = id;
         RoutineName = routineName;
@@ -86,6 +88,7 @@ public sealed class Frame
         Values = new FrameValues(initialValues);
         OutputParameterNames = outputParameterNames ?? System.Array.Empty<string>();
         Source = source;
+        Model = model;
         SavepointName = $"ET_DBG_FRAME_{id}";
         // Start executing the body's statements. The body's own DECLAREs are not executed — declared
         // variables begin null (their values arrive via injection/assignment); initialValues seeds params.
@@ -107,6 +110,14 @@ public sealed class Frame
     /// engine tests). The root frame's source is the launched routine's; a stepped-into callee's is the
     /// fetched callee source.</summary>
     public string? Source { get; }
+
+    /// <summary>This routine's semantic model — the roster (declared parameters + locals, with their kinds and
+    /// types) the Variables panel projects. Carried for the <b>UI's</b> benefit exactly as <see cref="Source"/>
+    /// is (the interpreter never reads it): when the call stack selects a frame, the panel builds that frame's
+    /// roster from <b>its own</b> model, not the root's (spec §5.2). Null when not supplied (the fake-driven
+    /// engine tests). The root frame's model is the launched routine's; a stepped-into callee's is the model
+    /// built from the fetched callee source (D8, on the same offsets as its <see cref="Source"/>).</summary>
+    public SemanticModel? Model { get; }
 
     /// <summary>The <b>call-stack</b> parent — the frame that pushed this one (the caller). Walked by the
     /// call stack (spec §5) and the exception unwinder; null for the root. Distinct from

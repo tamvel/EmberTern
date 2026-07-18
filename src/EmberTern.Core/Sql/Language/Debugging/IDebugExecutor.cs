@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using EmberTern.Core.Sql.Language.Ast;
+using EmberTern.Core.Sql.Language.Semantics;
 
 namespace EmberTern.Core.Sql.Debugging;
 
@@ -75,7 +76,8 @@ public sealed class DebugRoutine
         IReadOnlyDictionary<string, object?>? initialValues = null,
         IReadOnlyList<string>? outputParameterNames = null,
         Frame? lexicalParent = null,
-        string? source = null)
+        string? source = null,
+        SemanticModel? model = null)
     {
         Name = name;
         Body = body;
@@ -83,6 +85,7 @@ public sealed class DebugRoutine
         OutputParameterNames = outputParameterNames ?? System.Array.Empty<string>();
         LexicalParent = lexicalParent;
         Source = source;
+        Model = model;
     }
 
     /// <summary>The callee's name (for the call stack / breadcrumbs).</summary>
@@ -94,6 +97,11 @@ public sealed class DebugRoutine
     /// <summary>The callee's full source text (for the call-stack UI to show its routine + compute lines);
     /// null when unavailable. Flows onto the pushed <see cref="Frame.Source"/>.</summary>
     public string? Source { get; }
+
+    /// <summary>The callee's semantic model (the roster the Variables panel projects when the call stack selects
+    /// this frame — spec §5.2); null when unavailable. Flows onto the pushed <see cref="Frame.Model"/>, on the
+    /// same offsets as <see cref="Source"/>.</summary>
+    public SemanticModel? Model { get; }
 
     /// <summary>The argument values bound into the new frame's scope (the callee's input parameters, seeded
     /// from the call's evaluated arguments), or null.</summary>
