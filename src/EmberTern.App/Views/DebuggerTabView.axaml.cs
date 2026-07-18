@@ -133,6 +133,17 @@ public partial class DebuggerTabView : UserControl
         e.Handled = true;
     }
 
+    // Double-click the resize bar toggles collapse too — same ToggleBottomPanelCommand. The splitter is only
+    // visible while expanded (IsVisible bound to !IsBottomPanelCollapsed), so this always collapses; re-expand
+    // is the header-strip double-click above. A standard, unambiguous gesture (double-click a splitter to
+    // collapse the panel it sizes) — no separate mechanism.
+    private void OnBottomSplitterDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (_vm is null) return;
+        Invoke(_vm.ToggleBottomPanelCommand);
+        e.Handled = true;
+    }
+
     private void OnDebugMarkersChanged(object? sender, EventArgs e) => RepaintMarkers();
 
     private void SyncEditorText()

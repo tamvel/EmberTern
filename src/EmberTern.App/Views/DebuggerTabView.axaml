@@ -220,7 +220,8 @@
                       ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
                       HorizontalAlignment="Stretch"
                       Background="{DynamicResource BorderBrush}"
-                      IsVisible="{Binding !IsBottomPanelCollapsed}" />
+                      IsVisible="{Binding !IsBottomPanelCollapsed}"
+                      DoubleTapped="OnBottomSplitterDoubleTapped" />
 
         <!-- ── Bottom tabbed panel (full width, collapsible) ──────────────────────────
              Immediate / Executed SQL / Watches now; Call Stack / Breakpoints / Output
