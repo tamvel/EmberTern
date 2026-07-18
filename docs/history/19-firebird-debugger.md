@@ -1239,3 +1239,25 @@ and 4 `PsqlAstTests` (paren/bare arguments, paren/bare + folded returning target
 Build 0/0; **4813 green** (in one run); smoke clean. **Nothing user-visible yet** — seam (a) is the
 foundation; seam (b) (Firebird `ResolveRoutine` + lab fidelity) and seam (c) (Call Stack / breadcrumbs / frame
 nav UI) follow. Gotcha #241 (the LexicalParent-vs-Parent distinction).
+
+### D8 seam (b) part 1 — `FirebirdDebugExecutor` multi-routine context (2026-07-18, behavior-preserving)
+
+`FirebirdDebugExecutor` held **single-routine** state (`_source` / `_model` / `_variableTemplates` /
+`_outputParameters`) — fine while only the root frame ever ran, but a D8 call stack activates **distinct
+routines**, each with its own source / model / variable templates / outputs. Refactored the four fields into a
+`Dictionary<BlockStatement, RoutineContext>` keyed by the routine's **body node** (the stable per-frame key):
+every method now reads `Ctx(frame)` (via `frame.Body`) and threads its `Source` / `Model` / `VariableTemplates`
+/ `OutputParameters` through the (now `static`) helpers `ResolveReadWrite` / `BindValues` / `SnapshotOutputs` /
+`Slice` / `ConditionExpression` / `AllTemplateNames`. The root registers its context in `CreateAsync`; a
+stepped-into stored routine will register its own in `ResolveRoutine` (part 2). **Recursion is correct for
+free**: the same body on two frames shares one context (same declarations + types; the per-frame *values* live
+on the `Frame`).
+
+**Behavior-preserving**: `ResolveRoutine` still returns null, so no callee frame is pushed and the single
+routine's path is byte-for-byte the same lookup as before — the whole suite stays green (4813) and the live
+single-routine behaviour is unchanged. This is the necessary foundation for part 2 (`ResolveRoutine` — fetch +
+parse + metadata the callee, evaluate its arguments through the harness, register its context) + the mandatory
+**lab fidelity** verification (nested procedures, simulated vs real), which the §F rule requires be proven
+against real execution in a focused session.
+
+Build 0/0; **4813 green**; smoke clean.

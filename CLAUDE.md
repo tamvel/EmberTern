@@ -539,10 +539,21 @@ noted.
   A D1 test that used `execute procedure p` as a proxy for the scope-chain and (wrongly for a stored routine)
   asserted callee→caller resolution was split into an honest stored (closed-scope) test + a local (closure, D9
   mechanism) test — the fake executor gained an `asLocalClosure` mode. Build 0/0; **4813 green** (+6: 4
-  `PsqlAstTests` arg/returning, +2 net `DebugEngineTests`); smoke clean. **Next: D8 seam (b)** — Firebird
-  `ResolveRoutine` (multi-routine executor context: fetch+parse+metadata the callee, evaluate arguments via the
-  harness) + lab fidelity (nested procedures, simulated vs real); then seam (c) — Call Stack / breadcrumbs /
-  frame-nav UI. Gotcha #241 (LexicalParent vs Parent). See [[feedback-debugger-ux-polish-backlog]].
+  `PsqlAstTests` arg/returning, +2 net `DebugEngineTests`); smoke clean. Gotcha #241 (LexicalParent vs Parent).
+  **D8 seam (b) part 1 — `FirebirdDebugExecutor` multi-routine context (2026-07-18, behavior-preserving).** The
+  executor held single-routine state (`_source`/`_model`/`_variableTemplates`/`_outputParameters`) — fine for
+  the root, but a D8 call stack activates distinct routines. Refactored into a
+  `Dictionary<BlockStatement, RoutineContext>` keyed by the routine's **body node**; every method reads
+  `Ctx(frame)` and threads Source/Model/templates/outputs through the (now static) helpers. Root registers in
+  `CreateAsync`; a callee will register in `ResolveRoutine` (part 2). Recursion correct for free (same body →
+  one context; per-frame values on the `Frame`). **`ResolveRoutine` still returns null** → no callee frame
+  pushed, single-routine path unchanged → 4813 green, live behaviour identical.
+  **Next: D8 seam (b) part 2** — implement `ResolveRoutine` (fetch+parse+metadata the callee via
+  `FirebirdDdlReader`, evaluate the call's arguments through a typed Statement-mode harness against the caller
+  frame → seed the callee input params, register the callee context) + **mandatory lab fidelity** (extend
+  `Lab/setup.sql` with nested procedures; simulated vs real, §F) — a focused session (highest-risk milestone).
+  Then seam (c) — Call Stack panel / Breadcrumbs (shared) / frame-nav / simulated-frame indicator / Peek Frame
+  UI. See [[feedback-debugger-ux-polish-backlog]].
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

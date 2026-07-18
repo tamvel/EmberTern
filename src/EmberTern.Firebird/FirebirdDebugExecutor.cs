@@ -54,29 +54,28 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     private const string EvaluationResultType = "VARCHAR(8191) CHARACTER SET UTF8";
 
     private readonly DebugSessionConnection _session;
-    private readonly string _source;
-    private readonly SemanticModel _model;
-    private readonly IReadOnlyList<HarnessVariable> _variableTemplates;
-    private readonly HashSet<string> _outputParameters;
 
-    private FirebirdDebugExecutor(
-        DebugSessionConnection session,
-        string source,
-        SemanticModel model,
-        IReadOnlyList<HarnessVariable> variableTemplates,
-        IReadOnlyList<string> outputParameters)
-    {
-        _session = session;
-        _source = source;
-        _model = model;
-        _variableTemplates = variableTemplates;
-        _outputParameters = new HashSet<string>(outputParameters, StringComparer.OrdinalIgnoreCase);
-    }
+    // Per-routine context, keyed by the routine's body node (Stage X / D8): the interpreter runs a call stack
+    // of frames, each an activation of a routine whose source / model / variable templates / outputs differ.
+    // Every executor method reads the context for the frame it operates on (via the frame's Body — the stable
+    // key). One entry per distinct routine body: recursion (the same body on two frames) shares one context
+    // (same declarations + types; the per-frame VALUES live on the Frame). The root is registered at
+    // construction; a stepped-into stored routine registers its own in ResolveRoutine (D8 seam b part 2).
+    private readonly Dictionary<BlockStatement, RoutineContext> _contexts = new();
 
-    /// <summary>Creates the executor for a standalone routine: resolves its frame variable templates (verbatim
-    /// declarations R3 + base types R2) from metadata once, then binds them to the session. <paramref name="source"/>
-    /// is the routine's full source (the span backing for fragments + declarations), <paramref name="body"/>
-    /// its parsed body, <paramref name="model"/> its semantic model (the read/write sets consume it).</summary>
+    private sealed record RoutineContext(
+        string Source,
+        SemanticModel Model,
+        IReadOnlyList<HarnessVariable> VariableTemplates,
+        HashSet<string> OutputParameters);
+
+    private FirebirdDebugExecutor(DebugSessionConnection session) => _session = session;
+
+    /// <summary>Creates the executor for a standalone routine (the root frame): resolves its frame variable
+    /// templates (verbatim declarations R3 + base types R2) from metadata once, then registers its context.
+    /// <paramref name="source"/> is the routine's full source (the span backing for fragments + declarations),
+    /// <paramref name="body"/> its parsed body (the context key), <paramref name="model"/> its semantic model
+    /// (the read/write sets consume it).</summary>
     public static async Task<FirebirdDebugExecutor> CreateAsync(
         DebugSessionConnection session,
         string? routineName,
@@ -93,8 +92,30 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         var layout = await FirebirdDebugMetadata
             .BuildFrameVariablesAsync(session, routineName, body, source, cancellationToken)
             .ConfigureAwait(false);
-        return new FirebirdDebugExecutor(session, source, model, layout.Variables, layout.OutputParameters);
+        var executor = new FirebirdDebugExecutor(session);
+        executor.Register(body, source, model, layout.Variables, layout.OutputParameters);
+        return executor;
     }
+
+    // Registers a routine's context under its body node. Called for the root (CreateAsync) and, in seam b
+    // part 2, for each stepped-into stored routine (ResolveRoutine). Idempotent for a body already known
+    // (recursion re-resolves the same routine — keep the first context).
+    private void Register(
+        BlockStatement body, string source, SemanticModel model,
+        IReadOnlyList<HarnessVariable> templates, IReadOnlyList<string> outputs)
+    {
+        if (_contexts.ContainsKey(body)) return;
+        _contexts[body] = new RoutineContext(
+            source, model, templates, new HashSet<string>(outputs, StringComparer.OrdinalIgnoreCase));
+    }
+
+    // The context for the routine the given frame activates — keyed by its Body. Every step / condition /
+    // evaluation / cursor open is scoped to the frame's own routine (D8: a call stack of distinct routines).
+    private RoutineContext Ctx(Frame frame)
+        => _contexts.TryGetValue(frame.Body, out var ctx)
+            ? ctx
+            : throw new InvalidOperationException(
+                $"Debug: no routine context registered for frame '{frame.RoutineName}'.");
 
     // ── IDebugExecutor ──────────────────────────────────────────────────────────────────────────────
 
@@ -104,20 +125,22 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         ArgumentNullException.ThrowIfNull(statement);
         ArgumentNullException.ThrowIfNull(frame);
 
+        var ctx = Ctx(frame);
+
         // SUSPEND is control flow, not server semantics: it yields the current output-parameter values as the
         // routine's output row. Emit it client-side (no harness, no round-trip) — §3.1 (client owns control).
         if (statement is PsqlLeafStatement { Kind: PsqlLeafKind.Suspend })
         {
-            return StatementOutcome.Suspended(SnapshotOutputs(frame));
+            return StatementOutcome.Suspended(SnapshotOutputs(ctx, frame));
         }
 
         var node = AsNode(statement);
-        var (reads, writes) = ResolveReadWrite(node);
+        var (reads, writes) = ResolveReadWrite(ctx, node);
         var request = new HarnessRequest
         {
-            Fragment = Slice(node),
+            Fragment = Slice(ctx.Source, node),
             Mode = HarnessMode.Statement,
-            Variables = BindValues(frame),
+            Variables = BindValues(ctx, frame),
             Reads = reads,
             Writes = writes,
         };
@@ -139,14 +162,15 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(frame);
 
+        var ctx = Ctx(frame);
         var node = AsNode(owner);
-        var (reads, _) = ResolveReadWrite(node);
+        var (reads, _) = ResolveReadWrite(ctx, node);
         var request = new HarnessRequest
         {
-            Fragment = ConditionExpression(node),
+            Fragment = ConditionExpression(ctx.Source, node),
             Mode = HarnessMode.Expression,
             ExpressionResultType = BooleanResultType,
-            Variables = BindValues(frame),
+            Variables = BindValues(ctx, frame),
             Reads = reads,
         };
 
@@ -173,11 +197,12 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(frame);
 
-        var names = ReadWriteSetAnalyzer.InScopeLocals(_model, request.ScopeOffset);
+        var ctx = Ctx(frame);
+        var names = ReadWriteSetAnalyzer.InScopeLocals(ctx.Model, request.ScopeOffset);
         if (names.Count == 0)
         {
             // At/before an offset with no locals in scope — inject every known frame variable (still §3.5).
-            names = AllTemplateNames();
+            names = AllTemplateNames(ctx);
         }
 
         bool expression = request.Kind == EvaluationKind.Expression;
@@ -186,7 +211,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             Fragment = request.Fragment,
             Mode = expression ? HarnessMode.Expression : HarnessMode.Statement,
             ExpressionResultType = expression ? EvaluationResultType : null,
-            Variables = BindValues(frame),
+            Variables = BindValues(ctx, frame),
             Reads = names,
             Writes = expression ? Array.Empty<string>() : names, // an expression writes nothing; a statement may
         });
@@ -202,10 +227,10 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         }
     }
 
-    private IReadOnlyList<string> AllTemplateNames()
+    private static IReadOnlyList<string> AllTemplateNames(RoutineContext ctx)
     {
-        var names = new List<string>(_variableTemplates.Count);
-        foreach (var t in _variableTemplates) names.Add(t.Name);
+        var names = new List<string>(ctx.VariableTemplates.Count);
+        foreach (var t in ctx.VariableTemplates) names.Add(t.Name);
         return names;
     }
 
@@ -224,7 +249,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             throw new NotSupportedException(
                 "Debug (D6): a FOR EXECUTE STATEMENT (dynamic) cursor cannot be stepped — step over the loop.");
 
-        var plan = CursorBridge.Build(_source, loop);
+        var plan = CursorBridge.Build(Ctx(frame).Source, loop);
         var values = new object?[plan.ParameterNames.Count];
         for (int i = 0; i < values.Length; i++)
         {
@@ -341,12 +366,12 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     // the INTO write-back (the variable the statement exists to set) — a §F divergence. So when the model
     // surfaces nothing, fall back to §3.5's named "inject all in-scope" primitive (correct, chattier), never
     // a guess. A statement that genuinely touches no local (e.g. bare EXCEPTION) is over-included harmlessly.
-    private (IReadOnlyList<string> Reads, IReadOnlyList<string> Writes) ResolveReadWrite(SqlNode node)
+    private static (IReadOnlyList<string> Reads, IReadOnlyList<string> Writes) ResolveReadWrite(RoutineContext ctx, SqlNode node)
     {
-        var rw = ReadWriteSetAnalyzer.Analyze(node, _model);
+        var rw = ReadWriteSetAnalyzer.Analyze(node, ctx.Model);
         if (rw.Reads.Count == 0 && rw.Writes.Count == 0)
         {
-            var all = ReadWriteSetAnalyzer.InScopeLocals(_model, node.Start);
+            var all = ReadWriteSetAnalyzer.InScopeLocals(ctx.Model, node.Start);
             return (all, all);
         }
         return (rw.Reads, rw.Writes);
@@ -357,10 +382,10 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     // Every in-scope variable is declared in the harness (verbatim, R3); its current value (if any) rides
     // along so HarnessBuilder can inject the reads (R1 skips a null/absent value). Over-declaring a variable
     // the fragment does not use is harmless — the read/write set narrows what is injected/returned (§3.5).
-    private IReadOnlyList<HarnessVariable> BindValues(Frame frame)
+    private static IReadOnlyList<HarnessVariable> BindValues(RoutineContext ctx, Frame frame)
     {
-        var bound = new List<HarnessVariable>(_variableTemplates.Count);
-        foreach (var template in _variableTemplates)
+        var bound = new List<HarnessVariable>(ctx.VariableTemplates.Count);
+        foreach (var template in ctx.VariableTemplates)
         {
             if (frame.TryResolveValue(template.Name, out var value))
             {
@@ -374,10 +399,10 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         return bound;
     }
 
-    private IReadOnlyDictionary<string, object?> SnapshotOutputs(Frame frame)
+    private static IReadOnlyDictionary<string, object?> SnapshotOutputs(RoutineContext ctx, Frame frame)
     {
         var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var name in _outputParameters)
+        foreach (var name in ctx.OutputParameters)
         {
             row[name] = frame.TryResolveValue(name, out var v) ? v : null;
         }
@@ -386,18 +411,18 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
 
     // ── Source spans ────────────────────────────────────────────────────────────────────────────────
 
-    private string Slice(SqlNode node)
+    private static string Slice(string source, SqlNode node)
     {
-        int start = Math.Clamp(node.Start, 0, _source.Length);
-        int length = Math.Clamp(node.Length, 0, _source.Length - start);
-        return _source.Substring(start, length);
+        int start = Math.Clamp(node.Start, 0, source.Length);
+        int length = Math.Clamp(node.Length, 0, source.Length - start);
+        return source.Substring(start, length);
     }
 
     // The parenthesised condition of an IF/WHILE header — the first top-level (…) group after the keyword.
     // Firebird requires the condition in parens (IF (<cond>) THEN / WHILE (<cond>) DO), so the first '(' opens
     // it and its match closes it. Read from the node's tokens (never re-parsed) and sliced verbatim from
     // source; the whole "(<cond>)" is a valid boolean expression for the Expression-mode harness.
-    private string ConditionExpression(SqlNode node)
+    private static string ConditionExpression(string source, SqlNode node)
     {
         if (node is PsqlStatement psql)
         {
@@ -417,9 +442,9 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
                     {
                         int s = tokens[open].Start;
                         int e = tokens[i].End;
-                        if (s >= 0 && e <= _source.Length && e > s)
+                        if (s >= 0 && e <= source.Length && e > s)
                         {
-                            return _source.Substring(s, e - s);
+                            return source.Substring(s, e - s);
                         }
                         break;
                     }
@@ -428,7 +453,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         }
         // Fallback (malformed / unexpected shape): the whole node text. §F: correctness over cleverness —
         // Firebird will report a syntax error rather than the debugger silently guessing a boolean.
-        return Slice(node);
+        return Slice(source, node);
     }
 
     private static SqlNode AsNode(IExecutableStatement statement)
