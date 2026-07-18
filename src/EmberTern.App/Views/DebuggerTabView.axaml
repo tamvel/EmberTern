@@ -9,6 +9,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="640"
              x:Class="EmberTern.App.Views.DebuggerTabView"
+             x:Name="RootControl"
              x:DataType="vm:DebuggerTabViewModel"
              Background="{DynamicResource BackgroundBrush}"
              Foreground="{DynamicResource ForegroundBrush}">
@@ -17,6 +18,15 @@
     <Style Selector="TextBox.time-error">
       <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
       <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <!-- Variables panel: a variable the last step changed gets a subtle themed wash (change-highlight). -->
+    <Style Selector="Border.var-changed">
+      <Setter Property="Background" Value="{DynamicResource DebugVariableChangedBrush}" />
+    </Style>
+    <!-- A null/unset value renders distinctly (subtle + italic), themed. -->
+    <Style Selector="TextBlock.var-null">
+      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+      <Setter Property="FontStyle" Value="Italic" />
     </Style>
   </UserControl.Styles>
 
@@ -194,35 +204,100 @@
                   Background="{DynamicResource PanelBrush}"
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="1,0,0,0">
-            <Grid RowDefinitions="Auto,*">
+            <Grid RowDefinitions="Auto,Auto,*">
               <Border Grid.Row="0" Padding="8,6"
                       BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                 <TextBlock Text="{x:Static app:UiStrings.DebuggerVariablesHeader}"
                            FontWeight="SemiBold" FontSize="11" />
               </Border>
-              <TextBlock Grid.Row="1" Margin="10,8"
+
+              <!-- Type-to-filter (by name; mirrors the sidebar). Shown only when there are variables. -->
+              <TextBox Grid.Row="1" Margin="6,6,6,2" FontSize="11"
+                       Text="{Binding VariableFilter, Mode=TwoWay}"
+                       PlaceholderText="{x:Static app:UiStrings.DebuggerVariableFilterWatermark}"
+                       IsVisible="{Binding HasVariables}" />
+
+              <TextBlock Grid.Row="2" Margin="10,8"
                          Text="{x:Static app:UiStrings.DebuggerVariablesEmpty}"
                          Classes="subtle" FontSize="11" TextWrapping="Wrap"
                          IsVisible="{Binding !HasVariables}" />
-              <ListBox Grid.Row="1" ItemsSource="{Binding Variables}"
-                       Background="Transparent" BorderThickness="0"
-                       IsVisible="{Binding HasVariables}">
-                <ListBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:DebugVariableRowViewModel">
-                    <Grid ColumnDefinitions="*,Auto" Margin="0,1">
-                      <StackPanel Grid.Column="0" Spacing="0">
-                        <TextBlock Text="{Binding Name}" FontSize="11" />
-                        <TextBlock Text="{Binding TypeText}" FontSize="10"
-                                   Foreground="{DynamicResource SubtleForegroundBrush}"
-                                   IsVisible="{Binding HasType}" />
+
+              <!-- Grouped variables (Pinned / Parameters / Locals). Each group header toggles its own
+                   expansion (code-behind flips the group VM's IsExpanded — theme-safe, no ToggleButton). -->
+              <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                            IsVisible="{Binding HasVariables}">
+                <ItemsControl ItemsSource="{Binding VariableGroups}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DebugVariableGroupViewModel">
+                      <StackPanel Margin="0,2,0,0">
+                        <Border Background="Transparent" Padding="6,3"
+                                Tapped="OnVariableGroupHeaderTapped">
+                          <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock FontSize="10" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                                       Text="▾" IsVisible="{Binding IsExpanded}" />
+                            <TextBlock FontSize="10" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                                       Text="▸" IsVisible="{Binding !IsExpanded}" />
+                            <TextBlock Text="{Binding Header}" FontWeight="SemiBold" FontSize="11"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Rows.Count}" FontSize="10" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource SubtleForegroundBrush}" />
+                          </StackPanel>
+                        </Border>
+
+                        <ItemsControl ItemsSource="{Binding Rows}" IsVisible="{Binding IsExpanded}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DebugVariableRowViewModel">
+                              <Border Classes.var-changed="{Binding IsChanged}" Padding="4,1" Margin="0,0,0,1">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,1">
+                                  <!-- Pin-to-top toggle (★ pinned / ☆ not) — not a Watch (§9.5). -->
+                                  <Button Grid.Column="0" Classes="icon" Width="18" Height="18" Padding="0"
+                                          VerticalAlignment="Center"
+                                          ToolTip.Tip="{x:Static app:UiStrings.DebuggerVariablePinTooltip}"
+                                          Command="{Binding #RootControl.((vm:DebuggerTabViewModel)DataContext).TogglePinCommand}"
+                                          CommandParameter="{Binding}">
+                                    <Panel>
+                                      <TextBlock Text="★" FontSize="11" Foreground="{DynamicResource AccentBrush}"
+                                                 IsVisible="{Binding IsPinned}" />
+                                      <TextBlock Text="☆" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}"
+                                                 IsVisible="{Binding !IsPinned}" />
+                                    </Panel>
+                                  </Button>
+
+                                  <!-- Kind glyph (⬤ IN / ◑ OUT / ○ local), themed by the row's key string. -->
+                                  <TextBlock Grid.Column="1" Text="{Binding KindGlyph}" FontSize="9"
+                                             VerticalAlignment="Center" Margin="2,0,6,0"
+                                             ToolTip.Tip="{Binding KindLabel}">
+                                    <TextBlock.Foreground>
+                                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                                        <Binding Path="KindBrushKey" />
+                                        <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                                      </MultiBinding>
+                                    </TextBlock.Foreground>
+                                  </TextBlock>
+
+                                  <StackPanel Grid.Column="2" Spacing="0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" FontSize="11" />
+                                    <TextBlock Text="{Binding TypeText}" FontSize="10"
+                                               Foreground="{DynamicResource SubtleForegroundBrush}"
+                                               IsVisible="{Binding HasType}" />
+                                  </StackPanel>
+
+                                  <TextBlock Grid.Column="3" Text="{Binding ValueText}" FontSize="11"
+                                             VerticalAlignment="Center" Margin="6,0,0,0"
+                                             Classes.var-null="{Binding IsNull}"
+                                             FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
+                                </Grid>
+                              </Border>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                       </StackPanel>
-                      <TextBlock Grid.Column="1" Text="{Binding ValueText}" FontSize="11"
-                                 VerticalAlignment="Center"
-                                 FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
-                    </Grid>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
             </Grid>
           </Border>
         </Grid>

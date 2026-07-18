@@ -96,6 +96,10 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         _watchStore = watchStore;
         Preflight = new ObservableCollection<DebugPreflightItem>();
         Variables = new ObservableCollection<DebugVariableRowViewModel>();
+        VariableGroups = new ObservableCollection<DebugVariableGroupViewModel>();
+        _pinnedGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupPinned);
+        _parametersGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupParameters);
+        _localsGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupLocals);
         ExecutedSql = new ObservableCollection<DebugExecutedSqlRowViewModel>();
         Watches = new ObservableCollection<WatchRowViewModel>();
         StatusText = UiStrings.DebuggerLaunchPreparing;
@@ -121,8 +125,24 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// <summary>The pre-flight report (§9.2 / §4.6) shown on the launch panel.</summary>
     public ObservableCollection<DebugPreflightItem> Preflight { get; }
 
-    /// <summary>The current frame's variables (basic list — D4).</summary>
+    /// <summary>The current frame's variables — the flat roster (all rows, unfiltered, stable identity per
+    /// frame). The grouped/filtered presentation is <see cref="VariableGroups"/> over these same instances.</summary>
     public ObservableCollection<DebugVariableRowViewModel> Variables { get; }
+
+    /// <summary>The Variables panel's grouped, pinned and filtered presentation (Pinned / Parameters / Locals
+    /// — spec §9.4). References the same row instances as <see cref="Variables"/>; empty groups are hidden.
+    /// (Context = triggers is D10; Cursors needs cursor surfacing — deliberately not shipped as empty groups.)</summary>
+    public ObservableCollection<DebugVariableGroupViewModel> VariableGroups { get; }
+
+    // Persistent group instances (reused across pauses so IsExpanded survives a step-by-step rebuild).
+    private readonly DebugVariableGroupViewModel _pinnedGroup;
+    private readonly DebugVariableGroupViewModel _parametersGroup;
+    private readonly DebugVariableGroupViewModel _localsGroup;
+
+    // Change-highlighting state: the frame's values as of the previous pause, and the frame it belonged to.
+    // A new frame identity resets the baseline so the first pause in a frame marks nothing "changed".
+    private System.Collections.Generic.Dictionary<string, object?>? _previousValues;
+    private int? _previousFrameId;
 
     /// <summary>The Executed SQL audit log (D5, spec §10.3) — every expression evaluation / Immediate run,
     /// newest first. The trust anchor of a simulator (§F): the generated harness SQL is kept visible.</summary>
@@ -223,6 +243,13 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     public bool IsDebugViewVisible => !IsLaunchPanelVisible;
     public bool IsPaused => Phase == DebuggerPhase.Paused;
     public bool HasVariables => Variables.Count > 0;
+
+    /// <summary>Type-to-filter for the Variables panel (by name, case-insensitive contains — mirrors the
+    /// sidebar). Presentation only: it re-groups the existing roster, it never re-reads the frame.</summary>
+    [ObservableProperty]
+    private string _variableFilter = string.Empty;
+
+    partial void OnVariableFilterChanged(string value) => RebuildVariableGroups();
 
     /// <summary>Presentation state (not debug logic): whether the bottom tabbed panel (Immediate / Executed
     /// SQL / Watches, and future Call Stack / Breakpoints / Output) is collapsed so the editor + Variables get
@@ -583,8 +610,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     {
         await TeardownRunAsync().ConfigureAwait(true);
         SetCurrentMarker(null, null);
-        Variables.Clear();
-        OnPropertyChanged(nameof(HasVariables));
+        ClearVariables();
         ClearExecutedSql();
         ResetWatches(); // keep the (persisted) watch rows, clear their live values
         Phase = DebuggerPhase.Idle;
@@ -596,8 +622,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     {
         await TeardownRunAsync().ConfigureAwait(true);
         SetCurrentMarker(null, null);
-        Variables.Clear();
-        OnPropertyChanged(nameof(HasVariables));
+        ClearVariables();
         // Reuse the last parameter values (§9.3 — Restart re-runs without re-prompting).
         await LaunchAsync().ConfigureAwait(true);
     }
@@ -699,26 +724,51 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         RefreshVariables();
     }
 
+    // Refreshes the Variables panel after a pause. The roster (row identity) is rebuilt only when the frame
+    // changes; within a frame the rows are updated IN PLACE (so pins / expansion / selection survive a step),
+    // with change-highlighting computed against the previous pause's values.
     private void RefreshVariables()
     {
-        Variables.Clear();
-        var session = Session;
-        var frame = session?.CurrentFrame;
-        if (frame is not null && _model is not null)
+        var frame = Session?.CurrentFrame;
+        if (frame is null || _model is null)
         {
-            foreach (var row in BuildVariableRows(frame))
-            {
-                Variables.Add(row);
-            }
+            ClearVariables();
+            return;
         }
-        OnPropertyChanged(nameof(HasVariables));
+
+        // A new frame identity → fresh roster + no change baseline (nothing is "changed" on first entry).
+        if (frame.Id != _previousFrameId)
+        {
+            BuildRoster(frame);
+            _previousFrameId = frame.Id;
+            _previousValues = null;
+        }
+
+        foreach (var row in Variables)
+        {
+            bool hasValue = frame.TryResolveValue(row.Name, out var value);
+            bool changed = _previousValues is not null
+                && _previousValues.TryGetValue(row.Name, out var prev)
+                && !ValuesEqual(prev, hasValue ? value : null);
+            row.Update(hasValue, value, changed);
+        }
+
+        // The baseline for the NEXT pause is this pause's values.
+        _previousValues = new System.Collections.Generic.Dictionary<string, object?>(System.StringComparer.OrdinalIgnoreCase);
+        foreach (var row in Variables)
+        {
+            _previousValues[row.Name] = frame.TryResolveValue(row.Name, out var v) ? v : null;
+        }
+
+        RebuildVariableGroups();
     }
 
-    private IEnumerable<DebugVariableRowViewModel> BuildVariableRows(Frame frame)
+    // Rebuilds the flat roster from the semantic model (parameters first in declaration order, then locals) —
+    // the model is the roster, the frame holds the live values. A variable present in the frame but declared
+    // nowhere in the model is not shown (the declared symbols are the roster).
+    private void BuildRoster(Frame frame)
     {
-        // Parameters first (in declaration order), then locals — the semantic model is the roster; the frame
-        // holds the live values. A variable defined nowhere in the model but present in the frame is skipped
-        // (D4's roster is the declared symbols; richer discovery is D7).
+        Variables.Clear();
         var symbols = _model!.AllSymbols
             .Where(s => s is ParameterSymbol or VariableSymbol)
             .OrderBy(s => s is ParameterSymbol ? 0 : 1)
@@ -726,12 +776,94 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
         foreach (var s in symbols)
         {
-            bool hasValue = frame.TryResolveValue(s.Name, out var value);
-            string kind = s is ParameterSymbol
-                ? UiStrings.DebuggerVariableKindParameter
-                : UiStrings.DebuggerVariableKindLocal;
-            yield return new DebugVariableRowViewModel(s.Name, kind, s.DataType, hasValue, value);
+            var kind = s switch
+            {
+                ParameterSymbol { Direction: ParameterDirection.Output } => DebugVariableKind.ParameterOut,
+                ParameterSymbol => DebugVariableKind.ParameterIn,
+                _ => DebugVariableKind.Local,
+            };
+            Variables.Add(new DebugVariableRowViewModel(s.Name, kind, s.DataType));
         }
+        OnPropertyChanged(nameof(HasVariables));
+    }
+
+    // Places the roster's rows into the Pinned / Parameters / Locals groups, applying the name filter. Reuses
+    // the persistent group instances (so IsExpanded survives) and shows only non-empty groups. Presentation
+    // only — it reads the existing rows, never the frame.
+    private void RebuildVariableGroups()
+    {
+        _pinnedGroup.Rows.Clear();
+        _parametersGroup.Rows.Clear();
+        _localsGroup.Rows.Clear();
+
+        string filter = VariableFilter?.Trim() ?? string.Empty;
+        foreach (var row in Variables)
+        {
+            if (filter.Length > 0 && row.Name.IndexOf(filter, System.StringComparison.OrdinalIgnoreCase) < 0)
+                continue;
+            var target = row.IsPinned ? _pinnedGroup
+                : row.Kind == DebugVariableKind.Local ? _localsGroup
+                : _parametersGroup;
+            target.Rows.Add(row);
+        }
+
+        SyncGroupVisibility(_pinnedGroup);
+        SyncGroupVisibility(_parametersGroup);
+        SyncGroupVisibility(_localsGroup);
+    }
+
+    // Keeps a group in VariableGroups iff it has rows, preserving the fixed order (Pinned, Parameters, Locals).
+    private void SyncGroupVisibility(DebugVariableGroupViewModel group)
+    {
+        bool present = VariableGroups.Contains(group);
+        if (group.Rows.Count > 0 && !present)
+        {
+            int index = OrderIndex(group);
+            int at = 0;
+            foreach (var g in VariableGroups)
+            {
+                if (OrderIndex(g) > index) break;
+                at++;
+            }
+            VariableGroups.Insert(at, group);
+        }
+        else if (group.Rows.Count == 0 && present)
+        {
+            VariableGroups.Remove(group);
+        }
+    }
+
+    private int OrderIndex(DebugVariableGroupViewModel group)
+        => group == _pinnedGroup ? 0 : group == _parametersGroup ? 1 : 2;
+
+    // Pin / unpin a variable to the top group (session-scoped; not a Watch — §9.5).
+    [RelayCommand]
+    private void TogglePin(DebugVariableRowViewModel? row)
+    {
+        if (row is null) return;
+        row.IsPinned = !row.IsPinned;
+        RebuildVariableGroups();
+    }
+
+    private void ClearVariables()
+    {
+        Variables.Clear();
+        _pinnedGroup.Rows.Clear();
+        _parametersGroup.Rows.Clear();
+        _localsGroup.Rows.Clear();
+        VariableGroups.Clear();
+        _previousValues = null;
+        _previousFrameId = null;
+        OnPropertyChanged(nameof(HasVariables));
+    }
+
+    // Null-tolerant value equality for change-highlighting (null and DBNull are equivalent "no value").
+    private static bool ValuesEqual(object? a, object? b)
+    {
+        if (a is System.DBNull) a = null;
+        if (b is System.DBNull) b = null;
+        if (a is null || b is null) return a is null && b is null;
+        return a.Equals(b);
     }
 
     private void SetCurrentMarker(int? start, int? length)

@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
@@ -146,15 +147,30 @@ public partial class DebuggerTabView : UserControl
     }
 
     // Double-click the resize bar toggles collapse too — the SAME ToggleBottomPanelCommand (one collapse
-    // logic). The splitter is only visible while expanded, so this always collapses; re-expand is the header
-    // double-click. ApplyBottomPanel re-normalizes both rows on the toggle, so the double-click's spurious
-    // micro-drag is absorbed (the collapse captures the post-drag height, imperceptibly close to the original —
-    // exactly as the SQL editor's maximize/restore does); no per-gesture snapshot is needed.
+    // logic). The toggle is DEFERRED to run after the splitter's pointer gesture finishes: collapsing hides
+    // the splitter (its IsVisible binds to !IsBottomPanelCollapsed), and doing that synchronously — while this
+    // very splitter is still handling the double-tap gesture — leaves the collapse half-applied (the SQL
+    // editor's splitter double-click works precisely because maximize/restore never hides the splitter). Once
+    // deferred, the double-click behaves exactly like the collapse button, which always worked. ApplyBottomPanel
+    // re-normalizes both rows, so the gesture's spurious micro-drag is absorbed; no per-gesture snapshot needed.
     private void OnBottomSplitterDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (_vm is null) return;
-        Invoke(_vm.ToggleBottomPanelCommand);
+        var vm = _vm;
+        if (vm is null) return;
         e.Handled = true;
+        Dispatcher.UIThread.Post(() => Invoke(vm.ToggleBottomPanelCommand));
+    }
+
+    // Click a Variables group header to expand/collapse it. A view concern (presentation), so it flips the
+    // group VM's IsExpanded directly rather than routing a command — theme-safe (no ToggleButton fighting
+    // FluentTheme's accent state colours).
+    private void OnVariableGroupHeaderTapped(object? sender, TappedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is DebugVariableGroupViewModel group)
+        {
+            group.IsExpanded = !group.IsExpanded;
+            e.Handled = true;
+        }
     }
 
     private void OnDebugMarkersChanged(object? sender, EventArgs e) => RepaintMarkers();

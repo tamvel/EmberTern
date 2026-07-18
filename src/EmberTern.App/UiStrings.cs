@@ -1726,6 +1726,13 @@ internal static class UiStrings
     public const string DebuggerVariableNull = "<null>";
     public const string DebuggerVariableKindParameter = "param";
     public const string DebuggerVariableKindLocal = "local";
+    public const string DebuggerVariableKindIn = "IN";
+    public const string DebuggerVariableKindOut = "OUT";
+    public const string DebuggerVariableGroupPinned = "Pinned";
+    public const string DebuggerVariableGroupParameters = "Parameters";
+    public const string DebuggerVariableGroupLocals = "Locals";
+    public const string DebuggerVariableFilterWatermark = "Filter variables…";
+    public const string DebuggerVariablePinTooltip = "Pin to top / unpin";
     // Call stack (single-frame in D4, but the header exists).
     public const string DebuggerCallStackHeader = "Call stack";
     // Errors.

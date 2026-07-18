@@ -209,6 +209,77 @@ public class DebuggerTabVmTests
         Assert.Equal("15", v.ValueText);
     }
 
+    // ── D7 — Variables window (grouping / change-highlight / pins / filter) ─────────────────────────
+
+    [Fact]
+    public async Task Variables_AreGrouped_ByKind()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        var parameters = vm.VariableGroups.Single(g => g.Header == EmberTern.App.UiStrings.DebuggerVariableGroupParameters);
+        var locals = vm.VariableGroups.Single(g => g.Header == EmberTern.App.UiStrings.DebuggerVariableGroupLocals);
+        // Params A, B and the OUTPUT param R are in Parameters; the local V is in Locals.
+        Assert.Equal(new[] { "A", "B", "R" }, parameters.Rows.Select(r => r.Name));
+        Assert.Equal(new[] { "V" }, locals.Rows.Select(r => r.Name));
+        // The output parameter is distinguished from the inputs.
+        Assert.Equal(DebugVariableKind.ParameterOut, parameters.Rows.Single(r => r.Name == "R").Kind);
+        Assert.Equal(DebugVariableKind.ParameterIn, parameters.Rows.Single(r => r.Name == "A").Kind);
+    }
+
+    [Fact]
+    public async Task StepOver_HighlightsChangedVariable_Only()
+    {
+        var writes = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["V"] = 15 };
+        var vm = Vm(Sql, new FakeExecutor().Write(Off("v = a + b"), writes), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        // Nothing is "changed" on first entry into the frame (no baseline yet).
+        Assert.All(vm.Variables, r => Assert.False(r.IsChanged));
+
+        await vm.StepOverCommand.ExecuteAsync(null);
+        Assert.True(vm.Variables.First(r => r.Name == "V").IsChanged);
+        Assert.False(vm.Variables.First(r => r.Name == "A").IsChanged);
+    }
+
+    [Fact]
+    public async Task TogglePin_MovesVariable_ToPinnedGroup()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        var v = vm.Variables.First(r => r.Name == "V");
+        vm.TogglePinCommand.Execute(v);
+
+        var pinned = vm.VariableGroups.Single(g => g.Header == EmberTern.App.UiStrings.DebuggerVariableGroupPinned);
+        Assert.Same(v, pinned.Rows.Single());
+        // The pinned group sorts to the very top.
+        Assert.Same(pinned, vm.VariableGroups.First());
+        // V is no longer in Locals (which, now empty, is hidden entirely).
+        Assert.DoesNotContain(vm.VariableGroups, g => g.Header == EmberTern.App.UiStrings.DebuggerVariableGroupLocals);
+    }
+
+    [Fact]
+    public async Task VariableFilter_NarrowsGroups_ByName()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        vm.VariableFilter = "V";
+        // Only the local V matches; the Parameters group (A/B/R) is now empty and hidden.
+        Assert.DoesNotContain(vm.VariableGroups, g => g.Header == EmberTern.App.UiStrings.DebuggerVariableGroupParameters);
+        var locals = vm.VariableGroups.Single(g => g.Header == EmberTern.App.UiStrings.DebuggerVariableGroupLocals);
+        Assert.Equal(new[] { "V" }, locals.Rows.Select(r => r.Name));
+
+        // Clearing the filter restores every group.
+        vm.VariableFilter = string.Empty;
+        Assert.Contains(vm.VariableGroups, g => g.Header == EmberTern.App.UiStrings.DebuggerVariableGroupParameters);
+    }
+
     [Fact]
     public async Task UnhandledRaise_Faults()
     {

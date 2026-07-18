@@ -1067,5 +1067,16 @@ height (expanded) — structurally identical to `ApplyResultsRowForActiveTab`. W
 every toggle, the double-click's spurious micro-drag is absorbed exactly as the SQL editor's maximize/restore
 absorbs it (collapse captures the post-drag height, imperceptibly close to the original), so the
 `_splitterGestureHeight` field, `OnBottomSplitterPointerPressed`, and the `handledEventsToo` registration are
-**deleted** — one collapse/expand logic, no per-gesture exception. Gotcha #240. Build 0/0; 4797 green; smoke
-clean; live behaviour awaits user confirmation.
+**deleted** — one collapse/expand logic, no per-gesture exception.
+
+**Part 2 — the double-click still didn't hide the panel (part 1 was necessary but not sufficient).** On live
+QA the *chevron button* collapsed/expanded perfectly, but *double-clicking the splitter* did nothing useful.
+Both call the same `ToggleBottomPanelCommand` → `ApplyBottomPanel`, so the difference had to be the context:
+the button fires when nothing is mid-gesture; the double-click fires **while the GridSplitter is still handling
+its own pointer gesture**, and the collapse **hides that very splitter** (`IsVisible="{Binding
+!IsBottomPanelCollapsed}"`). Toggling synchronously mid-gesture leaves the collapse half-applied. This also
+explains the user's own SQL-editor comparison: that splitter's double-click does maximize/restore, which never
+hides the splitter, so it works. **Fix:** defer the toggle — `Dispatcher.UIThread.Post(...)` it in
+`OnBottomSplitterDoubleTapped` — so it runs after the gesture completes, making the double-click behave exactly
+like the button. Gotcha #240 (both parts). Build 0/0; 4797 green; smoke clean; live behaviour awaits user
+confirmation.

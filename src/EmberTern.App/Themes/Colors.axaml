@@ -55,6 +55,9 @@
       <Color x:Key="DebugBreakpointColor">#E51400</Color>
       <SolidColorBrush x:Key="DebugCurrentLineBrush" Color="{StaticResource DebugCurrentLineColor}" />
       <SolidColorBrush x:Key="DebugBreakpointBrush" Color="{StaticResource DebugBreakpointColor}" />
+      <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4). -->
+      <Color x:Key="DebugVariableChangedColor">#33C8A000</Color>
+      <SolidColorBrush x:Key="DebugVariableChangedBrush" Color="{StaticResource DebugVariableChangedColor}" />
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
@@ -262,6 +265,9 @@
       <Color x:Key="DebugBreakpointColor">#C42B1C</Color>
       <SolidColorBrush x:Key="DebugCurrentLineBrush" Color="{StaticResource DebugCurrentLineColor}" />
       <SolidColorBrush x:Key="DebugBreakpointBrush" Color="{StaticResource DebugBreakpointColor}" />
+      <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4). -->
+      <Color x:Key="DebugVariableChangedColor">#3FE0B000</Color>
+      <SolidColorBrush x:Key="DebugVariableChangedBrush" Color="{StaticResource DebugVariableChangedColor}" />
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
