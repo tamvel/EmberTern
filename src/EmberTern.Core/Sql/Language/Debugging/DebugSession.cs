@@ -96,7 +96,8 @@ public sealed class DebugSession
             throw new InvalidOperationException("The debug session has already been started.");
         }
 
-        PushFrame(_rootName, _rootBody, parent: null, callSite: null, initialValues: _rootValues);
+        PushFrame(_rootName, _rootBody, parent: null, lexicalParent: null, callSite: null,
+            initialValues: _rootValues, outputParameterNames: null);
         _currentStep = AdvanceToNextStepPoint();
         if (_currentStep is null)
         {
@@ -284,7 +285,8 @@ public sealed class DebugSession
                     && _executor.ResolveRoutine(step, frame) is { } routine)
                 {
                     AdvanceSequence(frame); // consume the call in the caller's block
-                    PushFrame(routine.Name, routine.Body, parent: frame, callSite: step, routine.InitialValues);
+                    PushFrame(routine.Name, routine.Body, parent: frame, lexicalParent: routine.LexicalParent,
+                        callSite: step, routine.InitialValues, routine.OutputParameterNames);
                     return false;
                 }
 
@@ -324,17 +326,40 @@ public sealed class DebugSession
             var step = _frames[^1].NextStepPoint();
             if (step is not null) return step;
 
-            _executor.LeaveFrameSavepoint(_frames[^1].SavepointName); // normal frame exit (§4.5)
+            ApplyReturningValues(_frames[^1]);                              // bind the callee's outputs back (§5)
+            _executor.LeaveFrameSavepoint(_frames[^1].SavepointName);       // normal frame exit (§4.5)
             _frames.RemoveAt(_frames.Count - 1);
         }
         return null;
     }
 
-    private void PushFrame(
-        string name, BlockStatement body, Frame? parent, IExecutableStatement? callSite,
-        IReadOnlyDictionary<string, object?>? initialValues)
+    // On a callee frame's NORMAL return, copy its output parameters into the caller's RETURNING_VALUES targets
+    // (spec §5 — a real EXECUTE PROCEDURE binds its outputs into the caller's variables; a simulated frame
+    // reconstructs that client-side from the callee's own values). Positional: the i-th output parameter →
+    // the i-th RETURNING_VALUES target. A no-op for the root, a call with no RETURNING_VALUES, or a routine
+    // with no outputs; an unhandled unwind never reaches here (the ExceptionRouter rolls those frames back).
+    // Zips to the shorter list on a malformed pair — never throws (§0 tolerance).
+    private static void ApplyReturningValues(Frame completed)
     {
-        var frame = new Frame(_nextFrameId++, name, body, parent, callSite, initialValues);
+        if (completed.Parent is not { } caller) return;
+        if (completed.CallSite is not ExecuteProcedureStatement call) return;
+
+        var targets = call.ReturningTargets;
+        var outputs = completed.OutputParameterNames;
+        int n = Math.Min(targets.Count, outputs.Count);
+        for (int i = 0; i < n; i++)
+        {
+            object? value = completed.Values.TryGet(outputs[i], out var v) ? v : null;
+            caller.SetResolvedValue(targets[i], value);
+        }
+    }
+
+    private void PushFrame(
+        string name, BlockStatement body, Frame? parent, Frame? lexicalParent, IExecutableStatement? callSite,
+        IReadOnlyDictionary<string, object?>? initialValues, IReadOnlyList<string>? outputParameterNames)
+    {
+        var frame = new Frame(
+            _nextFrameId++, name, body, parent, lexicalParent, callSite, initialValues, outputParameterNames);
         _frames.Add(frame);
         _executor.EnterFrameSavepoint(frame.SavepointName); // SAVEPOINT on frame entry (§4.5)
     }

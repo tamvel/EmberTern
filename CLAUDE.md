@@ -518,7 +518,31 @@ noted.
   kind icons now distinct SHAPE + hue per kind (▶ IN blue / ◆ OUT amber / ● local green — dedicated
   `DebugParamInBrush`/`DebugParamOutBrush`/`DebugLocalBrush` tokens, both dicts); the Pinned star is now **gold**
   (`DebugPinBrush`) with more spacing so it no longer blends into the kind glyph; and the splitter double-click
-  root-cause fix above. **Next: D8 (Call stack + nested stored routines).**
+  root-cause fix above.
+  **D8 (Call stack + nested stored routines) — seam (a) DONE (2026-07-18; pure Core, no server, no user-visible
+  change yet).** D8's DoD needs a faithful Step Into of a stored procedure (pass its arguments, write its
+  `RETURNING_VALUES` back), which the AST could not express — so seam (a) lands the **AST + Frame-model
+  foundation** before the Firebird/UI seams. **AST deepening (Contract #1):** `ExecuteProcedureStatement` now
+  produces `Arguments` (`IReadOnlyList<CallArgument>` — per-argument source spans, not tree children; a step-into
+  slices + evaluates each in the CALLER frame to seed the callee's input params) + `ReturningTargets`
+  (`IReadOnlyList<string>`, folded via the one `ForTargetName` reader). Parser producer `ReadProcedureCallParts`
+  (paren-tolerant, top-level `RETURNING_VALUES` by text); **additive** — §0 tokens round-trip, formatter
+  untouched, binder unchanged (it already binds the `:var` tokens via `BindPsqlExpression`). **Frame model —
+  `LexicalParent` split from the call-stack `Parent` (the load-bearing correction):** D1 conflated the two, but
+  a called **stored** routine has a caller (call stack / savepoints / write-back) yet is a **closed scope**
+  (cannot see caller variables); left conflated, seam (b) would inject a caller's like-named variable into an
+  unassigned callee local (§F bug). `TryResolveValue`/`SetResolvedValue` now walk `LexicalParent` (null for a
+  stored callee — D8; the declaring frame for a local sub-routine — D9, exactly the spec §6 "lexical parent"
+  language). `Frame`/`DebugRoutine` gained `OutputParameterNames` + `DebugRoutine.LexicalParent` (additive
+  ctors). **Interpreter:** `ApplyReturningValues` on a callee's NORMAL return binds its outputs **positionally**
+  into the caller's `RETURNING_VALUES` targets (spec §5; a no-op for root / no-returning / an unhandled unwind).
+  A D1 test that used `execute procedure p` as a proxy for the scope-chain and (wrongly for a stored routine)
+  asserted callee→caller resolution was split into an honest stored (closed-scope) test + a local (closure, D9
+  mechanism) test — the fake executor gained an `asLocalClosure` mode. Build 0/0; **4813 green** (+6: 4
+  `PsqlAstTests` arg/returning, +2 net `DebugEngineTests`); smoke clean. **Next: D8 seam (b)** — Firebird
+  `ResolveRoutine` (multi-routine executor context: fetch+parse+metadata the callee, evaluate arguments via the
+  harness) + lab fidelity (nested procedures, simulated vs real); then seam (c) — Call Stack / breadcrumbs /
+  frame-nav UI. Gotcha #241 (LexicalParent vs Parent). See [[feedback-debugger-ux-polish-backlog]].
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

@@ -71,15 +71,19 @@ public sealed class Frame
         string routineName,
         BlockStatement body,
         Frame? parent,
+        Frame? lexicalParent,
         IExecutableStatement? callSite,
-        IReadOnlyDictionary<string, object?>? initialValues)
+        IReadOnlyDictionary<string, object?>? initialValues,
+        IReadOnlyList<string>? outputParameterNames = null)
     {
         Id = id;
         RoutineName = routineName;
         Body = body;
         Parent = parent;
+        LexicalParent = lexicalParent;
         CallSite = callSite;
         Values = new FrameValues(initialValues);
+        OutputParameterNames = outputParameterNames ?? System.Array.Empty<string>();
         SavepointName = $"ET_DBG_FRAME_{id}";
         // Start executing the body's statements. The body's own DECLAREs are not executed — declared
         // variables begin null (their values arrive via injection/assignment); initialValues seeds params.
@@ -95,16 +99,31 @@ public sealed class Frame
     /// <summary>The body this frame interprets.</summary>
     public BlockStatement Body { get; }
 
-    /// <summary>The lexical parent frame (the declaring frame for a sub-routine; the caller otherwise), or
-    /// null for the root. The scope chain (<see cref="TryResolveValue"/>) walks this.</summary>
+    /// <summary>The <b>call-stack</b> parent — the frame that pushed this one (the caller). Walked by the
+    /// call stack (spec §5) and the exception unwinder; null for the root. Distinct from
+    /// <see cref="LexicalParent"/>: a called <b>stored</b> routine's caller is NOT its lexical parent (a
+    /// stored routine is a closed scope), whereas a local sub-routine's declaring frame is both (spec §6).</summary>
     public Frame? Parent { get; }
 
-    /// <summary>The statement in the parent frame that pushed this frame (for the caller-line marker), or
-    /// null for the root.</summary>
+    /// <summary>The <b>lexical</b> (scope-chain) parent — the frame whose variables this frame can see and
+    /// write through the closure chain (<see cref="TryResolveValue"/> / <see cref="SetResolvedValue"/>).
+    /// <b>null</b> for the root and for a called <b>stored</b> routine (a closed scope: its only inputs are
+    /// its parameters); the <b>declaring</b> frame for a <b>local</b> sub-routine (spec §6 closures — set by
+    /// D9). Deliberately separate from the call-stack <see cref="Parent"/>: D8 is where the two first
+    /// diverge (a stored callee has a caller but no lexical parent).</summary>
+    public Frame? LexicalParent { get; }
+
+    /// <summary>The statement in the parent frame that pushed this frame (for the caller-line marker and the
+    /// <c>RETURNING_VALUES</c> write-back on return), or null for the root.</summary>
     public IExecutableStatement? CallSite { get; }
 
     /// <summary>This frame's variable store — the client-side truth.</summary>
     public FrameValues Values { get; }
+
+    /// <summary>This routine's <b>output</b> parameter names, in declaration order (empty for the root / a
+    /// routine with no outputs). On this frame's normal return, its outputs are written positionally into the
+    /// caller's <c>RETURNING_VALUES</c> targets (spec §5 — a real call's output binding, reconstructed).</summary>
+    public IReadOnlyList<string> OutputParameterNames { get; }
 
     /// <summary>The SAVEPOINT name reconstructing this frame's call atomicity (spec §4.5).</summary>
     public string SavepointName { get; }
@@ -114,12 +133,14 @@ public sealed class Frame
 
     // ── Scope chain (spec §6 — closures over the declaring frame) ────────────────────────────────
 
-    /// <summary>Resolves a variable up the lexical scope chain (this frame, then <see cref="Parent"/>,
-    /// …), returning the nearest defining frame's value. This is the mechanism a sub-routine frame uses to
-    /// read an outer variable (spec §6.1); D1 provides it, D9 wires local routines to it.</summary>
+    /// <summary>Resolves a variable up the lexical scope chain (this frame, then
+    /// <see cref="LexicalParent"/>, …), returning the nearest defining frame's value. This is the mechanism a
+    /// local sub-routine frame uses to read an outer variable (spec §6.1); a stored routine has no lexical
+    /// parent, so it resolves only its own variables (a closed scope). D1 provides it, D9 wires local
+    /// routines to it.</summary>
     public bool TryResolveValue(string name, out object? value)
     {
-        for (var f = this; f is not null; f = f.Parent)
+        for (var f = this; f is not null; f = f.LexicalParent)
         {
             if (f.Values.Contains(name))
             {
@@ -135,7 +156,7 @@ public sealed class Frame
     /// or in this frame when it is defined nowhere.</summary>
     public void SetResolvedValue(string name, object? value)
     {
-        for (var f = this; f is not null; f = f.Parent)
+        for (var f = this; f is not null; f = f.LexicalParent)
         {
             if (f.Values.Contains(name))
             {

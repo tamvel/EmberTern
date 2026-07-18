@@ -69,11 +69,18 @@ public interface IDebugCursor
 /// source is D8; a local routine resolves from the AST (D9); D1 drives it from a fake.</summary>
 public sealed class DebugRoutine
 {
-    public DebugRoutine(string name, BlockStatement body, IReadOnlyDictionary<string, object?>? initialValues = null)
+    public DebugRoutine(
+        string name,
+        BlockStatement body,
+        IReadOnlyDictionary<string, object?>? initialValues = null,
+        IReadOnlyList<string>? outputParameterNames = null,
+        Frame? lexicalParent = null)
     {
         Name = name;
         Body = body;
         InitialValues = initialValues;
+        OutputParameterNames = outputParameterNames ?? System.Array.Empty<string>();
+        LexicalParent = lexicalParent;
     }
 
     /// <summary>The callee's name (for the call stack / breadcrumbs).</summary>
@@ -82,8 +89,20 @@ public sealed class DebugRoutine
     /// <summary>The callee's body — a <see cref="BlockStatement"/> the interpreter runs as a new frame.</summary>
     public BlockStatement Body { get; }
 
-    /// <summary>The argument values bound into the new frame's scope, or null.</summary>
+    /// <summary>The argument values bound into the new frame's scope (the callee's input parameters, seeded
+    /// from the call's evaluated arguments), or null.</summary>
     public IReadOnlyDictionary<string, object?>? InitialValues { get; }
+
+    /// <summary>The callee's <b>output</b> parameter names, in declaration order (empty when it has none) —
+    /// on the callee frame's normal return, its outputs are written positionally into the caller's
+    /// <c>RETURNING_VALUES</c> targets (spec §5).</summary>
+    public IReadOnlyList<string> OutputParameterNames { get; }
+
+    /// <summary>The callee's <b>lexical</b> parent frame for the scope chain (<see cref="Frame.LexicalParent"/>):
+    /// <b>null</b> for a stored routine (a closed scope — D8), the <b>declaring</b> frame for a local
+    /// sub-routine (a closure over the parent — D9). The call-stack parent is always the caller and is set by
+    /// the interpreter, independently of this.</summary>
+    public Frame? LexicalParent { get; }
 }
 
 /// <summary>The server seam. The interpreter calls it; it never drives the interpreter.</summary>

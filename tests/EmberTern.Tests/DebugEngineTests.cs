@@ -67,6 +67,7 @@ public class DebugEngineTests
         private readonly Dictionary<int, Queue<StatementOutcome>> _outcomes = new();
         private readonly Dictionary<int, List<IReadOnlyDictionary<string, object?>>> _cursorRows = new();
         private readonly Dictionary<int, DebugRoutine> _routines = new();
+        private readonly HashSet<int> _localClosures = new();
 
         public FakeExecutor(bool defaultCondition = true) => _defaultCondition = defaultCondition;
 
@@ -94,9 +95,13 @@ public class DebugEngineTests
             return this;
         }
 
-        public FakeExecutor RoutineAt(int start, DebugRoutine routine)
+        // Registers a callee for step-into at `start`. asLocalClosure = true makes it a LOCAL sub-routine
+        // (its frame's lexical parent = the caller frame, a closure — the D9 mechanism); the default is a
+        // stored routine (a closed scope — the D8 default, lexical parent null).
+        public FakeExecutor RoutineAt(int start, DebugRoutine routine, bool asLocalClosure = false)
         {
             _routines[start] = routine;
+            if (asLocalClosure) _localClosures.Add(start);
             return this;
         }
 
@@ -136,7 +141,14 @@ public class DebugEngineTests
         }
 
         public DebugRoutine? ResolveRoutine(IExecutableStatement call, Frame frame)
-            => _routines.TryGetValue(call.Start, out var routine) ? routine : null;
+        {
+            if (!_routines.TryGetValue(call.Start, out var routine)) return null;
+            // A local sub-routine closes over its declaring (caller) frame — rebuild it with that lexical
+            // parent (D9 mechanism). A stored routine keeps a null lexical parent (a closed scope — D8).
+            return _localClosures.Contains(call.Start)
+                ? new DebugRoutine(routine.Name, routine.Body, routine.InitialValues, routine.OutputParameterNames, lexicalParent: frame)
+                : routine;
+        }
 
         public void EnterFrameSavepoint(string name) => Savepoints.Add("enter:" + name);
 
@@ -501,22 +513,47 @@ public class DebugEngineTests
     }
 
     [Fact]
-    public void ScopeChain_InnerFrameResolvesAndWritesOuterVariable()
+    public void StoredCallee_IsAClosedScope_DoesNotSeeCallerVariables()
     {
-        // The scope-chain mechanism the flagship (D9) local routines build on: a callee frame's lexical
-        // parent is its caller, so it resolves and can write-back a variable defined in the parent.
+        // A called STORED routine is a closed scope (spec §6): its only inputs are its parameters, so its
+        // frame does NOT chain to the caller's variables (D8 — the LexicalParent split). It is still on the
+        // call stack (Parent = caller) for stepping, navigation and exception propagation.
         const string sql = "begin a = 1; execute procedure p; end";
         var callee = new DebugRoutine("P", Body(CalleeSql));
         var exec = new FakeExecutor()
             .Outcome(Off(sql, "a = 1"), StatementOutcome.Normal(Row("V_OUTER", 5)))
-            .RoutineAt(Off(sql, "execute procedure p"), callee);
+            .RoutineAt(Off(sql, "execute procedure p"), callee); // stored (default) → closed scope
         var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
         s.Start();
         s.Step(StepKind.Into); // a = 1; → ROOT frame gets V_OUTER = 5
-        s.Step(StepKind.Into); // step INTO p → callee frame, parent = ROOT
+        s.Step(StepKind.Into); // step INTO the stored callee
 
         var child = s.CurrentFrame!;
         Assert.Equal("P", child.RoutineName);
+        Assert.Null(child.LexicalParent);                       // closed scope — no lexical parent
+        Assert.Equal("ROOT", child.Parent!.RoutineName);        // but the caller IS its call-stack parent
+        Assert.False(child.TryResolveValue("V_OUTER", out _));  // the caller's variable is not visible
+    }
+
+    [Fact]
+    public void LocalCallee_IsAClosure_ResolvesAndWritesOuterVariable()
+    {
+        // The scope-chain mechanism the flagship (D9) local routines build on: a LOCAL sub-routine's frame's
+        // lexical parent is its declaring (caller) frame, so it resolves and can write back an outer variable.
+        // (Contrast StoredCallee_IsAClosedScope: a stored routine — the D8 default — has NO lexical parent.)
+        const string sql = "begin a = 1; execute procedure p; end";
+        var callee = new DebugRoutine("P", Body(CalleeSql));
+        var exec = new FakeExecutor()
+            .Outcome(Off(sql, "a = 1"), StatementOutcome.Normal(Row("V_OUTER", 5)))
+            .RoutineAt(Off(sql, "execute procedure p"), callee, asLocalClosure: true);
+        var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
+        s.Start();
+        s.Step(StepKind.Into); // a = 1; → ROOT frame gets V_OUTER = 5
+        s.Step(StepKind.Into); // step INTO the local sub-routine → lexical parent = ROOT
+
+        var child = s.CurrentFrame!;
+        Assert.Equal("P", child.RoutineName);
+        Assert.Equal("ROOT", child.LexicalParent!.RoutineName);
         Assert.True(child.TryResolveValue("V_OUTER", out var v)); // resolves up the chain to ROOT
         Assert.Equal(5, v);
         Assert.False(child.TryResolveValue("NOPE", out _));
@@ -526,6 +563,31 @@ public class DebugEngineTests
         Assert.Equal("ROOT", root.RoutineName);
         Assert.Equal(99, root.Values.Get("V_OUTER"));
         Assert.False(child.Values.Contains("V_OUTER"));   // not shadowed locally
+    }
+
+    [Fact]
+    public void StepInto_ReturningValues_WritesCalleeOutputsIntoCallerVariables()
+    {
+        // EXECUTE PROCEDURE P RETURNING_VALUES :x, :y — on P's NORMAL return, P's output parameters (O1, O2)
+        // are bound positionally into the caller's :x / :y (spec §5). Proven with a scripted stored callee
+        // whose outputs are set by its own body.
+        const string sql = "begin execute procedure p returning_values :x, :y; end";
+        const string calleeSql = "begin o1 = 10; o2 = 20; end";
+        var callee = new DebugRoutine("P", Body(calleeSql), outputParameterNames: new[] { "O1", "O2" });
+        var exec = new FakeExecutor()
+            .RoutineAt(Off(sql, "execute procedure p"), callee)
+            .Outcome(Off(calleeSql, "o1 = 10"), StatementOutcome.Normal(Row("O1", 10)))
+            .Outcome(Off(calleeSql, "o2 = 20"), StatementOutcome.Normal(Row("O2", 20)));
+        var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
+        s.Start();
+        var root = s.CurrentFrame!;                 // the ROOT (caller) frame
+        s.Step(StepKind.Into);                      // into P → o1 = 10;
+        Assert.Equal(2, s.Depth);
+        s.Step(StepKind.Into);                      // o1 = 10; (callee O1 = 10)
+        s.Step(StepKind.Into);                      // o2 = 20; then P returns → RETURNING_VALUES write-back
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Equal(10, root.Values.Get("X"));     // :x ← O1
+        Assert.Equal(20, root.Values.Get("Y"));     // :y ← O2
     }
 
     // ── Exception routing (seam b): handler matching, propagation, unwind, re-raise ────────────────

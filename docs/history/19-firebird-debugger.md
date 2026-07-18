@@ -1173,3 +1173,69 @@ both a touch larger, with a 4px gap added between the pin button and the kind gl
 
 Build 0/0; **4807 green** (no test changes — no test asserts glyph/colour strings); smoke clean. UX awaits the
 user's visual confirmation.
+
+## D8 — Call stack + nested stored routines, seam (a): AST deepening + Frame model (2026-07-18, pure Core)
+
+D8's DoD ("A→B→C stack navigable; simulated vs real") requires a **faithful** Step Into of a stored
+procedure — pass its arguments, write its `RETURNING_VALUES` back — which the AST could not express. Analysis
+(presented to the user before coding, per the "stop and recommend if AST/binder deepening is needed" rule)
+found two structural gaps; the user ratified **full D8, starting from a pure-Core seam (a)**. Seam (a) lands
+the AST + Frame-model foundation with **zero server** in the loop and no production behaviour change — the
+executor's `ResolveRoutine` still returns null (seam b activates it), so no callee frame is pushed in prod yet.
+
+### 1. AST — `ExecuteProcedureStatement` deepened (Contract #1: structure belongs in the AST, not a token scan)
+
+The node carried only `ProcedureName`. It now also produces (parser producer, additive overlay — §0 tokens
+still round-trip; formatter untouched, token-based):
+- **`Arguments`** — `IReadOnlyList<CallArgument>`, each a **source span** of one positional argument (not a
+  tree child — it carries only a span, like `ForSelectStatement.IntoTargets`). A step-into slices the span and
+  evaluates the argument expression **in the caller frame** to seed the callee's input parameters (seam b). The
+  argument's ordinary-expression interior stays in the tokens (structural-depth boundary — no subquery/CASE
+  recursion into arguments in D8, a documented boundary).
+- **`ReturningTargets`** — `IReadOnlyList<string>`, the `RETURNING_VALUES` targets folded to the resolution
+  convention (reusing the one `ForTargetName` INTO-target reader), so they key straight into a frame.
+
+Parser: `ReadProcedureCallParts` (SqlParser.cs) — skips the (possibly dotted) name, finds the top-level
+`RETURNING_VALUES` (an identifier, matched by text — mirrors the binder), splits the argument and returning
+sections at paren-depth-0 commas, tolerating the optional surrounding parens Firebird allows in either section.
+The binder is **unchanged**: it already binds the `:var` argument/returning tokens via `BindPsqlExpression`
+(the sanctioned expression-interior token walk), so the read/write sets already see them — no new binding.
+
+### 2. Frame model — `LexicalParent` split from the call-stack `Parent`; `OutputParameterNames`
+
+The load-bearing correction: D1's `Frame.Parent` conflated **two roles** — the call-stack parent (caller) and
+the lexical/scope-chain parent (closure). For a **stored** routine these differ: the callee has a caller (call
+stack, savepoint nesting, `RETURNING_VALUES` write-back, the future caller-line marker) but is a **closed
+scope** — it cannot see the caller's variables. D1 never exercised this (only the root frame existed); D8 is
+the first milestone that pushes a second frame, so it is where the two first diverge. Left conflated, in seam
+(b) an unassigned callee local `X` would resolve up to a caller `X` and inject the wrong value — a §F bug.
+
+- New `Frame.LexicalParent` (distinct from `Parent`); `TryResolveValue` / `SetResolvedValue` now walk
+  `LexicalParent`. A stored callee gets `LexicalParent = null` (closed scope, D8); a **local** sub-routine will
+  get its declaring frame (spec §6 closure — D9). This is exactly the spec §6 "lexical parent" language, now
+  first-class.
+- New `Frame.OutputParameterNames` (declaration order) + `DebugRoutine.OutputParameterNames` /
+  `DebugRoutine.LexicalParent` — additive ctor params (defaults preserve every existing caller).
+
+### 3. Interpreter — `RETURNING_VALUES` write-back on normal return
+
+`AdvanceToNextStepPoint` now calls `ApplyReturningValues` before releasing a completing frame's savepoint: on a
+callee's **normal** exit, its output parameters are bound **positionally** into the caller's `RETURNING_VALUES`
+targets (spec §5 — a real `EXECUTE PROCEDURE` binds outputs into the caller; a simulated frame reconstructs
+that client-side from the callee's own values). A no-op for the root / a call with no `RETURNING_VALUES` / an
+unhandled unwind (the `ExceptionRouter` rolls those back — a faulted call returns nothing); zips to the shorter
+list on a malformed pair, never throws.
+
+### A D1 test that encoded the wrong assumption (corrected, not deleted)
+
+`ScopeChain_InnerFrameResolvesAndWritesOuterVariable` used `execute procedure p` as a **proxy** for the
+scope-chain mechanism and asserted the callee resolves the caller's variable — true only for a *local*
+sub-routine (D9), **false** for a stored one (D8). Split into two honest tests:
+`StoredCallee_IsAClosedScope_DoesNotSeeCallerVariables` (D8 default) and
+`LocalCallee_IsAClosure_ResolvesAndWritesOuterVariable` (the D9 mechanism, driven by the fake executor's new
+`asLocalClosure` mode that sets `LexicalParent = caller`). Plus `StepInto_ReturningValues_...` (the write-back)
+and 4 `PsqlAstTests` (paren/bare arguments, paren/bare + folded returning targets, the no-arg regression).
+
+Build 0/0; **4813 green** (in one run); smoke clean. **Nothing user-visible yet** — seam (a) is the
+foundation; seam (b) (Firebird `ResolveRoutine` + lab fidelity) and seam (c) (Call Stack / breadcrumbs / frame
+nav UI) follow. Gotcha #241 (the LexicalParent-vs-Parent distinction).

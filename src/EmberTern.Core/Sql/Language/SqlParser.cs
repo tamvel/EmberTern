@@ -395,7 +395,10 @@ public static partial class SqlParser
             if (Kw(slice[1], "BLOCK"))
                 return new ExecuteBlockStatement(start, length, slice, ParseRoutineBody(slice));
             if (Kw(slice[1], "PROCEDURE"))
-                return new ExecuteProcedureStatement(start, length, slice, ReadProcedureName(slice));
+            {
+                var (args, returning) = ReadProcedureCallParts(slice);
+                return new ExecuteProcedureStatement(start, length, slice, ReadProcedureName(slice), args, returning);
+            }
         }
         return new ExecuteStatementStatement(start, length, slice);
     }
@@ -412,6 +415,107 @@ public static partial class SqlParser
             TokenKind.Keyword or TokenKind.Identifier => t.Text.ToUpperInvariant(),
             _ => null,
         };
+    }
+
+    // EXECUTE PROCEDURE <name> [ ( ] <arg>, … [ ) ] [ RETURNING_VALUES [ ( ] <var>, … [ ) ] ] — the call's
+    // positional arguments (as source spans, for a debugger step-into to evaluate in the caller frame) and
+    // its RETURNING_VALUES targets (folded variable names). Additive AST overlay (Stage X / D8); the slice's
+    // tokens still round-trip (§0). Both sections tolerate the optional surrounding parens Firebird allows.
+    private static (IReadOnlyList<CallArgument> Args, IReadOnlyList<string> Returning) ReadProcedureCallParts(
+        IReadOnlyList<SqlToken> slice)
+    {
+        int hi = slice.Count;
+        while (hi > 0 && slice[hi - 1].Kind == TokenKind.Semicolon) hi--; // ';' is a terminator, not a part
+
+        // Index just past the (possibly dotted, e.g. PACKAGE.PROC) procedure name.
+        int i = 3; // slice[0]=EXECUTE, slice[1]=PROCEDURE, slice[2]=name
+        while (i < hi && At(slice, i).Kind == TokenKind.Dot) { i++; if (i < hi) i++; }
+        if (i >= hi) return (Array.Empty<CallArgument>(), Array.Empty<string>());
+
+        int rv = FindReturningValuesTop(slice, i, hi);
+        var args = ReadCallArgumentList(slice, i, rv);
+        var returning = rv < hi
+            ? ReadCallReturningTargets(slice, rv + 1, hi)
+            : (IReadOnlyList<string>)Array.Empty<string>();
+        return (args, returning);
+    }
+
+    // The index of the top-level (paren-depth 0) RETURNING_VALUES keyword, or hi. RETURNING_VALUES is not a
+    // catalogued keyword — it lexes as an identifier — so it is matched by text (mirrors the binder).
+    private static int FindReturningValuesTop(IReadOnlyList<SqlToken> t, int from, int hi)
+    {
+        int depth = 0;
+        for (int i = from; i < hi; i++)
+        {
+            var kind = t[i].Kind;
+            if (kind == TokenKind.LParen) depth++;
+            else if (kind == TokenKind.RParen) { if (depth > 0) depth--; }
+            else if (depth == 0 && IsWordText(t[i], "RETURNING_VALUES")) return i;
+        }
+        return hi;
+    }
+
+    // Splits the argument range [lo, hi) into per-argument source spans at paren-depth-0 commas, stripping a
+    // single fully-enclosing paren pair first (EXECUTE PROCEDURE P (a, b) vs. EXECUTE PROCEDURE P a, b).
+    private static IReadOnlyList<CallArgument> ReadCallArgumentList(IReadOnlyList<SqlToken> t, int lo, int hi)
+    {
+        if (lo >= hi) return Array.Empty<CallArgument>();
+        if (t[lo].Kind == TokenKind.LParen)
+        {
+            int close = MatchParenTok(t, lo, hi);
+            if (close == hi - 1) { lo++; hi = close; } // the parens enclose the whole list — strip them
+        }
+
+        var args = new List<CallArgument>();
+        int depth = 0, segStart = lo;
+        for (int k = lo; k <= hi; k++)
+        {
+            bool atEnd = k == hi;
+            if (!atEnd)
+            {
+                var kind = t[k].Kind;
+                if (kind == TokenKind.LParen) { depth++; continue; }
+                if (kind == TokenKind.RParen) { if (depth > 0) depth--; continue; }
+                if (!(depth == 0 && kind == TokenKind.Comma)) continue;
+            }
+            if (k > segStart)
+            {
+                int s = t[segStart].Start;
+                args.Add(new CallArgument(s, t[k - 1].End - s));
+            }
+            segStart = k + 1;
+        }
+        return args.Count == 0 ? Array.Empty<CallArgument>() : args;
+    }
+
+    // Splits the RETURNING_VALUES target range [lo, hi) at paren-depth-0 commas and reads each segment's
+    // folded variable name (bare / :name / @name / quoted). Reuses the one INTO-target reader (ForTargetName).
+    private static IReadOnlyList<string> ReadCallReturningTargets(IReadOnlyList<SqlToken> t, int lo, int hi)
+    {
+        if (lo >= hi) return Array.Empty<string>();
+        if (t[lo].Kind == TokenKind.LParen)
+        {
+            int close = MatchParenTok(t, lo, hi);
+            if (close == hi - 1) { lo++; hi = close; }
+        }
+
+        var names = new List<string>();
+        int depth = 0, segStart = lo;
+        for (int k = lo; k <= hi; k++)
+        {
+            bool atEnd = k == hi;
+            if (!atEnd)
+            {
+                var kind = t[k].Kind;
+                if (kind == TokenKind.LParen) { depth++; continue; }
+                if (kind == TokenKind.RParen) { if (depth > 0) depth--; continue; }
+                if (!(depth == 0 && kind == TokenKind.Comma)) continue;
+            }
+            var name = ForTargetName(t, segStart, k);
+            if (name is not null) names.Add(name);
+            segStart = k + 1;
+        }
+        return names.Count == 0 ? Array.Empty<string>() : names;
     }
 
     private static DdlStatement BuildDdl(IReadOnlyList<SqlToken> slice, int start, int length)

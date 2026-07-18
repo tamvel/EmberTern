@@ -192,6 +192,48 @@ public class PsqlAstTests
         Assert.All(body.Statements, s => Assert.IsAssignableFrom<IExecutableStatement>(s));
     }
 
+    // ── Stage X / D8: EXECUTE PROCEDURE arguments + RETURNING_VALUES (additive AST overlay) ──────────
+
+    private static ExecuteProcedureStatement Call(string sql)
+        => Assert.IsType<ExecuteProcedureStatement>(Body(sql).Statements.Single());
+
+    [Fact]
+    public void ExecuteProcedure_NoArgs_NoReturning_HasEmptyLists()
+    {
+        var call = Call("begin execute procedure p; end");
+        Assert.Equal("P", call.ProcedureName);
+        Assert.Empty(call.Arguments);
+        Assert.Empty(call.ReturningTargets);
+    }
+
+    [Fact]
+    public void ExecuteProcedure_ParenthesizedArguments_AreSpans()
+    {
+        const string sql = "begin execute procedure p(:a, :b + 1); end";
+        var call = Call(sql);
+        Assert.Equal(2, call.Arguments.Count);
+        Assert.Equal(":a", sql.Substring(call.Arguments[0].Start, call.Arguments[0].Length));
+        Assert.Equal(":b + 1", sql.Substring(call.Arguments[1].Start, call.Arguments[1].Length));
+        Assert.Empty(call.ReturningTargets);
+    }
+
+    [Fact]
+    public void ExecuteProcedure_BareArguments_AndReturningValues_Folded()
+    {
+        const string sql = "begin execute procedure p :a, :b returning_values :x, :y; end";
+        var call = Call(sql);
+        Assert.Equal(new[] { ":a", ":b" }, call.Arguments.Select(a => sql.Substring(a.Start, a.Length)));
+        Assert.Equal(new[] { "X", "Y" }, call.ReturningTargets);
+    }
+
+    [Fact]
+    public void ExecuteProcedure_ParenthesizedReturningValues_NoArgs()
+    {
+        var call = Call("begin execute procedure p returning_values (:x); end");
+        Assert.Empty(call.Arguments);
+        Assert.Equal(new[] { "X" }, call.ReturningTargets);
+    }
+
     [Fact]
     public void MalformedIf_WithoutThen_StaysLosslessLeaf()
     {

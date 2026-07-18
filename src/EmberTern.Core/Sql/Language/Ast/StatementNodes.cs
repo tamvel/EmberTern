@@ -189,18 +189,46 @@ public sealed class ExecuteBlockStatement : SqlStatement
 /// <summary><c>EXECUTE PROCEDURE name [(args)] [RETURNING_VALUES …]</c>.</summary>
 public sealed class ExecuteProcedureStatement : SqlStatement, IExecutableStatement
 {
-    public ExecuteProcedureStatement(int start, int length, IReadOnlyList<SqlToken> tokens, string? procedureName)
+    public ExecuteProcedureStatement(
+        int start,
+        int length,
+        IReadOnlyList<SqlToken> tokens,
+        string? procedureName,
+        IReadOnlyList<CallArgument>? arguments = null,
+        IReadOnlyList<string>? returningTargets = null)
         : base(start, length, tokens)
     {
         ProcedureName = procedureName;
+        Arguments = arguments ?? Array.Empty<CallArgument>();
+        ReturningTargets = returningTargets ?? Array.Empty<string>();
     }
 
     /// <summary>The invoked procedure's name — an unquoted name is upper-cased to match the
     /// catalog, a quoted name keeps its case — or null when it could not be read.</summary>
     public string? ProcedureName { get; }
 
+    /// <summary>The call's positional arguments, in order (Stage X / D8) — each the source span of one
+    /// argument expression, which a debugger step-into evaluates verbatim in the <b>caller's</b> frame to
+    /// seed the callee's input parameters. Empty for a no-argument call. The arguments' ordinary expression
+    /// interior stays in <see cref="SqlStatement.Tokens"/> (structural-depth boundary; this carries only the
+    /// spans the debugger slices); additive overlay — the tokens still round-trip (§0).</summary>
+    public IReadOnlyList<CallArgument> Arguments { get; }
+
+    /// <summary>The <c>RETURNING_VALUES</c> target variable names, in order, folded to the resolution
+    /// convention (unquoted upper-cased; the leading <c>:</c>/<c>@</c> of a parameter stripped) so they key
+    /// straight into a frame's values (Stage X / D8) — the caller variables the callee's output parameters
+    /// are written into on return. Empty when the call has no <c>RETURNING_VALUES</c>. Additive overlay;
+    /// <see cref="SqlStatement.Tokens"/> still round-trips (§0).</summary>
+    public IReadOnlyList<string> ReturningTargets { get; }
+
     public override StatementKind Kind => StatementKind.ExecuteProcedure;
 }
+
+/// <summary>One positional argument of an <see cref="ExecuteProcedureStatement"/> — the source span of the
+/// argument expression (Stage X / D8). A debugger step-into slices this span and evaluates it in the caller
+/// frame; the ordinary expression content is not modelled deeper (structural-depth boundary). Not a tree
+/// child (it carries only a span, like <see cref="ForSelectStatement.IntoTargets"/>).</summary>
+public sealed record CallArgument(int Start, int Length);
 
 /// <summary><c>EXECUTE STATEMENT …</c> (or a bare <c>EXECUTE …</c> that is neither BLOCK nor PROCEDURE).</summary>
 public sealed class ExecuteStatementStatement : SqlStatement, IExecutableStatement

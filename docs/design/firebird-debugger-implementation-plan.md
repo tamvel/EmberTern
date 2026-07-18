@@ -339,6 +339,22 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
   stack; frame savepoints correct on unwind.
 - **Weryfikacja.** Lab: nested procedures; simulated vs real. VM tests for stack/selection.
 - **Sesje: 2–3.**
+- **STATUS — seam (a) DONE (2026-07-18; pure Core, no server, no user-visible change yet).** The faithful
+  Step Into the DoD needs (pass arguments, write `RETURNING_VALUES` back) required an **AST deepening**, so the
+  analysis stopped for a decision before coding (per Contract #1/#15) and the user ratified full D8 starting
+  from a pure-Core foundation seam. Landed: **AST** — `ExecuteProcedureStatement.Arguments` (per-arg source
+  spans) + `ReturningTargets` (folded), parser producer `ReadProcedureCallParts` (additive; §0 tokens
+  round-trip; formatter + binder unchanged). **Frame model** — `LexicalParent` **split** from the call-stack
+  `Parent` (gotcha #241): a stored callee is a **closed scope** (`LexicalParent = null`), a local sub-routine's
+  (D9) is its declaring frame; `TryResolveValue`/`SetResolvedValue` walk `LexicalParent`. `OutputParameterNames`
+  on `Frame`/`DebugRoutine`; `DebugRoutine.LexicalParent`. **Interpreter** — `ApplyReturningValues` on a callee's
+  normal return binds its outputs positionally into the caller's `RETURNING_VALUES` targets (§5). A D1 test that
+  used a stored-proc call as a scope-chain proxy was split into an honest stored (closed) + local (closure, D9
+  mechanism) pair. Build 0/0; **4813 green** (+6); smoke clean. `ResolveRoutine` still returns null in prod →
+  **no callee frame is pushed yet** (gotcha #233: staged, not a regression — recorded here + in CLAUDE.md).
+  **Next: seam (b)** — Firebird `ResolveRoutine` (multi-routine executor context: fetch/parse/metadata the
+  callee, evaluate arguments via the harness) + **lab fidelity** (nested procedures, simulated vs real); then
+  **seam (c)** — Call Stack panel + Breadcrumbs (shared) + frame nav + simulated-frame indicator + Peek Frame.
 
 ---
 
