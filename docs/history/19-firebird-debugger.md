@@ -1040,3 +1040,32 @@ The real executor drove `DebugSession` through them; outputs matched real execut
 Build 0/0; **4797 tests green** (+11: 6 D6a AST, 5 CursorBridge); smoke clean; live fidelity proven. The
 in-app stepping UX (breakpoints inside a loop body, Variables reflecting INTO targets live) awaits user
 confirmation (renders only against a live DB). **Next: D7 (Variables window, full).**
+
+---
+
+## Bottom-panel splitter double-click — root-cause fix (2026-07-18)
+
+Three prior commits (`1b77c55`, `c5bf882`, `282fd4d`) tried to fix "double-click the bottom-panel
+GridSplitter to collapse, re-expand restores the height" by fiddling with the splitter gesture itself
+(a `_splitterGestureHeight` snapshot captured on `PointerPressed` with `handledEventsToo`, restored before
+the toggle). It still misbehaved: after a real drag, collapse + re-expand left the panel "glued" to the
+editor.
+
+**Root cause (found by comparing to the SQL editor, not the splitter).** `ApplyBottomPanel` mutated **only**
+the bottom row (Row 2 of `DebugLayout`), never the top row (Row 0). Avalonia's `GridSplitter`
+(`ResizeBehavior=PreviousAndNext`) between a `*` (star) top row and an absolute-pixel bottom row **converts
+the star row to an absolute pixel height** on a genuine drag. Once Row 0 is stuck absolute, the grid has **no
+star row** to reclaim vacated space — so collapse leaves a gap and re-expand can't re-establish the
+editor↔panel relationship. The SQL editor never has this bug because `ApplyResultsRowForActiveTab` /
+`ApplyResultsMaximized` are a **single re-normalization point that always sets both rows** (editor row → `*`,
+results row → pixel/0) on every layout apply; the splitter's transient mutations never survive to the next
+normalize.
+
+**Fix (unify, delete the workaround).** `ApplyBottomPanel` is now the debugger's single re-normalization
+point: it sets **Row 0 back to star** in both branches and Row 2 to Auto (collapsed) / remembered pixel
+height (expanded) — structurally identical to `ApplyResultsRowForActiveTab`. With full re-normalization on
+every toggle, the double-click's spurious micro-drag is absorbed exactly as the SQL editor's maximize/restore
+absorbs it (collapse captures the post-drag height, imperceptibly close to the original), so the
+`_splitterGestureHeight` field, `OnBottomSplitterPointerPressed`, and the `handledEventsToo` registration are
+**deleted** — one collapse/expand logic, no per-gesture exception. Gotcha #240. Build 0/0; 4797 green; smoke
+clean; live behaviour awaits user confirmation.

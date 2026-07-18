@@ -480,7 +480,17 @@ noted.
   `RETURNS (LINE_NO)` output param got rewritten to `?` → SQL -804; fix = rewrite **only** the colon/`@` form
   (unambiguous variable syntax; a bare name is a column), gotcha #239. Lab zoo +`SP_DBG_CURSOR`/`SP_DBG_NESTED`;
   **sim-vs-real fidelity proven** incl. a fully-stepped run + nested cursors (spec §15.5). Build 0/0, **4797
-  green** (+11), smoke clean. **Next: D7 (Variables window, full).** History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
+  green** (+11), smoke clean. History: [docs/history/19-...](docs/history/19-firebird-debugger.md).
+  **Bottom-panel splitter double-click — root-cause fix (2026-07-18; live behaviour awaits user confirmation).**
+  Three prior commits fiddled with the splitter gesture (a `_splitterGestureHeight` snapshot) and the panel
+  still "glued" to the editor after collapse + re-expand. **Real cause** (found by comparing to the SQL editor):
+  `ApplyBottomPanel` mutated only the bottom row, never the top — but Avalonia's `GridSplitter`
+  (`PreviousAndNext`) converts the `*` top row to an **absolute pixel height** on a drag, so once dragged the
+  grid has no star row to reclaim space. Fix = make `ApplyBottomPanel` the **single re-normalization point that
+  sets both rows every toggle** (top → star, bottom → Auto/pixel), exactly like `ApplyResultsRowForActiveTab`;
+  the `_splitterGestureHeight` workaround + its `PointerPressed` handler are **deleted** (full re-normalization
+  absorbs the double-click micro-drag, as the SQL editor's maximize/restore does). Gotcha #240. Build 0/0, 4797
+  green, smoke clean. **Next: D7 (Variables window, full).**
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

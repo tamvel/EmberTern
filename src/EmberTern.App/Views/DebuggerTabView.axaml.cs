@@ -28,23 +28,25 @@ public partial class DebuggerTabView : UserControl
     private DebuggerTabViewModel? _vm;
     private bool _attached;
 
-    // Bottom tabbed panel (Immediate / Executed SQL / Watches) collapse — mirrors the SQL results panel's
-    // row-height toggle (MainWindow). Collapsed → the row goes Auto (only the tab strip shows), the editor +
-    // Variables reclaim the height; expanded → the remembered (draggable) pixel height. Presentation only.
+    // Bottom tabbed panel (Immediate / Executed SQL / Watches) collapse — same mechanism as the SQL results
+    // panel (MainWindow.ApplyResultsRowForActiveTab): ApplyBottomPanel is the ONE re-normalization point, and
+    // it sets BOTH rows every time — top row to star (so the editor always reclaims space) and bottom row to
+    // Auto (collapsed → only the tab strip shows) or the remembered pixel height (expanded). Presentation only.
+    private RowDefinition? _topRow;
     private RowDefinition? _bottomRow;
     private double _bottomHeight = 220;
     private const double MinBottomHeight = 80;
-    // The panel height captured at the START of a splitter gesture (before the splitter drags it). Used so a
-    // double-click on the splitter — which is only a toggle affordance — cannot let its spurious micro-drag
-    // pollute the remembered height that collapse restores from.
-    private double? _splitterGestureHeight;
 
     public DebuggerTabView()
     {
         InitializeComponent();
         _editor = this.FindControl<TextEditor>("SourceEditor");
         var layout = this.FindControl<Grid>("DebugLayout");
-        if (layout is not null && layout.RowDefinitions.Count > 2) _bottomRow = layout.RowDefinitions[2];
+        if (layout is not null && layout.RowDefinitions.Count > 2)
+        {
+            _topRow = layout.RowDefinitions[0];
+            _bottomRow = layout.RowDefinitions[2];
+        }
         ApplyEditorTheme();
         ActualThemeVariantChanged += (_, _) => ApplyEditorTheme();
         DataContextChanged += OnDataContextChanged;
@@ -53,12 +55,6 @@ public partial class DebuggerTabView : UserControl
             _editor.AddHandler(KeyDownEvent, OnEditorKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             _editor.AddHandler(PointerPressedEvent, OnEditorPointerPressed, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         }
-        // The GridSplitter marks PointerPressed as handled (it captures the pointer to drag), so a normal
-        // XAML/bubbling handler never sees it — hence handledEventsToo, to snapshot the panel height at the
-        // gesture start before any drag (see OnBottomSplitterPointerPressed).
-        this.FindControl<GridSplitter>("BottomSplitter")?.AddHandler(
-            Avalonia.Input.InputElement.PointerPressedEvent, OnBottomSplitterPointerPressed,
-            Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
     private void InitializeComponent() => Avalonia.Markup.Xaml.AvaloniaXamlLoader.Load(this);
@@ -106,13 +102,17 @@ public partial class DebuggerTabView : UserControl
         else if (e.PropertyName == nameof(DebuggerTabViewModel.IsBottomPanelCollapsed)) ApplyBottomPanel();
     }
 
-    // Toggles the bottom-panel row between its remembered pixel height (expanded) and Auto (collapsed → just
-    // the tab strip). The tab contents bind IsVisible to !IsBottomPanelCollapsed, so an Auto row measures to
-    // the strip only. Mirrors MainWindow's ApplyResultsRowForActiveTab.
+    // The ONE re-normalization point (mirrors MainWindow.ApplyResultsRowForActiveTab): it always sets BOTH
+    // rows, so a GridSplitter drag that converted the top row to an absolute pixel height (Avalonia's Split
+    // behaviour on a star+absolute pair) never survives a toggle — the top row is re-established as star, so
+    // the editor always reclaims the space and the panel can never "glue" to it. Collapsed → the bottom row
+    // goes Auto (the tab contents bind IsVisible to !IsBottomPanelCollapsed, so an Auto row measures to the
+    // strip only); expanded → the remembered (possibly dragged) pixel height.
     private void ApplyBottomPanel()
     {
         if (_bottomRow is null) return;
         bool collapsed = _vm?.IsBottomPanelCollapsed ?? false;
+        if (_topRow is not null) _topRow.Height = new GridLength(1, GridUnitType.Star);
         if (collapsed)
         {
             if (_bottomRow.Height.IsAbsolute && _bottomRow.Height.Value > 0)
@@ -145,25 +145,14 @@ public partial class DebuggerTabView : UserControl
         e.Handled = true;
     }
 
-    // On the first press of a splitter gesture, snapshot the panel height BEFORE the splitter starts dragging
-    // it — this is the pre-gesture height a following double-click must preserve. (A real drag also lands here
-    // and just leaves the snapshot unused.)
-    private void OnBottomSplitterPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (e.ClickCount == 1 && _bottomRow?.Height is { IsAbsolute: true, Value: > 0 } h)
-            _splitterGestureHeight = h.Value;
-    }
-
     // Double-click the resize bar toggles collapse too — the SAME ToggleBottomPanelCommand (one collapse
     // logic). The splitter is only visible while expanded, so this always collapses; re-expand is the header
-    // double-click. The double-click makes the splitter micro-drag the row first, so we restore the pre-gesture
-    // height before toggling — then collapse remembers the right height and re-expand returns to it (not to the
-    // spurious drag height).
+    // double-click. ApplyBottomPanel re-normalizes both rows on the toggle, so the double-click's spurious
+    // micro-drag is absorbed (the collapse captures the post-drag height, imperceptibly close to the original —
+    // exactly as the SQL editor's maximize/restore does); no per-gesture snapshot is needed.
     private void OnBottomSplitterDoubleTapped(object? sender, TappedEventArgs e)
     {
         if (_vm is null) return;
-        if (_splitterGestureHeight is { } h && _bottomRow is not null)
-            _bottomRow.Height = new GridLength(h);
         Invoke(_vm.ToggleBottomPanelCommand);
         e.Handled = true;
     }
