@@ -692,8 +692,10 @@ CREATE PROCEDURE SP_DBG_PKG(P_N INTEGER) RETURNS (RESULT INTEGER)
 AS
 BEGIN
   /* Standalone entry point: step INTO the public package procedure, then into its private
-     and public siblings. SP_DBG_PKG(5) => 5*2 + (5+1) = 16. */
+     and public siblings. SP_DBG_PKG(5) => 5*2 + (5+1) = 16. Selectable (SUSPEND) so the
+     fidelity probe can read RESULT via SELECT, as it does for SP_DBG_ROOT. */
   EXECUTE PROCEDURE PKG_DBG.PUB_RUN(:P_N) RETURNING_VALUES :RESULT;
+  SUSPEND;
 END^
 
 SET TERM ; ^

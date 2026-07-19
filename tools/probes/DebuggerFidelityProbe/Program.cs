@@ -98,7 +98,8 @@ try
     // selects the movement command driven each pause — Into descends into resolvable local/stored calls;
     // Over runs a call in place (exercising the step-over harness + the D9 seam b Part 2 read/write fixpoint).
     async Task<(IReadOnlyList<IReadOnlyDictionary<string, object?>> Rows, int MaxDepth, List<string> Frames)>
-        SimulateAsync(string routine, Dictionary<string, object?> rootValues, StepKind step = StepKind.Into)
+        SimulateAsync(string routine, Dictionary<string, object?> rootValues, StepKind step = StepKind.Into,
+                      Func<DebugSession, StepKind>? chooser = null)
     {
         string source = await reader.FetchProcedureSourceAsync(new MetadataObject(routine, MetadataObjectKind.Procedure));
         var model = SemanticModel.Build(SqlParser.Parse(source).Root);
@@ -118,7 +119,7 @@ try
             {
                 if (dbg.Depth > maxDepth) maxDepth = dbg.Depth;
                 if (dbg.CurrentFrame is { } f && !frames.Contains(f.RoutineName)) frames.Add(f.RoutineName);
-                dbg.Step(step);
+                dbg.Step(chooser is null ? step : chooser(dbg));
                 if (++guard > 5000) throw new Exception("runaway stepping");
             }
             if (dbg.State == DebugState.Faulted)
@@ -521,6 +522,41 @@ try
     else Fail("subquery sim", $"{subq.State} / {subq.Error} / NOTE={simSubqNote}");
     if (Show(realSubq) == "CNT=2") Pass("subquery real UPDATE persists NOTE='CNT=2' (sim == real; #248 fixed)");
     else Fail("subquery real", Show(realSubq));
+
+    // ── 18. Package routines (D11) — step into a public member, then its private + public siblings ──
+    Head("18. SP_DBG_PKG(5) — step INTO PKG_DBG.PUB_RUN (public), then PRIV_DOUBLE (private) + PUB_ADD (public) siblings");
+    var pkgRoot = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["P_N"] = 5 };
+    var pkg = await SimulateAsync("SP_DBG_PKG", pkgRoot);
+    int? realPkg = AsInt(await RealScalarAsync("SELECT RESULT FROM SP_DBG_PKG(5)"));
+    int? simPkg = pkg.Rows.Count > 0 ? AsInt(pkg.Rows[0]["RESULT"]) : null;
+
+    if (pkg.MaxDepth == 3) Pass("package depth == 3 (SP_DBG_PKG → PUB_RUN → sibling)"); else Fail("package depth", $"{pkg.MaxDepth}");
+    // Step-into descends into the PUBLIC member (D8-style reconstruct), then its PRIVATE sibling PRIV_DOUBLE
+    // (not DSQL-callable — interpreted via the R5 harness) and its PUBLIC sibling PUB_ADD.
+    if (pkg.Frames.SequenceEqual(new[] { "SP_DBG_PKG", "PUB_RUN", "PRIV_DOUBLE", "PUB_ADD" }))
+        Pass("package frame chain (public entry, private + public siblings stepped into)", string.Join(" → ", pkg.Frames));
+    else Fail("package frame chain", string.Join(" → ", pkg.Frames));
+    if (simPkg is not null && simPkg == realPkg)
+        Pass("SIMULATED RESULT == REAL", $"sim {simPkg} == real {realPkg}");
+    else Fail("package simulated vs real RESULT", $"sim {simPkg} vs real {realPkg}");
+    Console.WriteLine("      (PUB_RUN: PRIV_DOUBLE(5)=10 [private, interpreted] + PUB_ADD(5)=6 [public] = 16)");
+
+    // ── 19. Package private sibling STEP-OVER — proves the R5 harness runs a non-DSQL-callable private routine ──
+    // Step INTO to reach PUB_RUN's frame, then Step OVER inside it: the private PRIV_DOUBLE + public PUB_ADD
+    // sibling calls run via the harness (every package routine declared as a harness sub-routine, D9 R5), NOT as
+    // frames. So the run must never descend below PUB_RUN (max depth 2) yet still compute RESULT = 16.
+    Head("19. SP_DBG_PKG(5) — step INTO PUB_RUN then step OVER its siblings (private PRIV_DOUBLE via the R5 harness)");
+    var pkgOverRoot = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["P_N"] = 5 };
+    var pkgOver = await SimulateAsync("SP_DBG_PKG", pkgOverRoot,
+        chooser: s => s.Depth < 2 ? StepKind.Into : StepKind.Over); // descend into PUB_RUN, then step over within it
+    int? simPkgOver = pkgOver.Rows.Count > 0 ? AsInt(pkgOver.Rows[0]["RESULT"]) : null;
+
+    if (pkgOver.MaxDepth == 2) Pass("package step-over depth == 2 (siblings NOT entered as frames)"); else Fail("package step-over depth", $"{pkgOver.MaxDepth}");
+    if (pkgOver.Frames.SequenceEqual(new[] { "SP_DBG_PKG", "PUB_RUN" }))
+        Pass("package step-over frames (private sibling ran via the harness, not a frame)", string.Join(" → ", pkgOver.Frames));
+    else Fail("package step-over frames", string.Join(" → ", pkgOver.Frames));
+    if (simPkgOver == 16) Pass("SIMULATED RESULT == REAL (step over)", $"sim {simPkgOver} == real 16");
+    else Fail("package step-over RESULT", $"sim {simPkgOver} vs 16");
 }
 catch (Exception ex)
 {

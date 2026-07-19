@@ -337,6 +337,16 @@ public sealed class FirebirdDdlReader
         FbConnection connection, FbTransaction? tx, string name, int serverMajor, Encoding fallback, CancellationToken ct)
         => BuildProcedureDdlAsync(connection, tx, name, serverMajor, fallback, ct);
 
+    /// <summary>Reads a package's raw body source (<c>RDB$PACKAGE_BODY_SOURCE</c> — a <c>BEGIN … END</c> blob of
+    /// member routine declarations) on a <b>caller-supplied</b> connection + transaction (Stage X / D11: the
+    /// debugger reads a stepped-into package member's source on its own debug session). Reuses the shared blob
+    /// reader; null when the package has no body. The caller serializes wire access.</summary>
+    internal static Task<string?> ReadPackageBodySourceAsync(
+        FbConnection connection, FbTransaction? tx, string packageName, Encoding fallback, CancellationToken ct)
+        => ReadBlobAsync(connection, tx,
+            "SELECT RDB$PACKAGE_BODY_SOURCE FROM RDB$PACKAGES WHERE RDB$PACKAGE_NAME = @name",
+            packageName.ToUpperInvariant(), fallback, ct);
+
     /// <summary>
     /// Fetches a procedure's BODY alone — <c>RDB$PROCEDURE_SOURCE</c> is exactly
     /// the text after <c>AS</c> (the DECLARE…BEGIN…END), with no header. This is

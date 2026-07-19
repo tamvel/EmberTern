@@ -50,7 +50,8 @@ internal static class FirebirdDebugMetadata
         string? routineName,
         BlockStatement body,
         string source,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? packageName = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(body);
@@ -63,7 +64,7 @@ internal static class FirebirdDebugMetadata
 
         if (!string.IsNullOrWhiteSpace(routineName))
         {
-            foreach (var (variable, isOutput) in await ReadProcedureParametersAsync(session, routineName!, cancellationToken).ConfigureAwait(false))
+            foreach (var (variable, isOutput) in await ReadProcedureParametersAsync(session, routineName!, packageName, cancellationToken).ConfigureAwait(false))
             {
                 if (!seen.Add(variable.Name))
                 {
@@ -259,15 +260,22 @@ internal static class FirebirdDebugMetadata
     // ── Parameters (RDB$PROCEDURE_PARAMETERS) ───────────────────────────────────────────────────────
 
     private static async Task<List<(HarnessVariable Variable, bool IsOutput)>> ReadProcedureParametersAsync(
-        DebugSessionConnection session, string routineName, CancellationToken cancellationToken)
+        DebugSessionConnection session, string routineName, string? packageName, CancellationToken cancellationToken)
     {
-        const string sql =
+        // A standalone routine's parameters have RDB$PACKAGE_NAME IS NULL; a package member's are keyed by the
+        // package (Stage X / D11 — verified live, §15.12: both public and private members' params are here). The
+        // package/standalone distinction is the ONLY difference — the same catalog, join and typing (D8) serve
+        // both, so a package member reuses the stored-routine layout path rather than a parallel one.
+        string packageFilter = packageName is null
+            ? "AND pp.RDB$PACKAGE_NAME IS NULL "
+            : "AND pp.RDB$PACKAGE_NAME = @pkg ";
+        string sql =
             "SELECT pp.RDB$PARAMETER_NAME, pp.RDB$FIELD_SOURCE, pp.RDB$PARAMETER_TYPE, " +
             "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
             "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, f.RDB$CHARACTER_LENGTH " +
             "FROM RDB$PROCEDURE_PARAMETERS pp " +
             "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = pp.RDB$FIELD_SOURCE " +
-            "WHERE pp.RDB$PROCEDURE_NAME = @proc AND pp.RDB$PACKAGE_NAME IS NULL " +
+            "WHERE pp.RDB$PROCEDURE_NAME = @proc " + packageFilter +
             "ORDER BY pp.RDB$PARAMETER_TYPE, pp.RDB$PARAMETER_NUMBER";
 
         var list = new List<(HarnessVariable, bool)>();
@@ -279,6 +287,7 @@ internal static class FirebirdDebugMetadata
             cmd.CommandTimeout = 0;
             cmd.Transaction = session.Transaction;
             cmd.Parameters.Add(new FbParameter("@proc", routineName.ToUpperInvariant()));
+            if (packageName is not null) cmd.Parameters.Add(new FbParameter("@pkg", packageName.ToUpperInvariant()));
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {

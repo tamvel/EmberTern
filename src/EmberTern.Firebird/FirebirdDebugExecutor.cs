@@ -81,7 +81,21 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         // NEW/OLD columns and INSERTING/UPDATING/DELETING predicates become synthetic frame variables + literals
         // (spec §8.1). A stepped-into callee (a stored/local routine) has no trigger context (NEW/OLD are not in
         // scope there), so this stays null for every non-root frame — leaving D8/D9 paths untouched.
-        TriggerContext? Trigger = null);
+        TriggerContext? Trigger = null,
+        // The package a member frame belongs to (Stage X / D11) — non-null ONLY for a package member frame. An
+        // unqualified sibling call inside such a frame is resolved against <see cref="PackageMembers"/> (the
+        // package's routines, parsed once); and every package routine is declared as a harness sub-routine (R5,
+        // via <see cref="SubRoutines"/>) so a sibling call — public OR private — runs inside the harness like a
+        // D9 local routine (a private routine is not DSQL-callable, §15.12). Null for every non-package frame,
+        // leaving D8/D9 paths untouched.
+        string? PackageName = null,
+        IReadOnlyList<SubroutineDeclaration>? PackageMembers = null);
+
+    // A package's parsed body (Stage X / D11), cached per package name for the session: the raw body source
+    // (RDB$PACKAGE_BODY_SOURCE — the frame-source backing + the R5 sub-routine declarations) and its member
+    // routines (SqlParser.ParsePackageBodyMembers). Null = the package has no readable body (→ step over).
+    private readonly Dictionary<string, PackageBody?> _packages = new(StringComparer.OrdinalIgnoreCase);
+    private sealed record PackageBody(string Source, IReadOnlyList<SubroutineDeclaration> Members);
 
     private FirebirdDebugExecutor(DebugSessionConnection session, Encoding fallback)
     {
@@ -444,8 +458,22 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             }
         }
 
-        // A dotted (package.procedure) callee is D11 — step over it for now (§F: faithful, just no descent).
-        if (exec.ProcedureName!.Contains('.')) return null;
+        // D11: a package routine — a QUALIFIED PKG.PROC call, or an UNQUALIFIED sibling call from within a
+        // package member frame. Resolved to a real frame the D8 way (reconstruct the member's source, catalog
+        // params keyed by package, seed the args), with the package's routines declared as harness sub-routines
+        // so a sibling — public OR private — runs inside the harness like a D9 local routine (§15.12). Not a
+        // package call → fall through to the standalone (D8) path.
+        if (TryResolvePackageCall(exec, frame) is { } packageResolution)
+        {
+            try
+            {
+                return Await(packageResolution);
+            }
+            catch (FbException)
+            {
+                return null; // package body / member metadata unreadable → step over in place (§5.3)
+            }
+        }
 
         try
         {
@@ -455,6 +483,147 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         {
             return null; // callee source / metadata unreadable → step over in place (§5.3), never guess
         }
+    }
+
+    // Decides whether an EXECUTE PROCEDURE call is a package routine and, if so, returns its resolution task
+    // (null = not a package call, fall through to the standalone D8 path). Two forms: a QUALIFIED PKG.PROC
+    // call (exec.PackageName set — D11 seam A), and an UNQUALIFIED sibling call from within a package member
+    // frame (the frame's context carries the package + its members). The local-sub-routine check runs first
+    // (nearest scope shadows a sibling), so a same-named local wins.
+    private Task<DebugRoutine?>? TryResolvePackageCall(ExecuteProcedureStatement exec, Frame frame)
+    {
+        if (exec.PackageName is { Length: > 0 } qualified)
+        {
+            return ResolvePackageMemberAsync(qualified, exec.ProcedureName!, exec, frame, CancellationToken.None);
+        }
+
+        var ctx = Ctx(frame);
+        if (ctx.PackageName is { } pkg && ctx.PackageMembers is { } members
+            && HasMember(members, exec.ProcedureName!, SubroutineKind.Procedure))
+        {
+            return ResolvePackageMemberAsync(pkg, exec.ProcedureName!, exec, frame, CancellationToken.None);
+        }
+        return null;
+    }
+
+    private static bool HasMember(IReadOnlyList<SubroutineDeclaration> members, string name, SubroutineKind kind)
+    {
+        foreach (var m in members)
+        {
+            if (m.Kind == kind && m.Body is not null
+                && string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Builds a stepped-into PACKAGE member frame (Stage X / D11). Maximal D8 reuse: the member is reconstructed
+    // as a standalone CREATE PROCEDURE (its body source is a slice of RDB$PACKAGE_BODY_SOURCE) so the SAME parse
+    // → scope-bound model + body, package-aware catalog params, and argument seeding as a stored routine apply.
+    // The only package-specific state: the frame's context carries the package + its members so an unqualified
+    // sibling resolves, and R5 declares every package routine in the harness (so a private sibling — not
+    // DSQL-callable — runs inside the harness, the D9 mechanism, §15.12). LexicalParent stays null (a package
+    // member is a closed scope — it sees no caller variables and packages have no package-level variables, §8.2).
+    private async Task<DebugRoutine?> ResolvePackageMemberAsync(
+        string packageName, string memberName, ExecuteProcedureStatement exec, Frame callerFrame,
+        CancellationToken cancellationToken)
+    {
+        var pkg = await PackageBodyFor(packageName, cancellationToken).ConfigureAwait(false);
+        if (pkg is null) return null; // no readable body → step over (§5.3)
+
+        SubroutineDeclaration? member = null;
+        foreach (var m in pkg.Members)
+        {
+            if (m.Kind == SubroutineKind.Procedure && m.Body is not null
+                && string.Equals(m.Name, memberName, StringComparison.OrdinalIgnoreCase))
+            {
+                member = m;
+                break;
+            }
+        }
+        if (member is null) return null; // not a (runnable) member → step over
+
+        // Reconstruct the member as a standalone CREATE PROCEDURE and parse it exactly like a stored routine
+        // (D8): "CREATE " + the member's own "PROCEDURE name(params) RETURNS(...) AS … BEGIN … END" source.
+        string memberSource = "CREATE " + pkg.Source.Substring(member.Start, member.Length);
+        var model = SemanticModel.Build(SqlParser.Parse(memberSource).Root);
+        BlockStatement? body = null;
+        foreach (var st in model.Syntax.Statements)
+        {
+            if (st is DdlStatement { Body: { } b }) { body = b; break; }
+        }
+        if (body is null) return null;
+
+        // Frame templates from the catalog, keyed by package (the ONE difference from a standalone routine).
+        var layout = await FirebirdDebugMetadata
+            .BuildFrameVariablesAsync(_session, memberName, body, memberSource, cancellationToken, packageName)
+            .ConfigureAwait(false);
+
+        // Seed the callee's input params by evaluating the call's arguments in the CALLER frame (Contract #4 —
+        // the same harness a stored/local step-into uses).
+        var initialValues = await SeedInputParametersAsync(
+            exec.Arguments, exec.Tokens, exec.Start, callerFrame, layout.InputParameters, cancellationToken)
+            .ConfigureAwait(false);
+
+        RegisterPackageMember(body, memberSource, model, layout.Variables, layout.OutputParameters, packageName, pkg);
+
+        return new DebugRoutine(
+            memberName, body, initialValues, layout.OutputParameters, lexicalParent: null, source: memberSource, model: model);
+    }
+
+    // Fetches + parses a package body once per session (cached). Null when the package has no readable body.
+    private async Task<PackageBody?> PackageBodyFor(string packageName, CancellationToken cancellationToken)
+    {
+        if (_packages.TryGetValue(packageName, out var cached)) return cached;
+        string? bodySource = await LoadPackageBodySourceAsync(packageName, cancellationToken).ConfigureAwait(false);
+        PackageBody? info = string.IsNullOrWhiteSpace(bodySource)
+            ? null
+            : new PackageBody(bodySource!, SqlParser.ParsePackageBodyMembers(bodySource));
+        _packages[packageName] = info;
+        return info;
+    }
+
+    // Reads RDB$PACKAGE_BODY_SOURCE on the DEBUG session (its own attachment + tx), holding the session command
+    // lock across the read (#98/#120/#236). Mirrors LoadProcedureSourceAsync.
+    private async Task<string?> LoadPackageBodySourceAsync(string packageName, CancellationToken cancellationToken)
+    {
+        var gate = _session.CommandLock;
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await FirebirdDdlReader.ReadPackageBodySourceAsync(
+                _session.Connection, _session.Transaction, packageName, _fallback, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    // Registers a package member frame's context. Differs from Register only in that its R5 sub-routine set is
+    // EVERY package routine (declared verbatim as a harness DECLARE sub-routine, so a sibling call resolves in
+    // the harness — the D9 mechanism), plus the member's own local sub-routines, and it carries the package +
+    // its members so an unqualified sibling call resolves.
+    private void RegisterPackageMember(
+        BlockStatement body, string source, SemanticModel model,
+        IReadOnlyList<HarnessVariable> templates, IReadOnlyList<string> outputs,
+        string packageName, PackageBody pkg)
+    {
+        if (_contexts.ContainsKey(body)) return;
+        var subRoutines = new List<string>(pkg.Members.Count);
+        foreach (var m in pkg.Members)
+        {
+            // A package member's verbatim source is "PROCEDURE/FUNCTION …" (no DECLARE); a harness sub-routine
+            // needs the DECLARE keyword.
+            subRoutines.Add("DECLARE " + pkg.Source.Substring(m.Start, m.Length));
+        }
+        subRoutines.AddRange(PsqlDeclarationExtractor.Extract(body, source).SubRoutines); // the member's own locals
+        _contexts[body] = new RoutineContext(
+            source, model, templates, new HashSet<string>(outputs, StringComparer.OrdinalIgnoreCase),
+            subRoutines, Trigger: null, PackageName: packageName, PackageMembers: pkg.Members);
     }
 
     /// <inheritdoc/>
