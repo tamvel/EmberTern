@@ -220,10 +220,13 @@ internal sealed partial class SemanticBinder
         var t = exec.Tokens;
         int hi = t.Count;
 
-        // EXECUTE PROCEDURE <name> — record a reference to the procedure object.
+        // EXECUTE PROCEDURE <name> — record a reference to the object at the first name token. For a
+        // package-qualified call (PKG.PROC) that token is the package, so resolve the package name there
+        // (the routine part is a package member, not a standalone object — D11); a bare call resolves the
+        // routine as today.
         if (hi >= 3 && IsWord(t[2]))
         {
-            AddReference(t[2], ResolveObject(exec.ProcedureName), ReferenceRole.SchemaObject);
+            AddReference(t[2], ResolveObject(exec.PackageName ?? exec.ProcedureName), ReferenceRole.SchemaObject);
         }
 
         // RETURNING_VALUES :a, :b, … — the targets are host/PSQL variables (recorded as references;

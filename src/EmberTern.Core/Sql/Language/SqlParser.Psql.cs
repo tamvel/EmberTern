@@ -156,13 +156,15 @@ public static partial class SqlParser
     // declaration terminator. Never throws; always advances i.
     private static SubroutineDeclaration ParseSubroutineDeclaration(IReadOnlyList<SqlToken> sig, ref int i)
     {
-        int lo = i; // at DECLARE
-        var kind = i + 1 < sig.Count && IsBodyWord(sig[i + 1], "FUNCTION")
+        int lo = i; // at DECLARE (a local sub-routine, D9) OR at PROCEDURE/FUNCTION (a package body member, D11)
+        bool hasDeclare = IsBodyWord(sig[i], "DECLARE");
+        int kindIdx = hasDeclare ? i + 1 : i; // the PROCEDURE|FUNCTION keyword
+        var kind = kindIdx < sig.Count && IsBodyWord(sig[kindIdx], "FUNCTION")
             ? SubroutineKind.Function : SubroutineKind.Procedure;
-        string? name = PsqlNameAt(sig, i + 2); // DECLARE PROCEDURE|FUNCTION <name>
+        string? name = PsqlNameAt(sig, kindIdx + 1); // [DECLARE] PROCEDURE|FUNCTION <name>
 
         int depth = 0, asIdx = -1, semiIdx = -1;
-        int k = i + 1;
+        int k = kindIdx;
         for (; k < sig.Count; k++)
         {
             var t = sig[k];

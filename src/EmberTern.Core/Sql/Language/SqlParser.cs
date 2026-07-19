@@ -397,25 +397,39 @@ public static partial class SqlParser
             if (Kw(slice[1], "PROCEDURE"))
             {
                 var (args, returning) = ReadProcedureCallParts(slice);
-                return new ExecuteProcedureStatement(start, length, slice, ReadProcedureName(slice), args, returning);
+                var (pkg, routine) = ReadProcedureNameParts(slice);
+                return new ExecuteProcedureStatement(start, length, slice, routine, args, returning, pkg);
             }
         }
         return new ExecuteStatementStatement(start, length, slice);
     }
 
-    // EXECUTE PROCEDURE <name> — unquoted name upper-cased (catalog convention), quoted name kept
-    // in its literal case; null when there is no readable identifier.
-    private static string? ReadProcedureName(IReadOnlyList<SqlToken> slice)
+    // EXECUTE PROCEDURE <name> — reads the (optionally package-qualified) routine name (Stage X / D11).
+    // For PKG.PROC the qualifier PKG is the package and PROC is the routine; for a bare name the package is
+    // null. An unquoted part is upper-cased (catalog convention), a quoted part keeps its literal case; null
+    // when there is no readable identifier. Mirrors ReadProcedureCallParts' dot-skip so the two agree.
+    private static (string? Package, string? Routine) ReadProcedureNameParts(IReadOnlyList<SqlToken> slice)
     {
-        if (slice.Count < 3) return null;
-        var t = slice[2];
-        return t.Kind switch
+        if (slice.Count < 3) return (null, null);
+        string? first = FoldNameToken(slice[2]); // slice[0]=EXECUTE, slice[1]=PROCEDURE, slice[2]=name
+        if (first is null) return (null, null);
+        // PKG . PROC → (PKG, PROC); a bare name → (null, name).
+        if (slice.Count >= 5 && slice[3].Kind == TokenKind.Dot)
         {
-            TokenKind.QuotedIdentifier => t.Value,
-            TokenKind.Keyword or TokenKind.Identifier => t.Text.ToUpperInvariant(),
-            _ => null,
-        };
+            var second = FoldNameToken(slice[4]);
+            if (second is not null) return (first, second);
+        }
+        return (null, first);
     }
+
+    // Folds one name token to the resolution convention: an unquoted identifier/keyword upper-cased, a quoted
+    // identifier kept verbatim; null when the token is not a name.
+    private static string? FoldNameToken(SqlToken t) => t.Kind switch
+    {
+        TokenKind.QuotedIdentifier => t.Value,
+        TokenKind.Keyword or TokenKind.Identifier => t.Text.ToUpperInvariant(),
+        _ => null,
+    };
 
     // EXECUTE PROCEDURE <name> [ ( ] <arg>, … [ ) ] [ RETURNING_VALUES [ ( ] <var>, … [ ) ] ] — the call's
     // positional arguments (as source spans, for a debugger step-into to evaluate in the caller frame) and

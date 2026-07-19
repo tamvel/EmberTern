@@ -195,17 +195,28 @@ public sealed class ExecuteProcedureStatement : SqlStatement, IExecutableStateme
         IReadOnlyList<SqlToken> tokens,
         string? procedureName,
         IReadOnlyList<CallArgument>? arguments = null,
-        IReadOnlyList<string>? returningTargets = null)
+        IReadOnlyList<string>? returningTargets = null,
+        string? packageName = null)
         : base(start, length, tokens)
     {
         ProcedureName = procedureName;
+        PackageName = packageName;
         Arguments = arguments ?? Array.Empty<CallArgument>();
         ReturningTargets = returningTargets ?? Array.Empty<string>();
     }
 
-    /// <summary>The invoked procedure's name — an unquoted name is upper-cased to match the
-    /// catalog, a quoted name keeps its case — or null when it could not be read.</summary>
+    /// <summary>The invoked <b>routine's</b> name (the part after the dot for a package-qualified call) —
+    /// an unquoted name is upper-cased to match the catalog, a quoted name keeps its case — or null when it
+    /// could not be read. For <c>EXECUTE PROCEDURE PKG.PROC</c> this is <c>PROC</c> and <see cref="PackageName"/>
+    /// is <c>PKG</c>.</summary>
     public string? ProcedureName { get; }
+
+    /// <summary>The package qualifier of a <c>EXECUTE PROCEDURE PKG.PROC</c> call (folded like
+    /// <see cref="ProcedureName"/>), or <c>null</c> for an unqualified call (Stage X / D11). Additive overlay;
+    /// the full slice still round-trips (§0). The debugger resolves a package routine from these two parts;
+    /// an unqualified sibling call inside a package frame carries a null package and is resolved against the
+    /// frame's package (Seam B).</summary>
+    public string? PackageName { get; }
 
     /// <summary>The call's positional arguments, in order (Stage X / D8) — each the source span of one
     /// argument expression, which a debugger step-into evaluates verbatim in the <b>caller's</b> frame to
