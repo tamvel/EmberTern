@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D9 DONE. D9 (local procedures & functions — THE FLAGSHIP) COMPLETE + live-fidelity-verified 2026-07-18: local routines are real, steppable debugger frames with real closure variables (the capability IBExpert cannot deliver). §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) = local-routine step-into (AST + parser + binder + extractor R5; runtime ResolveRoutine + AST-header param types); seam (b) = closures — Part 1 closure capture for step-INTO (read+write an OUTER var, the write reaching the parent frame), Part 2 the transitive read/write-set fixpoint over the sub-routine call graph for step-OVER (a local call whose callee captures an outer var not named at the call site). All proven sim==real on the lab. Next milestone: D10 (Triggers).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D9 (CORE) DONE. D9 (local procedures & functions — THE FLAGSHIP) CORE COMPLETE + live-fidelity-verified 2026-07-18: local routines are real, steppable debugger frames with real closure variables (the capability IBExpert cannot deliver); a local procedure is faithful step-into+step-over, a local function step-over. §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) = local-routine step-into (AST + parser + binder + extractor R5; runtime ResolveRoutine + AST-header param types); seam (b) = closures — Part 1 closure capture for step-INTO (read+write an OUTER var, the write reaching the parent frame), Part 2 the transitive read/write-set fixpoint over the sub-routine call graph for step-OVER (a local call whose callee captures an outer var not named at the call site). All proven sim==real on the lab. NEXT: D9 seam (c) — local-FUNCTION step-into — DESIGNED + handoff-ready, NOT implemented (§6.4; the four lone-call positions v=f()/RETURN f()/IF f()/WHILE f() via a Function Return Continuation; no new server path); implement it (c1 AST → c2 Core → c3 live fidelity), THEN D10 (Triggers).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -725,10 +725,38 @@ noted.
   param): **sim `TOTAL=15` == real `15`** for both — the hidden capture injected + written back across the
   call, ALL PASS. Build 0/0; **4856 tests green** (+3 `ReadWriteSetAnalyzerTests`: function capture with the
   in-scope filter, transitivity across the call graph, null/empty-catalog = direct set); smoke clean.
-  **D9 — the flagship — is COMPLETE:** local procedures and functions are real, steppable debugger frames with
-  real closure variables (step-into *and* step-over faithful), the capability IBExpert cannot deliver. **Next
-  milestone: D10 (Triggers).** History: [docs/history/19-...](docs/history/19-firebird-debugger.md)
-  (D9 gate + seam a + seam b Parts 1 & 2). See [[feedback-debugger-ux-polish-backlog]].
+  **D9 CORE — the flagship — is COMPLETE:** local procedures and functions are real, steppable debugger frames
+  with real closure variables; a local **procedure** is faithful step-into *and* step-over, a local function is
+  faithful step-over — the capability IBExpert cannot deliver. History:
+  [docs/history/19-...](docs/history/19-firebird-debugger.md) (D9 gate + seam a + seam b Parts 1 & 2).
+  See [[feedback-debugger-ux-polish-backlog]].
+  **D9 seam (c) — local-FUNCTION step-into — DESIGNED, NOT IMPLEMENTED (2026-07-18); the immediate next task
+  before D10.** Manual QA found the one asymmetry: Step Into works for a local *procedure* but a local
+  *function* runs whole (effectively Step Over) — a complex local function's body can't be traced line by line.
+  Not a §F/correctness bug, the last usability gap in the flagship. **Ratified design (closed, no code):** Step
+  Into descends into a local function **only when the call is the ENTIRE operand of a value-consuming position**
+  (`v = f(x)` / `RETURN f(x)` / `IF f(x)` / `WHILE f(x)` — **Variant A, one mechanism, all four**), so the
+  client never evaluates a surrounding expression (a proper sub-expression like `f(x)+1` / `a AND f(x)` /
+  `VALUES(f(x))` stays step-over — a permanent §F boundary, §6.4). **No new server path, no expression
+  evaluator, no delivery/mini-harness:** reuse Statement + Expression Harness, `SeedInputParametersAsync`,
+  `SetResolvedValue`/`ApplyReturningValues`, `Frame`/`LexicalParent`/closures; the return value is delivered
+  **client-side** via `SetResolvedValue` (as procedures do for `RETURNING_VALUES`); `RETURN <expr>` computes via
+  the **Expression Harness** (never the Statement Harness — `RETURN` is invalid in `EXECUTE BLOCK`); the
+  mechanism is a **Function Return Continuation** (a generalisation of `ApplyReturningValues`). Small AST
+  deepening only (`CallExpression` + additive lone-call props; Contract #1 — token-scan rejected). Sub-steps
+  c1 (AST) → c2 (Core interpreter, fake executor) → c3 (Firebird executor + live fidelity, sim==real on the
+  lab); optional c4 UI polish. Full design + handoff: [docs/history/19-...](docs/history/19-firebird-debugger.md)
+  §"D9 seam (c)"; milestone brief + danger zones:
+  [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md) (D9 §"seam (c)");
+  spec §6.4 + boundary #13. **c1 — AST only (pure Core) — DONE (2026-07-19):** `CallExpression` +
+  `PsqlLeafStatement.RhsCall`/`.AssignmentTarget` + `IfStatement`/`WhileStatement.ConditionCall`, set by
+  **strict** parser producers (whole-operand lone call only; trailing op / second call / dotted target /
+  sub-expression ⇒ null ⇒ step-over), reusing D8's `ReadCallArgumentList`/`MatchParenTok`; +
+  `SubroutineSignature.ReturnType` (function `RETURNS` type spec, R2 input). Producer-only — no consumer yet
+  (`ResolveFunction`/`EvaluateReturn` are c2/c3, staged per gotcha #233); §0 round-trip unchanged,
+  binder/formatter untouched. Build 0/0; +19 `PsqlAstTests` +3 `PsqlDeclarationExtractorTests` +2 corpus
+  (targeted green; full suite hangs #94/#226 → user-verified green); smoke clean. **NEXT: c2 (Core
+  interpreter, fake executor). After c1–c3 land: D9 fully closed ⇒ then D10 (Triggers).**
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

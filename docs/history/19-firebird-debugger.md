@@ -1738,6 +1738,227 @@ D8 + seam-a + seam-b-Part-1 cases unchanged.
 
 Build 0/0; **4856 tests green** (+3 `ReadWriteSetAnalyzerTests`: a called function's captured outer var folded in
 while its own param is filtered out; transitivity across the call graph; null/empty catalog = the direct set);
-smoke clean; live fidelity proven. One commit. **D9 is COMPLETE — local procedures and functions are real,
-steppable debugger frames with real closure variables (step-into *and* step-over faithful), the capability
-IBExpert cannot deliver.** Next milestone: **D10 (Triggers)**.
+smoke clean; live fidelity proven. One commit. **D9 CORE is COMPLETE — local procedures and functions are real,
+steppable debugger frames with real closure variables, the capability IBExpert cannot deliver.** A local
+**procedure** is faithful both step-into and step-over; a local **function** is faithful step-over. The one
+remaining asymmetry — step *into* a local function's body — is closed by **seam (c)** below (designed here,
+implemented next).
+
+## D9 seam (c) — Step Into a local FUNCTION — DESIGN (2026-07-18; NOT implemented — full handoff for a new session)
+
+During manual QA of D9 the user found an asymmetry: **Step Into works for a local procedure but a local
+function runs whole and returns (effectively Step Over)** — you cannot trace a complex local function's body
+line by line. After an architectural analysis (recorded below) we ratified a small closing seam. **Nothing is
+implemented; this section is the complete design so the next session codes without re-analysing.**
+
+### Why functions differ (root cause)
+
+A **procedure** call is a *statement* (`EXECUTE PROCEDURE p(...)`) — a discrete step point the interpreter owns.
+A **function** call is an *element of a server-evaluated expression* (`v = f(x)`, `if (f(x))`, …). The whole
+expression is computed by the server in one harness (§F / Contract #3: the client owns control flow, the server
+owns **all** semantics). Stepping into a function *in the general case* would force the client to decompose and
+drive expression evaluation — becoming an expression evaluator, exactly what the architecture forbids. **The
+general case is a permanent §F boundary, NOT a gap to fix.**
+
+### The Step Into principle (ratified, final)
+
+> **Step Into descends into a local function only when the function call is the ENTIRE operand of a
+> value-consuming position, so the client never has to evaluate an expression around it.**
+
+Covered (Variant A — all four positions):
+
+| Position | Consumer of the return value `r` | Client evaluates an expression? |
+|---|---|---|
+| `v = LocalFunction(args)` (assignment; Firebird PSQL uses `=`, not `:=`) | the assignment target `v` | no |
+| `RETURN LocalFunction(args)` | the enclosing function frame's return value | no |
+| `IF LocalFunction(args) THEN` | the IF branch decision (`r == true`) | no |
+| `WHILE LocalFunction(args) DO` | the WHILE loop decision (re-evaluated per iteration) | no |
+
+The function's **arguments** may be arbitrary (server-evaluated during seeding, incl. a nested `g(...)` which is
+step-over). **Excluded** (require expression decomposition → step-over, no exceptions): `f(x)+1`, `f(x)=5`,
+`f(g(x))` [f is stepped-in, g is a step-over argument — this IS covered; the *excluded* form is f being a
+sub-operand], `a AND f(x)`, `INSERT … VALUES(f(x))`, and any proper-sub-expression position.
+
+### Ratified architectural decisions (final)
+
+1. Small closing seam before D10. **No §F violation. No expression evaluator. No new SERVER path.**
+2. Reuse only: **Statement Harness**, **Expression Harness**, **`SetResolvedValue` / `ApplyReturningValues`**,
+   `Frame`, `LexicalParent`, closures, argument seeding.
+3. **No mini-harness for delivery.** Delivery of `r` is **client-side** via `SetResolvedValue` — the same
+   primitive procedures use for `RETURNING_VALUES`. A delivery harness was rejected for TWO reasons: (a) it
+   would be a second delivery mechanism (procedures deliver client-side ⇒ duplication), and (b) declaring the
+   target with its domain (R3) would **re-validate the domain mid-flight**, contradicting R2 (which deliberately
+   base-types harness slots to avoid exactly that). Coercion faithfulness: the function's **own** return
+   coercion (operand → its `RETURNS` type) IS faithful — done by the server inside the Expression Harness whose
+   result column is typed as the function's `RETURNS` base type (R2). The **outer** assignment coercion
+   (function type → `v`'s type) is raw client-side, **identical to procedure `RETURNING_VALUES`**, and
+   self-heals at `v`'s next injection (declared with its type ⇒ the server coerces). The only residual is a
+   cosmetic display difference if `v` is emitted by `SUSPEND` before any use — the same, accepted boundary as
+   procedures.
+4. `RETURN <expr>` inside a stepped function is evaluated by the **existing Expression Harness** (result column
+   typed as the function's `RETURNS` base type). Never route a `RETURN` leaf through the Statement Harness — it
+   is invalid inside `EXECUTE BLOCK` (would error).
+5. **Function Return Continuation** — a generalized, client-side mechanism: "the caller statement is paused
+   pending the callee function's return value, then consumes it per the call position." `ApplyReturningValues`
+   becomes the procedure special-case of this idea (both fire at the callee frame's normal return in
+   `AdvanceToNextStepPoint`).
+6. Small AST deepening (Contract #1 — structure in the tree, never a token-scan in the Firebird layer).
+
+### Impact — AST
+
+New node **`CallExpression`** (`Ast/ExpressionNodes.cs`): a lone call — `Name : string` (folded, like
+`ExecuteProcedureStatement.ProcedureName`) + `Arguments : IReadOnlyList<CallArgument>` (reuse D8's
+`CallArgument` span record). Its span is the whole `name(args)`.
+
+Additive properties on existing nodes, set by the parser **only** when the operand is *exactly* a lone call
+(strict recognition — under-recognise → step-over is always safe):
+- `PsqlLeafStatement.RhsCall : CallExpression?` — the lone-call RHS of an `Assignment` leaf **or** the lone-call
+  operand of a `Return` leaf.
+- `PsqlLeafStatement.AssignmentTarget : string?` — the folded bare-identifier target of an `Assignment` whose
+  RHS is a lone call (null for a `Return` leaf and when the target is dotted/`NEW.col` → not recognised, a D10
+  concern). Precedent for a folded name in the AST: `ProcedureName` / `ReturningTargets`.
+- `IfStatement.ConditionCall : CallExpression?` and `WhileStatement.ConditionCall : CallExpression?` — non-null
+  when the **entire** condition (inside the header parens) is exactly a lone call.
+
+Parser producers recognise these shapes strictly (a trailing operator / second call / dotted target ⇒ leave the
+property null ⇒ step-over). The parser does **not** decide local-function-vs-not (no catalog) — it models "a
+lone call `name(args)`"; the **debugger** resolves whether `name` is an in-scope local function. Additive
+overlay; §0 round-trip unchanged; `SqlFormatter` untouched (token-based).
+
+Extend `PsqlDeclarationExtractor.ExtractSignature` → `SubroutineSignature.ReturnType : string?` — a local
+**function**'s single `RETURNS <typespec>` (the tokens between `RETURNS` and `AS`, no parens); null for a
+procedure. Feeds R2 base-type derivation for the Expression Harness result column.
+
+### Impact — interpreter (`DebugSession.ExecuteCurrent` / `AdvanceToNextStepPoint`)
+
+- **Step-into recognition (4 positions).** When `kind == StepKind.Into` and the relevant `CallExpression` is
+  present and `_executor.ResolveFunction(call, frame)` returns a routine: push a **function frame** (its
+  `LexicalParent` per server major — FB5 declaring frame / FB3+FB4 null; seeded input params; carrying its
+  `ReturnType`) with a **Function Return Continuation** derived from the position. Do **not** advance the caller
+  sequence / decide the branch yet — the continuation does that on the callee's return. If `ResolveFunction`
+  returns null (not a local function, e.g. a stored/builtin) → run the statement normally (Statement/Expression
+  Harness — the function runs server-side, step-over). For `StepKind.Over/Out/Continue` the `CallExpression` is
+  ignored (always run normally).
+- **`RETURN` inside a function frame.** A `Return` leaf in a function frame is NOT run through the Statement
+  Harness. Instead: if its `RhsCall` is a step-into-able local function (and `StepKind.Into`) → step into it
+  with a `SetFrameReturn` continuation; otherwise → `_executor.EvaluateReturn(returnLeaf, frame)` (Expression
+  Harness typed as `frame.ReturnType`) → set `frame.ReturnValue` and terminate the frame (clear its control
+  stack so it completes).
+- **Delivery on normal return.** `AdvanceToNextStepPoint`, when a frame completes, generalises the existing
+  `ApplyReturningValues` step: a **procedure** callee delivers output params → `RETURNING_VALUES` targets (as
+  today); a **function** callee runs its `ReturnContinuation` against the caller frame + `frame.ReturnValue`:
+  - `AssignTo(target)` → `caller.SetResolvedValue(target, r)`; consume the assignment leaf.
+  - `SetFrameReturn` → `caller.ReturnValue = r`; terminate the caller (its own `RETURN` completes → its
+    continuation fires — recursion handled naturally).
+  - `BranchIf(ifNode)` → advance past the IF; `caller.PushBranch(r == true ? then : else)`.
+  - `DecideWhile(whileNode)` → `r == true` ? `caller.PushBranch(body)` : pop the `WhileActivation`.
+  A raised function (exception) unwinds via `ExceptionRouter` (savepoint rollback) and the continuation does
+  **not** fire — identical to procedures.
+- A function frame that completes with no `RETURN` on its path (Firebird runtime error "function returned no
+  value") → surface a `DebugError`/step error; do not silently deliver null. (§F boundary — documented.)
+
+### Impact — DebugSession (state/API)
+
+Same class as the interpreter. New: `PushFrame` gains an optional continuation + return type. No public API
+change for the tab VM (Step Into is the same command). `CallStack`, breadcrumbs, frame navigation all work for a
+function frame unchanged (it is a `Frame`, marked simulated △ like any stepped-in local routine).
+
+### Impact — HarnessBuilder
+
+**NONE.** The `RETURN` operand and the seeding reuse Statement/Expression modes exactly as they are.
+
+### Impact — runtime (`FirebirdDebugExecutor` / `FirebirdDebugMetadata`)
+
+- New `IDebugExecutor.ResolveFunction(CallExpression call, Frame frame) : DebugRoutine?` — mirrors
+  `ResolveRoutine`: `BuildSubroutineCatalog(frame)` → an in-scope local **function** named `call.Name` with a
+  body → build the frame (reuse the `BuildLocalRoutineAsync` path; **no server source fetch** — the body is in
+  the enclosing AST), seed input params from `call.Arguments` (generalise `SeedInputParametersAsync` to take
+  `IReadOnlyList<CallArgument>` + the enclosing tokens/source), `LexicalParent` per server major, carry
+  `ReturnType` (R2, from `SubroutineSignature.ReturnType` via `FirebirdDebugMetadata`). Null → step-over.
+- New `IDebugExecutor.EvaluateReturn(IExecutableStatement returnStatement, Frame frame) : (value/error)` —
+  refactor `EvaluateCondition` into a private typed-expression evaluator (`EvaluateExpression(fragment, frame,
+  resultType, reads)`), with two public entry points: `EvaluateCondition` (BOOLEAN → `ConditionOutcome`) and
+  `EvaluateReturn` (`frame.ReturnType` → value). Same Expression Harness; reuses `ResolveReadWrite` for the
+  operand's reads (incl. the seam-b fixpoint if the operand itself calls a local routine).
+- `FirebirdDebugMetadata`: derive the function's `RETURNS` base type (R2) from `SubroutineSignature.ReturnType`
+  (reuse `ResolveBaseTypeAsync`).
+- **No `DebugSessionConnection` change. No new SERVER round-trip type.**
+
+### Impact — UI
+
+Minimal / none required for the mechanism (Step Into descends automatically in the recognised positions; the
+function frame shows in the Call Stack / breadcrumbs / Variables like any local-routine frame). **Optional
+polish (defer, D4-backlog style — view/status only, no VM logic):** (a) a subtle "will step into f()" cue in the
+richer paused-status when the current step point is a step-into-able function call, to make the boundary
+predictable; (b) show a function frame's `ReturnValue` as a synthetic `⟵ RETURN` row in Variables once set.
+
+### New classes / structures — responsibilities
+
+| Type | Where | Responsibility |
+|---|---|---|
+| `CallExpression` | Core `Ast/ExpressionNodes.cs` | A lone call operand (name + arg spans) recognised in a value-consuming position. |
+| `PsqlLeafStatement.RhsCall` / `.AssignmentTarget` | Core AST (additive props) | The lone-call RHS/RETURN-operand + the assignment target. |
+| `IfStatement.ConditionCall` / `WhileStatement.ConditionCall` | Core AST (additive props) | The lone-call whole-condition. |
+| `SubroutineSignature.ReturnType` | Core `PsqlDeclarationExtractor` | A local function's single `RETURNS` type spec (R2 input). |
+| `FunctionReturnContinuation` (variants `AssignTo` / `SetFrameReturn` / `BranchIf` / `DecideWhile`) | Core `Sql/Language/Debugging` | Encapsulates "resume the caller statement with the callee function's return value." |
+| `Frame.ReturnValue` / `.ReturnType` / `.ReturnContinuation` | Core `Frame` | A function frame's computed return, its `RETURNS` base type (for the Expression Harness), and how its result is delivered. |
+| `IDebugExecutor.ResolveFunction` | Core seam + Firebird impl | Resolve a lone local-function call → a function frame (or null → step-over). |
+| `IDebugExecutor.EvaluateReturn` | Core seam + Firebird impl | Evaluate a `RETURN` operand via the Expression Harness typed as the function's `RETURNS` type. |
+
+### Implementation plan — small, safe, committable sub-steps
+
+- **c1 — AST only (pure Core, no runtime change). ✅ DONE (2026-07-19).** `CallExpression`
+  (`Ast/ExpressionNodes.cs`: folded `Name` + reused D8 `CallArgument` spans; **not a tree child** — an
+  additive overlay referenced by typed props, so `Descendants`/round-trip/formatter are untouched). The
+  additive props + strict parser producers (`SqlParser.Psql.cs`): `PsqlLeafStatement.RhsCall` +
+  `.AssignmentTarget` (an assignment whose **whole** RHS is a lone call, with a **single bare** target only —
+  `eq == lo+1`; `NEW.col` is left null, a D10 concern) and `RhsCall` for a `RETURN` operand;
+  `IfStatement.ConditionCall` / `WhileStatement.ConditionCall` (the whole header condition — a single
+  enclosing paren pair stripped first, then the remainder must be exactly a lone call). Shared helpers
+  `TryReadLoneCall` (name → `(` → matching `)` is the **last** token, nothing trailing) / `TryReadConditionCall`
+  / `ReadLeafCall` / `FindTopLevelAssign`, **reusing** the D8 `ReadCallArgumentList` + `MatchParenTok` (rule
+  #1 — no second scanner). `PsqlDeclarationExtractor.ExtractSignature` gained
+  `SubroutineSignature.ReturnType` (a local function's single `RETURNS` type spec, captured up to the header's
+  depth-0 `AS` via a new `FindHeaderAs` so the `AS` is not absorbed — the R2 base-type input for c3's
+  Expression Harness result column; null for a procedure). **Producer-only, deliberately staged:**
+  `CallExpression` has no consumer yet (`IDebugExecutor.ResolveFunction` / `EvaluateReturn` are c2/c3), so the
+  tests assert the **AST is produced correctly** at this layer; the "is it actually called" surface assertion
+  arrives with the consumer in c2/c3 (gotcha #233 — a tested-but-uncalled component; recorded as the c1→c2
+  boundary). Additive overlay — §0 round-trip byte-identical, binder + `SqlFormatter` untouched. Tests: +19
+  `PsqlAstTests` (each of the 4 positions recognised; no-arg `f()`; nested-arg `f(g(x))` = one step-over
+  argument; quoted target+callee folding; **negatives** for a trailing operator, a plain expression, two
+  calls, a dotted target, a `RETURN` with a trailing op, a compound/comparison IF/WHILE condition, a
+  non-assignment leaf; a lone-call round-trip), +3 `PsqlDeclarationExtractorTests` (function `ReturnType`:
+  scalar / parametrised / domain / null-for-procedure), +2 `SqlTestCorpus` shapes (round-trip +
+  well-formedness). Build 0/0; targeted tests green (402); full suite hangs in this env (#94/#226) —
+  user-verified green; smoke clean. *(Mirrors seam-a Part 1.)*
+- **c2 — Core interpreter (fake-executor-driven).** `Frame.ReturnValue/ReturnType/ReturnContinuation`;
+  `FunctionReturnContinuation`; `IDebugExecutor.ResolveFunction` + `EvaluateReturn` (contract only); the
+  step-into recognition for the 4 positions; the `RETURN`-in-a-function handling; the generalised delivery in
+  `AdvanceToNextStepPoint`. Tests: `DebugEngineTests` with the fake — step into each of the 4 positions +
+  deliver, nested `RETURN f()`, a raising function (continuation does NOT fire), `ResolveFunction`→null ⇒
+  step-over. Pure Core, no server. Build 0/0, tests green, smoke. Commit. *(Mirrors D1 / seam-a Core work.)*
+- **c3 — Firebird executor + live fidelity.** `FirebirdDebugExecutor.ResolveFunction` (catalog + build frame +
+  generalised seeding) + `EvaluateReturn` (typed Expression Harness) + `FirebirdDebugMetadata` return-type
+  derivation. Lab: a local function with a multi-statement body exercised in the 4 positions (+ a closure
+  capture). Rebuild `.fdb` (#149). `DebuggerFidelityProbe` extended: Step Into a local function in each
+  position, **sim == real**. Build 0/0, full tests green, smoke, live fidelity. Commit. *(Mirrors seam-a Part 2
+  / seam-b live fidelity.)*
+- **c4 — optional UI polish** (the two view/status items above). Only if wanted; not required to close the seam.
+
+### Danger zones for the implementer
+
+- A `RETURN` leaf inside a function frame must go through `EvaluateReturn` (Expression Harness), **never** the
+  Statement Harness — `RETURN` is invalid inside `EXECUTE BLOCK`.
+- Do **not** advance the caller sequence / decide the branch when pushing the function frame — the continuation
+  owns that on return (otherwise the branch/assignment fires twice or in the wrong order).
+- The continuation fires **only** on normal return; an exception unwinds via `ExceptionRouter` and must not run
+  it.
+- **No delivery harness** — deliver client-side (`SetResolvedValue`); a harness would duplicate the procedure
+  path and violate R2 (mid-flight domain re-validation).
+- Parser recognition must be **strict**: under-recognise (step-over) rather than over-recognise. A recognised
+  shape the interpreter cannot deliver cleanly is a bug.
+- Firebird PSQL assignment is `=`, not `:=`.
+
+**Once c1–c3 land: D9 is fully closed (procedures + functions, step-into + step-over faithful). Then D10
+(Triggers).**

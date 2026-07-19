@@ -528,4 +528,152 @@ public class PsqlAstTests
                          + "begin execute procedure sp(1) returning_values r; end";
         Assert.Equal(sql, SqlParser.Parse(sql).Root.ToSourceString());
     }
+
+    // ── D9 seam c (§6.4): lone-call recognition in the four value-consuming positions ────────────────────
+    // The parser recognises a call ONLY when it is the ENTIRE operand (assignment RHS, RETURN operand, whole
+    // IF/WHILE condition) — so the debugger can Step Into a local function without evaluating a surrounding
+    // expression. Strict: any sub-expression position leaves the property null ⇒ step-over. The parser does
+    // not decide local-vs-not (no catalog); it only models "a lone call name(args)".
+
+    private static PsqlLeafStatement Leaf(string sql)
+        => Assert.IsType<PsqlLeafStatement>(Body(sql).Statements.Single());
+
+    [Fact]
+    public void Assignment_LoneCallRhs_Recognised_WithTargetAndArg()
+    {
+        const string sql = "begin r = f(x); end";
+        var leaf = Leaf(sql);
+        Assert.Equal(PsqlLeafKind.Assignment, leaf.Kind);
+        Assert.NotNull(leaf.RhsCall);
+        Assert.Equal("F", leaf.RhsCall!.Name);
+        Assert.Equal("R", leaf.AssignmentTarget);
+        var arg = Assert.Single(leaf.RhsCall.Arguments);
+        Assert.Equal("x", sql.Substring(arg.Start, arg.Length));
+    }
+
+    [Fact]
+    public void Assignment_LoneCallRhs_NoArgs_Recognised()
+    {
+        var leaf = Leaf("begin r = f(); end");
+        Assert.NotNull(leaf.RhsCall);
+        Assert.Equal("F", leaf.RhsCall!.Name);
+        Assert.Empty(leaf.RhsCall.Arguments);
+    }
+
+    [Fact]
+    public void Assignment_LoneCallRhs_NestedCallArgument_IsOneStepOverArgument()
+    {
+        // f(g(x)): f is the step-into-able lone call; g(x) is ONE argument (evaluated server-side = step-over).
+        const string sql = "begin r = f(g(x)); end";
+        var leaf = Leaf(sql);
+        Assert.NotNull(leaf.RhsCall);
+        Assert.Equal("F", leaf.RhsCall!.Name);
+        var arg = Assert.Single(leaf.RhsCall.Arguments);
+        Assert.Equal("g(x)", sql.Substring(arg.Start, arg.Length));
+    }
+
+    [Fact]
+    public void Assignment_QuotedTargetAndCallee_Folded()
+    {
+        var leaf = Leaf("begin \"MyVar\" = \"MyFunc\"(1); end");
+        Assert.NotNull(leaf.RhsCall);
+        Assert.Equal("MyFunc", leaf.RhsCall!.Name);      // quoted → kept as written
+        Assert.Equal("MyVar", leaf.AssignmentTarget);
+    }
+
+    [Fact]
+    public void Return_LoneCallOperand_Recognised_NoTarget()
+    {
+        var leaf = Leaf("begin return f(a, b); end");
+        Assert.Equal(PsqlLeafKind.Return, leaf.Kind);
+        Assert.NotNull(leaf.RhsCall);
+        Assert.Equal("F", leaf.RhsCall!.Name);
+        Assert.Equal(2, leaf.RhsCall.Arguments.Count);
+        Assert.Null(leaf.AssignmentTarget); // a RETURN has no named target
+    }
+
+    [Fact]
+    public void IfCondition_LoneCall_Recognised()
+    {
+        var iff = Assert.IsType<IfStatement>(Body("begin if (f(x)) then y = 1; end").Statements.Single());
+        Assert.NotNull(iff.ConditionCall);
+        Assert.Equal("F", iff.ConditionCall!.Name);
+    }
+
+    [Fact]
+    public void WhileCondition_LoneCall_Recognised()
+    {
+        var loop = Assert.IsType<WhileStatement>(Body("begin while (f(x)) do y = 1; end").Statements.Single());
+        Assert.NotNull(loop.ConditionCall);
+        Assert.Equal("F", loop.ConditionCall!.Name);
+    }
+
+    // ── Negative cases — every excluded shape leaves the property null (⇒ step-over) ─────────────────────
+
+    [Fact]
+    public void Assignment_TrailingOperator_NotRecognised()
+        => Assert.Null(Leaf("begin r = f(x) + 1; end").RhsCall);
+
+    [Fact]
+    public void Assignment_PlainExpression_NotRecognised()
+        => Assert.Null(Leaf("begin r = a + b; end").RhsCall);
+
+    [Fact]
+    public void Assignment_TwoCalls_NotRecognised()
+        => Assert.Null(Leaf("begin r = f(x) = g(x); end").RhsCall);
+
+    [Fact]
+    public void Assignment_DottedTarget_NotRecognised()
+    {
+        // NEW.col = f(x): a dotted target is not a single bare identifier (a D10 trigger concern) ⇒ null.
+        var leaf = Leaf("begin new.col = f(x); end");
+        Assert.Null(leaf.RhsCall);
+        Assert.Null(leaf.AssignmentTarget);
+    }
+
+    [Fact]
+    public void Return_WithTrailingOperator_NotRecognised()
+        => Assert.Null(Leaf("begin return f(x) + 1; end").RhsCall);
+
+    [Fact]
+    public void Return_PlainValue_NotRecognised()
+        => Assert.Null(Leaf("begin return a + 1; end").RhsCall);
+
+    [Fact]
+    public void IfCondition_CompoundBoolean_NotRecognised()
+    {
+        var iff = Assert.IsType<IfStatement>(Body("begin if (f(x) and g(x)) then y = 1; end").Statements.Single());
+        Assert.Null(iff.ConditionCall);
+    }
+
+    [Fact]
+    public void IfCondition_Comparison_NotRecognised()
+    {
+        var iff = Assert.IsType<IfStatement>(Body("begin if (f(x) = 5) then y = 1; end").Statements.Single());
+        Assert.Null(iff.ConditionCall);
+    }
+
+    [Fact]
+    public void WhileCondition_Comparison_NotRecognised()
+    {
+        var loop = Assert.IsType<WhileStatement>(Body("begin while (i < f(x)) do y = 1; end").Statements.Single());
+        Assert.Null(loop.ConditionCall);
+    }
+
+    [Fact]
+    public void NonAssignmentReturnLeaf_HasNoRhsCall()
+    {
+        // A plain call statement is not a step point for seam c — only assignment RHS / RETURN operands are.
+        var leaf = Leaf("begin post_event 'x'; end");
+        Assert.Null(leaf.RhsCall);
+        Assert.Null(leaf.AssignmentTarget);
+    }
+
+    [Fact]
+    public void LoneCall_RoundTripsByteForByte()
+    {
+        // Additive overlay: recognition never changes the tokens (§0).
+        const string sql = "begin r = f(x); if (g(y)) then return h(z); while (k(w)) do r = m(); end";
+        Assert.Equal(sql, SqlParser.Parse(sql).Root.ToSourceString());
+    }
 }

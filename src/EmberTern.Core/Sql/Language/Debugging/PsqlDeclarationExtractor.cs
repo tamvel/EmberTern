@@ -34,10 +34,17 @@ public sealed record SubroutineParam(string Name, string TypeSpec);
 /// <summary>A local sub-routine's signature read from its AST header (Stage X / D9): the ordered input
 /// parameters and — for a <c>PROCEDURE</c> — the <c>RETURNS (…)</c> output parameters. A local
 /// <c>FUNCTION</c>'s single <c>RETURNS &lt;type&gt;</c> yields no output parameters (its value returns via
-/// <c>RETURN</c>, not a named output), so <see cref="Outputs"/> is empty for a function.</summary>
+/// <c>RETURN</c>, not a named output), so <see cref="Outputs"/> is empty for a function; its return type is
+/// surfaced separately in <see cref="ReturnType"/>.</summary>
+/// <remarks><see cref="ReturnType"/> is the local <b>function</b>'s single return type spec (the tokens
+/// between <c>RETURNS</c> and the header's <c>AS</c>/terminator, no parens) — the R2 base-type resolver's
+/// input for the Expression Harness result column that carries a stepped-into function's <c>RETURN</c> value
+/// (Stage X / D9 seam c, §6.4). Null for a procedure (its outputs are the named <see cref="Outputs"/>) and
+/// when unreadable.</remarks>
 public sealed record SubroutineSignature(
     IReadOnlyList<SubroutineParam> Inputs,
-    IReadOnlyList<SubroutineParam> Outputs);
+    IReadOnlyList<SubroutineParam> Outputs,
+    string? ReturnType = null);
 
 /// <summary>
 /// Extracts a routine frame's variable declarations from its parsed body (Stage X / D2 seam c). Pure Core:
@@ -136,6 +143,7 @@ public static class PsqlDeclarationExtractor
             ParseParamSegments(t, k + 1, close, source, inputs);
             k = close + 1;
         }
+        string? returnType = null;
         if (k < hi && IsWord(t[k], "RETURNS"))
         {
             k++;
@@ -144,10 +152,33 @@ public static class PsqlDeclarationExtractor
                 int close = MatchParen(t, k, hi);
                 ParseParamSegments(t, k + 1, close, source, outputs);
             }
-            // else: a local FUNCTION's single return type — no named output parameter (RETURN yields it).
+            else
+            {
+                // A local FUNCTION's single return type — no named output parameter (RETURN yields it). Capture
+                // the type spec (the R2 base-type input, D9 seam c), stopping before the header's depth-0 AS
+                // (the body separator, which TypeSpecBetween would otherwise absorb).
+                int asIdx = FindHeaderAs(t, k, hi);
+                var rt = TypeSpecBetween(t, k, asIdx >= 0 ? asIdx : hi, source);
+                returnType = rt.Length == 0 ? null : rt;
+            }
         }
 
-        return new SubroutineSignature(inputs, outputs);
+        return new SubroutineSignature(inputs, outputs, returnType);
+    }
+
+    // First paren-depth-0 AS keyword in [from, hi), or -1. A parametrised type's own parens (e.g.
+    // VARCHAR(80)) sit at depth > 0, so a CAST(x AS type) inside would never be mistaken for the body AS.
+    private static int FindHeaderAs(IReadOnlyList<SqlToken> toks, int from, int hi)
+    {
+        int depth = 0;
+        for (int i = from; i < hi; i++)
+        {
+            var kind = toks[i].Kind;
+            if (kind == TokenKind.LParen) depth++;
+            else if (kind == TokenKind.RParen) { if (depth > 0) depth--; }
+            else if (depth == 0 && IsWord(toks[i], "AS")) return i;
+        }
+        return -1;
     }
 
     // The header ends where the body block begins (the first token at/after body.Start); a forward

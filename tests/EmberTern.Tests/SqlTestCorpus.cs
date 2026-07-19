@@ -132,6 +132,10 @@ public static class SqlTestCorpus
         "create procedure p as declare function f (a integer) returns integer as begin return a + 1; end begin r = f(1); end",
         "create procedure p as declare variable v1 integer; declare procedure sp as declare variable t integer; begin t = 1; end declare variable v2 integer; begin end",
         "create procedure p as declare procedure sp (a integer) returns (o integer); declare procedure sp (a integer) returns (o integer) as begin o = a; end begin end",
+        // Lone-call operands — Stage X / D9 seam c (§6.4): assignment RHS, RETURN operand, whole IF/WHILE
+        // condition (recognised), plus excluded shapes that must stay token fragments (round-trip unaffected).
+        "create procedure p as declare function f (a integer) returns integer as begin return f(a - 1); end begin r = f(1); if (f(r)) then suspend; while (f(r)) do r = f(r); end",
+        "begin r = f(g(x)); r = f(x) + 1; if (f(x) and g(x)) then r = 1; end",
     };
 
     /// <summary>Representative + structural-construct cases.</summary>

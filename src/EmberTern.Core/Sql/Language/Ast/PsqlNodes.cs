@@ -142,12 +142,14 @@ public sealed class IfStatement : PsqlStatement, IExecutableStatement
         IReadOnlyList<SqlToken> tokens,
         SqlNode? then,
         SqlNode? @else,
-        IReadOnlyList<SqlNode>? conditionExpressions = null)
+        IReadOnlyList<SqlNode>? conditionExpressions = null,
+        CallExpression? conditionCall = null)
         : base(start, length, tokens)
     {
         Then = then;
         Else = @else;
         ConditionExpressions = conditionExpressions ?? Array.Empty<SqlNode>();
+        ConditionCall = conditionCall;
         _children = Pack(ConditionExpressions, then, @else);
     }
 
@@ -155,6 +157,13 @@ public sealed class IfStatement : PsqlStatement, IExecutableStatement
     /// (<c>IF (EXISTS (…))</c>) or a CASE (Etap 6.9 / B3–B4). Empty when the condition has none. In source
     /// order they precede the branches.</summary>
     public IReadOnlyList<SqlNode> ConditionExpressions { get; }
+
+    /// <summary>The lone call forming the <b>entire</b> condition (<c>IF (f(x)) THEN</c>) — Stage X / D9
+    /// seam c (§6.4); null when the condition is anything else (a comparison, a compound boolean, a
+    /// non-call). Lets the debugger Step Into a local function whose result decides the branch. Whether
+    /// <see cref="CallExpression.Name"/> is an in-scope local function is the debugger's decision. Additive
+    /// overlay; the tokens still round-trip (§0).</summary>
+    public CallExpression? ConditionCall { get; }
 
     /// <summary>The THEN branch (a block or a single statement — a PSQL construct or a reused DSQL
     /// statement node, B5), or null on malformed input.</summary>
@@ -192,11 +201,13 @@ public sealed class WhileStatement : PsqlStatement, IExecutableStatement
         int length,
         IReadOnlyList<SqlToken> tokens,
         SqlNode? body,
-        IReadOnlyList<SqlNode>? conditionExpressions = null)
+        IReadOnlyList<SqlNode>? conditionExpressions = null,
+        CallExpression? conditionCall = null)
         : base(start, length, tokens)
     {
         Body = body;
         ConditionExpressions = conditionExpressions ?? Array.Empty<SqlNode>();
+        ConditionCall = conditionCall;
         var head = ConditionExpressions;
         if (head.Count == 0)
         {
@@ -215,6 +226,12 @@ public sealed class WhileStatement : PsqlStatement, IExecutableStatement
     /// <summary>The structurally-meaningful expressions embedded in the condition (subquery / CASE);
     /// empty when none. In source order they precede the body.</summary>
     public IReadOnlyList<SqlNode> ConditionExpressions { get; }
+
+    /// <summary>The lone call forming the <b>entire</b> loop condition (<c>WHILE (f(x)) DO</c>) — Stage X / D9
+    /// seam c (§6.4); null otherwise. Lets the debugger Step Into a local function whose result decides each
+    /// iteration. Whether <see cref="CallExpression.Name"/> is an in-scope local function is the debugger's
+    /// decision. Additive overlay; the tokens still round-trip (§0).</summary>
+    public CallExpression? ConditionCall { get; }
 
     /// <summary>The loop body (a block or a single statement — a PSQL construct or a reused DSQL statement
     /// node, B5), or null on malformed input.</summary>
@@ -388,15 +405,36 @@ public sealed class PsqlLeafStatement : PsqlStatement, IExecutableStatement
     private readonly IReadOnlyList<SqlNode> _children;
 
     public PsqlLeafStatement(
-        int start, int length, IReadOnlyList<SqlToken> tokens, PsqlLeafKind kind, IReadOnlyList<SqlNode>? expressions = null)
+        int start, int length, IReadOnlyList<SqlToken> tokens, PsqlLeafKind kind,
+        IReadOnlyList<SqlNode>? expressions = null,
+        CallExpression? rhsCall = null, string? assignmentTarget = null)
         : base(start, length, tokens)
     {
         Kind = kind;
         _children = expressions ?? Array.Empty<SqlNode>();
+        RhsCall = rhsCall;
+        AssignmentTarget = assignmentTarget;
     }
 
     /// <summary>The coarse role of this leaf (a hint for consumers; never affects the round-trip).</summary>
     public PsqlLeafKind Kind { get; }
+
+    /// <summary>The lone-call operand of this leaf when it is exactly <c>v = f(args)</c> (an
+    /// <see cref="PsqlLeafKind.Assignment"/> whose whole RHS is a call) or <c>RETURN f(args)</c> (a
+    /// <see cref="PsqlLeafKind.Return"/> whose whole operand is a call) — Stage X / D9 seam c (§6.4). Null for
+    /// every other leaf, and null when the RHS/operand is not <b>exactly</b> a lone call (a trailing operator,
+    /// a second call, a proper sub-expression ⇒ the debugger steps over). Whether <see cref="CallExpression.Name"/>
+    /// is an in-scope local function is the debugger's decision. Additive overlay; the tokens still round-trip
+    /// (§0).</summary>
+    public CallExpression? RhsCall { get; }
+
+    /// <summary>For an <see cref="PsqlLeafKind.Assignment"/> leaf whose RHS is a lone call
+    /// (<see cref="RhsCall"/> non-null), the folded bare-identifier target the return value is delivered into
+    /// (<c>v</c> in <c>v = f(x)</c>). Null for a <c>RETURN</c> leaf (its value flows to the enclosing frame's
+    /// return, not a named target) and when the target is dotted (<c>NEW.col = f(x)</c> — not recognised, a D10
+    /// concern). Precedent for a folded name in the AST: <see cref="ExecuteProcedureStatement.ProcedureName"/>
+    /// / <see cref="ExecuteProcedureStatement.ReturningTargets"/>.</summary>
+    public string? AssignmentTarget { get; }
 
     /// <inheritdoc/>
     /// <remarks>The structurally-meaningful expressions embedded in the leaf's interior (Etap 6.9 / B3–B4)

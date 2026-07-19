@@ -552,6 +552,28 @@ frame** (no new abstraction — the D8 `Frame.LexicalParent` split, gotcha #241,
 
 The branch is one predicate on `FirebirdDdlReader.ParseServerMajor` (reused from P2) at frame construction.
 
+### 6.4 Step *into* a local FUNCTION — seam (c) *(DESIGNED, not implemented)*
+
+§6.2(a) says "step into a local routine ⇒ just interpret it" — true for a local **procedure** (an
+`EXECUTE PROCEDURE` *statement* is a step point the interpreter owns). A local **function** is different: its
+call is an *element of a server-evaluated expression* (`v = f(x)`, `IF f(x)`, …), so D9 core steps **over** it
+(the server evaluates the whole expression in one harness). Faithful (§F), but you can't trace a complex local
+function's body line by line. **Seam (c)** closes that gap without breaking the responsibility split.
+
+> **Principle (ratified, final):** Step Into descends into a local function **only when the call is the ENTIRE
+> operand of a value-consuming position**, so the client never has to evaluate an expression around it.
+
+Covered (**Variant A** — one mechanism, all four positions): `v = f(args)` · `RETURN f(args)` · `IF f(args) THEN`
+· `WHILE f(args) DO`. **Excluded** (require expression decomposition ⇒ step-over, a permanent §F boundary):
+`f(x)+1`, `f(x)=5`, `f` as a sub-operand, `a AND f(x)`, `INSERT … VALUES(f(x))`. The boundary is architectural,
+not syntactic. **No new server path, no expression evaluator, no delivery/mini-harness:** the return value is
+delivered **client-side** via `SetResolvedValue` (the primitive procedures already use for `RETURNING_VALUES`),
+`RETURN <expr>` computes via the existing **Expression Harness** (result column typed as the function's `RETURNS`
+base type, R2), and the mechanism is a **Function Return Continuation** — a generalisation of `ApplyReturningValues`
+(procedures become its special case). Small AST deepening only (`CallExpression` + additive lone-call props;
+Contract #1). Full design + implementation handoff: **[docs/history/19-...](../history/19-firebird-debugger.md)
+§"D9 seam (c)"**; milestone brief: the implementation plan's D9 section.
+
 ---
 
 ## 7. Cursors — the sleeper problem
@@ -923,6 +945,12 @@ Each is **named, detected where possible, and surfaced**. None is silently appro
     `LexicalParent` branches on server major — not an assumption. FB4 is a documented §F boundary.
 12. **Unparseable source.** If a routine's source does not yield step points (the `RawStatement`/§0 valve),
     the debugger **refuses to start, with the reason** — it never debugs a partial understanding.
+13. **Local-function step-into in a proper sub-expression** (§6.4, seam c). Step Into descends into a local
+    function only when its call is the **entire** operand of a value-consuming position (`v = f(x)`,
+    `RETURN f(x)`, `IF f(x)`, `WHILE f(x)`). A function call that is a *sub-expression* (`f(x)+1`, `a AND f(x)`,
+    `f` inside `VALUES(…)`, an argument to another expression) steps **over** — descending would force the
+    client to evaluate the surrounding expression, becoming a second engine (§F / Contract #3). Step-over stays
+    100% faithful (the server evaluates the whole expression). This is an **architectural boundary, not a gap**.
 
 ### 12.1 Fast-forward (D13) — the optimisation and its price
 
@@ -961,7 +989,7 @@ next. Foundation-first; never big-bang.
 | **D6 ✅** | **Cursor Bridge** | `FOR SELECT` incremental stepping via a real DSQL cursor (§7); per-wire-op locking; colon-only injection (§15.5). **DONE** (nested cursors + fidelity proven; `WHERE CURRENT OF`/`DECLARE CURSOR` explicit cursors are follow-ups). | `FOR SELECT` is in nearly every real procedure — D4 isn't truly usable without it. Before the flashier work. |
 | **D7** | **Variables window, full** | Grouping/icons, change highlight, inline edit + validation, pins, types, `<null>`, lazy BLOBs, filter, **data tips**. | The most important panel, once there is state worth showing. |
 | **D8** | **Call stack + nested stored routines** | Frames, stack panel, **Breadcrumbs** (shared feature), Peek Frame, frame keyboard nav, simulated-frame indicator. | Nesting needs a working single frame first. |
-| **D9** ✅ | **Local procedures & functions** 🏁 | **COMPLETE (2026-07-18).** Sub-routine frames (§6.2a) + closure harness (§6.2b) + the transitive read/write-set fixpoint + **R5**. §6.3 gate (§15.7): frame `LexicalParent` branches on version. Step-into + step-over faithful, sim==real (§15.8–§15.10). | **The flagship — DELIVERED.** Real, steppable local-routine frames with real closure variables; IBExpert cannot do this. |
+| **D9** ✅ | **Local procedures & functions** 🏁 | **CORE COMPLETE (2026-07-18).** Sub-routine frames (§6.2a) + closure harness (§6.2b) + the transitive read/write-set fixpoint + **R5**. §6.3 gate (§15.7): frame `LexicalParent` branches on version. Procedure step-into + step-over faithful, sim==real (§15.8–§15.10). **Seam (c)** (local-**function** step-into, §6.4) **DESIGNED, not implemented — the immediate next task.** | **The flagship.** Real, steppable local-routine frames with real closure variables; IBExpert cannot do this. |
 | **D10** | **Triggers** | Action selector, NEW/OLD editor + availability rules, span-based substitution, seed-from-row. | Independent surface; needs D4+D7. |
 | **D11** | **Packages** | Public + private routines (§8.2). **Extend the lab with a private routine first.** | Smallest remaining surface. |
 | **D12** | **Advanced breakpoints** | Break on exception, conditional + hit counts, data breakpoints, **run to next `SUSPEND`** (+ its result grid). | Cheap *given* the engine; pure additions. |

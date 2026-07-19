@@ -247,6 +247,7 @@ public static partial class SqlParser
         int thenIdx = FindBodyWord(sig, i + 1, "THEN");
         if (thenIdx < 0) return ParsePsqlLeaf(sig, ref i); // malformed IF — lossless leaf
         var conditions = ParseEmbeddedExpressions(sig, lo + 1, thenIdx); // subquery / CASE in the condition
+        var conditionCall = TryReadConditionCall(sig, lo + 1, thenIdx); // whole-condition lone call (§6.4)
         i = thenIdx + 1;
         var thenBranch = ParsePsqlUnit(sig, ref i);
         SqlNode? elseBranch = null;
@@ -256,7 +257,7 @@ public static partial class SqlParser
             elseBranch = ParsePsqlUnit(sig, ref i);
         }
         var (start, length) = TokenSpan(sig, lo, i);
-        return new IfStatement(start, length, Sub(sig, lo, i), thenBranch, elseBranch, conditions);
+        return new IfStatement(start, length, Sub(sig, lo, i), thenBranch, elseBranch, conditions, conditionCall);
     }
 
     private static SqlNode ParsePsqlWhile(IReadOnlyList<SqlToken> sig, ref int i)
@@ -265,10 +266,11 @@ public static partial class SqlParser
         int doIdx = FindBodyWord(sig, i + 1, "DO");
         if (doIdx < 0) return ParsePsqlLeaf(sig, ref i);
         var conditions = ParseEmbeddedExpressions(sig, lo + 1, doIdx); // subquery / CASE in the condition
+        var conditionCall = TryReadConditionCall(sig, lo + 1, doIdx); // whole-condition lone call (§6.4)
         i = doIdx + 1;
         var body = ParsePsqlUnit(sig, ref i);
         var (start, length) = TokenSpan(sig, lo, i);
-        return new WhileStatement(start, length, Sub(sig, lo, i), body, conditions);
+        return new WhileStatement(start, length, Sub(sig, lo, i), body, conditions, conditionCall);
     }
 
     // FOR <select|execute statement> [INTO <vars>] [AS CURSOR c] DO <body> — the DO is located at paren
@@ -508,7 +510,92 @@ public static partial class SqlParser
         var (start, length) = TokenSpan(sig, lo, i);
         var slice = Sub(sig, lo, i);
         if (IsEmbeddedDsqlStart(sig, lo)) return Classify(slice, start, length);
-        return new PsqlLeafStatement(start, length, slice, ClassifyLeaf(sig, lo, i), ParseEmbeddedExpressions(sig, lo, i));
+        var kind = ClassifyLeaf(sig, lo, i);
+        int hi = i;
+        if (hi > lo && sig[hi - 1].Kind == TokenKind.Semicolon) hi--; // exclude the ';' terminator from operand scans
+        var (rhsCall, assignTarget) = ReadLeafCall(sig, lo, hi, kind);
+        return new PsqlLeafStatement(
+            start, length, slice, kind, ParseEmbeddedExpressions(sig, lo, i), rhsCall, assignTarget);
+    }
+
+    // A step-into-able local-FUNCTION call (§6.4, D9 seam c): the lone-call RHS of an assignment (with its
+    // bare target) or the lone-call operand of a RETURN, over the leaf's token range [lo, hi) (the trailing
+    // ';' already excluded). STRICT — anything but exactly `name(args)` as the WHOLE RHS / operand leaves both
+    // null ⇒ the debugger steps over. Only Assignment / Return leaves are considered.
+    private static (CallExpression? Call, string? Target) ReadLeafCall(
+        IReadOnlyList<SqlToken> sig, int lo, int hi, PsqlLeafKind kind)
+    {
+        if (kind == PsqlLeafKind.Return)
+            return (TryReadLoneCall(sig, lo + 1, hi), null); // RETURN <operand>
+
+        if (kind == PsqlLeafKind.Assignment)
+        {
+            int eq = FindTopLevelAssign(sig, lo, hi);
+            if (eq != lo + 1) return (null, null); // target must be a single bare identifier (not NEW.col — D10)
+            var t = sig[lo];
+            string? target = t.Kind switch
+            {
+                TokenKind.QuotedIdentifier => t.Value,
+                TokenKind.Identifier => t.Text.ToUpperInvariant(),
+                _ => null,
+            };
+            if (target is null) return (null, null);
+            var call = TryReadLoneCall(sig, eq + 1, hi);
+            return call is null ? (null, null) : (call, target);
+        }
+        return (null, null);
+    }
+
+    // The index of the first paren-depth-0 assignment operator '=' in [lo, hi), or -1. Matches the classifier's
+    // '=' convention (by text) so a comparison '=' nested in a parenthesised sub-expression is never taken.
+    private static int FindTopLevelAssign(IReadOnlyList<SqlToken> sig, int lo, int hi)
+    {
+        int depth = 0;
+        for (int k = lo; k < hi; k++)
+        {
+            var t = sig[k];
+            if (t.Kind == TokenKind.LParen) depth++;
+            else if (t.Kind == TokenKind.RParen) { if (depth > 0) depth--; }
+            else if (depth == 0 && t.Text == "=") return k;
+        }
+        return -1;
+    }
+
+    // Recognises the ENTIRE condition of an IF/WHILE header (the range [lo, hi) between the keyword and
+    // THEN/DO) as a lone call (§6.4). Firebird wraps the condition in parens, so a single fully-enclosing pair
+    // is stripped first; the remainder must then be exactly `name(args)`. Null otherwise ⇒ step-over.
+    private static CallExpression? TryReadConditionCall(IReadOnlyList<SqlToken> sig, int lo, int hi)
+    {
+        if (lo >= hi) return null;
+        if (sig[lo].Kind == TokenKind.LParen)
+        {
+            int close = MatchParenTok(sig, lo, hi);
+            if (close == hi - 1) { lo++; hi = close; } // strip the enclosing condition parens
+        }
+        return TryReadLoneCall(sig, lo, hi);
+    }
+
+    // A lone call `name(args)` over exactly [lo, hi): a name token, then '(', whose matching ')' is the LAST
+    // token (nothing trails). Null otherwise — a trailing operator (`f(x)+1`), a second call, or a dotted
+    // callee (`PKG.F(x)` — sig[lo+1] is '.', not '(') all leave it unrecognised ⇒ step-over (strict by design,
+    // §6.4; under-recognition is always safe). Arguments reuse the D8 call-argument slicer.
+    private static CallExpression? TryReadLoneCall(IReadOnlyList<SqlToken> sig, int lo, int hi)
+    {
+        if (hi - lo < 3) return null; // need at least: name ( )
+        var nameTok = sig[lo];
+        string? name = nameTok.Kind switch
+        {
+            TokenKind.QuotedIdentifier => nameTok.Value,
+            TokenKind.Identifier => nameTok.Text.ToUpperInvariant(),
+            _ => null,
+        };
+        if (name is null) return null;
+        if (sig[lo + 1].Kind != TokenKind.LParen) return null;
+        int close = MatchParenTok(sig, lo + 1, hi);
+        if (close != hi - 1) return null; // the ')' must be the last token — nothing may follow the call
+        var args = ReadCallArgumentList(sig, lo + 1, hi); // strips the enclosing parens, splits at depth-0 commas
+        var (start, length) = TokenSpan(sig, lo, hi);
+        return new CallExpression(start, length, name, args);
     }
 
     // True when the leaf beginning at `lo` is an embedded DSQL statement whose node the top-level parser

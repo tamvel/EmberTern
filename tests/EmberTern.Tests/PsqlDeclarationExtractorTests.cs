@@ -183,6 +183,77 @@ public class PsqlDeclarationExtractorTests
         Assert.Equal(new[] { "X" }, sig.Inputs.Select(p => p.Name));
         // A local function's single RETURNS <type> is not a named output parameter (its value returns via RETURN).
         Assert.Empty(sig.Outputs);
+        // …but its return type IS surfaced (R2 input for the Expression Harness result column, D9 seam c).
+        Assert.Equal("integer", sig.ReturnType);
+    }
+
+    // ── ExtractSignature.ReturnType (Stage X / D9 seam c, §6.4) ───────────────────────────────────────────
+    // A local FUNCTION's single RETURNS <type> is the R2 base-type input for the Expression Harness that
+    // carries a stepped-into function's RETURN value. A PROCEDURE has named outputs, not a return type ⇒ null.
+
+    [Fact]
+    public void ExtractSignature_ReturnTypeIsNull_ForAProcedure()
+    {
+        const string sql = """
+            create procedure p (n integer) returns (r integer) as
+            declare procedure sp (a integer) returns (o integer) as
+            begin
+              o = a;
+            end
+            begin
+              execute procedure sp(n) returning_values r;
+            end
+            """;
+        var (body, source) = Build(sql);
+        var sub = body.LocalRoutines.Single();
+
+        var sig = PsqlDeclarationExtractor.ExtractSignature(sub, source);
+
+        Assert.Null(sig.ReturnType); // a procedure's outputs are the named Outputs, not a scalar return type
+    }
+
+    [Fact]
+    public void ExtractSignature_ReturnType_CapturesAParametrisedType_Whole()
+    {
+        const string sql = """
+            create procedure p as
+            declare function label (n integer) returns varchar(80) as
+            begin
+              return 'x';
+            end
+            begin
+              r = label(1);
+            end
+            """;
+        var (body, source) = Build(sql);
+        var fn = body.LocalRoutines.Single();
+
+        var sig = PsqlDeclarationExtractor.ExtractSignature(fn, source);
+
+        // The type spec stops before the header's AS and captures the parametrised type whole.
+        Assert.Equal("varchar(80)", sig.ReturnType);
+    }
+
+    [Fact]
+    public void ExtractSignature_ReturnType_KeepsADomainName_ForR2Resolution()
+    {
+        const string sql = """
+            create procedure p as
+            declare function fee (n integer) returns d_amount as
+            begin
+              return 0;
+            end
+            begin
+              r = fee(1);
+            end
+            """;
+        var (body, source) = Build(sql);
+        var fn = body.LocalRoutines.Single();
+
+        var sig = PsqlDeclarationExtractor.ExtractSignature(fn, source);
+
+        // A domain return type comes back bare — the Firebird layer resolves its base type from RDB$FIELDS (R2).
+        Assert.Equal("d_amount", sig.ReturnType);
     }
 
     [Fact]
