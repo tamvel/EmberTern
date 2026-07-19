@@ -117,6 +117,16 @@ CREATE TABLE TRIG_LAB (
   CONSTRAINT PK_TRIG_LAB PRIMARY KEY (ID)
 );
 
+/* A second isolated table for the debugger's trigger zoo (Stage X / D10, gotcha #248). Its BEFORE UPDATE
+   trigger assigns a local from a scalar subquery that references NEW inside the subquery's WHERE — the case
+   where the harness must colon-prefix the NEW/OLD synthetic (a bare name there is read by Firebird as a
+   COLUMN → SQL -206). Kept apart from TRIG_LAB so it never clashes with the multi-action UPDATE trigger. */
+CREATE TABLE TRIG_SUBQ_LAB (
+  ID   INTEGER NOT NULL,
+  NOTE VARCHAR(20),
+  CONSTRAINT PK_TRIG_SUBQ_LAB PRIMARY KEY (ID)
+);
+
 /* ---------- Standalone indexes --------------------------------------
    Exercise the Index Detail surface: a plain index, a DESCENDING index,
    a composite index, a standalone UNIQUE index, an expression index, and
@@ -584,6 +594,20 @@ BEGIN
     NEW.NOTE = 'INSERTED';
   IF (UPDATING) THEN
     NEW.NOTE = 'UPDATED';
+END^
+
+/* BEFORE UPDATE with an EMBEDDED SCALAR SUBQUERY that references NEW inside its WHERE (gotcha #248). The
+   assignment CNT = COALESCE((SELECT ... WHERE oi.ORDER_ID = NEW.ID), 0) is a PSQL statement, so the NEW.ID
+   reference sits inside a DSQL subquery and MUST be colon-prefixed in the harness (:ET_CTX_i) — a bare name
+   there is a column (SQL -206). Debugger D10: proves the per-reference colon decision. NEW.ID = 1000 counts
+   the two ORDER_ITEMS rows of order 1000 ⇒ NEW.NOTE = 'CNT=2'.                                              */
+CREATE TRIGGER TR_SUBQ_BU FOR TRIG_SUBQ_LAB
+ACTIVE BEFORE UPDATE POSITION 0
+AS
+DECLARE VARIABLE CNT INTEGER = 0;
+BEGIN
+  CNT = COALESCE((SELECT COUNT(*) FROM ORDER_ITEMS oi WHERE oi.ORDER_ID = NEW.ID), 0);
+  NEW.NOTE = 'CNT=' || CAST(CNT AS VARCHAR(10));
 END^
 
 SET TERM ; ^

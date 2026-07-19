@@ -213,6 +213,7 @@ public partial class MainWindowViewModel : ViewModelBase
         Metadata.DeleteObjectRequested += OnDeleteObjectRequested;
         Metadata.ExecuteProcedureRequested += OnExecuteProcedureRequested;
         Metadata.DebugProcedureRequested += OnDebugProcedureRequested;
+        Metadata.DebugTriggerRequested += OnDebugTriggerRequested;
         Metadata.RecompileGroupRequested += OnRecompileGroupRequested;
         Metadata.SetObjectActiveRequested += OnSetObjectActiveRequested;
         Metadata.BulkSetActiveRequested += OnBulkSetActiveRequested;
@@ -4149,7 +4150,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
         detail.RunExecuteRequested = RunProcedureExecuteAsync;
         // Editor-toolbar Debug entry point (Stage X / D5) — reuses the one debugger-launch path.
-        detail.DebugRequested = () => OpenDebuggerForProcedure(detail.ProcedureName);
+        detail.DebugRequested = () => OpenDebuggerForObject(detail.ProcedureName, MetadataObjectKind.Procedure);
         // Its OWN Performance context — analyzes only this procedure tab's Execute.
         detail.PerformanceContext = CreatePerformanceContext();
         // Lazy column loader for the Variables grid's merged Domain/Column picker.
@@ -4203,6 +4204,8 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
+        // Editor-toolbar Debug entry point (Stage X / D10) — reuses the one debugger-launch path.
+        detail.DebugRequested = () => OpenDebuggerForObject(detail.TriggerName, MetadataObjectKind.Trigger);
         // Lazy column loader for the Variables grid's merged Domain/Column picker.
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadTriggerListsAsync(detail);
@@ -4789,14 +4792,22 @@ public partial class MainWindowViewModel : ViewModelBase
     private void OnDebugProcedureRequested(MetadataObject obj)
     {
         if (obj.Kind != MetadataObjectKind.Procedure) return;
-        OpenDebuggerForProcedure(obj.Name);
+        OpenDebuggerForObject(obj.Name, MetadataObjectKind.Procedure);
     }
 
-    // The one debugger-launch path, reused by the sidebar "Debug procedure…" and the procedure editor's
-    // Debug toolbar button (Stage X / D5) — the button is only an additional entry point, not new logic.
-    private void OpenDebuggerForProcedure(string routineName)
+    private void OnDebugTriggerRequested(MetadataObject obj)
     {
-        if (string.IsNullOrWhiteSpace(routineName)) return;
+        if (obj.Kind != MetadataObjectKind.Trigger) return;
+        OpenDebuggerForObject(obj.Name, MetadataObjectKind.Trigger);
+    }
+
+    // The one debugger-launch path, reused by the sidebar "Debug procedure…" / "Debug trigger…" and the
+    // procedure/trigger editor's Debug toolbar button (Stage X / D5, D10) — the buttons are only additional
+    // entry points, not new logic. The kind selects how the source is fetched (procedure vs trigger) and, for a
+    // trigger, the columns provider types its NEW/OLD context grid.
+    private void OpenDebuggerForObject(string name, MetadataObjectKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return;
         if (!_service.IsConnected)
         {
             AddMessage(MessageSeverity.Error, UiStrings.DebuggerNoConnection);
@@ -4805,14 +4816,15 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var launcher = new EmberTern.App.Debugging.FirebirdDebugSessionLauncher(_service);
         var debugger = new DebuggerTabViewModel(
-            routineName,
-            ct => FetchObjectDefinitionAsync(routineName, MetadataObjectKind.Procedure),
+            name,
+            ct => FetchObjectDefinitionAsync(name, kind),
             launcher,
             _parameterHistory,
             _service.ActiveProfile?.Id,
-            _watchStore);
+            _watchStore,
+            columnsProvider: (t, ct) => EnsureColumnsAsync(t, ct));
 
-        var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, routineName, _service.ActiveProfile?.Id);
+        var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, name, _service.ActiveProfile?.Id);
         WorkspaceTabs.Add(tab);
         SelectTab(tab);
         _ = debugger.PrepareAsync();

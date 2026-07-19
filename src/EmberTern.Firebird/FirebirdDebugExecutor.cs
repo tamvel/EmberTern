@@ -202,10 +202,13 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         // injects / writes it returns are unioned into the read/write set. Non-trigger frames are unchanged.
         if (ctx.Trigger is not null)
         {
-            // Inside an embedded DSQL statement (INSERT/UPDATE/DELETE/MERGE/SELECT — not a PSQL leaf) a variable
-            // reference must be colon-prefixed, or Firebird reads the bare name as a column (gotcha #247).
-            bool dsql = node is not PsqlStatement;
-            var rewrite = ContextSubstitution.Substitute(ctx.Model, ctx.Source, SpanOf(node), ctx.Trigger, colonReferences: dsql);
+            // A context reference must be colon-prefixed exactly where Firebird would read a bare name as a
+            // COLUMN — inside an embedded DSQL query (gotchas #247/#248): the whole statement when it IS a DSQL
+            // statement (SELECT…INTO / INSERT / UPDATE / DELETE / MERGE, not a PSQL leaf), or each embedded
+            // scalar/EXISTS subquery inside a PSQL statement (a subquery in an assignment RHS / a condition). A
+            // PSQL l-value / expression stays bare (a colon there is SQL -104). Decided per-reference.
+            var rewrite = ContextSubstitution.Substitute(
+                ctx.Model, ctx.Source, SpanOf(node), ctx.Trigger, ColonRegions(node));
             fragment = rewrite.Fragment;
             reads = Union(reads, rewrite.ContextReads);
             writes = Union(writes, rewrite.ContextWrites);
@@ -250,7 +253,10 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             var (s, e) = ConditionBounds(node);
             if (s >= 0 && e <= ctx.Source.Length && e > s)
             {
-                var rewrite = ContextSubstitution.Substitute(ctx.Model, ctx.Source, TextSpan.FromBounds(s, e), ctx.Trigger);
+                // A condition is a PSQL expression, so its NEW/OLD refs are bare — EXCEPT any inside an embedded
+                // subquery (IF (x = (select … where c = new.col))), which must be colon-prefixed (#248).
+                var rewrite = ContextSubstitution.Substitute(
+                    ctx.Model, ctx.Source, TextSpan.FromBounds(s, e), ctx.Trigger, ColonRegions(node));
                 condition = rewrite.Fragment;
                 reads = Union(reads, rewrite.ContextReads);
             }
@@ -942,6 +948,30 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     }
 
     private static TextSpan SpanOf(SqlNode node) => new(node.Start, node.Length);
+
+    // The regions of a statement inside which a NEW/OLD context reference must be COLON-prefixed for Firebird
+    // (gotchas #247/#248): the whole node when it IS a DSQL statement (a reused SELECT…INTO / INSERT / UPDATE /
+    // DELETE / MERGE — every unqualified name there is column-scoped), otherwise each embedded scalar/EXISTS
+    // subquery inside a PSQL statement (a subquery in an assignment RHS, or in an IF/WHILE condition). A pure
+    // PSQL statement with no embedded subquery yields none ⇒ every reference stays bare. AST-driven (the parser
+    // models embedded subqueries as SubqueryExpression, Etap 6.9 / B3), never a token scan (Contract #1).
+    private static IReadOnlyList<TextSpan> ColonRegions(SqlNode node)
+    {
+        if (node is not PsqlStatement)
+        {
+            return new[] { SpanOf(node) };
+        }
+
+        List<TextSpan>? regions = null;
+        foreach (var descendant in node.DescendantNodes())
+        {
+            if (descendant is SubqueryExpression)
+            {
+                (regions ??= new List<TextSpan>()).Add(SpanOf(descendant));
+            }
+        }
+        return regions ?? (IReadOnlyList<TextSpan>)System.Array.Empty<TextSpan>();
+    }
 
     // Distinct union preserving first-seen order (a ∪ b) — used to fold a trigger's context reads/writes into the
     // local read/write set. Returns the input unchanged when one side is empty (the common non-trigger case).

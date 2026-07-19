@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EmberTern.App.Debugging;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Metadata;
 using EmberTern.Core.Settings;
 using EmberTern.Core.Sql.Debugging;
 using EmberTern.Core.Sql.Language;
@@ -768,6 +769,128 @@ public class DebuggerTabVmTests
         Assert.Equal("SP_LEAF", peek!.RoutineName);
         Assert.Equal(LeafSql, peek.Source);
         Assert.True(peek.CurrentLine > 0);
+    }
+
+    // ── D10 Seam C — trigger launch (NEW/OLD context) ────────────────────────────────────────────────
+
+    private const string TriggerSql = """
+        create trigger tr_test for orders active before update position 0 as
+        begin
+          new.total = old.total + 1;
+        end
+        """;
+
+    private static readonly IReadOnlyList<ColumnSpec> OrdersColumns = new[]
+    {
+        new ColumnSpec("TOTAL", "NUMERIC(15,2)"),
+        new ColumnSpec("STATUS", "VARCHAR(20)"),
+    };
+
+    private static DebuggerTabViewModel TriggerVm(
+        string sql, IDebugExecutor executor, out FakeLauncher launcher,
+        Func<string, CancellationToken, Task<IReadOnlyList<ColumnSpec>>>? columns = null)
+    {
+        launcher = new FakeLauncher(executor);
+        return new DebuggerTabViewModel(
+            "TR_TEST", _ => Task.FromResult<string?>(sql), launcher,
+            columnsProvider: columns ?? ((_, _) => Task.FromResult(OrdersColumns)));
+    }
+
+    [Fact]
+    public async Task Prepare_Trigger_EntersTriggerMode_WithReferencedContextColumns()
+    {
+        var vm = TriggerVm(TriggerSql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+
+        Assert.Equal(DebuggerPhase.ReadyToLaunch, vm.Phase);
+        Assert.True(vm.IsTriggerMode);
+        Assert.Null(vm.Parameters);                 // a trigger has no procedure parameters
+        Assert.NotNull(vm.TriggerEditor);
+        // BEFORE UPDATE ⇒ both records available; only the referenced column (TOTAL) is a row.
+        Assert.True(vm.TriggerEditor!.NewAvailable);
+        Assert.True(vm.TriggerEditor.OldAvailable);
+        Assert.Equal("TOTAL", Assert.Single(vm.TriggerEditor.NewParameters.Params).Name);
+        Assert.Equal("NUMERIC(15,2)", vm.TriggerEditor.NewParameters.Params[0].TypeText); // typed from the catalog
+    }
+
+    [Fact]
+    public async Task Launch_Trigger_SeedsSyntheticRootValues_AndCarriesTriggerContext()
+    {
+        var vm = TriggerVm(TriggerSql, new FakeExecutor(), out var launcher);
+        await vm.PrepareAsync();
+
+        vm.TriggerEditor!.NewParameters.Params[0].IsNull = false;
+        vm.TriggerEditor.NewParameters.Params[0].NumericValue = 100m;
+        vm.TriggerEditor.OldParameters.Params[0].IsNull = false;
+        vm.TriggerEditor.OldParameters.Params[0].NumericValue = 50m;
+
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.NotNull(launcher.LastSpec);
+        var trigger = launcher.LastSpec!.Trigger;
+        Assert.NotNull(trigger);                                  // the launch carries the trigger context (§8.1)
+        Assert.Equal(TriggerEvent.Update, trigger!.Event);
+        // The NEW/OLD values are seeded onto their synthetic frame variables (ET_CTX_i).
+        Assert.Equal(100m, launcher.LastSpec.RootValues["ET_CTX_0"]);
+        Assert.Equal(50m, launcher.LastSpec.RootValues["ET_CTX_1"]);
+    }
+
+    [Fact]
+    public async Task Launch_Trigger_ShowsContextGroup_WithNewAndOldRows()
+    {
+        var vm = TriggerVm(TriggerSql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        vm.TriggerEditor!.NewParameters.Params[0].IsNull = false;
+        vm.TriggerEditor.NewParameters.Params[0].NumericValue = 100m;
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        var context = vm.VariableGroups.Single(g => g.Header == EmberTern.App.UiStrings.DebuggerVariableGroupContext);
+        Assert.Contains(context.Rows, r => r.Name == "NEW.TOTAL" && r.Kind == DebugVariableKind.ContextNew);
+        Assert.Contains(context.Rows, r => r.Name == "OLD.TOTAL" && r.Kind == DebugVariableKind.ContextOld);
+        // The NEW.TOTAL row resolves its live value through the synthetic frame variable it was seeded with.
+        Assert.Equal("100", context.Rows.Single(r => r.Name == "NEW.TOTAL").ValueText);
+    }
+
+    [Fact]
+    public async Task Prepare_DatabaseLevelTrigger_IsOutOfScope_BlocksLaunch()
+    {
+        const string onConnect = """
+            create trigger tr_conn active on connect position 0 as
+            begin
+              exit;
+            end
+            """;
+        var vm = TriggerVm(onConnect, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+
+        Assert.False(vm.IsTriggerMode);
+        Assert.True(vm.LaunchBlocked);
+        Assert.Equal(DebuggerPhase.Idle, vm.Phase);
+        Assert.Equal(EmberTern.App.UiStrings.DebuggerTriggerOutOfScope, vm.StatusText);
+    }
+
+    [Fact]
+    public async Task Launch_InsertTrigger_OmitsOldRows_FromContextGroup()
+    {
+        // A multi-action BEFORE INSERT OR UPDATE trigger referencing OLD.STATUS; launched as INSERT ⇒ OLD is
+        // unavailable, so the OLD context row is not shown (matches the launch panel hiding the OLD grid).
+        const string biu = """
+            create trigger tr_biu for orders active before insert or update position 0 as
+            begin
+              new.status = old.status;
+            end
+            """;
+        var vm = TriggerVm(biu, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        Assert.True(vm.TriggerEditor!.HasMultipleActions);
+        vm.TriggerEditor.SelectedActionIndex = 0; // INSERT
+
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        var context = vm.VariableGroups.Single(g => g.Header == EmberTern.App.UiStrings.DebuggerVariableGroupContext);
+        Assert.Contains(context.Rows, r => r.Name == "NEW.STATUS");
+        Assert.DoesNotContain(context.Rows, r => r.Name == "OLD.STATUS"); // OLD unavailable for INSERT (§8.1)
     }
 
     [Fact]

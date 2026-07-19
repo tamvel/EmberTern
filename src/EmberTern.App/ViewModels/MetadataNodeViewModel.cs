@@ -337,6 +337,16 @@ public partial class MetadataNodeViewModel : ViewModelBase
         }
     }
 
+    // Trigger leaf → Debug (Stage X / D10). Opens a debugger tab for the relation trigger.
+    [RelayCommand]
+    private void DebugTrigger()
+    {
+        if (IsTriggerLeaf && Object is { } obj)
+        {
+            _owner.RequestDebugTrigger(obj);
+        }
+    }
+
     // Trigger leaf → single activate / deactivate.
     [RelayCommand]
     private void Activate()

@@ -501,6 +501,26 @@ try
     else Fail("BIU update sim", $"{biuUpd.State} / NOTE={simUpdNote}");
     if (Show(realUpd) == "UPDATED") Pass("BIU real UPDATE persists NOTE='UPDATED' (sim == real; multi-action, same trigger)");
     else Fail("BIU update real", Show(realUpd));
+
+    // ── 17. BEFORE UPDATE with an EMBEDDED SUBQUERY referencing NEW (gotcha #248) — sim vs real ──
+    // The regression the user hit: NEW.ID inside a scalar subquery in a PSQL assignment was emitted bare
+    // (ET_CTX_i) → Firebird read it as a COLUMN → SQL -206. The per-reference colon fix must colon-prefix it.
+    Head("17. TR_SUBQ_BU — BEFORE UPDATE, NEW inside a scalar subquery (gotcha #248); NEW.NOTE='CNT=2' (sim vs real)");
+    var subq = await SimulateTriggerAsync("TR_SUBQ_BU", "TRIG_SUBQ_LAB", TriggerEvent.Update, TriggerTiming.Before,
+        new() { [(TriggerRecord.New, "ID")] = 1000, [(TriggerRecord.New, "NOTE")] = null });
+    string simSubqNote = Show(subq.Final.TryGetValue((TriggerRecord.New, "NOTE"), out var vsq) ? vsq : null);
+    object? realSubq = await RealInTxAsync(
+        new[]
+        {
+            "INSERT INTO TRIG_SUBQ_LAB (ID, NOTE) VALUES (1000, 'x')",
+            "UPDATE TRIG_SUBQ_LAB SET NOTE = 'y' WHERE ID = 1000",
+        },
+        "SELECT NOTE FROM TRIG_SUBQ_LAB WHERE ID = 1000");
+    if (subq.State == DebugState.Completed && simSubqNote == "CNT=2")
+        Pass("subquery-NEW ⇒ NEW.NOTE='CNT=2' (sim; NEW.ID colon-prefixed inside the subquery)", simSubqNote);
+    else Fail("subquery sim", $"{subq.State} / {subq.Error} / NOTE={simSubqNote}");
+    if (Show(realSubq) == "CNT=2") Pass("subquery real UPDATE persists NOTE='CNT=2' (sim == real; #248 fixed)");
+    else Fail("subquery real", Show(realSubq));
 }
 catch (Exception ex)
 {

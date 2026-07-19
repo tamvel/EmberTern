@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Debugging;
+using EmberTern.Core.Metadata;
 using EmberTern.Core.Settings;
 using EmberTern.Core.Sql.Debugging;
 using EmberTern.Core.Sql.Language;
@@ -65,6 +66,9 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 {
     private readonly Func<CancellationToken, Task<string?>> _sourceProvider;
     private readonly IDebugSessionLauncher _launcher;
+    // Loads a table's columns (types) for the trigger NEW/OLD launch grids + Variables Context group (D10).
+    // Null for a procedure/function launch (no trigger context is ever built).
+    private readonly Func<string, CancellationToken, Task<IReadOnlyList<ColumnSpec>>>? _columnsProvider;
 
     // Parsed once during preparation (the strict whole-routine parse — gotcha #238), then reused at launch.
     private string? _source;
@@ -86,7 +90,8 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         IDebugSessionLauncher launcher,
         ParameterHistoryStore? historyStore = null,
         string? connectionId = null,
-        WatchStore? watchStore = null)
+        WatchStore? watchStore = null,
+        Func<string, CancellationToken, Task<IReadOnlyList<ColumnSpec>>>? columnsProvider = null)
     {
         RoutineName = routineName ?? throw new ArgumentNullException(nameof(routineName));
         _sourceProvider = sourceProvider ?? throw new ArgumentNullException(nameof(sourceProvider));
@@ -94,10 +99,12 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         _historyStore = historyStore;
         _connectionId = connectionId;
         _watchStore = watchStore;
+        _columnsProvider = columnsProvider;
         Preflight = new ObservableCollection<DebugPreflightItem>();
         Variables = new ObservableCollection<DebugVariableRowViewModel>();
         VariableGroups = new ObservableCollection<DebugVariableGroupViewModel>();
         _pinnedGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupPinned);
+        _contextGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupContext);
         _parametersGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupParameters);
         _localsGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupLocals);
         ExecutedSql = new ObservableCollection<DebugExecutedSqlRowViewModel>();
@@ -131,15 +138,35 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// frame). The grouped/filtered presentation is <see cref="VariableGroups"/> over these same instances.</summary>
     public ObservableCollection<DebugVariableRowViewModel> Variables { get; }
 
-    /// <summary>The Variables panel's grouped, pinned and filtered presentation (Pinned / Parameters / Locals
-    /// — spec §9.4). References the same row instances as <see cref="Variables"/>; empty groups are hidden.
-    /// (Context = triggers is D10; Cursors needs cursor surfacing — deliberately not shipped as empty groups.)</summary>
+    /// <summary>The Variables panel's grouped, pinned and filtered presentation (Pinned / Context / Parameters /
+    /// Locals — spec §9.4). References the same row instances as <see cref="Variables"/>; empty groups are hidden.
+    /// (Context = a debugged trigger's NEW/OLD columns, D10, present only in trigger mode; Cursors needs cursor
+    /// surfacing — deliberately not shipped as an empty group.)</summary>
     public ObservableCollection<DebugVariableGroupViewModel> VariableGroups { get; }
 
     // Persistent group instances (reused across pauses so IsExpanded survives a step-by-step rebuild).
     private readonly DebugVariableGroupViewModel _pinnedGroup;
+    private readonly DebugVariableGroupViewModel _contextGroup; // trigger NEW/OLD (D10) — only in trigger mode
     private readonly DebugVariableGroupViewModel _parametersGroup;
     private readonly DebugVariableGroupViewModel _localsGroup;
+
+    // Trigger-debug state (Stage X / D10), populated during preparation when the routine is a relation trigger.
+    // The launch panel shows the trigger editor instead of plain parameters; the launched context feeds the
+    // Variables Context group. All null / false for a procedure/function launch (D4–D9 paths untouched).
+    private IReadOnlyList<ContextColumn> _triggerColumns = Array.Empty<ContextColumn>();
+    private IReadOnlyDictionary<string, string> _triggerColumnTypes =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private TriggerContext? _activeTrigger; // the context launched with (drives Context-row availability)
+
+    /// <summary>True when the routine being debugged is a relation trigger (Stage X / D10) — the launch panel
+    /// shows NEW/OLD context editors instead of procedure parameters, and Variables gains a Context group.</summary>
+    [ObservableProperty]
+    private bool _isTriggerMode;
+
+    /// <summary>The trigger launch editor (NEW/OLD context values + action selector, spec §8.1). Null until
+    /// preparation identifies a debuggable trigger; null for a procedure/function.</summary>
+    [ObservableProperty]
+    private TriggerContextEditorViewModel? _triggerEditor;
 
     // Change-highlighting state: the innermost frame's values as of the previous STEP, and the frame they
     // belonged to. A new innermost-frame identity resets the baseline so the first pause in a frame marks
@@ -370,11 +397,61 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             ? Array.Empty<IExecutableStatement>()
             : _body.DescendantNodesAndSelf().OfType<IExecutableStatement>().ToList();
 
-        BuildParameters();
+        // A relation trigger launches with NEW/OLD context editors instead of parameters (§8.1); a procedure/
+        // function keeps the plain parameter panel. TriggerHeaderReader refuses a DB-level / DDL trigger.
+        if (ddl is not null && ddl.ObjectKind == DdlObjectKind.Trigger)
+        {
+            if (!await TryPrepareTriggerAsync(ddl, cancellationToken).ConfigureAwait(true)) return;
+        }
+        else
+        {
+            BuildParameters();
+        }
+
         BuildPreflight(hasStepPoints: _stepPoints.Count > 0 && _body is not null);
 
         Phase = DebuggerPhase.ReadyToLaunch;
         StatusText = UiStrings.DebuggerStatusReady;
+    }
+
+    // Prepares the trigger launch editor (Stage X / D10): reads the header facts (target table / timing / DML
+    // events) from the AST via the Core reader, derives the referenced NEW/OLD columns (reference-driven, never
+    // a text scan), types them from the target-table catalog, and builds the dumb editor VM. Returns false (and
+    // fails preparation) for a DB-level / DDL trigger — those have no target table or DML event (§8.1, out of
+    // scope). All availability/predicate rules stay in Core (TriggerContext); this only wires the UI to them.
+    private async Task<bool> TryPrepareTriggerAsync(DdlStatement ddl, CancellationToken cancellationToken)
+    {
+        var header = TriggerHeaderReader.Read(ddl);
+        if (header is null || ddl.Body is null)
+        {
+            FailPreparation(UiStrings.DebuggerTriggerOutOfScope);
+            return false;
+        }
+
+        var columns = ContextSubstitution.BuildColumns(_model!, new TextSpan(ddl.Body.Start, ddl.Body.Length));
+        var columnTypes = await LoadTriggerColumnTypesAsync(header.TargetTable, cancellationToken).ConfigureAwait(true);
+        _triggerColumns = columns;
+        _triggerColumnTypes = columnTypes;
+        TriggerEditor = new TriggerContextEditorViewModel(header, columns, columnTypes, _connectionId, _historyStore);
+        IsTriggerMode = true;
+        return true;
+    }
+
+    // The base types of the trigger's target-table columns (folded name → type), for the NEW/OLD launch grids
+    // and the Variables Context group. Best-effort — a missing provider / read leaves a column untyped (a plain
+    // text box). Never re-derives Firebird semantics; it only labels the entry controls.
+    private async Task<IReadOnlyDictionary<string, string>> LoadTriggerColumnTypesAsync(
+        string table, CancellationToken cancellationToken)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (_columnsProvider is null) return map;
+        try
+        {
+            var cols = await _columnsProvider(table, cancellationToken).ConfigureAwait(true);
+            foreach (var c in cols) map[c.Name.ToUpperInvariant()] = c.Type;
+        }
+        catch { /* best-effort — an untyped column falls back to a text box */ }
+        return map;
     }
 
     private void BuildParameters()
@@ -412,25 +489,22 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     // ── Launch ────────────────────────────────────────────────────────────────────────────────────
 
     private bool CanLaunch => Phase is DebuggerPhase.ReadyToLaunch or DebuggerPhase.Idle
-                              && !LaunchBlocked && _body is not null && Parameters is not null;
+                              && !LaunchBlocked && _body is not null
+                              && (Parameters is not null || (IsTriggerMode && TriggerEditor is not null));
 
     [RelayCommand(CanExecute = nameof(CanLaunch))]
     private async Task LaunchAsync()
     {
-        if (_body is null || _model is null || _source is null || Parameters is null) return;
+        if (_body is null || _model is null || _source is null) return;
 
-        // Reuse the Smart-Parameters resolve/validate/record path: AcceptCommand validates time fields, sets
-        // Result to the ordered bound values, and records the set into history ("last used" for Restart).
-        Parameters.AcceptCommand.Execute(null);
-        if (Parameters.Result is null) return; // validation error — stay on the launch panel
+        // Collect the root-frame seed + (for a trigger) its context. A trigger uses the NEW/OLD editors; a
+        // procedure/function uses the plain parameter grid. Either path returns null on a validation error, so
+        // we stay on the launch panel.
+        var launch = IsTriggerMode ? BuildTriggerLaunch() : BuildParameterLaunch();
+        if (launch is not (var rootValues, var trigger)) return;
 
-        var rootValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        for (int i = 0; i < Parameters.Params.Count; i++)
-        {
-            rootValues[Parameters.Params[i].Name] = Parameters.Result[i];
-        }
-
-        var spec = new DebugLaunchSpec(_source, _body, _model, RoutineName, rootValues, Isolation);
+        _activeTrigger = trigger; // drives the Variables Context group (available NEW/OLD rows)
+        var spec = new DebugLaunchSpec(_source, _body, _model, RoutineName, rootValues, Isolation, trigger);
 
         ClearExecutedSql(); // a fresh session starts a fresh audit log
         Phase = DebuggerPhase.Busy;
@@ -450,6 +524,35 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         ApplyBreakpointsToSession();
         await EvaluateWatchesAsync().ConfigureAwait(true); // show watch values immediately at entry
         RefreshFromSession();
+    }
+
+    // A procedure/function launch: the root-frame seed comes from the plain parameter grid (name → value), no
+    // trigger context. Returns null on a validation error (Result stays null) so the launch panel stays shown.
+    // Reuses the Smart-Parameters resolve/validate/record path: AcceptCommand validates time fields, sets Result
+    // to the ordered bound values, and records the set into history ("last used" for Restart).
+    private (IReadOnlyDictionary<string, object?> RootValues, TriggerContext? Trigger)? BuildParameterLaunch()
+    {
+        if (Parameters is null) return null;
+        Parameters.AcceptCommand.Execute(null);
+        if (Parameters.Result is null) return null;
+
+        var rootValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < Parameters.Params.Count; i++)
+        {
+            rootValues[Parameters.Params[i].Name] = Parameters.Result[i];
+        }
+        return (rootValues, null);
+    }
+
+    // A trigger launch (Stage X / D10, §8.1): the root-frame seed is the entered NEW/OLD values keyed by their
+    // synthetic frame variables, plus the Core TriggerContext for the picked action. All the NEW/OLD availability
+    // + synthetic mapping lives in the (dumb) editor VM over Core; this only ferries it into the launch spec.
+    private (IReadOnlyDictionary<string, object?> RootValues, TriggerContext? Trigger)? BuildTriggerLaunch()
+    {
+        if (TriggerEditor is null) return null;
+        if (!TriggerEditor.Accept()) return null; // a shown NEW/OLD grid failed validation
+        var context = TriggerEditor.BuildTriggerContext();
+        return (TriggerEditor.CollectRootValues(context), context);
     }
 
     // ── Stepping ──────────────────────────────────────────────────────────────────────────────────
@@ -969,19 +1072,23 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             return;
         }
 
-        // A different inspected frame → fresh roster.
+        // A different inspected frame → fresh roster. Trigger NEW/OLD context rows belong only to the trigger
+        // ROOT frame (a stepped-into stored/local callee has no NEW/OLD in scope — spec §8.1).
         if (frame.Id != _rosterFrameId)
         {
-            BuildRoster(model);
+            bool isRootTriggerFrame = IsTriggerMode && _body is not null && ReferenceEquals(frame.Body, _body);
+            BuildRoster(model, isRootTriggerFrame);
             _rosterFrameId = frame.Id;
         }
 
+        // Values (and the change baseline) resolve through the frame by ResolveName — the synthetic frame
+        // variable for a context row, the plain name for a parameter/local.
         bool haveBaseline = computeChanges && _previousValues is not null && _previousFrameId == frame.Id;
         foreach (var row in Variables)
         {
-            bool hasValue = frame.TryResolveValue(row.Name, out var value);
+            bool hasValue = frame.TryResolveValue(row.ResolveName, out var value);
             bool changed = haveBaseline
-                && _previousValues!.TryGetValue(row.Name, out var prev)
+                && _previousValues!.TryGetValue(row.ResolveName, out var prev)
                 && !ValuesEqual(prev, hasValue ? value : null);
             row.Update(hasValue, value, changed);
         }
@@ -992,7 +1099,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             _previousValues = new System.Collections.Generic.Dictionary<string, object?>(System.StringComparer.OrdinalIgnoreCase);
             foreach (var row in Variables)
             {
-                _previousValues[row.Name] = frame.TryResolveValue(row.Name, out var v) ? v : null;
+                _previousValues[row.ResolveName] = frame.TryResolveValue(row.ResolveName, out var v) ? v : null;
             }
             _previousFrameId = frame.Id;
         }
@@ -1003,9 +1110,26 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     // Rebuilds the flat roster from the frame's semantic model (parameters first in declaration order, then
     // locals) — the model is the roster, the frame holds the live values. A variable present in the frame but
     // declared nowhere in the model is not shown (the declared symbols are the roster).
-    private void BuildRoster(SemanticModel model)
+    private void BuildRoster(SemanticModel model, bool includeContext)
     {
         Variables.Clear();
+
+        // Trigger NEW/OLD context columns first (only the referenced ones, and only those AVAILABLE for the
+        // simulated event — spec §8.1). Each resolves through its synthetic frame variable (ResolveName); the
+        // display name is NEW.col / OLD.col.
+        if (includeContext)
+        {
+            foreach (var c in _triggerColumns)
+            {
+                if (c.Record == TriggerRecord.New && _activeTrigger?.NewAvailable != true) continue;
+                if (c.Record == TriggerRecord.Old && _activeTrigger?.OldAvailable != true) continue;
+                var kind = c.Record == TriggerRecord.New ? DebugVariableKind.ContextNew : DebugVariableKind.ContextOld;
+                string display = (c.Record == TriggerRecord.New ? "NEW." : "OLD.") + c.Column;
+                string? type = _triggerColumnTypes.TryGetValue(c.Column, out var t) ? t : null;
+                Variables.Add(new DebugVariableRowViewModel(display, kind, type, resolveName: c.Synthetic));
+            }
+        }
+
         var symbols = model.AllSymbols
             .Where(s => s is ParameterSymbol or VariableSymbol)
             .OrderBy(s => s is ParameterSymbol ? 0 : 1)
@@ -1030,6 +1154,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     private void RebuildVariableGroups()
     {
         _pinnedGroup.Rows.Clear();
+        _contextGroup.Rows.Clear();
         _parametersGroup.Rows.Clear();
         _localsGroup.Rows.Clear();
 
@@ -1039,17 +1164,20 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             if (filter.Length > 0 && row.Name.IndexOf(filter, System.StringComparison.OrdinalIgnoreCase) < 0)
                 continue;
             var target = row.IsPinned ? _pinnedGroup
+                : row.Kind is DebugVariableKind.ContextNew or DebugVariableKind.ContextOld ? _contextGroup
                 : row.Kind == DebugVariableKind.Local ? _localsGroup
                 : _parametersGroup;
             target.Rows.Add(row);
         }
 
         SyncGroupVisibility(_pinnedGroup);
+        SyncGroupVisibility(_contextGroup);
         SyncGroupVisibility(_parametersGroup);
         SyncGroupVisibility(_localsGroup);
     }
 
-    // Keeps a group in VariableGroups iff it has rows, preserving the fixed order (Pinned, Parameters, Locals).
+    // Keeps a group in VariableGroups iff it has rows, preserving the fixed order (Pinned, Context, Parameters,
+    // Locals).
     private void SyncGroupVisibility(DebugVariableGroupViewModel group)
     {
         bool present = VariableGroups.Contains(group);
@@ -1071,7 +1199,10 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     }
 
     private int OrderIndex(DebugVariableGroupViewModel group)
-        => group == _pinnedGroup ? 0 : group == _parametersGroup ? 1 : 2;
+        => group == _pinnedGroup ? 0
+        : group == _contextGroup ? 1
+        : group == _parametersGroup ? 2
+        : 3;
 
     // Pin / unpin a variable to the top group (session-scoped; not a Watch — §9.5).
     [RelayCommand]
@@ -1111,12 +1242,13 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         }
 
         // Client-side truth: write it into the frame (the next harness injection re-reads it), then reflect
-        // it in the row without marking a step-change, and re-baseline so the next step compares correctly.
-        frame.SetResolvedValue(row.Name, value);
+        // it in the row without marking a step-change, and re-baseline so the next step compares correctly. A
+        // trigger context row writes through its synthetic frame variable (ResolveName).
+        frame.SetResolvedValue(row.ResolveName, value);
         row.Update(hasValue: true, value, changed: false);
         row.CancelEdit();
         _previousValues ??= new System.Collections.Generic.Dictionary<string, object?>(System.StringComparer.OrdinalIgnoreCase);
-        _previousValues[row.Name] = value;
+        _previousValues[row.ResolveName] = value;
     }
 
     // Best-effort typed parse of the edited text for the declared type (InvariantCulture, matching the harness
@@ -1167,6 +1299,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     {
         Variables.Clear();
         _pinnedGroup.Rows.Clear();
+        _contextGroup.Rows.Clear();
         _parametersGroup.Rows.Clear();
         _localsGroup.Rows.Clear();
         VariableGroups.Clear();

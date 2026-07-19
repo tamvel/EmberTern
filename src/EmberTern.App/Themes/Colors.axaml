@@ -63,10 +63,13 @@
       <Color x:Key="DebugParamOutColor">#E8A020</Color>
       <Color x:Key="DebugLocalColor">#4EC994</Color>
       <Color x:Key="DebugPinColor">#F2C94C</Color>
+      <!-- Stage X / D10 — trigger NEW/OLD context columns: a distinct purple, apart from IN/OUT/local hues. -->
+      <Color x:Key="DebugContextColor">#C678DD</Color>
       <SolidColorBrush x:Key="DebugParamInBrush"  Color="{StaticResource DebugParamInColor}" />
       <SolidColorBrush x:Key="DebugParamOutBrush" Color="{StaticResource DebugParamOutColor}" />
       <SolidColorBrush x:Key="DebugLocalBrush"    Color="{StaticResource DebugLocalColor}" />
       <SolidColorBrush x:Key="DebugPinBrush"      Color="{StaticResource DebugPinColor}" />
+      <SolidColorBrush x:Key="DebugContextBrush"  Color="{StaticResource DebugContextColor}" />
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
@@ -282,10 +285,13 @@
       <Color x:Key="DebugParamOutColor">#C77800</Color>
       <Color x:Key="DebugLocalColor">#1A7F4B</Color>
       <Color x:Key="DebugPinColor">#C99700</Color>
+      <!-- Stage X / D10 — trigger NEW/OLD context columns: a distinct purple, apart from IN/OUT/local hues. -->
+      <Color x:Key="DebugContextColor">#8E44AD</Color>
       <SolidColorBrush x:Key="DebugParamInBrush"  Color="{StaticResource DebugParamInColor}" />
       <SolidColorBrush x:Key="DebugParamOutBrush" Color="{StaticResource DebugParamOutColor}" />
       <SolidColorBrush x:Key="DebugLocalBrush"    Color="{StaticResource DebugLocalColor}" />
       <SolidColorBrush x:Key="DebugPinBrush"      Color="{StaticResource DebugPinColor}" />
+      <SolidColorBrush x:Key="DebugContextBrush"  Color="{StaticResource DebugContextColor}" />
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or

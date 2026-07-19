@@ -1674,6 +1674,7 @@ internal static class UiStrings
 
     // ─── Debugger (Stage X / D4 — Debugger tab MVP) ───────────────────────────
     public const string MetadataContextDebugProcedure = "Debug procedure…";
+    public const string MetadataContextDebugTrigger = "Debug trigger…";
     public const string DebuggerTabTitleFormat = "Debug: {0}";
     // Launch panel.
     public const string DebuggerLaunchHeader = "Launch debug session";
@@ -1728,7 +1729,10 @@ internal static class UiStrings
     public const string DebuggerVariableKindLocal = "local";
     public const string DebuggerVariableKindIn = "IN";
     public const string DebuggerVariableKindOut = "OUT";
+    public const string DebuggerVariableKindContextNew = "NEW record";
+    public const string DebuggerVariableKindContextOld = "OLD record";
     public const string DebuggerVariableGroupPinned = "Pinned";
+    public const string DebuggerVariableGroupContext = "Context";
     public const string DebuggerVariableGroupParameters = "Parameters";
     public const string DebuggerVariableGroupLocals = "Locals";
     public const string DebuggerVariableFilterWatermark = "Filter variables…";
@@ -1740,7 +1744,18 @@ internal static class UiStrings
     // Errors.
     public const string DebuggerNoConnection = "Connect to a database before debugging.";
     public const string ProcedureDebugTooltip = "Debug procedure";
+    public const string TriggerDebugTooltip = "Debug trigger";
     public const string DebuggerSourceUnavailableFormat = "Could not load the source of {0}.";
+    // Trigger debugging (Stage X / D10) — the launch panel's NEW/OLD context editors + the out-of-scope refusal.
+    public const string DebuggerTriggerOutOfScope =
+        "Only relation triggers (BEFORE/AFTER INSERT/UPDATE/DELETE) can be debugged — database-level and DDL triggers are out of scope.";
+    public const string DebuggerTriggerActionLabel = "Fires for";
+    public const string DebuggerTriggerActionInsert = "INSERT";
+    public const string DebuggerTriggerActionUpdate = "UPDATE";
+    public const string DebuggerTriggerActionDelete = "DELETE";
+    public const string DebuggerTriggerNewHeader = "NEW values";
+    public const string DebuggerTriggerOldHeader = "OLD values";
+    public const string DebuggerTriggerNoColumns = "This trigger references no columns of this record.";
     // Bottom tabbed panel (D5 layout redesign) — extensible: Call Stack / Breakpoints / Output join later.
     public const string DebuggerBottomTabImmediate = "Immediate";
     public const string DebuggerBottomTabExecutedSql = "Executed SQL";

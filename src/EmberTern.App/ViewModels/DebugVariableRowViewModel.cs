@@ -3,13 +3,16 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace EmberTern.App.ViewModels;
 
-/// <summary>What a variable row denotes — an input parameter, an output parameter, or a local. Drives the
-/// group it lands in, its kind glyph, and its themed colour key.</summary>
+/// <summary>What a variable row denotes — an input parameter, an output parameter, a local, or (for a debugged
+/// trigger, Stage X / D10) a <c>NEW</c>/<c>OLD</c> context column. Drives the group it lands in, its kind glyph,
+/// and its themed colour key.</summary>
 public enum DebugVariableKind
 {
     ParameterIn,
     ParameterOut,
     Local,
+    ContextNew,
+    ContextOld,
 }
 
 /// <summary>
@@ -25,14 +28,22 @@ public enum DebugVariableKind
 /// </summary>
 public sealed partial class DebugVariableRowViewModel : ObservableObject
 {
-    public DebugVariableRowViewModel(string name, DebugVariableKind kind, string? typeText)
+    public DebugVariableRowViewModel(string name, DebugVariableKind kind, string? typeText, string? resolveName = null)
     {
         Name = name;
+        ResolveName = resolveName ?? name;
         Kind = kind;
         TypeText = typeText ?? string.Empty;
     }
 
+    /// <summary>The display name (e.g. <c>NEW.STATUS</c> for a trigger context column).</summary>
     public string Name { get; }
+
+    /// <summary>The name used to resolve/write this variable's value in the frame. Equals <see cref="Name"/> for
+    /// an ordinary parameter/local, but a trigger context column resolves through its synthetic frame variable
+    /// (<c>ET_CTX_i</c> — <see cref="EmberTern.Core.Sql.Debugging.ContextColumn.Synthetic"/>), because
+    /// <c>NEW</c>/<c>OLD</c> do not exist inside the harness (spec §8.1).</summary>
+    public string ResolveName { get; }
 
     public DebugVariableKind Kind { get; }
 
@@ -49,14 +60,18 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
         // than the diamond/circle — use the full "▶" U+25B6 instead; same concept, same colour).
         DebugVariableKind.ParameterIn => "▶",   // input parameter
         DebugVariableKind.ParameterOut => "◆",  // output / RETURNS
+        DebugVariableKind.ContextNew => "▲",    // trigger NEW record column
+        DebugVariableKind.ContextOld => "▽",    // trigger OLD record column
         _ => "●",                                // local
     };
 
-    /// <summary>Localized kind label (IN / OUT / local).</summary>
+    /// <summary>Localized kind label (IN / OUT / local / NEW / OLD).</summary>
     public string KindLabel => Kind switch
     {
         DebugVariableKind.ParameterIn => UiStrings.DebuggerVariableKindIn,
         DebugVariableKind.ParameterOut => UiStrings.DebuggerVariableKindOut,
+        DebugVariableKind.ContextNew => UiStrings.DebuggerVariableKindContextNew,
+        DebugVariableKind.ContextOld => UiStrings.DebuggerVariableKindContextOld,
         _ => UiStrings.DebuggerVariableKindLocal,
     };
 
@@ -66,6 +81,7 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
     {
         DebugVariableKind.ParameterIn => "DebugParamInBrush",
         DebugVariableKind.ParameterOut => "DebugParamOutBrush",
+        DebugVariableKind.ContextNew or DebugVariableKind.ContextOld => "DebugContextBrush",
         _ => "DebugLocalBrush",
     };
 

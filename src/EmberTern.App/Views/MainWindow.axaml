@@ -561,6 +561,9 @@
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
                                 Command="{Binding DebugProcedureCommand}"
                                 IsVisible="{Binding IsProcedureLeaf}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugTrigger}"
+                                Command="{Binding DebugTriggerCommand}"
+                                IsVisible="{Binding IsTriggerLeaf}" />
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
                                 Command="{Binding ActivateCommand}"
                                 IsVisible="{Binding ShowActivate}" />
@@ -1010,7 +1013,12 @@
                       Command="{Binding ActiveProcedureDetail.UncommentBodyCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
-              <!-- Trigger: format / comment / uncomment -->
+              <!-- Trigger: debug / format / comment / uncomment -->
+              <!-- Debugger entry point (Stage X / D10) — same launch as the sidebar "Debug trigger…". -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TriggerDebugTooltip}"
+                      Command="{Binding ActiveTriggerDetail.DebugTriggerCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
+                <controls:SvgIcon Data="{StaticResource Icon.Bug}" Foreground="{DynamicResource InfoIconBrush}" />
+              </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveTriggerDetail.FormatSqlCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />

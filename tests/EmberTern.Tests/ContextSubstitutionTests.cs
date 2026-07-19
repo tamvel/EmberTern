@@ -158,6 +158,45 @@ public class ContextSubstitutionTests
     }
 
     [Fact]
+    public void Substitute_ColonPrefixesContextRef_OnlyInsideEmbeddedSubquery()
+    {
+        // Gotcha #248 (D10 QA): a NEW/OLD reference inside a scalar subquery embedded in a PSQL assignment must
+        // be colon-prefixed (Firebird reads a bare name there as a COLUMN → SQL -206), while a NEW/OLD reference
+        // in the bare PSQL part of the SAME statement (an l-value / RHS) must stay bare (a colon there is -104).
+        // The decision is per-reference; the executor derives the colon-regions from the AST's SubqueryExpression
+        // spans, so this test mirrors that and also GUARDS the premise (the parser models the subquery).
+        const string sql = """
+            create trigger tr for wystcechkart active before insert or update position 0 as
+            declare variable podstwylcen integer = 0;
+            begin
+              podstwylcen = coalesce((select k.podstwylcen
+                                      from kartoteka k
+                                      where k.id_kartoteka = new.id_kartoteka), 0);
+              new.wartosc = new.id_kartoteka;
+            end
+            """;
+        var (model, ddl) = Build(sql);
+        var columns = ContextSubstitution.BuildColumns(model, Span(ddl.Body!));
+        var context = new TriggerContext("WYSTCECHKART", TriggerEvent.Update, TriggerTiming.Before, columns);
+
+        // Statement 1 — the assignment with an embedded scalar subquery.
+        var assign = ddl.Body!.Statements.First();
+        var subRegions = assign.DescendantNodes().OfType<SubqueryExpression>().Select(Span).ToList();
+        Assert.NotEmpty(subRegions); // the parser models the embedded subquery (the fix's premise)
+
+        var r1 = ContextSubstitution.Substitute(model, sql, Span(assign), context, subRegions);
+        Assert.Contains(":ET_CTX", r1.Fragment);        // the ref inside the subquery is colon-prefixed
+        Assert.DoesNotContain("= ET_CTX", r1.Fragment); // …and never emitted bare in the subquery's WHERE
+
+        // Statement 2 — new.wartosc = new.id_kartoteka: a pure PSQL assignment (no subquery) → both refs bare.
+        var assign2 = ddl.Body.Statements.Skip(1).First();
+        var subRegions2 = assign2.DescendantNodes().OfType<SubqueryExpression>().Select(Span).ToList();
+        var r2 = ContextSubstitution.Substitute(model, sql, Span(assign2), context, subRegions2);
+        Assert.DoesNotContain(":ET_CTX", r2.Fragment);  // no colon in a pure PSQL assignment
+        Assert.Contains("ET_CTX", r2.Fragment);         // but the NEW refs are still rewritten (bare)
+    }
+
+    [Fact]
     public void Substitute_NoContext_ReturnsRegionVerbatim()
     {
         const string sql = """

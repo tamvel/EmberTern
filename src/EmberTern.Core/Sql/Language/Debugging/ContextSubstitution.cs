@@ -85,14 +85,20 @@ public static class ContextSubstitution
     /// (a BEFORE trigger) — over-inclusive there (a merely-read <c>NEW.col</c> written back returns its own value,
     /// harmlessly), never missing a real write; <c>OLD</c> is never written back.
     /// <para>
-    /// <paramref name="colonReferences"/> controls how a rewritten column reference names its synthetic frame
-    /// variable in the fragment text: bare (<c>ET_CTX_0</c>) for a PSQL expression (an assignment RHS, an
-    /// <c>IF</c>/<c>WHILE</c> condition), or colon-prefixed (<c>:ET_CTX_0</c>) inside an embedded <b>DSQL</b>
-    /// statement (<c>INSERT</c>/<c>UPDATE</c>/<c>DELETE</c>/<c>MERGE</c>/<c>SELECT … INTO</c>), where Firebird
-    /// reads a bare name as a <b>column</b> (gotcha #247). The reported reads/writes are always the bare synthetic
-    /// (the harness declares + injects them bare); only the fragment reference is qualified.</para></summary>
+    /// <paramref name="colonRegions"/> controls, <b>per reference</b>, how a rewritten column reference names its
+    /// synthetic frame variable in the fragment text: colon-prefixed (<c>:ET_CTX_0</c>) when the reference lies
+    /// inside one of these regions — an embedded <b>DSQL</b> query (a scalar/EXISTS subquery, or the whole
+    /// statement when it is a <c>SELECT … INTO</c> / <c>INSERT</c> / <c>UPDATE</c> / <c>DELETE</c> / <c>MERGE</c>),
+    /// where Firebird reads a bare name as a <b>column</b> (gotcha #247) — or bare (<c>ET_CTX_0</c>) otherwise (a
+    /// PSQL assignment target / RHS, an <c>IF</c>/<c>WHILE</c> condition, where a colon is a syntax error). The
+    /// distinction is per-reference, not per-statement, because a PSQL assignment can embed a DSQL subquery: the
+    /// l-value <c>new.col</c> stays bare while a <c>new.col</c> inside <c>(select … where x = new.col)</c> in the
+    /// same statement must be colon-prefixed (gotcha #248). Null / empty ⇒ every reference is bare. The reported
+    /// reads/writes are always the bare synthetic (the harness declares + injects them bare); only the fragment
+    /// reference is qualified.</para></summary>
     public static ContextRewrite Substitute(
-        SemanticModel model, string source, TextSpan region, TriggerContext context, bool colonReferences = false)
+        SemanticModel model, string source, TextSpan region, TriggerContext context,
+        IReadOnlyList<TextSpan>? colonRegions = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(source);
@@ -121,8 +127,10 @@ public static class ContextSubstitution
                 if (lookup.TryGetValue((record, column), out var synthetic))
                 {
                     // Replace the whole NEW.col span (qualifier .. member) with the synthetic name — colon-prefixed
-                    // inside a DSQL statement, bare inside a PSQL expression (gotcha #247). Reads/writes stay bare.
-                    edits.Add(new Edit(r.Span.Start, member.Span.End, colonReferences ? ":" + synthetic : synthetic));
+                    // when this reference lies inside an embedded DSQL region, bare inside a PSQL expression
+                    // (gotchas #247/#248). Reads/writes stay bare (the harness declares + injects them bare).
+                    bool colon = InsideAnyRegion(r.Span.Start, member.Span.End, colonRegions);
+                    edits.Add(new Edit(r.Span.Start, member.Span.End, colon ? ":" + synthetic : synthetic));
                     if (seenRead.Add(synthetic)) reads.Add(synthetic);
                     if (record == TriggerRecord.New && context.NewWritable && seenWrite.Add(synthetic))
                     {
@@ -145,6 +153,19 @@ public static class ContextSubstitution
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
 
     private readonly record struct Edit(int Start, int End, string Replacement);
+
+    // True when the reference span [start, end) is fully contained in any colon-region (an embedded DSQL query).
+    // Regions may nest (a subquery inside a subquery); containment in any one is enough — the union is what
+    // matters. Null / empty ⇒ no reference is inside a DSQL region (a pure-PSQL statement).
+    private static bool InsideAnyRegion(int start, int end, IReadOnlyList<TextSpan>? regions)
+    {
+        if (regions is null) return false;
+        foreach (var region in regions)
+        {
+            if (start >= region.Start && end <= region.End) return true;
+        }
+        return false;
+    }
 
     // The references inside a region, in document order (the order the binder recorded them, which keeps a
     // NEW.col's RecordAlias and Column references adjacent — BindDottedReference records them back-to-back).

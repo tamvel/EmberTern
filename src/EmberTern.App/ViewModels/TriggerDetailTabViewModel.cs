@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Language.Semantics;
@@ -60,6 +61,20 @@ public partial class TriggerDetailTabViewModel : SourceObjectDetailTabViewModel
     }
 
     public string TriggerName { get; }
+
+    /// <summary>Raised when the user asks to debug this trigger (the editor-toolbar Debug button, Stage X / D10).
+    /// The host (<see cref="MainWindowViewModel"/>) opens a debugger tab for <see cref="TriggerName"/> — the
+    /// debugger owns its own attachment + transaction, so the editor VM only signals intent (mirrors the
+    /// procedure editor's Debug entry point). Null until the host wires it. Only an additional entry point onto
+    /// the one debugger-launch path — no debug logic lives here.</summary>
+    public Action? DebugRequested { get; set; }
+
+    /// <summary>A compiled (non-New) trigger can be debugged once the host has wired
+    /// <see cref="DebugRequested"/> (both fixed at construction, so this needs no change notification).</summary>
+    public bool CanDebugTrigger => DebugRequested is not null && !IsNew;
+
+    [RelayCommand(CanExecute = nameof(CanDebugTrigger))]
+    private void DebugTrigger() => DebugRequested?.Invoke();
 
     // ─── Trigger metadata (Easy mode header) ──────────────────────────────
 
