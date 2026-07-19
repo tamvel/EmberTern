@@ -262,6 +262,37 @@ public sealed class DebugSession
         var frame = _frames[^1];
         var step = _currentStep!;
 
+        // (1) Step Into a local FUNCTION whose call is the ENTIRE operand of a value-consuming position
+        // (§6.4 — assignment RHS / RETURN operand / whole IF or WHILE condition). Recognition + the
+        // position-specific return continuation are decided in ONE place (RecognizeStepInto); when the call
+        // resolves to an in-scope local function, push a function frame that delivers its RETURN value to the
+        // caller position on normal return. The caller's control flow is NOT advanced / branched now — the
+        // continuation does that on return (ApplyReturnContinuation), so the assignment / branch fires exactly
+        // once. An unresolved call (stored / built-in / package) falls through and runs on the server = a
+        // 100%-faithful step-over (§5.3/§6.4). Step Over/Out/Continue ignore the call entirely (also fall through).
+        if (kind == StepKind.Into
+            && FunctionReturnContinuation.RecognizeStepInto(step) is { } into
+            && _executor.ResolveFunction(into.Call, frame) is { } fn)
+        {
+            PushFrame(fn.Name, fn.Body, parent: frame, lexicalParent: fn.LexicalParent, callSite: step,
+                fn.InitialValues, fn.OutputParameterNames, fn.Source, fn.Model,
+                returnType: fn.ReturnType, returnContinuation: into.Continuation);
+            return false;
+        }
+
+        // (2) A RETURN <expr> inside a FUNCTION frame is computed by the Expression Harness (a bare RETURN is
+        // invalid inside EXECUTE BLOCK), records the frame's return value, and terminates the frame; its
+        // continuation then delivers the value to the caller position (AdvanceToNextStepPoint). A step-into-able
+        // RETURN f(x) was already handled by (1); this covers a plain RETURN <expr> and a stepped-over one.
+        if (frame.IsFunctionFrame && step is PsqlLeafStatement { Kind: PsqlLeafKind.Return })
+        {
+            var ret = _executor.EvaluateReturn(step, frame);
+            if (ret.Error is not null) { _error = ret.Error; return true; }
+            frame.SetReturnValue(ret.Value);
+            frame.TerminateForReturn();
+            return false;
+        }
+
         switch (step)
         {
             case IfStatement iff:
@@ -343,11 +374,49 @@ public sealed class DebugSession
             var step = _frames[^1].NextStepPoint();
             if (step is not null) return step;
 
-            ApplyReturningValues(_frames[^1]);                              // bind the callee's outputs back (§5)
-            _executor.LeaveFrameSavepoint(_frames[^1].SavepointName);       // normal frame exit (§4.5)
+            var completed = _frames[^1];
+            ApplyReturningValues(completed);                    // a procedure callee's outputs → RETURNING_VALUES (§5)
+            _executor.LeaveFrameSavepoint(completed.SavepointName); // normal frame exit (§4.5)
             _frames.RemoveAt(_frames.Count - 1);
+            ApplyReturnContinuation(completed);                 // a function callee's RETURN value → caller position (§6.4)
         }
         return null;
+    }
+
+    // On a FUNCTION frame's NORMAL return (§6.4, D9 seam c), deliver its RETURN value to the caller statement
+    // that stepped into it — the ONE place the four continuation variants resume the caller's control flow,
+    // generalising ApplyReturningValues (a procedure delivers named outputs; a function delivers one value per
+    // the call position). A non-function frame (root / procedure / EXECUTE BLOCK) has no continuation → no-op.
+    // An unhandled unwind never reaches here (the ExceptionRouter rolls those frames back), so a raised function
+    // never fires its continuation — identical to a procedure.
+    private void ApplyReturnContinuation(Frame completed)
+    {
+        if (completed.ReturnContinuation is not { } continuation) return;
+        if (completed.Parent is not { } caller) return;
+        object? value = completed.ReturnValue;
+
+        switch (continuation)
+        {
+            case FunctionReturnContinuation.AssignTo assign:
+                caller.SetResolvedValue(assign.Target, value); // v = f(x)
+                AdvanceSequence(caller);                        // consume the assignment leaf (not advanced at push)
+                break;
+
+            case FunctionReturnContinuation.SetFrameReturn:
+                caller.SetReturnValue(value);                   // RETURN f(x): becomes the caller's own return value
+                caller.TerminateForReturn();                    // the caller's RETURN completes → its continuation fires next
+                break;
+
+            case FunctionReturnContinuation.BranchIf branch:
+                AdvanceSequence(caller);                        // consume the IF header (not advanced at push)
+                caller.PushBranch(value as bool? == true ? branch.Node.Then : branch.Node.Else);
+                break;
+
+            case FunctionReturnContinuation.DecideWhile loop:
+                if (value as bool? == true) caller.PushBranch(loop.Node.Body); // enter the body this iteration
+                else caller.Pop();                                             // the WhileActivation is done
+                break;
+        }
     }
 
     // On a callee frame's NORMAL return, copy its output parameters into the caller's RETURNING_VALUES targets
@@ -374,10 +443,12 @@ public sealed class DebugSession
     private void PushFrame(
         string name, BlockStatement body, Frame? parent, Frame? lexicalParent, IExecutableStatement? callSite,
         IReadOnlyDictionary<string, object?>? initialValues, IReadOnlyList<string>? outputParameterNames,
-        string? source, SemanticModel? model)
+        string? source, SemanticModel? model,
+        string? returnType = null, FunctionReturnContinuation? returnContinuation = null)
     {
         var frame = new Frame(
-            _nextFrameId++, name, body, parent, lexicalParent, callSite, initialValues, outputParameterNames, source, model);
+            _nextFrameId++, name, body, parent, lexicalParent, callSite, initialValues, outputParameterNames,
+            source, model, returnType, returnContinuation);
         _frames.Add(frame);
         _executor.EnterFrameSavepoint(frame.SavepointName); // SAVEPOINT on frame entry (§4.5)
     }

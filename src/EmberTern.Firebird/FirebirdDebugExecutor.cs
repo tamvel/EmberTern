@@ -354,6 +354,20 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         }
     }
 
+    /// <summary>D9 seam c (§6.4) — step into a local FUNCTION. <b>Contract stub for c2:</b> returns null, so the
+    /// function runs on the server = a 100%-faithful step-over — identical to D9 core's live behaviour. The real
+    /// resolution (walk the lexical chain for a local function named <paramref name="call"/>.Name, build a frame
+    /// from the already-parsed AST body, seed its input parameters, derive its <c>RETURNS</c> base type) lands in
+    /// c3.</summary>
+    public DebugRoutine? ResolveFunction(CallExpression call, Frame frame) => null;
+
+    /// <summary>D9 seam c (§6.4) — evaluate a function frame's <c>RETURN</c> operand via the Expression Harness.
+    /// <b>Unreachable until c3:</b> a function frame exists only when <see cref="ResolveFunction"/> resolves one,
+    /// which the c2 stub never does — so the interpreter never calls this on a real session. c3 implements it
+    /// (the typed Expression Harness) together with <see cref="ResolveFunction"/>.</summary>
+    public ReturnOutcome EvaluateReturn(IExecutableStatement returnStatement, Frame frame)
+        => throw new NotSupportedException("EvaluateReturn is implemented in D9 seam c, sub-step c3.");
+
     // Finds a LOCAL sub-procedure named <paramref name="name"/> visible from <paramref name="frame"/>, walking
     // the lexical scope chain (this frame's routine body, then its declaring frame's, …) exactly as name
     // resolution does (spec §6). Returns the declaration + the frame that declares it (the callee's lexical

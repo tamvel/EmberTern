@@ -76,6 +76,12 @@ public class DebuggerTabVmTests
         public DebugRoutine? ResolveRoutine(IExecutableStatement call, Frame frame)
             => call is ExecuteProcedureStatement ? _callee : null;
 
+        // D9 seam c — the VM tests never step into a local function; the null resolver keeps every call a
+        // step-over, and EvaluateReturn is then unreachable (no function frame is ever pushed).
+        public DebugRoutine? ResolveFunction(CallExpression call, Frame frame) => null;
+        public ReturnOutcome EvaluateReturn(IExecutableStatement returnStatement, Frame frame)
+            => throw new NotSupportedException();
+
         public void EnterFrameSavepoint(string name) { }
         public void LeaveFrameSavepoint(string name) { }
         public void RollbackFrameSavepoint(string name) { }

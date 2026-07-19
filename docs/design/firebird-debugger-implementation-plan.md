@@ -511,9 +511,28 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
     nested-arg + quoted + every excluded shape + round-trip), +3 `PsqlDeclarationExtractorTests` (function
     `ReturnType`: scalar / parametrised / domain / null-for-procedure), +2 corpus shapes. Build 0/0; tests
     green (targeted 402 green; full suite hangs in this env #94/#226 — user-verified green); smoke clean.
-  - **c2 (Core interpreter, fake-executor) → c3 (Firebird executor + live fidelity) → optional c4 (UI).**
-    After c1–c3 land: **D9 fully closed (procedures + functions, step-into + step-over faithful) ⇒ then D10
-    (Triggers).**
+  - **c2 — Core interpreter (fake-executor-driven) — DONE (2026-07-19).** New internal
+    `FunctionReturnContinuation` (variants `AssignTo`/`SetFrameReturn`/`BranchIf`/`DecideWhile`) with its
+    `RecognizeStepInto` factory — **the single concentration point** the user asked for: the interpreter's
+    step-into decision (is this a lone-call value-consuming position, and which continuation consumes the
+    return) lives in ONE place, not scattered across the IF/WHILE/leaf cases. `Frame` gained
+    `ReturnType`/`ReturnValue`/`ReturnContinuation`/`IsFunctionFrame` + `SetReturnValue`/`TerminateForReturn`.
+    `IDebugExecutor` gained `ResolveFunction` + `EvaluateReturn` (+ `ReturnOutcome`, + `DebugRoutine.ReturnType`).
+    `DebugSession.ExecuteCurrent` got two guarded branches — (1) step-into a resolved local function (push a
+    function frame carrying the continuation; caller control flow untouched until return), (2) a `RETURN <expr>`
+    in a function frame → `EvaluateReturn` (Expression Harness) → terminate the frame; and
+    `AdvanceToNextStepPoint` got `ApplyReturnContinuation` — the ONE delivery switch generalising
+    `ApplyReturningValues` (AssignTo writes+consumes the leaf; SetFrameReturn propagates to the caller's return;
+    BranchIf/DecideWhile resume the caller's branch/loop with the returned boolean). A raised function unwinds
+    via the `ExceptionRouter` and the continuation never fires. **`FirebirdDebugExecutor` got c2 stubs**
+    (`ResolveFunction` → null, `EvaluateReturn` → throw) so **live behaviour is byte-identical to D9 core**
+    until c3. +11 `DebugEngineTests` (each of the 4 positions + deliver, nested `RETURN f()`, IF then/else,
+    WHILE iteration, unresolved ⇒ step-over, Step Over ignores the call, unresolved IF condition ⇒ server
+    EvaluateCondition, a raising function ⇒ no continuation, plain `RETURN <expr>` ⇒ EvaluateReturn not
+    Statement Harness). Build 0/0; targeted green (508); full suite hangs in this env (#94/#226) — user-verified.
+    Smoke clean.
+  - **c3 (Firebird executor + live fidelity) → optional c4 (UI).** After c1–c3 land: **D9 fully closed
+    (procedures + functions, step-into + step-over faithful) ⇒ then D10 (Triggers).**
 
 ---
 

@@ -1932,12 +1932,35 @@ predictable; (b) show a function frame's `ReturnValue` as a synthetic `⟵ RETUR
   scalar / parametrised / domain / null-for-procedure), +2 `SqlTestCorpus` shapes (round-trip +
   well-formedness). Build 0/0; targeted tests green (402); full suite hangs in this env (#94/#226) —
   user-verified green; smoke clean. *(Mirrors seam-a Part 1.)*
-- **c2 — Core interpreter (fake-executor-driven).** `Frame.ReturnValue/ReturnType/ReturnContinuation`;
-  `FunctionReturnContinuation`; `IDebugExecutor.ResolveFunction` + `EvaluateReturn` (contract only); the
-  step-into recognition for the 4 positions; the `RETURN`-in-a-function handling; the generalised delivery in
-  `AdvanceToNextStepPoint`. Tests: `DebugEngineTests` with the fake — step into each of the 4 positions +
-  deliver, nested `RETURN f()`, a raising function (continuation does NOT fire), `ResolveFunction`→null ⇒
-  step-over. Pure Core, no server. Build 0/0, tests green, smoke. Commit. *(Mirrors D1 / seam-a Core work.)*
+- **c2 — Core interpreter (fake-executor-driven). ✅ DONE (2026-07-19).** New internal
+  `FunctionReturnContinuation` (`Sql/Language/Debugging/FunctionReturnContinuation.cs`) — four variants
+  (`AssignTo(target)` / `SetFrameReturn` / `BranchIf(ifNode)` / `DecideWhile(whileNode)`) plus a
+  `RecognizeStepInto(step)` factory returning `FunctionStepInto?` (the call + its continuation). **Per the
+  user's architectural request, `RecognizeStepInto` is the single concentration point:** the interpreter's
+  "is this a step-into-able local-function position, and which continuation consumes the return" decision lives
+  in ONE place, not scattered across the IF/WHILE/leaf branches of the step loop. `Frame` gained
+  `ReturnType`/`ReturnValue`/`ReturnContinuation` + `IsFunctionFrame` (⟺ has a continuation) + `SetReturnValue`
+  / `TerminateForReturn` (close cursors + clear the control stack — a RETURN exits regardless of block
+  nesting). `IDebugExecutor` gained `ResolveFunction(CallExpression, Frame)` + `EvaluateReturn(returnStmt,
+  Frame)` (+ the `ReturnOutcome` record, + `DebugRoutine.ReturnType`). `DebugSession.ExecuteCurrent` got two
+  guarded branches **before** the node switch: (1) `kind==Into && RecognizeStepInto(step) is {} into &&
+  ResolveFunction(into.Call, frame) is {} fn` → push a function frame carrying `into.Continuation` (the
+  caller's control flow is **not** advanced/branched now — the continuation owns that on return, so it fires
+  exactly once); (2) a `RETURN <expr>` in a function frame → `EvaluateReturn` (Expression Harness) → record
+  the value + `TerminateForReturn`. `AdvanceToNextStepPoint` got `ApplyReturnContinuation(completed)` — the ONE
+  delivery switch generalising `ApplyReturningValues`: `AssignTo` writes the value + consumes the assignment
+  leaf; `SetFrameReturn` sets the caller's own return value + terminates it (its continuation fires next —
+  recursion for `RETURN f()`); `BranchIf`/`DecideWhile` resume the caller's branch/loop with the returned
+  boolean. A raised function unwinds via the `ExceptionRouter` and its continuation never fires (identical to a
+  procedure). **`FirebirdDebugExecutor` got c2 stubs** — `ResolveFunction` → null (⇒ every local-function call
+  still steps over), `EvaluateReturn` → `NotSupportedException` (unreachable while no function frame exists) —
+  so **live behaviour is byte-identical to D9 core** until c3. All types internal (no new public API; the tab
+  VM's Step Into command is unchanged). +11 `DebugEngineTests` (each of the 4 positions + deliver + savepoints,
+  nested `RETURN f()` propagation, IF then/else, WHILE iteration count, unresolved ⇒ step-over, Step Over
+  ignores the call, unresolved IF condition ⇒ server `EvaluateCondition`, a raising function ⇒ no continuation
+  + frame rollback, plain `RETURN <expr>` ⇒ `EvaluateReturn` not the Statement Harness). Build 0/0; targeted
+  green (508 across the debugger + parser classes); full suite hangs in this env (#94/#226) — user-verified;
+  smoke clean. *(Mirrors D1 / seam-a Core work.)*
 - **c3 — Firebird executor + live fidelity.** `FirebirdDebugExecutor.ResolveFunction` (catalog + build frame +
   generalised seeding) + `EvaluateReturn` (typed Expression Harness) + `FirebirdDebugMetadata` return-type
   derivation. Lab: a local function with a multi-statement body exercised in the 4 positions (+ a closure

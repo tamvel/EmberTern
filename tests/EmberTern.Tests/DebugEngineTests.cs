@@ -150,6 +150,39 @@ public class DebugEngineTests
                 : routine;
         }
 
+        // ── D9 seam c: local-function step-into (§6.4) ──
+        private readonly Dictionary<string, DebugRoutine> _functions = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<int, Queue<object?>> _returns = new();
+        public List<string> FunctionsResolved { get; } = new();
+        public List<int> ReturnsEvaluated { get; } = new();
+
+        // Registers a local FUNCTION resolvable by name for step-into. Its frame closes over the resolving
+        // (declaring) frame — a closure, spec §6 — mirroring the real local-function resolution.
+        public FakeExecutor FunctionNamed(string name, DebugRoutine routine) { _functions[name] = routine; return this; }
+
+        // Scripts the value(s) EvaluateReturn yields for the RETURN leaf at `start`, one per RETURN execution
+        // (so a WHILE condition function can return true then false across iterations).
+        public FakeExecutor ReturnAt(int start, params object?[] values)
+        {
+            _returns[start] = new Queue<object?>(values);
+            return this;
+        }
+
+        public DebugRoutine? ResolveFunction(CallExpression call, Frame frame)
+        {
+            if (call.Name is null || !_functions.TryGetValue(call.Name, out var routine)) return null;
+            FunctionsResolved.Add(call.Name);
+            return new DebugRoutine(routine.Name, routine.Body, routine.InitialValues, routine.OutputParameterNames,
+                lexicalParent: frame, returnType: routine.ReturnType ?? "integer");
+        }
+
+        public ReturnOutcome EvaluateReturn(IExecutableStatement returnStatement, Frame frame)
+        {
+            ReturnsEvaluated.Add(returnStatement.Start);
+            if (_returns.TryGetValue(returnStatement.Start, out var q) && q.Count > 0) return ReturnOutcome.Of(q.Dequeue());
+            return ReturnOutcome.Of(null);
+        }
+
         public void EnterFrameSavepoint(string name) => Savepoints.Add("enter:" + name);
 
         public void LeaveFrameSavepoint(string name) => Savepoints.Add("leave:" + name);
@@ -911,5 +944,214 @@ public class DebugEngineTests
         var s = new DebugSession(Body(sql), new FakeExecutor());
         s.Start();
         Assert.Throws<ArgumentException>(() => s.Evaluate("   ", EvaluationKind.Expression));
+    }
+
+    // ── D9 seam c (§6.4): Step Into a local FUNCTION in the four value-consuming positions ─────────────
+    // The interpreter descends into a local function only where its call is the ENTIRE operand (recognised
+    // in ONE place, FunctionReturnContinuation.RecognizeStepInto), delivers its RETURN value to the caller
+    // position client-side (a generalisation of RETURNING_VALUES), evaluates RETURN via the Expression Harness
+    // (never the Statement Harness), and steps over an unresolved / stepped-over call. Fake-driven — no server.
+
+    [Fact]
+    public void StepInto_LocalFunction_Assignment_DeliversReturnValueToTarget_AndSavepoints()
+    {
+        const string sql = "begin r = f(x); done = 1; end";
+        const string fSql = "begin\n  return 42;\nend";
+        var exec = new FakeExecutor()
+            .FunctionNamed("F", new DebugRoutine("F", Body(fSql), returnType: "integer"))
+            .ReturnAt(Off(fSql, "return 42"), 42);
+        var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
+        s.Start();
+        var root = s.CurrentFrame!;
+        Assert.Equal("r = f(x);", Text(sql, s.CurrentStatement!));
+
+        s.Step(StepKind.Into); // step INTO f → push a function frame
+        Assert.Equal(2, s.Depth);
+        Assert.Equal("F", s.CurrentFrame!.RoutineName);
+        Assert.True(s.CurrentFrame!.LexicalParent is not null); // a local function closes over its declarer
+        Assert.Equal("return 42;", Text(fSql, s.CurrentStatement!));
+
+        s.Step(StepKind.Into); // run RETURN 42 → deliver 42 into R, resume the caller past the assignment
+        Assert.Equal(1, s.Depth);
+        Assert.Equal("done = 1;", Text(sql, s.CurrentStatement!));
+        Assert.Equal(42, root.Values.Get("R"));
+        Assert.Equal(new[] { "F" }, exec.FunctionsResolved);
+        Assert.Contains(Off(fSql, "return 42"), exec.ReturnsEvaluated);
+        // The assignment was delivered client-side — the leaf itself never ran on the server (§6.4).
+        Assert.DoesNotContain(Off(sql, "r = f(x)"), exec.Executed);
+        // Function frame got an entry savepoint and its release on normal return (§4.5).
+        Assert.Contains("enter:ET_DBG_FRAME_1", exec.Savepoints);
+        Assert.Contains("leave:ET_DBG_FRAME_1", exec.Savepoints);
+    }
+
+    [Fact]
+    public void StepInto_LocalFunction_NestedReturn_PropagatesThroughFrames()
+    {
+        // r = g(a); where g's body is `RETURN f(b);` and f's body is `RETURN 7;` — stepping into g then into f
+        // must propagate 7 up: f → g's return value → the caller's R. Distinct source shapes ⇒ distinct offsets.
+        const string sql = "begin r = g(a); done = 1; end";
+        const string gSql = "begin\n  return f(b);\nend";
+        const string fSql = "begin\n\n   return 7;\nend";
+        var exec = new FakeExecutor()
+            .FunctionNamed("G", new DebugRoutine("G", Body(gSql), returnType: "integer"))
+            .FunctionNamed("F", new DebugRoutine("F", Body(fSql), returnType: "integer"))
+            .ReturnAt(Off(fSql, "return 7"), 7);
+        var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
+        s.Start();
+        var root = s.CurrentFrame!;
+
+        s.Step(StepKind.Into); // into G → return f(b);
+        Assert.Equal(2, s.Depth);
+        Assert.Equal("return f(b);", Text(gSql, s.CurrentStatement!));
+
+        s.Step(StepKind.Into); // step INTO f (RETURN f(b)) → return 7;
+        Assert.Equal(3, s.Depth);
+        Assert.Equal("F", s.CurrentFrame!.RoutineName);
+
+        s.Step(StepKind.Into); // run RETURN 7 → propagate to G's return → deliver to R; both frames unwind
+        Assert.Equal(1, s.Depth);
+        Assert.Equal(7, root.Values.Get("R"));
+        Assert.Equal("done = 1;", Text(sql, s.CurrentStatement!));
+        Assert.Equal(new[] { "G", "F" }, exec.FunctionsResolved);
+    }
+
+    [Fact]
+    public void StepInto_LocalFunction_IfCondition_TakesThenBranch_WhenTrue()
+    {
+        const string sql = "begin if (f(x)) then taken = 1; else other = 2; end";
+        const string fSql = "begin\n  return 1;\nend";
+        var exec = new FakeExecutor()
+            .FunctionNamed("F", new DebugRoutine("F", Body(fSql), returnType: "boolean"))
+            .ReturnAt(Off(fSql, "return 1"), true);
+        var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
+        s.Start();
+        Assert.StartsWith("if (f(x)) then", Text(sql, s.CurrentStatement!));
+
+        s.Step(StepKind.Into); // into the condition function
+        Assert.Equal(2, s.Depth);
+        s.Step(StepKind.Into); // RETURN true → decide the branch, back in the caller
+        Assert.Equal(1, s.Depth);
+        Assert.Equal("taken = 1;", Text(sql, s.CurrentStatement!));
+    }
+
+    [Fact]
+    public void StepInto_LocalFunction_IfCondition_TakesElseBranch_WhenFalse()
+    {
+        const string sql = "begin if (f(x)) then taken = 1; else other = 2; end";
+        const string fSql = "begin\n  return 0;\nend";
+        var exec = new FakeExecutor()
+            .FunctionNamed("F", new DebugRoutine("F", Body(fSql), returnType: "boolean"))
+            .ReturnAt(Off(fSql, "return 0"), false);
+        var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
+        s.Start();
+        s.Step(StepKind.Into); // into f
+        s.Step(StepKind.Into); // RETURN false → ELSE
+        Assert.Equal(1, s.Depth);
+        Assert.Equal("other = 2;", Text(sql, s.CurrentStatement!));
+    }
+
+    [Fact]
+    public void StepInto_LocalFunction_WhileCondition_IteratesUntilFalse()
+    {
+        const string sql = "begin while (f(x)) do cnt = cnt + 1; end";
+        const string fSql = "begin\n  return c;\nend";
+        var exec = new FakeExecutor()
+            .FunctionNamed("F", new DebugRoutine("F", Body(fSql), returnType: "boolean"))
+            .ReturnAt(Off(fSql, "return c"), true, true, false); // two iterations, then stop
+        var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
+        var body = Off(sql, "cnt = cnt + 1");
+        int guard = 0;
+        s.Start();
+        while (s.State == DebugState.Paused) { Assert.True(guard++ < 100); s.Step(StepKind.Into); }
+
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Equal(3, exec.FunctionsResolved.Count);      // condition evaluated once per iteration decision
+        Assert.Equal(2, exec.Executed.FindAll(o => o == body).Count); // body ran on the two true iterations
+    }
+
+    [Fact]
+    public void StepInto_LocalFunction_Unresolved_StepsOverInPlace()
+    {
+        // f is not a registered local function ⇒ ResolveFunction returns null ⇒ the whole assignment runs on
+        // the server (step-over, 100% faithful) — no frame is pushed.
+        const string sql = "begin r = f(x); done = 1; end";
+        var exec = new FakeExecutor(); // no FunctionNamed
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.Step(StepKind.Into);
+        Assert.Equal(1, s.Depth);
+        Assert.Contains(Off(sql, "r = f(x)"), exec.Executed); // executed in place, not descended
+        Assert.Empty(exec.FunctionsResolved);                 // ResolveFunction was asked but found nothing
+    }
+
+    [Fact]
+    public void StepOver_LocalFunctionCall_RunsInPlace_EvenWhenResolvable()
+    {
+        // Step Over ignores the call entirely — even a resolvable local function runs on the server.
+        const string sql = "begin r = f(x); done = 1; end";
+        const string fSql = "begin\n  return 5;\nend";
+        var exec = new FakeExecutor().FunctionNamed("F", new DebugRoutine("F", Body(fSql), returnType: "integer"));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.Step(StepKind.Over);
+        Assert.Equal(1, s.Depth);
+        Assert.Contains(Off(sql, "r = f(x)"), exec.Executed);
+        Assert.Empty(exec.FunctionsResolved); // never attempted — Step Over doesn't recognise the call
+    }
+
+    [Fact]
+    public void StepInto_UnresolvedIfConditionCall_EvaluatesConditionOnServer()
+    {
+        // IF whose condition is a call to a NON-local function: falls through to EvaluateCondition (the server
+        // evaluates the whole condition) — no frame, no client-side branch decision.
+        const string sql = "begin if (f(x)) then a = 1; end";
+        var exec = new FakeExecutor(defaultCondition: true); // no FunctionNamed → ResolveFunction null
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.Step(StepKind.Into);
+        Assert.Equal(1, s.Depth);
+        Assert.Contains(Off(sql, "if (f(x)) then"), exec.ConditionsEvaluated);
+    }
+
+    [Fact]
+    public void StepInto_LocalFunction_ThatRaises_DoesNotFireTheContinuation()
+    {
+        // A raising function unwinds via the ExceptionRouter (savepoint rollback); its return continuation must
+        // NOT fire — the assignment target is never written — identical to a raising procedure.
+        const string sql = "begin r = f(x); after = 1; end";
+        const string fSql = "begin\n  bad = 1;\nend";
+        var exec = new FakeExecutor()
+            .FunctionNamed("F", new DebugRoutine("F", Body(fSql), returnType: "integer"))
+            .Outcome(Off(fSql, "bad = 1"), StatementOutcome.Raised(new DebugError(ExceptionName: "E_BOOM")));
+        var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
+        s.Start();
+        var root = s.CurrentFrame!;
+        s.Step(StepKind.Into); // into f → bad = 1;
+        Assert.Equal(2, s.Depth);
+        s.Step(StepKind.Into); // bad = 1; raises → no handler → fault; continuation must NOT run
+
+        Assert.Equal(DebugState.Faulted, s.State);
+        Assert.False(root.Values.Contains("R")); // the assignment continuation never fired
+        Assert.Contains("rollback:ET_DBG_FRAME_1", exec.Savepoints); // the function frame was rolled back
+    }
+
+    [Fact]
+    public void StepInto_LocalFunction_WithPlainReturnValue_UsesEvaluateReturn_NotStatementHarness()
+    {
+        // RETURN <expr> where <expr> is NOT a call goes through EvaluateReturn (Expression Harness), never
+        // ExecuteStatement (Statement Harness) — a bare RETURN is invalid inside EXECUTE BLOCK.
+        const string sql = "begin r = f(x); end";
+        const string fSql = "begin\n  return a + 1;\nend";
+        var exec = new FakeExecutor()
+            .FunctionNamed("F", new DebugRoutine("F", Body(fSql), returnType: "integer"))
+            .ReturnAt(Off(fSql, "return a + 1"), 100);
+        var s = new DebugSession(Body(sql), exec, rootName: "ROOT");
+        s.Start();
+        var root = s.CurrentFrame!;
+        s.Step(StepKind.Into); // into f → return a + 1;
+        s.Step(StepKind.Into); // evaluate the RETURN operand → deliver to R
+        Assert.Equal(100, root.Values.Get("R"));
+        Assert.Contains(Off(fSql, "return a + 1"), exec.ReturnsEvaluated);
+        Assert.DoesNotContain(Off(fSql, "return a + 1"), exec.Executed); // NOT run as a statement
     }
 }

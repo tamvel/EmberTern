@@ -77,7 +77,8 @@ public sealed class DebugRoutine
         IReadOnlyList<string>? outputParameterNames = null,
         Frame? lexicalParent = null,
         string? source = null,
-        SemanticModel? model = null)
+        SemanticModel? model = null,
+        string? returnType = null)
     {
         Name = name;
         Body = body;
@@ -86,6 +87,7 @@ public sealed class DebugRoutine
         LexicalParent = lexicalParent;
         Source = source;
         Model = model;
+        ReturnType = returnType;
     }
 
     /// <summary>The callee's name (for the call stack / breadcrumbs).</summary>
@@ -117,6 +119,20 @@ public sealed class DebugRoutine
     /// sub-routine (a closure over the parent — D9). The call-stack parent is always the caller and is set by
     /// the interpreter, independently of this.</summary>
     public Frame? LexicalParent { get; }
+
+    /// <summary>A stepped-into local <b>function</b>'s <c>RETURNS</c> base type (R2) — the type the Expression
+    /// Harness gives the result column that computes the frame's <c>RETURN</c> value (Stage X / D9 seam c,
+    /// §6.4). Null for a procedure callee (which returns via <see cref="OutputParameterNames"/>). Flows onto
+    /// the pushed <see cref="Frame.ReturnType"/>.</summary>
+    public string? ReturnType { get; }
+}
+
+/// <summary>The result of evaluating a function's <c>RETURN &lt;expr&gt;</c> operand (spec §6.4, D9 seam c):
+/// the value the server computed via the Expression Harness, or an error when the operand itself raised.</summary>
+public sealed record ReturnOutcome(object? Value, DebugError? Error = null)
+{
+    public static ReturnOutcome Of(object? value) => new(value);
+    public static ReturnOutcome Raised(DebugError error) => new(null, error);
 }
 
 /// <summary>The server seam. The interpreter calls it; it never drives the interpreter.</summary>
@@ -145,6 +161,21 @@ public interface IDebugExecutor
     /// <summary>Resolves a call step point (e.g. <c>EXECUTE PROCEDURE</c>) to a callee body for step-into,
     /// or null when it is not a resolvable call (then the caller executes it in place instead).</summary>
     DebugRoutine? ResolveRoutine(IExecutableStatement call, Frame frame);
+
+    /// <summary>Resolves a lone local-<b>function</b> call (Stage X / D9 seam c, §6.4) to a callee body for
+    /// step-into, or null when <paramref name="call"/> is not an in-scope local function (a stored / built-in
+    /// / package call ⇒ the caller runs the whole statement server-side = step-over, 100% faithful). Mirrors
+    /// <see cref="ResolveRoutine"/>; the returned <see cref="DebugRoutine"/> carries the callee's <c>RETURNS</c>
+    /// base type (<see cref="DebugRoutine.ReturnType"/>) for the Expression Harness that computes its
+    /// <c>RETURN</c> value, and its lexical parent (the declaring frame — a closure, §6).</summary>
+    DebugRoutine? ResolveFunction(CallExpression call, Frame frame);
+
+    /// <summary>Evaluates a function frame's <c>RETURN &lt;expr&gt;</c> operand (Stage X / D9 seam c, §6.4) via
+    /// the <b>Expression Harness</b> typed as the frame's <see cref="Frame.ReturnType"/>, returning the computed
+    /// value or an error. It reuses the same Expression-Harness mechanism as <see cref="EvaluateCondition"/> —
+    /// the server computes the value — and never runs a bare <c>RETURN</c> through the Statement Harness (a
+    /// <c>RETURN</c> is invalid inside an <c>EXECUTE BLOCK</c>).</summary>
+    ReturnOutcome EvaluateReturn(IExecutableStatement returnStatement, Frame frame);
 
     /// <summary>Sets a SAVEPOINT on entry to a simulated frame (spec §4.5 — call atomicity is reconstructed
     /// one savepoint per frame). Named by the frame's <see cref="Frame.SavepointName"/>.</summary>

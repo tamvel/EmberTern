@@ -84,7 +84,9 @@ public sealed class Frame
         IReadOnlyDictionary<string, object?>? initialValues,
         IReadOnlyList<string>? outputParameterNames = null,
         string? source = null,
-        SemanticModel? model = null)
+        SemanticModel? model = null,
+        string? returnType = null,
+        FunctionReturnContinuation? returnContinuation = null)
     {
         Id = id;
         RoutineName = routineName;
@@ -96,6 +98,8 @@ public sealed class Frame
         OutputParameterNames = outputParameterNames ?? System.Array.Empty<string>();
         Source = source;
         Model = model;
+        ReturnType = returnType;
+        ReturnContinuation = returnContinuation;
         SavepointName = $"ET_DBG_FRAME_{id}";
 
         // Record the declared names (params + body local variables) so the closure scope chain resolves and
@@ -170,6 +174,43 @@ public sealed class Frame
 
     /// <summary>True when this frame has finished (its control stack is empty).</summary>
     public bool IsComplete => _control.Count == 0;
+
+    // ── Function return (Stage X / D9 seam c, §6.4) ──────────────────────────────────────────────
+    // A function frame is one the interpreter stepped INTO via IDebugExecutor.ResolveFunction; it carries how
+    // its RETURN value reaches the caller position (ReturnContinuation) and the RETURNS base type the
+    // Expression Harness types the RETURN operand as (ReturnType). The root and procedure/EXECUTE-BLOCK frames
+    // have neither. A stored/procedure callee returns via output parameters (OutputParameterNames), not this.
+
+    /// <summary>The local function's <c>RETURNS</c> base type (R2) — the type the Expression Harness gives the
+    /// result column that computes this frame's <c>RETURN</c> value; null for a non-function frame.</summary>
+    public string? ReturnType { get; }
+
+    /// <summary>The value this function frame's <c>RETURN</c> computed (set by the interpreter via
+    /// <see cref="SetReturnValue"/>), delivered to the caller position by <see cref="ReturnContinuation"/> on
+    /// normal exit; null until a <c>RETURN</c> runs (and always for a non-function frame).</summary>
+    public object? ReturnValue { get; private set; }
+
+    /// <summary>How this function frame's return value is consumed by the caller statement that stepped into
+    /// it (§6.4); null for the root and for a procedure/EXECUTE-BLOCK frame.</summary>
+    internal FunctionReturnContinuation? ReturnContinuation { get; }
+
+    /// <summary>True for a stepped-into local <b>function</b> frame — its <c>RETURN &lt;expr&gt;</c> leaves are
+    /// evaluated via the Expression Harness (a bare <c>RETURN</c> is invalid inside <c>EXECUTE BLOCK</c>) and
+    /// its computed value is delivered by <see cref="ReturnContinuation"/> on normal exit. Equivalently: this
+    /// frame was entered through <c>ResolveFunction</c>, so it carries a continuation.</summary>
+    internal bool IsFunctionFrame => ReturnContinuation is not null;
+
+    /// <summary>Records this function frame's computed <c>RETURN</c> value.</summary>
+    internal void SetReturnValue(object? value) => ReturnValue = value;
+
+    /// <summary>Terminates the whole frame for a <c>RETURN</c> — regardless of block nesting — by closing any
+    /// open cursors and clearing the control stack, so <c>AdvanceToNextStepPoint</c> pops it and runs its
+    /// continuation. (A <c>RETURN</c> exits a function immediately, unlike falling off the end of a block.)</summary>
+    internal void TerminateForReturn()
+    {
+        CloseOpenCursors();
+        _control.Clear();
+    }
 
     // ── Scope chain (spec §6 — closures over the declaring frame) ────────────────────────────────
 

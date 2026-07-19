@@ -755,8 +755,21 @@ noted.
   `SubroutineSignature.ReturnType` (function `RETURNS` type spec, R2 input). Producer-only — no consumer yet
   (`ResolveFunction`/`EvaluateReturn` are c2/c3, staged per gotcha #233); §0 round-trip unchanged,
   binder/formatter untouched. Build 0/0; +19 `PsqlAstTests` +3 `PsqlDeclarationExtractorTests` +2 corpus
-  (targeted green; full suite hangs #94/#226 → user-verified green); smoke clean. **NEXT: c2 (Core
-  interpreter, fake executor). After c1–c3 land: D9 fully closed ⇒ then D10 (Triggers).**
+  (targeted green; full suite hangs #94/#226 → user-verified green); smoke clean.
+  **c2 — Core interpreter (fake-executor-driven) — DONE (2026-07-19):** new internal `FunctionReturnContinuation`
+  (`AssignTo`/`SetFrameReturn`/`BranchIf`/`DecideWhile`) with a `RecognizeStepInto` factory — **the single place**
+  the interpreter decides step-into + which continuation consumes the return (not scattered across the
+  IF/WHILE/leaf cases; the user's architectural request). `Frame` gained `ReturnType`/`ReturnValue`/
+  `ReturnContinuation`/`IsFunctionFrame` + `SetReturnValue`/`TerminateForReturn`; `IDebugExecutor` gained
+  `ResolveFunction` + `EvaluateReturn` (+ `ReturnOutcome`, `DebugRoutine.ReturnType`). `DebugSession` got two
+  guarded `ExecuteCurrent` branches (step-into a resolved local function; a `RETURN <expr>` in a function frame
+  → Expression-Harness `EvaluateReturn`) and ONE delivery switch `ApplyReturnContinuation` generalising
+  `ApplyReturningValues`; a raised function unwinds without firing the continuation. `FirebirdDebugExecutor` got
+  **c2 stubs** (`ResolveFunction`→null, `EvaluateReturn`→throw) so **live behaviour is byte-identical to D9
+  core** until c3. Build 0/0; +11 `DebugEngineTests` (4 positions + deliver, nested `RETURN f()`, IF then/else,
+  WHILE iteration, unresolved/step-over, raising ⇒ no continuation, plain `RETURN` ⇒ EvaluateReturn); targeted
+  green (508); full suite hangs #94/#226 → user-verify; smoke clean. **NEXT: c3 (Firebird executor + live
+  fidelity). After c1–c3 land: D9 fully closed ⇒ then D10 (Triggers).**
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
