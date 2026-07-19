@@ -2141,3 +2141,40 @@ Build 0/0; 122 debugger Core/Firebird unit tests green (full suite hangs #94/#22
 **Next: Seam C — the UI (`TriggerContextEditor` with the action selector + NEW/OLD grids honouring the §8.1
 availability rules, trigger-mode `DebuggerTabViewModel`, the Variables Context group, and the sidebar / trigger-
 editor "Debug trigger…" entry points). "Seed from a real row" is deferred to C2.**
+
+## D10 Seam C — trigger launch UI + terminal debug states (2026-07-19, user-confirmed)
+
+**Seam C (Triggers UI) — commit `050b790`.** The trigger becomes debuggable end-to-end. New Core
+`TriggerHeaderReader` derives `(TargetTable, Timing, Events)` from the parsed `CREATE TRIGGER` (matching header
+words by TEXT, since Firebird lexes BEFORE/AFTER/ACTIVE as identifiers) and returns null for a DB-level / DDL
+trigger (out of scope, §8.1). `TriggerContextEditorViewModel` is a **dumb VM**: it holds no availability rules —
+it builds a Core `TriggerContext` for the picked action and reads `NewAvailable`/`OldAvailable` from it; the
+NEW/OLD grids show **only the columns the body references** (`ContextSubstitution.BuildColumns`, typed via
+`EnsureColumnsAsync`) and reuse the Smart-Parameters editor; `CollectRootValues` maps each entered value onto its
+synthetic frame variable (`ET_CTX_i`). `DebuggerTabViewModel` gained trigger mode (prepare → header/columns/
+editor; launch → synthetic rootValues + `TriggerContext` into `DebugLaunchSpec`), a Variables **Context** group
+(rows resolved through a new `DebugVariableRowViewModel.ResolveName` = synthetic; filtered by availability), and
+entry points across `MetadataExplorer`/`MetadataNode`/`MainWindow`/`TriggerDetail` (sidebar + editor toolbar
+"Debug trigger…"). Manual entry only; "seed from a real row" is a future C2.
+
+**QA bug — gotcha #248 (per-reference colon).** A real ERP trigger stopped with `SQL -206, Column unknown
+ET_CTX_3` on `podstwylcen = coalesce((select … where k.id_kartoteka = new.id_kartoteka), 0)`. Root cause: #247's
+colon-vs-bare decision was **per statement** (`node is not PsqlStatement`), but a PSQL assignment can embed a DSQL
+subquery — the `NEW.id_kartoteka` inside the subquery must be `:ET_CTX_3` while the l-value stays bare. Fix:
+`ContextSubstitution.Substitute` takes `colonRegions` and decides **per reference**; the executor derives the
+regions from the AST (whole node if it is a DSQL statement, else each embedded `SubqueryExpression` span —
+`FirebirdDebugExecutor.ColonRegions`), never a token scan. Lab +`TRIG_SUBQ_LAB`/`TR_SUBQ_BU`; `DebuggerFidelityProbe`
+case 17 proves sim==real (`NEW.NOTE='CNT=2'`), all prior cases still green.
+
+**Terminal debug states — Completed / Faulted (follow-up commit).** At end-of-run the debugger no longer clears
+the session (which made it "vanish"). **Completed** keeps the terminal snapshot visible with the block's closing
+`END` marked (execution finished there — IBExpert-like), Variables / Context / Call Stack showing FINAL values.
+**Faulted** stops **on the raising statement** (marked), keeps Variables / Context / Call Stack with the values
+**at the error**, and the status line renders **red + bold** (`IsFaulted`). In both, stepping is disabled and
+only Restart / Stop are active; **Stop** tears the session down and clears. Additive Core: `DebugSession` retains
+`FinalFrame`/`LastStatement` (Completed) and snapshots `FaultStatement`/`FaultFrame`/`FaultStack` **before**
+`ExceptionRouter.TryRoute` unwinds — the unwind DB-rolls-back + pops each frame but never touches its client-side
+`frame.Values`, so the snapshot preserves the state at the raise (§4.5). `CurrentFrame`/`CallStack` still go null
+after termination (existing contract unchanged). The debugger now has four distinct states: Running / Completed /
+Faulted / Stopped. Architecturally the whole D10 + terminal-state work is additive, contract-preserving, unit-
+tested, and live-fidelity-verified.

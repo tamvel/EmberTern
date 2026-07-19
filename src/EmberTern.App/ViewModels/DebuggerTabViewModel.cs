@@ -295,6 +295,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     [NotifyPropertyChangedFor(nameof(IsLaunchPanelVisible))]
     [NotifyPropertyChangedFor(nameof(IsDebugViewVisible))]
     [NotifyPropertyChangedFor(nameof(IsPaused))]
+    [NotifyPropertyChangedFor(nameof(IsFaulted))]
     [NotifyPropertyChangedFor(nameof(HasVariables))]
     [NotifyCanExecuteChangedFor(nameof(LaunchCommand))]
     [NotifyCanExecuteChangedFor(nameof(ContinueCommand))]
@@ -338,6 +339,11 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     public bool IsLaunchPanelVisible => Phase is DebuggerPhase.Preparing or DebuggerPhase.ReadyToLaunch or DebuggerPhase.Idle;
     public bool IsDebugViewVisible => !IsLaunchPanelVisible;
     public bool IsPaused => Phase == DebuggerPhase.Paused;
+
+    /// <summary>True when the session ended on an unhandled exception — the view paints the status line in the
+    /// error colour so the fault is immediately noticeable.</summary>
+    public bool IsFaulted => Phase == DebuggerPhase.Faulted;
+
     public bool HasVariables => Variables.Count > 0;
 
     /// <summary>Type-to-filter for the Variables panel (by name, case-insensitive contains — mirrors the
@@ -881,26 +887,125 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
                 return;
 
             case DebugState.Completed:
+                // The session ran to the end. Rather than clearing (which made the session "vanish"), keep the
+                // terminal snapshot visible: the last executed line stays marked, and Variables / Context / Call
+                // Stack show the FINAL frame values. Stepping is disabled (CanStep needs Paused); Restart / Stop
+                // stay enabled, and Stop is what finally tears the session down. The engine retains the terminal
+                // frame + last statement for exactly this (DebugSession.FinalFrame / LastStatement).
                 Phase = DebuggerPhase.Completed;
                 StatusText = UiStrings.DebuggerStatusCompleted;
-                break;
+                ShowCompletedState(session);
+                return;
 
             case DebugState.Faulted:
+                // Like Completed, keep the state visible instead of clearing: stop ON the faulting line (marked),
+                // with Variables / Context / Call Stack showing the values AT the error. The DB effects are rolled
+                // back (§4.5), but the client-side variable values at the raise survive — the useful debugging
+                // info. Stepping is disabled; Restart / Stop stay enabled, and Stop tears the session down.
                 Phase = DebuggerPhase.Faulted;
                 var err = session.CurrentError;
                 StatusText = string.Format(
                     CultureInfo.CurrentCulture, UiStrings.DebuggerStatusFaultedFormat,
                     err?.Message ?? err?.ExceptionName ?? "?");
-                break;
+                ShowFaultState(session);
+                return;
 
             default:
                 Phase = DebuggerPhase.Busy;
                 return;
         }
+    }
 
-        // Completed / Faulted: no live stack to inspect.
-        SetCurrentMarker(null, null);
-        ClearVariables();
+    // Renders the terminal (Completed) state from the engine's retained snapshot (spec §5 — frames are data):
+    // the final frame's values (last write-back / RETURNING_VALUES / trigger NEW-OLD), a single-frame call stack,
+    // and the closing END of the block MARKED — so it reads as "execution finished here", not "about to run the
+    // last statement" (IBExpert-like). Pure read of the retained frame; the session is not touched (it is torn
+    // down only by Stop / Restart). An empty body (nothing ran) shows no marker and no variables.
+    private void ShowCompletedState(DebugSession session)
+    {
+        var frame = session.FinalFrame;
+        if (frame is null)
+        {
+            SetCurrentMarker(null, null);
+            ClearVariables();
+            return;
+        }
+
+        _selectedFrame = frame;
+        SelectedFrameId = frame.Id;
+        SourceText = frame.Source ?? _source ?? string.Empty;
+
+        // The closing END of the routine's block (the terminal frame's own body). Fall back to the last executed
+        // step point only if the END can't be located (malformed) — but never a callee-space offset (#243).
+        var end = EndMarkerOf(frame.Body);
+        if (end is null && session.LastStatement is { } last && _stepPoints.Contains(last))
+        {
+            end = (last.Start, last.Length);
+        }
+
+        RebuildTerminalCallStack(new[] { frame }, end?.Start ?? -1);
+        ShowFrameVariables(frame, computeChanges: false); // final values, no change-highlight
+        SetCurrentMarker(end?.Start, end?.Length);
+    }
+
+    // Renders the terminal (Faulted) state: stop ON the faulting line (marked), showing the innermost fault
+    // frame's Variables / Context and the whole call stack AT the fault — the engine retained both (the live
+    // stack is empty after the unwind). The faulting statement is in the innermost frame's own source, so the
+    // marker aligns with the shown source. Mirrors ShowCompletedState; the difference is the stack (multi-frame)
+    // and the marked line (the raise point, not END).
+    private void ShowFaultState(DebugSession session)
+    {
+        var frame = session.FaultFrame;
+        if (frame is null)
+        {
+            SetCurrentMarker(null, null);
+            ClearVariables();
+            return;
+        }
+
+        var stmt = session.FaultStatement;
+        _selectedFrame = frame;
+        SelectedFrameId = frame.Id;
+        SourceText = frame.Source ?? _source ?? string.Empty;
+
+        RebuildCallStackFrom(session.FaultStack, stmt?.Start ?? -1);
+        RebuildBreadcrumbsFrom(session.FaultStack);
+        ShowFrameVariables(frame, computeChanges: false);
+        SetCurrentMarker(stmt?.Start, stmt?.Length);
+        SyncSelectionToInnermost(frame.Id);
+    }
+
+    // The offset span of the block's closing END keyword (the last `end` token of the routine body), or null if
+    // it can't be found. The marker lands here at Completed so the user sees execution finished at END.
+    private static (int Start, int Length)? EndMarkerOf(BlockStatement? block)
+    {
+        if (block is null) return null;
+        var tokens = block.Tokens;
+        for (int i = tokens.Count - 1; i >= 0; i--)
+        {
+            if (string.Equals(tokens[i].Text, "end", StringComparison.OrdinalIgnoreCase))
+            {
+                return (tokens[i].Start, tokens[i].Length);
+            }
+        }
+        return null;
+    }
+
+    // The terminal (Completed) call stack is a single frame — the root the routine ended in; reuse the shared
+    // builder with the END line as the position.
+    private void RebuildTerminalCallStack(IReadOnlyList<Frame> stack, int innermostOffset)
+    {
+        RebuildCallStackFrom(stack, innermostOffset);
+        RebuildBreadcrumbsFrom(stack);
+        if (CallStack.Count > 0) SyncSelectionToInnermost(CallStack[0].FrameId);
+    }
+
+    private void SyncSelectionToInnermost(int frameId)
+    {
+        _syncingFrameSelection = true;
+        SelectedFrameRow = CallStack.FirstOrDefault(r => r.FrameId == frameId);
+        SelectedBreadcrumbIndex = BreadcrumbIndexForFrame(frameId);
+        _syncingFrameSelection = false;
     }
 
     // Rebuilds the Call Stack rows from the engine's call stack (innermost-first). Each frame shows its
@@ -912,22 +1017,28 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     private void RebuildCallStack()
     {
         var session = Session;
-        CallStack.Clear();
         if (session is null || session.State != DebugState.Paused)
         {
+            CallStack.Clear();
             OnPropertyChanged(nameof(HasCallStack));
             return;
         }
+        RebuildCallStackFrom(session.CallStack, session.CurrentStatement?.Start ?? -1);
+    }
 
-        var stack = session.CallStack; // innermost first
-        int currentStart = session.CurrentStatement?.Start ?? -1;
+    // Builds the Call Stack rows from a stack (innermost-first) + the innermost frame's current-position offset.
+    // Each frame shows its routine, its position line (the innermost frame → its current/fault/END offset; a
+    // caller → the call site of its child, a statement in THIS frame's own source, spec §5.2) and the
+    // simulated-frame indicator (a callee reached by Step Into = interpreted, §5.3). Shared by the live pause and
+    // the terminal (Completed / Faulted) snapshots — the only difference is which stack + innermost offset.
+    private void RebuildCallStackFrom(IReadOnlyList<Frame> stack, int innermostOffset)
+    {
+        CallStack.Clear();
         for (int i = 0; i < stack.Count; i++)
         {
             var frame = stack[i];
             bool isCurrent = i == 0;
-            // Position in THIS frame's own source: innermost → the current step; a caller → the call site of
-            // its child (stack[i-1] was pushed by a statement in stack[i]).
-            int offset = isCurrent ? currentStart : (stack[i - 1].CallSite?.Start ?? -1);
+            int offset = isCurrent ? innermostOffset : (stack[i - 1].CallSite?.Start ?? -1);
             int line = offset >= 0 ? LineOf(frame.Source, offset) : 0;
             string lineText = line > 0
                 ? string.Format(CultureInfo.CurrentCulture, UiStrings.DebuggerCallStackLineFormat, line)
@@ -942,14 +1053,19 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     // reads left-to-right as the call chain (ROOT › … › current). Mirrors the stack; a follow of the same data.
     private void RebuildBreadcrumbs()
     {
-        Breadcrumbs.Clear();
         var session = Session;
         if (session is null || session.State != DebugState.Paused)
         {
+            Breadcrumbs.Clear();
             SelectedBreadcrumbIndex = -1;
             return;
         }
-        var stack = session.CallStack; // innermost first
+        RebuildBreadcrumbsFrom(session.CallStack);
+    }
+
+    private void RebuildBreadcrumbsFrom(IReadOnlyList<Frame> stack)
+    {
+        Breadcrumbs.Clear();
         for (int i = stack.Count - 1; i >= 0; i--) Breadcrumbs.Add(stack[i].RoutineName);
     }
 

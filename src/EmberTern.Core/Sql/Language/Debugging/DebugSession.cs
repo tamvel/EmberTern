@@ -35,6 +35,10 @@ public sealed class DebugSession
     private int _nextFrameId;
     private IExecutableStatement? _currentStep;
     private DebugError? _error;
+    private Frame? _rootFrame;                 // retained so the terminal (Completed) snapshot survives frame-pop
+    private IExecutableStatement? _lastStatement; // the last step point executed before normal completion
+    private IExecutableStatement? _faultStatement; // the step point that raised the unhandled exception
+    private List<Frame>? _faultStack;          // the call stack (innermost last) captured at the unhandled fault
 
     /// <summary>Creates a session over <paramref name="rootBody"/>. <paramref name="rootValues"/> seeds the
     /// root frame's initial values — the routine's <b>input parameter</b> arguments supplied at launch (§9.3):
@@ -69,6 +73,42 @@ public sealed class DebugSession
 
     /// <summary>The innermost (current) frame, or null before <see cref="Start"/> / after completion.</summary>
     public Frame? CurrentFrame => _frames.Count > 0 ? _frames[^1] : null;
+
+    /// <summary>The terminal frame after the routine ran to <see cref="DebugState.Completed"/> — the root frame,
+    /// <b>retained</b> after its pop so its FINAL values (the last statement's write-back, callees'
+    /// <c>RETURNING_VALUES</c>, a trigger's final NEW/OLD) can still be inspected. Null until the session
+    /// completes (and for a fault — a fault rolls every frame back to its savepoint, so the values would be
+    /// meaningless). Lets the UI keep the last state visible instead of the session "vanishing" at completion.</summary>
+    public Frame? FinalFrame => State == DebugState.Completed ? _rootFrame : null;
+
+    /// <summary>The last step point that executed before normal completion (the routine's final line), or null
+    /// (not completed / an empty body). The UI marks it as the "here execution ended" line at
+    /// <see cref="DebugState.Completed"/>.</summary>
+    public IExecutableStatement? LastStatement => State == DebugState.Completed ? _lastStatement : null;
+
+    /// <summary>The step point that raised the <b>unhandled</b> exception the session <see cref="DebugState.Faulted"/>
+    /// on — the line the UI marks so the user sees exactly where it failed. Null unless faulted. The exception
+    /// unwind rolls back each frame's <i>DB</i> savepoint but never its client-side variable values, so the
+    /// frame snapshot below still shows the values as they were at the moment of the error (spec §4.5).</summary>
+    public IExecutableStatement? FaultStatement => State == DebugState.Faulted ? _faultStatement : null;
+
+    /// <summary>The innermost frame at the moment of the unhandled fault — the frame whose statement raised, with
+    /// its variables as they were then. Null unless faulted. Retained after the unwind popped it (like
+    /// <see cref="FinalFrame"/>), so the UI can keep the last state visible instead of clearing.</summary>
+    public Frame? FaultFrame => State == DebugState.Faulted && _faultStack is { Count: > 0 } ? _faultStack[^1] : null;
+
+    /// <summary>The call stack captured at the unhandled fault, innermost frame first — for the Call Stack panel
+    /// in the Faulted state (the live <see cref="CallStack"/> is empty after the unwind). Empty unless faulted.</summary>
+    public IReadOnlyList<Frame> FaultStack
+    {
+        get
+        {
+            if (State != DebugState.Faulted || _faultStack is null) return Array.Empty<Frame>();
+            var stack = new Frame[_faultStack.Count];
+            for (int i = 0; i < _faultStack.Count; i++) stack[i] = _faultStack[_faultStack.Count - 1 - i];
+            return stack;
+        }
+    }
 
     /// <summary>The call stack, innermost frame first (spec §5 — frames are data).</summary>
     public IReadOnlyList<Frame> CallStack
@@ -105,6 +145,7 @@ public sealed class DebugSession
 
         PushFrame(_rootName, _rootBody, parent: null, lexicalParent: null, callSite: null,
             initialValues: _rootValues, outputParameterNames: null, source: _rootSource, model: _rootModel);
+        _rootFrame = _frames[^1]; // retained for the terminal (Completed) snapshot, even after its pop
         _currentStep = AdvanceToNextStepPoint();
         if (_currentStep is null)
         {
@@ -222,10 +263,18 @@ public sealed class DebugSession
         {
             if (ExecuteCurrent(kind))
             {
-                // A statement / condition raised — route it through the handler stack (spec §3.6/§4.5).
+                // A statement / condition raised. Snapshot the faulting line + the call stack BEFORE routing:
+                // TryRoute pops (and DB-rolls-back) each unhandled frame, but never touches a frame's client-side
+                // variable values, so the snapshot preserves the state at the moment of the error (spec §4.5) for
+                // the Faulted terminal view. Committed only if nothing catches it.
+                var faultStep = _currentStep;
+                var stackAtFault = new List<Frame>(_frames);
+                // Route it through the handler stack (spec §3.6/§4.5).
                 if (!ExceptionRouter.TryRoute(_frames, _error!, _executor))
                 {
                     // Nothing caught it: every frame (root included) has been rolled back and popped.
+                    _faultStatement = faultStep;
+                    _faultStack = stackAtFault;
                     _currentStep = null;
                     State = DebugState.Faulted;
                     StopReason = StopReason.Exception;
@@ -236,9 +285,11 @@ public sealed class DebugSession
                 _error = null;
             }
 
+            var justExecuted = _currentStep; // the step ExecuteCurrent just ran (before we advance past it)
             _currentStep = AdvanceToNextStepPoint();
             if (_currentStep is null)
             {
+                _lastStatement = justExecuted; // the routine's final executed line — kept for the terminal marker
                 State = DebugState.Completed;
                 StopReason = StopReason.Completed;
                 return;

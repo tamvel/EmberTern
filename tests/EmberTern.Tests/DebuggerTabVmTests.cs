@@ -219,8 +219,11 @@ public class DebuggerTabVmTests
         Assert.Equal(Off("r = v"), vm.CurrentStart);
 
         await vm.StepOverCommand.ExecuteAsync(null);
+        // Completed keeps the terminal snapshot visible (not cleared): the closing END is marked (execution
+        // finished there — IBExpert-like) and the frame's variables remain — the session no longer "vanishes".
         Assert.Equal(DebuggerPhase.Completed, vm.Phase);
-        Assert.Null(vm.CurrentStart);
+        Assert.Equal(Off("end"), vm.CurrentStart); // the block's END is highlighted
+        Assert.NotEmpty(vm.Variables);
     }
 
     [Fact]
@@ -232,6 +235,54 @@ public class DebuggerTabVmTests
 
         await vm.ContinueCommand.ExecuteAsync(null);
         Assert.Equal(DebuggerPhase.Completed, vm.Phase);
+    }
+
+    [Fact]
+    public async Task Completed_PreservesTerminalState_ThenStopClears()
+    {
+        // R is written on the routine's last statement (r = v) — the terminal snapshot must reflect it.
+        var vm = Vm(Sql, new FakeExecutor().Write(
+            Off("r = v"), new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["R"] = 15 }), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        await vm.ContinueCommand.ExecuteAsync(null); // run to the end
+
+        Assert.Equal(DebuggerPhase.Completed, vm.Phase);
+        // The session does NOT vanish: the closing END is marked, variables + a single-frame call stack retained.
+        Assert.Equal(Off("end"), vm.CurrentStart);
+        Assert.NotEmpty(vm.Variables);
+        Assert.True(vm.HasCallStack);
+        Assert.Equal("SP_TEST", Assert.Single(vm.CallStack).RoutineName);
+        Assert.Equal("15", vm.Variables.First(r => r.Name == "R").ValueText); // final write-back visible
+        // Stepping disabled; only Restart / Stop remain enabled.
+        Assert.False(vm.ContinueCommand.CanExecute(null));
+        Assert.False(vm.StepIntoCommand.CanExecute(null));
+        Assert.False(vm.StepOverCommand.CanExecute(null));
+        Assert.False(vm.StepOutCommand.CanExecute(null));
+        Assert.True(vm.StopCommand.CanExecute(null));
+        Assert.True(vm.RestartCommand.CanExecute(null));
+
+        // Stop is what finally tears the session down + clears the state.
+        await vm.StopCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Idle, vm.Phase);
+        Assert.Null(vm.CurrentStart);
+        Assert.Empty(vm.Variables);
+        Assert.False(vm.HasCallStack);
+    }
+
+    [Fact]
+    public async Task Completed_Trigger_KeepsContextGroupVisible()
+    {
+        var vm = TriggerVm(TriggerSql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        vm.TriggerEditor!.NewParameters.Params[0].IsNull = false;
+        vm.TriggerEditor.NewParameters.Params[0].NumericValue = 100m;
+        await vm.LaunchCommand.ExecuteAsync(null);
+        await vm.ContinueCommand.ExecuteAsync(null); // run the trigger body to the end
+
+        Assert.Equal(DebuggerPhase.Completed, vm.Phase);
+        // The trigger's Context (NEW/OLD) group is still shown at completion (not cleared).
+        Assert.Contains(vm.VariableGroups, g => g.Header == EmberTern.App.UiStrings.DebuggerVariableGroupContext);
     }
 
     [Fact]
@@ -373,14 +424,34 @@ public class DebuggerTabVmTests
     }
 
     [Fact]
-    public async Task UnhandledRaise_Faults()
+    public async Task UnhandledRaise_Faults_StopsOnFaultingLine_PreservesState()
     {
         var vm = Vm(Sql, new FakeExecutor().Raise(Off("v = a + b")), out _);
         await vm.PrepareAsync();
         await vm.LaunchCommand.ExecuteAsync(null);
 
         await vm.ContinueCommand.ExecuteAsync(null);
+
         Assert.Equal(DebuggerPhase.Faulted, vm.Phase);
+        Assert.True(vm.IsFaulted); // drives the red status line
+        // Stops ON the faulting statement (not cleared): marker + variables + call stack all preserved.
+        Assert.Equal(Off("v = a + b"), vm.CurrentStart);
+        Assert.NotEmpty(vm.Variables);
+        Assert.True(vm.HasCallStack);
+        Assert.Equal("SP_TEST", Assert.Single(vm.CallStack).RoutineName);
+        // Stepping disabled; only Restart / Stop remain enabled.
+        Assert.False(vm.ContinueCommand.CanExecute(null));
+        Assert.False(vm.StepIntoCommand.CanExecute(null));
+        Assert.True(vm.StopCommand.CanExecute(null));
+        Assert.True(vm.RestartCommand.CanExecute(null));
+
+        // Stop finally clears everything.
+        await vm.StopCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Idle, vm.Phase);
+        Assert.False(vm.IsFaulted);
+        Assert.Null(vm.CurrentStart);
+        Assert.Empty(vm.Variables);
+        Assert.False(vm.HasCallStack);
     }
 
     // ── Stop / breakpoints ──────────────────────────────────────────────────────────────────────

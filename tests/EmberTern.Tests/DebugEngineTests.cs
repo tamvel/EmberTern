@@ -240,6 +240,28 @@ public class DebugEngineTests
     }
 
     [Fact]
+    public void Completed_RetainsTerminalFrame_AndLastStatement()
+    {
+        // The UI keeps the last state visible at Completed (instead of the session "vanishing"): the engine
+        // retains the terminal (root) frame + the last executed line, while the LIVE frame is still popped.
+        const string sql = "begin a = 1; b = 2; end";
+        var s = new DebugSession(Body(sql), new FakeExecutor());
+        s.Start();
+
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Null(s.FinalFrame);    // no terminal snapshot while the session is running
+        Assert.Null(s.LastStatement);
+
+        s.Step(StepKind.Over); // a = 1 → paused at b = 2
+        s.Step(StepKind.Over); // b = 2 → completed
+
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Null(s.CurrentFrame);  // the live frame is popped — the existing contract is unchanged
+        Assert.NotNull(s.FinalFrame); // …but the terminal frame is retained for inspection
+        Assert.Equal("b = 2;", Text(sql, s.LastStatement!)); // the routine's final executed line
+    }
+
+    [Fact]
     public void If_TrueBranch_IsTaken_ElseSkipped()
     {
         const string sql = "begin if (c) then t = 1; else f = 2; end";
@@ -518,6 +540,29 @@ public class DebugEngineTests
         // The unhandled root frame was rolled back to its savepoint (§4.5), never released.
         Assert.Contains("rollback:ET_DBG_FRAME_0", exec.Savepoints);
         Assert.DoesNotContain("leave:ET_DBG_FRAME_0", exec.Savepoints);
+    }
+
+    [Fact]
+    public void Faulted_RetainsFaultingLine_AndFrameSnapshot()
+    {
+        // The UI keeps the fault visible: the engine retains the faulting statement + the call stack at the raise
+        // (the frame's client-side values survive the DB rollback, spec §4.5), even though the live stack is
+        // popped — so the user sees WHERE it failed and the variable values at that moment.
+        const string sql = "begin a = 1; b = 2; end";
+        var exec = new FakeExecutor().Outcome(Off(sql, "b = 2"), StatementOutcome.Raised(new DebugError(ExceptionName: "X")));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        Assert.Null(s.FaultStatement); // nothing retained while paused
+        Assert.Null(s.FaultFrame);
+
+        s.Step(StepKind.Into); // a = 1;
+        s.Step(StepKind.Into); // b = 2; → unhandled fault
+
+        Assert.Equal(DebugState.Faulted, s.State);
+        Assert.Empty(s.CallStack);          // the live stack is popped (existing contract, unchanged)
+        Assert.NotNull(s.FaultFrame);        // …but the fault snapshot is retained
+        Assert.Equal("b = 2;", Text(sql, s.FaultStatement!)); // the exact faulting line
+        Assert.Equal("(anonymous block)", Assert.Single(s.FaultStack).RoutineName);
     }
 
     [Fact]

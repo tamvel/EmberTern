@@ -28,6 +28,15 @@
       <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
       <Setter Property="FontStyle" Value="Italic" />
     </Style>
+    <!-- Status line: subtle normally, but the error colour + bold when the session Faulted, so an unhandled
+         exception is immediately noticeable. -->
+    <Style Selector="TextBlock.debug-status">
+      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+    </Style>
+    <Style Selector="TextBlock.debug-status.fault">
+      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
   </UserControl.Styles>
 
   <UserControl.Resources>
@@ -101,7 +110,7 @@
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                    Margin="10,0,0,0" FontSize="11"
                    TextTrimming="CharacterEllipsis"
-                   Foreground="{DynamicResource SubtleForegroundBrush}" />
+                   Classes="debug-status" Classes.fault="{Binding IsFaulted}" />
       </DockPanel>
     </Border>
 

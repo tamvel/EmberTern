@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D9 DONE. D9 (local procedures & functions — THE FLAGSHIP) COMPLETE + live-fidelity-verified (core 2026-07-18, seam c 2026-07-19): local routines are real, steppable debugger frames with real closure variables (the capability IBExpert cannot deliver); both local procedures and local functions are faithful step-into AND step-over. §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) = local-routine step-into (AST + parser + binder + extractor R5; runtime ResolveRoutine + AST-header param types); seam (b) = closures — Part 1 closure capture for step-INTO (read+write an OUTER var, the write reaching the parent frame), Part 2 the transitive read/write-set fixpoint over the sub-routine call graph for step-OVER (a local call whose callee captures an outer var not named at the call site). All proven sim==real on the lab. D9 seam (c) — local-FUNCTION step-into (§6.4) — COMPLETE 2026-07-19 (c1 AST → c2 Core interpreter → c3 Firebird executor + live fidelity): a local function is a real steppable frame in all four value-consuming positions (v=f()/RETURN f()/IF f()/WHILE f()) via a Function Return Continuation, no new server path; live-proven sim==real for the four positions, six return types (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing (local shadows a same-named stored function), nesting, and closures (spec §15.11). 🏁 D9 FULLY COMPLETE — local procedures AND functions step faithfully, into and over. NEXT: D10 (Triggers).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D9 DONE. D9 (local procedures & functions — THE FLAGSHIP) COMPLETE + live-fidelity-verified (core 2026-07-18, seam c 2026-07-19): local routines are real, steppable debugger frames with real closure variables (the capability IBExpert cannot deliver); both local procedures and local functions are faithful step-into AND step-over. §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) = local-routine step-into (AST + parser + binder + extractor R5; runtime ResolveRoutine + AST-header param types); seam (b) = closures — Part 1 closure capture for step-INTO (read+write an OUTER var, the write reaching the parent frame), Part 2 the transitive read/write-set fixpoint over the sub-routine call graph for step-OVER (a local call whose callee captures an outer var not named at the call site). All proven sim==real on the lab. D9 seam (c) — local-FUNCTION step-into (§6.4) — COMPLETE 2026-07-19 (c1 AST → c2 Core interpreter → c3 Firebird executor + live fidelity): a local function is a real steppable frame in all four value-consuming positions (v=f()/RETURN f()/IF f()/WHILE f()) via a Function Return Continuation, no new server path; live-proven sim==real for the four positions, six return types (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing (local shadows a same-named stored function), nesting, and closures (spec §15.11). 🏁 D9 FULLY COMPLETE — local procedures AND functions step faithfully, into and over. 🏁 D10 (Triggers) COMPLETE + user-confirmed 2026-07-19 (seam A pure-Core / seam B live-fidelity / seam C UI; NEW/OLD context, multi-action, embedded-subquery colon fix #248) — PLUS terminal debug states (Completed keeps state + END marker, Faulted stops on the raising line + red status). NEXT: D11 (Packages).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -834,9 +834,27 @@ noted.
   tx) sim==real, BEFORE DELETE (OLD-only) exception (E_ORDER_LOCKED) sim==real, and the multi-action BIU trigger
   producing `NEW.NOTE='INSERTED'` (INSERTING) / `='UPDATED'` (UPDATING) sim==real for both events — plus all 11
   D8/D9 cases still green (no regression). Build 0/0; 122 debugger Core/Firebird unit tests green; smoke clean.
-  **NEXT: Seam C (UI — TriggerContextEditor with the action selector + NEW/OLD grids + availability, trigger-mode
-  DebuggerTabViewModel, the Variables Context group, and the sidebar/editor Debug-trigger entry points; "seed
-  from a real row" is C2).**
+  **D10 Seam C (UI) — DONE + user-confirmed (2026-07-19; commit `050b790`). 🏁 D10 COMPLETE — triggers debug
+  end-to-end.** `TriggerHeaderReader` (Core) derives `(TargetTable, Timing, Events)` from the parsed trigger
+  (refuses DB-level/DDL, §8.1); `TriggerContextEditorViewModel` is a **dumb VM** — availability read from Core
+  `TriggerContext`, NEW/OLD grids show **only referenced columns** (typed via `EnsureColumnsAsync`), values mapped
+  onto their synthetic frame variables; `DebuggerTabViewModel` trigger mode (prepare/launch), a Variables
+  **Context** group (resolved via new `DebugVariableRowViewModel.ResolveName` = synthetic); "Debug trigger…" entry
+  points (sidebar + trigger-editor toolbar). **QA-found + fixed — gotcha #248:** a `NEW`/`OLD` reference inside a
+  **scalar subquery embedded in a PSQL assignment** was emitted bare → Firebird read it as a column (SQL -206);
+  the colon-vs-bare decision is now **per-reference** from AST-derived colon-regions
+  (`FirebirdDebugExecutor.ColonRegions`, each embedded `SubqueryExpression` span), not per-statement. Lab
+  +`TRIG_SUBQ_LAB`/`TR_SUBQ_BU`; `DebuggerFidelityProbe` case 17 sim==real. "Seed from a real row" stays a
+  future **C2**. **Terminal debug states (Completed / Faulted) — DONE + user-confirmed (2026-07-19; commit
+  pending after this doc):** the session no longer clears on end. **Completed** keeps the last state visible with
+  the closing **`END` marked** (execution finished — IBExpert-like), Variables/Context/Call-Stack showing final
+  values; **Faulted** stops **on the raising statement** (marked), keeps Variables/Context/Call-Stack with the
+  values **at the error**, and the status line goes **red+bold** (`IsFaulted`); in both, stepping is disabled and
+  only **Restart/Stop** are active — **Stop** tears the session down + clears. Additive Core: `DebugSession`
+  retains `FinalFrame`/`LastStatement` (Completed) and snapshots `FaultStatement`/`FaultFrame`/`FaultStack`
+  **before** the exception unwind (which DB-rolls-back + pops but never touches client-side `frame.Values`) —
+  `CurrentFrame`/`CallStack` still null after termination (existing contract unchanged). Running / Completed /
+  Faulted / Stopped are now distinct debugger states.
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
