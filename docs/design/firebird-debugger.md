@@ -1313,3 +1313,32 @@ Raw `isql` / `EXECUTE BLOCK` — no debugger interpreter (they measure the *engi
 > is one parseable blob, so `PackageSourceScanner`/the AST locate + slice a routine — no hand-rolled scanner, no
 > temporary metadata. `PKG_DBG`'s routines are structurally D9-local-shaped, so the executor seam reuses the D8/D9
 > frame machinery rather than a new path. `RDB$PRIVATE_FLAG` distinguishes the two (1 = private).
+
+**Seam B design probes (same rebuilt lab):**
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **P-C1** | Are package member params (public **and** private) in `RDB$PROCEDURE_PARAMETERS` keyed by `RDB$PACKAGE_NAME`? | **YES** — `PRIV_DOUBLE`/`PUB_ADD`/`PUB_RUN` each with `P_N` (in) + `R` (out) | The D8 catalog layout **generalizes** with a package-name filter — a package member reuses `BuildFrameVariablesAsync`, not a new metadata path. |
+| **P-C2** | Can an `EXECUTE BLOCK` **declare** a private routine's body as a sub-routine and call it? | **R = 42** (`21*2`) | The **D9 R5 mechanism works for a private sibling** — declaring every package routine in the harness makes a private call resolvable, so step-**over** of a private routine needs no DSQL call. |
+
+### 15.13 D11 seam B — package routine step fidelity (simulated vs real, FB5 lab)
+
+The real `FirebirdDebugExecutor` drove `DebugSession` through `SP_DBG_PKG` (`DebuggerFidelityProbe` cases 18–19).
+A package member is built the **D8** way (reconstruct `CREATE PROCEDURE` from the body-blob slice, catalog params
+keyed by package, seed args); a sibling call resolves through the **D9 R5** harness (every package routine declared
+as a harness sub-routine — so a private routine, not DSQL-callable, runs inside the harness). One execution path;
+no parallel package executor.
+
+| # | Case | Assertion | Result |
+|---|---|---|---|
+| 18 | `SP_DBG_PKG(5)` step **Into** | descend `SP_DBG_PKG → PUB_RUN` (public) `→ PRIV_DOUBLE` (private, interpreted) + `PUB_ADD` (public); depth 3; **sim == real** | **sim 16 == real 16** ✔ |
+| 19 | `SP_DBG_PKG(5)` step **Into** `PUB_RUN` then step **Over** its siblings | the private `PRIV_DOUBLE` + public `PUB_ADD` run via the **R5 harness** (depth 2 — never entered as frames); **sim == real** | **sim 16 == real 16** ✔ |
+
+> **Verdict — package procedures, public and private, step faithfully into and over.** A public member reuses D8
+> (real step-over is a genuine DSQL call from outside; step-into reconstructs + frames it); a private member reuses
+> D9 (reached only as a sibling from within a package frame; its calls run through the R5 harness like a local
+> sub-routine). Packages have no package-level variables (§8.2) and a member is a closed scope, so there is no
+> capture and the read/write fixpoint is a no-op — `ExecuteStatement`/`EvaluateCondition`/`BindValues` are
+> unchanged. **Boundary:** a package **function** call as a step-into is not yet modelled on the call side (seam A
+> parses function members generically, but `CallExpression` carries no package qualifier) — a documented §F stop
+> (step-over, faithful) until a lab case needs it.

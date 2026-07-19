@@ -2222,3 +2222,113 @@ not compiled) in RELEASE.
 cleanly with no unused-symbol warnings under `TreatWarningsAsErrors`), **4929 tests green** in one run. Live visual
 confirmation (open a debug session in a DEBUG build → the "Harness Log" tab shows with its description; a RELEASE
 build has no such tab) is the user's to make, per the QA rule.
+
+---
+
+## D11 — Packages (Seam 0 + Seam A + Seam B done; Seam C + close remain)
+
+D11 makes packaged procedures — **public and private** — real debugger frames. The plan splits it A/B/C like
+D8/D9/D10, preceded by the mandatory probe/lab step (Seam 0), and the whole milestone is governed by one binding
+user directive: **one execution path — public package procs maximally reuse D8, private maximally reuse D9; do
+NOT build a parallel "package executor". If tempted, stop and extend the existing mechanism.**
+
+### Seam 0 — lab + blocking probes (commit `f229b94`)
+
+D11 was probe-blocked (implementation plan): §8.2 rested on two unverified claims. The lab had **no** private
+package routine, so the very first step was to extend it and measure the engine.
+
+- **Lab (`Lab/setup.sql` + rebuilt `.fdb`, #149):** `PKG_DBG` — header `PUB_RUN`/`PUB_ADD`; body a PRIVATE
+  `PRIV_DOUBLE` (body-only, absent from the header) + the two public routines, with `PUB_RUN` calling the private
+  sibling (`PRIV_DOUBLE`) and the public sibling (`PUB_ADD`). Standalone `SP_DBG_PKG` steps into the package
+  (`SP_DBG_PKG(5)` -> `PKG_DBG.PUB_RUN` -> `5*2 + (5+1) = 16`); made **selectable** (`SUSPEND`) in Seam B so the
+  probe reads `RESULT` via `SELECT`.
+- **Probes (section 15.12), raw `isql`/`EXECUTE BLOCK` — the engine, not the interpreter:**
+  - **A private routine is NOT callable from an `EXECUTE BLOCK`** — `PKG_DBG.PRIV_DOUBLE(5)` -> SQLSTATE 42000,
+    *"Procedure PRIV_DOUBLE is private to package PKG_DBG"*. So a private routine **must be interpreted**, never
+    harness-called.
+  - **A public routine IS callable** (`PKG_DBG.PUB_ADD(5)` -> 6; `SP_DBG_PKG(5)` -> 16). So real step-over /
+    source-fetch step-into.
+  - **The whole body is verbatim in `RDB$PACKAGE_BODY_SOURCE`** (private routine included), starting at `BEGIN` —
+    so an individual routine is a **parse of the blob**, and each routine is shaped exactly like a D9 local
+    `DECLARE PROCEDURE` *without the `DECLARE`*. A strong reuse signal.
+
+### Seam A — pure Core AST/parser (commit `ead3a41`)
+
+Additive; no server; a package call still steps over until Seam B.
+
+1. **Qualified call name.** `ExecuteProcedureStatement.PackageName`; the parser reads `EXECUTE PROCEDURE
+   PKG.PROC` as `(PackageName=PKG, ProcedureName=PROC)` — previously the whole name folded to just the package
+   (the D8 "package/qualified => step-over" boundary; the D8 executor even had a `Contains('.')` guard
+   anticipating this). Argument / `RETURNING_VALUES` parsing already dot-skipped, so it was unaffected. Consumers
+   kept correct: the binder still references the **package** object at the first name token
+   (`ResolveObject(PackageName ?? ProcedureName)`); `SqlParameterScanner` now returns the qualified `PKG.PROC`.
+2. **Package-body member parser.** New `SqlParser.ParsePackageBodyMembers(bodySource)` turns the
+   `RDB$PACKAGE_BODY_SOURCE` blob into member `SubroutineDeclaration` nodes (spans indexing into the blob).
+   `ParseSubroutineDeclaration` was **generalized** to accept the leading `DECLARE` (D9 local) OR a bare
+   `PROCEDURE/FUNCTION` (package member) — the `DECLARE` path is byte-identical; `ParseScopedBlockBody`
+   (CASE-aware) is reused, so there is **no hand-rolled scanner**. Private-ness stays a metadata fact
+   (`RDB$PRIVATE_FLAG`), supplied by the executor in Seam B; the parser only structures the source. Sibling calls
+   inside a member surface as unqualified `ExecuteProcedureStatement`s (resolved against the frame's package in B).
+   +11 tests (qualified name; member order/kind/bodies/spans; sibling-call exposure; function member; edge cases).
+
+### Seam B — Firebird executor + live fidelity (commit `e07ad40`)
+
+Two more design probes first (section 15.13): **(P-C1)** package member params — public **and** private — ARE in
+`RDB$PROCEDURE_PARAMETERS` keyed by `RDB$PACKAGE_NAME` (so the D8 catalog layout generalizes with a package
+filter, not a new metadata path); **(P-C2)** an `EXECUTE BLOCK` that DECLAREs a private routine's body as a
+sub-routine and calls it returns the right value (so the D9 R5 mechanism works for a private sibling => step-over
+of a private routine needs no DSQL call).
+
+The design that fell out — **one path, reuse both**:
+
+- **A package member frame is built the D8 way.** The member is reconstructed as a standalone
+  `CREATE PROCEDURE` (`"CREATE "` + its slice of `RDB$PACKAGE_BODY_SOURCE`), so the SAME D8 pipeline applies:
+  strict parse -> scope-bound `SemanticModel` + body, catalog params (via a generalized `BuildFrameVariablesAsync`
+  keyed by package name — the ONE catalog difference), argument seeding through the shared harness. A PUBLIC
+  member behaves exactly like a D8 stored routine (real step-over from outside is a genuine DSQL call; step-into
+  reconstructs + frames it).
+- **Sibling calls reuse the D9 R5 harness.** The frame's `RoutineContext` carries the package + its members
+  (parsed once via Seam A's `ParsePackageBodyMembers`, cached per session), and **every package routine is
+  declared as a harness sub-routine** (R5, `DECLARE ` + the member's verbatim body). So an unqualified sibling
+  call — public OR **private** — resolves *inside* the harness like a D9 local routine. This is the only way a
+  private routine (not DSQL-callable) can step-over at all.
+- **A package member is a closed scope.** Packages have no package-level variables (§8.2) and a member sees no
+  caller variables, so `LexicalParent` stays null, there is no capture, and the read/write fixpoint is a no-op —
+  `ExecuteStatement` / `EvaluateCondition` / `BindValues` / `ResolveReadWrite` are **unchanged**; a package frame
+  flows through them exactly as a stored frame does. `FirebirdDdlReader.ReadPackageBodySourceAsync` (reusing the
+  shared blob reader) fetches the body on the debug session.
+
+**Files:** `FirebirdDdlReader` (+`ReadPackageBodySourceAsync`), `FirebirdDebugMetadata` (optional `packageName`
+on `BuildFrameVariablesAsync`/`ReadProcedureParametersAsync`), `FirebirdDebugExecutor` (`RoutineContext` gained
+`PackageName`/`PackageMembers`; `TryResolvePackageCall` -> `ResolvePackageMemberAsync` + `PackageBodyFor` cache +
+`RegisterPackageMember`).
+
+**Live fidelity PROVEN — sim == real (section 15.13, `DebuggerFidelityProbe` cases 18-19):**
+- **18 (step Into):** `SP_DBG_PKG -> PUB_RUN` (public) `-> PRIV_DOUBLE` (private, interpreted) `+ PUB_ADD` (public);
+  depth 3; **sim 16 == real 16**.
+- **19 (step Into `PUB_RUN`, then step Over its siblings):** the private `PRIV_DOUBLE` + public `PUB_ADD` run via
+  the **R5 harness** (depth 2 — never entered as frames); **sim 16 == real 16**. (`SimulateAsync` gained an
+  optional per-pause step chooser for this mixed strategy.)
+- All 17 prior D8/D9/D10 cases still pass — no regression.
+
+### Key architectural decisions
+
+- **One execution path (the user's binding directive).** Public = D8 (reconstruct + catalog + real call);
+  private = D9 (R5 harness). The private case is *not* a special executor — it is the existing D9 local-routine
+  mechanism (declare the routine in the harness), applied to a package sibling. The catalog param query is the
+  same D8 query with an added `RDB$PACKAGE_NAME` filter. No `PackageExecutor`, no parallel path.
+- **Reconstruct-as-CREATE** gives a package member a properly scope-bound model + body for free (the D8 binder
+  path), so the read/write narrowing and everything downstream work unchanged — instead of hand-binding member
+  scopes over the blob.
+- **Structure vs. semantics split held:** the parser (Seam A) only structures the package body; private-ness and
+  types are metadata (Seam B). The parser never learns "private".
+
+### Project boundaries (§F — explained stops, not guesses)
+
+- **A package FUNCTION call as a step-into** is not modelled on the call side: Seam A parses function *members*
+  generically, but `CallExpression` carries no package qualifier, so `v = PKG.FN(x)` steps **over** (faithful).
+  Adding it would mirror Seam A's `PackageName` onto `CallExpression` + a `ResolveFunction` package branch — do it
+  when a real lab case needs it, not pre-emptively (gotcha #233).
+- **Launching a package member as the debug ROOT** (a "Debug..." entry point on a package member) is Seam C.
+  Today a package is reached by stepping into it from a standalone caller; the DoD's "both appear as frames" is
+  met from that direction, and Seam C adds the direct launch + UI.
