@@ -1758,9 +1758,20 @@ internal static class UiStrings
     public const string DebuggerTriggerNoColumns = "This trigger references no columns of this record.";
     // Bottom tabbed panel (D5 layout redesign) — extensible: Call Stack / Breakpoints / Output join later.
     public const string DebuggerBottomTabImmediate = "Immediate";
-    public const string DebuggerBottomTabExecutedSql = "Executed SQL";
     public const string DebuggerBottomTabWatches = "Watches";
     public const string DebuggerBottomTabCallStack = "Call Stack";
+    // Harness Log (Sprint D10.5) — a DEBUG-only diagnostic surface for developing/diagnosing the debugger
+    // itself. It is built in code-behind under #if DEBUG (DebuggerTabView.axaml.cs), so these strings are
+    // referenced only in DEBUG builds; in RELEASE they are simply unused consts. It replaced the misnamed
+    // "Executed SQL" tab (that name read as the user's SQL history, which it never was).
+    public const string DebuggerBottomTabHarnessLog = "Harness Log";
+    public const string DebuggerHarnessLogDescription =
+        "Diagnostic tool (debug builds only). Shows the EXECUTE BLOCK harnesses the debugger generates " +
+        "internally to evaluate expressions and statements on the server — this is how the debugger works " +
+        "under the hood, not a history of your SQL.";
+    public const string DebuggerHarnessLogEmpty =
+        "No harnesses generated yet. Evaluate an expression (Shift+F9) or run an Immediate statement while " +
+        "the session is paused, and the generated harness SQL will appear here.";
     public const string DebuggerBottomPanelCollapseTooltip = "Collapse / expand the panel";
     // Call Stack panel (D8, spec §5).
     public const string DebuggerCallStackEmpty = "No call stack — not paused.";

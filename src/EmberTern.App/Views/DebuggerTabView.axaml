@@ -418,7 +418,7 @@
               </Panel>
             </Button>
 
-            <TabControl Padding="0">
+            <TabControl x:Name="BottomTabs" Padding="0">
 
               <!-- Immediate — the interactive REPL: input + the latest result inline. -->
               <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabImmediate}">
@@ -473,47 +473,12 @@
                 </Grid>
               </TabItem>
 
-              <!-- Executed SQL — the full audit history (§10.3/§F). -->
-              <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabExecutedSql}">
-                <Grid IsVisible="{Binding !IsBottomPanelCollapsed}" Margin="0,2,0,0">
-                  <TextBlock Margin="10,6"
-                             Text="{x:Static app:UiStrings.DebuggerImmediateEmpty}"
-                             Classes="subtle" FontSize="11" TextWrapping="Wrap"
-                             IsVisible="{Binding !HasExecutedSql}" />
-                  <ListBox ItemsSource="{Binding ExecutedSql}"
-                           Background="Transparent" BorderThickness="0"
-                           IsVisible="{Binding HasExecutedSql}">
-                    <ListBox.ItemTemplate>
-                      <DataTemplate x:DataType="vm:DebugExecutedSqlRowViewModel">
-                        <!-- The row's tooltip carries the generated harness SQL (the §10.3/§F audit). -->
-                        <StackPanel Spacing="1" Margin="0,2" ToolTip.Tip="{Binding Sql}">
-                          <Grid ColumnDefinitions="Auto,*,Auto">
-                            <TextBlock Grid.Column="0" Text="{Binding TimestampText}" FontSize="10"
-                                       Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,0,6,0"
-                                       VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="1" Text="{Binding Fragment}" FontSize="11"
-                                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                                       TextTrimming="CharacterEllipsis" />
-                            <TextBlock Grid.Column="2" Text="{Binding SideEffectGlyph}" FontSize="11"
-                                       Foreground="{DynamicResource WarningBrush}"
-                                       VerticalAlignment="Center" />
-                          </Grid>
-                          <TextBlock Text="{Binding ResultText}" FontSize="11"
-                                     FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                                     TextWrapping="Wrap"
-                                     IsVisible="{Binding IsError}"
-                                     Foreground="{DynamicResource ErrorBrush}" />
-                          <TextBlock Text="{Binding ResultText}" FontSize="11"
-                                     FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                                     TextWrapping="Wrap"
-                                     IsVisible="{Binding !IsError}"
-                                     Foreground="{DynamicResource ForegroundBrush}" />
-                        </StackPanel>
-                      </DataTemplate>
-                    </ListBox.ItemTemplate>
-                  </ListBox>
-                </Grid>
-              </TabItem>
+              <!-- Harness Log — the generated EXECUTE BLOCK audit (§10.3/§F). This is an internal DIAGNOSTIC
+                   surface for developing/diagnosing the debugger itself, NOT a production feature: it is built
+                   and inserted here in code-behind only under #if DEBUG (DebuggerTabView.axaml.cs →
+                   BuildHarnessLogTab), so in RELEASE builds the tab does not exist at all. The audit log itself
+                   (DebuggerTabViewModel.ExecutedSql) keeps collecting in every build — it also feeds the
+                   Immediate tab's inline result — only the UI that exposes the harnesses is DEBUG-only. -->
 
               <!-- Watches — expressions re-evaluated after every step (D5, §9.5). -->
               <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabWatches}">

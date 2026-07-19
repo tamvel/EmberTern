@@ -2178,3 +2178,47 @@ only Restart / Stop are active; **Stop** tears the session down and clears. Addi
 after termination (existing contract unchanged). The debugger now has four distinct states: Running / Completed /
 Faulted / Stopped. Architecturally the whole D10 + terminal-state work is additive, contract-preserving, unit-
 tested, and live-fidelity-verified.
+
+---
+
+## Sprint D10.5 — UX polish: the harness-audit tab is now DEBUG-only ("Harness Log")
+
+A short cleanup sprint between D10 and D11 (no new debugger capability). The debugger's bottom-panel
+**"Executed SQL"** tab exposed the generated `EXECUTE BLOCK` harnesses (the §10.3/§F audit log) directly in the
+production UI. Two problems: (1) the name read as "the user's SQL history", which it never was — it is a view of
+how the debugger evaluates expressions/statements on the server; (2) that internal mechanism should not be part
+of the interface a normal EmberTern user sees at all. It is a diagnostic surface for *developing / diagnosing the
+debugger itself*.
+
+**Decision (user, mid-sprint).** No new setting, no toggle, no reuse of the existing per-connection
+`ConnectionProfile.DeveloperMode` — that flag has a specific, narrow domain meaning (metadata/DDL WAIT policy for
+one connection) and must not be overloaded with debugger diagnostics; two different concepts. Instead the tab is
+made a **compile-time DEBUG-only** surface: present in DEBUG builds, *absent* (not hidden, not disabled — simply
+not compiled) in RELEASE.
+
+**Implementation (additive, one commit's worth).**
+- The tab's markup was **removed from `DebuggerTabView.axaml`** entirely and is now **built in code-behind under
+  `#if DEBUG`** (`DebuggerTabView.axaml.cs` → `InsertHarnessLogTab` / `BuildHarnessLogTab` / `BuildHarnessRow`),
+  inserted into the named `BottomTabs` `TabControl` at its historical position (right after Immediate). In RELEASE
+  the `#if DEBUG` block (and its DEBUG-only `using`s) is not compiled, so the tab does not exist. Chosen over a
+  csproj `Configuration`-conditioned separate `.axaml` (fragile XAML-globbing surgery, and a RELEASE-only path I
+  can't runtime-verify here) and over runtime `IsVisible` hiding (the user explicitly wanted it *not compiled*,
+  not merely hidden). The code-behind row builder faithfully mirrors the former XAML row (time | fragment | ±
+  side-effect, then result/error text, harness SQL on the row tooltip) and consumes theme brushes as live
+  `DynamicResource`s via `GetResourceObservable` (project rule: brushes via DynamicResource, never a snapshot).
+- **Renamed** "Executed SQL" → **"Harness Log"** (`UiStrings.DebuggerBottomTabHarnessLog`); the dead
+  `DebuggerBottomTabExecutedSql` const was removed.
+- **Task 3 — self-explanation:** a persistent purpose description (`DebuggerHarnessLogDescription`) sits at the top
+  of the tab and is also the header tooltip, plus a dedicated empty-state (`DebuggerHarnessLogEmpty`). Both state
+  plainly that this is a diagnostic view of the debugger's generated `EXECUTE BLOCK`s, *not* a history of the
+  user's SQL.
+- **Nothing else changed.** The audit log itself (`DebuggerTabViewModel.ExecutedSql` / `HasExecutedSql` /
+  `LatestEvaluation` / `AddExecutedSql`) is untouched and still collected in **every** build — it also feeds the
+  Immediate tab's inline latest-result — so `HarnessBuilder`, `DebugSession.Evaluate`, Immediate, Evaluate
+  (Shift+F9), Watches and the harness-SQL tooltips are all behaviour-identical. The `DebuggerTabVmTests` that
+  assert on `ExecutedSql`/`HasExecutedSql` pass unchanged.
+
+**Verification.** Build **0/0 in BOTH Debug and Release** (the RELEASE build proves the harness UI compiles out
+cleanly with no unused-symbol warnings under `TreatWarningsAsErrors`), **4929 tests green** in one run. Live visual
+confirmation (open a debug session in a DEBUG build → the "Harness Log" tab shows with its description; a RELEASE
+build has no such tab) is the user's to make, per the QA rule.

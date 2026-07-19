@@ -13,6 +13,12 @@ using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
+#if DEBUG
+using Avalonia.Controls.Templates;
+using Avalonia.Data;
+using Avalonia.Data.Converters;
+using Avalonia.Layout;
+#endif
 
 namespace EmberTern.App.Views;
 
@@ -59,6 +65,12 @@ public partial class DebuggerTabView : UserControl
             _editor.AddHandler(KeyDownEvent, OnEditorKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             _editor.AddHandler(PointerPressedEvent, OnEditorPointerPressed, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         }
+#if DEBUG
+        // The Harness Log tab is a DEBUG-only diagnostic surface (Sprint D10.5) — it exists in development
+        // builds only, so it is added here rather than in the XAML. In RELEASE this call is compiled out and
+        // the tab does not exist at all.
+        InsertHarnessLogTab();
+#endif
     }
 
     private void InitializeComponent() => Avalonia.Markup.Xaml.AvaloniaXamlLoader.Load(this);
@@ -413,6 +425,141 @@ public partial class DebuggerTabView : UserControl
         if (_editor.GetPositionFromPoint(e.GetPosition(_editor)) is { } tvp)
             _editor.CaretOffset = _editor.Document.GetOffset(tvp.Location);
     }
+
+#if DEBUG
+    // ── Harness Log tab (DEBUG-only diagnostic surface, Sprint D10.5) ───────────────────────────────────
+    //
+    // Shows the EXECUTE BLOCK harnesses the debugger generates internally to evaluate expressions/statements
+    // on the server (§10.3/§F) — a developer-diagnostic view of how the debugger works, NOT a production
+    // feature and NOT the user's SQL history. It is deliberately built in code-behind under #if DEBUG (never
+    // in DebuggerTabView.axaml), so in RELEASE builds none of this UI is compiled and the tab does not exist.
+    // The audit log it renders (DebuggerTabViewModel.ExecutedSql) is still collected in every build — it also
+    // feeds the Immediate tab's inline result — so only the *exposing* UI is DEBUG-scoped, not the mechanism.
+
+    private void InsertHarnessLogTab()
+    {
+        if (this.FindControl<TabControl>("BottomTabs") is not { } tabs) return;
+        // Keep the historical position (right after Immediate); clamp defensively.
+        tabs.Items.Insert(Math.Min(1, tabs.Items.Count), BuildHarnessLogTab());
+    }
+
+    private TabItem BuildHarnessLogTab()
+    {
+        var header = new TextBlock { Text = UiStrings.DebuggerBottomTabHarnessLog };
+        ToolTip.SetTip(header, UiStrings.DebuggerHarnessLogDescription);
+
+        var tab = new TabItem { Header = header };
+        tab.Classes.Add("bottom-tab");
+
+        var content = new Grid { Margin = new Thickness(0, 2, 0, 0) };
+        content.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        content.RowDefinitions.Add(new RowDefinition(GridLength.Star));
+        // Collapse behaviour: mirror the other tabs — the content hides when the bottom panel is collapsed so
+        // the Auto row measures to the tab strip only (see ApplyBottomPanel).
+        content.Bind(Visual.IsVisibleProperty, new Binding("IsBottomPanelCollapsed") { Converter = BoolConverters.Not });
+
+        // Always-visible purpose line, so the tab explains itself the moment it is opened (Task 3).
+        var description = Subtle(UiStrings.DebuggerHarnessLogDescription, new Thickness(10, 6, 10, 4));
+        Grid.SetRow(description, 0);
+        content.Children.Add(description);
+
+        // Empty-state hint (no harnesses generated yet in this session).
+        var empty = Subtle(UiStrings.DebuggerHarnessLogEmpty, new Thickness(10, 2, 10, 6));
+        empty.Bind(Visual.IsVisibleProperty, new Binding("HasExecutedSql") { Converter = BoolConverters.Not });
+        Grid.SetRow(empty, 1);
+        content.Children.Add(empty);
+
+        var list = new ListBox
+        {
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            ItemTemplate = new FuncDataTemplate<DebugExecutedSqlRowViewModel>((_, _) => BuildHarnessRow(), supportsRecycling: true),
+        };
+        list.Bind(ItemsControl.ItemsSourceProperty, new Binding("ExecutedSql"));
+        list.Bind(Visual.IsVisibleProperty, new Binding("HasExecutedSql"));
+        Grid.SetRow(list, 1);
+        content.Children.Add(list);
+
+        tab.Content = content;
+        return tab;
+    }
+
+    // One Harness Log row (mirrors the former XAML template): [time | fragment | ± side-effect] then the
+    // result / error text, with the generated harness SQL on the row tooltip (the §10.3/§F audit anchor).
+    private Control BuildHarnessRow()
+    {
+        var row = new StackPanel { Spacing = 1, Margin = new Thickness(0, 2, 0, 2) };
+        row.Bind(ToolTip.TipProperty, new Binding("Sql"));
+
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        head.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        head.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+        var time = new TextBlock
+        {
+            FontSize = 10,
+            Margin = new Thickness(0, 0, 6, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        time.Bind(TextBlock.TextProperty, new Binding("TimestampText"));
+        BindBrush(time, TextBlock.ForegroundProperty, "SubtleForegroundBrush");
+        Grid.SetColumn(time, 0);
+        head.Children.Add(time);
+
+        var fragment = Mono("Fragment");
+        fragment.TextTrimming = TextTrimming.CharacterEllipsis;
+        Grid.SetColumn(fragment, 1);
+        head.Children.Add(fragment);
+
+        var glyph = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        glyph.Bind(TextBlock.TextProperty, new Binding("SideEffectGlyph"));
+        BindBrush(glyph, TextBlock.ForegroundProperty, "WarningBrush");
+        Grid.SetColumn(glyph, 2);
+        head.Children.Add(glyph);
+
+        row.Children.Add(head);
+
+        // Error vs. normal result — two TextBlocks toggled by IsError (matches the former XAML), each themed.
+        var errorText = Mono("ResultText");
+        errorText.TextWrapping = TextWrapping.Wrap;
+        errorText.Bind(Visual.IsVisibleProperty, new Binding("IsError"));
+        BindBrush(errorText, TextBlock.ForegroundProperty, "ErrorBrush");
+        row.Children.Add(errorText);
+
+        var okText = Mono("ResultText");
+        okText.TextWrapping = TextWrapping.Wrap;
+        okText.Bind(Visual.IsVisibleProperty, new Binding("IsError") { Converter = BoolConverters.Not });
+        BindBrush(okText, TextBlock.ForegroundProperty, "ForegroundBrush");
+        row.Children.Add(okText);
+
+        return row;
+    }
+
+    // A subtle, wrapping caption (matches the "subtle" style used for the other panels' hints/descriptions).
+    private TextBlock Subtle(string text, Thickness margin)
+    {
+        var tb = new TextBlock { Text = text, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = margin };
+        BindBrush(tb, TextBlock.ForegroundProperty, "SubtleForegroundBrush");
+        return tb;
+    }
+
+    private static TextBlock Mono(string path)
+    {
+        var tb = new TextBlock
+        {
+            FontSize = 11,
+            FontFamily = new FontFamily("Cascadia Code,Consolas,Menlo,monospace"),
+        };
+        tb.Bind(TextBlock.TextProperty, new Binding(path));
+        return tb;
+    }
+
+    // Consume a theme brush as a live DynamicResource (project rule: brushes via DynamicResource, never a
+    // snapshot) so the harness rows recolour on a theme toggle.
+    private void BindBrush(Control control, AvaloniaProperty property, string key)
+        => control.Bind(property, this.GetResourceObservable(key));
+#endif
 
     private void ApplyEditorTheme()
     {
