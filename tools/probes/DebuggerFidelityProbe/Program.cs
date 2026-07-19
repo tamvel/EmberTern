@@ -76,6 +76,24 @@ try
         return await cmd.ExecuteScalarAsync();
     }
 
+    // Real execution returning one row as a column→value map (for the multi-column return-type comparison).
+    async Task<Dictionary<string, object?>> RealRowAsync(string sql)
+    {
+        await using var cn = new FbConnection(csb.ToString());
+        await cn.OpenAsync();
+        await using var cmd = new FbCommand(sql, cn);
+        await using var r = await cmd.ExecuteReaderAsync();
+        var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        if (await r.ReadAsync())
+        {
+            for (int i = 0; i < r.FieldCount; i++)
+            {
+                row[r.GetName(i)] = await r.IsDBNullAsync(i) ? null : r.GetValue(i);
+            }
+        }
+        return row;
+    }
+
     // Simulate a standalone routine end-to-end and return (emitted rows, max depth, frame names). `step`
     // selects the movement command driven each pause — Into descends into resolvable local/stored calls;
     // Over runs a call in place (exercising the step-over harness + the D9 seam b Part 2 read/write fixpoint).
@@ -115,6 +133,9 @@ try
 
     static int? AsInt(object? v) => v is null or DBNull ? null : Convert.ToInt32(v, CultureInfo.InvariantCulture);
     static Dictionary<string, object?> Root(int p) => new(StringComparer.OrdinalIgnoreCase) { ["P"] = p };
+    // A type-agnostic display of a value for comparison — normalises across the driver's native types (int,
+    // long, decimal, bool, string, null) via the invariant culture, so a per-column sim-vs-real check is exact.
+    static string Show(object? v) => v is null or DBNull ? "<null>" : Convert.ToString(v, CultureInfo.InvariantCulture)!.Trim();
 
     // ── 1. Leaf (no descent) ────────────────────────────────────────────────
     Head("1. SP_DBG_LEAF(5) — single frame, RETURNS Q = P + 1");
@@ -152,22 +173,23 @@ try
         Fail("simulated vs real RESULT", $"sim {simRoot} vs real {realRoot}");
     Console.WriteLine($"      (arg seeding + RETURNING_VALUES across 3 levels: LEAF(5)=6, MID=12, ROOT=112)");
 
-    // ── 4. Local sub-procedure step-into (D9 seam a part 2) ──────────────────
-    Head("4. SP_DBG_LOCAL(5) — step INTO local PROCEDURE ADD_TAX; local FUNCTION TRIPLE runs server-side");
+    // ── 4. Local sub-procedure + sub-function step-into (D9 seam a part 2 + seam c) ───────────
+    Head("4. SP_DBG_LOCAL(5) — step INTO local FUNCTION TRIPLE (seam c) then local PROCEDURE ADD_TAX");
     var localRoot = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["BASE"] = 5 };
     var loc = await SimulateAsync("SP_DBG_LOCAL", localRoot);
     int? realLocal = AsInt(await RealScalarAsync("SELECT TOTAL FROM SP_DBG_LOCAL(5)"));
     int? simLocal = loc.Rows.Count > 0 ? AsInt(loc.Rows[0]["TOTAL"]) : null;
 
-    if (loc.MaxDepth == 2) Pass("local depth == 2 (stepped into ADD_TAX)"); else Fail("local depth", $"{loc.MaxDepth}");
-    if (loc.Frames.SequenceEqual(new[] { "SP_DBG_LOCAL", "ADD_TAX" }))
+    if (loc.MaxDepth == 2) Pass("local depth == 2 (stepped into TRIPLE, then ADD_TAX)"); else Fail("local depth", $"{loc.MaxDepth}");
+    // Seam c change: TRIPLE (a local FUNCTION) is now stepped INTO (ACC = TRIPLE(BASE)), not run server-side.
+    if (loc.Frames.SequenceEqual(new[] { "SP_DBG_LOCAL", "TRIPLE", "ADD_TAX" }))
         Pass("local frame chain", string.Join(" → ", loc.Frames));
     else Fail("local frame chain", string.Join(" → ", loc.Frames));
     if (simLocal is not null && simLocal == realLocal)
         Pass("SIMULATED TOTAL == REAL", $"sim {simLocal} == real {realLocal}");
     else
         Fail("simulated vs real TOTAL", $"sim {simLocal} vs real {realLocal}");
-    Console.WriteLine($"      (TRIPLE(5)=15 server-side; step into ADD_TAX(15): BONUS=100 → WITH_TAX=115 → TOTAL, expected 115)");
+    Console.WriteLine($"      (step into TRIPLE(5)=15, then ADD_TAX(15): BONUS=100 → WITH_TAX=115 → TOTAL, expected 115)");
 
     // ── 5. Closure capture — step into a local proc that reads+writes an outer var (D9 seam b) ──
     Head("5. SP_DBG_CLOSURE(5) — step INTO local BUMP twice; it reads+writes the OUTER var ACC (FB5 closure)");
@@ -187,9 +209,12 @@ try
     Console.WriteLine($"      (BUMP captures outer ACC by reference: 5 → 15 → 25 → TOTAL, expected 25 — the closure write reaches the parent frame)");
 
     // ── 6. Transitive fixpoint — local FUNCTION with a HIDDEN capture, step OVER (D9 seam b Part 2) ──
-    Head("6. SP_DBG_CLOSURE_FN(5) — a local FUNCTION reads+writes outer HIDDEN, not named at the call site");
+    // Step OVER is explicit now: since seam c, a lone-call assignment (TOTAL = BUMP_HIDDEN(10)) is stepped
+    // INTO under Step Into; this case still exercises the step-OVER fixpoint (the whole leaf runs server-side,
+    // the fixpoint injecting the HIDDEN capture the call never names).
+    Head("6. SP_DBG_CLOSURE_FN(5) — Step OVER a local FUNCTION that reads+writes outer HIDDEN (not named at the call)");
     var fnRoot = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["SEED"] = 5 };
-    var fn = await SimulateAsync("SP_DBG_CLOSURE_FN", fnRoot); // a function call in a leaf runs server-side (step over)
+    var fn = await SimulateAsync("SP_DBG_CLOSURE_FN", fnRoot, StepKind.Over);
     int? realFn = AsInt(await RealScalarAsync("SELECT TOTAL FROM SP_DBG_CLOSURE_FN(5)"));
     int? simFn = fn.Rows.Count > 0 ? AsInt(fn.Rows[0]["TOTAL"]) : null;
     if (fn.MaxDepth == 1) Pass("fn depth == 1 (function runs server-side, not stepped into)"); else Fail("fn depth", $"{fn.MaxDepth}");
@@ -211,6 +236,67 @@ try
     else
         Fail("simulated vs real TOTAL", $"sim {simOv} vs real {realOv}");
     Console.WriteLine($"      (fixpoint injects+returns HIDDEN across the EXECUTE PROCEDURE the call never names: 5 → ACCUMULATE(10)=15 → TOTAL, expected 15)");
+
+    // ── 8. Local FUNCTION step-into — the four value-consuming positions (D9 seam c, §6.4) ──────────
+    Head("8. SP_DBG_FN_POS(5) — step INTO a local FUNCTION in all four positions (=, RETURN, IF, WHILE)");
+    var pos = await SimulateAsync("SP_DBG_FN_POS", Root(5));
+    int? realPos = AsInt(await RealScalarAsync("SELECT RESULT FROM SP_DBG_FN_POS(5)"));
+    int? simPos = pos.Rows.Count > 0 ? AsInt(pos.Rows[0]["RESULT"]) : null;
+    if (pos.MaxDepth == 3) Pass("pos depth == 3 (SP_DBG_FN_POS → WRAP → INC, via the RETURN operand)");
+    else Fail("pos depth", $"{pos.MaxDepth}");
+    if (pos.Frames.Contains("INC") && pos.Frames.Contains("POSITIVE") && pos.Frames.Contains("WRAP"))
+        Pass("pos stepped into every position's function", string.Join(" → ", pos.Frames));
+    else Fail("pos frames", string.Join(" → ", pos.Frames));
+    if (simPos is not null && simPos == realPos) Pass("SIMULATED RESULT == REAL", $"sim {simPos} == real {realPos}");
+    else Fail("simulated vs real RESULT", $"sim {simPos} vs real {realPos}");
+    Console.WriteLine("      (= : INC ; IF/WHILE : POSITIVE ; RETURN operand : WRAP→INC — RESULT expected 10)");
+
+    // ── 9. Local FUNCTION return types — the Expression Harness vs the server, across types ──────────
+    Head("9. SP_DBG_FN_TYPES — step INTO a local FUNCTION per return type (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL)");
+    var types = await SimulateAsync("SP_DBG_FN_TYPES", new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase));
+    var realTypes = await RealRowAsync("SELECT R_INT, R_BIG, R_NUM, R_TXT, R_BOOL, R_NUL FROM SP_DBG_FN_TYPES");
+    var simTypes = types.Rows.Count > 0 ? types.Rows[0] : null;
+    if (types.MaxDepth == 2) Pass("types depth == 2 (each function stepped into)"); else Fail("types depth", $"{types.MaxDepth}");
+    if (simTypes is null)
+    {
+        Fail("types row", "no SUSPEND row emitted");
+    }
+    else
+    {
+        foreach (var col in new[] { "R_INT", "R_BIG", "R_NUM", "R_TXT", "R_BOOL", "R_NUL" })
+        {
+            string sim = Show(simTypes.TryGetValue(col, out var sv) ? sv : null);
+            string real = Show(realTypes.TryGetValue(col, out var rv) ? rv : null);
+            if (sim == real) Pass($"{col}: sim == real", real);
+            else Fail($"{col}: sim vs real", $"sim {sim} vs real {real}");
+        }
+    }
+    Console.WriteLine("      (each RETURN operand computed by the Expression Harness typed as the function's RETURNS base type)");
+
+    // ── 10. Shadowing — a local function shadows a same-named stored function (D9 seam c) ────────────
+    Head("10. SP_DBG_FN_SHADOW(5) — a LOCAL function shadows the stored FN_ADD_TAX; the LOCAL must be chosen");
+    var shadow = await SimulateAsync("SP_DBG_FN_SHADOW", Root(5));
+    int? realShadow = AsInt(await RealScalarAsync("SELECT RESULT FROM SP_DBG_FN_SHADOW(5)"));
+    int? simShadow = shadow.Rows.Count > 0 ? AsInt(shadow.Rows[0]["RESULT"]) : null;
+    if (shadow.MaxDepth == 2) Pass("shadow depth == 2 (stepped INTO the LOCAL FN_ADD_TAX, not the stored global)");
+    else Fail("shadow depth", $"{shadow.MaxDepth} (1 ⇒ resolved to the stored global — wrong definition)");
+    if (shadow.Frames.Contains("FN_ADD_TAX")) Pass("shadow frame", string.Join(" → ", shadow.Frames));
+    else Fail("shadow frame", string.Join(" → ", shadow.Frames));
+    if (simShadow is not null && simShadow == realShadow) Pass("SIMULATED RESULT == REAL", $"sim {simShadow} == real {realShadow}");
+    else Fail("simulated vs real RESULT", $"sim {simShadow} vs real {realShadow}");
+    Console.WriteLine("      (the local FN_ADD_TAX(N) returns N+5000, unlike the 2-arg stored one — RESULT expected 5005)");
+
+    // ── 11. Closure — a local FUNCTION reads an outer variable, stepped into (D9 seam c) ─────────────
+    Head("11. SP_DBG_FN_CLOSURE(5) — step INTO a local FUNCTION that CLOSES OVER the outer variable BASE");
+    var fnClo = await SimulateAsync("SP_DBG_FN_CLOSURE", Root(5));
+    int? realFnClo = AsInt(await RealScalarAsync("SELECT RESULT FROM SP_DBG_FN_CLOSURE(5)"));
+    int? simFnClo = fnClo.Rows.Count > 0 ? AsInt(fnClo.Rows[0]["RESULT"]) : null;
+    if (fnClo.MaxDepth == 2) Pass("fn-closure depth == 2 (stepped into ADD_BASE)"); else Fail("fn-closure depth", $"{fnClo.MaxDepth}");
+    if (fnClo.Frames.Contains("ADD_BASE")) Pass("fn-closure frame", string.Join(" → ", fnClo.Frames));
+    else Fail("fn-closure frame", string.Join(" → ", fnClo.Frames));
+    if (simFnClo is not null && simFnClo == realFnClo) Pass("SIMULATED RESULT == REAL", $"sim {simFnClo} == real {realFnClo}");
+    else Fail("simulated vs real RESULT", $"sim {simFnClo} vs real {realFnClo}");
+    Console.WriteLine("      (ADD_BASE reads outer BASE=100 by closure: 5 + 100 = 105)");
 }
 catch (Exception ex)
 {

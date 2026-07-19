@@ -552,7 +552,7 @@ frame** (no new abstraction — the D8 `Frame.LexicalParent` split, gotcha #241,
 
 The branch is one predicate on `FirebirdDdlReader.ParseServerMajor` (reused from P2) at frame construction.
 
-### 6.4 Step *into* a local FUNCTION — seam (c) *(DESIGNED, not implemented)*
+### 6.4 Step *into* a local FUNCTION — seam (c) *(✅ DELIVERED 2026-07-19)*
 
 §6.2(a) says "step into a local routine ⇒ just interpret it" — true for a local **procedure** (an
 `EXECUTE PROCEDURE` *statement* is a step point the interpreter owns). A local **function** is different: its
@@ -571,8 +571,20 @@ delivered **client-side** via `SetResolvedValue` (the primitive procedures alrea
 `RETURN <expr>` computes via the existing **Expression Harness** (result column typed as the function's `RETURNS`
 base type, R2), and the mechanism is a **Function Return Continuation** — a generalisation of `ApplyReturningValues`
 (procedures become its special case). Small AST deepening only (`CallExpression` + additive lone-call props;
-Contract #1). Full design + implementation handoff: **[docs/history/19-...](../history/19-firebird-debugger.md)
+Contract #1). Full design + as-built: **[docs/history/19-...](../history/19-firebird-debugger.md)
 §"D9 seam (c)"**; milestone brief: the implementation plan's D9 section.
+
+> **✅ DELIVERED (2026-07-19, sub-steps c1–c3).** c1 — the AST (`CallExpression` + `PsqlLeafStatement.RhsCall`/
+> `.AssignmentTarget` + `If`/`WhileStatement.ConditionCall`, strict lone-call parser producers) + `SubroutineSignature.ReturnType`.
+> c2 — the pure-Core interpreter: `FunctionReturnContinuation` (`AssignTo`/`SetFrameReturn`/`BranchIf`/`DecideWhile`)
+> with a single `RecognizeStepInto` factory, `Frame` return state, `IDebugExecutor.ResolveFunction`/`EvaluateReturn`,
+> and one delivery switch generalising `ApplyReturningValues`. c3 — the Firebird executor: `ResolveFunction` walks
+> the lexical chain for a local function (a **local shadows a same-named global** — verified), builds its frame from
+> the AST body, seeds args through the shared harness, and carries the `RETURNS` base type; `EvaluateReturn` computes
+> the `RETURN` operand via the Expression Harness (shared with `EvaluateCondition`). **Live fidelity proven (§15.11):**
+> all four positions, six return types (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing, nesting and a
+> closure — simulated == real on the lab. **⚠ Firebird forbids nested sub-routines** (gotcha #244), so lexical-level
+> shadowing is not expressible — local-vs-global is the realistic case.
 
 ---
 
@@ -989,7 +1001,7 @@ next. Foundation-first; never big-bang.
 | **D6 ✅** | **Cursor Bridge** | `FOR SELECT` incremental stepping via a real DSQL cursor (§7); per-wire-op locking; colon-only injection (§15.5). **DONE** (nested cursors + fidelity proven; `WHERE CURRENT OF`/`DECLARE CURSOR` explicit cursors are follow-ups). | `FOR SELECT` is in nearly every real procedure — D4 isn't truly usable without it. Before the flashier work. |
 | **D7** | **Variables window, full** | Grouping/icons, change highlight, inline edit + validation, pins, types, `<null>`, lazy BLOBs, filter, **data tips**. | The most important panel, once there is state worth showing. |
 | **D8** | **Call stack + nested stored routines** | Frames, stack panel, **Breadcrumbs** (shared feature), Peek Frame, frame keyboard nav, simulated-frame indicator. | Nesting needs a working single frame first. |
-| **D9** ✅ | **Local procedures & functions** 🏁 | **CORE COMPLETE (2026-07-18).** Sub-routine frames (§6.2a) + closure harness (§6.2b) + the transitive read/write-set fixpoint + **R5**. §6.3 gate (§15.7): frame `LexicalParent` branches on version. Procedure step-into + step-over faithful, sim==real (§15.8–§15.10). **Seam (c)** (local-**function** step-into, §6.4) **DESIGNED, not implemented — the immediate next task.** | **The flagship.** Real, steppable local-routine frames with real closure variables; IBExpert cannot do this. |
+| **D9** ✅ | **Local procedures & functions** 🏁 | **COMPLETE (2026-07-19).** Sub-routine frames (§6.2a) + closure harness (§6.2b) + the transitive read/write-set fixpoint + **R5**. §6.3 gate (§15.7): frame `LexicalParent` branches on version. Procedure step-into + step-over faithful (§15.8–§15.10); **seam (c)** — local-**function** step-into in all four value-consuming positions (§6.4) — delivered + live-fidelity-proven (§15.11: four positions, six return types, shadowing, nesting, closure — sim==real). | **The flagship — DELIVERED.** Real, steppable local-routine frames (procedures *and* functions) with real closure variables; IBExpert cannot do this. |
 | **D10** | **Triggers** | Action selector, NEW/OLD editor + availability rules, span-based substitution, seed-from-row. | Independent surface; needs D4+D7. |
 | **D11** | **Packages** | Public + private routines (§8.2). **Extend the lab with a private routine first.** | Smallest remaining surface. |
 | **D12** | **Advanced breakpoints** | Break on exception, conditional + hit counts, data breakpoints, **run to next `SUSPEND`** (+ its result grid). | Cheap *given* the engine; pure additions. |
@@ -1248,5 +1260,30 @@ driven with explicit Step Over).
 > **Verdict — the transitive read/write-set fixpoint makes a step-over of a local call with a hidden capture
 > faithful:** the call-graph analysis injects the outer `HIDDEN` the callee reads and returns the value it wrote,
 > even though the call site names only `10`. Without it, `HIDDEN` would be injected as `NULL` and its mutation
-> dropped (sim ≠ real). This closes D9: **local procedures and functions step faithfully both into (§15.8/§15.9)
-> and over (§15.10)** — the flagship capability.
+> dropped (sim ≠ real). This closes D9 core: **local procedures step faithfully both into (§15.8/§15.9) and over
+> (§15.10)**; seam (c) below adds the same for local **functions**.
+
+### 15.11 D9 seam (c) — local-FUNCTION step-into, simulated vs real (FB5 lab)
+
+Run with the real `FirebirdDebugExecutor` on the FB5 lab (`tools/probes/DebuggerFidelityProbe`, extended — cases
+8–11; the lab gained `SP_DBG_FN_POS`/`SP_DBG_FN_TYPES`/`SP_DBG_FN_SHADOW`/`SP_DBG_FN_CLOSURE`). Proves stepping
+**into** a local `DECLARE FUNCTION` in the four value-consuming positions, across return types, and that
+`ResolveFunction` picks the correct definition (lexical shadowing). Two existing cases were re-pointed by seam c:
+case 4 now steps into the local **function** `TRIPLE` as well as the procedure `ADD_TAX` (`SP_DBG_LOCAL → TRIPLE →
+ADD_TAX`), and case 6 is now driven with explicit Step **Over** (Step Into would descend into the function).
+
+| # | Case | Assertion | Result |
+|---|---|---|---|
+| 8 | `SP_DBG_FN_POS(5)` | step into a local function at **`=` / `RETURN` / `IF` / `WHILE`**; depth 3 (`… → WRAP → INC`); **sim == real** | **sim 10 == real 10** ✔ |
+| 9 | `SP_DBG_FN_TYPES` | RETURN via the Expression Harness across **INTEGER / BIGINT / NUMERIC / VARCHAR / BOOLEAN / NULL** | **all 6 sim == real** (42, 9000000000, 3.14, hello, True, `<null>`) ✔ |
+| 10 | `SP_DBG_FN_SHADOW(5)` | a **local** function shadows the same-named **stored** `FN_ADD_TAX` → the local is chosen (depth 2); **sim == real** | **sim 5005 == real 5005** ✔ |
+| 11 | `SP_DBG_FN_CLOSURE(5)` | step into a local function that **closes over** an outer variable (`BASE`); **sim == real** | **sim 105 == real 105** ✔ |
+
+> **Verdict — a local FUNCTION is a real, steppable debugger frame in every value-consuming position, with the
+> server reproducing its `RETURN` value across all common types:** the client owns only the descent + the return
+> continuation; the Expression Harness (typed as the function's `RETURNS` base type) computes the value. Shadowing
+> is resolved local-first, matching the engine (§F). **Boundary (permanent, §6.4):** a function call that is a
+> proper sub-expression (`f(x)+1`, `a AND f(x)`, `VALUES(f(x))`) steps *over* — descending would require the client
+> to evaluate the surrounding expression. **⚠ Firebird forbids nested sub-routines** (gotcha #244), so lexical-level
+> function-name shadowing across sub-routine levels is not expressible; local-vs-global is the realistic case
+> tested here. **D9 IS COMPLETE — local procedures *and* functions step faithfully, into and over.**

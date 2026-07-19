@@ -531,8 +531,22 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
     EvaluateCondition, a raising function ⇒ no continuation, plain `RETURN <expr>` ⇒ EvaluateReturn not
     Statement Harness). Build 0/0; targeted green (508); full suite hangs in this env (#94/#226) — user-verified.
     Smoke clean.
-  - **c3 (Firebird executor + live fidelity) → optional c4 (UI).** After c1–c3 land: **D9 fully closed
-    (procedures + functions, step-into + step-over faithful) ⇒ then D10 (Triggers).**
+  - **c3 — Firebird executor + live fidelity — DONE (2026-07-19).** `FirebirdDebugExecutor.ResolveFunction`
+    walks the lexical chain (generalised `TryFindLocalRoutine(name, frame, kind)`) for a local `DECLARE
+    FUNCTION`, builds its frame from the already-parsed AST body via `BuildLocalFunctionAsync` (no source
+    fetch), seeds args through the **shared** `SeedInputParametersAsync` (generalised to `(arguments, callTokens,
+    callStart, …)` — Contract #4), sets `LexicalParent` by the §6.3 gate, and carries the `RETURNS` base type.
+    `EvaluateReturn` computes the `RETURN` operand via the Expression Harness typed as `frame.ReturnType`,
+    sharing a new private `EvaluateExpression` with `EvaluateCondition` (one server path). `FirebirdDebugMetadata`:
+    `DebugFrameLayout.ReturnType` derives the function's `RETURNS` base type (R2, reusing `ResolveBaseTypeAsync`).
+    **Live fidelity (spec §15.11, `DebuggerFidelityProbe` cases 8–11 + re-pointed 4/6):** four positions (`=`/
+    `RETURN`/`IF`/`WHILE`, depth 3), six return types (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing
+    (a local shadows the stored `FN_ADD_TAX`), and a closure — **all sim == real**. Lab zoo +`SP_DBG_FN_POS`/
+    `_TYPES`/`_SHADOW`/`_CLOSURE`; `.fdb` rebuilt (#149). **Live-verified constraint: Firebird forbids nested
+    sub-routines** (gotcha #244) — lexical-level shadowing is not expressible, so the shadow test is local-vs-global.
+    Build 0/0; 508 Core tests green (no regression — c3 is Firebird/metadata only); smoke clean.
+  - **c4 — optional UI polish** (step-into cue / synthetic RETURN row) — not required to close the seam; deferred.
+  - **🏁 D9 IS COMPLETE — local procedures *and* functions step faithfully, into and over. NEXT: D10 (Triggers).**
 
 ---
 

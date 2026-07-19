@@ -186,11 +186,23 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         var ctx = Ctx(frame);
         var node = AsNode(owner);
         var (reads, _) = ResolveReadWrite(ctx, node, frame);
+        var (value, error) = EvaluateExpression(ctx, frame, ConditionExpression(ctx.Source, node), BooleanResultType, reads);
+        if (error is not null) return ConditionOutcome.Raised(error);
+        return value is null or DBNull ? new ConditionOutcome(null) : ConditionOutcome.Of(Convert.ToBoolean(value));
+    }
+
+    // The one typed-expression evaluator (D9 seam c): runs a fragment through the Expression Harness typed as
+    // <paramref name="resultType"/> and returns (value, error). Shared by EvaluateCondition (BOOLEAN → branch
+    // decision) and EvaluateReturn (the function's RETURNS base type → return value) — one server path, no
+    // second evaluator (Contract #3/#4). The server computes the value; this never coerces or decides anything.
+    private (object? Value, DebugError? Error) EvaluateExpression(
+        RoutineContext ctx, Frame frame, string fragment, string resultType, IReadOnlyList<string> reads)
+    {
         var request = new HarnessRequest
         {
-            Fragment = ConditionExpression(ctx.Source, node),
+            Fragment = fragment,
             Mode = HarnessMode.Expression,
-            ExpressionResultType = BooleanResultType,
+            ExpressionResultType = resultType,
             Variables = BindValues(ctx, frame),
             Reads = reads,
             SubRoutines = ctx.SubRoutines,
@@ -199,12 +211,11 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         try
         {
             var run = Await(RunHarnessAsync(HarnessBuilder.Build(request), CancellationToken.None));
-            object? value = run.ResultValue;
-            return value is null or DBNull ? new ConditionOutcome(null) : ConditionOutcome.Of(Convert.ToBoolean(value));
+            return (run.ResultValue, null);
         }
         catch (FbException ex)
         {
-            return ConditionOutcome.Raised(DebugErrorMapper.FromFirebird(ex));
+            return (null, DebugErrorMapper.FromFirebird(ex));
         }
     }
 
@@ -328,7 +339,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         // server source fetch — its body is already parsed (part of the enclosing routine's AST) and its
         // parameter types come from the AST header (a local routine is not a catalog object). A local FUNCTION
         // is never here (it is called inside an expression, not as an EXECUTE PROCEDURE step point).
-        if (TryFindLocalProcedure(exec.ProcedureName!, frame) is { } local)
+        if (TryFindLocalRoutine(exec.ProcedureName!, frame, SubroutineKind.Procedure) is { } local)
         {
             try
             {
@@ -354,34 +365,71 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         }
     }
 
-    /// <summary>D9 seam c (§6.4) — step into a local FUNCTION. <b>Contract stub for c2:</b> returns null, so the
-    /// function runs on the server = a 100%-faithful step-over — identical to D9 core's live behaviour. The real
-    /// resolution (walk the lexical chain for a local function named <paramref name="call"/>.Name, build a frame
-    /// from the already-parsed AST body, seed its input parameters, derive its <c>RETURNS</c> base type) lands in
-    /// c3.</summary>
-    public DebugRoutine? ResolveFunction(CallExpression call, Frame frame) => null;
+    /// <inheritdoc/>
+    /// <remarks>D9 seam c (§6.4): resolves a lone <b>local-function</b> call for step-into. Walks the lexical
+    /// scope chain for a local <c>DECLARE FUNCTION</c> named <paramref name="call"/>.Name (nearest scope first,
+    /// so an inner declaration shadows a like-named outer — exactly how name resolution works, spec §6), builds
+    /// its frame from the <b>already-parsed AST body</b> (no server source fetch — a local routine lives in the
+    /// enclosing routine's AST), seeds its input parameters from the call's arguments through the SAME seeding
+    /// harness a procedure step-into uses (Contract #4), sets its <see cref="Frame.LexicalParent"/> per the §6.3
+    /// version gate (FB5 = the declaring frame, a true closure; FB3/FB4 = null, a closed scope), and carries its
+    /// <c>RETURNS</c> base type (R2) for the Expression Harness. Returns null when <paramref name="call"/> is not
+    /// an in-scope local function (a stored / built-in / package function) — the caller then runs the whole
+    /// expression on the server = a 100%-faithful step-over (§5.3/§6.4).</remarks>
+    public DebugRoutine? ResolveFunction(CallExpression call, Frame frame)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        ArgumentNullException.ThrowIfNull(frame);
+        if (string.IsNullOrWhiteSpace(call.Name)) return null;
 
-    /// <summary>D9 seam c (§6.4) — evaluate a function frame's <c>RETURN</c> operand via the Expression Harness.
-    /// <b>Unreachable until c3:</b> a function frame exists only when <see cref="ResolveFunction"/> resolves one,
-    /// which the c2 stub never does — so the interpreter never calls this on a real session. c3 implements it
-    /// (the typed Expression Harness) together with <see cref="ResolveFunction"/>.</summary>
+        if (TryFindLocalRoutine(call.Name!, frame, SubroutineKind.Function) is not { } local) return null;
+        try
+        {
+            return Await(BuildLocalFunctionAsync(
+                call, frame, local.Declaration, local.DeclaringFrame, CancellationToken.None));
+        }
+        catch (FbException)
+        {
+            return null; // param / return base-type derivation unreadable → step over in place (§5.3), never guess
+        }
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>D9 seam c (§6.4): evaluates a function frame's <c>RETURN &lt;expr&gt;</c> operand through the
+    /// <b>Expression Harness</b> typed as the frame's <see cref="Frame.ReturnType"/> (R2) — the SAME mechanism as
+    /// <see cref="EvaluateCondition"/> (they share <see cref="EvaluateExpression"/>), so the server computes the
+    /// value with full fidelity (types, coercion, <c>NULL</c>). Never routes a bare <c>RETURN</c> through the
+    /// Statement Harness — <c>RETURN</c> is invalid inside an <c>EXECUTE BLOCK</c>.</remarks>
     public ReturnOutcome EvaluateReturn(IExecutableStatement returnStatement, Frame frame)
-        => throw new NotSupportedException("EvaluateReturn is implemented in D9 seam c, sub-step c3.");
+    {
+        ArgumentNullException.ThrowIfNull(returnStatement);
+        ArgumentNullException.ThrowIfNull(frame);
 
-    // Finds a LOCAL sub-procedure named <paramref name="name"/> visible from <paramref name="frame"/>, walking
-    // the lexical scope chain (this frame's routine body, then its declaring frame's, …) exactly as name
-    // resolution does (spec §6). Returns the declaration + the frame that declares it (the callee's lexical
-    // parent). Only a PROCEDURE with a real Body qualifies: a local FUNCTION is called in an expression (never
-    // an EXECUTE PROCEDURE step point), and a forward declaration (null body) is not runnable — the real
-    // definition carries the body.
-    private static (SubroutineDeclaration Declaration, Frame DeclaringFrame)? TryFindLocalProcedure(
-        string name, Frame frame)
+        var ctx = Ctx(frame);
+        var node = AsNode(returnStatement);
+        // A function frame always carries its RETURNS base type; fall back to the wide text column only defensively
+        // (an unknown type is cast to text — the honest general choice, never a guessed typed value, §F).
+        string resultType = frame.ReturnType ?? EvaluationResultType;
+        var (reads, _) = ResolveReadWrite(ctx, node, frame); // the RETURN operand's read set (+ seam-b fixpoint)
+        var (value, error) = EvaluateExpression(ctx, frame, ReturnOperandExpression(ctx.Source, node), resultType, reads);
+        return error is not null ? ReturnOutcome.Raised(error) : ReturnOutcome.Of(value);
+    }
+
+    // Finds a LOCAL sub-routine of <paramref name="kind"/> named <paramref name="name"/> visible from
+    // <paramref name="frame"/>, walking the lexical scope chain (this frame's routine body, then its declaring
+    // frame's, …) exactly as name resolution does (spec §6) — so nearest scope first: an inner declaration
+    // SHADOWS a like-named outer one. Returns the declaration + the frame that declares it (the callee's lexical
+    // parent). Only a routine with a real Body qualifies (a forward declaration — null body — is not runnable;
+    // the real definition carries the body). Shared by ResolveRoutine (Procedure — EXECUTE PROCEDURE step point)
+    // and ResolveFunction (Function — a lone call in a value-consuming position).
+    private static (SubroutineDeclaration Declaration, Frame DeclaringFrame)? TryFindLocalRoutine(
+        string name, Frame frame, SubroutineKind kind)
     {
         for (var f = frame; f is not null; f = f.LexicalParent)
         {
             foreach (var r in f.Body.LocalRoutines)
             {
-                if (r.Kind == SubroutineKind.Procedure && r.Body is not null
+                if (r.Kind == kind && r.Body is not null
                     && string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase))
                 {
                     return (r, f);
@@ -389,6 +437,39 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             }
         }
         return null;
+    }
+
+    // Builds a stepped-into local FUNCTION's frame (D9 seam c) — mirrors BuildLocalRoutineAsync: templates + the
+    // RETURNS base type from the AST header (a local routine is not a catalog object), input params seeded from
+    // the call's arguments through the shared seeding harness, LexicalParent per the §6.3 version gate, source +
+    // model the ENCLOSING routine's (a local routine's spans + scope live there). Carries ReturnType so the
+    // interpreter's EvaluateReturn types the RETURN result column.
+    private async Task<DebugRoutine?> BuildLocalFunctionAsync(
+        CallExpression call, Frame callerFrame, SubroutineDeclaration routine, Frame declaringFrame,
+        CancellationToken cancellationToken)
+    {
+        var body = routine.Body!;
+        var callerCtx = Ctx(callerFrame);
+
+        var layout = await FirebirdDebugMetadata
+            .BuildLocalRoutineFrameVariablesAsync(_session, routine, callerCtx.Source, cancellationToken)
+            .ConfigureAwait(false);
+
+        // Seed the callee's input params by evaluating the call's arguments in the CALLER frame (the SAME harness
+        // as a procedure step-into, Contract #4). The caller's own body tokens cover the argument spans — enough
+        // for the colon→bare rewrite, which is span-scoped.
+        var initialValues = await SeedInputParametersAsync(
+            call.Arguments, callerFrame.Body.Tokens, call.Start, callerFrame, layout.InputParameters, cancellationToken)
+            .ConfigureAwait(false);
+
+        Register(body, callerCtx.Source, callerCtx.Model, layout.Variables, layout.OutputParameters);
+
+        int serverMajor = FirebirdDdlReader.ParseServerMajor(_session.Connection.ServerVersion);
+        Frame? lexicalParent = serverMajor >= 5 ? declaringFrame : null; // §6.3 gate (FB5 closure / FB3+FB4 closed)
+
+        return new DebugRoutine(
+            routine.Name ?? "(local function)", body, initialValues, layout.OutputParameters,
+            lexicalParent: lexicalParent, source: callerCtx.Source, model: callerCtx.Model, returnType: layout.ReturnType);
     }
 
     private async Task<DebugRoutine?> BuildLocalRoutineAsync(
@@ -409,7 +490,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         // Evaluate the call's arguments in the CALLER frame (the SAME harness as a step, Contract #4) → seed the
         // callee's input parameters positionally (the D8 mechanism, reused unchanged).
         var initialValues = await SeedInputParametersAsync(
-            exec, callerFrame, layout.InputParameters, cancellationToken).ConfigureAwait(false);
+            exec.Arguments, exec.Tokens, exec.Start, callerFrame, layout.InputParameters, cancellationToken).ConfigureAwait(false);
 
         Register(body, callerCtx.Source, callerCtx.Model, layout.Variables, layout.OutputParameters);
 
@@ -450,7 +531,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
 
         // Evaluate the call's arguments in the CALLER frame (typed as the callee's input params) → seed them.
         var initialValues = await SeedInputParametersAsync(
-            exec, callerFrame, layout.InputParameters, cancellationToken).ConfigureAwait(false);
+            exec.Arguments, exec.Tokens, exec.Start, callerFrame, layout.InputParameters, cancellationToken).ConfigureAwait(false);
 
         Register(body, source, model, layout.Variables, layout.OutputParameters);
         return new DebugRoutine(
@@ -487,10 +568,10 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     // defaulted params seeds only the provided ones (the rest start unset — a documented §F boundary, since a
     // parameter default is evaluated by the callee's own signature, not reconstructed here).
     private async Task<IReadOnlyDictionary<string, object?>?> SeedInputParametersAsync(
-        ExecuteProcedureStatement exec, Frame callerFrame,
-        IReadOnlyList<HarnessVariable> inputParameters, CancellationToken cancellationToken)
+        IReadOnlyList<CallArgument> arguments, IReadOnlyList<SqlToken> callTokens, int callStart,
+        Frame callerFrame, IReadOnlyList<HarnessVariable> inputParameters, CancellationToken cancellationToken)
     {
-        int n = Math.Min(exec.Arguments.Count, inputParameters.Count);
+        int n = Math.Min(arguments.Count, inputParameters.Count);
         if (n == 0) return null;
 
         var callerCtx = Ctx(callerFrame);
@@ -508,11 +589,11 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             string baseType = inputParameters[i].BaseType;
             variables.Add(new HarnessVariable(argVar, $"DECLARE {argVar} {baseType};", baseType));
             string argText = RewriteColonRefsToBare(
-                callerCtx.Source, exec.Tokens, exec.Arguments[i].Start, exec.Arguments[i].Length);
+                callerCtx.Source, callTokens, arguments[i].Start, arguments[i].Length);
             fragment.Append(argVar).Append(" = ").Append(argText.Trim()).Append(';');
         }
 
-        var reads = ReadWriteSetAnalyzer.InScopeLocals(callerCtx.Model, exec.Start);
+        var reads = ReadWriteSetAnalyzer.InScopeLocals(callerCtx.Model, callStart);
         var harness = HarnessBuilder.Build(new HarnessRequest
         {
             Fragment = fragment.ToString(),
@@ -764,6 +845,30 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         }
         // Fallback (malformed / unexpected shape): the whole node text. §F: correctness over cleverness —
         // Firebird will report a syntax error rather than the debugger silently guessing a boolean.
+        return Slice(source, node);
+    }
+
+    // The operand of a RETURN leaf (D9 seam c) — everything after the RETURN keyword, up to the trailing ';'
+    // — a valid scalar expression for the Expression-mode harness. Read from the node's own tokens (never
+    // re-parsed) and sliced verbatim from source; a bare RETURN with no operand falls back to the node text
+    // (the server then reports it, never a guess — §F).
+    private static string ReturnOperandExpression(string source, SqlNode node)
+    {
+        if (node is PsqlStatement psql)
+        {
+            var toks = psql.Tokens;
+            int lo = 1; // skip the leading RETURN keyword
+            int hi = toks.Count;
+            while (hi > lo && toks[hi - 1].Kind == TokenKind.Semicolon) hi--; // drop the terminator
+            if (hi > lo)
+            {
+                int s = toks[lo].Start, e = toks[hi - 1].End;
+                if (s >= 0 && e <= source.Length && e > s)
+                {
+                    return source.Substring(s, e - s);
+                }
+            }
+        }
         return Slice(source, node);
     }
 

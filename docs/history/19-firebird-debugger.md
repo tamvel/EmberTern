@@ -1961,13 +1961,31 @@ predictable; (b) show a function frame's `ReturnValue` as a synthetic `⟵ RETUR
   + frame rollback, plain `RETURN <expr>` ⇒ `EvaluateReturn` not the Statement Harness). Build 0/0; targeted
   green (508 across the debugger + parser classes); full suite hangs in this env (#94/#226) — user-verified;
   smoke clean. *(Mirrors D1 / seam-a Core work.)*
-- **c3 — Firebird executor + live fidelity.** `FirebirdDebugExecutor.ResolveFunction` (catalog + build frame +
-  generalised seeding) + `EvaluateReturn` (typed Expression Harness) + `FirebirdDebugMetadata` return-type
-  derivation. Lab: a local function with a multi-statement body exercised in the 4 positions (+ a closure
-  capture). Rebuild `.fdb` (#149). `DebuggerFidelityProbe` extended: Step Into a local function in each
-  position, **sim == real**. Build 0/0, full tests green, smoke, live fidelity. Commit. *(Mirrors seam-a Part 2
-  / seam-b live fidelity.)*
-- **c4 — optional UI polish** (the two view/status items above). Only if wanted; not required to close the seam.
+- **c3 — Firebird executor + live fidelity. ✅ DONE (2026-07-19).** `FirebirdDebugExecutor.ResolveFunction`
+  resolves a lone local-function call: a generalised `TryFindLocalRoutine(name, frame, SubroutineKind)` (the D9
+  seam-a `TryFindLocalProcedure` widened, now shared by `ResolveRoutine` for procedures and `ResolveFunction`
+  for functions) walks the lexical chain **nearest-first** (so a local shadows a same-named global); a match →
+  `BuildLocalFunctionAsync` (mirrors `BuildLocalRoutineAsync`) builds the frame from the **already-parsed AST
+  body** (no server source fetch), seeds input params through the **shared** `SeedInputParametersAsync`
+  (generalised from `(ExecuteProcedureStatement exec, …)` to `(IReadOnlyList<CallArgument> arguments,
+  IReadOnlyList<SqlToken> callTokens, int callStart, …)`; the procedure callers pass `exec.Arguments/.Tokens/
+  .Start`, the function passes `call.Arguments`, the caller body's tokens, `call.Start`), sets `LexicalParent`
+  by the §6.3 server-major gate, and carries the `RETURNS` base type. `EvaluateReturn` computes the `RETURN`
+  operand (`ReturnOperandExpression` — the tokens after `RETURN`, before `;`) via the Expression Harness typed
+  as `frame.ReturnType`, through a new private `EvaluateExpression` **shared with `EvaluateCondition`** (one
+  server path — no second evaluator). `FirebirdDebugMetadata`: `DebugFrameLayout` gained `ReturnType`, derived
+  in `BuildLocalRoutineFrameVariablesAsync` from `SubroutineSignature.ReturnType` via the existing
+  `ResolveBaseTypeAsync` (R2; null for a procedure). **Lab zoo +4** (`Lab/setup.sql`, `.fdb` rebuilt at an ASCII
+  temp path #149): `SP_DBG_FN_POS` (four positions), `SP_DBG_FN_TYPES` (six return types), `SP_DBG_FN_SHADOW`
+  (a local shadows the stored `FN_ADD_TAX`), `SP_DBG_FN_CLOSURE` (a function closing over an outer var). **Live
+  fidelity (spec §15.11):** `DebuggerFidelityProbe` cases 8–11 (+ re-pointed 4 & 6) — all four positions (depth
+  3), all six return types (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing (depth 2 → local chosen),
+  nesting, a closure — **all sim == real**. **Live-verified boundary:** Firebird rejects a **nested sub-routine**
+  (`SQLSTATE 0A000 "nested sub function"` — gotcha #244), so the first shadow design (a sub-function inside a
+  sub-procedure) was invalid; lexical-level shadowing is not expressible in Firebird — the realistic case is
+  local-vs-global (`SP_DBG_FN_SHADOW`). Build 0/0; 508 Core tests green (no regression — c3 is Firebird/metadata
+  only); smoke clean. *(Mirrors seam-a Part 2 / seam-b live fidelity.)*
+- **c4 — optional UI polish** (the two view/status items above). Deferred; not required to close the seam.
 
 ### Danger zones for the implementer
 
@@ -1983,5 +2001,5 @@ predictable; (b) show a function frame's `ReturnValue` as a synthetic `⟵ RETUR
   shape the interpreter cannot deliver cleanly is a bug.
 - Firebird PSQL assignment is `=`, not `:=`.
 
-**Once c1–c3 land: D9 is fully closed (procedures + functions, step-into + step-over faithful). Then D10
-(Triggers).**
+**🏁 c1–c3 LANDED (2026-07-19): D9 is fully closed — local procedures *and* functions step faithfully, both
+into and over (spec §15.8–§15.11). Next: D10 (Triggers).**

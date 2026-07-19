@@ -434,6 +434,88 @@ BEGIN
   SUSPEND;
 END^
 
+/* D9 seam (c) — step INTO a local FUNCTION in each of the four value-consuming positions (§6.4): an
+   assignment RHS (V = INC(P)), a RETURN operand (inside WRAP: RETURN INC(N)), an IF condition
+   (IF (POSITIVE(V))), and a WHILE condition (WHILE (POSITIVE(3 - I))). Each call is the ENTIRE operand, so
+   the debugger descends without evaluating a surrounding expression; the return value is delivered to the
+   caller position client-side. Depth reaches 3 (SP_DBG_FN_POS → WRAP → INC via the RETURN operand).
+   SP_DBG_FN_POS(5): V=INC(5)=6; POSITIVE(6) → V=WRAP(6)=INC(6)=7; loop POSITIVE(3),(2),(1) true, (0) false
+   → I=3; RESULT = 7 + 3 = 10. */
+CREATE PROCEDURE SP_DBG_FN_POS(P INTEGER)
+RETURNS (RESULT INTEGER)
+AS
+  DECLARE FUNCTION INC(N INTEGER) RETURNS INTEGER AS BEGIN RETURN N + 1; END
+  DECLARE FUNCTION POSITIVE(N INTEGER) RETURNS BOOLEAN AS BEGIN RETURN N > 0; END
+  DECLARE FUNCTION WRAP(N INTEGER) RETURNS INTEGER AS BEGIN RETURN INC(N); END
+  DECLARE VARIABLE V INTEGER;
+  DECLARE VARIABLE I INTEGER;
+BEGIN
+  V = INC(P);
+  IF (POSITIVE(V)) THEN
+    V = WRAP(V);
+  I = 0;
+  WHILE (POSITIVE(3 - I)) DO
+    I = I + 1;
+  RESULT = V + I;
+  SUSPEND;
+END^
+
+/* D9 seam (c) — the Expression Harness must reproduce the server's RETURN value across diverse types. Each
+   local function returns a different type; each is stepped INTO (an assignment RHS) and its RETURN operand is
+   computed by the Expression Harness typed as the function's RETURNS base type (R2). Covers INTEGER, BIGINT
+   (a value beyond INT32), NUMERIC, VARCHAR, BOOLEAN, and NULL. Every output column is compared simulated vs
+   real. */
+CREATE PROCEDURE SP_DBG_FN_TYPES
+RETURNS (R_INT INTEGER, R_BIG BIGINT, R_NUM NUMERIC(15,2), R_TXT VARCHAR(20), R_BOOL BOOLEAN, R_NUL INTEGER)
+AS
+  DECLARE FUNCTION F_INT RETURNS INTEGER AS BEGIN RETURN 42; END
+  DECLARE FUNCTION F_BIG RETURNS BIGINT AS BEGIN RETURN 9000000000; END
+  DECLARE FUNCTION F_NUM RETURNS NUMERIC(15,2) AS BEGIN RETURN 3.14; END
+  DECLARE FUNCTION F_TXT RETURNS VARCHAR(20) AS BEGIN RETURN 'hello'; END
+  DECLARE FUNCTION F_BOOL RETURNS BOOLEAN AS BEGIN RETURN TRUE; END
+  DECLARE FUNCTION F_NUL RETURNS INTEGER AS BEGIN RETURN NULL; END
+BEGIN
+  R_INT = F_INT();
+  R_BIG = F_BIG();
+  R_NUM = F_NUM();
+  R_TXT = F_TXT();
+  R_BOOL = F_BOOL();
+  R_NUL = F_NUL();
+  SUSPEND;
+END^
+
+/* D9 seam (c) — ResolveFunction lexical SHADOWING + choosing the correct definition. FN_ADD_TAX exists as a
+   standalone stored FUNCTION (defined above); here a LOCAL function of the same name shadows it. Firebird
+   resolves the call to the LOCAL sub-routine (a local declaration shadows a global one), so the debugger must
+   ALSO pick the local — step INTO it (depth 2) — rather than treating the name as the global stored function
+   (which would step over, depth 1). depth == 2 proves the local definition was chosen; simulated == real ==
+   P + 5000 proves fidelity. (Firebird does not permit sub-routines nested inside sub-routines, so lexical
+   shadowing across sub-routine levels is not expressible — local-vs-global is the realistic case.)
+   SP_DBG_FN_SHADOW(5) → 5005. */
+CREATE PROCEDURE SP_DBG_FN_SHADOW(P INTEGER)
+RETURNS (RESULT INTEGER)
+AS
+  DECLARE FUNCTION FN_ADD_TAX(N INTEGER) RETURNS INTEGER AS BEGIN RETURN N + 5000; END
+BEGIN
+  RESULT = FN_ADD_TAX(P);
+  SUSPEND;
+END^
+
+/* D9 seam (c) — step INTO a local FUNCTION that CLOSES OVER an outer variable (an FB5 closure, §6.2b): the
+   function reads BASE, which is not one of its parameters. Stepping into RESULT = ADD_BASE(P) descends into
+   ADD_BASE, whose harness declares + injects the captured outer BASE, so RETURN N + BASE computes correctly.
+   SP_DBG_FN_CLOSURE(5): BASE=100, ADD_BASE(5) = 5 + 100 = 105 → RESULT = 105. */
+CREATE PROCEDURE SP_DBG_FN_CLOSURE(P INTEGER)
+RETURNS (RESULT INTEGER)
+AS
+  DECLARE VARIABLE BASE INTEGER;
+  DECLARE FUNCTION ADD_BASE(N INTEGER) RETURNS INTEGER AS BEGIN RETURN N + BASE; END
+BEGIN
+  BASE = 100;
+  RESULT = ADD_BASE(P);
+  SUSPEND;
+END^
+
 SET TERM ; ^
 
 /* ---------- Triggers (PSQL) ----------------------------------------

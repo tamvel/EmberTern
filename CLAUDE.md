@@ -196,7 +196,7 @@ noted.
 
 ## Current state
 
-- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D9 (CORE) DONE. D9 (local procedures & functions — THE FLAGSHIP) CORE COMPLETE + live-fidelity-verified 2026-07-18: local routines are real, steppable debugger frames with real closure variables (the capability IBExpert cannot deliver); a local procedure is faithful step-into+step-over, a local function step-over. §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) = local-routine step-into (AST + parser + binder + extractor R5; runtime ResolveRoutine + AST-header param types); seam (b) = closures — Part 1 closure capture for step-INTO (read+write an OUTER var, the write reaching the parent frame), Part 2 the transitive read/write-set fixpoint over the sub-routine call graph for step-OVER (a local call whose callee captures an outer var not named at the call site). All proven sim==real on the lab. NEXT: D9 seam (c) — local-FUNCTION step-into — DESIGNED + handoff-ready, NOT implemented (§6.4; the four lone-call positions v=f()/RETURN f()/IF f()/WHILE f() via a Function Return Continuation; no new server path); implement it (c1 AST → c2 Core → c3 live fidelity), THEN D10 (Triggers).** Spec:
+- **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D9 DONE. D9 (local procedures & functions — THE FLAGSHIP) COMPLETE + live-fidelity-verified (core 2026-07-18, seam c 2026-07-19): local routines are real, steppable debugger frames with real closure variables (the capability IBExpert cannot deliver); both local procedures and local functions are faithful step-into AND step-over. §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) = local-routine step-into (AST + parser + binder + extractor R5; runtime ResolveRoutine + AST-header param types); seam (b) = closures — Part 1 closure capture for step-INTO (read+write an OUTER var, the write reaching the parent frame), Part 2 the transitive read/write-set fixpoint over the sub-routine call graph for step-OVER (a local call whose callee captures an outer var not named at the call site). All proven sim==real on the lab. D9 seam (c) — local-FUNCTION step-into (§6.4) — COMPLETE 2026-07-19 (c1 AST → c2 Core interpreter → c3 Firebird executor + live fidelity): a local function is a real steppable frame in all four value-consuming positions (v=f()/RETURN f()/IF f()/WHILE f()) via a Function Return Continuation, no new server path; live-proven sim==real for the four positions, six return types (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing (local shadows a same-named stored function), nesting, and closures (spec §15.11). 🏁 D9 FULLY COMPLETE — local procedures AND functions step faithfully, into and over. NEXT: D10 (Triggers).** Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
   (milestone briefs, session split, danger zones, **Developer Contract**).
@@ -768,8 +768,20 @@ noted.
   **c2 stubs** (`ResolveFunction`→null, `EvaluateReturn`→throw) so **live behaviour is byte-identical to D9
   core** until c3. Build 0/0; +11 `DebugEngineTests` (4 positions + deliver, nested `RETURN f()`, IF then/else,
   WHILE iteration, unresolved/step-over, raising ⇒ no continuation, plain `RETURN` ⇒ EvaluateReturn); targeted
-  green (508); full suite hangs #94/#226 → user-verify; smoke clean. **NEXT: c3 (Firebird executor + live
-  fidelity). After c1–c3 land: D9 fully closed ⇒ then D10 (Triggers).**
+  green (508); full suite hangs #94/#226 → user-verify; smoke clean.
+  **c3 — Firebird executor + live fidelity — DONE (2026-07-19):** `FirebirdDebugExecutor.ResolveFunction` walks
+  the lexical chain (generalised `TryFindLocalRoutine(name, frame, kind)`, shared with `ResolveRoutine`) for a
+  local `DECLARE FUNCTION` — a **local shadows a same-named global** — builds its frame from the AST body,
+  seeds args through the **shared** `SeedInputParametersAsync` (generalised to `(arguments, callTokens,
+  callStart, …)`), and carries the `RETURNS` base type; `EvaluateReturn` computes the `RETURN` operand via the
+  Expression Harness through a new `EvaluateExpression` **shared with `EvaluateCondition`** (one server path).
+  `FirebirdDebugMetadata`: `DebugFrameLayout.ReturnType` (R2, via `ResolveBaseTypeAsync`). Lab zoo +4
+  (`SP_DBG_FN_POS`/`_TYPES`/`_SHADOW`/`_CLOSURE`; `.fdb` rebuilt #149). **Live fidelity PROVEN (spec §15.11,
+  `DebuggerFidelityProbe` cases 8–11 + re-pointed 4/6): all four positions (depth 3), six return types
+  (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing, nesting, a closure — all sim == real.**
+  **Live-verified: Firebird forbids nested sub-routines** (gotcha #244) ⇒ shadowing is local-vs-global.
+  Build 0/0; 508 Core tests green (c3 is Firebird/metadata only, no Core change); smoke clean.
+  **🏁 D9 IS COMPLETE — local procedures *and* functions step faithfully, into and over. NEXT: D10 (Triggers).**
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**

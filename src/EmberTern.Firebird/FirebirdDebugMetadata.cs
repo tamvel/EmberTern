@@ -13,11 +13,16 @@ namespace EmberTern.Firebird;
 /// <summary>The resolved layout of a debug frame's variables: the harness variable templates (values unset),
 /// the ordered <b>input</b> parameters (a step-into seeds these positionally from the call's arguments — D8),
 /// and the names of the <b>output</b> parameters (a <c>SUSPEND</c> emits their current values as the output
-/// row; a return binds them into the caller's <c>RETURNING_VALUES</c>). Stage X / D2 seam c + D8.</summary>
+/// row; a return binds them into the caller's <c>RETURNING_VALUES</c>). Stage X / D2 seam c + D8.
+/// <para><see cref="ReturnType"/> is a local <b>function</b>'s resolved <c>RETURNS</c> base type (R2) — the
+/// type the Expression Harness gives the result column that computes a stepped-into function's <c>RETURN</c>
+/// value (Stage X / D9 seam c, §6.4); null for a procedure (its outputs are the named
+/// <see cref="OutputParameters"/>).</para></summary>
 internal sealed record DebugFrameLayout(
     IReadOnlyList<HarnessVariable> Variables,
     IReadOnlyList<string> OutputParameters,
-    IReadOnlyList<HarnessVariable> InputParameters);
+    IReadOnlyList<HarnessVariable> InputParameters,
+    string? ReturnType = null);
 
 /// <summary>
 /// Resolves a debug session's <b>frame variable templates</b> — the harness's <see cref="HarnessVariable"/>
@@ -139,7 +144,15 @@ internal static class FirebirdDebugMetadata
             result.Add(new HarnessVariable(local.Name, local.Verbatim, baseType));
         }
 
-        return new DebugFrameLayout(result, outputs, inputs);
+        // A local FUNCTION's single RETURNS <type> (D9 seam c, §6.4): resolve its base type (R2), the type the
+        // Expression Harness gives the RETURN result column. Null for a procedure (sig.ReturnType is null there).
+        string? returnType = null;
+        if (sig.ReturnType is { Length: > 0 } rt)
+        {
+            returnType = await ResolveBaseTypeAsync(session, rt, routine.Name ?? "(function)", cancellationToken).ConfigureAwait(false);
+        }
+
+        return new DebugFrameLayout(result, outputs, inputs, returnType);
     }
 
     // A local sub-routine parameter has no catalog row: declare it VERBATIM with its AST-written type (R3 — a
