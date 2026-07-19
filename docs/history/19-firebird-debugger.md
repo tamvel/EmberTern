@@ -2003,3 +2003,82 @@ predictable; (b) show a function frame's `ReturnValue` as a synthetic `⟵ RETUR
 
 **🏁 c1–c3 LANDED (2026-07-19): D9 is fully closed — local procedures *and* functions step faithfully, both
 into and over (spec §15.8–§15.11). Next: D10 (Triggers).**
+
+---
+
+## D10 — Triggers
+
+Debug a trigger body with user-supplied `NEW`/`OLD` (spec §8.1). No engine API attaches to a real firing
+trigger, so — like IBExpert, and honest about it — **debugging a trigger does not perform the triggering DML**:
+the user supplies `NEW`/`OLD`, we interpret the body. `NEW`/`OLD` do not exist inside an `EXECUTE BLOCK`, so the
+interpreter models them as **frame variables** and the harness **substitutes** them.
+
+### Architecture review (ratified before any code)
+
+The plan (2 sessions) was reviewed against the post-D8/D9 codebase and found **cheaper than budgeted**: the
+mechanism is *one pure-Core engine + one new metadata path + a launch/UI extension*, all resting on shipped,
+live-verified seams. Ratified decisions:
+
+- **Split into 3 committable seams** (A pure Core → B Firebird + Live Fidelity → C UI), mirroring the D8/D9
+  rhythm, instead of the plan's monolithic "2 sessions". Each seam ends build 0/0 + green + smoke + docs +
+  committable.
+- **User decisions:** (2) `NEW`/`OLD` inside a `FOR SELECT` cursor (or a stepped-into callee) is a **§F
+  boundary** — D10 shows a clear refusal rather than partial fidelity; (3) extend the lab with a **BEFORE
+  DELETE** and a **BEFORE INSERT OR UPDATE** trigger to close the full trigger matrix; (4) **"seed from a real
+  row"** deferred to Seam **C2** so C1 stays small.
+- **No heavyweight `TriggerContextModel` (user's architectural request).** The "trigger context" decomposes into
+  already-existing state: the context columns are ordinary `HarnessVariable`s (they go into
+  `RoutineContext.VariableTemplates`), their values live on the `Frame`, and the synthetic names are a naming
+  *convention*, not stored state. What genuinely remains is a *small* value — the simulated event + timing —
+  from which the §8.1 availability rules derive. So it lands as an **optional field on the existing
+  `RoutineContext`** (Seam B), carried by a small pure-Core `TriggerContext` record, **not** a parallel model.
+- **`ContextSubstitution` is entirely `SemanticModel`/`SymbolReference`-driven, never a text search (user's
+  second architectural request).** Confirmed feasible by reading the binder: `AddReference` records a reference
+  **even when the symbol is null**, so in the debugger's **metadata-less** model (`SemanticModel.Build(
+  SqlParser.Parse(source).Root)` with no provider) `NEW.STATUS` still yields two references — `NEW` (role
+  `RecordAlias`, resolved) and `STATUS` (role `Column`, span + `Text="STATUS"` present though the column symbol
+  does not resolve). The engine anchors every rewrite on those reference spans; the column name comes from the
+  reference's own text. A `'NEW.'` inside a string literal/comment/quoted identifier has no such reference and
+  is therefore untouched — the substring-corruption risk the danger-zone warns about is structurally excluded.
+
+### Seam A — pure Core (2026-07-19)
+
+Pure Core, no server, no UI, **unwired** (staged per gotcha #233 — the engine ships tested-but-uncalled; Seam B
+wires it):
+
+- `EmberTern.Core.Sql.Debugging.ContextSubstitution` — the **one** substitution engine (designed to also serve
+  the §3.6 handler error context `GDSCODE`/`SQLSTATE`/`RDB$ERROR` — one mechanism, two consumers):
+  - `BuildColumns(model, scope)` scans the body's references for each distinct `NEW.col`/`OLD.col`
+    (a `RecordAlias` reference immediately followed by a `Column` reference — how the binder records a dotted
+    ref) and assigns each a **stable, compact synthetic name** `ET_CTX_i`. Index-based on purpose: it stays a
+    valid ≤31-char identifier regardless of column-name length (FB3's identifier limit — `ET_CTX_NEW_<col>`
+    could overflow). This class is the **single owner** of the naming convention; Seam B's metadata (base type)
+    and the write-back both consume the names it hands out. Assigned once over the whole body so the same
+    `NEW.col` is the same frame variable in every statement, in the frame, and in the Variables window.
+  - `Substitute(model, source, region, context)` rewrites each `NEW.col`/`OLD.col` reference span to its
+    synthetic and each `INSERTING`/`UPDATING`/`DELETING` predicate to `TRUE`/`FALSE` for the simulated
+    `TriggerContext.Event`, returning the rewritten fragment + the context **reads** (inject) and **writes**
+    (return for write-back). Reads = every context occurrence (over-inclusive is safe — R1 skips a null value).
+    Writes = `NEW` columns only when `TriggerContext.NewWritable` (a BEFORE trigger); over-inclusive there (a
+    merely-read `NEW.col` written back returns its own value, harmlessly) so it can never *miss* a real write —
+    the alternative (missing a write) would leave the frame/Variables stale, a §F divergence. `OLD` is never
+    written back. Edits are applied by a non-overlapping span splice (reference spans don't overlap), mirroring
+    the executor's existing `RewriteColonRefsToBare`/`CursorBridge` span rewrites — a generalisation of a proven
+    pattern, not a new class of mechanism.
+- `TriggerContext` record (`TargetTable`/`Event`/`Timing`/`Columns`) + `TriggerEvent`/`TriggerTiming`/
+  `TriggerRecord` enums + `ContextColumn` record. The §8.1 availability table is expressed as computed
+  properties: `OldAvailable` (UPDATE/DELETE), `NewAvailable` (INSERT/UPDATE), `NewWritable` (BEFORE ∧
+  NewAvailable). This is the value Seam B mounts on `RoutineContext`.
+
+**Tests — built the debugger's way (strict whole-routine parse, NO metadata):** 13 `ContextSubstitutionTests`
+covering distinct + deduplicated columns, synthetic rewrite with the read/write split, AFTER trigger ⇒ no NEW
+write, predicate literals flipping with the simulated event, a **string literal `'…OLD.STATUS'` left
+byte-for-byte intact beside a real rewritten `OLD.STATUS`** (the reference-driven proof), a no-context statement
+returned verbatim, and the full §8.1 availability matrix (6 cases). The metadata-less build is the load-bearing
+case — it proves the `Column` reference is present and usable even when it does not resolve to a symbol.
+
+Build 0/0; Seam A (13) + 191 neighbouring Core/semantic tests green (full suite hangs in this env, #94/#226 —
+ran filtered); smoke clean. **Next: Seam B — the Firebird executor wiring (`RoutineContext.TriggerContext`,
+`ExecuteStatement`/`EvaluateCondition` routing every trigger-frame fragment through `ContextSubstitution`), the
+one new metadata path (trigger-table column base types via `RDB$RELATION_FIELDS ⨝ RDB$FIELDS`, reusing
+`FormatType`), `CreateAsync`/`DebugLaunchSpec` extension, and live fidelity on the lab's triggers.**

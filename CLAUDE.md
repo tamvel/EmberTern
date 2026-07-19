@@ -781,7 +781,34 @@ noted.
   (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing, nesting, a closure — all sim == real.**
   **Live-verified: Firebird forbids nested sub-routines** (gotcha #244) ⇒ shadowing is local-vs-global.
   Build 0/0; 508 Core tests green (c3 is Firebird/metadata only, no Core change); smoke clean.
-  **🏁 D9 IS COMPLETE — local procedures *and* functions step faithfully, into and over. NEXT: D10 (Triggers).**
+  **🏁 D9 IS COMPLETE — local procedures *and* functions step faithfully, into and over.**
+  **D10 (Triggers) — STARTED; architecture review DONE + ratified, Seam A (pure Core) DONE (2026-07-19). Split
+  into 3 committable seams (A Core → B Firebird+Live-Fidelity → C UI), mirroring D8/D9; user decisions: NEW/OLD
+  in a `FOR SELECT` cursor is a §F boundary (clear refusal, not partial fidelity); lab to be extended with
+  BEFORE DELETE + BEFORE INSERT OR UPDATE (full trigger matrix); "seed from a real row" deferred to Seam C2.**
+  Two ratified architecture decisions shaping the milestone: (1) **there is no heavyweight `TriggerContextModel`
+  — trigger context is *specialized state* mounted as an optional field on the existing per-routine context**:
+  NEW/OLD are ordinary frame variables (synthetic names), values live on the frame, only the simulated event +
+  timing are genuinely new; (2) **`ContextSubstitution` is entirely `SemanticModel`/`SymbolReference`-driven,
+  never a text search** — confirmed feasible because the binder records the `NEW`/`OLD` `RecordAlias` reference
+  **and** the following `Column` reference (span + text) *even in the debugger's metadata-less model* (the
+  member does not resolve to a `ColumnSymbol`, but its reference span/text is all the engine needs). **Seam A —
+  pure Core, no server, no UI, unwired (gotcha #233):** new `EmberTern.Core.Sql.Debugging.ContextSubstitution`
+  (the ONE engine, designed to also serve the §3.6 handler error context — one mechanism, two consumers):
+  `BuildColumns(model, scope)` assigns each distinct `NEW.col`/`OLD.col` a **stable, compact synthetic name**
+  (`ET_CTX_i` — index-based, so it stays a valid ≤31-char identifier regardless of column-name length, FB3's
+  limit; ContextSubstitution is the single owner of the naming convention), and
+  `Substitute(model, source, region, context)` rewrites each `NEW.col`/`OLD.col` reference span to its synthetic
+  and each `INSERTING`/`UPDATING`/`DELETING` predicate to `TRUE`/`FALSE` for the simulated event — reporting the
+  context reads (inject) and writes (return; `NEW` only when a BEFORE trigger, over-inclusive but never missing
+  a write; `OLD` never). New `TriggerContext` record (`TargetTable`/`Event`/`Timing`/`Columns`) with the §8.1
+  availability rules as computed properties (`OldAvailable`/`NewAvailable`/`NewWritable`) — the value that Seam B
+  mounts on `RoutineContext`. Pinned by 13 `ContextSubstitutionTests` built the debugger's way (**strict parse,
+  NO metadata**): distinct/deduped columns, synthetic rewrite + read/write split, AFTER = no NEW write,
+  predicate literals per event, **string-literal `'OLD.STATUS'` left byte-intact beside a real `OLD.STATUS`**
+  (reference-driven proof), no-context verbatim, full availability matrix. Build 0/0; Seam A tests + 191
+  neighbouring Core/semantic tests green; smoke clean. **NEXT: Seam B (Firebird executor + column-base-type
+  metadata path + launch-spec wiring + live fidelity on the lab triggers).**
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
