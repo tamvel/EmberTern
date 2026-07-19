@@ -645,6 +645,57 @@ BEGIN
   END
 END^
 
+/* ---------- Package for the debugger - D11 (packages) --------------
+   Covers the D11 debug matrix: PUBLIC routines (callable from DSQL - real step-over,
+   step-into by source), a PRIVATE routine (body-only, absent from the header - NOT
+   callable from DSQL, so the debugger must INTERPRET it), a PUBLIC sibling call and a
+   PRIVATE sibling call. SP_DBG_PKG (standalone) is the debugger entry point that steps
+   into the package.                                                                    */
+
+CREATE PACKAGE PKG_DBG
+AS
+BEGIN
+  PROCEDURE PUB_RUN(P_N INTEGER) RETURNS (R INTEGER);
+  PROCEDURE PUB_ADD(P_N INTEGER) RETURNS (R INTEGER);
+END^
+
+CREATE PACKAGE BODY PKG_DBG
+AS
+BEGIN
+  /* PRIVATE routine - declared in the body only, absent from the header. Not callable from
+     DSQL outside the package (D11 probe A), so the debugger INTERPRETS it (spec 8.2), never
+     calls it via the harness. */
+  PROCEDURE PRIV_DOUBLE(P_N INTEGER) RETURNS (R INTEGER)
+  AS
+  BEGIN
+    R = P_N * 2;
+  END
+
+  PROCEDURE PUB_ADD(P_N INTEGER) RETURNS (R INTEGER)
+  AS
+  BEGIN
+    R = P_N + 1;
+  END
+
+  PROCEDURE PUB_RUN(P_N INTEGER) RETURNS (R INTEGER)
+  AS
+    DECLARE VARIABLE A INTEGER;
+    DECLARE VARIABLE B INTEGER;
+  BEGIN
+    EXECUTE PROCEDURE PRIV_DOUBLE(:P_N) RETURNING_VALUES :A;   /* private sibling call */
+    EXECUTE PROCEDURE PUB_ADD(:P_N)     RETURNING_VALUES :B;   /* public  sibling call */
+    R = A + B;
+  END
+END^
+
+CREATE PROCEDURE SP_DBG_PKG(P_N INTEGER) RETURNS (RESULT INTEGER)
+AS
+BEGIN
+  /* Standalone entry point: step INTO the public package procedure, then into its private
+     and public siblings. SP_DBG_PKG(5) => 5*2 + (5+1) = 16. */
+  EXECUTE PROCEDURE PKG_DBG.PUB_RUN(:P_N) RETURNING_VALUES :RESULT;
+END^
+
 SET TERM ; ^
 
 /* ---------- Descriptions (exercise COMMENT ON metadata) ------------ */

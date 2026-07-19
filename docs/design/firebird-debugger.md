@@ -681,10 +681,15 @@ package body and pushes a frame. A **private** routine (in the body, absent from
 metadata but **not callable from DSQL outside the package** — so the harness cannot call it. This lands on the
 §6 answer: **interpret it.** Step-over of a private routine = interpret without UI updates.
 
-> **⚠ Open probes for D11:** confirm a private package routine is not callable from an `EXECUTE BLOCK`, and
-> that private-routine source is extractable from the package body (a body is one source blob — extracting an
-> individual routine is real parsing work, not a lookup). The lab's `PKG_ORDERS` has only public routines
-> (`RDB$PRIVATE_FLAG = 0`) — **extend `Lab/setup.sql`** with a private routine and verify.
+> **✔ D11 probes — RESOLVED (§15.12, 2026-07-19).** A private package routine is **not** callable from an
+> `EXECUTE BLOCK` (`PKG_DBG.PRIV_DOUBLE(5)` ⇒ SQLSTATE 42000, *"Procedure PRIV_DOUBLE is private to package
+> PKG_DBG"*), while a public one is (`PKG_DBG.PUB_ADD(5)` ⇒ 6) — so a public routine can be run for real
+> (step-over) or fetched-and-stepped, and a private routine **must be interpreted**, never harness-called. The
+> package body is **one blob** (`RDB$PACKAGE_BODY_SOURCE`) returned verbatim, private routine included — so an
+> individual routine's source is extractable by **parsing** that blob (the blob starts at `BEGIN` and shapes each
+> routine like a D9 local `DECLARE PROCEDURE`, i.e. reuse the AST, not a hand-rolled scanner). Lab extended:
+> `PKG_DBG` (private `PRIV_DOUBLE` + public `PUB_ADD`/`PUB_RUN` with a private and a public sibling call) +
+> standalone `SP_DBG_PKG` entry point.
 
 ---
 
@@ -1024,8 +1029,11 @@ next. Foundation-first; never big-bang.
 - ~~**§6.3 / §1.4** — sub-routine outer-variable capture on **FB3 / FB4** (probes Q2/Q3/Q4).~~ **RESOLVED
   (§15.7, 2026-07-18):** FB3 = **closed** (SQL -206); FB5 = **closures** (read+write byref). FB4 unverified
   (not installed). D9's frame `LexicalParent` branches on server major (FB3 `null`, FB5 declaring frame).
-- **§8.2** — private package routine callable from `EXECUTE BLOCK`? Source extractable from the body blob?
-  **Blocks D11.**
+- ~~**§8.2** — private package routine callable from `EXECUTE BLOCK`? Source extractable from the body blob?~~
+  **RESOLVED (§15.12, 2026-07-19):** private is **NOT** callable (SQLSTATE 42000 *"Procedure … is private to
+  package"*) ⇒ interpret it; the whole body **is** extractable from `RDB$PACKAGE_BODY_SOURCE` verbatim (private
+  routine included), so an individual routine is a parse of that blob. Lab extended with `PKG_DBG` (a private
+  routine + public siblings) + `SP_DBG_PKG`.
 - ~~**§7** — `WHERE CURRENT OF` on a named DSQL cursor.~~ **RESOLVED (§15.5 [12]):** unsupported cross-context
   (SQL -504) — a §F boundary, surfaced as an honest step error; not in D6's DoD.
 - ~~**§1.4** — cursor interleaving verified on FB5; confirm on **FB3/FB4**.~~ **RESOLVED (§15.5 [11]):** FB3 +
@@ -1089,8 +1097,8 @@ Driver probes: `FirebirdSql.Data.FirebirdClient` 10.3.4 in a throwaway console a
 | **[4]** | Two cursors open simultaneously | **SUCCESS** | **Nested `FOR SELECT` is possible.** §7 |
 | **[5]** | `SAVEPOINT` + `ROLLBACK TO SAVEPOINT` through the driver | **rows after rollback-to = 0** | **Frame atomicity is implementable.** §4.5 |
 
-*(Incidental: `PKG_ORDERS`' routines are all `RDB$PRIVATE_FLAG = 0` — the lab has no private package routine,
-hence §8.2's open probe.)*
+*(Incidental: `PKG_ORDERS`' routines are all `RDB$PRIVATE_FLAG = 0`; the lab gained a private package routine in
+`PKG_DBG` for D11 — see §15.12.)*
 
 ### 15.4 D2 seam (c) — executor fidelity (simulated vs real, FB5 lab)
 
@@ -1287,3 +1295,21 @@ ADD_TAX`), and case 6 is now driven with explicit Step **Over** (Step Into would
 > to evaluate the surrounding expression. **⚠ Firebird forbids nested sub-routines** (gotcha #244), so lexical-level
 > function-name shadowing across sub-routine levels is not expressible; local-vs-global is the realistic case
 > tested here. **D9 IS COMPLETE — local procedures *and* functions step faithfully, into and over.**
+
+### 15.12 D11 — package probes (blocking; FB5 lab, ASCII build copy)
+
+The two §8.2 blocking questions, measured against the rebuilt lab (extended first with `PKG_DBG` + `SP_DBG_PKG`).
+Raw `isql` / `EXECUTE BLOCK` — no debugger interpreter (they measure the *engine*, like the §6.3 gate).
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **P-A1** | Is a **private** package routine callable from an `EXECUTE BLOCK`? (`PKG_DBG.PRIV_DOUBLE(5)`) | **NO** — SQLSTATE 42000, *"Procedure PRIV_DOUBLE is private to package PKG_DBG"* | A private routine **must be interpreted**; the harness can never call it. §8.2 |
+| **P-A2** | Is a **public** package routine callable from an `EXECUTE BLOCK`? (`PKG_DBG.PUB_ADD(5)`) | **6** | A public routine runs for real — step-**over** is a real call; step-**into** fetches its source. §8.2 |
+| **P-A3** | Does the standalone caller run for real? (`SP_DBG_PKG(5)` → `PKG_DBG.PUB_RUN`) | **RESULT = 16** (`5*2 + (5+1)`) | The fidelity baseline for D11 (private + public sibling calls). |
+| **P-B** | Is a private routine's **source** extractable from the body blob? (`RDB$PACKAGE_BODY_SOURCE`) | **YES** — whole body verbatim, `PROCEDURE PRIV_DOUBLE … AS BEGIN … END` included | Extract an individual routine by **parsing the blob** (it starts at `BEGIN`, each routine shaped like a D9 local `DECLARE PROCEDURE`). §8.2 |
+
+> **Verdict — D11 is unblocked.** Public routines behave like D8 stored routines (real step-over, source-fetch
+> step-into); private routines are the §6 answer (interpret — a real frame, never a DSQL call). The package body
+> is one parseable blob, so `PackageSourceScanner`/the AST locate + slice a routine — no hand-rolled scanner, no
+> temporary metadata. `PKG_DBG`'s routines are structurally D9-local-shaped, so the executor seam reuses the D8/D9
+> frame machinery rather than a new path. `RDB$PRIVATE_FLAG` distinguishes the two (1 = private).
