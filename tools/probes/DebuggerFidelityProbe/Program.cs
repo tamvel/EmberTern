@@ -131,6 +131,111 @@ try
         }
     }
 
+    // Simulate a TRIGGER body (D10) — the triggering DML is NOT performed (spec §8.1); the user supplies
+    // NEW/OLD and we interpret the body. Fetches the full CREATE source, builds the trigger context (columns via
+    // ContextSubstitution), seeds the NEW/OLD synthetics, steps to completion/fault, and reports the outcome, the
+    // FINAL NEW values (read from the retained root frame — it keeps its values after the run) and an optional
+    // inspection of the debug transaction (for a body that performs DML, captured before the §4.4 rollback).
+    async Task<(DebugState State, string? Error,
+                Dictionary<(TriggerRecord Rec, string Col), object?> Final, string? Inspected, List<string> Frames)>
+        SimulateTriggerAsync(
+            string triggerName, string table, TriggerEvent evt, TriggerTiming timing,
+            Dictionary<(TriggerRecord Rec, string Col), object?> context,
+            StepKind step = StepKind.Into,
+            Func<DebugSessionConnection, Task<string?>>? inspect = null)
+    {
+        string source = await reader.FetchTriggerSourceAsync(new MetadataObject(triggerName, MetadataObjectKind.Trigger));
+        var model = SemanticModel.Build(SqlParser.Parse(source).Root);
+        var body = model.Syntax.Statements.OfType<DdlStatement>().First(d => d.Body is not null).Body!;
+
+        var columns = ContextSubstitution.BuildColumns(model, new TextSpan(body.Start, body.Length));
+        var trigger = new TriggerContext(table, evt, timing, columns);
+
+        var rootValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in columns)
+        {
+            if (context.TryGetValue((c.Record, c.Column), out var v)) rootValues[c.Synthetic] = v;
+        }
+
+        var session = await service.CreateDebugSessionAsync(DebugIsolation.ReadCommitted);
+        try
+        {
+            var executor = await FirebirdDebugExecutor.CreateAsync(session, triggerName, source, body, model, fallback, trigger);
+            var dbg = new DebugSession(body, executor, triggerName, rootValues, source, model);
+            dbg.Start();
+
+            Frame? root = dbg.CurrentFrame; // retained — the frame keeps its values after it is popped
+            var frames = new List<string>();
+            int guard = 0;
+            while (dbg.State == DebugState.Paused)
+            {
+                if (dbg.CurrentFrame is { } f && !frames.Contains(f.RoutineName)) frames.Add(f.RoutineName);
+                dbg.Step(step);
+                if (++guard > 5000) throw new Exception("runaway stepping");
+            }
+
+            string? inspected = inspect is not null ? await inspect(session) : null;
+
+            var final = new Dictionary<(TriggerRecord, string), object?>();
+            if (root is not null)
+            {
+                foreach (var c in columns)
+                {
+                    root.TryResolveValue(c.Synthetic, out var v);
+                    final[(c.Record, c.Column)] = v;
+                }
+            }
+
+            string? error = dbg.State == DebugState.Faulted
+                ? (dbg.CurrentError?.ExceptionName ?? dbg.CurrentError?.Message) : null;
+            return (dbg.State, error, final, inspected, frames);
+        }
+        finally
+        {
+            await session.DisposeAsync();
+        }
+    }
+
+    // Runs DML in a throwaway transaction and ROLLS BACK — the independent "real" reference for trigger effects
+    // (the sim never persists). Returns the scalar from `query`, run in the same tx after `setup`.
+    async Task<object?> RealInTxAsync(string[] setup, string query)
+    {
+        await using var cn = new FbConnection(csb.ToString());
+        await cn.OpenAsync();
+        var tx = cn.BeginTransaction();
+        try
+        {
+            foreach (var s in setup)
+            {
+                await using var c = new FbCommand(s, cn, tx);
+                await c.ExecuteNonQueryAsync();
+            }
+            await using var q = new FbCommand(query, cn, tx);
+            return await q.ExecuteScalarAsync();
+        }
+        finally
+        {
+            await tx.RollbackAsync();
+        }
+    }
+
+    // Runs DML expected to raise, in a throwaway tx (rolled back); returns the exception message, or null if it
+    // unexpectedly succeeded.
+    async Task<string?> RealRaisesAsync(string sql)
+    {
+        await using var cn = new FbConnection(csb.ToString());
+        await cn.OpenAsync();
+        var tx = cn.BeginTransaction();
+        try
+        {
+            await using var c = new FbCommand(sql, cn, tx);
+            await c.ExecuteNonQueryAsync();
+            return null;
+        }
+        catch (FbException ex) { return ex.Message; }
+        finally { try { await tx.RollbackAsync(); } catch { /* best-effort */ } }
+    }
+
     static int? AsInt(object? v) => v is null or DBNull ? null : Convert.ToInt32(v, CultureInfo.InvariantCulture);
     static Dictionary<string, object?> Root(int p) => new(StringComparer.OrdinalIgnoreCase) { ["P"] = p };
     // A type-agnostic display of a value for comparison — normalises across the driver's native types (int,
@@ -297,6 +402,105 @@ try
     if (simFnClo is not null && simFnClo == realFnClo) Pass("SIMULATED RESULT == REAL", $"sim {simFnClo} == real {realFnClo}");
     else Fail("simulated vs real RESULT", $"sim {simFnClo} vs real {realFnClo}");
     Console.WriteLine("      (ADD_BASE reads outer BASE=100 by closure: 5 + 100 = 105)");
+
+    // ══ Stage X / D10 — TRIGGERS (spec §8.1). The triggering DML is not performed; the user supplies NEW/OLD ══
+    // and we interpret the body. Fidelity = the body's EFFECTS vs a real DML that fires the trigger (rolled back).
+
+    // ── 12. BEFORE UPDATE exception (TR_ORDERS_BU) — NEW context, sim vs real ─
+    Head("12. TR_ORDERS_BU — BEFORE UPDATE; NEW.TOTAL_AMOUNT < 0 raises E_NEGATIVE_AMOUNT (sim vs real)");
+    var buNeg = await SimulateTriggerAsync("TR_ORDERS_BU", "ORDERS", TriggerEvent.Update, TriggerTiming.Before,
+        new() { [(TriggerRecord.New, "TOTAL_AMOUNT")] = -5m });
+    string? realBu = await RealRaisesAsync(
+        "UPDATE ORDERS SET TOTAL_AMOUNT = -5 WHERE ORDER_ID = (SELECT MIN(ORDER_ID) FROM ORDERS)");
+    if (buNeg.State == DebugState.Faulted && (buNeg.Error?.Contains("E_NEGATIVE_AMOUNT") ?? false))
+        Pass("BU sim faults E_NEGATIVE_AMOUNT", buNeg.Error!);
+    else Fail("BU sim fault", $"{buNeg.State} / {buNeg.Error}");
+    if (realBu is not null && realBu.Contains("E_NEGATIVE_AMOUNT")) Pass("BU real faults too (sim == real: same exception)");
+    else Fail("BU real fault", realBu ?? "no exception");
+    var buOk = await SimulateTriggerAsync("TR_ORDERS_BU", "ORDERS", TriggerEvent.Update, TriggerTiming.Before,
+        new() { [(TriggerRecord.New, "TOTAL_AMOUNT")] = 100m });
+    if (buOk.State == DebugState.Completed) Pass("BU with a non-negative amount completes (no fault)");
+    else Fail("BU non-negative", $"{buOk.State} / {buOk.Error}");
+
+    // ── 13. AFTER UPDATE side-effect (TR_ORDERS_AU) — OLD+NEW read-only, sim vs real DML ──
+    Head("13. TR_ORDERS_AU — AFTER UPDATE; a STATUS change writes an AUDIT_LOG row (sim vs real DETAILS)");
+    const string auDetails = "Status changed from ACT to DONE";
+    var au = await SimulateTriggerAsync("TR_ORDERS_AU", "ORDERS", TriggerEvent.Update, TriggerTiming.After,
+        new()
+        {
+            [(TriggerRecord.Old, "STATUS")] = "ACT",
+            [(TriggerRecord.New, "STATUS")] = "DONE",
+            [(TriggerRecord.New, "ORDER_ID")] = 1,
+        },
+        inspect: async conn =>
+        {
+            await using var cmd = conn.Connection.CreateCommand();
+            cmd.CommandText = "SELECT DETAILS FROM AUDIT_LOG WHERE ACTION = 'STATUS_CHANGE' ORDER BY LOG_ID DESC ROWS 1";
+            cmd.Transaction = conn.Transaction;
+            var r = await cmd.ExecuteScalarAsync();
+            return r is null or DBNull ? null : Convert.ToString(r, CultureInfo.InvariantCulture)?.Trim();
+        });
+    var realAu = await RealInTxAsync(
+        new[]
+        {
+            "UPDATE ORDERS SET STATUS = 'ACT'  WHERE ORDER_ID = (SELECT MIN(ORDER_ID) FROM ORDERS)",
+            "UPDATE ORDERS SET STATUS = 'DONE' WHERE ORDER_ID = (SELECT MIN(ORDER_ID) FROM ORDERS)",
+        },
+        "SELECT DETAILS FROM AUDIT_LOG WHERE ACTION = 'STATUS_CHANGE' ORDER BY LOG_ID DESC ROWS 1");
+    string? realAuDetails = realAu is null or DBNull ? null : Convert.ToString(realAu, CultureInfo.InvariantCulture)?.Trim();
+    if (au.Inspected == auDetails) Pass("AU sim inserted the audit row into the debug tx", au.Inspected!);
+    else Fail("AU sim audit", $"{au.State}/{au.Error ?? "ok"} inspected={au.Inspected ?? "<none>"}");
+    if (realAuDetails == auDetails) Pass("AU real UPDATE produced the same audit row (sim == real)", realAuDetails!);
+    else Fail("AU real audit", $"sim '{auDetails}' vs real '{realAuDetails}'");
+
+    // ── 14. BEFORE DELETE, OLD-only (TR_TRIG_BD) — NEW unavailable, sim vs real ──
+    Head("14. TR_TRIG_BD — BEFORE DELETE (OLD-only); OLD.STATUS='LOCKED' raises E_ORDER_LOCKED (sim vs real)");
+    var bdLocked = await SimulateTriggerAsync("TR_TRIG_BD", "TRIG_LAB", TriggerEvent.Delete, TriggerTiming.Before,
+        new() { [(TriggerRecord.Old, "STATUS")] = "LOCKED" });
+    if (bdLocked.State == DebugState.Faulted && (bdLocked.Error?.Contains("E_ORDER_LOCKED") ?? false))
+        Pass("BD sim faults E_ORDER_LOCKED on a locked row", bdLocked.Error!);
+    else Fail("BD sim fault", $"{bdLocked.State} / {bdLocked.Error}");
+    string? realBd = await RealRaisesAsync(
+        "EXECUTE BLOCK AS BEGIN " +
+        "  INSERT INTO TRIG_LAB (ID, STATUS) VALUES (9001, 'LOCKED'); " +
+        "  DELETE FROM TRIG_LAB WHERE ID = 9001; " +
+        "END");
+    if (realBd is not null && realBd.Contains("E_ORDER_LOCKED")) Pass("BD real DELETE faults too (sim == real)");
+    else Fail("BD real fault", realBd ?? "no exception");
+    var bdOk = await SimulateTriggerAsync("TR_TRIG_BD", "TRIG_LAB", TriggerEvent.Delete, TriggerTiming.Before,
+        new() { [(TriggerRecord.Old, "STATUS")] = "ACTIVE" });
+    if (bdOk.State == DebugState.Completed) Pass("BD on a non-locked row completes (no fault)");
+    else Fail("BD non-locked", $"{bdOk.State} / {bdOk.Error}");
+
+    // ── 15. BEFORE INSERT, multi-action predicate (TR_TRIG_BIU) — NEW writable, sim vs real ──
+    Head("15. TR_TRIG_BIU — BEFORE INSERT (multi-action); INSERTING ⇒ NEW.NOTE='INSERTED' (sim vs real)");
+    var biuIns = await SimulateTriggerAsync("TR_TRIG_BIU", "TRIG_LAB", TriggerEvent.Insert, TriggerTiming.Before,
+        new() { [(TriggerRecord.New, "NOTE")] = null });
+    string simInsNote = Show(biuIns.Final.TryGetValue((TriggerRecord.New, "NOTE"), out var vi) ? vi : null);
+    object? realIns = await RealInTxAsync(
+        new[] { "INSERT INTO TRIG_LAB (ID, STATUS) VALUES (9002, 'NEW')" },
+        "SELECT NOTE FROM TRIG_LAB WHERE ID = 9002");
+    if (biuIns.State == DebugState.Completed && simInsNote == "INSERTED") Pass("BIU INSERTING ⇒ NEW.NOTE='INSERTED' (sim)", simInsNote);
+    else Fail("BIU insert sim", $"{biuIns.State} / NOTE={simInsNote}");
+    if (Show(realIns) == "INSERTED") Pass("BIU real INSERT persists NOTE='INSERTED' (sim == real)");
+    else Fail("BIU insert real", Show(realIns));
+
+    // ── 16. BEFORE UPDATE via the SAME multi-action trigger — the UPDATING predicate ──
+    Head("16. TR_TRIG_BIU — BEFORE UPDATE (same trigger, other action); UPDATING ⇒ NEW.NOTE='UPDATED' (sim vs real)");
+    var biuUpd = await SimulateTriggerAsync("TR_TRIG_BIU", "TRIG_LAB", TriggerEvent.Update, TriggerTiming.Before,
+        new() { [(TriggerRecord.New, "NOTE")] = null });
+    string simUpdNote = Show(biuUpd.Final.TryGetValue((TriggerRecord.New, "NOTE"), out var vu) ? vu : null);
+    object? realUpd = await RealInTxAsync(
+        new[]
+        {
+            "INSERT INTO TRIG_LAB (ID, STATUS) VALUES (9003, 'NEW')",
+            "UPDATE TRIG_LAB SET STATUS = 'X' WHERE ID = 9003",
+        },
+        "SELECT NOTE FROM TRIG_LAB WHERE ID = 9003");
+    if (biuUpd.State == DebugState.Completed && simUpdNote == "UPDATED") Pass("BIU UPDATING ⇒ NEW.NOTE='UPDATED' (sim)", simUpdNote);
+    else Fail("BIU update sim", $"{biuUpd.State} / NOTE={simUpdNote}");
+    if (Show(realUpd) == "UPDATED") Pass("BIU real UPDATE persists NOTE='UPDATED' (sim == real; multi-action, same trigger)");
+    else Fail("BIU update real", Show(realUpd));
 }
 catch (Exception ex)
 {

@@ -31,14 +31,18 @@ internal interface IDebugSessionLauncher
 
 /// <summary>The inputs a launch needs: the routine's full source (span backing), its parsed body + semantic
 /// model (both from the strict whole-routine parse — gotcha #238), the display name, the input-parameter
-/// arguments seeding the root frame (§9.3), and the chosen transaction isolation (§4.2).</summary>
+/// arguments seeding the root frame (§9.3; for a trigger, the synthetic-keyed NEW/OLD context values), the
+/// chosen transaction isolation (§4.2), and — for a trigger — the <paramref name="Trigger"/> context (§8.1:
+/// target table + simulated event/timing + the NEW/OLD column→synthetic mapping). <c>Trigger</c> is null for a
+/// procedure/function (the standalone case, D4–D9).</summary>
 internal sealed record DebugLaunchSpec(
     string Source,
     BlockStatement Body,
     SemanticModel Model,
     string RoutineName,
     IReadOnlyDictionary<string, object?> RootValues,
-    DebugIsolation Isolation);
+    DebugIsolation Isolation,
+    TriggerContext? Trigger = null);
 
 /// <summary>A live, started debug session and its teardown. Disposing rolls back + closes the session's
 /// attachment (best-effort, idempotent). The <see cref="Session"/> is already <see cref="DebugSession.Start"/>ed

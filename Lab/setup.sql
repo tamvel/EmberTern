@@ -106,6 +106,17 @@ CREATE TABLE AUDIT_LOG (
   CONSTRAINT PK_AUDIT_LOG PRIMARY KEY (LOG_ID)
 );
 
+/* A small table dedicated to the debugger's trigger zoo (Stage X / D10). Isolated from ORDERS so its
+   BEFORE DELETE (OLD-only) and BEFORE INSERT OR UPDATE (multi-action) triggers touch independent columns
+   (STATUS for the delete-guard, NOTE for the predicate writes) and never interfere with each other or with
+   the ORDERS triggers — giving clean, independent simulated-vs-real fidelity checks. */
+CREATE TABLE TRIG_LAB (
+  ID     INTEGER NOT NULL,
+  STATUS VARCHAR(8) DEFAULT 'NEW' NOT NULL,
+  NOTE   VARCHAR(20),
+  CONSTRAINT PK_TRIG_LAB PRIMARY KEY (ID)
+);
+
 /* ---------- Standalone indexes --------------------------------------
    Exercise the Index Detail surface: a plain index, a DESCENDING index,
    a composite index, a standalone UNIQUE index, an expression index, and
@@ -549,6 +560,30 @@ BEGIN
     INSERT INTO AUDIT_LOG (ENTITY, ENTITY_ID, ACTION, DETAILS)
       VALUES ('ORDERS', NEW.ORDER_ID, 'STATUS_CHANGE',
               'Status changed from ' || TRIM(OLD.STATUS) || ' to ' || TRIM(NEW.STATUS));
+END^
+
+/* BEFORE DELETE — OLD-only context (NEW unavailable); guards a locked row.
+   Debugger D10: exercises OLD availability + the DELETE event.                 */
+CREATE TRIGGER TR_TRIG_BD FOR TRIG_LAB
+ACTIVE BEFORE DELETE POSITION 0
+AS
+BEGIN
+  IF (OLD.STATUS = 'LOCKED') THEN
+    EXCEPTION E_ORDER_LOCKED;
+END^
+
+/* BEFORE INSERT OR UPDATE — a MULTI-ACTION trigger driven by the context
+   predicates. Debugger D10: exercises INSERTING/UPDATING substitution, the
+   action selector, and a writable NEW in both events. Writes NOTE (not STATUS)
+   so it never clashes with the delete-guard above.                             */
+CREATE TRIGGER TR_TRIG_BIU FOR TRIG_LAB
+ACTIVE BEFORE INSERT OR UPDATE POSITION 0
+AS
+BEGIN
+  IF (INSERTING) THEN
+    NEW.NOTE = 'INSERTED';
+  IF (UPDATING) THEN
+    NEW.NOTE = 'UPDATED';
 END^
 
 SET TERM ; ^

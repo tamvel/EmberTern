@@ -2078,7 +2078,66 @@ returned verbatim, and the full §8.1 availability matrix (6 cases). The metadat
 case — it proves the `Column` reference is present and usable even when it does not resolve to a symbol.
 
 Build 0/0; Seam A (13) + 191 neighbouring Core/semantic tests green (full suite hangs in this env, #94/#226 —
-ran filtered); smoke clean. **Next: Seam B — the Firebird executor wiring (`RoutineContext.TriggerContext`,
-`ExecuteStatement`/`EvaluateCondition` routing every trigger-frame fragment through `ContextSubstitution`), the
-one new metadata path (trigger-table column base types via `RDB$RELATION_FIELDS ⨝ RDB$FIELDS`, reusing
-`FormatType`), `CreateAsync`/`DebugLaunchSpec` extension, and live fidelity on the lab's triggers.**
+ran filtered); smoke clean.
+
+### Seam B — Firebird executor + metadata + Live Fidelity (2026-07-19)
+
+The pure-Core substitution from Seam A is wired to the live executor and proven sim==real on the lab.
+
+**Wiring (behaviour-preserving for non-triggers):**
+- `FirebirdDebugExecutor.RoutineContext` gained an optional `TriggerContext? Trigger`, **non-null only for a
+  trigger's root frame**. A stepped-into stored/local callee has no NEW/OLD in scope, so its context stays null
+  and the D8/D9 step-into paths are byte-for-byte untouched.
+- A new `CreateAsync` overload takes the `TriggerContext`: it skips the (pointless) `RDB$PROCEDURE_PARAMETERS`
+  query (a trigger is not a procedure), builds the **NEW/OLD context column templates** and merges them into the
+  frame variable templates, then registers the trigger context on the root.
+- `ExecuteStatement` and `EvaluateCondition` route every trigger-frame fragment / condition through
+  `ContextSubstitution.Substitute` (over the node span / the condition's paren-group span), replacing the
+  verbatim `Slice`, and **union** the context reads/writes into the local read/write set. `ConditionExpression`
+  was split into a reusable `ConditionBounds` so the condition region can be substituted, not only sliced.
+- `OpenCursor` **refuses** a `FOR SELECT` whose query references NEW/OLD with a clear message — the §F boundary
+  (decision 2): a cursor is a separately-opened DSQL statement where the harness's synthetic context variables
+  do not exist, so a partially-faithful cursor is never opened.
+- `DebugLaunchSpec` + `FirebirdDebugSessionLauncher` carry the `TriggerContext` through to `CreateAsync`.
+
+**One new metadata path** — `FirebirdDebugMetadata.BuildTriggerContextVariablesAsync`: types each context
+column from the **trigger's target table** (`RDB$RELATION_FIELDS ⨝ RDB$FIELDS` via the existing
+`FirebirdDdlReader.FormatType` — derivation, not guessing), producing one `HarnessVariable` per `ContextColumn`.
+
+**Two §F corrections found by probing, not reasoning** (Contract: verify-don't-infer):
+- **Base type, never the domain (gotcha #246).** First cut declared a context variable with its column domain
+  (mirroring `ReadProcedureParametersAsync`'s R3). The probe seeded `NEW.TOTAL_AMOUNT = -5` for `TR_ORDERS_BU`
+  (which raises `E_NEGATIVE_AMOUNT` on a negative amount); the harness died on entry with *"validation error for
+  variable ET_CTX_0, value -5.00"* — the `D_AMOUNT CHECK (VALUE >= 0)` domain re-validated the injected value
+  before the trigger's own logic ran. A NEW/OLD field is a **record field**, not a domain-constrained local: in a
+  real trigger the value can violate the column CHECK (that is exactly what a BEFORE trigger is there to catch;
+  the constraint is enforced at write time, after the trigger, which the debugger never performs). Fixed by
+  declaring context variables with the **base type** (R2) — `BuildTriggerContextVariablesAsync` now reads only
+  the base type.
+- **Colon prefix inside DSQL (gotcha #247).** `TR_ORDERS_AU`'s `INSERT INTO AUDIT_LOG … VALUES (…, NEW.ORDER_ID,
+  …)` failed with *"Column unknown ET_CTX_2"*: inside an embedded DSQL statement Firebird reads a **bare**
+  identifier as a **column**, so a PSQL variable there must be `:ET_CTX_2`. This flips the direction of the other
+  colon rewrites (#239 `:v`→`?`, #242 `:v`→bare). `ContextSubstitution.Substitute` gained a `colonReferences`
+  flag; the executor sets it with `node is not PsqlStatement` (DSQL statements are `SqlStatement`, PSQL leaves are
+  `PsqlStatement`). Reads/writes stay the bare synthetic (the harness declares + injects it bare); only the
+  fragment reference is qualified.
+
+**Lab extended** (`Lab/setup.sql` + rebuilt `.fdb`, #149): an isolated `TRIG_LAB` table + `TR_TRIG_BD` (BEFORE
+DELETE, OLD-only) and `TR_TRIG_BIU` (BEFORE INSERT OR UPDATE, multi-action, writes NOTE not STATUS). Isolating
+them on their own table means they never clobber each other or the ORDERS triggers, giving clean independent
+fidelity checks and closing the full trigger matrix.
+
+**Live fidelity PROVEN** (`DebuggerFidelityProbe` +5 cases; the spec's method — compare the body's *effects*,
+since the triggering DML is not performed): (12) `TR_ORDERS_BU` raises `E_NEGATIVE_AMOUNT` on `NEW.TOTAL_AMOUNT
+= -5` — sim faults == a real UPDATE faults with the same exception; a non-negative amount completes. (13)
+`TR_ORDERS_AU` writes an `AUDIT_LOG` row on a STATUS change — the sim's DETAILS (read from the debug tx before
+rollback) == the real UPDATE's DETAILS ("Status changed from ACT to DONE"). (14) `TR_TRIG_BD` (OLD-only) raises
+`E_ORDER_LOCKED` on `OLD.STATUS='LOCKED'` — sim == a real DELETE of a locked row; a non-locked row completes.
+(15/16) `TR_TRIG_BIU` produces `NEW.NOTE='INSERTED'` for the INSERTING event and `='UPDATED'` for UPDATING —
+sim == the persisted value from a real INSERT / UPDATE, proving predicate substitution + the writable-NEW
+write-back for a multi-action trigger. All 11 D8/D9 cases stayed green (the executor changes are regression-free).
+
+Build 0/0; 122 debugger Core/Firebird unit tests green (full suite hangs #94/#226 — ran filtered); smoke clean.
+**Next: Seam C — the UI (`TriggerContextEditor` with the action selector + NEW/OLD grids honouring the §8.1
+availability rules, trigger-mode `DebuggerTabViewModel`, the Variables Context group, and the sidebar / trigger-
+editor "Debug trigger…" entry points). "Seed from a real row" is deferred to C2.**

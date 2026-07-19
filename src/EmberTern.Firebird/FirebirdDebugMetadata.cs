@@ -164,6 +164,98 @@ internal static class FirebirdDebugMetadata
         return new HarnessVariable(p.Name, $"DECLARE {p.Name} {p.TypeSpec.Trim()};", baseType);
     }
 
+    // ── Trigger context columns — NEW/OLD as frame variables (Stage X / D10) ─────────────────────────
+
+    /// <summary>Builds the harness variable templates for a trigger's <c>NEW</c>/<c>OLD</c> context columns
+    /// (spec §8.1). <c>NEW</c>/<c>OLD</c> do not exist inside an <c>EXECUTE BLOCK</c>, so
+    /// <see cref="ContextSubstitution"/> rewrites each <c>NEW.col</c>/<c>OLD.col</c> to a synthetic frame
+    /// variable and this resolves that variable's type from the <b>table's</b> column (the one new metadata path
+    /// of D10). The synthetic name comes from the <see cref="ContextColumn"/> — <see cref="ContextSubstitution"/>
+    /// is the single owner of that convention. A distinct <c>NEW.col</c> and <c>OLD.col</c> of the same column
+    /// share the column's type under two synthetic names.
+    /// <para>
+    /// <b>Declared with the BASE type, never the column's domain (R2, and deliberately NOT R3).</b> Unlike a
+    /// procedure parameter or a body local — a domain-typed variable declared verbatim (R3) — a <c>NEW</c>/
+    /// <c>OLD</c> field is a <b>record field</b>, not a constrained local. In a real trigger the user-supplied
+    /// value can be any value of the base type, <b>including one that violates the column's domain <c>CHECK</c>/
+    /// <c>NOT NULL</c></b>: a BEFORE trigger exists precisely to validate or fix such a value before the row is
+    /// written, and the domain/column constraint is enforced at write time — <b>after</b> the trigger, which the
+    /// debugger never performs. Declaring the context variable with the domain would re-validate the injected
+    /// value on entry and fail on exactly the case the trigger is meant to catch (e.g. a negative amount injected
+    /// into a <c>CHECK (VALUE &gt;= 0)</c> domain — proven live). So the base type is both the R2 rule and the
+    /// faithful record-field model. Gotcha #246.</para></summary>
+    public static async Task<IReadOnlyList<HarnessVariable>> BuildTriggerContextVariablesAsync(
+        DebugSessionConnection session,
+        string targetTable,
+        IReadOnlyList<ContextColumn> columns,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(targetTable);
+        ArgumentNullException.ThrowIfNull(columns);
+        if (columns.Count == 0)
+        {
+            return System.Array.Empty<HarnessVariable>();
+        }
+
+        var baseTypeByColumn = await ReadTableColumnTypesAsync(session, targetTable, cancellationToken).ConfigureAwait(false);
+
+        var result = new List<HarnessVariable>(columns.Count);
+        foreach (var c in columns)
+        {
+            if (!baseTypeByColumn.TryGetValue(c.Column, out var baseType))
+            {
+                throw new NotSupportedException(
+                    $"Debug (D10): column {targetTable}.{c.Column} was not found — cannot type the NEW/OLD context variable.");
+            }
+            // Base type for BOTH the declaration and the harness param/return (R2) — a NEW/OLD record field is
+            // never re-validated against the column's domain inside the trigger (see the remarks above).
+            result.Add(new HarnessVariable(c.Synthetic, $"DECLARE {c.Synthetic} {baseType};", baseType));
+        }
+        return result;
+    }
+
+    // The BASE type of every column of a table, keyed by folded column name (via FormatType — derivation, not
+    // string-munging). One round-trip for the whole table (a trigger references only a few columns, but reading
+    // them all in one query is simpler than one query per column and mirrors the catalog readers). The domain is
+    // deliberately NOT carried — a NEW/OLD context variable is declared with its base type (R2, see the remarks
+    // on BuildTriggerContextVariablesAsync).
+    private static async Task<Dictionary<string, string>> ReadTableColumnTypesAsync(
+        DebugSessionConnection session, string targetTable, CancellationToken cancellationToken)
+    {
+        const string sql =
+            "SELECT rf.RDB$FIELD_NAME, " +
+            "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
+            "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, f.RDB$CHARACTER_LENGTH " +
+            "FROM RDB$RELATION_FIELDS rf " +
+            "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE " +
+            "WHERE rf.RDB$RELATION_NAME = @t";
+
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        await session.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = session.Connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = session.Transaction;
+            cmd.Parameters.Add(new FbParameter("@t", targetTable.ToUpperInvariant()));
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                string name = TrimStr(reader, 0);
+                string baseType = FirebirdDdlReader.FormatType(
+                    Sh(reader, 1), Sh(reader, 2), Sh(reader, 3), Sh(reader, 4), Sh(reader, 5), Sh(reader, 6));
+                map[name] = baseType;
+            }
+        }
+        finally
+        {
+            session.CommandLock.Release();
+        }
+        return map;
+    }
+
     // ── Parameters (RDB$PROCEDURE_PARAMETERS) ───────────────────────────────────────────────────────
 
     private static async Task<List<(HarnessVariable Variable, bool IsOutput)>> ReadProcedureParametersAsync(

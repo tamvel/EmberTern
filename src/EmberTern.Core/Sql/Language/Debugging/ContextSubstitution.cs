@@ -83,9 +83,16 @@ public static class ContextSubstitution
     /// simulated <see cref="TriggerContext.Event"/>. Reports the synthetic names the fragment reads (inject) and
     /// may write (return). <c>NEW</c> columns are reported as writes only when <see cref="TriggerContext.NewWritable"/>
     /// (a BEFORE trigger) — over-inclusive there (a merely-read <c>NEW.col</c> written back returns its own value,
-    /// harmlessly), never missing a real write; <c>OLD</c> is never written back.</summary>
+    /// harmlessly), never missing a real write; <c>OLD</c> is never written back.
+    /// <para>
+    /// <paramref name="colonReferences"/> controls how a rewritten column reference names its synthetic frame
+    /// variable in the fragment text: bare (<c>ET_CTX_0</c>) for a PSQL expression (an assignment RHS, an
+    /// <c>IF</c>/<c>WHILE</c> condition), or colon-prefixed (<c>:ET_CTX_0</c>) inside an embedded <b>DSQL</b>
+    /// statement (<c>INSERT</c>/<c>UPDATE</c>/<c>DELETE</c>/<c>MERGE</c>/<c>SELECT … INTO</c>), where Firebird
+    /// reads a bare name as a <b>column</b> (gotcha #247). The reported reads/writes are always the bare synthetic
+    /// (the harness declares + injects them bare); only the fragment reference is qualified.</para></summary>
     public static ContextRewrite Substitute(
-        SemanticModel model, string source, TextSpan region, TriggerContext context)
+        SemanticModel model, string source, TextSpan region, TriggerContext context, bool colonReferences = false)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(source);
@@ -113,8 +120,9 @@ public static class ContextSubstitution
                 string column = Fold(member.Text);
                 if (lookup.TryGetValue((record, column), out var synthetic))
                 {
-                    // Replace the whole NEW.col span (qualifier .. member) with the synthetic name.
-                    edits.Add(new Edit(r.Span.Start, member.Span.End, synthetic));
+                    // Replace the whole NEW.col span (qualifier .. member) with the synthetic name — colon-prefixed
+                    // inside a DSQL statement, bare inside a PSQL expression (gotcha #247). Reads/writes stay bare.
+                    edits.Add(new Edit(r.Span.Start, member.Span.End, colonReferences ? ":" + synthetic : synthetic));
                     if (seenRead.Add(synthetic)) reads.Add(synthetic);
                     if (record == TriggerRecord.New && context.NewWritable && seenWrite.Add(synthetic))
                     {

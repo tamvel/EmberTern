@@ -75,7 +75,13 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         SemanticModel Model,
         IReadOnlyList<HarnessVariable> VariableTemplates,
         HashSet<string> OutputParameters,
-        IReadOnlyList<string> SubRoutines);
+        IReadOnlyList<string> SubRoutines,
+        // The trigger context (Stage X / D10) — non-null ONLY for a trigger's root frame. When present, every
+        // statement/condition of this routine is routed through ContextSubstitution before the harness so its
+        // NEW/OLD columns and INSERTING/UPDATING/DELETING predicates become synthetic frame variables + literals
+        // (spec §8.1). A stepped-into callee (a stored/local routine) has no trigger context (NEW/OLD are not in
+        // scope there), so this stays null for every non-root frame — leaving D8/D9 paths untouched.
+        TriggerContext? Trigger = null);
 
     private FirebirdDebugExecutor(DebugSessionConnection session, Encoding fallback)
     {
@@ -97,6 +103,24 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         SemanticModel model,
         Encoding fallback,
         CancellationToken cancellationToken = default)
+        => await CreateAsync(session, routineName, source, body, model, fallback, trigger: null, cancellationToken)
+            .ConfigureAwait(false);
+
+    /// <summary>Creates the executor for a <b>trigger</b> root frame (Stage X / D10): as the standalone overload,
+    /// but the root routine's <c>NEW</c>/<c>OLD</c> context columns become additional frame variables — their
+    /// types resolved from the trigger's target table (<see cref="FirebirdDebugMetadata.BuildTriggerContextVariablesAsync"/>)
+    /// and merged into the frame templates — and the <paramref name="trigger"/> context is registered on the
+    /// root so every statement/condition is routed through <see cref="ContextSubstitution"/>. A trigger has no
+    /// stored parameters (it is not a procedure), so the parameter query is skipped.</summary>
+    public static async Task<FirebirdDebugExecutor> CreateAsync(
+        DebugSessionConnection session,
+        string? routineName,
+        string source,
+        BlockStatement body,
+        SemanticModel model,
+        Encoding fallback,
+        TriggerContext? trigger,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(source);
@@ -104,11 +128,26 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(fallback);
 
+        // A trigger is not a catalog procedure, so skip the RDB$PROCEDURE_PARAMETERS query (it has none — passing
+        // null avoids a pointless round-trip and any name collision with a like-named procedure).
         var layout = await FirebirdDebugMetadata
-            .BuildFrameVariablesAsync(session, routineName, body, source, cancellationToken)
+            .BuildFrameVariablesAsync(session, trigger is null ? routineName : null, body, source, cancellationToken)
             .ConfigureAwait(false);
+
+        IReadOnlyList<HarnessVariable> templates = layout.Variables;
+        if (trigger is not null)
+        {
+            var contextVars = await FirebirdDebugMetadata
+                .BuildTriggerContextVariablesAsync(session, trigger.TargetTable, trigger.Columns, cancellationToken)
+                .ConfigureAwait(false);
+            var merged = new List<HarnessVariable>(layout.Variables.Count + contextVars.Count);
+            merged.AddRange(layout.Variables);
+            merged.AddRange(contextVars);
+            templates = merged;
+        }
+
         var executor = new FirebirdDebugExecutor(session, fallback);
-        executor.Register(body, source, model, layout.Variables, layout.OutputParameters);
+        executor.Register(body, source, model, templates, layout.OutputParameters, trigger);
         return executor;
     }
 
@@ -117,7 +156,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     // (recursion re-resolves the same routine — keep the first context).
     private void Register(
         BlockStatement body, string source, SemanticModel model,
-        IReadOnlyList<HarnessVariable> templates, IReadOnlyList<string> outputs)
+        IReadOnlyList<HarnessVariable> templates, IReadOnlyList<string> outputs, TriggerContext? trigger = null)
     {
         if (_contexts.ContainsKey(body)) return;
         // R5 (§3.4): the routine's in-scope local sub-routine declarations, carried verbatim into every harness
@@ -126,7 +165,7 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         // change there. Extracted from the AST the parser already built (Contract #1).
         var subRoutines = PsqlDeclarationExtractor.Extract(body, source).SubRoutines;
         _contexts[body] = new RoutineContext(
-            source, model, templates, new HashSet<string>(outputs, StringComparer.OrdinalIgnoreCase), subRoutines);
+            source, model, templates, new HashSet<string>(outputs, StringComparer.OrdinalIgnoreCase), subRoutines, trigger);
     }
 
     // The context for the routine the given frame activates — keyed by its Body. Every step / condition /
@@ -156,9 +195,25 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
 
         var node = AsNode(statement);
         var (reads, writes) = ResolveReadWrite(ctx, node, frame);
+        string fragment = Slice(ctx.Source, node);
+
+        // D10: a trigger frame's NEW/OLD columns and INSERTING/UPDATING/DELETING predicates are rewritten to
+        // synthetic frame variables + boolean literals (spec §8.1) before the harness, and the context reads it
+        // injects / writes it returns are unioned into the read/write set. Non-trigger frames are unchanged.
+        if (ctx.Trigger is not null)
+        {
+            // Inside an embedded DSQL statement (INSERT/UPDATE/DELETE/MERGE/SELECT — not a PSQL leaf) a variable
+            // reference must be colon-prefixed, or Firebird reads the bare name as a column (gotcha #247).
+            bool dsql = node is not PsqlStatement;
+            var rewrite = ContextSubstitution.Substitute(ctx.Model, ctx.Source, SpanOf(node), ctx.Trigger, colonReferences: dsql);
+            fragment = rewrite.Fragment;
+            reads = Union(reads, rewrite.ContextReads);
+            writes = Union(writes, rewrite.ContextWrites);
+        }
+
         var request = new HarnessRequest
         {
-            Fragment = Slice(ctx.Source, node),
+            Fragment = fragment,
             Mode = HarnessMode.Statement,
             Variables = BindValues(ctx, frame),
             Reads = reads,
@@ -186,7 +241,30 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         var ctx = Ctx(frame);
         var node = AsNode(owner);
         var (reads, _) = ResolveReadWrite(ctx, node, frame);
-        var (value, error) = EvaluateExpression(ctx, frame, ConditionExpression(ctx.Source, node), BooleanResultType, reads);
+
+        // D10: a trigger frame's IF/WHILE condition may reference NEW/OLD or a predicate — substitute over the
+        // condition region (the paren group) before evaluating it, unioning the context reads it injects.
+        string condition;
+        if (ctx.Trigger is not null)
+        {
+            var (s, e) = ConditionBounds(node);
+            if (s >= 0 && e <= ctx.Source.Length && e > s)
+            {
+                var rewrite = ContextSubstitution.Substitute(ctx.Model, ctx.Source, TextSpan.FromBounds(s, e), ctx.Trigger);
+                condition = rewrite.Fragment;
+                reads = Union(reads, rewrite.ContextReads);
+            }
+            else
+            {
+                condition = Slice(ctx.Source, node); // fallback (malformed shape) — §F, server reports it
+            }
+        }
+        else
+        {
+            condition = ConditionExpression(ctx.Source, node);
+        }
+
+        var (value, error) = EvaluateExpression(ctx, frame, condition, BooleanResultType, reads);
         if (error is not null) return ConditionOutcome.Raised(error);
         return value is null or DBNull ? new ConditionOutcome(null) : ConditionOutcome.Of(Convert.ToBoolean(value));
     }
@@ -283,7 +361,15 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             throw new NotSupportedException(
                 "Debug (D6): a FOR EXECUTE STATEMENT (dynamic) cursor cannot be stepped — step over the loop.");
 
-        var plan = CursorBridge.Build(Ctx(frame).Source, loop);
+        var ctx = Ctx(frame);
+        // D10 §F boundary (decision 2): a FOR SELECT cursor that references NEW/OLD cannot be stepped — the
+        // cursor is a separately-opened DSQL statement where the harness's synthetic context variables do not
+        // exist. Refuse clearly rather than open a partially-faithful cursor.
+        if (ctx.Trigger is not null && QueryReferencesContext(ctx.Model, loop.Query))
+            throw new NotSupportedException(
+                "Debug (D10): a FOR SELECT cursor that references NEW/OLD is not supported in a trigger — step over the loop.");
+
+        var plan = CursorBridge.Build(ctx.Source, loop);
         var values = new object?[plan.ParameterNames.Count];
         for (int i = 0; i < values.Length; i++)
         {
@@ -816,6 +902,21 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
     // source; the whole "(<cond>)" is a valid boolean expression for the Expression-mode harness.
     private static string ConditionExpression(string source, SqlNode node)
     {
+        var (s, e) = ConditionBounds(node);
+        if (s >= 0 && e <= source.Length && e > s)
+        {
+            return source.Substring(s, e - s);
+        }
+        // Fallback (malformed / unexpected shape): the whole node text. §F: correctness over cleverness —
+        // Firebird will report a syntax error rather than the debugger silently guessing a boolean.
+        return Slice(source, node);
+    }
+
+    // The source bounds (start, exclusive end) of the parenthesised IF/WHILE condition — the first top-level
+    // (…) group after the keyword — or (-1, -1) when the shape is not recognised. Split from ConditionExpression
+    // so D10 can substitute NEW/OLD over the same region (not only slice it).
+    private static (int Start, int End) ConditionBounds(SqlNode node)
+    {
         if (node is PsqlStatement psql)
         {
             var tokens = psql.Tokens;
@@ -832,20 +933,42 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
                     depth--;
                     if (depth == 0 && open >= 0)
                     {
-                        int s = tokens[open].Start;
-                        int e = tokens[i].End;
-                        if (s >= 0 && e <= source.Length && e > s)
-                        {
-                            return source.Substring(s, e - s);
-                        }
-                        break;
+                        return (tokens[open].Start, tokens[i].End);
                     }
                 }
             }
         }
-        // Fallback (malformed / unexpected shape): the whole node text. §F: correctness over cleverness —
-        // Firebird will report a syntax error rather than the debugger silently guessing a boolean.
-        return Slice(source, node);
+        return (-1, -1);
+    }
+
+    private static TextSpan SpanOf(SqlNode node) => new(node.Start, node.Length);
+
+    // Distinct union preserving first-seen order (a ∪ b) — used to fold a trigger's context reads/writes into the
+    // local read/write set. Returns the input unchanged when one side is empty (the common non-trigger case).
+    private static IReadOnlyList<string> Union(IReadOnlyList<string> a, IReadOnlyList<string> b)
+    {
+        if (b.Count == 0) return a;
+        if (a.Count == 0) return b;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>(a.Count + b.Count);
+        foreach (var x in a) if (seen.Add(x)) result.Add(x);
+        foreach (var x in b) if (seen.Add(x)) result.Add(x);
+        return result;
+    }
+
+    // True when a cursor query references a NEW/OLD record alias (a RecordAlias reference within the query span).
+    // Reference-driven, so a 'NEW.' inside a string literal in the query never trips it (D10 §F boundary guard).
+    private static bool QueryReferencesContext(SemanticModel model, SqlNode query)
+    {
+        foreach (var r in model.References)
+        {
+            if (r.Role == ReferenceRole.RecordAlias
+                && r.Span.Start >= query.Start && r.Span.End <= query.End)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     // The operand of a RETURN leaf (D9 seam c) — everything after the RETURN keyword, up to the trailing ';'

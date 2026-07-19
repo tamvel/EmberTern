@@ -807,8 +807,36 @@ noted.
   NO metadata**): distinct/deduped columns, synthetic rewrite + read/write split, AFTER = no NEW write,
   predicate literals per event, **string-literal `'OLD.STATUS'` left byte-intact beside a real `OLD.STATUS`**
   (reference-driven proof), no-context verbatim, full availability matrix. Build 0/0; Seam A tests + 191
-  neighbouring Core/semantic tests green; smoke clean. **NEXT: Seam B (Firebird executor + column-base-type
-  metadata path + launch-spec wiring + live fidelity on the lab triggers).**
+  neighbouring Core/semantic tests green; smoke clean.
+  **D10 Seam B — Firebird executor + metadata + Live Fidelity — DONE + live-fidelity-verified (2026-07-19).**
+  The trigger substitution is wired end-to-end and proven sim==real on the lab. **`RoutineContext` gained an
+  optional `TriggerContext?`** (non-null only for a trigger root frame — a stepped-into stored/local callee has
+  no NEW/OLD, so D8/D9 paths are untouched); a new `FirebirdDebugExecutor.CreateAsync` trigger overload merges
+  the **NEW/OLD context columns** into the frame templates and registers the context on the root.
+  `ExecuteStatement`/`EvaluateCondition` route every trigger-frame fragment/condition through
+  `ContextSubstitution` (unioning the context reads/writes into the harness read/write set); `OpenCursor`
+  **refuses a `FOR SELECT` that references NEW/OLD** with a clear message (the §F boundary, decision 2). One new
+  metadata path — `FirebirdDebugMetadata.BuildTriggerContextVariablesAsync` — types each context column from the
+  **trigger's target table** (`RDB$RELATION_FIELDS ⨝ RDB$FIELDS` via the existing `FormatType`, derivation not
+  guessing). `DebugLaunchSpec`/`FirebirdDebugSessionLauncher` carry the `TriggerContext` through. **Two §F
+  corrections found by probing, not reasoning:** (a) a context variable is declared with the column's **BASE
+  type, never its domain** — a NEW/OLD field is a record field, not a domain-constrained local, so a
+  user-supplied value that violates the column's `CHECK` (the very case a BEFORE trigger catches) must inject
+  freely (gotcha #246; injecting `-5` into a `D_AMOUNT CHECK(VALUE>=0)` domain died on entry before the
+  trigger's own logic); (b) inside an embedded DSQL statement a context reference is **colon-prefixed**
+  (`:ET_CTX_i`) — a bare name there is read as a column — while a PSQL expression keeps it bare, chosen by
+  `node is not PsqlStatement` (gotcha #247). **Lab extended** (`Lab/setup.sql` + rebuilt `.fdb`, #149) with an
+  isolated `TRIG_LAB` table + a **BEFORE DELETE** (`TR_TRIG_BD`, OLD-only) and a **BEFORE INSERT OR UPDATE**
+  (`TR_TRIG_BIU`, multi-action) trigger — isolated so they never clobber each other or the ORDERS triggers,
+  closing the full trigger matrix. **Live fidelity PROVEN** (`DebuggerFidelityProbe` +5 cases, spec verification
+  method — compare the body's *effects* since the triggering DML is not performed): BEFORE UPDATE exception
+  (E_NEGATIVE_AMOUNT) sim==real, AFTER UPDATE audit side-effect (the `AUDIT_LOG` DETAILS row, read from the debug
+  tx) sim==real, BEFORE DELETE (OLD-only) exception (E_ORDER_LOCKED) sim==real, and the multi-action BIU trigger
+  producing `NEW.NOTE='INSERTED'` (INSERTING) / `='UPDATED'` (UPDATING) sim==real for both events — plus all 11
+  D8/D9 cases still green (no regression). Build 0/0; 122 debugger Core/Firebird unit tests green; smoke clean.
+  **NEXT: Seam C (UI — TriggerContextEditor with the action selector + NEW/OLD grids + availability, trigger-mode
+  DebuggerTabViewModel, the Variables Context group, and the sidebar/editor Debug-trigger entry points; "seed
+  from a real row" is C2).**
   **Superseded note (D5 seam b already shipped): —
   Watches panel + per-routine persistence** (auto-re-evaluate after each step through the same
   `DebugSession.Evaluate`; flag a non-pure-expression watch; persist per routine). Order stays **risk-first**
