@@ -119,6 +119,32 @@ public class DebugEngineTests
             return ConditionOutcome.Of(_defaultCondition);
         }
 
+        // ── D12 breakpoint conditions (a user-supplied boolean fragment) ──
+        // Scripted per fragment as a queue of outcomes (null value = NULL condition); an unscripted fragment
+        // defaults to TRUE (an "always break" conditional needs no script). CondFragmentRaises scripts an error.
+        private readonly Dictionary<string, Queue<ConditionOutcome>> _condFragments = new(StringComparer.OrdinalIgnoreCase);
+        public List<string> ConditionFragmentsEvaluated { get; } = new();
+
+        public FakeExecutor CondFragment(string fragment, params bool?[] values)
+        {
+            _condFragments[fragment] = new Queue<ConditionOutcome>(
+                values.Select(v => v is bool b ? ConditionOutcome.Of(b) : new ConditionOutcome(null)));
+            return this;
+        }
+
+        public FakeExecutor CondFragmentRaises(string fragment, DebugError error)
+        {
+            _condFragments[fragment] = new Queue<ConditionOutcome>(new[] { ConditionOutcome.Raised(error) });
+            return this;
+        }
+
+        public ConditionOutcome EvaluateCondition(string fragment, int scopeOffset, Frame frame)
+        {
+            ConditionFragmentsEvaluated.Add(fragment);
+            if (_condFragments.TryGetValue(fragment, out var q) && q.Count > 0) return q.Dequeue();
+            return ConditionOutcome.True;
+        }
+
         // ── D5 evaluation surface ──
         private readonly Dictionary<string, EvaluationResult> _evals = new(StringComparer.OrdinalIgnoreCase);
         public List<EvaluationRequest> Evaluations { get; } = new();
@@ -1069,6 +1095,178 @@ public class DebugEngineTests
         Assert.Equal(StopReason.Breakpoint, s.StopReason);
         Assert.Equal("q2 = 2;", Text(CalleeSql, s.CurrentStatement!));
         Assert.Equal(2, s.Depth);
+    }
+
+    // ── D12: Conditional breakpoints + hit counts (spec §9.8.2) ─────────────────────────────────────
+
+    [Fact]
+    public void HitCountPolicy_IsMetAt_PerKind()
+    {
+        Assert.True(HitCountPolicy.Always.IsMetAt(1));
+        Assert.True(HitCountPolicy.Always.IsMetAt(9));
+
+        Assert.False(HitCountPolicy.Exactly(3).IsMetAt(2));
+        Assert.True(HitCountPolicy.Exactly(3).IsMetAt(3));
+        Assert.False(HitCountPolicy.Exactly(3).IsMetAt(4));
+
+        Assert.False(HitCountPolicy.AtLeast(3).IsMetAt(2));
+        Assert.True(HitCountPolicy.AtLeast(3).IsMetAt(3));
+        Assert.True(HitCountPolicy.AtLeast(3).IsMetAt(9));
+
+        Assert.False(HitCountPolicy.Multiple(2).IsMetAt(1));
+        Assert.True(HitCountPolicy.Multiple(2).IsMetAt(2));
+        Assert.False(HitCountPolicy.Multiple(2).IsMetAt(3));
+        Assert.True(HitCountPolicy.Multiple(2).IsMetAt(4));
+    }
+
+    [Fact]
+    public void Breakpoint_UnsatisfiedCondition_DoesNotCountOrBreak()
+    {
+        var bp = new Breakpoint(0);
+        Assert.False(bp.ShouldBreak(conditionSatisfied: false));
+        Assert.Equal(0, bp.Hits); // a false / NULL condition never counts as a hit
+    }
+
+    [Fact]
+    public void Breakpoint_HitCount_CountsSatisfiedArrivals_BreaksAtPolicy()
+    {
+        var bp = new Breakpoint(0) { HitCount = HitCountPolicy.Exactly(2) };
+        Assert.False(bp.ShouldBreak(true)); // Hits 1
+        Assert.True(bp.ShouldBreak(true));  // Hits 2 → Exactly(2) met
+        Assert.False(bp.ShouldBreak(true)); // Hits 3
+        Assert.Equal(3, bp.Hits);
+    }
+
+    [Fact]
+    public void BreakpointSet_AddThenGetOrAdd_ReturnsTheSamePolicyObject()
+    {
+        var set = new BreakpointSet();
+        Assert.True(set.Add(10));
+        var bp = set.Get(10);
+        Assert.NotNull(bp);
+        Assert.Same(bp, set.GetOrAdd(10));            // GetOrAdd returns the existing entry
+        bp!.Condition = "x > 0";
+        Assert.False(set.Add(10));                    // Add on an existing offset is a no-op…
+        Assert.Equal("x > 0", set.Get(10)!.Condition); // …it keeps the configured policy
+    }
+
+    [Fact]
+    public void ConditionalBreakpoint_StopsOnlyWhenConditionTrue()
+    {
+        // Condition false on arrival 1 (no count, no stop), true on arrival 2 (counts, stops).
+        const string sql = "begin for select id from t into :i do x = 1; end";
+        var exec = new FakeExecutor()
+            .CursorAt(Off(sql, "for select"), Row("I", 1), Row("I", 2), Row("I", 3))
+            .CondFragment("i > 1", false, true);
+        var s = new DebugSession(Body(sql), exec);
+        var bp = s.Breakpoints.GetOrAdd(Off(sql, "x = 1"));
+        bp.Condition = "i > 1";
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(StopReason.Breakpoint, s.StopReason);
+        Assert.Equal(1, bp.Hits);                                        // only the condition-true arrival counted
+        Assert.Equal(new[] { "i > 1", "i > 1" }, exec.ConditionFragmentsEvaluated); // evaluated on BOTH arrivals
+    }
+
+    [Fact]
+    public void HitCountBreakpoint_Exactly_BreaksOnNthArrival()
+    {
+        const string sql = "begin for select id from t into :i do x = 1; end";
+        var exec = new FakeExecutor().CursorAt(Off(sql, "for select"),
+            Row("I", 1), Row("I", 2), Row("I", 3), Row("I", 4), Row("I", 5));
+        var s = new DebugSession(Body(sql), exec);
+        var bp = s.Breakpoints.GetOrAdd(Off(sql, "x = 1"));
+        bp.HitCount = HitCountPolicy.Exactly(3);
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal(StopReason.Breakpoint, s.StopReason);
+        Assert.Equal(3, bp.Hits); // one Continue stopped on exactly the 3rd arrival
+    }
+
+    [Fact]
+    public void HitCountBreakpoint_Multiple_BreaksEveryN()
+    {
+        const string sql = "begin for select id from t into :i do x = 1; end";
+        var exec = new FakeExecutor().CursorAt(Off(sql, "for select"),
+            Row("I", 1), Row("I", 2), Row("I", 3), Row("I", 4), Row("I", 5), Row("I", 6));
+        var s = new DebugSession(Body(sql), exec);
+        var bp = s.Breakpoints.GetOrAdd(Off(sql, "x = 1"));
+        bp.HitCount = HitCountPolicy.Multiple(2);
+        s.Start();
+        s.Step(StepKind.Continue); Assert.Equal(2, bp.Hits); // stop at arrival 2
+        s.Step(StepKind.Continue); Assert.Equal(4, bp.Hits); // stop at arrival 4
+        s.Step(StepKind.Continue); Assert.Equal(6, bp.Hits); // stop at arrival 6
+        s.Step(StepKind.Continue);                            // no more rows → completes
+        Assert.Equal(DebugState.Completed, s.State);
+    }
+
+    [Fact]
+    public void ConditionAndHitCount_Combined_HitCountRunsOverConditionTrueArrivals()
+    {
+        // Condition gates first; the hit count counts only condition-TRUE arrivals. Condition true on arrivals
+        // 2,3,4; hit-count Exactly(2) → stop on the 2nd condition-true arrival.
+        const string sql = "begin for select id from t into :i do x = 1; end";
+        var exec = new FakeExecutor()
+            .CursorAt(Off(sql, "for select"), Row("I", 1), Row("I", 2), Row("I", 3), Row("I", 4))
+            .CondFragment("i > 1", false, true, true, true);
+        var s = new DebugSession(Body(sql), exec);
+        var bp = s.Breakpoints.GetOrAdd(Off(sql, "x = 1"));
+        bp.Condition = "i > 1";
+        bp.HitCount = HitCountPolicy.Exactly(2);
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal(StopReason.Breakpoint, s.StopReason);
+        Assert.Equal(2, bp.Hits); // arrivals 2 and 3 counted; stopped on the 2nd condition-true arrival
+    }
+
+    [Fact]
+    public void ConditionalBreakpoint_ConditionRaises_StopsAndSurfacesError()
+    {
+        // A condition that raises never silently skips the breakpoint — the session stops ON the line and the
+        // error is surfaced (spec §F), so the user can fix the condition.
+        const string sql = "begin a = 1; b = 2; end";
+        var exec = new FakeExecutor().CondFragmentRaises("bad expr", new DebugError(ExceptionName: "E_COND", Message: "bad"));
+        var s = new DebugSession(Body(sql), exec);
+        s.Breakpoints.GetOrAdd(Off(sql, "b = 2")).Condition = "bad expr";
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(StopReason.Breakpoint, s.StopReason);
+        Assert.Equal("E_COND", s.BreakpointConditionError!.ExceptionName);
+        Assert.Equal("b = 2;", Text(sql, s.CurrentStatement!));     // stopped ON the line…
+        Assert.DoesNotContain(Off(sql, "b = 2"), exec.Executed);    // …b = 2 not executed
+    }
+
+    [Fact]
+    public void ConditionalBreakpoint_NullCondition_DoesNotStop()
+    {
+        const string sql = "begin a = 1; b = 2; end";
+        var exec = new FakeExecutor().CondFragment("x", new bool?[] { null }); // condition → NULL
+        var s = new DebugSession(Body(sql), exec);
+        s.Breakpoints.GetOrAdd(Off(sql, "b = 2")).Condition = "x";
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal(DebugState.Completed, s.State); // NULL is not-true (three-valued logic) → never stops
+    }
+
+    [Fact]
+    public void PlainBreakpoint_StillStopsEveryArrival_AndNeverTouchesTheConditionEngine()
+    {
+        // A plain Add breakpoint (no condition, Always) behaves exactly as pre-D12: it stops every time and
+        // never invokes the condition evaluator (no needless server round-trip).
+        const string sql = "begin for select id from t into :i do x = 1; end";
+        var exec = new FakeExecutor().CursorAt(Off(sql, "for select"), Row("I", 1), Row("I", 2));
+        var s = new DebugSession(Body(sql), exec);
+        s.Breakpoints.Add(Off(sql, "x = 1"));
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal("x = 1;", Text(sql, s.CurrentStatement!)); // arrival 1
+        s.Step(StepKind.Continue);
+        Assert.Equal("x = 1;", Text(sql, s.CurrentStatement!)); // arrival 2
+        s.Step(StepKind.Continue);
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Empty(exec.ConditionFragmentsEvaluated); // no condition → the D5 engine is never touched
     }
 
     // ── D5: expression evaluation (Evaluate / Watches / Immediate — one engine, §9.5) ──────────────

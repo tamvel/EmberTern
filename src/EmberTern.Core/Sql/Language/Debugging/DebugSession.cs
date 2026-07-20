@@ -42,6 +42,7 @@ public sealed class DebugSession
     private IExecutableStatement? _faultStatement; // the step point that raised the unhandled exception
     private List<Frame>? _faultStack;          // the call stack (innermost last) captured at the unhandled fault
     private (IExecutableStatement? Step, List<Frame> Stack)? _pendingRaise; // a raise held at a Break-on-Exception pause, routed on the next resume (§9.8.1)
+    private DebugError? _conditionError;       // a conditional breakpoint whose condition RAISED on the stop that paused us (§9.8.2); cleared on resume
 
     /// <summary>Creates a session over <paramref name="rootBody"/>. <paramref name="rootValues"/> seeds the
     /// root frame's initial values — the routine's <b>input parameter</b> arguments supplied at launch (§9.3):
@@ -130,9 +131,18 @@ public sealed class DebugSession
     /// <summary>The error the session faulted on, or null (also null after a <c>WHEN</c> handler caught).</summary>
     public DebugError? CurrentError => _error;
 
-    /// <summary>The active breakpoints (offsets of step points). Mutable during the session — add or remove
-    /// while paused; a run command stops at the next step point whose offset is set here.</summary>
+    /// <summary>The active breakpoints — <see cref="Breakpoint"/> stop-policy objects keyed by step-point
+    /// offset (D12). Mutable during the session: add / remove while paused, and set a condition or hit-count
+    /// policy on an entry (<see cref="BreakpointSet.GetOrAdd"/>). A run command stops at the next step point
+    /// whose breakpoint's policy is met (condition TRUE + hit count reached); a plain breakpoint stops every
+    /// time.</summary>
     public BreakpointSet Breakpoints => _breakpoints;
+
+    /// <summary>The error a conditional breakpoint's condition RAISED on the stop decision that paused the
+    /// session (D12, spec §9.8.2 / §F): a broken condition never silently skips its breakpoint — the session
+    /// stops (<see cref="StopReason.Breakpoint"/>) and the error is surfaced here so the user can fix it. Null
+    /// unless the current pause was caused by a failed condition; cleared on the next resume.</summary>
+    public DebugError? BreakpointConditionError => _conditionError;
 
     /// <summary>When true, a raised exception <b>pauses</b> the session at the raising statement — frame
     /// intact, <see cref="DebugState.Paused"/> with <see cref="StopReason.Exception"/> — <i>before</i> the
@@ -280,6 +290,7 @@ public sealed class DebugSession
     private void RunStepping(StepKind kind, int? targetOffset)
     {
         EnsurePaused();
+        _conditionError = null; // a fresh stop decision re-sets it if a condition raises again
         int startDepth = _frames.Count;
 
         while (true)
@@ -326,7 +337,7 @@ public sealed class DebugSession
                 return;
             }
 
-            bool atBreakpoint = _breakpoints.Contains(_currentStep.Start);
+            bool atBreakpoint = ShouldBreakAt(_currentStep);
             if (atBreakpoint || StepPlanner.ShouldStop(kind, targetOffset, startDepth, _frames.Count, _currentStep))
             {
                 State = DebugState.Paused;
@@ -360,6 +371,35 @@ public sealed class DebugSession
         // so the session is no longer faulted.
         _error = null;
         return false;
+    }
+
+    // The full D12 stop decision for a breakpoint at this step point (spec §9.8.2). A plain breakpoint stops
+    // every time. A conditional one stops only when its boolean condition — evaluated through the SAME engine
+    // as an IF/WHILE header and Evaluate/Watches (no second evaluator) — is TRUE, and only when its hit-count
+    // policy is met at the resulting tally. A condition that yields NULL/false does not count and does not
+    // stop (three-valued logic, as IF); one that RAISES stops and surfaces the error (never silently skipped,
+    // §F). Returns false when no breakpoint is set here. The condition is evaluated against the frame about to
+    // execute the step point (_frames[^1]) — the correct frame by construction.
+    private bool ShouldBreakAt(IExecutableStatement step)
+    {
+        var bp = _breakpoints.Get(step.Start);
+        if (bp is null)
+        {
+            return false;
+        }
+
+        bool conditionSatisfied = true;
+        if (bp.HasCondition)
+        {
+            var outcome = _executor.EvaluateCondition(bp.Condition!.Trim(), step.Start, _frames[^1]);
+            if (outcome.Error is not null)
+            {
+                _conditionError = outcome.Error; // a broken condition stops the session so the user can fix it
+                return true;
+            }
+            conditionSatisfied = outcome.Value == true; // NULL / false → not-true
+        }
+        return bp.ShouldBreak(conditionSatisfied);
     }
 
     // Executes the current step point, advancing the control stack (consuming a leaf / evaluating a

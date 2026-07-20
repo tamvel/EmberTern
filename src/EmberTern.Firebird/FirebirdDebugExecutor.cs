@@ -320,6 +320,30 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         return value is null or DBNull ? new ConditionOutcome(null) : ConditionOutcome.Of(Convert.ToBoolean(value));
     }
 
+    /// <inheritdoc/>
+    /// <remarks>D12 (§9.8.2): a breakpoint condition is a user-supplied boolean fragment (no AST node), so —
+    /// exactly like <see cref="Evaluate"/> — its injected read set is the §3.5 in-scope-locals primitive at the
+    /// breakpoint offset. It is then run through the very same typed <see cref="EvaluateExpression"/> path the
+    /// <c>IF</c>/<c>WHILE</c> overload uses (<see cref="BooleanResultType"/>), and its result is interpreted
+    /// identically: NULL → no branch (three-valued logic), otherwise <c>Convert.ToBoolean</c>. One engine, no
+    /// second evaluator.</remarks>
+    public ConditionOutcome EvaluateCondition(string fragment, int scopeOffset, Frame frame)
+    {
+        ArgumentNullException.ThrowIfNull(fragment);
+        ArgumentNullException.ThrowIfNull(frame);
+
+        var ctx = Ctx(frame);
+        var names = ReadWriteSetAnalyzer.InScopeLocals(ctx.Model, scopeOffset);
+        if (names.Count == 0)
+        {
+            names = AllTemplateNames(ctx); // no locals in scope here — inject every known frame variable (§3.5)
+        }
+
+        var (value, error) = EvaluateExpression(ctx, frame, fragment, BooleanResultType, names);
+        if (error is not null) return ConditionOutcome.Raised(error);
+        return value is null or DBNull ? new ConditionOutcome(null) : ConditionOutcome.Of(Convert.ToBoolean(value));
+    }
+
     // The one typed-expression evaluator (D9 seam c): runs a fragment through the Expression Harness typed as
     // <paramref name="resultType"/> and returns (value, error). Shared by EvaluateCondition (BOOLEAN → branch
     // decision) and EvaluateReturn (the function's RETURNS base type → return value) — one server path, no

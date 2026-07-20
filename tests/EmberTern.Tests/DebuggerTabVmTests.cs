@@ -55,6 +55,7 @@ public class DebuggerTabVmTests
         }
 
         public ConditionOutcome EvaluateCondition(IExecutableStatement owner, Frame frame) => ConditionOutcome.True;
+        public ConditionOutcome EvaluateCondition(string fragment, int scopeOffset, Frame frame) => ConditionOutcome.True;
 
         private readonly Dictionary<string, EvaluationResult> _evals = new(StringComparer.OrdinalIgnoreCase);
         public List<EvaluationRequest> Evaluations { get; } = new();

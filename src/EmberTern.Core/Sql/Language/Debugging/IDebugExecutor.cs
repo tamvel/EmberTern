@@ -146,6 +146,14 @@ public interface IDebugExecutor
     /// <c>IF</c>/<c>WHILE</c> node) against <paramref name="frame"/>'s values.</summary>
     ConditionOutcome EvaluateCondition(IExecutableStatement owner, Frame frame);
 
+    /// <summary>Evaluates a <b>user-supplied</b> boolean expression — a breakpoint condition (D12, spec §9.8.2)
+    /// — against <paramref name="frame"/>, resolving the in-scope locals to inject at
+    /// <paramref name="scopeOffset"/> (the breakpoint's step-point offset, §3.5). It is the SAME typed-boolean
+    /// server path as the <c>IF</c>/<c>WHILE</c> overload above (a <c>BOOLEAN</c> Expression Harness), fed a
+    /// string fragment instead of an AST node — <b>not a second evaluator</b> (the plan's D12 constraint). NULL
+    /// / false → the breakpoint does not break; an error is surfaced (never silently skipped, §F).</summary>
+    ConditionOutcome EvaluateCondition(string fragment, int scopeOffset, Frame frame);
+
     /// <summary>Evaluates a <b>user-supplied fragment</b> against <paramref name="frame"/> (spec §9.5 — the
     /// Evaluate / Watches / Immediate surfaces). It is the SAME harness mechanism as a step: the fragment
     /// becomes a generated <c>EXECUTE BLOCK</c>, run in the debug transaction, and the server computes
