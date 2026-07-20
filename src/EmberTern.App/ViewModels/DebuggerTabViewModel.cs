@@ -91,7 +91,8 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         ParameterHistoryStore? historyStore = null,
         string? connectionId = null,
         WatchStore? watchStore = null,
-        Func<string, CancellationToken, Task<IReadOnlyList<ColumnSpec>>>? columnsProvider = null)
+        Func<string, CancellationToken, Task<IReadOnlyList<ColumnSpec>>>? columnsProvider = null,
+        string? packageName = null)
     {
         RoutineName = routineName ?? throw new ArgumentNullException(nameof(routineName));
         _sourceProvider = sourceProvider ?? throw new ArgumentNullException(nameof(sourceProvider));
@@ -100,6 +101,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         _connectionId = connectionId;
         _watchStore = watchStore;
         _columnsProvider = columnsProvider;
+        _packageName = packageName;
         Preflight = new ObservableCollection<DebugPreflightItem>();
         Variables = new ObservableCollection<DebugVariableRowViewModel>();
         VariableGroups = new ObservableCollection<DebugVariableGroupViewModel>();
@@ -118,6 +120,12 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     private readonly ParameterHistoryStore? _historyStore;
     private readonly string? _connectionId;
     private readonly WatchStore? _watchStore;
+
+    // The package a package-member root belongs to (D11 seam C) — non-null ONLY when this tab debugs a package
+    // member launched directly (the source provider returns the member reconstructed as a standalone CREATE
+    // PROCEDURE; this threads the package name into the launch spec so the executor sets up the package frame —
+    // sibling-call resolution + package-keyed catalog params). Null for every standalone routine / trigger.
+    private readonly string? _packageName;
 
     /// <summary>The routine being debugged (a standalone procedure in D4).</summary>
     public string RoutineName { get; }
@@ -510,7 +518,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         if (launch is not (var rootValues, var trigger)) return;
 
         _activeTrigger = trigger; // drives the Variables Context group (available NEW/OLD rows)
-        var spec = new DebugLaunchSpec(_source, _body, _model, RoutineName, rootValues, Isolation, trigger);
+        var spec = new DebugLaunchSpec(_source, _body, _model, RoutineName, rootValues, Isolation, trigger, _packageName);
 
         ClearExecutedSql(); // a fresh session starts a fresh audit log
         Phase = DebuggerPhase.Busy;

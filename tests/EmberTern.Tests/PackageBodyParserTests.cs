@@ -92,4 +92,39 @@ END";
 
     [Fact] // a body with no member routines (defensive) → empty, never throws
     public void EmptyBody_YieldsEmpty() => Assert.Empty(SqlParser.ParsePackageBodyMembers("BEGIN END"));
+
+    // ── ReconstructPackageMemberSource (D11 seam C) — the one shared "CREATE " + slice reconstruction ──
+
+    [Fact] // reconstruction prefixes CREATE and slices the exact member text; the result parses as a CREATE PROCEDURE
+    public void Reconstruct_ProcedureMember_ProducesStandaloneCreate()
+    {
+        var source = SqlParser.ReconstructPackageMemberSource(PkgDbgBody, "PUB_RUN", SubroutineKind.Procedure);
+        Assert.NotNull(source);
+        Assert.StartsWith("CREATE PROCEDURE PUB_RUN", source);
+
+        // It parses back into a DdlStatement with a runnable body (the same shape a stored routine has).
+        var ddl = SqlParser.Parse(source!).Root.Statements.OfType<DdlStatement>().Single();
+        Assert.NotNull(ddl.Body);
+        // Its sibling calls survive the reconstruction (a package root resolves them against its package).
+        var calls = ddl.Body!.DescendantNodesAndSelf().OfType<ExecuteProcedureStatement>().Select(c => c.ProcedureName).ToArray();
+        Assert.Equal(new[] { "PRIV_DOUBLE", "PUB_ADD" }, calls);
+    }
+
+    [Fact] // the blob-taking overload agrees with the members-taking overload (both go through the one slicer)
+    public void Reconstruct_BlobOverload_MatchesMembersOverload()
+    {
+        var members = SqlParser.ParsePackageBodyMembers(PkgDbgBody);
+        var viaBlob = SqlParser.ReconstructPackageMemberSource(PkgDbgBody, "PUB_ADD", SubroutineKind.Procedure);
+        var viaMembers = SqlParser.ReconstructPackageMemberSource(PkgDbgBody, members, "PUB_ADD", SubroutineKind.Procedure);
+        Assert.Equal(viaMembers, viaBlob);
+        Assert.StartsWith("CREATE PROCEDURE PUB_ADD", viaBlob);
+    }
+
+    [Fact] // a missing / wrong-kind / blank member yields null (→ step over, source unavailable)
+    public void Reconstruct_MissingOrWrongKind_YieldsNull()
+    {
+        Assert.Null(SqlParser.ReconstructPackageMemberSource(PkgDbgBody, "NOPE", SubroutineKind.Procedure));
+        Assert.Null(SqlParser.ReconstructPackageMemberSource(PkgDbgBody, "PUB_RUN", SubroutineKind.Function));
+        Assert.Null(SqlParser.ReconstructPackageMemberSource(null, "PUB_RUN", SubroutineKind.Procedure));
+    }
 }

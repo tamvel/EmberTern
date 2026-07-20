@@ -450,6 +450,41 @@ public sealed class FirebirdDdlReader
         }
     }
 
+    /// <summary>Reconstructs a package PROCEDURE member's standalone <c>CREATE PROCEDURE …</c> source (Stage X /
+    /// D11 seam C) so the debugger can launch it as a ROOT frame with the SAME machinery a stored routine uses:
+    /// reads the raw <c>RDB$PACKAGE_BODY_SOURCE</c> blob and slices out the member via the one shared reconstructor
+    /// (<see cref="EmberTern.Core.Sql.Language.SqlParser.ReconstructPackageMemberSource(string?, string, EmberTern.Core.Sql.Language.Ast.SubroutineKind)"/>).
+    /// Returns null when the package has no readable body or has no such procedure member. Only PROCEDURE members
+    /// are launchable (a package function-as-root is out of scope, §F).</summary>
+    public async Task<string?> FetchPackageMemberSourceAsync(
+        string packageName, string memberName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(memberName);
+
+        var connection = LaneConnection();
+        var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
+        var tx = _lane.TransactionForCommand;
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var body = await ReadPackageBodySourceAsync(connection, tx, packageName, fallback, cancellationToken)
+                .ConfigureAwait(false);
+            return EmberTern.Core.Sql.Language.SqlParser.ReconstructPackageMemberSource(
+                body, memberName, EmberTern.Core.Sql.Language.Ast.SubroutineKind.Procedure);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException(
+                $"Could not read body for PACKAGE {packageName}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
     private static async Task<string> BuildPackageDdlAsync(FbConnection connection, FbTransaction? tx, string name, Encoding fallback, CancellationToken ct)
     {
         var header = await ReadBlobAsync(connection, tx,

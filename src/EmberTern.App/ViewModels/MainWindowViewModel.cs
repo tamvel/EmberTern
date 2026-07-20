@@ -4830,6 +4830,60 @@ public partial class MainWindowViewModel : ViewModelBase
         _ = debugger.PrepareAsync();
     }
 
+    // Debugger launch for a PACKAGE PROCEDURE member (Stage X / D11 seam C) — the Package editor's Members tab
+    // "Debug procedure…" entry point. Reuses the ONE launch path (OpenDebuggerForObject's shape): the only
+    // differences are that the source provider reconstructs the member as a standalone CREATE PROCEDURE and the
+    // package name is threaded into the launch so the executor builds a package root frame (sibling-call
+    // resolution + package-keyed catalog params). Only procedure members are launchable — a package
+    // function-as-root is out of scope (§F). The tab title is the qualified PKG.MEMBER name; the frame name is
+    // the member name (matching how a stepped-into package member is named, seam B).
+    internal void OpenDebuggerForPackageMember(string packageName, string memberName)
+    {
+        if (string.IsNullOrWhiteSpace(packageName) || string.IsNullOrWhiteSpace(memberName)) return;
+        if (!_service.IsConnected)
+        {
+            AddMessage(MessageSeverity.Error, UiStrings.DebuggerNoConnection);
+            return;
+        }
+
+        var launcher = new EmberTern.App.Debugging.FirebirdDebugSessionLauncher(_service);
+        var debugger = new DebuggerTabViewModel(
+            memberName,
+            ct => FetchPackageMemberSourceAsync(packageName, memberName, ct),
+            launcher,
+            _parameterHistory,
+            _service.ActiveProfile?.Id,
+            _watchStore,
+            columnsProvider: (t, ct) => EnsureColumnsAsync(t, ct),
+            packageName: packageName);
+
+        var title = string.Format(CultureInfo.CurrentCulture, "{0}.{1}", packageName, memberName);
+        var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, title, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+        _ = debugger.PrepareAsync();
+    }
+
+    // Source provider for a package member launch: the member reconstructed as a standalone CREATE PROCEDURE
+    // (the same reconstruction the step-into path uses, via the one shared SqlParser reconstructor). Returns null
+    // on a read failure / missing member → the VM reports "source unavailable".
+    private async Task<string?> FetchPackageMemberSourceAsync(
+        string packageName, string memberName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _ddlReader.FetchPackageMemberSourceAsync(packageName, memberName, cancellationToken).ConfigureAwait(true);
+        }
+        catch (MetadataReadException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
     // ─── Bulk operations (recompile / recompute stats / activate-deactivate) ──
     // One dialog-request event + one execution pipeline reused by every bulk op. The
     // dialog opens IMMEDIATELY with a live VM; rows + counters update as each object

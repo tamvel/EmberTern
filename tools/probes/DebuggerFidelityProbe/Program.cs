@@ -132,6 +132,53 @@ try
         }
     }
 
+    // Launch a PACKAGE PROCEDURE member directly as the debug ROOT (D11 seam C). The member is reconstructed as a
+    // standalone CREATE PROCEDURE by the SAME reader the App source-provider uses (FetchPackageMemberSourceAsync
+    // → the one shared SqlParser reconstructor), then framed as a package root (package-keyed catalog params +
+    // its routines declared as harness sub-routines so a sibling — public or private — resolves). Returns the
+    // member's output value (read from the retained root frame — it keeps its values after it is popped, as the
+    // trigger sim does), max depth and frame names.
+    async Task<(object? Output, int MaxDepth, List<string> Frames)>
+        SimulatePackageMemberAsync(string packageName, string memberName, string outputName,
+            Dictionary<string, object?> rootValues, StepKind step = StepKind.Into)
+    {
+        string? source = await reader.FetchPackageMemberSourceAsync(packageName, memberName);
+        if (source is null) throw new Exception($"member source unavailable: {packageName}.{memberName}");
+        var model = SemanticModel.Build(SqlParser.Parse(source).Root);
+        var body = model.Syntax.Statements.OfType<DdlStatement>().First(d => d.Body is not null).Body!;
+
+        var session = await service.CreateDebugSessionAsync(DebugIsolation.ReadCommitted);
+        try
+        {
+            var executor = await FirebirdDebugExecutor.CreateAsync(
+                session, memberName, source, body, model, fallback, trigger: null, packageName: packageName);
+            var dbg = new DebugSession(body, executor, memberName, rootValues, source, model);
+            dbg.Start();
+
+            Frame? root = dbg.CurrentFrame; // retained — keeps its values after it is popped
+            int maxDepth = 0;
+            var frames = new List<string>();
+            int guard = 0;
+            while (dbg.State == DebugState.Paused)
+            {
+                if (dbg.Depth > maxDepth) maxDepth = dbg.Depth;
+                if (dbg.CurrentFrame is { } f && !frames.Contains(f.RoutineName)) frames.Add(f.RoutineName);
+                dbg.Step(step);
+                if (++guard > 5000) throw new Exception("runaway stepping");
+            }
+            if (dbg.State == DebugState.Faulted)
+                throw new Exception($"faulted: {dbg.CurrentError?.Message ?? dbg.CurrentError?.ExceptionName}");
+
+            object? output = null;
+            root?.TryResolveValue(outputName, out output);
+            return (output, maxDepth, frames);
+        }
+        finally
+        {
+            await session.DisposeAsync();
+        }
+    }
+
     // Simulate a TRIGGER body (D10) — the triggering DML is NOT performed (spec §8.1); the user supplies
     // NEW/OLD and we interpret the body. Fetches the full CREATE source, builds the trigger context (columns via
     // ContextSubstitution), seeds the NEW/OLD synthetics, steps to completion/fault, and reports the outcome, the
@@ -557,6 +604,26 @@ try
     else Fail("package step-over frames", string.Join(" → ", pkgOver.Frames));
     if (simPkgOver == 16) Pass("SIMULATED RESULT == REAL (step over)", $"sim {simPkgOver} == real 16");
     else Fail("package step-over RESULT", $"sim {simPkgOver} vs 16");
+
+    // ── 20. Package member launched as ROOT (D11 seam C) — the direct "Debug procedure…" entry point ──
+    // PKG_DBG.PUB_RUN(5), reconstructed as a standalone CREATE PROCEDURE and framed as a package root: its
+    // unqualified sibling calls (private PRIV_DOUBLE + public PUB_ADD) must resolve against the root frame's
+    // package context and step into as frames — proving the ROOT setup, not just step-into from a standalone
+    // caller (case 18). PUB_RUN is not selectable (returns via output R), so we read R from the retained frame.
+    Head("20. PKG_DBG.PUB_RUN(5) launched as ROOT (D11 seam C) — step INTO private + public siblings");
+    var pubRunRoot = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["P_N"] = 5 };
+    var pubRun = await SimulatePackageMemberAsync("PKG_DBG", "PUB_RUN", "R", pubRunRoot);
+    int? realPubRun = AsInt(await RealScalarAsync("EXECUTE PROCEDURE PKG_DBG.PUB_RUN(5)"));
+    int? simPubRun = AsInt(pubRun.Output);
+
+    if (pubRun.MaxDepth == 2) Pass("package-root depth == 2 (PUB_RUN → sibling)"); else Fail("package-root depth", $"{pubRun.MaxDepth}");
+    if (pubRun.Frames.SequenceEqual(new[] { "PUB_RUN", "PRIV_DOUBLE", "PUB_ADD" }))
+        Pass("package-root frame chain (member root + private/public siblings stepped into)", string.Join(" → ", pubRun.Frames));
+    else Fail("package-root frame chain", string.Join(" → ", pubRun.Frames));
+    if (simPubRun is not null && simPubRun == realPubRun)
+        Pass("SIMULATED R == REAL", $"sim {simPubRun} == real {realPubRun}");
+    else Fail("package-root simulated vs real R", $"sim {simPubRun} vs real {realPubRun}");
+    Console.WriteLine("      (PUB_RUN launched as root: PRIV_DOUBLE(5)=10 [private] + PUB_ADD(5)=6 [public] = 16)");
 }
 catch (Exception ex)
 {

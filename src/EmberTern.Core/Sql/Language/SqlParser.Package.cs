@@ -66,4 +66,33 @@ public static partial class SqlParser
     // form). ParseSubroutineDeclaration handles both leading forms.
     private static bool IsPackageMemberStart(IReadOnlyList<SqlToken> sig, int i)
         => IsBodyWord(sig[i], "PROCEDURE") || IsBodyWord(sig[i], "FUNCTION");
+
+    /// <summary>Reconstructs a package member's standalone <c>CREATE PROCEDURE/FUNCTION</c> source from the
+    /// package body blob (Stage X / D11): <c>"CREATE "</c> + the member's own <c>PROCEDURE/FUNCTION … AS … END</c>
+    /// slice, the D8-reusable form so a member parses + frames exactly like a stored routine. Returns null when
+    /// no runnable member of that kind + name exists. This is the <b>single owner</b> of the reconstruction — the
+    /// executor's step-into (with pre-parsed <paramref name="members"/>) and the App's root-launch source provider
+    /// (the blob overload below) both go through it, so there is no parallel implementation.</summary>
+    public static string? ReconstructPackageMemberSource(
+        string bodySource, IReadOnlyList<SubroutineDeclaration> members, string memberName, SubroutineKind kind)
+    {
+        if (bodySource is null || members is null) return null;
+        foreach (var m in members)
+        {
+            if (m.Kind == kind && m.Body is not null
+                && string.Equals(m.Name, memberName, StringComparison.OrdinalIgnoreCase))
+            {
+                return "CREATE " + bodySource.Substring(m.Start, m.Length);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Convenience overload for callers that have only the raw body blob (the App / probe root-launch
+    /// path): parses the members via <see cref="ParsePackageBodyMembers"/> then reconstructs. Returns null for
+    /// null/blank input or a missing member.</summary>
+    public static string? ReconstructPackageMemberSource(string? bodySource, string memberName, SubroutineKind kind)
+        => string.IsNullOrWhiteSpace(bodySource)
+            ? null
+            : ReconstructPackageMemberSource(bodySource!, ParsePackageBodyMembers(bodySource), memberName, kind);
 }

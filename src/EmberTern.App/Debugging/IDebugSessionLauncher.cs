@@ -32,9 +32,12 @@ internal interface IDebugSessionLauncher
 /// <summary>The inputs a launch needs: the routine's full source (span backing), its parsed body + semantic
 /// model (both from the strict whole-routine parse — gotcha #238), the display name, the input-parameter
 /// arguments seeding the root frame (§9.3; for a trigger, the synthetic-keyed NEW/OLD context values), the
-/// chosen transaction isolation (§4.2), and — for a trigger — the <paramref name="Trigger"/> context (§8.1:
-/// target table + simulated event/timing + the NEW/OLD column→synthetic mapping). <c>Trigger</c> is null for a
-/// procedure/function (the standalone case, D4–D9).</summary>
+/// chosen transaction isolation (§4.2), — for a trigger — the <paramref name="Trigger"/> context (§8.1:
+/// target table + simulated event/timing + the NEW/OLD column→synthetic mapping), and — for a package member
+/// launched as the ROOT (D11 seam C) — the <paramref name="PackageName"/> it belongs to (so its sibling calls
+/// resolve and its catalog params are keyed by package; <c>Source</c> is then the member reconstructed as a
+/// standalone <c>CREATE PROCEDURE</c>). <c>Trigger</c> is null for a procedure/function; <c>PackageName</c> is
+/// null for every standalone routine (D4–D10). The two are mutually exclusive.</summary>
 internal sealed record DebugLaunchSpec(
     string Source,
     BlockStatement Body,
@@ -42,7 +45,8 @@ internal sealed record DebugLaunchSpec(
     string RoutineName,
     IReadOnlyDictionary<string, object?> RootValues,
     DebugIsolation Isolation,
-    TriggerContext? Trigger = null);
+    TriggerContext? Trigger = null,
+    string? PackageName = null);
 
 /// <summary>A live, started debug session and its teardown. Disposing rolls back + closes the session's
 /// attachment (best-effort, idempotent). The <see cref="Session"/> is already <see cref="DebugSession.Start"/>ed

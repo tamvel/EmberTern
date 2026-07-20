@@ -134,13 +134,45 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         SemanticModel model,
         Encoding fallback,
         TriggerContext? trigger,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? packageName = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(body);
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(fallback);
+
+        var executor = new FirebirdDebugExecutor(session, fallback);
+
+        // D11 seam C: a package member launched as the debug ROOT. Built the SAME way a stepped-into package
+        // member is (seam B): package-keyed catalog params (the ONE catalog difference), and the package's
+        // routines declared as harness sub-routines (R5) so a sibling call — public OR private — resolves inside
+        // the harness like a D9 local routine (§15.12), with the package + its members carried on the frame's
+        // context so an unqualified sibling resolves. <paramref name="source"/> is the member reconstructed as a
+        // standalone CREATE PROCEDURE (the App/probe source provider does the same reconstruction). A closed
+        // scope (LexicalParent null) — Execute/EvaluateCondition/BindValues are untouched, as for a step-into
+        // package frame. (trigger + packageName are mutually exclusive.)
+        if (packageName is not null)
+        {
+            var pkgLayout = await FirebirdDebugMetadata
+                .BuildFrameVariablesAsync(session, routineName, body, source, cancellationToken, packageName)
+                .ConfigureAwait(false);
+            var pkg = await executor.PackageBodyFor(packageName, cancellationToken).ConfigureAwait(false);
+            if (pkg is not null)
+            {
+                executor.RegisterPackageMember(
+                    body, source, model, pkgLayout.Variables, pkgLayout.OutputParameters, packageName, pkg);
+            }
+            else
+            {
+                // No readable package body → register as a plain routine (sibling calls won't resolve → step
+                // over, faithful). Reaching launch without a body is not expected (the source was reconstructed
+                // from it), but never guess (§F).
+                executor.Register(body, source, model, pkgLayout.Variables, pkgLayout.OutputParameters);
+            }
+            return executor;
+        }
 
         // A trigger is not a catalog procedure, so skip the RDB$PROCEDURE_PARAMETERS query (it has none — passing
         // null avoids a pointless round-trip and any name collision with a like-named procedure).
@@ -160,7 +192,6 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
             templates = merged;
         }
 
-        var executor = new FirebirdDebugExecutor(session, fallback);
         executor.Register(body, source, model, templates, layout.OutputParameters, trigger);
         return executor;
     }
@@ -533,21 +564,12 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         var pkg = await PackageBodyFor(packageName, cancellationToken).ConfigureAwait(false);
         if (pkg is null) return null; // no readable body → step over (§5.3)
 
-        SubroutineDeclaration? member = null;
-        foreach (var m in pkg.Members)
-        {
-            if (m.Kind == SubroutineKind.Procedure && m.Body is not null
-                && string.Equals(m.Name, memberName, StringComparison.OrdinalIgnoreCase))
-            {
-                member = m;
-                break;
-            }
-        }
-        if (member is null) return null; // not a (runnable) member → step over
-
         // Reconstruct the member as a standalone CREATE PROCEDURE and parse it exactly like a stored routine
         // (D8): "CREATE " + the member's own "PROCEDURE name(params) RETURNS(...) AS … BEGIN … END" source.
-        string memberSource = "CREATE " + pkg.Source.Substring(member.Start, member.Length);
+        // The reconstruction is the one shared owner (SqlParser) — the same call the root-launch path uses.
+        string? memberSource = SqlParser.ReconstructPackageMemberSource(
+            pkg.Source, pkg.Members, memberName, SubroutineKind.Procedure);
+        if (memberSource is null) return null; // not a (runnable) member → step over
         var model = SemanticModel.Build(SqlParser.Parse(memberSource).Root);
         BlockStatement? body = null;
         foreach (var st in model.Syntax.Statements)
