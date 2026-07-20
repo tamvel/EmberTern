@@ -2625,15 +2625,18 @@ breakpoints, run to next `SUSPEND` (+ result grid), all editable in the Breakpoi
 clean. Docs: closed 2026-07-20. **Remaining debugger milestones D13 (Fast-forward) and D14 (Step-back) are
 optional — build only if real usage asks.** 🏁 **D12 IS FORMALLY CLOSED.**
 
-## D13 — Fast Forward (loop fast-forward) — IN PROGRESS (Seam 0 + Seam A done; STOPPED after Seam A)
+## D13 — Fast Forward (loop fast-forward) — COMPLETE + user-confirmed 🏁
 
 D12 being formally closed, the user opened **D13 (Fast Forward)** — commands that eliminate the repeated
 Continue-pressing of loop debugging. **The hard constraint, set by the user up front: Fast Forward must NOT
 create a new execution path — it is only another way to *control* the existing `DebugSession`.** This is not
 a general "fast-forward everything" milestone; it is deliberately small.
 
-> **STATUS: the project stopped after Seam A (commit `3fd541e`), for a review checkpoint before Seam B. D13 is
-> NOT complete.** Seam B (Live Fidelity), Seam C (UI) and Seam D (docs/close) remain.
+> **STATUS: COMPLETE + user-confirmed (2026-07-20).** Seam 0 (`1049c71`) → Seam A (`3fd541e`) → Seam B
+> (`424c676`, Live Fidelity) → Seam C (`c6c4ebf`, UI) → Seam D (docs/close). Two commands ship — **Continue
+> Until Loop Exit** and **Next Iteration** — as pure client-side stop policies (no new execution path),
+> live-fidelity-proven `Simulator == Real Firebird` (`DebuggerFidelityProbe` 34/34 on FB5). See the closing
+> summary at the end of this section. **D14 (Step-back) remains optional — build only if real usage asks.**
 
 ### Design analysis + scope (accepted)
 
@@ -2790,7 +2793,7 @@ suite is unchanged from the Seam-A baseline (5013 green). The incidental `Lab/Em
 from attaching (Firebird bumps the on-disk transaction counter even though every debug/real transaction rolls
 back — no schema or data change) was restored to the committed file.
 
-### Seam C — UI (thin presentation; awaits user visual confirmation) (2026-07-20)
+### Seam C — UI (thin presentation; user-confirmed) (2026-07-20)
 
 **Thin UI, no business logic** — the two D13 commands are surfaced exactly like D12's Run-to-`SUSPEND` (Seam E2):
 two `[RelayCommand]`s on `DebuggerTabViewModel` that **delegate straight to the engine** through the existing
@@ -2815,13 +2818,69 @@ inventing one would be arbitrary. All theme tokens, both dictionaries unaffected
 style + existing brushes).
 
 **Metrics:** full solution build **0/0**; the view uses compiled bindings (`x:DataType` on the root), so the two
-new command bindings were validated **at compile time**; smoke clean (app launches). **Awaits the user's visual
-confirmation** (QA rule — a desktop-UI change isn't "done" on a green build alone; the button gating + fast-
-forward behaviour need a live debug session inside a loop to confirm).
+new command bindings were validated **at compile time**; smoke clean (app launches). **User-confirmed by manual
+QA (2026-07-20)** — the toolbar buttons enable only inside a loop and both fast-forward correctly on the live lab.
 
-### Current state — STOPPED after Seam C (2026-07-20)
+### D13 — COMPLETE + user-confirmed (Seam D — docs/close, 2026-07-20) 🏁
 
-- **Done:** Seam 0 (`1049c71`), Seam A (`3fd541e`), Seam B (Live Fidelity, probe-only), **Seam C (UI —
-  implementation done, awaits user visual confirmation)**.
-- **Not started:** **Seam D** (docs/close). **D13 is NOT complete — do not mark it COMPLETE.** Next session
-  begins at **Seam D** after the user confirms Seam C live, stopping for review when done.
+**D13 (Fast Forward — loop fast-forward) is DONE.** Two commands ship end-to-end, live-fidelity-proven and
+manually QA-confirmed: **Continue Until Loop Exit** and **Next Iteration**. Nothing else (Skip Current Iteration
+and Continue Until RETURN stayed out of scope by design).
+
+**Final functional scope (exactly what shipped):**
+
+- **Continue Until Loop Exit** (`DebugSession.RunToLoopExit()`) — run the rest of the innermost enclosing loop
+  and pause just after it, for **any** exit path: condition false, `FOR` cursor exhausted, unlabeled `LEAVE`,
+  `BREAK`, or `EXIT` (which ends the whole routine → the session completes). On a nested loop it lands back in
+  the enclosing body.
+- **Next Iteration** (`DebugSession.RunToNextIteration()`) — finish the current iteration and pause at the start
+  of the next; if the loop exits first, pause after it (identical to Loop Exit). Advances the **innermost** loop.
+- Both gated on **`DebugSession.IsInsideLoop`**; a UI toolbar affordance (`↻ Next Iter`, `⤶ Loop Exit`) beside
+  `⏭ SUSPEND`.
+
+**The seams, at a glance:**
+
+| Seam | What | Commit | Proof |
+|---|---|---|---|
+| 0 | Lab: 4 deterministic loop workhorses (`SP_DBG_LOOP_NESTED`/`_LEAVE`/`_BREAK`/`_EXIT`) + the `LEAVE`/`EXIT`-gap discovery | `1049c71` | live values verified on FB5 |
+| A | Core: two run modes + the `LEAVE`/`BREAK`/`EXIT` control-flow correctness patch + minimal `LoopActivation` | `3fd541e` | +15 `DebugEngineTests` (fake executor); suite 5013 green |
+| B | Live Fidelity: `DebuggerFidelityProbe` +8 cases (probe-only, no production code) | `424c676` | **34/34 ALL PASS** on FB5 |
+| C | UI: two toolbar commands, thin presentation, gated on `IsInsideLoop` | `c6c4ebf` | build 0/0; manual QA confirmed |
+
+**The load-bearing architectural decisions (ratified across the milestone):**
+
+1. **No new execution path — Fast Forward only *controls* the existing `DebugSession`.** The hard constraint the
+   user set up front; honoured throughout. Both commands are **client-side stop policies** over the same
+   interpreter that already drives the real `FirebirdDebugExecutor`.
+2. **The D12 `RunToSuspend` pattern is the template** — `StepKind.RunToLoopExit`/`RunToNextIteration`,
+   `StepPlanner` returns `false` (run at Continue speed), and the stop is a **loop-lifecycle event decided in
+   `RunStepping`'s tail**. No new evaluator, no new server round-trip, no new frame machinery.
+3. **One capture, at the command** — the innermost loop + its iteration counter are locals in `RunStepping`; no
+   new `DebugSession` state. Loop Exit = the captured activation **left the control stack**; Next Iteration = its
+   **iteration counter incremented** past the captured value (or it exited first).
+4. **The `LEAVE`/`BREAK`/`EXIT` correctness patch is a control-*flow* fix, a prerequisite — not part of the stop
+   policy.** It was surfaced and user-ratified before implementation (the staged contract): `EXIT` →
+   `Frame.ExitRoutine`; unlabeled `LEAVE` and `BREAK` (parser maps `BREAK` → `PsqlLeafKind.Leave`) →
+   `Frame.LeaveInnermostLoop`. Pure control flow, never a server round-trip. Bonus: it fixes ordinary stepping
+   through `LEAVE`/`EXIT` routines, a latent pre-existing gap.
+5. **`LEAVE <label>` to an outer loop = §F boundary** — labels are not in the AST; treated as unlabeled
+   (breaks the innermost loop). Documented in `Frame.LeaveInnermostLoop` and the enum.
+6. **`StopReason.Step` reused** for both modes (a "movement completed" stop, like `RunToCursor`); the command
+   identity is the caller's (the VM), so no new `StopReason` was needed.
+7. **Thin UI** — the VM commands are pure delegation through the existing `RunStepAsync` path; gating reuses the
+   engine's `IsInsideLoop`; no business logic in the view or VM.
+
+**Live Fidelity (the proof of Firebird conformance):** because every mode is a stop policy over the interpreter
+that drives the REAL executor, every value and the loop condition / `SUSPEND` / `LEAVE` / `BREAK` / `EXIT` that
+ends each stop is computed by Firebird. `DebuggerFidelityProbe` proves **Simulator == Real Firebird** on FB5 —
+not only the final emitted rows but the **logical stop-moment** (current statement, in-loop membership, rows
+emitted so far, live variable state) — across the four workhorses × both modes. **34/34 ALL PASS** (85
+assertions), all 26 prior D8–D12 cases still green.
+
+**Final metrics:** Core build **0/0**, full solution build **0/0**; **+15 new `DebugEngineTests`** (Seam A;
+Seams B and C added no production tests — Seam B is probe-only, Seam C is thin UI validated by compiled bindings
++ manual QA); full suite **5013 tests green**; `DebuggerFidelityProbe` **34/34 ALL PASS** on FB5; smoke clean.
+
+**Philosophy held:** no new execution path (Fast Forward only controls the session) · the new features are stop
+policies (the `RunToSuspend` template) · `Simulator == Real Firebird` (live-fidelity-proven). **🏁 D13 COMPLETE.**
+**D14 (Step-back) remains OPTIONAL — build only if real usage asks; nothing queued.**

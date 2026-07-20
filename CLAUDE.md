@@ -280,8 +280,9 @@ noted.
   Fidelity (`DebuggerFidelityProbe` 26/26 sim==real on FB5)** is the proof each mechanism matches Firebird's real
   values AND stop-moment. Build 0/0; full suite **4998 green**; user QA confirmed 2026-07-20 → **D12 formally
   closed.** D14 (Step-back) remains **optional — build only if real usage asks.**
-  **D13 (Fast Forward — loop fast-forward) — IN PROGRESS; Seam 0 + Seam A + Seam B DONE, Seam C (UI) impl done
-  (awaits user visual confirmation), STOPPED after Seam C for review (2026-07-20). NOT complete.** Scope
+  **D13 (Fast Forward — loop fast-forward) — COMPLETE + user-confirmed 2026-07-20 (Seam 0/A/B/C + docs-close
+  Seam D). 🏁 Two commands ship end-to-end, live-fidelity-proven + manual-QA-confirmed: Continue Until Loop Exit
+  + Next Iteration.** Scope
   (accepted, deliberately small): exactly **Continue Until Loop Exit** +
   **Next Iteration** — nothing else (Skip Current Iteration rejected = a control jump / new path; Continue Until
   RETURN deferred; Continue Until Exception / Variable-Changes / END subsumed by D12). **Hard constraint: no new
@@ -310,10 +311,12 @@ noted.
   the existing `RunStepAsync` background-step path; **gating uses the engine's own `IsInsideLoop`** (`CanFastForward`
   = `Phase==Paused && Session is { IsInsideLoop: true }`, added to the `Phase` `NotifyCanExecuteChangedFor` list
   so it re-evaluates on every step). No keyboard shortcut (mirrors Run-to-`SUSPEND`, toolbar-only). Build 0/0;
-  compiled bindings validate the commands at compile time; smoke clean — **awaits user visual confirmation**
-  (QA rule). **Next: user confirms Seam C live, then D13 — Seam D (docs/close). D13 NOT complete — do not mark
-  COMPLETE.**
-  D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C) narrative:
+  compiled bindings validate the commands at compile time; manual QA confirmed (buttons enable only inside a
+  loop; both fast-forward correctly on the live lab). **Philosophy held — no new execution path (Fast Forward
+  only *controls* the session), the new features are stop policies (the `RunToSuspend` template), `Simulator ==
+  Real Firebird` (live-fidelity-proven). D13 formally CLOSED.** D14 (Step-back) remains **optional — build only
+  if real usage asks; nothing queued.**
+  D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)
