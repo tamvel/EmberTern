@@ -563,6 +563,88 @@ BEGIN
   END
 END^
 
+/* ---------- D13 (Fast Forward) loop workhorses --------------------------------------
+   Deterministic, selectable routines for the two D13 run modes (Continue Until Loop
+   Exit, Next Iteration) and the interpreter's LEAVE/BREAK/EXIT control flow. All emit
+   clean integer state per SUSPEND so simulated-vs-real fidelity compares row-by-row. */
+
+/* Nested WHILE loops — for capturing the INNERMOST loop (Next Iteration advances the
+   inner J; Continue Until Loop Exit on the inner loop lands back in the outer body).
+   SP_DBG_LOOP_NESTED(2) => (1,1,11),(1,2,23),(2,1,44),(2,2,66); ACC += I*10 + J. */
+CREATE PROCEDURE SP_DBG_LOOP_NESTED(N INTEGER)
+RETURNS (OI INTEGER, OJ INTEGER, ACC INTEGER)
+AS
+  DECLARE VARIABLE I INTEGER;
+  DECLARE VARIABLE J INTEGER;
+BEGIN
+  ACC = 0;
+  I = 0;
+  WHILE (I < N) DO
+  BEGIN
+    I = I + 1;
+    J = 0;
+    WHILE (J < N) DO
+    BEGIN
+      J = J + 1;
+      ACC = ACC + I * 10 + J;
+      OI = I;
+      OJ = J;
+      SUSPEND;
+    END
+  END
+END^
+
+/* Early loop exit via LEAVE (unlabeled — breaks the innermost loop, then control
+   continues AFTER the loop). A statement follows the loop so Continue Until Loop Exit
+   has a concrete step point to land on. SP_DBG_LOOP_LEAVE(5) => one row (3,1). */
+CREATE PROCEDURE SP_DBG_LOOP_LEAVE(N INTEGER)
+RETURNS (R INTEGER, DONE INTEGER)
+AS
+BEGIN
+  R = 0;
+  WHILE (R < N) DO
+  BEGIN
+    R = R + 1;
+    IF (R = 3) THEN LEAVE;
+  END
+  DONE = 1;
+  SUSPEND;
+END^
+
+/* Early loop exit via BREAK (legacy synonym of unlabeled LEAVE — proves the interpreter
+   treats it identically). SP_DBG_LOOP_BREAK(5) => one row (3,1). */
+CREATE PROCEDURE SP_DBG_LOOP_BREAK(N INTEGER)
+RETURNS (R INTEGER, DONE INTEGER)
+AS
+BEGIN
+  R = 0;
+  WHILE (R < N) DO
+  BEGIN
+    R = R + 1;
+    IF (R = 3) THEN BREAK;
+  END
+  DONE = 1;
+  SUSPEND;
+END^
+
+/* EXIT from inside the loop terminates the WHOLE routine — the post-loop statement must
+   NOT run, so DONE stays 0 and no SUSPEND fires (zero rows). Proves EXIT ends the frame
+   (Continue Until Loop Exit therefore completes the session). SP_DBG_LOOP_EXIT(5) => no rows. */
+CREATE PROCEDURE SP_DBG_LOOP_EXIT(N INTEGER)
+RETURNS (R INTEGER, DONE INTEGER)
+AS
+BEGIN
+  R = 0;
+  DONE = 0;
+  WHILE (R < N) DO
+  BEGIN
+    R = R + 1;
+    IF (R = 3) THEN EXIT;
+  END
+  DONE = 1;
+  SUSPEND;
+END^
+
 SET TERM ; ^
 
 /* ---------- Triggers (PSQL) ----------------------------------------
