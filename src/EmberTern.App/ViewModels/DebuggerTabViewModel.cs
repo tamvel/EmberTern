@@ -80,9 +80,16 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     private DebugRunHandle? _run;
     private DebugSession? Session => _run?.Session;
 
-    // Breakpoint step-point offsets, kept here so they survive across launch/restart; mirrored into the live
-    // session's BreakpointSet while it exists.
-    private readonly HashSet<int> _breakpoints = new();
+    // Breakpoints kept here (the Core stop-policy objects themselves, not bare offsets) so their conditions +
+    // hit-count policies survive launch/restart; mirrored into the live session's BreakpointSet while it exists.
+    // Reusing the Core BreakpointSet as the VM's own store is what lets the Breakpoints panel be a pure view of
+    // the domain objects (D12 Seam E) — the panel edits these Breakpoint objects directly, decisions stay in Core.
+    private readonly BreakpointSet _breakpoints = new();
+
+    // Data breakpoints (D12, spec §9.8.4) — the Core set is the store; a small name→display map keeps a friendly
+    // label for the panel (a trigger context row is watched by its synthetic name). Mirrored to the session.
+    private readonly DataBreakpointSet _dataBreakpoints = new();
+    private readonly Dictionary<string, string> _dataBreakpointNames = new(StringComparer.OrdinalIgnoreCase);
 
     internal DebuggerTabViewModel(
         string routineName,
@@ -112,6 +119,8 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         ExecutedSql = new ObservableCollection<DebugExecutedSqlRowViewModel>();
         Watches = new ObservableCollection<WatchRowViewModel>();
         CallStack = new ObservableCollection<DebugFrameRowViewModel>();
+        BreakpointRows = new ObservableCollection<BreakpointRowViewModel>();
+        DataBreakpointRows = new ObservableCollection<DataBreakpointRowViewModel>();
         Breadcrumbs = new ObservableCollection<string>();
         StatusText = UiStrings.DebuggerLaunchPreparing;
         LoadWatches();
@@ -244,6 +253,33 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// <summary>True while there is a call stack to show (a live paused session with at least one frame).</summary>
     public bool HasCallStack => CallStack.Count > 0;
 
+    // ── Breakpoints panel (D12 Seam E) — a pure VIEW of the Core Breakpoint / DataBreakpoint objects ───────
+
+    /// <summary>The line breakpoints as editable projections of the Core <see cref="Breakpoint"/> objects in
+    /// <see cref="_breakpoints"/> (D12, spec §9.8). Each row edits its wrapped breakpoint's condition / hit-count
+    /// directly; the panel holds no policy logic. Rebuilt whenever the breakpoint set changes.</summary>
+    public ObservableCollection<BreakpointRowViewModel> BreakpointRows { get; }
+
+    /// <summary>The data breakpoints as read-only projections of the Core <see cref="DataBreakpoint"/> objects
+    /// (spec §9.8.4 — "break when this variable changes"). Added via the Variables "Break when changes" gesture.</summary>
+    public ObservableCollection<DataBreakpointRowViewModel> DataBreakpointRows { get; }
+
+    public bool HasBreakpoints => BreakpointRows.Count > 0;
+    public bool HasDataBreakpoints => DataBreakpointRows.Count > 0;
+    public bool HasAnyBreakpoints => HasBreakpoints || HasDataBreakpoints;
+
+    /// <summary>Break on exception (spec §9.8.1): when set, a raise PAUSES at the raising statement before it is
+    /// routed to a handler. A pure mirror of <see cref="DebugSession.BreakOnException"/> — the pause + routing
+    /// logic is entirely in Core; this only reflects the toggle to the live session (and applies it at launch).
+    /// Persists across launch/restart because it lives on the VM, not the (recreated) session.</summary>
+    [ObservableProperty]
+    private bool _breakOnException;
+
+    partial void OnBreakOnExceptionChanged(bool value)
+    {
+        if (Session is { } s) s.BreakOnException = value;
+    }
+
     /// <summary>The selected call-stack row (bound two-way to the Call Stack list's SelectedItem). A user pick
     /// routes to <see cref="SelectFrame"/>; a programmatic sync (a new pause / breadcrumb / keyboard) sets it
     /// under <see cref="_syncingFrameSelection"/>.</summary>
@@ -333,7 +369,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// callee, or a selected caller other than the root) the offsets are in a different coordinate space, so
     /// none are surfaced (nested-routine breakpoints are a later milestone — D12). Stepping still works fully;
     /// only breakpoint editing + Run-To-Cursor are root-source-scoped.</summary>
-    public IReadOnlyCollection<int> BreakpointOffsets => IsViewingRootSource ? _breakpoints : Array.Empty<int>();
+    public IReadOnlyCollection<int> BreakpointOffsets => IsViewingRootSource ? _breakpoints.Offsets : Array.Empty<int>();
 
     // True while the editor shows the launched routine's own source — i.e. no frame is selected yet, or the
     // selected frame IS the root (its body is the parsed root body). Breakpoints + Run-To-Cursor act only then.
@@ -536,6 +572,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         }
 
         ApplyBreakpointsToSession();
+        RebuildBreakpointPanel(); // the panel reflects the (persisted) breakpoints now that a run exists
         await EvaluateWatchesAsync().ConfigureAwait(true); // show watch values immediately at entry
         RefreshFromSession();
     }
@@ -824,22 +861,108 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         var target = StepPointAtOrAfter(caretOffset);
         if (target is null) return;
 
-        if (!_breakpoints.Remove(target.Value))
-        {
-            _breakpoints.Add(target.Value);
-        }
-        Session?.Breakpoints.Toggle(target.Value);
+        _breakpoints.Toggle(target.Value);         // add a plain breakpoint, or remove the existing one
+        Session?.Breakpoints.Toggle(target.Value); // mirror to the live session
+        RebuildBreakpointPanel();
         DebugMarkersChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    // Copies the VM's breakpoints (with their conditions + hit-count policies) and data breakpoints into the
+    // live session's sets at launch, and applies the break-on-exception toggle. The VM's sets are the authority
+    // (they persist across launch/restart); the session's are a mirror. Called after LaunchAsync opens the run.
     private void ApplyBreakpointsToSession()
     {
         var session = Session;
         if (session is null) return;
-        foreach (var offset in _breakpoints)
+        foreach (var offset in _breakpoints.Offsets)
         {
-            session.Breakpoints.Add(offset);
+            var vm = _breakpoints.Get(offset);
+            if (vm is null) continue;
+            var live = session.Breakpoints.GetOrAdd(offset);
+            live.Condition = vm.Condition;
+            live.HitCount = vm.HitCount;
         }
+        foreach (var name in _dataBreakpoints.Variables)
+        {
+            session.DataBreakpoints.Add(name);
+        }
+        session.BreakOnException = BreakOnException;
+    }
+
+    // Mirrors one breakpoint's edited condition / hit-count policy to the live session (called by a panel row
+    // after the user edits it). Incremental — it never rebuilds the session's set, so the other breakpoints'
+    // hit tallies are preserved. A no-op before launch / after stop (the VM set is applied afresh at launch).
+    private void SyncBreakpointToSession(int offset)
+    {
+        var session = Session;
+        var vm = _breakpoints.Get(offset);
+        if (session is null || vm is null) return;
+        var live = session.Breakpoints.GetOrAdd(offset);
+        live.Condition = vm.Condition;
+        live.HitCount = vm.HitCount;
+    }
+
+    // Rebuilds the Breakpoints-panel rows from the VM's Core sets — the panel is a pure projection, so this is
+    // called whenever the sets change (toggle / add / remove / launch). Line breakpoints are ordered by offset;
+    // each row wraps its Core Breakpoint and mirrors its edits to the live session via SyncBreakpointToSession.
+    private void RebuildBreakpointPanel()
+    {
+        BreakpointRows.Clear();
+        foreach (var offset in _breakpoints.Offsets.OrderBy(o => o))
+        {
+            var bp = _breakpoints.Get(offset);
+            if (bp is null) continue;
+            int capturedOffset = offset;
+            BreakpointRows.Add(new BreakpointRowViewModel(bp, LineOf(offset), () => SyncBreakpointToSession(capturedOffset)));
+        }
+
+        DataBreakpointRows.Clear();
+        foreach (var name in _dataBreakpoints.Variables)
+        {
+            DataBreakpointRows.Add(new DataBreakpointRowViewModel(
+                name, _dataBreakpointNames.TryGetValue(name, out var display) ? display : name));
+        }
+
+        OnPropertyChanged(nameof(HasBreakpoints));
+        OnPropertyChanged(nameof(HasDataBreakpoints));
+        OnPropertyChanged(nameof(HasAnyBreakpoints));
+    }
+
+    /// <summary>Adds a data breakpoint on a variable (the Variables "Break when changes" gesture, spec §9.8.4) —
+    /// the session breaks when that variable's value changes across a step. The Core <see cref="DataBreakpointSet"/>
+    /// owns the change detection; this only registers the watch and mirrors it to the live session.</summary>
+    [RelayCommand]
+    private void AddDataBreakpoint(DebugVariableRowViewModel? row)
+    {
+        if (row is null) return;
+        if (_dataBreakpoints.Add(row.ResolveName))
+        {
+            _dataBreakpointNames[row.ResolveName] = row.Name; // friendly label (NEW.col / plain name)
+            Session?.DataBreakpoints.Add(row.ResolveName);
+            RebuildBreakpointPanel();
+        }
+    }
+
+    /// <summary>Removes a line breakpoint from the Breakpoints panel (and the editor gutter + live session).</summary>
+    [RelayCommand]
+    private void RemoveBreakpoint(BreakpointRowViewModel? row)
+    {
+        if (row is null) return;
+        _breakpoints.Remove(row.Offset);
+        Session?.Breakpoints.Remove(row.Offset);
+        RebuildBreakpointPanel();
+        DebugMarkersChanged?.Invoke(this, EventArgs.Empty); // the gutter dot goes away
+    }
+
+    /// <summary>Removes a data breakpoint from the Breakpoints panel (and the live session).</summary>
+    [RelayCommand]
+    private void RemoveDataBreakpoint(DataBreakpointRowViewModel? row)
+    {
+        if (row is null) return;
+        _dataBreakpoints.Remove(row.WatchedName);
+        _dataBreakpointNames.Remove(row.WatchedName);
+        Session?.DataBreakpoints.Remove(row.WatchedName);
+        RebuildBreakpointPanel();
     }
 
     // The step point whose span begins at or first after the offset (breakpoints snap to a step unit). Chosen
@@ -888,7 +1011,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
                 int line = step is null ? 0 : LineOf(session.CurrentFrame?.Source ?? _source, step.Start);
                 StatusText = string.Format(
                     CultureInfo.CurrentCulture, UiStrings.DebuggerStatusPausedFormat,
-                    line, StopReasonText(session.StopReason));
+                    line, PausedReasonText(session));
                 RebuildCallStack();
                 RebuildBreadcrumbs();
                 if (session.CurrentFrame is { } current) ApplySelectedFrame(current, computeChanges: true);
@@ -1472,10 +1595,30 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         return line;
     }
 
+    // The paused-status reason text (D12): the specific reason for THIS pause, enriched from the session where
+    // one variable/error makes it clearer. A broken breakpoint condition and a data-breakpoint hit are surfaced
+    // by name so the user sees WHY it stopped (a broken condition must never be silent — §F).
+    private static string PausedReasonText(DebugSession session)
+    {
+        if (session.BreakpointConditionError is { } ce)
+        {
+            return string.Format(CultureInfo.CurrentCulture,
+                UiStrings.DebuggerStopReasonConditionErrorFormat, ce.Message ?? ce.ExceptionName ?? "?");
+        }
+        if (session.StopReason == StopReason.DataBreakpoint && session.DataBreakpointHit is { } hit)
+        {
+            return string.Format(CultureInfo.CurrentCulture, UiStrings.DebuggerStopReasonDataChangedFormat, hit.Variable);
+        }
+        return StopReasonText(session.StopReason);
+    }
+
     private static string StopReasonText(StopReason reason) => reason switch
     {
         StopReason.Entry => UiStrings.DebuggerStopReasonEntry,
         StopReason.Breakpoint => UiStrings.DebuggerStopReasonBreakpoint,
+        StopReason.Exception => UiStrings.DebuggerStopReasonException,
+        StopReason.Suspend => UiStrings.DebuggerStopReasonSuspend,
+        StopReason.DataBreakpoint => UiStrings.DebuggerStopReasonDataBreakpoint,
         _ => UiStrings.DebuggerStopReasonStep,
     };
 

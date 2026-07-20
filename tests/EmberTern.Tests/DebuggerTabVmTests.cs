@@ -55,7 +55,13 @@ public class DebuggerTabVmTests
         }
 
         public ConditionOutcome EvaluateCondition(IExecutableStatement owner, Frame frame) => ConditionOutcome.True;
-        public ConditionOutcome EvaluateCondition(string fragment, int scopeOffset, Frame frame) => ConditionOutcome.True;
+
+        // A breakpoint condition (a string fragment through the one engine) — scriptable per fragment so a
+        // D12 conditional-breakpoint test can prove the condition set on a panel row reached the engine.
+        private readonly Dictionary<string, bool> _stringConds = new(StringComparer.OrdinalIgnoreCase);
+        public FakeExecutor CondString(string fragment, bool value) { _stringConds[fragment] = value; return this; }
+        public ConditionOutcome EvaluateCondition(string fragment, int scopeOffset, Frame frame)
+            => _stringConds.TryGetValue(fragment, out var v) ? ConditionOutcome.Of(v) : ConditionOutcome.True;
 
         private readonly Dictionary<string, EvaluationResult> _evals = new(StringComparer.OrdinalIgnoreCase);
         public List<EvaluationRequest> Evaluations { get; } = new();
@@ -497,6 +503,124 @@ public class DebuggerTabVmTests
         await vm.ContinueCommand.ExecuteAsync(null);
         Assert.Equal(DebuggerPhase.Paused, vm.Phase);
         Assert.Equal(Off("r = v"), vm.CurrentStart);
+    }
+
+    // ── D12 Seam E — Breakpoints panel + Break-on-Exception + data breakpoints (spec §9.8) ──────────
+
+    [Fact]
+    public async Task BreakpointsPanel_ReflectsCoreBreakpoints_AndRemoveClearsThem()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        vm.ToggleBreakpointAt(Off("r = v"));
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        Assert.True(vm.HasBreakpoints);
+        var row = Assert.Single(vm.BreakpointRows);
+        Assert.Equal(Off("r = v"), row.Offset);
+
+        vm.RemoveBreakpointCommand.Execute(row);
+        Assert.Empty(vm.BreakpointRows);
+        Assert.DoesNotContain(Off("r = v"), vm.BreakpointOffsets); // gone from the gutter too
+    }
+
+    [Fact]
+    public async Task BreakpointRow_HitCountKind_TogglesOperandEnabled()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        vm.ToggleBreakpointAt(Off("r = v"));
+        await vm.LaunchCommand.ExecuteAsync(null);
+        var row = Assert.Single(vm.BreakpointRows);
+
+        Assert.False(row.IsHitCountValueEnabled);          // Always (default) — no operand
+        row.HitCountKindIndex = (int)HitCountKind.Exactly;
+        Assert.True(row.IsHitCountValueEnabled);           // Exactly — operand N enabled
+    }
+
+    [Fact]
+    public async Task ConditionalBreakpoint_SetViaPanel_DoesNotStop_WhenConditionFalse()
+    {
+        // The condition set on the panel row is forwarded to the Core Breakpoint and evaluated by the engine;
+        // a false condition means the (otherwise-plain) breakpoint does not stop — proving it reached the engine.
+        var exec = new FakeExecutor().CondString("r = 99", false);
+        var vm = Vm(Sql, exec, out _);
+        await vm.PrepareAsync();
+        vm.ToggleBreakpointAt(Off("r = v"));
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        Assert.Single(vm.BreakpointRows).Condition = "r = 99";
+        await vm.ContinueCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Completed, vm.Phase); // condition false → ran past the breakpoint to the end
+    }
+
+    [Fact]
+    public async Task ConditionalBreakpoint_SetViaPanel_Stops_WhenConditionTrue()
+    {
+        var exec = new FakeExecutor().CondString("r = 99", true);
+        var vm = Vm(Sql, exec, out _);
+        await vm.PrepareAsync();
+        vm.ToggleBreakpointAt(Off("r = v"));
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        Assert.Single(vm.BreakpointRows).Condition = "r = 99";
+        await vm.ContinueCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.Equal(Off("r = v"), vm.CurrentStart);
+    }
+
+    [Fact]
+    public async Task DataBreakpoint_AddedViaGesture_BreaksWhenTheVariableChanges()
+    {
+        // V changes at "v = a + b" (not the last statement); a data breakpoint on V (added via the Variables
+        // "Break when changes" gesture) stops the session at the step AFTER the change.
+        var exec = new FakeExecutor().Write(Off("v = a + b"),
+            new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["V"] = 7 });
+        var vm = Vm(Sql, exec, out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null); // paused at entry (v = a + b)
+
+        var vRow = vm.Variables.First(r => string.Equals(r.Name, "V", StringComparison.OrdinalIgnoreCase));
+        vm.AddDataBreakpointCommand.Execute(vRow);
+        Assert.True(vm.HasDataBreakpoints);
+        var dbRow = Assert.Single(vm.DataBreakpointRows);
+        Assert.Equal("V", dbRow.DisplayName);
+
+        await vm.ContinueCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);          // stopped on the V change, not completed
+        Assert.Equal(Off("r = v"), vm.CurrentStart);           // paused just after the change
+
+        vm.RemoveDataBreakpointCommand.Execute(dbRow);
+        Assert.Empty(vm.DataBreakpointRows);
+    }
+
+    [Fact]
+    public async Task BreakOnException_PausesAtRaise_BeforeRouting_ThenFaultsOnResume()
+    {
+        var exec = new FakeExecutor().Raise(Off("r = v"));
+        var vm = Vm(Sql, exec, out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        vm.BreakOnException = true; // mirrors to the live session
+
+        await vm.ContinueCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);   // paused AT the raising statement, NOT faulted
+        Assert.Equal(Off("r = v"), vm.CurrentStart);
+
+        await vm.ContinueCommand.ExecuteAsync(null);     // resume → routes the raise → unhandled → faulted
+        Assert.Equal(DebuggerPhase.Faulted, vm.Phase);
+    }
+
+    [Fact]
+    public async Task WithoutBreakOnException_RaiseFaultsImmediately()
+    {
+        var exec = new FakeExecutor().Raise(Off("r = v"));
+        var vm = Vm(Sql, exec, out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        await vm.ContinueCommand.ExecuteAsync(null); // no break-on-exception → routed immediately → faulted
+        Assert.Equal(DebuggerPhase.Faulted, vm.Phase);
     }
 
     // ── Expression evaluation (Evaluate / Immediate — D5, §9.5) ────────────────────────────────────

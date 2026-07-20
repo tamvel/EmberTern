@@ -73,6 +73,17 @@ public readonly record struct HitCountPolicy(HitCountKind Kind, int Value)
     /// <summary>Break on every <paramref name="n"/>th arrival (a multiple of <paramref name="n"/>).</summary>
     public static HitCountPolicy Multiple(int n) => new(HitCountKind.Multiple, n);
 
+    /// <summary>Builds the policy for a <paramref name="kind"/> + operand — the single construction point a UI
+    /// editor uses to turn a picked kind + count into a policy, so the choice-to-policy mapping stays here in
+    /// Core rather than in a ViewModel. <see cref="HitCountKind.Always"/> ignores <paramref name="value"/>.</summary>
+    public static HitCountPolicy Of(HitCountKind kind, int value) => kind switch
+    {
+        HitCountKind.Exactly => Exactly(value),
+        HitCountKind.AtLeast => AtLeast(value),
+        HitCountKind.Multiple => Multiple(value),
+        _ => Always,
+    };
+
     /// <summary>Whether this policy breaks at the given (1-based) hit tally.</summary>
     public bool IsMetAt(int hits) => Kind switch
     {

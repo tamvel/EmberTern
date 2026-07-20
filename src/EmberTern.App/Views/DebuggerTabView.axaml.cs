@@ -217,6 +217,16 @@ public partial class DebuggerTabView : UserControl
         e.Handled = true;
     }
 
+    // "Break when changes" (D12, §9.8.4) from a variable row's right-click menu. Routed here because an
+    // ElementName binding cannot reach the VM across a ContextMenu's popup namescope; the MenuItem inherits the
+    // row as its DataContext. Pure routing to the VM command — the data-breakpoint change detection is in Core.
+    private void OnBreakWhenChangesClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is null || (sender as Control)?.DataContext is not DebugVariableRowViewModel row) return;
+        if (_vm.AddDataBreakpointCommand.CanExecute(row)) _vm.AddDataBreakpointCommand.Execute(row);
+        e.Handled = true;
+    }
+
     private void OnDebugMarkersChanged(object? sender, EventArgs e) => RepaintMarkers();
 
     private void SyncEditorText()

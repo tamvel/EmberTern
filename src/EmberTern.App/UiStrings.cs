@@ -1718,6 +1718,12 @@ internal static class UiStrings
     public const string DebuggerStopReasonEntry = "entry";
     public const string DebuggerStopReasonStep = "step";
     public const string DebuggerStopReasonBreakpoint = "breakpoint";
+    // Advanced-breakpoint stop reasons (D12, spec §9.8).
+    public const string DebuggerStopReasonException = "exception";
+    public const string DebuggerStopReasonSuspend = "suspended";
+    public const string DebuggerStopReasonDataBreakpoint = "data change";
+    public const string DebuggerStopReasonDataChangedFormat = "data breakpoint — {0} changed";
+    public const string DebuggerStopReasonConditionErrorFormat = "breakpoint condition error — {0}";
     // Variables panel.
     public const string DebuggerVariablesHeader = "Variables";
     public const string DebuggerVariablesEmpty = "No variables in the current frame.";
@@ -1760,6 +1766,27 @@ internal static class UiStrings
     public const string DebuggerBottomTabImmediate = "Immediate";
     public const string DebuggerBottomTabWatches = "Watches";
     public const string DebuggerBottomTabCallStack = "Call Stack";
+    public const string DebuggerBottomTabBreakpoints = "Breakpoints";
+    // Breakpoints panel (D12 Seam E, spec §9.8) — a pure view of the Core Breakpoint / DataBreakpoint objects.
+    public const string DebuggerBreakpointsEmpty =
+        "No breakpoints. Click the editor gutter to add a line breakpoint; right-click a variable → " +
+        "\"Break when changes\" for a data breakpoint.";
+    public const string DebuggerBreakpointsLineHeader = "Line breakpoints";
+    public const string DebuggerBreakpointsDataHeader = "Data breakpoints (break on change)";
+    public const string DebuggerBreakpointLineFormat = "Line {0}";
+    public const string DebuggerBreakpointConditionWatermark = "condition (e.g. IDX = 3)";
+    public const string DebuggerBreakpointWhenLabel = "when";
+    public const string DebuggerBreakpointHitsLabel = "hits";
+    public const string DebuggerBreakpointRemoveTooltip = "Remove breakpoint";
+    public const string DebuggerBreakOnException = "Break on exception";
+    public const string DebuggerBreakOnExceptionTooltip =
+        "Pause at the raising statement before the exception is routed to a WHEN … DO handler (spec §9.8.1).";
+    public const string DebuggerDataBreakpointMenu = "Break when changes";
+    // Hit-count kinds, in HitCountKind order (Always / Exactly / AtLeast / Multiple).
+    public const string DebuggerHitCountAlways = "always";
+    public const string DebuggerHitCountExactly = "= N";
+    public const string DebuggerHitCountAtLeast = "≥ N";
+    public const string DebuggerHitCountMultiple = "every N";
     // Harness Log (Sprint D10.5) — a DEBUG-only diagnostic surface for developing/diagnosing the debugger
     // itself. It is built in code-behind under #if DEBUG (DebuggerTabView.axaml.cs), so these strings are
     // referenced only in DEBUG builds; in RELEASE they are simply unused consts. It replaced the misnamed

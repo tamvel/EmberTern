@@ -106,6 +106,13 @@
           <Button Classes="flat" Content="↻ Restart" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRestartTooltip}"
                   Command="{Binding RestartCommand}" />
+          <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+          <!-- Break on exception (D12, §9.8.1) — a pure toggle of DebugSession.BreakOnException; all pause +
+               routing logic is in Core. -->
+          <CheckBox IsChecked="{Binding BreakOnException, Mode=TwoWay}"
+                    Content="{x:Static app:UiStrings.DebuggerBreakOnException}"
+                    ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakOnExceptionTooltip}"
+                    FontSize="11" VerticalAlignment="Center" />
         </StackPanel>
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                    Margin="10,0,0,0" FontSize="11"
@@ -311,6 +318,16 @@
                           <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:DebugVariableRowViewModel">
                               <Border Classes.var-changed="{Binding IsChanged}" Padding="4,1" Margin="0,0,0,1">
+                                <!-- Right-click → add a data breakpoint on this variable (D12, §9.8.4). The
+                                     change detection lives entirely in Core; this only registers the watch.
+                                     Routed via code-behind (an ElementName binding can't cross into a
+                                     ContextMenu's popup namescope) to the VM's AddDataBreakpointCommand. -->
+                                <Border.ContextMenu>
+                                  <ContextMenu>
+                                    <MenuItem Header="{x:Static app:UiStrings.DebuggerDataBreakpointMenu}"
+                                              Click="OnBreakWhenChangesClick" />
+                                  </ContextMenu>
+                                </Border.ContextMenu>
                                 <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,1">
                                   <!-- Pin-to-top toggle — gold ★ pinned / faint ☆ not, so it never blends into
                                        the kind glyph beside it. Not a Watch (§9.5). -->
@@ -581,6 +598,81 @@
                       </DataTemplate>
                     </ListBox.ItemTemplate>
                   </ListBox>
+                </Grid>
+              </TabItem>
+
+              <!-- Breakpoints (D12 Seam E, spec §9.8) — a pure VIEW of the Core Breakpoint / DataBreakpoint
+                   objects. Line breakpoints: edit the condition + hit-count policy (forwarded straight to the
+                   Core object; the engine evaluates + counts). Data breakpoints: added via the Variables
+                   "Break when changes" gesture, removed here. No breakpoint logic lives in the view/VM. -->
+              <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabBreakpoints}">
+                <Grid IsVisible="{Binding !IsBottomPanelCollapsed}" Margin="0,2,0,0">
+                  <TextBlock Margin="10,6"
+                             Text="{x:Static app:UiStrings.DebuggerBreakpointsEmpty}"
+                             Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                             IsVisible="{Binding !HasAnyBreakpoints}" />
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasAnyBreakpoints}">
+                    <StackPanel Margin="8,4" Spacing="8">
+
+                      <!-- Line breakpoints -->
+                      <StackPanel Spacing="2" IsVisible="{Binding HasBreakpoints}">
+                        <TextBlock Text="{x:Static app:UiStrings.DebuggerBreakpointsLineHeader}" Classes="field-label" />
+                        <ItemsControl ItemsSource="{Binding BreakpointRows}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:BreakpointRowViewModel">
+                              <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,2">
+                                <TextBlock Grid.Column="0" Text="{Binding LineText}" FontSize="11"
+                                           VerticalAlignment="Center" Margin="0,0,8,0" MinWidth="56"
+                                           FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
+                                <TextBox Grid.Column="1" Text="{Binding Condition, Mode=TwoWay}"
+                                         PlaceholderText="{x:Static app:UiStrings.DebuggerBreakpointConditionWatermark}"
+                                         FontSize="11" FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                                         VerticalContentAlignment="Center" />
+                                <ComboBox Grid.Column="2" ItemsSource="{Binding HitCountKinds}"
+                                          SelectedIndex="{Binding HitCountKindIndex, Mode=TwoWay}"
+                                          FontSize="11" Width="96" Margin="6,0,0,0"
+                                          ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakpointHitsLabel}" />
+                                <NumericUpDown Grid.Column="3" Value="{Binding HitCountValue, Mode=TwoWay}"
+                                               IsEnabled="{Binding IsHitCountValueEnabled}"
+                                               Minimum="1" FormatString="0" Width="96" FontSize="11" Margin="4,0,0,0" />
+                                <Button Grid.Column="4" Classes="icon" Width="18" Height="18" Padding="0"
+                                        VerticalAlignment="Center" Margin="4,0,0,0"
+                                        ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakpointRemoveTooltip}"
+                                        Command="{Binding #RootControl.((vm:DebuggerTabViewModel)DataContext).RemoveBreakpointCommand}"
+                                        CommandParameter="{Binding}">
+                                  <controls:SvgIcon Data="{StaticResource Icon.X}" Width="11" Height="11" />
+                                </Button>
+                              </Grid>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+
+                      <!-- Data breakpoints -->
+                      <StackPanel Spacing="2" IsVisible="{Binding HasDataBreakpoints}">
+                        <TextBlock Text="{x:Static app:UiStrings.DebuggerBreakpointsDataHeader}" Classes="field-label" />
+                        <ItemsControl ItemsSource="{Binding DataBreakpointRows}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DataBreakpointRowViewModel">
+                              <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                <TextBlock Grid.Column="0" Text="{Binding DisplayName}" FontSize="11"
+                                           VerticalAlignment="Center"
+                                           FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
+                                <Button Grid.Column="1" Classes="icon" Width="18" Height="18" Padding="0"
+                                        VerticalAlignment="Center"
+                                        ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakpointRemoveTooltip}"
+                                        Command="{Binding #RootControl.((vm:DebuggerTabViewModel)DataContext).RemoveDataBreakpointCommand}"
+                                        CommandParameter="{Binding}">
+                                  <controls:SvgIcon Data="{StaticResource Icon.X}" Width="11" Height="11" />
+                                </Button>
+                              </Grid>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+
+                    </StackPanel>
+                  </ScrollViewer>
                 </Grid>
               </TabItem>
             </TabControl>
