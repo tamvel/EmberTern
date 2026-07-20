@@ -24,7 +24,8 @@ verbatim, in the archive below.
 | **`docs/design/editor-stage7-diagnostics.md`** | **Active design/vision** for **Stage 7 (Diagnostics)** — engine, model, categories, pipeline, squiggles/panel/nav, milestones, post-Stage-7 Quick Fixes. Consumes Etap 6.9. | When working on Stage 7. |
 | **`docs/design/editor-language-expansion.md`** | **FULLY DELIVERED design** for the code-writing experience that replaced Stage 8 M2 — both halves shipped + user-approved: **Language Completion** (construct completion by natural prefix, Tab + shown hint, grammar-armed, synchronous) + **Typing Ergonomics** (`begin…end` pairing on Enter, `()`/`[]`/`''` pairing, structural auto-indent; Enter stays normal), separate from IntelliSense. §3 documents the as-built ergonomics (incl. what is deliberately NOT done: paren alignment, `IndentLines`); §5 the arming gate; §9.1 the **one-responsibility-one-owner** rule (vocabulary *and* grammatical position). | When working on `Core.Sql.Language.Constructs`, `Core.Sql.Language.Ergonomics`, or the completion/ergonomics wiring. |
 | **`docs/design/firebird-debugger.md`** | **DESIGN v2 — decisions ratified 2026-07-17; the target implementation spec.** Nothing implemented. Feasibility (Firebird has **no** debug API — verified), the Fidelity Law §F, the client-interpreter + `EXECUTE BLOCK` harness, harness declaration rules, frame savepoints, exception control flow, per-session connection + transaction, nested frames/call stack, local routines (no temporary metadata), cursor bridge, UI/UX, panels, reuse map, prerequisites P1/P2 + milestones D1–D14, Fidelity Boundaries, and a live-engine verification log. | When working on the debugger. |
-| **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. | **Every debugger implementation session — read this + your milestone's brief first.** |
+| **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. **D14 = ANALYZED + DEFERRED** (its STATUS block records the ratified snapshot+savepoint+undo-only architecture if ever revisited). | **Every debugger implementation session — read this + your milestone's brief first.** |
+| **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (~190 entries, #1–#202), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -314,8 +315,52 @@ noted.
   compiled bindings validate the commands at compile time; manual QA confirmed (buttons enable only inside a
   loop; both fast-forward correctly on the live lab). **Philosophy held — no new execution path (Fast Forward
   only *controls* the session), the new features are stop policies (the `RunToSuspend` template), `Simulator ==
-  Real Firebird` (live-fidelity-proven). D13 formally CLOSED.** D14 (Step-back) remains **optional — build only
-  if real usage asks; nothing queued.**
+  Real Firebird` (live-fidelity-proven). D13 formally CLOSED.**
+  **D14 (Step Back) — ANALYZED + DEFERRED by user decision (2026-07-20). Not started.** Full
+  architecture/feasibility analysis accepted; the user chose not to build it now — it stays optional, revisited
+  only when real debugger usage asks. Ratified if ever revisited (do not re-derive): a **new engine capability
+  (reversible state)**, **replay rejected**, only **full-client-state snapshot + one savepoint per step +
+  undo-only** (`ROLLBACK TO`, never re-execute — matches spec §9.8.5); a **second savepoint layer**
+  (`ET_DBG_STEP_{n}`) not eagerly released; **v1 scope** single step-back over leaf/DML/IF/assignment +
+  stepped-over CALL, **loops/`FOR SELECT` out** (a live cursor cannot be rewound), exception routing out; **§4.6
+  irreversibles disclosed, not hidden**; fidelity via a round-trip invariant. **Difficulty High; ~5 sessions.**
+  Full write-up: the plan's D14 STATUS block + [docs/history/19-...](docs/history/19-firebird-debugger.md) (D14)
+  + [[project-d14-step-back-deferred]].
+  **⭐ NEXT STAGE — D15 (Debugger Experience & IDE Polish) — PLANNING PHASE COMPLETE (2026-07-20); NOTHING
+  IMPLEMENTED.** The debugger is now polished to professional-IDE level as a **full project**, designed +
+  ratified over two review passes. **One organising principle: Presentation vs Feature** (P = view/theme/tokens
+  only, obeys "no logic in VM/Core"; F = new data/Core surface, full rigour + live fidelity). Milestones:
+  **D15.1** Editor Readability (P, **app-wide** — readability-first palette, variables neutral; rebuilt
+  full-width calm-blue current-line + gutter bar) · **D15.2** Toolbar + Error Bar (P — a whole **SVG icon
+  system** in EmberTern's *own* visual language, NOT a VS/Rider copy; debugger icon = an **execution-tracing/
+  flow** metaphor, not a bug; fault message → its **own bar** with copy + expand, never shifts the toolbar) ·
+  **D15.3** Launch Experience (P + tiny persist — compact form, type subordinate to name, isolation
+  practical-description-first in Advanced, launch shortcut + post-launch focus, **Quick Relaunch yes / favorites
+  deferred**) · **D15.4** Expression UX + Friendly Errors (P+F — placeholders/examples + friendly errors via the
+  existing `EditorLanguageService` local pre-validation + `DebugErrorMapper`) · **D15.5** Inline Values (F —
+  only current-line-used OR changed-since-last-step, never all; AvaloniaEdit renderer, no text shift) · **D15.6**
+  Debugger Performance (F — **direction reversed**: no debug-time timing (harness overhead misleads); integrate
+  with the existing Performance Analysis; any future debug metric labelled "debugger runtime") · **D15.7** Global
+  UI Audit (analysis-only catalogue for a future visual-refresh stage). **Ratified priority order:** Script
+  Executor **Step 0 Probe** → D15.1 → D15.2 → D15.3 → **Script Executor Rewrite (Steps 1–6)** → D15.4 → D15.5 →
+  D15.6 (D15.7 in the background). Full self-contained guide (architecture / seams / decisions / rationale /
+  priorities / deps / risks — start a milestone from it without re-analysing):
+  [docs/design/d15-debugger-experience-and-ide-polish.md](docs/design/d15-debugger-experience-and-ide-polish.md).
+  **Script Executor Rewrite — Step 0 (Probe) DONE 2026-07-20; architecture stands, measurement-gated.** The
+  `Sequenced`-mode plan is ratified ([docs/design/script-executor-transaction-review.md](docs/design/script-executor-transaction-review.md)
+  §5/§6): fixes the KNOWN-BROKEN mixed DDL+DML defect (gotcha #213). **Step 0 (the Probe) — the blocking
+  measurement gate — RAN against the live FB5 lab (twice, deterministic; no production code touched).** The one
+  unmeasured load-bearing claim, the §2.2(b) self-block, is **real but SELECTIVE**: table-scanning DDL
+  (`CREATE INDEX`) self-blocks on the script's own uncommitted DML (WAIT-exhausted lock timeout, SQLSTATE 40001,
+  PROBE 1c), but the review's stated example (`ALTER TABLE … ADD COLUMN`/`DROP COLUMN`) does **not** —
+  metadata-only on FB5 (~7 ms, PROBEs 1/1a/1d). So §2.2(b) was **restated, not withdrawn** (example corrected,
+  scope narrowed, "decisive objection" framing dropped — the decisive objection is §2.2(a) Rollback-lies, which
+  never rested on inference). #213 **re-confirmed** (PROBE 2); the commit-boundary fix **works** (PROBE 3);
+  independent DDL **can share a segment** (PROBE 2a). **The architecture did NOT change** — the Sequenced design
+  cannot self-block by construction (never two txns open at once); the review's §2.2(b)/§6/§7 were corrected in
+  place. **Next actionable is Step 1 (doc truth pass)**; the `Sequenced` build (Steps 3–6) proceeds only when the
+  user schedules it. Full record: review §6 "Results" + §7, and
+  [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target

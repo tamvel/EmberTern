@@ -7,10 +7,20 @@
 > CLAUDE.md's "Current state" and `FirebirdScriptExecutor.UsesDeveloperModeWaitPolicy`. Both
 > conditions are load-bearing; the auto-commit one is now gotcha #230.
 >
-> §2.4 axis 2 (**transaction boundaries** — `Sequenced` mode, §5) is **NOT built and not scheduled**:
-> the user explicitly kept the existing transaction model. So **gotcha #213 stands** — a mixed DDL+DML
+> §2.4 axis 2 (**transaction boundaries** — `Sequenced` mode, §5) is **NOT built**: the user
+> explicitly kept the existing transaction model. So **gotcha #213 stands** — a mixed DDL+DML
 > migration still cannot run. §5 remains a proposal, retained as the analysis of what fixing that
-> would require. §6 Step 0's probe is still unrun and still gates §2.2(b).
+> would require.
+>
+> **Step 0 (§6) — RUN 2026-07-20 against the live FB5 lab. The design is now measurement-gated and
+> stands.** The one load-bearing unmeasured claim, the §2.2(b) self-block, was measured: it is **real
+> but selective** — table-scanning DDL (`CREATE INDEX`) self-blocks on the script's own uncommitted
+> DML (WAIT-exhausted lock timeout, SQLSTATE 40001), but the review's stated example (`ALTER TABLE …
+> ADD COLUMN`) does **not** (it is metadata-only on FB5). §2.2(b) is therefore **restated, not
+> withdrawn**; the lane-split rejection is unchanged (decisive on §2.2(a) alone). #213 re-confirmed
+> (PROBE 2); the Sequenced commit-boundary fix works (PROBE 3); independent DDL can share a segment
+> (PROBE 2a). Full report: see §6 "Results" and §7. **The next actionable is Step 1** (doc truth
+> pass), then the `Sequenced` build (Steps 3–6) if/when the user schedules it.
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -164,22 +174,30 @@ leaves half the migration in place is worse than one that cannot run the migrati
 first silently corrupts, the second visibly fails. This directly violates the paramount rule
 (#11, never lose/corrupt) more sharply than today's honest failure does.
 
-**(b) It self-blocks.** This is the decisive technical objection. Under the split, a script like:
+**(b) It self-blocks — for table-scanning DDL.** Under the split, a script like:
 
 ```sql
 INSERT INTO CUSTOMERS ...;      -- data → Data lane, transaction stays OPEN for the whole run
-ALTER TABLE CUSTOMERS ADD ...;  -- metadata → DDL lane, autonomous, WAIT-bounded
+CREATE INDEX IX_CUSTOMERS ...;  -- metadata → DDL lane, autonomous, WAIT-bounded
 ```
 
 has the DDL lane waiting on a lock held by **our own** still-open data transaction — which will not
 settle until the script finishes. The script blocks on itself, resolved only by the 3 s/10 s timeout,
-and then reports a lock error that names no other session. Note the irony: the split is proposed to
-*reduce* lock pain during deployment, but it introduces a lock conflict **with yourself** that does
-not exist today.
+and then reports a lock error that names no other session (SQLSTATE 40001, `isc_lock_timeout`). The
+irony: the split is proposed to *reduce* lock pain during deployment, but it introduces a lock
+conflict **with yourself**. "Populate a table, then index it" is a completely ordinary migration
+pattern, so this hazard is not exotic.
 
-> ⚠ **This claim is reasoned from Firebird semantics, not yet measured.** Given that #213, #214 and
-> #215 were *all* falsified inferences, it must be measured before the design is frozen. A probe is
-> written and ready — see §6.
+> ✅ **MEASURED (Step 0, 2026-07-20) — real but SELECTIVE; example corrected.** The self-block was
+> reasoned, not measured — and, given #213/#214/#215 were all falsified inferences, the probe (§6)
+> ran before freezing. Finding: **the mechanism is real for table-scanning DDL** — `CREATE INDEX`
+> against a table with our own uncommitted `INSERT` waits out the full 10 s WAIT and fails with
+> `isc_lock_timeout` (PROBE 1c). **But the review's original example was wrong**: `ALTER TABLE … ADD
+> COLUMN` (PROBE 1) and `DROP COLUMN` (PROBE 1d) are metadata-only on FB5 and do **not** block
+> (~7 ms). So (b) is **not** the decisive objection it was billed as — (a) is decisive on its own —
+> but it is a confirmed hazard for a real class of DDL, so it stays as a corrected objection rather
+> than being withdrawn. Note: the Sequenced design (§5) can never exhibit this, by construction — it
+> never holds two transactions open at once.
 
 **(c) It re-creates what was deliberately removed.** The brief says the editor's two-transaction
 model caused "locking and consistency problems" and that removing it was intentional. Every one of
@@ -447,28 +465,42 @@ In `Sequenced`:
 
 ## 6. Implementation plan
 
-**Nothing below is started. Step 0 gates the rest.**
+**Step 0 is DONE (2026-07-20). Steps 1–6 are not started.**
 
-**Step 0 — MEASURE (blocking; do this before freezing anything).**
-A probe is written and **builds clean**:
-`…/scratchpad/LaneProbe/` (standalone, not in `EmberTern.slnx`; managed driver, so the non-ASCII repo
-path is fine — gotcha #149). It reads the password from `ET_LAB_PWD` so no secret is written to disk
-or passed through this session. Run:
+**Step 0 — MEASURE — RUN 2026-07-20 (blocking gate; cleared).**
+The probe (`scratchpad/LaneProbe/`, standalone, not in `EmberTern.slnx`; managed driver, non-ASCII
+repo path fine — gotcha #149) reads the password from `ET_LAB_PWD` so no secret hits disk. It was run
+twice against `Lab/EmberTern_Lab.fdb` on the live FB5 (`WI-V5.0.3.1683`), identical outcomes; the lab
+`.fdb` was restored to pristine afterward.
 
 ```powershell
 $env:ET_LAB_PWD = "<local dev SYSDBA password>"
 dotnet run --project "<scratchpad>\LaneProbe"
 ```
 
-It measures, against `Lab/EmberTern_Lab.fdb`:
-1. **PROBE 1** — DDL on lane #3 vs our own uncommitted DML on lane #1, same table. *Settles §2.2(b).*
-2. **PROBE 1b** — same, but lane #1 holds only an open **read**. *Bounds the blast radius.*
-3. **PROBE 2** — re-confirms #213 on this engine.
-4. **PROBE 3** — proves the §5 commit-boundary design actually works.
+**Results:**
 
-**If PROBE 1 shows no self-block, §2.2(b) is withdrawn** and the lane split deserves a second look on
-(a)/(c)/(d) alone — which I still judge decisive, but the argument would be weaker and should be
-re-stated honestly.
+| Probe | Scenario | Result |
+|---|---|---|
+| **1**  | DDL `ADD COLUMN` on lane #3 vs our uncommitted `INSERT` on lane #1 (WAIT 10 s) | **SUCCEEDED ~7 ms — no self-block** |
+| **1a** | Same, WAIT 3 s | **SUCCEEDED ~6 ms — no self-block** |
+| **1c** | Table-scanning DDL `CREATE INDEX` vs our uncommitted `INSERT` (WAIT 10 s) | **FAILED ~10 011 ms — SELF-BLOCK** (SQLSTATE 40001, `isc_lock_timeout`) |
+| **1d** | Format-changing DDL `DROP COLUMN` vs our uncommitted `INSERT` (WAIT 10 s) | **SUCCEEDED ~7 ms — no self-block** |
+| **1b** | DDL vs an open **read-only** tx on lane #1 | SUCCEEDED ~6 ms — an open read never blocks DDL |
+| **2**  | `CREATE TABLE T; INSERT INTO T;` in ONE tx | INSERT **FAILED** (SQLSTATE 42000 / -204) — **#213 confirmed** |
+| **2a** | Two independent `CREATE TABLE`s in ONE tx | Both **committed** — independent DDL can share a segment |
+| **3**  | `CREATE` then `INSERT` split by a commit boundary, one lane | **Both succeeded** — the §5 fix works |
+
+**Outcome — §2.2(b) is RESTATED, not withdrawn; the architecture is unchanged and now
+measurement-gated.** The self-block is **real but selective**: it occurs for table-scanning DDL
+(`CREATE INDEX` — PROBE 1c, a genuine WAIT-exhausted lock timeout) but **not** for the metadata-only
+op the review used as its example (`ADD COLUMN`/`DROP COLUMN` — PROBEs 1/1a/1d). So §2.2(b)'s example
+was falsified while its phenomenon was confirmed. Because §2.2(a) (Rollback lies) is decisive on its
+own, the lane-split rejection stands regardless, and the **Sequenced design (§5) — which by
+construction never holds two transactions open at once — cannot self-block at all.** PROBE 2/2a/3
+validate the three engine facts the Sequenced planner rests on. The gate is cleared: the design is
+safe to freeze. Full write-up in the Step 0 report kept with this session's scratchpad; §2.2(b) and
+§7 updated in place.
 
 **Step 1 — Documentation truth pass** *(independent of the outcome; safe to do now).*
 Fix the stale comments that caused this drift: `ConnectionProfile.cs:19` (NOWAIT claim),
@@ -525,6 +557,20 @@ distinction, not a diluted dial (§1.3).
 **Measured previously, recorded, trusted:** #213 (CREATE+INSERT in one tx → -204) · #214
 (cross-attachment "object in use" is transient; WAIT clears in ~10 ms).
 
-**Reasoned, NOT measured — gated on Step 0:** the §2.2(b) self-block. This is the one load-bearing
-claim in the review that rests on inference rather than measurement, and the project's own history
-(#213/#214/#215 were all falsified inferences) says not to trust it until the probe runs.
+**Measured in Step 0 (2026-07-20, live FB5 `WI-V5.0.3.1683`, two runs, deterministic):**
+- **§2.2(b) self-block is real but SELECTIVE.** Table-scanning DDL (`CREATE INDEX`) against a table
+  with our own uncommitted `INSERT` waits out the full 10 s WAIT and fails `isc_lock_timeout`
+  (SQLSTATE 40001) — PROBE 1c. **But `ALTER TABLE … ADD COLUMN` (PROBE 1) and `DROP COLUMN`
+  (PROBE 1d) do NOT block** (~7 ms, metadata-only on FB5) — so the review's original *example* was a
+  falsified inference, joining #213/#214/#215; the *phenomenon* stands for a real DDL class.
+- **#213 re-confirmed on FB5** (PROBE 2): `CREATE TABLE T; INSERT INTO T;` in one tx → INSERT fails
+  (SQLSTATE 42000 / -204).
+- **Sequenced commit-boundary fix works** (PROBE 3): `CREATE`, commit, then `INSERT` in a new tx on
+  one lane → succeeds.
+- **Independent DDL can share a segment** (PROBE 2a): two unrelated `CREATE TABLE`s commit in one tx
+  → the §5.1 planner need not commit between every DDL.
+- **An open read-only tx never blocks cross-lane DDL** (PROBE 1b).
+
+**Net:** the review's *conclusion* (Sequenced, not lane-split; three attachments) is unchanged and
+now measurement-backed; only §2.2(b)'s example and "decisive objection" framing were corrected. The
+decisive objection to the lane split is §2.2(a) (Rollback lies), which never rested on inference.

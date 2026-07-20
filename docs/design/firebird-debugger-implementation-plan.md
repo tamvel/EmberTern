@@ -630,6 +630,31 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
 
 ### D14 — Step back via savepoints *(optional)*
 
+> **STATUS (2026-07-20): ANALYZED + DEFERRED by user decision. Not started; no code.** A full
+> architecture/feasibility analysis was run and accepted. Ratified conclusions to honour **if** D14 is ever
+> revisited (do not re-derive):
+> - Step Back is **not** another stop policy like D12/D13 — it needs a **new engine capability: reversible
+>   state**. The forward `_control` stack was designed one-way (mutable, `internal` activations), so
+>   snapshot/restore is genuinely new surface, not free.
+> - **Replay is rejected, unconditionally** (re-executes DML, **double-increments generators**, diverges
+>   `CURRENT_TIMESTAMP`, re-fires autonomous tx) — it would break Sim==Real. The *only* acceptable path is
+>   **snapshot (full client state) + one savepoint per step + undo-only** (never re-execute; the sole way to
+>   reverse DB effects is `ROLLBACK TO`). This matches spec §9.8.5.
+> - **Requires a second savepoint layer** (`ET_DBG_STEP_{n}`) with a lifecycle distinct from the frame
+>   savepoints — **not** eagerly `RELEASE`d on normal frame exit (D1 releases frame savepoints at
+>   `DebugSession` line ~756; after `RELEASE` you cannot `ROLLBACK TO`). Additive `IDebugExecutor` ops.
+> - **v1 scope (if built):** single step-back over leaf/DML/IF/assignment + step-back over a stepped-over
+>   CALL, bounded history. **OUT of scope:** loops/`FOR SELECT` (a live server cursor cannot be rewound —
+>   the hard blocker), exception routing, Set-Next/post-fast-forward.
+> - **§4.6 irreversibles** (autonomous tx, generator increments, `EXECUTE STATEMENT ON EXTERNAL`,
+>   side-effecting UDFs) survive `ROLLBACK TO` — **must be disclosed in the UI, never hidden**.
+> - **Live Fidelity:** no "real" Step Back exists to compare against; verify by a **round-trip invariant**
+>   (forward→N recording state; back→M; forward→N again == the recorded ground-truth that forward-fidelity
+>   already validated) + an explicit assertion that a §4.6 effect persists.
+> - **Revised estimate: ~5 sessions** (the "Sessies: 2" below predates knowing the snapshot/restore surface).
+>   **Difficulty: High.** Recommendation stood: **defer until real debugger usage asks for it.**
+> Analysis + rationale: this doc's D14 review + [[project-d14-step-back-deferred]].
+
 - **Cel.** Bounded reverse stepping. Spec §9.8.5.
 - **Zakres.** One savepoint per **step** (vs §4.5's per **frame**) + client frame snapshots; bounded
   history.

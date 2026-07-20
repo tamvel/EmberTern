@@ -2883,4 +2883,61 @@ Seams B and C added no production tests — Seam B is probe-only, Seam C is thin
 
 **Philosophy held:** no new execution path (Fast Forward only controls the session) · the new features are stop
 policies (the `RunToSuspend` template) · `Simulator == Real Firebird` (live-fidelity-proven). **🏁 D13 COMPLETE.**
-**D14 (Step-back) remains OPTIONAL — build only if real usage asks; nothing queued.**
+
+---
+
+## D14 (Step Back) — ANALYZED + DEFERRED (2026-07-20)
+
+A full architecture/feasibility analysis was run at the user's request and **accepted**; the user decided **not**
+to start D14 — it stays an optional milestone, revisited only when real debugger usage shows the need. Ratified
+conclusions (do not re-derive; full text in the plan's D14 brief STATUS block + [[project-d14-step-back-deferred]]):
+Step Back is **not** another stop policy like D12/D13 — it needs a **new engine capability, reversible state**
+(the forward `_control` stack was designed one-way: mutable, `internal` activations). **Replay is rejected
+unconditionally** (re-executes DML, double-increments generators, diverges `CURRENT_TIMESTAMP`, re-fires
+autonomous tx → breaks Sim==Real); the only acceptable path is **full-client-state snapshot + one savepoint per
+step + undo-only** (reverse DB effects solely via `ROLLBACK TO`), matching spec §9.8.5. It needs a **second
+savepoint layer** (`ET_DBG_STEP_{n}`) NOT eagerly released on normal frame exit. **v1 scope if built:** single
+step-back over leaf/DML/IF/assignment + step-back over a stepped-over CALL; **OUT:** loops/`FOR SELECT` (a live
+server cursor cannot be rewound — the hard blocker), exception routing, Set-Next/post-fast-forward. **§4.6
+irreversibles** (autonomous tx, generator increments, `EXECUTE STATEMENT ON EXTERNAL`, side-effecting UDFs)
+survive rollback → must be disclosed, not hidden. **Live Fidelity:** no real Step Back to compare against →
+verify by a round-trip invariant (forward→N record; back→M; forward→N again == the recorded ground-truth
+forward-fidelity already validated) + assert a §4.6 effect persists. **Difficulty High; ~5 sessions** (the
+plan's old "2" predates the snapshot/restore surface). Recommendation stood: **defer until real usage asks.**
+
+---
+
+## D15 (Debugger Experience & IDE Polish) — PLANNING PHASE COMPLETE (2026-07-20)
+
+After D13 closed and D14 was deferred, the next major stage was scoped as a full project — **not** a bag of UI
+tweaks — and its design was ratified over two review passes. The complete, self-contained implementation guide
+is [docs/design/d15-debugger-experience-and-ide-polish.md](../design/d15-debugger-experience-and-ide-polish.md);
+a future session starts any milestone from there **without re-analysing**. Summary of what planning settled:
+
+- **Organising principle — Presentation vs Feature.** Every milestone is either **P** (view/theme/tokens only,
+  obeys the "no logic in VM/Core" directive) or **F** (new data/Core surface, full debugger rigour + live
+  fidelity where it touches engine behaviour). The user called the split "bardzo trafiony".
+- **Milestones:** D15.1 Editor Readability (P, **app-wide** — one highlighting pipeline serves every editor;
+  readability-first palette + rebuilt full-width calm-blue current-line with a gutter bar); D15.2 Toolbar
+  Visual System + Error Bar (P — a whole **SVG icon system** in EmberTern's *own* visual language, not a
+  VS/Rider copy; the debugger icon becomes an **execution-tracing/flow** metaphor, not a bug; the fault message
+  moves to its **own bar** with copy + expand so it never shifts the toolbar); D15.3 Launch & Entry Experience
+  (P + tiny persist — compact form, type subordinate to name, isolation practical-description-first in an
+  Advanced section, launch keyboard shortcut + post-launch focus, **Quick Relaunch yes / favorites deferred**);
+  D15.4 Expression UX + Friendly Errors (P+F — placeholders/examples + friendly errors via the existing
+  `EditorLanguageService` local pre-validation and `DebugErrorMapper`); D15.5 Inline Values (F — only
+  current-line-used OR changed-since-last-step, never all; AvaloniaEdit renderer/generator, no text shift);
+  D15.6 Debugger Performance (F — **direction reversed**: no debug-time timing (harness overhead misleads);
+  integrate with the existing Performance Analysis; any future debug metric labelled "debugger runtime"); D15.7
+  Global UI Audit (analysis-only catalogue for a future visual-refresh stage).
+- **Priority order (ratified):** Script Executor **Step 0 Probe** → D15.1 → D15.2 → D15.3 → **Script Executor
+  Rewrite (Steps 1–6)** → D15.4 → D15.5 → D15.6; D15.7 in the background. Rationale: the probe is measurement,
+  not implementation, and unblocks a correctness decision; readability is highest-value + app-wide; toolbar +
+  launch are the visible debugger polish; the rewrite is a self-contained debt block slotted after the quick
+  wins; the feature-bearing seams come last.
+- **Script Executor Rewrite** is a **parallel correctness-debt track** with its own ratified plan
+  ([../design/script-executor-transaction-review.md](../design/script-executor-transaction-review.md) §5/§6):
+  the `Sequenced` mode fixes gotcha #213; **Step 0 (Probe) is the immediate next actionable** (measurement),
+  and the rewrite proper starts only after its results are recorded.
+
+**Nothing in D15 or the Script Executor Rewrite is implemented — this is the end of the planning phase.**

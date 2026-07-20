@@ -212,6 +212,50 @@ made to `FirebirdScriptExecutor` here was a comment correcting the false claim s
 
 ---
 
+## Script Executor Rewrite — Step 0 (the Probe), 2026-07-20
+
+The rewrite's architecture review (`docs/design/script-executor-transaction-review.md`) chose a
+**Sequenced** mode (one lane, one transaction at a time, commit boundaries between segments) over the
+user's proposed concurrent lane split, and rejected the split on four grounds §2.2(a)–(d). One of
+those, **§2.2(b) self-block**, was explicitly flagged as *reasoned from Firebird semantics, not
+measured* — and the review made it a **blocking gate (Step 0)**: given #213/#214/#215 were all
+falsified inferences, the claim had to be measured before the design was frozen. This session ran it.
+
+The probe (`scratchpad/LaneProbe`, a standalone console on the managed driver — non-ASCII repo path
+fine, #149; password from `ET_LAB_PWD`, never on disk) exercised the self-block, #213, the
+commit-boundary fix, and the segment-sharing premise against the live FB5 lab. Two runs, identical.
+
+**The decisive finding: the self-block is real but SELECTIVE — and the review's example was wrong.**
+
+- `ALTER TABLE … ADD COLUMN` (the review's verbatim §2.2(b) example) does **not** self-block on the
+  script's own uncommitted same-table `INSERT` — it succeeded in ~7 ms at both WAIT=10 s and WAIT=3 s.
+  `DROP COLUMN` likewise. On FB5 these are metadata-only and proceed concurrently with open DML.
+- `CREATE INDEX` **does** self-block — it must scan every row, so it waits on the lock our own
+  still-open data transaction holds, exhausts the full 10 s WAIT, and fails with `isc_lock_timeout`
+  (SQLSTATE 40001). "Populate a table, then index it" is an ordinary migration pattern, so this is a
+  genuine hazard, not exotic.
+
+So §2.2(b)'s *example* joined #213/#214/#215 as another falsified inference, while its *phenomenon*
+was confirmed for a real DDL class. The right move was to **restate, not withdraw** it: correct the
+example to `CREATE INDEX`, narrow the scope to table-scanning DDL, and drop the "decisive technical
+objection" framing — because the genuinely decisive objection, §2.2(a) (a DDL auto-commit lane makes
+manual Rollback roll back only the DML — a paramount-rule-#11 corruption), never rested on inference.
+
+The rest of the probe validated the Sequenced design's engine premises: **#213 re-confirmed**
+(`CREATE`+`INSERT` in one tx fails, -204); the **commit-boundary fix works** (`CREATE`, commit,
+`INSERT` in a fresh tx on one lane succeeds); and **independent DDL can share a segment** (two
+unrelated `CREATE TABLE`s commit together), so the planner need not commit between every DDL.
+
+**Net: the architecture did not change.** The Sequenced conclusion stands and is now
+measurement-backed; the Sequenced design *cannot* self-block by construction (it never holds two
+transactions open at once — the self-block is purely a lane-split hazard). Only the review's §2.2(b),
+§6 (Step 0 marked RUN with results), and §7 (evidence log) were corrected in place. No production
+code was touched — Step 0 is validation only. The next actionable is Step 1 (the documentation truth
+pass); the `Sequenced` build (Steps 3–6) proceeds only when the user schedules it. The lab `.fdb` was
+churned by the probe's temporary tables and restored to pristine (`git checkout`) afterward.
+
+---
+
 ## Final architecture
 
 | Attachment | Carries | Transaction |
