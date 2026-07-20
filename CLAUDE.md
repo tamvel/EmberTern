@@ -279,8 +279,28 @@ noted.
   directly); there is **ONE decision point "before executing a statement"** for every run mode; and **Live
   Fidelity (`DebuggerFidelityProbe` 26/26 sim==real on FB5)** is the proof each mechanism matches Firebird's real
   values AND stop-moment. Build 0/0; full suite **4998 green**; user QA confirmed 2026-07-20 → **D12 formally
-  closed.** Remaining debugger milestones D13 (Fast-forward) / D14 (Step-back) are **optional — build only if
-  real usage asks.** D11 narrative + full D12 narrative:
+  closed.** D14 (Step-back) remains **optional — build only if real usage asks.**
+  **D13 (Fast Forward — loop fast-forward) — IN PROGRESS; Seam 0 + Seam A DONE, STOPPED after Seam A for review
+  (2026-07-20). NOT complete.** Scope (accepted, deliberately small): exactly **Continue Until Loop Exit** +
+  **Next Iteration** — nothing else (Skip Current Iteration rejected = a control jump / new path; Continue Until
+  RETURN deferred; Continue Until Exception / Variable-Changes / END subsumed by D12). **Hard constraint: no new
+  execution path — Fast Forward only *controls* the existing `DebugSession`.** Both are pure stop policies on the
+  **D12 `RunToSuspend` pattern** — new `StepKind.RunToLoopExit`/`RunToNextIteration`, `StepPlanner` returns
+  false, the stop is a **loop-lifecycle event decided in `RunStepping`'s tail** (innermost loop captured once at
+  the command; Loop Exit = the loop activation left the control stack, Next Iteration = its iteration counter
+  incremented). **`IsInsideLoop`** gates the commands; `Step(kind)` rejects them; breakpoints inside the loop
+  still win (pre-execute gate). **Seam 0 (`1049c71`):** 4 deterministic lab workhorses (`SP_DBG_LOOP_NESTED`/
+  `_LEAVE`/`_BREAK`/`_EXIT`, `.fdb` rebuilt, live-verified) — and it revealed that the interpreter modelled **no
+  `LEAVE`/`EXIT` control flow** (both fell to the server path → `LEAVE` faulted, `EXIT` was silently ignored).
+  **Seam A (`3fd541e`):** the two run modes + a **user-ratified correctness patch** folding minimal
+  `LEAVE`/`BREAK`/`EXIT` into `ExecuteCurrent` (EXIT → `Frame.ExitRoutine` terminates the frame; unlabeled
+  `LEAVE`, and `BREAK` which the parser now maps to `PsqlLeafKind.Leave`, → `Frame.LeaveInnermostLoop`), plus a
+  minimal `LoopActivation` base (only the iteration counter). **`LEAVE <label>` to an outer loop = §F boundary**
+  (labels are not in the AST). Build 0/0; full suite **5013 green**; parser/AST/§0 after the `BREAK` change no
+  regression. **Next session starts at D13 — Seam B (Live Fidelity): probe-only, no production code — extend
+  `DebuggerFidelityProbe` (cases over the 4 lab routines × both run modes) to prove sim == real on FB5, then
+  stop for review.** Then Seam C (UI) + Seam D (docs/close).
+  D11 narrative + full D12 narrative + D13 (Seam 0/A) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)

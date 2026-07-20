@@ -2624,3 +2624,138 @@ breakpoints, run to next `SUSPEND` (+ result grid), all editable in the Breakpoi
 **Metrics:** Build 0/0; full suite **4998 tests green** (one run); `DebuggerFidelityProbe` **26/26**; smoke
 clean. Docs: closed 2026-07-20. **Remaining debugger milestones D13 (Fast-forward) and D14 (Step-back) are
 optional — build only if real usage asks.** 🏁 **D12 IS FORMALLY CLOSED.**
+
+## D13 — Fast Forward (loop fast-forward) — IN PROGRESS (Seam 0 + Seam A done; STOPPED after Seam A)
+
+D12 being formally closed, the user opened **D13 (Fast Forward)** — commands that eliminate the repeated
+Continue-pressing of loop debugging. **The hard constraint, set by the user up front: Fast Forward must NOT
+create a new execution path — it is only another way to *control* the existing `DebugSession`.** This is not
+a general "fast-forward everything" milestone; it is deliberately small.
+
+> **STATUS: the project stopped after Seam A (commit `3fd541e`), for a review checkpoint before Seam B. D13 is
+> NOT complete.** Seam B (Live Fidelity), Seam C (UI) and Seam D (docs/close) remain.
+
+### Design analysis + scope (accepted)
+
+Grounding the design in the actual engine (`DebugSession`, `StepPlanner`, `Frame`, `DebugEnums`) surfaced the
+key insight: **Fast Forward is not a new mechanism — it is the existing D12 "run mode + event-based stop"
+pattern.** `Continue`, `RunToCursor` and `RunToSuspend` already run at full speed and stop on an *event*
+(`StepPlanner` returns false for the run modes; the stop is decided in `RunStepping`, e.g. `RunToSuspend`'s
+row-count delta). So each Fast Forward variant is just another "run until <predicate>" whose predicate is a
+pure function of (AST, frames, command) — which is exactly what satisfies "no new execution path".
+
+Every proposed feature was evaluated. Most were **already delivered by D12** or **redundant**:
+
+- *Continue Until Exception* ≈ D12 **Break on Exception**; *Continue Until Variable Changes* ≈ D12 **Data
+  Breakpoint**; *Continue Until END* ≈ `Continue` (root) / `Step Out` (nested); *Run to next SUSPEND* = D12.
+  Adding these as Fast Forward modes would be a **second path to the same feature** (drift) — rejected.
+- *Skip Current Iteration* is a **control jump** (skips statements) = a `SetNextStatement` variant. It **does
+  create a divergent path**, so it violates the core constraint — rejected from Fast Forward (a possible future
+  "Control Jump" concern, not this milestone).
+- *Continue Until RETURN* overlaps `Step Out` (for procedures, effectively identical); marginal value — deferred.
+
+The genuinely-new, high-value, pure-run-until commands are **loop-scoped** (loops are the #1 reason for
+repeated Continue), with **zero D12 overlap**:
+
+- **Continue Until Loop Exit** — run to the end of the current loop, stop just after it.
+- **Next Iteration** — finish the current iteration normally, stop at the start of the next (or at loop exit).
+
+**Accepted D13 scope = exactly these two.** Nothing else. (Continue Until RETURN and Skip Current Iteration
+explicitly out.) Seam plan accepted: **0 (lab) → A (Core) → B (Live Fidelity) → C (UI) → D (docs)**.
+
+### Seam 0 — lab + a scope-changing discovery (commit `1049c71`, 2026-07-20)
+
+Seam 0 extended the lab with four deterministic, selectable loop workhorses (rebuilt `EmberTern_Lab.fdb` from
+canonical `setup.sql`, ASCII-temp method #149; live values verified on FB5):
+
+- `SP_DBG_LOOP_NESTED(2)` → `(1,1,11),(1,2,23),(2,1,44),(2,2,66)` — nested `WHILE`; proves **innermost-loop**
+  capture (Next Iteration advances the inner `J`; Loop Exit on the inner loop lands back in the outer body).
+- `SP_DBG_LOOP_LEAVE(5)` → `(3,1)` — early exit via unlabeled `LEAVE`, with a statement AFTER the loop.
+- `SP_DBG_LOOP_BREAK(5)` → `(3,1)` — `BREAK` (legacy synonym of `LEAVE`).
+- `SP_DBG_LOOP_EXIT(5)` → **no rows** — `EXIT` terminates the whole routine before any `SUSPEND`.
+
+**The lab did its job — it revealed a plan-changing fact before implementation:**
+
+**The interpreter models no `LEAVE` / `EXIT` control flow.** `DebugSession.ExecuteCurrent` has cases only for
+`IF`/`WHILE`/`FOR`/`RETURN`(in a function)/step-into; `Leave`/`Exit` leaves fall to the `default` server path.
+Consequences on the real engine:
+
+- **`LEAVE;`** → wrapped in a one-statement `EXECUTE BLOCK` harness, where `LEAVE` outside a loop is a **compile
+  error** → `FbException` → the session **faults with a spurious error**.
+- **`EXIT;`** → the one-statement block just exits (a no-op) and the interpreter `AdvanceSequence`s onward →
+  **`EXIT` is silently ignored**, the routine keeps running.
+
+This is a **pre-existing latent gap** (no lab routine exercised `LEAVE`/`EXIT` before), independent of D13. A
+live throwaway-DB probe confirmed **FB5 accepts `EXIT`, `LEAVE`, `LEAVE <label>` and `BREAK`**; the AST does
+**not** model loop labels (`WhileStatement`/`ForSelectStatement` carry no `Label`).
+
+**Why this forces a decision (and the user's ruling):** the DoD of `RunToLoopExit` — stop correctly *regardless
+of how the loop is left* (the user's explicit test requirement) — cannot be met as a pure stop policy while the
+interpreter doesn't pop the loop activation on `LEAVE`/`EXIT`. Teaching the interpreter minimal `LEAVE`/`EXIT`
+is a **new control mechanism**, beyond the "pure stop policy" agreed for D13, so — per the project's staged
+contract (*never silently change a ratified design; stop and consult*) — it was surfaced. **User decision:
+fold minimal `LEAVE`/`BREAK`/`EXIT` control flow into Seam A as an explicit correctness patch; keep
+`LEAVE <label>` to an outer loop a documented §F boundary** (labels are not in the AST).
+
+### Seam A — loop fast-forward (Core) + LEAVE/BREAK/EXIT control flow (commit `3fd541e`, 2026-07-20)
+
+Pure Core, off-by-default, fake-executor-tested. Three coordinated pieces:
+
+1. **The correctness patch (interpreter).** `ExecuteCurrent` now handles `EXIT`/`LEAVE`/`BREAK` as **pure
+   control flow** (the client owns control, §3.1 — never a server round-trip): `EXIT` → `Frame.ExitRoutine`
+   (close cursors + clear the control stack → the frame terminates); unlabeled `LEAVE` → `Frame.LeaveInnermostLoop`
+   (pop control activations down to and including the innermost loop activation, closing a `FOR` cursor).
+   The parser now maps **`BREAK` → `PsqlLeafKind.Leave`** (one "break the loop" leaf kind; §0 round-trip
+   unchanged — the leaf's tokens are preserved verbatim). *Rationale: this is not scope creep — it is exactly
+   what the user's "stop on every exit path" requirement demands, and it fixes a latent bug for ordinary
+   stepping through `LEAVE`/`EXIT` routines as a bonus.*
+
+2. **The loop mechanism.** A minimal `LoopActivation` base (parent of `WhileActivation`/`ForActivation`) carries
+   only the per-iteration counter `Iteration`, incremented in `ExecuteCurrent` when a loop enters a body pass.
+   *(Decision, honoring the user's "reconsider a shared class" note: the pattern-match-in-`DebugSession`
+   alternative was evaluated and rejected — the base gives one home for `Iteration` and a semantic
+   `is LoopActivation` test; `Node` stays type-specific on each derived activation, untouched.)* `Frame` owns
+   the control-stack introspection: `InnermostLoop()`, `IsInLoop`, `ContainsActivation`.
+
+3. **The two run modes.** New `StepKind.RunToLoopExit` / `RunToNextIteration`; `StepPlanner` returns **false**
+   for both (they run at Continue speed). The stop is a **loop-lifecycle event decided in `RunStepping`'s tail**
+   (mirroring `RunToSuspend`): the innermost loop is **captured once** from the current frame at the command,
+   and the tail stops when that activation has **left the control stack** (Loop Exit — any path: condition
+   false / cursor exhausted / `EXIT` / `LEAVE`/`BREAK`) or, for Next Iteration, when its **iteration counter
+   incremented** past the captured value (or it exited first). `Step(kind)` **rejects** the two new kinds;
+   dedicated `RunToLoopExit()` / `RunToNextIteration()` methods drive them. New public **`IsInsideLoop`** gates
+   the commands (for the UI, Seam C) and throws if invoked outside a loop. **Breakpoints inside the loop still
+   win** — they are decided by the pre-execute gate (`TryStopBeforeExecuting`) before the tail runs. Off by
+   default ⇒ existing sessions byte-identical.
+
+**Architecture, as built (for review):**
+
+- **D13 stays a pure stop policy** — no new execution path, no new control-*movement* mechanism; the only new
+  interpreter behaviour is the `LEAVE`/`EXIT` correctness patch (a control-*flow* fix, prerequisite, not part of
+  the stop policy).
+- **The `RunToSuspend` pattern is the template** — `StepPlanner` false + an event stop in `RunStepping`'s tail.
+- **One capture, at the command** — the innermost loop + its iteration count are locals in `RunStepping`; no new
+  session state, keeping `DebugSession` simple.
+- **`StopReason.Step`** is reused for both modes (a "movement completed" stop, like `RunToCursor`); the command
+  identity is known to the caller (the VM), so no new `StopReason` was needed.
+- **`LEAVE <label>` to an outer loop = §F boundary** — treated as unlabeled (breaks the innermost loop);
+  documented in `Frame.LeaveInnermostLoop` and the enum.
+
+**Tests (+15 `DebugEngineTests`, fake executor):** Next Iteration from mid-body / loop header / nested-inner /
+`FOR SELECT`; Loop Exit natural / via `LEAVE` / via `BREAK` / via `EXIT` (completes the session) /
+nested-inner→outer body / `FOR SELECT` (cursor closed); `LEAVE` & `EXIT` plain-stepping control flow (the
+statement after them never runs); breakpoint-inside-loop wins over Loop Exit; `IsInsideLoop` membership +
+throws-when-not-in-a-loop; `Step` rejects the new kinds.
+
+**Metrics:** Build **0/0** (full solution — no exhaustive `StepKind` switch broke under
+`TreatWarningsAsErrors`); full suite **5013 tests green in one run** (4998 baseline + 15 D13); parser/AST/§0
+regression after the `BREAK` change **260 green, no regression**; smoke n/a (no UI change).
+
+### Current state — STOPPED after Seam A (2026-07-20)
+
+- **Done:** Seam 0 (`1049c71`), Seam A (`3fd541e`).
+- **Not started:** **Seam B (Live Fidelity)** — extend `DebuggerFidelityProbe` (probe-only, **no production
+  code**) with cases over `SP_DBG_LOOP_NESTED` / `_LEAVE` / `_BREAK` / `_EXIT` for `RunToLoopExit` /
+  `RunToNextIteration`, proving **simulated == real Firebird**; then **Seam C** (toolbar + keyboard + gating on
+  `IsInsideLoop`, thin presentation) and **Seam D** (docs/close). **D13 is NOT complete — do not mark it
+  COMPLETE.** Next session begins at **Seam B**, stopping for review when done.
