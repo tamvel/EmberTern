@@ -592,8 +592,14 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
 
 ---
 
-### D12 — Advanced breakpoints
+### D12 — Advanced breakpoints — ✅ COMPLETE + user-confirmed (2026-07-20)
 
+- **Status.** DONE. All seams shipped (0 / A / B / C1 / C2 / D / E1 / E2 + QA fixes), live-fidelity-proven
+  (`DebuggerFidelityProbe` 26/26 sim==real on FB5). Final architecture: `Breakpoint` is a domain stop-policy
+  object; `HitCountPolicy`; `DataBreakpoint`; Run-to-`SUSPEND` run mode; Break-on-Exception is a pause-before-
+  routing; a condition is an expression through the ONE D5 evaluation engine; ONE breakpoint model shared by the
+  VM and `DebugSession`; ONE decision point "before executing a statement" (`TryStopBeforeExecuting` — the
+  first-statement-skipped QA fix). Narrative: `docs/history/19-firebird-debugger.md` (D12 section).
 - **Cel.** Cheap, high-value additions *given* the engine. Spec §9.8.
 - **Zakres.** Break on exception; conditional breakpoints + hit counts; data breakpoints; **run to next
   `SUSPEND`** (+ its result grid).

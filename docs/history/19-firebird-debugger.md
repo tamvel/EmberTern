@@ -2384,7 +2384,7 @@ boundary — step-over, faithful — to be added only when a real lab case needs
 
 ---
 
-## D12 — Advanced breakpoints (IN PROGRESS: Seam 0 + A + B + C1 done; C2 + D + E remain)
+## D12 — Advanced breakpoints (COMPLETE + user-confirmed 2026-07-20 — all seams 0 / A / B / C1 / C2 / D / E1 / E2 done)
 
 D12 (spec §9.8, plan brief "D12 — Advanced breakpoints") adds cheap, high-value stop modes *given* the
 existing engine: **break on exception**, **conditional breakpoints + hit counts**, **data breakpoints**, and
@@ -2401,9 +2401,10 @@ independent commit + a user QA checkpoint):
 - **Seam B** — Core: Conditional breakpoints + hit counts *(commit `f9beba7`)*.
 - **Seam C1** — Core: Data breakpoints *(commit `5561e10`)*.
 - **Seam C2** — Core: Run to next `SUSPEND` *(done)*.
-- **Seam D** — Firebird + Live Fidelity (sim==real + stop-moment fidelity on the lab) *(done — this session; probe-only)*. **← current head.**
-- **Seam E** — UI: Breakpoints panel, condition/hit-count editing, break-on-exception toggle, data-breakpoint
-  gesture, Run-to-SUSPEND command + result grid *(not started)*.
+- **Seam D** — Firebird + Live Fidelity (sim==real + stop-moment fidelity on the lab) *(done; probe-only)*.
+- **Seam E1** — UI: Breakpoints panel + Break-on-Exception toggle + data-breakpoint gesture *(commit `cab2f5b`)*.
+- **Seam E2** — UI: Run-to-`SUSPEND` command + Results grid over `EmittedRows` *(commit `9a96bb3`)*.
+- **QA fixes** — gutter hit-test (`c8fc061`) + first-statement breakpoint (`863c89d` → `01b66dd`). **← D12 closed here.**
 
 C was **deliberately split into C1 (Data Breakpoints) and C2 (Run-to-SUSPEND)** — architecturally distinct (a
 post-step diff *policy* vs a new *run mode*), and the user prefers two small coherent seams over one wide one.
@@ -2539,12 +2540,87 @@ live via `SELECT … FROM SP_DBG_LOOP(5)` — is the ground truth every mode is 
 tools\probes\DebuggerFidelityProbe` → **ALL PASS**, 26 cases). Build 0/0; **160 debugger tests green**
 (unchanged from C2 — Seam D added no production code); smoke clean.
 
-### D12 current state (end of Seam D)
+### Seam E1 — Breakpoints panel + Break-on-Exception toggle + data-bp gesture (commit `cab2f5b`)
 
-- **Done:** Seam 0 (`211a629`), Seam A (`a8b160a`), Seam B (`f9beba7`), Seam C1 (`5561e10`), Seam C2, Seam D
-  (this session; probe-only, live-fidelity-proven).
-- **Next: Seam E** (UI — the last seam): Breakpoints panel, condition / hit-count editing, break-on-exception
-  toggle, data-breakpoint gesture, Run-to-SUSPEND command + result grid over `EmittedRows`. D12 closes after
-  Seam E + user QA.
-- Build 0/0; **160 debugger tests green** (`dotnet test --filter FullyQualifiedName~Debug`); the full suite
-  still hangs in this env (#94/#226) → run the debugger subset. Live fidelity: `DebuggerFidelityProbe` 26/26.
+The first UI seam. Design principle: **the Breakpoints panel is a pure VIEW of the Core domain objects, never
+a parallel model.** The VM keeps ONE `BreakpointSet` + one `DataBreakpointSet` as its own store; the launch
+spec passes those very sets to the `DebugSession`, which **shares** them (no mirroring, no copy) — so a row's
+condition / hit-count-kind / hit-count-operand / enable edit mutates the exact `Breakpoint` object the engine
+consults on its next stop decision. `BreakpointRowViewModel` / `DataBreakpointRowViewModel` are dumb
+projections (offset → line, the policy fields); the kind→operand-enabled mapping and the picked-kind→policy
+construction route through Core (`HitCountPolicy.Of`, `HitCountKind`), so the choice-to-policy logic stays in
+Core, not the VM. The panel adds / removes / edits breakpoints and shows data breakpoints; the Break-on-Exception
+toggle sets `DebugSession.BreakOnException`; a data-breakpoint gesture (watch a variable) adds to the
+`DataBreakpointSet`. No new colours, tokens through the theme system.
+
+### Seam E2 — Run-to-`SUSPEND` command + Results grid (commit `9a96bb3`)
+
+The toolbar **Run-to-`SUSPEND`** command drives `DebugSession.RunToSuspend()`; a **Results grid** renders
+`DebugSession.EmittedRows` (reusing the shared data-grid infrastructure — each resume appends the next
+`SUSPEND` row). This closes the "selectable procedure: give me the next row" loop end-to-end.
+
+### QA fixes (manual QA on the live lab)
+
+Two defects surfaced by manual QA, each an independent commit:
+
+1. **Gutter hit-test (`c8fc061`).** The breakpoint margin was not hit-testable, so a click on the gutter never
+   registered — you could not set a breakpoint by clicking. Fixed so the margin receives the pointer and toggles
+   the breakpoint on the clicked line's step unit.
+
+2. **First-statement breakpoint always skipped (`863c89d` → refined + superseded by `01b66dd`).** A breakpoint on
+   the FIRST executed statement never stopped execution; breakpoints from the second statement onward worked.
+   **Root cause:** `RunStepping` made the breakpoint stop-decision at the BOTTOM of the loop — *after*
+   `ExecuteCurrent` ran the current statement and advanced to the next — so it structurally could not decide the
+   statement a run command RESUMES from. Launch always pauses at **Entry** on the first statement, and the
+   breakpoint gutter only appears once a run is live (the source editor is hidden on the launch panel), so the
+   user's first breakpoint is set *while paused at entry on the first statement* — exactly the statement the
+   first `Continue` executed unchecked. Commit `863c89d`'s first attempt (call `ShouldBreakAt` inside `Start`)
+   only helped when the breakpoint already existed at `Start`, which it never does in the real UI, and was itself
+   the first-statement special case. **Ratified fix — ONE pre-execute gate, one semantics, no first-statement
+   branch (`01b66dd`):** the stop decision moved into a single `TryStopBeforeExecuting` gate applied to EVERY
+   statement in EVERY run mode, on the statement the IP points at, *before* it executes. `Start` decides nothing
+   — Entry is a pre-execution pause (`_atDeliveredArrival = false`). A **resume-guard** lets a run command LEAVE
+   the statement it is currently sitting on (no double-stop): it suppresses re-breaking the current statement
+   when the pause was a *delivered arrival* (a prior breakpoint / step / data-bp / SUSPEND / Set-Next stop) OR the
+   command is an explicit **movement** (Into/Over/Out — which steps away, so Step behaviour is unchanged per the
+   DoD). The only un-guarded case is a **run** command (Continue / RunToCursor / RunToSuspend) resuming from
+   Entry, so a breakpoint set at entry fires on the first resume exactly like any later arrival. Routing a held
+   Break-on-Exception raise is a different operation ("about to route", not "about to execute") and bypasses the
+   gate. +7 `DebugEngineTests` (fired-on-resume, no double-stop, set-after-launch, restart via shared set, second
+   statement unaffected, Step-from-entry unchanged) + the 3 first-statement VM tests reworked to the ratified
+   model (launch → Entry, breakpoint honored on first Continue). Gotcha: the engine's `BreakpointSet` is a flat
+   offset map, so a callee step point at the same raw offset as a root breakpoint collides — a pre-existing
+   nested-breakpoint boundary (breakpoints are root-scoped in the VM; nested-routine breakpoints are future), not
+   changed by this fix.
+
+### D12 final state — COMPLETE (2026-07-20, user-confirmed)
+
+**Shipped end-to-end, live-fidelity-proven:** break on exception, conditional breakpoints + hit counts, data
+breakpoints, run to next `SUSPEND` (+ result grid), all editable in the Breakpoints panel.
+
+**Final architecture (ratified):**
+
+- **`Breakpoint` is a domain stop-policy object** — offset + optional `Condition` + `HitCountPolicy` + a running
+  hit tally, with `ShouldBreak(conditionSatisfied)` the pure policy — not a bare offset in a set. Future
+  breakpoint kinds grow as properties on this one model.
+- **`HitCountPolicy`** is an immutable value object (`Always` / `Exactly` / `AtLeast` / `Multiple`, `IsMetAt`,
+  `Of`), so the count comparison lives in Core.
+- **`DataBreakpoint`** is another stop policy — `ShouldBreak(old, new)` = "changed?" with `NULL`≡`DBNull`; the
+  `DataBreakpointSet` also owns the LOCAL snapshot→diff detection over the scope chain (a closure var is
+  watchable). Purely client-side.
+- **Run-to-`SUSPEND`** is a run mode (`StepKind.RunToSuspend`) whose stop is the `SUSPEND` *event* (a row-count
+  delta), not a movement decision.
+- **Break on Exception** is a *pause before routing*, never a second handler: the next resume routes the held
+  raise through the very same `ExceptionRouter` path.
+- **A condition is just an expression through the ONE D5 evaluation engine** (`EvaluateCondition` reuses the
+  typed-`BOOLEAN` `EvaluateExpression` path of `IF`/`WHILE`) — no second evaluator; a raising condition stops +
+  surfaces, never silently skipped.
+- **ONE breakpoint model is shared by the VM and `DebugSession`** — the panel edits the domain objects directly,
+  no mirroring.
+- **ONE decision point "before executing a statement"** governs every run mode (`TryStopBeforeExecuting`).
+- **Live Fidelity is the proof of Firebird conformance** — `DebuggerFidelityProbe` **26/26 sim == real** on FB5,
+  matching both the real values AND the stop-moment / ordering, not just the final result.
+
+**Metrics:** Build 0/0; full suite **4998 tests green** (one run); `DebuggerFidelityProbe` **26/26**; smoke
+clean. Docs: closed 2026-07-20. **Remaining debugger milestones D13 (Fast-forward) and D14 (Step-back) are
+optional — build only if real usage asks.** 🏁 **D12 IS FORMALLY CLOSED.**
