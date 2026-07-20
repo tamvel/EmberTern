@@ -65,7 +65,11 @@ public enum StopReason
     /// <summary>Stopped because the next step point's offset is in <see cref="DebugSession.Breakpoints"/>.</summary>
     Breakpoint,
 
-    /// <summary>Stopped because a statement raised an exception.</summary>
+    /// <summary>An exception is why the session stopped. Paired with <see cref="DebugState.Faulted"/> it is
+    /// terminal — an unhandled raise rolled every frame back (the pre-D12 meaning). Paired with
+    /// <see cref="DebugState.Paused"/> it is a <b>Break-on-Exception</b> stop (D12, spec §9.8.1): the raise
+    /// is paused at its statement, frame intact, and will be routed on the next resume. The pair
+    /// (<see cref="DebugState"/>, this) tells the two apart; see <see cref="DebugSession.IsPausedOnException"/>.</summary>
     Exception,
 
     /// <summary>Stopped after a <c>SUSPEND</c> emitted a row.</summary>

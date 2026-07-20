@@ -18,7 +18,9 @@ namespace EmberTern.Core.Sql.Debugging;
 /// unhandled frame rolled back to its savepoint, §4.5) until a <c>WHEN … DO</c> handler matches, then
 /// resumes at that handler's body; when nothing catches, every frame — the root included — is rolled back
 /// and the session <see cref="DebugState.Faulted"/>s. Breakpoints (<see cref="Breakpoints"/>) are an
-/// additional stop condition of the run commands.
+/// additional stop condition of the run commands. <see cref="BreakOnException"/> (D12, spec §9.8.1) inserts
+/// one more stop point <i>before</i> that routing: a raise pauses at the raising statement, and the next
+/// resume routes it through the very same path — the break is a pause, never an alternative handler.
 /// </para>
 /// </summary>
 public sealed class DebugSession
@@ -39,6 +41,7 @@ public sealed class DebugSession
     private IExecutableStatement? _lastStatement; // the last step point executed before normal completion
     private IExecutableStatement? _faultStatement; // the step point that raised the unhandled exception
     private List<Frame>? _faultStack;          // the call stack (innermost last) captured at the unhandled fault
+    private (IExecutableStatement? Step, List<Frame> Stack)? _pendingRaise; // a raise held at a Break-on-Exception pause, routed on the next resume (§9.8.1)
 
     /// <summary>Creates a session over <paramref name="rootBody"/>. <paramref name="rootValues"/> seeds the
     /// root frame's initial values — the routine's <b>input parameter</b> arguments supplied at launch (§9.3):
@@ -131,6 +134,21 @@ public sealed class DebugSession
     /// while paused; a run command stops at the next step point whose offset is set here.</summary>
     public BreakpointSet Breakpoints => _breakpoints;
 
+    /// <summary>When true, a raised exception <b>pauses</b> the session at the raising statement — frame
+    /// intact, <see cref="DebugState.Paused"/> with <see cref="StopReason.Exception"/> — <i>before</i> the
+    /// raise is routed through the handler stack (spec §9.8.1). This is a stop point, <b>not</b> a fault and
+    /// <b>not</b> a second exception mechanism: the next resume command routes the held raise through the
+    /// <see cref="ExceptionRouter"/> along the <i>exact same</i> path it would have taken unbroken — a
+    /// matching <c>WHEN … DO</c> catches it (the session continues at the handler), or nothing does and the
+    /// session <see cref="DebugState.Faulted"/>s. Default false (route immediately — the pre-D12 behaviour).
+    /// May be toggled at any time during the session (armed / disarmed while paused).</summary>
+    public bool BreakOnException { get; set; }
+
+    /// <summary>True while the session is paused on a Break-on-Exception stop (an exception has been raised
+    /// but not yet routed — <see cref="BreakOnException"/>). The UI distinguishes this from an ordinary
+    /// <see cref="StopReason.Step"/> pause so it can label it and offer "continue to route the exception".</summary>
+    public bool IsPausedOnException => State == DebugState.Paused && _pendingRaise is not null;
+
     /// <summary>Rows emitted by <c>SUSPEND</c> so far, in order.</summary>
     public IReadOnlyList<IReadOnlyDictionary<string, object?>> EmittedRows => _emittedRows;
 
@@ -182,6 +200,11 @@ public sealed class DebugSession
     public bool SetNextStatement(int targetOffset)
     {
         EnsurePaused();
+        // Repositioning the IP explicitly abandons a Break-on-Exception raise held for routing: the user has
+        // chosen a new control point, so the held exception is dropped (never routed on the next resume) and
+        // is no longer the current error.
+        _pendingRaise = null;
+        _error = null;
         var frame = _frames[^1];
         var control = frame.Control;
         // Innermost active SequenceActivation that directly holds a step point at the target — pop back to
@@ -261,28 +284,36 @@ public sealed class DebugSession
 
         while (true)
         {
-            if (ExecuteCurrent(kind))
+            if (_pendingRaise is { } pending)
             {
-                // A statement / condition raised. Snapshot the faulting line + the call stack BEFORE routing:
-                // TryRoute pops (and DB-rolls-back) each unhandled frame, but never touches a frame's client-side
-                // variable values, so the snapshot preserves the state at the moment of the error (spec §4.5) for
-                // the Faulted terminal view. Committed only if nothing catches it.
-                var faultStep = _currentStep;
-                var stackAtFault = new List<Frame>(_frames);
-                // Route it through the handler stack (spec §3.6/§4.5).
-                if (!ExceptionRouter.TryRoute(_frames, _error!, _executor))
+                // Resuming from a Break-on-Exception pause (spec §9.8.1): route the held raise NOW — the SAME
+                // ExceptionRouter path an un-broken raise takes (a pause, not a second handler). Nothing is
+                // executed here; the statement already ran and raised before we paused, so the control stack is
+                // exactly what it was at the raise. On catch, fall through to advance/stop just like the
+                // immediate path below.
+                _pendingRaise = null;
+                if (RouteRaisedException(pending.Step, pending.Stack))
                 {
-                    // Nothing caught it: every frame (root included) has been rolled back and popped.
-                    _faultStatement = faultStep;
-                    _faultStack = stackAtFault;
-                    _currentStep = null;
-                    State = DebugState.Faulted;
+                    return; // nothing caught it → Faulted (terminal)
+                }
+            }
+            else if (ExecuteCurrent(kind))
+            {
+                // A statement / condition raised. With Break-on-Exception armed, PAUSE here — before routing,
+                // frame intact — so the user sees where it raised; the next resume routes it (above). Snapshot
+                // the faulting line + call stack now, BEFORE any routing, exactly as the immediate route does.
+                if (BreakOnException)
+                {
+                    _pendingRaise = (_currentStep, new List<Frame>(_frames));
+                    State = DebugState.Paused;
                     StopReason = StopReason.Exception;
                     return;
                 }
-                // Caught: the router repositioned control to the matching handler's body. The exception is
-                // handled, so the session is no longer faulted; fall through to stop/continue per the command.
-                _error = null;
+                // Disarmed: route immediately through the same one path (the pre-D12 behaviour).
+                if (RouteRaisedException(_currentStep, new List<Frame>(_frames)))
+                {
+                    return; // nothing caught it → Faulted (terminal)
+                }
             }
 
             var justExecuted = _currentStep; // the step ExecuteCurrent just ran (before we advance past it)
@@ -303,6 +334,32 @@ public sealed class DebugSession
                 return;
             }
         }
+    }
+
+    // Routes the current raise (_error) through the handler stack — the ONE exception-control-flow path
+    // (spec §3.6/§4.5), whether the raise routes immediately or after a Break-on-Exception pause. The
+    // faulting line + call-stack snapshot are captured BEFORE routing (passed in) and retained only if the
+    // session faults: TryRoute pops and DB-rolls-back each unhandled frame, but never touches a frame's
+    // client-side variable values, so the snapshot preserves the state at the moment of the error for the
+    // Faulted terminal view. Returns true when nothing caught it and the session Faulted (the caller stops);
+    // false when a WHEN … DO handler caught it — the router has repositioned control to the handler body,
+    // _error is cleared, and the caller falls through to advance/stop per its command.
+    private bool RouteRaisedException(IExecutableStatement? faultStep, List<Frame> stackAtFault)
+    {
+        if (!ExceptionRouter.TryRoute(_frames, _error!, _executor))
+        {
+            // Nothing caught it: every frame (root included) has been rolled back and popped.
+            _faultStatement = faultStep;
+            _faultStack = stackAtFault;
+            _currentStep = null;
+            State = DebugState.Faulted;
+            StopReason = StopReason.Exception;
+            return true;
+        }
+        // Caught: the router repositioned control to the matching handler's body. The exception is handled,
+        // so the session is no longer faulted.
+        _error = null;
+        return false;
     }
 
     // Executes the current step point, advancing the control stack (consuming a leaf / evaluating a

@@ -861,6 +861,155 @@ public class DebugEngineTests
         Assert.DoesNotContain("rollback:ET_DBG_FRAME_0", exec.Savepoints); // handled in-frame → no rollback
     }
 
+    // ── D12: Break on Exception (a pause before the ExceptionRouter, spec §9.8.1) ───────────────────
+
+    [Fact]
+    public void BreakOnException_DefaultsFalse_RaiseRoutesImmediately()
+    {
+        // Default (disarmed): a raise routes immediately, exactly as before D12 — never a break pause.
+        const string sql = "begin a = 1; b = 2; end";
+        var exec = new FakeExecutor().Outcome(Off(sql, "b = 2"), StatementOutcome.Raised(new DebugError(ExceptionName: "X")));
+        var s = new DebugSession(Body(sql), exec);
+        Assert.False(s.BreakOnException);
+        s.Start();
+        s.Step(StepKind.Into); // a = 1;
+        Assert.False(s.IsPausedOnException);
+        s.Step(StepKind.Into); // b = 2; raises → routed immediately → Faulted (no break pause)
+        Assert.Equal(DebugState.Faulted, s.State);
+        Assert.False(s.IsPausedOnException);
+    }
+
+    [Fact]
+    public void BreakOnException_PausesAtRaisingStatement_NotFaulted_FrameIntact()
+    {
+        // Armed: the raise PAUSES at its statement — a stop point, not a session fault. The frame is intact
+        // (still on the stack, not rolled back), the raising line is current, and the error is inspectable.
+        const string sql = "begin a = 1; b = 2; end";
+        var exec = new FakeExecutor().Outcome(Off(sql, "b = 2"), StatementOutcome.Raised(new DebugError(ExceptionName: "MY_EXC")));
+        var s = new DebugSession(Body(sql), exec) { BreakOnException = true };
+        s.Start();
+        s.Step(StepKind.Into); // a = 1;
+        s.Step(StepKind.Into); // b = 2; raises → break-on-exception PAUSE (before routing)
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(StopReason.Exception, s.StopReason);
+        Assert.True(s.IsPausedOnException);
+        Assert.Equal("b = 2;", Text(sql, s.CurrentStatement!)); // paused ON the raising line
+        Assert.NotNull(s.CurrentFrame);                          // frame intact
+        Assert.Equal("MY_EXC", s.CurrentError!.ExceptionName);
+        // Nothing has been routed yet: the frame's savepoint is neither released nor rolled back.
+        Assert.DoesNotContain("rollback:ET_DBG_FRAME_0", exec.Savepoints);
+        Assert.DoesNotContain("leave:ET_DBG_FRAME_0", exec.Savepoints);
+        // The terminal (Faulted) snapshot fields stay empty — this is a pause, not a fault.
+        Assert.Null(s.FaultStatement);
+    }
+
+    [Fact]
+    public void BreakOnException_Continue_RoutesUnhandled_FaultsIdenticallyToImmediate()
+    {
+        // Resuming from the break routes the held raise through the SAME path. With no handler, the outcome is
+        // byte-for-byte the immediate fault: Faulted, the same faulting line retained, the same frame rollback.
+        const string sql = "begin a = 1; b = 2; end";
+
+        DebugSession Run(bool breakOn, out FakeExecutor exec)
+        {
+            exec = new FakeExecutor().Outcome(Off(sql, "b = 2"), StatementOutcome.Raised(new DebugError(ExceptionName: "X")));
+            var s = new DebugSession(Body(sql), exec) { BreakOnException = breakOn };
+            s.Start();
+            s.Step(StepKind.Into); // a = 1;
+            s.Step(StepKind.Into); // b = 2; → immediate fault, OR break pause
+            if (breakOn)
+            {
+                Assert.True(s.IsPausedOnException);
+                s.Step(StepKind.Continue); // resume → route the held raise
+            }
+            return s;
+        }
+
+        var immediate = Run(false, out var immExec);
+        var broken = Run(true, out var brkExec);
+
+        Assert.Equal(DebugState.Faulted, immediate.State);
+        Assert.Equal(DebugState.Faulted, broken.State);
+        Assert.Equal(StopReason.Exception, broken.StopReason);
+        Assert.False(broken.IsPausedOnException);                         // routed → no longer holding it
+        Assert.Equal("b = 2;", Text(sql, broken.FaultStatement!));        // same faulting line as immediate
+        Assert.Equal(Text(sql, immediate.FaultStatement!), Text(sql, broken.FaultStatement!));
+        Assert.Equal(immExec.Savepoints, brkExec.Savepoints);            // identical savepoint trace = one path
+    }
+
+    [Fact]
+    public void BreakOnException_Resume_RoutesCaught_RepositionsToHandlerBody()
+    {
+        // A caught raise, resumed from the break, routes to the matching WHEN … DO handler — the router
+        // repositions control to the handler body and the exception is cleared, exactly as an un-broken raise.
+        const string sql = "begin r = 1; when exception my_exc do h = 1; end";
+        var exec = new FakeExecutor().Outcome(Off(sql, "r = 1"), StatementOutcome.Raised(new DebugError(ExceptionName: "MY_EXC")));
+        var s = new DebugSession(Body(sql), exec) { BreakOnException = true };
+        s.Start();
+        s.Step(StepKind.Into); // r = 1; raises → break pause
+        Assert.True(s.IsPausedOnException);
+        s.Step(StepKind.Into); // resume (Step) → route → caught → stop at the handler body
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.False(s.IsPausedOnException);
+        Assert.Null(s.CurrentError);                            // caught → cleared
+        Assert.Equal("h = 1;", Text(sql, s.CurrentStatement!)); // repositioned to the handler
+        // A WHEN-handled block is not rolled back (§4.5).
+        Assert.DoesNotContain("rollback:ET_DBG_FRAME_0", exec.Savepoints);
+    }
+
+    [Fact]
+    public void BreakOnException_CaughtRouting_IsIdenticalWithBreakOnOrOff()
+    {
+        // The strongest "one path" proof: a caught raise reaches the SAME terminal state, the SAME emitted
+        // rows and the SAME savepoint trace whether Break-on-Exception is off (immediate) or on (break, then
+        // continue to completion). Break-on-Exception adds a pause, nothing else.
+        const string sql = "begin r = 1; when exception my_exc do h = 1; suspend; end";
+
+        (DebugState State, List<string> Savepoints, int Rows) Run(bool breakOn)
+        {
+            var exec = new FakeExecutor()
+                .Outcome(Off(sql, "r = 1"), StatementOutcome.Raised(new DebugError(ExceptionName: "MY_EXC")))
+                .Outcome(Off(sql, "suspend"), StatementOutcome.Suspended(Row("R", 1)));
+            var s = new DebugSession(Body(sql), exec) { BreakOnException = breakOn };
+            s.Start();
+            int guard = 0;
+            while (s.State == DebugState.Paused)
+            {
+                Assert.True(guard++ < 100, "runaway");
+                s.Step(StepKind.Continue);
+            }
+            return (s.State, exec.Savepoints, s.EmittedRows.Count);
+        }
+
+        var off = Run(false);
+        var on = Run(true);
+        Assert.Equal(DebugState.Completed, off.State);
+        Assert.Equal(off.State, on.State);
+        Assert.Equal(off.Savepoints, on.Savepoints);
+        Assert.Equal(off.Rows, on.Rows);
+    }
+
+    [Fact]
+    public void BreakOnException_SetNextStatement_DropsHeldRaise()
+    {
+        // Repositioning the IP while paused on a broken raise abandons it: it is no longer held (a later
+        // resume will not route it) and is no longer the current error.
+        const string sql = "begin a = 1; b = 2; c = 3; end";
+        var exec = new FakeExecutor().Outcome(Off(sql, "b = 2"), StatementOutcome.Raised(new DebugError(ExceptionName: "X")));
+        var s = new DebugSession(Body(sql), exec) { BreakOnException = true };
+        s.Start();
+        s.Step(StepKind.Into); // a = 1;
+        s.Step(StepKind.Into); // b = 2; raises → break pause
+        Assert.True(s.IsPausedOnException);
+        Assert.True(s.SetNextStatement(Off(sql, "c = 3"))); // reposition to c = 3;
+        Assert.False(s.IsPausedOnException);
+        Assert.Null(s.CurrentError);
+        Assert.Equal("c = 3;", Text(sql, s.CurrentStatement!));
+        s.Step(StepKind.Continue); // runs c = 3; to completion — the dropped raise is NOT routed
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.DoesNotContain("rollback:ET_DBG_FRAME_0", exec.Savepoints);
+    }
+
     // ── Breakpoints (seam b) ──────────────────────────────────────────────────────────────────────
 
     [Fact]
