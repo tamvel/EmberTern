@@ -121,6 +121,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         CallStack = new ObservableCollection<DebugFrameRowViewModel>();
         BreakpointRows = new ObservableCollection<BreakpointRowViewModel>();
         DataBreakpointRows = new ObservableCollection<DataBreakpointRowViewModel>();
+        SuspendRows = new ObservableCollection<object?[]>();
         Breadcrumbs = new ObservableCollection<string>();
         StatusText = UiStrings.DebuggerLaunchPreparing;
         LoadWatches();
@@ -280,6 +281,72 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         if (Session is { } s) s.BreakOnException = value;
     }
 
+    // ── Results grid (D12 Seam E2) — a view of the session's SUSPEND-emitted rows (spec §9.8) ──────────────
+
+    /// <summary>The rows emitted by <c>SUSPEND</c> so far (Run to next <c>SUSPEND</c>, or any run that passed a
+    /// <c>SUSPEND</c>), each as an <c>object?[]</c> aligned to <see cref="SuspendColumns"/> — bound to the
+    /// Results DataGrid. A pure projection of <see cref="DebugSession.EmittedRows"/> (the engine produces the
+    /// rows; this only shapes them for the grid). Rows only ever grow within a run; cleared on a fresh launch.</summary>
+    public ObservableCollection<object?[]> SuspendRows { get; }
+
+    private readonly List<string> _suspendColumns = new();
+
+    /// <summary>The result columns (the routine's <c>RETURNS</c> names, from the first emitted row). The view
+    /// builds the DataGrid columns from these on <see cref="SuspendColumnsChanged"/>.</summary>
+    public IReadOnlyList<string> SuspendColumns => _suspendColumns;
+
+    public bool HasSuspendRows => SuspendRows.Count > 0;
+
+    /// <summary>Raised when the result columns change (the first SUSPEND row of a run, or a clear) so the view
+    /// rebuilds the DataGrid columns — mirrors the main result grid's structure-change rebuild.</summary>
+    public event EventHandler? SuspendColumnsChanged;
+
+    // Projects the session's emitted SUSPEND rows into the grid-friendly SuspendRows/SuspendColumns. Called on
+    // every pause/terminal refresh; rows only grow within a run, so it appends new rows (rebuilding columns only
+    // when the structure first appears or changes). The engine owns the rows; this never computes a value.
+    private void RebuildSuspendRows()
+    {
+        var rows = Session?.EmittedRows;
+        if (rows is null || rows.Count == 0)
+        {
+            if (SuspendRows.Count > 0 || _suspendColumns.Count > 0)
+            {
+                SuspendRows.Clear();
+                _suspendColumns.Clear();
+                SuspendColumnsChanged?.Invoke(this, EventArgs.Empty);
+                OnPropertyChanged(nameof(HasSuspendRows));
+            }
+            return;
+        }
+
+        var cols = rows[0].Keys.ToList();
+        if (!_suspendColumns.SequenceEqual(cols, StringComparer.OrdinalIgnoreCase))
+        {
+            _suspendColumns.Clear();
+            _suspendColumns.AddRange(cols);
+            SuspendRows.Clear();
+            SuspendColumnsChanged?.Invoke(this, EventArgs.Empty); // the view rebuilds the DataGrid columns
+        }
+
+        for (int r = SuspendRows.Count; r < rows.Count; r++) // append only the newly-emitted rows
+        {
+            var arr = new object?[_suspendColumns.Count];
+            for (int i = 0; i < _suspendColumns.Count; i++)
+                arr[i] = rows[r].TryGetValue(_suspendColumns[i], out var v) ? v : null;
+            SuspendRows.Add(arr);
+        }
+        OnPropertyChanged(nameof(HasSuspendRows));
+    }
+
+    private void ClearSuspendRows()
+    {
+        if (SuspendRows.Count == 0 && _suspendColumns.Count == 0) return;
+        SuspendRows.Clear();
+        _suspendColumns.Clear();
+        SuspendColumnsChanged?.Invoke(this, EventArgs.Empty);
+        OnPropertyChanged(nameof(HasSuspendRows));
+    }
+
     /// <summary>The selected call-stack row (bound two-way to the Call Stack list's SelectedItem). A user pick
     /// routes to <see cref="SelectFrame"/>; a programmatic sync (a new pause / breadcrumb / keyboard) sets it
     /// under <see cref="_syncingFrameSelection"/>.</summary>
@@ -346,6 +413,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     [NotifyCanExecuteChangedFor(nameof(StepIntoCommand))]
     [NotifyCanExecuteChangedFor(nameof(StepOverCommand))]
     [NotifyCanExecuteChangedFor(nameof(StepOutCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunToSuspendCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(RestartCommand))]
     [NotifyCanExecuteChangedFor(nameof(EvaluateImmediateCommand))]
@@ -561,7 +629,8 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             _source, _body, _model, RoutineName, rootValues, Isolation, trigger, _packageName,
             _breakpoints, _dataBreakpoints, BreakOnException);
 
-        ClearExecutedSql(); // a fresh session starts a fresh audit log
+        ClearExecutedSql();  // a fresh session starts a fresh audit log
+        ClearSuspendRows();  // …and a fresh (empty) result set
         Phase = DebuggerPhase.Busy;
         StatusText = UiStrings.DebuggerStatusRunning;
         try
@@ -625,6 +694,12 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
     [RelayCommand(CanExecute = nameof(CanStep))]
     private Task StepOutAsync() => RunStepAsync(s => s.Step(StepKind.Out));
+
+    /// <summary>Run to next <c>SUSPEND</c> (D12, spec §9.8): runs full speed until the next <c>SUSPEND</c>
+    /// emits a row (a selectable procedure's "give me the next row"), then pauses. The emitted rows collect in
+    /// the Results grid. A non-selectable routine simply runs to completion. Pure delegation to the engine.</summary>
+    [RelayCommand(CanExecute = nameof(CanStep))]
+    private Task RunToSuspendAsync() => RunStepAsync(s => s.RunToSuspend());
 
     /// <summary>Run To Cursor: runs until the step point at (or first after) <paramref name="caretOffset"/>.
     /// A no-op when the offset does not map to a step point.</summary>
@@ -839,6 +914,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         SetCurrentMarker(null, null);
         ClearVariables();
         ClearExecutedSql();
+        ClearSuspendRows();
         ResetWatches(); // keep the (persisted) watch rows, clear their live values
         Phase = DebuggerPhase.Idle;
         StatusText = UiStrings.DebuggerStatusStopped;
@@ -966,6 +1042,8 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     {
         var session = Session;
         if (session is null) return;
+
+        RebuildSuspendRows(); // reflect any newly-emitted SUSPEND rows (Run-to-SUSPEND, or a run past a SUSPEND)
 
         switch (session.State)
         {

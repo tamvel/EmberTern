@@ -48,13 +48,28 @@ public class DebuggerTabVmTests
         public FakeExecutor Write(int start, IReadOnlyDictionary<string, object?> writes) { _writes[start] = writes; return this; }
         public FakeExecutor Raise(int start) { _raises.Add(start); return this; }
 
+        // SUSPEND rows scripted per offset (a queue — a loop re-executes the same SUSPEND) for the D12 Seam E2
+        // run-to-SUSPEND / Results-grid tests.
+        private readonly Dictionary<int, Queue<StatementOutcome>> _suspends = new();
+        public FakeExecutor Suspend(int start, params IReadOnlyDictionary<string, object?>[] rows)
+        {
+            _suspends[start] = new Queue<StatementOutcome>(rows.Select(r => StatementOutcome.Suspended(r)));
+            return this;
+        }
+
         public StatementOutcome ExecuteStatement(IExecutableStatement s, Frame frame)
         {
             if (_raises.Contains(s.Start)) return StatementOutcome.Raised(new DebugError(ExceptionName: "E_TEST", Message: "boom"));
+            if (_suspends.TryGetValue(s.Start, out var sq) && sq.Count > 0) return sq.Dequeue();
             return _writes.TryGetValue(s.Start, out var w) ? StatementOutcome.Normal(w) : StatementOutcome.Normal();
         }
 
-        public ConditionOutcome EvaluateCondition(IExecutableStatement owner, Frame frame) => ConditionOutcome.True;
+        // WHILE/IF conditions scripted per offset (a queue) — else default true; lets a loop run a bounded number
+        // of iterations for the run-to-SUSPEND test.
+        private readonly Dictionary<int, Queue<bool>> _conds = new();
+        public FakeExecutor Cond(int start, params bool[] values) { _conds[start] = new Queue<bool>(values); return this; }
+        public ConditionOutcome EvaluateCondition(IExecutableStatement owner, Frame frame)
+            => _conds.TryGetValue(owner.Start, out var q) && q.Count > 0 ? ConditionOutcome.Of(q.Dequeue()) : ConditionOutcome.True;
 
         // A breakpoint condition (a string fragment through the one engine) — scriptable per fragment so a
         // D12 conditional-breakpoint test can prove the condition set on a panel row reached the engine.
@@ -650,6 +665,74 @@ public class DebuggerTabVmTests
 
         await vm.ContinueCommand.ExecuteAsync(null); // no break-on-exception → routed immediately → faulted
         Assert.Equal(DebuggerPhase.Faulted, vm.Phase);
+    }
+
+    // ── D12 Seam E2 — Run to next SUSPEND + the Results grid projection (spec §9.8) ──────────────────
+
+    private const string SelSql = """
+        create procedure sp_sel (n integer) returns (i integer) as
+        begin
+          i = 0;
+          while (i < n) do
+          begin
+            i = i + 1;
+            suspend;
+          end
+        end
+        """;
+
+    private static Dictionary<string, object?> RowI(int i)
+        => new(StringComparer.OrdinalIgnoreCase) { ["I"] = i };
+
+    [Fact]
+    public async Task RunToSuspend_CollectsEmittedRows_IntoResultsProjection()
+    {
+        // Run to next SUSPEND yields one row per resume; each emitted row is projected into SuspendRows/
+        // SuspendColumns (the Results grid) — a pure projection of DebugSession.EmittedRows.
+        int whileAt = SelSql.IndexOf("while", StringComparison.Ordinal);
+        int suspendAt = SelSql.IndexOf("suspend", StringComparison.Ordinal);
+        var exec = new FakeExecutor().Cond(whileAt, true, true, false).Suspend(suspendAt, RowI(1), RowI(2));
+        var vm = Vm(SelSql, exec, out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        bool columnsChanged = false;
+        vm.SuspendColumnsChanged += (_, _) => columnsChanged = true;
+
+        await vm.RunToSuspendCommand.ExecuteAsync(null); // first SUSPEND
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.True(vm.HasSuspendRows);
+        Assert.Equal(new[] { "I" }, vm.SuspendColumns);
+        Assert.True(columnsChanged);
+        Assert.Equal(1, Assert.Single(vm.SuspendRows)[0]);
+
+        await vm.RunToSuspendCommand.ExecuteAsync(null); // second SUSPEND
+        Assert.Equal(2, vm.SuspendRows.Count);
+        Assert.Equal(2, vm.SuspendRows[1][0]);
+
+        await vm.RunToSuspendCommand.ExecuteAsync(null); // no further SUSPEND → completes, rows unchanged
+        Assert.Equal(DebuggerPhase.Completed, vm.Phase);
+        Assert.Equal(2, vm.SuspendRows.Count);
+    }
+
+    [Fact]
+    public async Task RunToSuspend_GatedToPaused_AndClearedOnStop()
+    {
+        int whileAt = SelSql.IndexOf("while", StringComparison.Ordinal);
+        int suspendAt = SelSql.IndexOf("suspend", StringComparison.Ordinal);
+        var exec = new FakeExecutor().Cond(whileAt, true, false).Suspend(suspendAt, RowI(1));
+        var vm = Vm(SelSql, exec, out _);
+        await vm.PrepareAsync();
+        Assert.False(vm.RunToSuspendCommand.CanExecute(null)); // not launched → disabled
+
+        await vm.LaunchCommand.ExecuteAsync(null);
+        Assert.True(vm.RunToSuspendCommand.CanExecute(null)); // paused → enabled
+        await vm.RunToSuspendCommand.ExecuteAsync(null);
+        Assert.True(vm.HasSuspendRows);
+
+        await vm.StopCommand.ExecuteAsync(null);
+        Assert.False(vm.HasSuspendRows);   // the result set is cleared on Stop
+        Assert.Empty(vm.SuspendColumns);
     }
 
     // ── Expression evaluation (Evaluate / Immediate — D5, §9.5) ────────────────────────────────────

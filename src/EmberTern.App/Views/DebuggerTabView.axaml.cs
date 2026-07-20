@@ -3,6 +3,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -15,7 +16,6 @@ using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
 #if DEBUG
 using Avalonia.Controls.Templates;
-using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Layout;
 #endif
@@ -34,6 +34,7 @@ public partial class DebuggerTabView : UserControl
 {
     private TextEditor? _editor;
     private BreakpointMargin? _margin;
+    private DataGrid? _suspendGrid;
     private DebuggerTabViewModel? _vm;
     private bool _attached;
     private Popup? _peekPopup; // Peek Frame flyout, created lazily on first double-click of a call-stack row
@@ -51,6 +52,7 @@ public partial class DebuggerTabView : UserControl
     {
         InitializeComponent();
         _editor = this.FindControl<TextEditor>("SourceEditor");
+        _suspendGrid = this.FindControl<DataGrid>("SuspendGrid");
         var layout = this.FindControl<Grid>("DebugLayout");
         if (layout is not null && layout.RowDefinitions.Count > 2)
         {
@@ -101,16 +103,45 @@ public partial class DebuggerTabView : UserControl
         {
             _vm.PropertyChanged -= OnVmPropertyChanged;
             _vm.DebugMarkersChanged -= OnDebugMarkersChanged;
+            _vm.SuspendColumnsChanged -= OnSuspendColumnsChanged;
         }
         _vm = DataContext as DebuggerTabViewModel;
         if (_vm is not null)
         {
             _vm.PropertyChanged += OnVmPropertyChanged;
             _vm.DebugMarkersChanged += OnDebugMarkersChanged;
+            _vm.SuspendColumnsChanged += OnSuspendColumnsChanged;
         }
         SyncEditorText();
         RepaintMarkers();
+        RebuildSuspendColumns();
         ApplyBottomPanel();
+    }
+
+    // Rebuilds the Results DataGrid's columns from the VM's SuspendColumns (D12 Seam E2) — dynamic columns, the
+    // same pattern as the SQL editor's result grid (MainWindow.PopulateResultGrid): each column binds to the
+    // row array by index ([i]). The rows themselves (SuspendRows) bind in XAML and update observably; only the
+    // columns need code-behind. Fired on SuspendColumnsChanged (first SUSPEND row of a run, or a clear).
+    private void OnSuspendColumnsChanged(object? sender, EventArgs e) => RebuildSuspendColumns();
+
+    private void RebuildSuspendColumns()
+    {
+        if (_suspendGrid is null) return;
+        _suspendGrid.Columns.Clear();
+        if (_vm is null) return;
+        for (int i = 0; i < _vm.SuspendColumns.Count; i++)
+        {
+            _suspendGrid.Columns.Add(new DataGridTextColumn
+            {
+                Header = _vm.SuspendColumns[i],
+                Binding = new Binding($"[{i}]")
+                {
+                    StringFormat = "{0}",
+                    FallbackValue = string.Empty,
+                    TargetNullValue = UiStrings.DebuggerVariableNull,
+                },
+            });
+        }
     }
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

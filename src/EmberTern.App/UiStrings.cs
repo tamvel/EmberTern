@@ -1767,6 +1767,13 @@ internal static class UiStrings
     public const string DebuggerBottomTabWatches = "Watches";
     public const string DebuggerBottomTabCallStack = "Call Stack";
     public const string DebuggerBottomTabBreakpoints = "Breakpoints";
+    public const string DebuggerBottomTabResults = "Results";
+    // Run to next SUSPEND + its result grid (D12 Seam E2, spec §9.8).
+    public const string DebuggerRunToSuspendContent = "⏭ SUSPEND";
+    public const string DebuggerRunToSuspendTooltip =
+        "Run to next SUSPEND — produce the next result row of a selectable procedure (rows collect in the Results tab).";
+    public const string DebuggerResultsEmpty =
+        "No rows yet. Use “⏭ SUSPEND” to run a selectable procedure to its next SUSPEND; each emitted row is collected here.";
     // Breakpoints panel (D12 Seam E, spec §9.8) — a pure view of the Core Breakpoint / DataBreakpoint objects.
     public const string DebuggerBreakpointsEmpty =
         "No breakpoints. Click the editor gutter to add a line breakpoint; right-click a variable → " +

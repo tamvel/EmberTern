@@ -99,6 +99,11 @@
                   IsEnabled="{Binding IsPaused}"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToCursorTooltip}"
                   Click="OnRunToCursorClick" />
+          <!-- Run to next SUSPEND (D12, §9.8) — a selectable procedure's "give me the next row"; rows collect
+               in the Results tab. A run mode delegated straight to the engine (DebugSession.RunToSuspend). -->
+          <Button Classes="flat" Content="{x:Static app:UiStrings.DebuggerRunToSuspendContent}" FontSize="11"
+                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToSuspendTooltip}"
+                  Command="{Binding RunToSuspendCommand}" />
           <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
           <Button Classes="flat" Content="■ Stop" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerStopTooltip}"
@@ -673,6 +678,33 @@
 
                     </StackPanel>
                   </ScrollViewer>
+                </Grid>
+              </TabItem>
+
+              <!-- Results (D12 Seam E2, spec §9.8) — the rows a selectable procedure emits via SUSPEND
+                   (collected by Run to next SUSPEND, or any run that passes a SUSPEND). A pure view of
+                   DebugSession.EmittedRows; columns are built in code-behind from SuspendColumns (dynamic,
+                   like the SQL editor's result grid), rows bind to SuspendRows. -->
+              <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabResults}">
+                <Grid IsVisible="{Binding !IsBottomPanelCollapsed}" Margin="0,2,0,0">
+                  <TextBlock Margin="10,6"
+                             Text="{x:Static app:UiStrings.DebuggerResultsEmpty}"
+                             Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                             IsVisible="{Binding !HasSuspendRows}" />
+                  <DataGrid x:Name="SuspendGrid"
+                            ItemsSource="{Binding SuspendRows}"
+                            IsVisible="{Binding HasSuspendRows}"
+                            IsReadOnly="True"
+                            AutoGenerateColumns="False"
+                            HeadersVisibility="Column"
+                            GridLinesVisibility="Horizontal"
+                            CanUserSortColumns="False"
+                            CanUserReorderColumns="False"
+                            ColumnWidth="Auto"
+                            RowBackground="Transparent"
+                            HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                            VerticalGridLinesBrush="{DynamicResource BorderBrush}"
+                            FontSize="11" />
                 </Grid>
               </TabItem>
             </TabControl>
