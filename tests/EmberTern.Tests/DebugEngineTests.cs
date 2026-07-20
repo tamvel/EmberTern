@@ -1097,23 +1097,125 @@ public class DebugEngineTests
         Assert.Equal(2, s.Depth);
     }
 
-    // ── D12: the FIRST statement goes through the same stop-decision as every arrival (spec §9.8) ────────
+    // ── D12: the breakpoint decision is made BEFORE executing a statement, in the RUN command — one
+    //    semantics for every statement, the first executed statement a natural case of it (spec §9.8). ────────
 
     [Fact]
-    public void Start_BreakpointOnFirstStatement_StopsAsBreakpoint_NotEntry()
+    public void Start_BreakpointOnFirstStatement_PausesAsEntry_BreakpointDecidedOnResume()
     {
-        // A breakpoint on the first executed statement must be honored at Start through the SAME stop-decision
-        // as any later statement — the session pauses ON it (before executing it) as a Breakpoint, not a plain
-        // Entry that then runs the statement on the next Continue.
+        // The stop decision belongs to the RUN command (made before executing the statement about to run), not
+        // to Start. So Start pauses at Entry even with a breakpoint on the first statement; the breakpoint is
+        // honored on the first resume — one semantics, no Start special case. (This is the model change: the
+        // session pauses at Entry, and the FIRST Continue stops on the first statement's breakpoint below.)
         const string sql = "begin a = 1; b = 2; c = 3; end";
         var exec = new FakeExecutor();
         var s = new DebugSession(Body(sql), exec);
         s.Breakpoints.Add(Off(sql, "a = 1")); // the FIRST statement
         s.Start();
         Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(StopReason.Entry, s.StopReason);
+        Assert.Empty(exec.Executed);
+
+        s.Step(StepKind.Continue);
+        Assert.Equal(DebugState.Paused, s.State);
         Assert.Equal(StopReason.Breakpoint, s.StopReason);
         Assert.Equal("a = 1;", Text(sql, s.CurrentStatement!));
-        Assert.Empty(exec.Executed); // paused BEFORE executing the first statement
+        Assert.Empty(exec.Executed); // still not executed — stopped ON it, before it ran
+    }
+
+    [Fact]
+    public void BreakpointAddedAtEntry_OnFirstStatement_FiresOnFirstResume()
+    {
+        // THE reported bug (regression pin): the breakpoint gutter only appears once a run is live, so the user
+        // sets the first breakpoint while paused at Entry — ON the first statement. Continue must then stop on
+        // it (before it runs), not execute it and skip ahead. Previously the run loop's post-execute check
+        // structurally skipped the statement it resumed FROM, so this breakpoint was always missed.
+        const string sql = "begin a = 1; b = 2; c = 3; end";
+        var exec = new FakeExecutor();
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        Assert.Equal(StopReason.Entry, s.StopReason); // paused at Entry, no breakpoint yet
+        s.Breakpoints.Add(Off(sql, "a = 1"));         // …now set one on the first statement
+        s.Step(StepKind.Continue);
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(StopReason.Breakpoint, s.StopReason);
+        Assert.Equal("a = 1;", Text(sql, s.CurrentStatement!));
+        Assert.Empty(exec.Executed); // stopped BEFORE the first statement ran
+    }
+
+    [Fact]
+    public void BreakpointOnFirstStatement_Continue_DoesNotDoubleStop()
+    {
+        // After stopping on the first statement's breakpoint, Continue must LEAVE it (run it exactly once) and
+        // not re-stop on the same statement — the resume-guard. No double stop on the same instruction.
+        const string sql = "begin a = 1; b = 2; end";
+        var exec = new FakeExecutor();
+        var s = new DebugSession(Body(sql), exec);
+        s.Breakpoints.Add(Off(sql, "a = 1"));
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal(StopReason.Breakpoint, s.StopReason); // stops on the first statement
+        Assert.Equal("a = 1;", Text(sql, s.CurrentStatement!));
+        s.Step(StepKind.Continue);                         // resume: leaves it, runs to completion
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Equal(2, exec.Executed.Count);              // a and b each ran exactly once (no re-execution)
+    }
+
+    [Fact]
+    public void BreakpointOnSecondStatement_StillFiresBeforeIt()
+    {
+        // Guard against regressing later statements while fixing the first: a breakpoint on the SECOND statement
+        // stops before it runs, with only the first statement executed.
+        const string sql = "begin a = 1; b = 2; c = 3; end";
+        var exec = new FakeExecutor();
+        var s = new DebugSession(Body(sql), exec);
+        s.Breakpoints.Add(Off(sql, "b = 2"));
+        s.Start();
+        Assert.Equal(StopReason.Entry, s.StopReason);
+        s.Step(StepKind.Continue);
+        Assert.Equal(StopReason.Breakpoint, s.StopReason);
+        Assert.Equal("b = 2;", Text(sql, s.CurrentStatement!));
+        Assert.Equal(new[] { Off(sql, "a = 1") }, exec.Executed); // only a ran; we stop before b
+    }
+
+    [Fact]
+    public void StepOver_FromEntry_WithBreakpointOnFirstStatement_StillSteps()
+    {
+        // DoD: Step Into / Over / Out are UNCHANGED. A movement command steps AWAY from the statement it starts
+        // on, so a breakpoint on that (first) statement must NOT re-fire — Step Over executes it and stops at the
+        // next statement, exactly as before. (Only the RUN commands honor a breakpoint on the resume statement.)
+        const string sql = "begin a = 1; b = 2; c = 3; end";
+        var exec = new FakeExecutor();
+        var s = new DebugSession(Body(sql), exec);
+        s.Breakpoints.Add(Off(sql, "a = 1")); // on the first statement
+        s.Start();
+        Assert.Equal(StopReason.Entry, s.StopReason);
+        s.Step(StepKind.Over);
+        Assert.Equal(StopReason.Step, s.StopReason);            // stepped, NOT stopped on the breakpoint
+        Assert.Equal("b = 2;", Text(sql, s.CurrentStatement!)); // advanced to the second statement
+        Assert.Equal(new[] { Off(sql, "a = 1") }, exec.Executed); // the first statement ran
+    }
+
+    [Fact]
+    public void BreakpointOnFirstStatement_SurvivesRestart_ViaSharedSet()
+    {
+        // The debug tab shares one BreakpointSet across launch/restart; a breakpoint on the first statement must
+        // fire on the first resume of a fresh session, run after run (a "restart" is a new session over the
+        // same shared set).
+        const string sql = "begin a = 1; b = 2; end";
+        var bps = new BreakpointSet();
+        bps.Add(Off(sql, "a = 1"));
+        for (int run = 0; run < 2; run++) // launch, then "restart"
+        {
+            var exec = new FakeExecutor();
+            var s = new DebugSession(Body(sql), exec, breakpoints: bps);
+            s.Start();
+            Assert.Equal(StopReason.Entry, s.StopReason);
+            s.Step(StepKind.Continue);
+            Assert.Equal(StopReason.Breakpoint, s.StopReason);
+            Assert.Equal("a = 1;", Text(sql, s.CurrentStatement!));
+            Assert.Empty(exec.Executed);
+        }
     }
 
     [Fact]

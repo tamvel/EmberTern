@@ -526,19 +526,81 @@ public class DebuggerTabVmTests
 
     // ── D12 Seam E — Breakpoints panel + Break-on-Exception + data breakpoints (spec §9.8) ──────────
 
+    // Reproduces the reported QA scenario as closely as a VM test can: a CREATE PROCEDURE with a DECLARE, a
+    // breakpoint set on the FIRST executed statement via the GUTTER line-start offset (leading whitespace). Under
+    // the ratified model the stop decision belongs to the RUN command (before executing the statement about to
+    // run), so launch pauses at Entry and the breakpoint on the first statement fires on the first Continue.
+    private const string DeclLoopSql = """
+        create or alter procedure sp_loopy (n integer) returns (idx integer, acc integer) as
+        declare variable i integer;
+        begin
+          i = 0;
+          acc = 0;
+          idx = i;
+        end
+        """;
+
     [Fact]
-    public async Task Breakpoint_OnFirstStatement_IsHonoredAtLaunch()
+    public async Task Breakpoint_OnFirstStatement_GutterOffset_HonoredOnFirstContinue()
     {
-        // Regression (QA): a breakpoint on the FIRST executed statement must be honored at launch — the session
-        // shares the VM's breakpoint set, so Start pauses ON the first statement as a Breakpoint (through the
-        // same stop-decision as any statement), not a plain Entry that silently runs it on the next Continue.
+        var vm = Vm(DeclLoopSql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+
+        int stmtOff = DeclLoopSql.IndexOf("i = 0", StringComparison.Ordinal);
+        int lineStart = DeclLoopSql.LastIndexOf('\n', stmtOff) + 1; // the gutter passes the LINE start
+        vm.ToggleBreakpointAt(lineStart);
+        Assert.Contains(stmtOff, vm.BreakpointOffsets); // maps to the first statement's start
+
+        await vm.LaunchCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.Contains("entry", vm.StatusText, StringComparison.OrdinalIgnoreCase); // launch pauses at Entry
+
+        await vm.ContinueCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.Equal(stmtOff, vm.CurrentStart); // stops ON the first statement (before executing it)
+        Assert.Contains("breakpoint", vm.StatusText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Breakpoint_OnFirstStatement_SetAfterLaunch_HonoredOnRestartThenContinue()
+    {
+        // The EXACT reported sequence: launch (paused at entry on the first statement, no breakpoint yet), set a
+        // breakpoint on that first statement via the gutter, then Restart. Restart pauses at Entry (the run
+        // command owns the decision), and the first Continue stops ON the first statement as a Breakpoint.
+        var vm = Vm(DeclLoopSql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        Assert.Contains("entry", vm.StatusText, StringComparison.OrdinalIgnoreCase); // no bp yet → entry
+
+        int stmtOff = DeclLoopSql.IndexOf("i = 0", StringComparison.Ordinal);
+        int lineStart = DeclLoopSql.LastIndexOf('\n', stmtOff) + 1;
+        vm.ToggleBreakpointAt(lineStart); // set on the first statement while paused there
+
+        await vm.RestartCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.Contains("entry", vm.StatusText, StringComparison.OrdinalIgnoreCase); // restart also pauses at Entry
+
+        await vm.ContinueCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.Equal(stmtOff, vm.CurrentStart);
+        Assert.Contains("breakpoint", vm.StatusText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Breakpoint_OnFirstStatement_IsHonoredOnFirstContinue()
+    {
+        // Regression (QA): a breakpoint on the FIRST executed statement must be honored — the run command makes
+        // the stop decision before executing the statement about to run, so the first Continue stops ON the first
+        // statement (the old post-execute check ran it and skipped ahead). Launch itself pauses at Entry.
         var vm = Vm(Sql, new FakeExecutor(), out _);
         await vm.PrepareAsync();
         vm.ToggleBreakpointAt(Off("v = a + b")); // the first statement, set before launch
         await vm.LaunchCommand.ExecuteAsync(null);
+        Assert.Contains("entry", vm.StatusText, StringComparison.OrdinalIgnoreCase);
 
+        await vm.ContinueCommand.ExecuteAsync(null);
         Assert.Equal(DebuggerPhase.Paused, vm.Phase);
-        Assert.Equal(Off("v = a + b"), vm.CurrentStart);           // paused ON it (before executing it)
+        Assert.Equal(Off("v = a + b"), vm.CurrentStart);           // stopped ON it (before executing it)
         Assert.Contains("breakpoint", vm.StatusText, StringComparison.OrdinalIgnoreCase); // honored as a breakpoint
     }
 

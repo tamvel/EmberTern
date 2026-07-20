@@ -45,6 +45,7 @@ public sealed class DebugSession
     private (IExecutableStatement? Step, List<Frame> Stack)? _pendingRaise; // a raise held at a Break-on-Exception pause, routed on the next resume (§9.8.1)
     private DebugError? _conditionError;       // a conditional breakpoint whose condition RAISED on the stop that paused us (§9.8.2); cleared on resume
     private DataBreakpoint? _dataBreakpointHit; // the watched variable whose change paused us (§9.8.4); cleared on resume
+    private bool _atDeliveredArrival;          // is the current pause a DELIVERED arrival at _currentStep (breakpoint / step / data-bp / SUSPEND / SetNext), rather than the pre-execution Entry pause? — the breakpoint resume-guard (see TryStopBeforeExecuting)
 
     /// <summary>Creates a session over <paramref name="rootBody"/>. <paramref name="rootValues"/> seeds the
     /// root frame's initial values — the routine's <b>input parameter</b> arguments supplied at launch (§9.3):
@@ -205,12 +206,14 @@ public sealed class DebugSession
         else
         {
             State = DebugState.Paused;
-            // The first step point is an ARRIVAL like every other — run it through the SAME stop-decision, so a
-            // breakpoint on the first statement is honored (and hit-counted) exactly as one on any later
-            // statement (spec §9.8). With no breakpoint there it is the plain entry pause. This is the one
-            // stop-decision mechanism the user asked for: entry, first statement, and every statement all go
-            // through ShouldBreakAt on arrival.
-            StopReason = ShouldBreakAt(_currentStep) ? StopReason.Breakpoint : StopReason.Entry;
+            StopReason = StopReason.Entry;
+            // Entry is a PRE-EXECUTION pause: execution has not yet reached the first statement, so no
+            // breakpoint decision is made here — the run command owns that one decision (TryStopBeforeExecuting),
+            // for the first statement exactly as for every later one. This is what makes a breakpoint set at
+            // Entry (the real-world case — the gutter only exists once a run is live) fire on the first resume
+            // instead of being silently executed past. _atDeliveredArrival = false marks Entry as the sole
+            // non-delivered pause, so the first resume does NOT resume-guard the first statement's breakpoint.
+            _atDeliveredArrival = false;
         }
     }
 
@@ -273,6 +276,9 @@ public sealed class DebugSession
                     _currentStep = AdvanceToNextStepPoint();
                     State = _currentStep is null ? DebugState.Completed : DebugState.Paused;
                     StopReason = _currentStep is null ? StopReason.Completed : StopReason.Step;
+                    // The repositioned pause is a delivered arrival (the user is now sitting on the target
+                    // statement), so a resume does not immediately re-break its breakpoint — the resume-guard.
+                    _atDeliveredArrival = _currentStep is not null;
                     return _currentStep is not null;
                 }
             }
@@ -325,9 +331,11 @@ public sealed class DebugSession
     private void RunStepping(StepKind kind, int? targetOffset)
     {
         EnsurePaused();
-        _conditionError = null;   // a fresh stop decision re-sets it if a condition raises again
+        _conditionError = null;    // a fresh stop decision re-sets it if a condition raises again
         _dataBreakpointHit = null; // …likewise for a data breakpoint
         int startDepth = _frames.Count;
+        bool firstArrival = true;  // the statement we are RESUMING from: no movement stop, and the breakpoint
+                                   // resume-guard applies only to this arrival (see TryStopBeforeExecuting)
 
         while (true)
         {
@@ -337,12 +345,14 @@ public sealed class DebugSession
 
             if (_pendingRaise is { } pending)
             {
-                // Resuming from a Break-on-Exception pause (spec §9.8.1): route the held raise NOW — the SAME
-                // ExceptionRouter path an un-broken raise takes (a pause, not a second handler). Nothing is
-                // executed here; the statement already ran and raised before we paused, so the control stack is
-                // exactly what it was at the raise. On catch, fall through to advance/stop just like the
-                // immediate path below.
+                // Resuming to ROUTE a held Break-on-Exception raise (spec §9.8.1): a genuinely different
+                // operation from executing a statement ("about to route", not "about to execute"), so the
+                // pre-execute stop gate below does NOT apply to it — this is not a first-statement special case.
+                // Route the held raise through the SAME ExceptionRouter path an un-broken raise takes; the
+                // statement already ran and raised before we paused, so the control stack is exactly what it was
+                // at the raise. On catch, control is at the handler body and we fall to the shared tail below.
                 _pendingRaise = null;
+                firstArrival = false;
                 if (RouteRaisedException(pending.Step, pending.Stack))
                 {
                     return; // nothing caught it → Faulted (terminal)
@@ -350,6 +360,16 @@ public sealed class DebugSession
             }
             else
             {
+                // ── The ONE stop decision, made BEFORE executing the statement the IP points at (spec §9.8). ──
+                // Applied to EVERY statement in EVERY run mode, including the statement a run command resumes
+                // from — which is what makes a breakpoint on the first executed statement no different from one
+                // on the hundredth (the old post-execute check structurally skipped the resume statement).
+                if (TryStopBeforeExecuting(kind, targetOffset, startDepth, firstArrival))
+                {
+                    return;
+                }
+                firstArrival = false;
+
                 // Snapshot the watched variables in the frame about to execute this step — the "before" side of
                 // the local data-breakpoint diff (DataBreakpointSet owns the detection; the loop only pairs this
                 // snapshot with the after-check below).
@@ -368,6 +388,7 @@ public sealed class DebugSession
                     if (BreakOnException)
                     {
                         _pendingRaise = (_currentStep, new List<Frame>(_frames));
+                        _atDeliveredArrival = true;
                         State = DebugState.Paused;
                         StopReason = StopReason.Exception;
                         return;
@@ -377,9 +398,14 @@ public sealed class DebugSession
                     {
                         return; // nothing caught it → Faulted (terminal)
                     }
+                    // Caught: control was repositioned to the handler body; fall to the shared tail (it advances
+                    // into it and re-loops so the pre-execute gate then decides the handler's first statement).
                 }
             }
 
+            // ── Shared advance + after-execute EVENT stops (data breakpoint, run-to-SUSPEND). ──
+            // The breakpoint / movement stop for the NEWLY-arrived statement is decided at the top of the next
+            // iteration (the one pre-execute gate) — never here, so it stays a single mechanism.
             bool suspended = _emittedRows.Count > rowsBefore; // a SUSPEND emitted a row during this step
 
             var justExecuted = _currentStep; // the step ExecuteCurrent just ran (before we advance past it)
@@ -395,11 +421,12 @@ public sealed class DebugSession
             // Data breakpoint (§9.8.4): a watched variable changed during the step just executed. Checked only
             // when the innermost frame is unchanged — a step-into/out crosses scopes, so the identity gate
             // prevents false positives (a cross-frame change on return is a documented boundary), mirroring the
-            // Variables change-highlight. A changed watch wins over a line/step stop (the more specific reason).
+            // Variables change-highlight. A changed watch wins over the coming line/step stop (more specific).
             if (dataBefore is not null && _frames[^1].Id == frameIdBefore
                 && _dataBreakpoints.FindChanged(dataBefore, _frames[^1]) is { } changed)
             {
                 _dataBreakpointHit = changed;
+                _atDeliveredArrival = true;
                 State = DebugState.Paused;
                 StopReason = StopReason.DataBreakpoint;
                 return;
@@ -407,27 +434,63 @@ public sealed class DebugSession
 
             // Run to next SUSPEND (§9.8): the run mode's target event. A SUSPEND emitted a row during the step
             // just executed — pause at the next step point (so the user can inspect the row + frame, then resume
-            // for the following row). Placed right after the data-breakpoint check, mirroring it: both are "the
-            // step just executed produced an event" stops that win over a line/breakpoint stop, and both share
-            // the same coincidence boundary (a breakpoint exactly on the post-event step point is not separately
-            // reported here; data breakpoint stays first, so a watched change on the same step is the more
-            // specific reason). Only the RunToSuspend mode reacts — every other mode keeps the pre-C2 behaviour
-            // (a SUSPEND during Continue just emits its row and keeps running).
+            // for the following row). Only the RunToSuspend mode reacts; every other mode keeps the pre-C2
+            // behaviour (a SUSPEND during Continue just emits its row and keeps running). A breakpoint that
+            // coincides with the post-SUSPEND step point is decided by the pre-execute gate on the next
+            // iteration; SUSPEND stays first, so this run mode's own event wins on the step that produced it.
             if (kind == StepKind.RunToSuspend && suspended)
             {
+                _atDeliveredArrival = true;
                 State = DebugState.Paused;
                 StopReason = StopReason.Suspend;
                 return;
             }
-
-            bool atBreakpoint = ShouldBreakAt(_currentStep);
-            if (atBreakpoint || StepPlanner.ShouldStop(kind, targetOffset, startDepth, _frames.Count, _currentStep))
-            {
-                State = DebugState.Paused;
-                StopReason = atBreakpoint ? StopReason.Breakpoint : StopReason.Step;
-                return;
-            }
+            // loop → the pre-execute stop gate decides the newly-arrived _currentStep
         }
+    }
+
+    // The single pre-execute stop decision (spec §9.8, the user-ratified model): BEFORE executing the statement
+    // the IP points at, decide whether to pause — a breakpoint whose policy is met here, or a movement command
+    // (Into/Over/Out/RunToCursor) that has reached its target arrival. Returns true (leaving the session Paused,
+    // StopReason set) when it stopped; false to proceed with executing the statement. Runs for EVERY statement
+    // in EVERY run mode, so the first executed statement is no different from any later one — no "if first
+    // statement" branch anywhere.
+    private bool TryStopBeforeExecuting(StepKind kind, int? targetOffset, int startDepth, bool firstArrival)
+    {
+        // Breakpoint — checked first: it owns the hit-count side effect, and on a step that lands on a
+        // breakpoint it owns the stop reason (matching the pre-refactor priority). RESUME-GUARD: on the arrival
+        // we are resuming from (firstArrival), do NOT re-break the statement the user is currently sitting on
+        // when EITHER (a) it was a DELIVERED arrival — a prior breakpoint / step / data-bp / SUSPEND / Set-Next
+        // stop (else a run command could never LEAVE its own breakpoint), OR (b) the command is an explicit
+        // movement (Into / Over / Out), which by definition steps AWAY from the current statement, so its own
+        // breakpoint must not re-fire — this keeps Step Into / Over / Out behaviour unchanged. The one case left
+        // un-guarded is a RUN command (Continue / RunToCursor / RunToSuspend) resuming from ENTRY: execution has
+        // not reached the first statement yet, so a breakpoint set at Entry — the reported real-world case,
+        // since the gutter only exists once a run is live — fires on that first resume exactly like any later
+        // arrival. The guard is spent after this one arrival (firstArrival is true for a single iteration), so a
+        // loop returning to the same line breaks again.
+        bool isMovementCommand = kind is StepKind.Into or StepKind.Over or StepKind.Out;
+        bool resumeGuarded = firstArrival && (_atDeliveredArrival || isMovementCommand);
+        if (!resumeGuarded && ShouldBreakAt(_currentStep!))
+        {
+            _atDeliveredArrival = true;
+            State = DebugState.Paused;
+            StopReason = StopReason.Breakpoint;
+            return true;
+        }
+
+        // Movement (Into / Over / Out / RunToCursor): a property of the statement we ARRIVED at, so it never
+        // fires on the resume statement (firstArrival) — only after at least one executed step moved us here.
+        if (!firstArrival
+            && StepPlanner.ShouldStop(kind, targetOffset, startDepth, _frames.Count, _currentStep!))
+        {
+            _atDeliveredArrival = true;
+            State = DebugState.Paused;
+            StopReason = StopReason.Step;
+            return true;
+        }
+
+        return false;
     }
 
     // Routes the current raise (_error) through the handler stack — the ONE exception-control-flow path
