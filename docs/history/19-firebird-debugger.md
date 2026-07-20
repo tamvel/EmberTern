@@ -2332,3 +2332,52 @@ on `BuildFrameVariablesAsync`/`ReadProcedureParametersAsync`), `FirebirdDebugExe
 - **Launching a package member as the debug ROOT** (a "Debug..." entry point on a package member) is Seam C.
   Today a package is reached by stepping into it from a standalone caller; the DoD's "both appear as frames" is
   met from that direction, and Seam C adds the direct launch + UI.
+
+### Seam C — launch a package member as the debug ROOT (C1 engine `fd50411`, C2 UI `0b6259d`)
+
+Seam C adds the direct "Debug procedure…" entry point for a package member, launched as the debug ROOT. Split
+into C1 (engine + live-fidelity proof) and C2 (UI, awaits-then-confirmed by user QA) — mirroring the A/B/C
+cadence — and governed by the same directive: **reuse the ONE execution path, do NOT build a parallel package
+executor.**
+
+**Seam C1 — engine (pure/Firebird/App plumbing + live fidelity):**
+- **The reconstruction has one owner now.** New `SqlParser.ReconstructPackageMemberSource` (members-taking +
+  blob-taking overloads) is the single `"CREATE " + member-slice` reconstruction. The step-into path
+  (`FirebirdDebugExecutor.ResolvePackageMemberAsync`, seam B) was refactored to route through it, so the root
+  launch and step-into share the exact reconstruction — no second implementation.
+- **`FirebirdDdlReader.FetchPackageMemberSourceAsync`** reads the raw `RDB$PACKAGE_BODY_SOURCE` blob (via the
+  existing `ReadPackageBodySourceAsync`) and reconstructs the member's standalone source — the App/probe root
+  source provider. Only PROCEDURE members (a package function-as-root is out of scope, §F).
+- **`FirebirdDebugExecutor.CreateAsync`** gained an optional `packageName`: when set it builds a **package root
+  frame** exactly as a stepped-into package member is built (seam B) — package-keyed catalog params
+  (`BuildFrameVariablesAsync(..., packageName)`), every package routine declared as a harness sub-routine (R5,
+  via `RegisterPackageMember`) so a sibling — public OR private — resolves, package + members on the frame
+  context. Closed scope (`LexicalParent` null) ⇒ `ExecuteStatement`/`EvaluateCondition`/`BindValues` untouched.
+- **App:** `DebugLaunchSpec.PackageName` (additive) threaded through `FirebirdDebugSessionLauncher`;
+  `DebuggerTabViewModel` gained a `packageName` ctor arg it forwards into the spec at launch;
+  `MainWindowViewModel.OpenDebuggerForPackageMember` + `FetchPackageMemberSourceAsync` reuse the
+  `OpenDebuggerForObject` launch shape (same §9.3 parameter panel + launcher). The tab title is the qualified
+  `PKG.MEMBER`; the root frame's name is the member name (matching a stepped-into member, seam B).
+- **Live fidelity PROVEN (`DebuggerFidelityProbe` case 20):** `PKG_DBG.PUB_RUN(5)` launched as ROOT (not
+  reached via a standalone caller — the new path) steps into its private `PRIV_DOUBLE` + public `PUB_ADD`
+  siblings, chain `PUB_RUN → PRIV_DOUBLE → PUB_ADD`, **sim R 16 == real 16** (`EXECUTE PROCEDURE
+  PKG_DBG.PUB_RUN(5)`); all 19 prior cases pass. +4 `PackageBodyParserTests` (reconstruction).
+
+**Seam C2 — UI (entry point only, no debugger-architecture change):**
+- **Package editor → Members tab**: a **"Debug procedure…"** context menu on a member, visible only for
+  PROCEDURE members (`PackageMemberItemNode.IsProcedure`; a function shows nothing — §F). Reuses the sidebar's
+  existing `MetadataContextDebugProcedure` label and mirrors the Members tab's own double-click code-behind
+  pattern (`OnMemberDebugClick` → `PackageDetailTabViewModel.RequestDebugMember`).
+- `PackageDetailTabViewModel.DebugMemberRequested(memberName)` (mirrors the sidebar's `DebugProcedureRequested`)
+  is wired in `MainWindowViewModel` to the C1 `OpenDebuggerForPackageMember` path.
+- **No** sidebar package-member leaf (packages don't expand in the sidebar) and **no** package toolbar button
+  (which member? = a new workflow) — the Members tab is the unambiguous, natural entry point. +3
+  `PackageDetailTests`. Build 0/0; 66 package tests green; smoke clean.
+- **User QA confirmed (2026-07-20):** launch from Members → "Debug procedure…" opens the member as a root
+  frame, parameters pass, Step Into works for public AND private siblings, result as expected; functions offer
+  no Debug item.
+
+**🏁 D11 (Packages) COMPLETE** — packaged procedures (public and private) are real, steppable debugger frames,
+both by stepping into them from a caller AND by launching a member directly as the root; one execution path,
+no parallel package executor, live-fidelity-proven. (A package FUNCTION call as a step-into remains the one §F
+boundary — step-over, faithful — to be added only when a real lab case needs it.)
