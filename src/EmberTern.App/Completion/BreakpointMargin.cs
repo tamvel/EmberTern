@@ -58,6 +58,15 @@ internal sealed class BreakpointMargin : AbstractMargin
     public override void Render(DrawingContext context)
     {
         base.Render(context);
+
+        // Fill the WHOLE margin bounds first, so the entire gutter strip is hit-testable. A custom Control that
+        // paints nothing on a row is transparent to pointer input there (Avalonia hit-tests painted content, not
+        // bare bounds) — without this fill a gutter click only registered when it landed exactly on an existing
+        // dot, so clicking an empty line to SET a breakpoint did nothing. A subtle themed gutter background also
+        // makes the clickable strip discoverable; it falls back to Transparent (still hit-testable) if unresolved.
+        var background = ResolveBrush("PanelBrush") ?? Brushes.Transparent;
+        context.FillRectangle(background, new Rect(Bounds.Size));
+
         var textView = TextView;
         if (textView is null || !textView.VisualLinesValid) return;
 

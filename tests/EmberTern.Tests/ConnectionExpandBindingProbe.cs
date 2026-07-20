@@ -348,6 +348,56 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
+    // D12 Seam E1 QA — the breakpoint gutter click. Ground truth for the reported "clicking the gutter does
+    // nothing": builds a real TextEditor with the production BreakpointMargin, lays it out, and sends a REAL
+    // left-click over the margin — the same hit-test + OnPointerPressed path the app uses — asserting the toggle
+    // callback fires. If this passes, the margin click plumbing works; if it fails, the margin is not receiving
+    // the click (the bug), and the log shows visualLinesValid + the margin bounds to diagnose.
+    [Fact]
+    public async System.Threading.Tasks.Task BreakpointMargin_GutterClick_InvokesToggle()
+    {
+        var session = SharedSession;
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            int? toggled = null;
+            var bps = new System.Collections.Generic.HashSet<int>();
+            var editor = new TextEditor
+            {
+                Text = "aaaa\nbbbb\ncccc\ndddd\neeee",
+                ShowLineNumbers = true,
+                FontFamily = new FontFamily("Consolas,monospace"),
+                FontSize = 13,
+            };
+            var margin = new BreakpointMargin(() => bps, off => toggled = off);
+            editor.TextArea.LeftMargins.Insert(0, margin);
+
+            var window = new Window { Width = 500, Height = 400, Content = editor };
+            window.Show();
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+
+            var tv = editor.TextArea.TextView;
+            log.AppendLine($"visualLinesValid={tv.VisualLinesValid} marginBounds={margin.Bounds}");
+
+            // A point over the margin, on the first text line's row.
+            var p = margin.TranslatePoint(new Point(9, 6), window);
+            log.AppendLine($"clickPoint={p}");
+            if (p is { } pt)
+            {
+                window.MouseDown(pt, MouseButton.Left);
+                window.MouseUp(pt, MouseButton.Left);
+                for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            }
+            log.AppendLine($"toggled={toggled}");
+
+            window.Close();
+            Assert.True(toggled is not null, "gutter click must invoke the breakpoint toggle.\n" + log);
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
     // Etap 2: every MetadataObjectKind's geometry key must resolve to a real Geometry
     // through IconGeometryConverter (the live SVG-icon pipeline), plus the tree-chrome
     // keys (Query tab / Connection node / Folder). A missing/typo'd key renders a BLANK
