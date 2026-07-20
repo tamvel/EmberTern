@@ -2400,8 +2400,8 @@ independent commit + a user QA checkpoint):
 - **Seam A** — Core: Break on Exception *(commit `a8b160a`)*.
 - **Seam B** — Core: Conditional breakpoints + hit counts *(commit `f9beba7`)*.
 - **Seam C1** — Core: Data breakpoints *(commit `5561e10`)*.
-- **Seam C2** — Core: Run to next `SUSPEND` *(done — this session)*. **← current head.**
-- **Seam D** — Firebird + Live Fidelity (sim==real on the lab) *(not started)*.
+- **Seam C2** — Core: Run to next `SUSPEND` *(done)*.
+- **Seam D** — Firebird + Live Fidelity (sim==real + stop-moment fidelity on the lab) *(done — this session; probe-only)*. **← current head.**
 - **Seam E** — UI: Breakpoints panel, condition/hit-count editing, break-on-exception toggle, data-breakpoint
   gesture, Run-to-SUSPEND command + result grid *(not started)*.
 
@@ -2497,13 +2497,54 @@ suspend + position; multi-suspend one-row-per-resume + run-to-completion on the 
 → completion; breakpoint-before-suspend still stops; Continue does not stop on suspend; `Step(RunToSuspend)`
 throws).
 
-### D12 current state (end of Seam C2)
+### Seam D — Firebird + Live Fidelity (probe-only; sim == real AND stop-moment fidelity)
 
-- **Done:** Seam 0 (`211a629`), Seam A (`a8b160a`), Seam B (`f9beba7`), Seam C1 (`5561e10`), Seam C2 (this
-  session).
-- **Next: Seam D** — Firebird + Live Fidelity (sim==real for run-to-SUSPEND on `SP_DBG_LOOP`/`SP_DBG_CURSOR`,
-  plus no regression for break-on-exception / conditional / data breakpoints on the real engine), then **Seam
-  E** (UI: Breakpoints panel, condition/hit-count editing, break-on-exception toggle, data-breakpoint gesture,
-  Run-to-SUSPEND command + result grid over `EmittedRows`). D12 closes after Seam E + user QA.
+**The most important seam of D12** (user): it closes the proof that every D12 mechanism behaves *identically*
+on the real engine — and, per the user's explicit directive, proves **not only WHAT happened (the final
+result) but WHEN the debugger stopped relative to the executing code, and in what order.** No production code
+changed — Seam D is **probe-only** (`tools/probes/DebuggerFidelityProbe`, +6 cases 21–26), because every D12
+mode is a *client-side stop policy over the interpreter that already drives the REAL `FirebirdDebugExecutor`*:
+the values each policy observes, and the SUSPEND / condition / change / raise that triggers each stop, are all
+computed by Firebird. So the fidelity question is purely "does the client pause at the right logical moment
+over real engine state?" — which is exactly what these cases assert.
+
+**Method.** A new probe helper `SimulateStopsAsync` drives a routine while capturing the **sequence of stops**
+— each a `StopSnapshot` (reason, paused-statement text, emitted-row count so far, is-paused-on-exception, the
+changed data-bp variable, and requested live-frame variable values). `SP_DBG_LOOP(5)` is the deterministic
+workhorse; its **real** per-iteration `(IDX, ACC)` sequence — `(1,5),(2,15),(3,30),(4,50),(5,75)`, fetched
+live via `SELECT … FROM SP_DBG_LOOP(5)` — is the ground truth every mode is compared against.
+
+**The six cases (all sim == real, live on FB5):**
+- **21 — Run-to-SUSPEND** (`SP_DBG_LOOP`): exactly **5** Suspend stops, one per `SUSPEND`, **in order**; after
+  the k-th resume exactly k rows are emitted and the live frame `(IDX, ACC)` == the real k-th row; then it
+  completes. The emitted set == the full real result set. (Proves the *moment*: one pause per SUSPEND, in
+  sequence — "give me the next row" is faithful.)
+- **22 — Run-to-SUSPEND over a `FOR SELECT` cursor** (`SP_DBG_CURSOR(1000)`): one Suspend stop per cursor
+  row, in order, `(1,20.00,20.00),(2,25.50,45.50)` == real — run-to-SUSPEND works over the D6 cursor bridge,
+  not just a `WHILE`.
+- **23 — Conditional breakpoint** `IDX = 3` (`SP_DBG_LOOP`): stops **exactly once**, skipping iterations 1 & 2
+  (the condition is evaluated on the engine each arrival), at `IDX=3, ACC=30` (== real 3rd row), then runs to
+  completion with the full real result set. (Proves *when*: the first iteration the real state satisfies it.)
+- **24 — Hit-count** `Exactly(4)` (`SP_DBG_LOOP`): stops on the **4th arrival**, `IDX=4, ACC=50` (== real 4th
+  row) — the hit tally aligns with real iteration order.
+- **25 — Data breakpoint on `ACC`** (`SP_DBG_LOOP`): stops on **every** change, value sequence
+  `0 → 5 → 15 → 30 → 50 → 75` (the `ACC = 0` init + one per iteration); the per-iteration tail == the real ACC
+  sequence. (The ACC values are real harness write-backs, so the change sequence *is* the engine's.)
+- **26 — Break on Exception** (`SP_DBG_GUARD(-5)`): pauses **at the raising statement**
+  (`EXCEPTION E_NEGATIVE_AMOUNT`), `IsPausedOnException`, **before** routing (frame intact, not a fault); the
+  resume routes it through the `WHEN … DO` handler and completes with `RESULT = 'CAUGHT'` == real; the same run
+  with break **OFF** yields the identical result — a pause, not a second handler (one routing path).
+
+**No regression:** all 20 prior D8/D9/D10/D11 cases still pass (`ET_LAB_PWD=… dotnet run --project
+tools\probes\DebuggerFidelityProbe` → **ALL PASS**, 26 cases). Build 0/0; **160 debugger tests green**
+(unchanged from C2 — Seam D added no production code); smoke clean.
+
+### D12 current state (end of Seam D)
+
+- **Done:** Seam 0 (`211a629`), Seam A (`a8b160a`), Seam B (`f9beba7`), Seam C1 (`5561e10`), Seam C2, Seam D
+  (this session; probe-only, live-fidelity-proven).
+- **Next: Seam E** (UI — the last seam): Breakpoints panel, condition / hit-count editing, break-on-exception
+  toggle, data-breakpoint gesture, Run-to-SUSPEND command + result grid over `EmittedRows`. D12 closes after
+  Seam E + user QA.
 - Build 0/0; **160 debugger tests green** (`dotnet test --filter FullyQualifiedName~Debug`); the full suite
-  still hangs in this env (#94/#226) → run the debugger subset.
+  still hangs in this env (#94/#226) → run the debugger subset. Live fidelity: `DebuggerFidelityProbe` 26/26.

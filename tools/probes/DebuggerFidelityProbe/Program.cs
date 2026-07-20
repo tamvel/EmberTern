@@ -94,6 +94,26 @@ try
         return row;
     }
 
+    // Real execution returning EVERY row (selectable procedure) as an ordered list of column→value maps — the
+    // ground-truth per-iteration state sequence a run-to-SUSPEND / conditional / hit-count / data breakpoint is
+    // compared against (D12 Seam D).
+    async Task<List<Dictionary<string, object?>>> RealRowsAsync(string sql)
+    {
+        await using var cn = new FbConnection(csb.ToString());
+        await cn.OpenAsync();
+        await using var cmd = new FbCommand(sql, cn);
+        await using var r = await cmd.ExecuteReaderAsync();
+        var rows = new List<Dictionary<string, object?>>();
+        while (await r.ReadAsync())
+        {
+            var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < r.FieldCount; i++)
+                row[r.GetName(i)] = await r.IsDBNullAsync(i) ? null : r.GetValue(i);
+            rows.Add(row);
+        }
+        return rows;
+    }
+
     // Simulate a standalone routine end-to-end and return (emitted rows, max depth, frame names). `step`
     // selects the movement command driven each pause — Into descends into resolvable local/stored calls;
     // Over runs a call in place (exercising the step-over harness + the D9 seam b Part 2 read/write fixpoint).
@@ -125,6 +145,54 @@ try
             if (dbg.State == DebugState.Faulted)
                 throw new Exception($"faulted: {dbg.CurrentError?.Message ?? dbg.CurrentError?.ExceptionName}");
             return (dbg.EmittedRows, maxDepth, frames);
+        }
+        finally
+        {
+            await session.DisposeAsync();
+        }
+    }
+
+    // D12 Seam D — drive a standalone routine while capturing the SEQUENCE OF STOPS, to prove not only WHAT the
+    // final state is but WHEN (and in what order) the debugger pauses relative to the executing code. `configure`
+    // sets breakpoints / data breakpoints / BreakOnException before Start (it is handed the source so it can
+    // resolve a step-point offset); `resume` issues ONE run command per pause (RunToSuspend / Continue); at each
+    // resulting pause a StopSnapshot records the reason, the paused statement text, the emitted-row count so far,
+    // whether it is a break-on-exception pause, the changed data-breakpoint variable, and the requested frame
+    // variables (read from the live frame — real engine state). The interpreter drives the REAL executor, so
+    // every value and the SUSPEND/condition/change that triggered the stop is computed by Firebird.
+    async Task<(List<StopSnapshot> Stops, DebugState Final, IReadOnlyList<IReadOnlyDictionary<string, object?>> Rows)>
+        SimulateStopsAsync(string routine, Dictionary<string, object?> rootValues,
+            Action<DebugSession, string> configure, Action<DebugSession> resume, string[] watchVars)
+    {
+        string source = await reader.FetchProcedureSourceAsync(new MetadataObject(routine, MetadataObjectKind.Procedure));
+        var model = SemanticModel.Build(SqlParser.Parse(source).Root);
+        var body = model.Syntax.Statements.OfType<DdlStatement>().First(d => d.Body is not null).Body!;
+
+        var session = await service.CreateDebugSessionAsync(DebugIsolation.ReadCommitted);
+        try
+        {
+            var executor = await FirebirdDebugExecutor.CreateAsync(session, routine, source, body, model, fallback);
+            var dbg = new DebugSession(body, executor, routine, rootValues, source, model);
+            configure(dbg, source);
+            dbg.Start();
+
+            var stops = new List<StopSnapshot>();
+            int guard = 0;
+            while (dbg.State == DebugState.Paused)
+            {
+                resume(dbg);
+                if (dbg.State == DebugState.Paused)
+                {
+                    var vars = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var v in watchVars)
+                        vars[v] = dbg.CurrentFrame is { } cf && cf.TryResolveValue(v, out var rv) ? rv : null;
+                    string stmt = dbg.CurrentStatement is { } cs ? source.Substring(cs.Start, cs.Length).Trim() : "";
+                    stops.Add(new StopSnapshot(dbg.StopReason, stmt, dbg.EmittedRows.Count,
+                        dbg.IsPausedOnException, dbg.DataBreakpointHit?.Variable, vars));
+                }
+                if (++guard > 200) throw new Exception("runaway stepping");
+            }
+            return (stops, dbg.State, dbg.EmittedRows);
         }
         finally
         {
@@ -624,6 +692,114 @@ try
         Pass("SIMULATED R == REAL", $"sim {simPubRun} == real {realPubRun}");
     else Fail("package-root simulated vs real R", $"sim {simPubRun} vs real {realPubRun}");
     Console.WriteLine("      (PUB_RUN launched as root: PRIV_DOUBLE(5)=10 [private] + PUB_ADD(5)=6 [public] = 16)");
+
+    // ══ Stage X / D12 — ADVANCED BREAKPOINTS (spec §9.8), Seam D: sim == real AND stop-MOMENT fidelity ══
+    // Every D12 mode is a client-side stop POLICY over the interpreter, which already drives the REAL executor —
+    // so the values it observes and the SUSPEND / condition / change that triggers each stop are computed by
+    // Firebird. These cases prove not only the final RESULT but that the debugger pauses at the SAME logical
+    // moment of execution the engine produces, in the SAME order. SP_DBG_LOOP(5) is the deterministic workhorse:
+    // its real per-iteration (IDX, ACC) sequence — (1,5),(2,15),(3,30),(4,50),(5,75) — is the ground truth.
+    var loopReal = await RealRowsAsync("SELECT IDX, ACC FROM SP_DBG_LOOP(5) ORDER BY IDX");
+
+    // ── 21. Run-to-SUSPEND — one row per resume, IN ORDER, each == real (SP_DBG_LOOP) ──
+    Head("21. SP_DBG_LOOP(5) — Run-to-SUSPEND yields one row per resume, in order; each stop's state == real");
+    var rts = await SimulateStopsAsync("SP_DBG_LOOP", new(StringComparer.OrdinalIgnoreCase) { ["N"] = 5 },
+        configure: (_, _) => { }, resume: d => d.RunToSuspend(), watchVars: new[] { "IDX", "ACC" });
+    if (rts.Stops.Count == 5 && rts.Stops.All(s => s.Reason == StopReason.Suspend))
+        Pass("five Suspend stops, one per SUSPEND (rows emitted: " + string.Join(",", rts.Stops.Select(s => s.Emitted)) + ")");
+    else Fail("run-to-suspend stops", $"{rts.Stops.Count}: {string.Join(", ", rts.Stops.Select(s => s.Reason))}");
+    bool rtsOrder = rts.Final == DebugState.Completed;
+    for (int k = 0; k < rts.Stops.Count && k < loopReal.Count; k++)
+    {
+        // after the k-th resume: exactly k rows emitted, and the live frame IDX/ACC == the real k-th row (WHEN)
+        if (rts.Stops[k].Emitted != k + 1) rtsOrder = false;
+        if (Show(rts.Stops[k].Vars["IDX"]) != Show(loopReal[k]["IDX"]) ||
+            Show(rts.Stops[k].Vars["ACC"]) != Show(loopReal[k]["ACC"])) rtsOrder = false;
+    }
+    if (rtsOrder) Pass("each stop pauses right after its SUSPEND with IDX/ACC == real row, then completes");
+    else Fail("run-to-suspend ordering/moment", $"final {rts.Final}");
+    bool rtsRows = rts.Rows.Count == loopReal.Count && Enumerable.Range(0, loopReal.Count).All(i =>
+        Show(rts.Rows[i]["IDX"]) == Show(loopReal[i]["IDX"]) && Show(rts.Rows[i]["ACC"]) == Show(loopReal[i]["ACC"]));
+    if (rtsRows) Pass("SIMULATED rows == REAL", string.Join(" ", rts.Rows.Select(r => $"({Show(r["IDX"])},{Show(r["ACC"])})")));
+    else Fail("run-to-suspend rows", "sim != real");
+
+    // ── 22. Run-to-SUSPEND over a FOR SELECT cursor (SP_DBG_CURSOR) — the D6 cursor SUSPEND source ──
+    Head("22. SP_DBG_CURSOR(1000) — Run-to-SUSPEND over a cursor; one row per resume, in order == real");
+    var curReal = await RealRowsAsync("SELECT LINE_NO, AMOUNT, RUNNING FROM SP_DBG_CURSOR(1000) ORDER BY LINE_NO");
+    var rtsCur = await SimulateStopsAsync("SP_DBG_CURSOR", new(StringComparer.OrdinalIgnoreCase) { ["P_ORDER"] = 1000 },
+        configure: (_, _) => { }, resume: d => d.RunToSuspend(), watchVars: Array.Empty<string>());
+    if (rtsCur.Stops.Count == curReal.Count && rtsCur.Stops.All(s => s.Reason == StopReason.Suspend))
+        Pass($"one Suspend stop per cursor row ({curReal.Count})");
+    else Fail("cursor run-to-suspend stops", $"{rtsCur.Stops.Count} vs real {curReal.Count}");
+    bool curRows = rtsCur.Rows.Count == curReal.Count && Enumerable.Range(0, curReal.Count).All(i =>
+        new[] { "LINE_NO", "AMOUNT", "RUNNING" }.All(c => Show(rtsCur.Rows[i][c]) == Show(curReal[i][c])));
+    if (curRows) Pass("SIMULATED cursor rows == REAL",
+        string.Join(" ", rtsCur.Rows.Select(r => $"({Show(r["LINE_NO"])},{Show(r["RUNNING"])})")));
+    else Fail("cursor run-to-suspend rows", "sim != real");
+
+    // ── 23. Conditional breakpoint (IDX = 3) — stops at EXACTLY the 3rd iteration, condition evaluated on the engine ──
+    Head("23. SP_DBG_LOOP(5) — conditional breakpoint 'IDX = 3' stops at exactly the 3rd iteration (sim == real)");
+    var cond = await SimulateStopsAsync("SP_DBG_LOOP", new(StringComparer.OrdinalIgnoreCase) { ["N"] = 5 },
+        configure: (d, src) => d.Breakpoints.GetOrAdd(src.IndexOf("SUSPEND", StringComparison.Ordinal)).Condition = "IDX = 3",
+        resume: d => d.Step(StepKind.Continue), watchVars: new[] { "IDX", "ACC" });
+    if (cond.Stops.Count == 1 && cond.Stops[0].Reason == StopReason.Breakpoint)
+        Pass("stopped exactly ONCE at a breakpoint — skipped iterations 1 and 2 (WHEN)");
+    else Fail("conditional stops", $"{cond.Stops.Count}: {string.Join(", ", cond.Stops.Select(s => s.Reason))}");
+    if (cond.Stops.Count == 1 && Show(cond.Stops[0].Vars["IDX"]) == "3" &&
+        Show(cond.Stops[0].Vars["ACC"]) == Show(loopReal[2]["ACC"]))
+        Pass("at the stop IDX == 3 and ACC == real 3rd-iteration value", $"ACC = {Show(cond.Stops[0].Vars["ACC"])}");
+    else Fail("conditional moment", cond.Stops.Count == 1
+        ? $"IDX={Show(cond.Stops[0].Vars["IDX"])} ACC={Show(cond.Stops[0].Vars["ACC"])}" : "no single stop");
+    if (cond.Final == DebugState.Completed && cond.Rows.Count == loopReal.Count)
+        Pass("resumes and runs to completion with the full real result set");
+    else Fail("conditional completion", $"{cond.Final}, {cond.Rows.Count} rows");
+
+    // ── 24. Hit-count breakpoint (Exactly 4) — stops on the 4th arrival, in real iteration order ──
+    Head("24. SP_DBG_LOOP(5) — hit-count breakpoint (Exactly 4) stops on the 4th arrival (sim == real)");
+    var hc = await SimulateStopsAsync("SP_DBG_LOOP", new(StringComparer.OrdinalIgnoreCase) { ["N"] = 5 },
+        configure: (d, src) => d.Breakpoints.GetOrAdd(src.IndexOf("SUSPEND", StringComparison.Ordinal)).HitCount = HitCountPolicy.Exactly(4),
+        resume: d => d.Step(StepKind.Continue), watchVars: new[] { "IDX", "ACC" });
+    if (hc.Stops.Count == 1 && hc.Stops[0].Reason == StopReason.Breakpoint && Show(hc.Stops[0].Vars["IDX"]) == "4" &&
+        Show(hc.Stops[0].Vars["ACC"]) == Show(loopReal[3]["ACC"]))
+        Pass("stopped on the 4th arrival: IDX == 4, ACC == real 4th-iteration value", $"ACC = {Show(hc.Stops[0].Vars["ACC"])}");
+    else Fail("hit-count moment",
+        $"{hc.Stops.Count} stops" + (hc.Stops.Count == 1 ? $"; IDX={Show(hc.Stops[0].Vars["IDX"])}" : ""));
+
+    // ── 25. Data breakpoint on ACC — stops on EVERY change, values in real order ──
+    Head("25. SP_DBG_LOOP(5) — data breakpoint on ACC stops on every change; the value sequence is the real one");
+    var dbp = await SimulateStopsAsync("SP_DBG_LOOP", new(StringComparer.OrdinalIgnoreCase) { ["N"] = 5 },
+        configure: (d, _) => d.DataBreakpoints.Add("ACC"),
+        resume: d => d.Step(StepKind.Continue), watchVars: new[] { "ACC" });
+    var accSeq = dbp.Stops.Select(s => Show(s.Vars["ACC"])).ToArray();
+    // ACC: null → 0 (the `ACC = 0` init), then 0 → 5 → 15 → 30 → 50 → 75 (one change per iteration) = 6 stops.
+    var expectedAcc = new[] { "0" }.Concat(loopReal.Select(r => Show(r["ACC"]))).ToArray();
+    if (dbp.Stops.All(s => s.Reason == StopReason.DataBreakpoint && s.DataVar == "ACC") && accSeq.SequenceEqual(expectedAcc))
+        Pass("ACC changes detected in order (init + one per iteration)", string.Join(" → ", accSeq));
+    else Fail("data-breakpoint sequence", $"[{string.Join(", ", accSeq)}] vs [{string.Join(", ", expectedAcc)}]");
+    if (accSeq.Skip(1).SequenceEqual(loopReal.Select(r => Show(r["ACC"]))))
+        Pass("per-iteration ACC changes == real ACC sequence (sim == real)");
+    else Fail("data-breakpoint vs real", string.Join(", ", accSeq.Skip(1)));
+
+    // ── 26. Break on Exception — pauses AT the raise (before routing), then routes through WHEN identically ──
+    Head("26. SP_DBG_GUARD(-5) — Break on Exception pauses AT the raise, then routes through WHEN (sim == real)");
+    string? realGuard = Show(await RealScalarAsync("SELECT RESULT FROM SP_DBG_GUARD(-5)"));
+    var boe = await SimulateStopsAsync("SP_DBG_GUARD", new(StringComparer.OrdinalIgnoreCase) { ["P_AMOUNT"] = -5m },
+        configure: (d, _) => d.BreakOnException = true,
+        resume: d => d.Step(StepKind.Continue), watchVars: Array.Empty<string>());
+    if (boe.Stops.Count == 1 && boe.Stops[0].Reason == StopReason.Exception && boe.Stops[0].PausedOnExc &&
+        boe.Stops[0].Stmt.Contains("E_NEGATIVE_AMOUNT"))
+        Pass("paused AT the raising statement, BEFORE routing (frame intact, not a fault)", boe.Stops[0].Stmt);
+    else Fail("break-on-exception moment",
+        boe.Stops.Count > 0 ? $"{boe.Stops[0].Reason}/{boe.Stops[0].PausedOnExc} — {boe.Stops[0].Stmt}" : "no stop");
+    string? simGuard = boe.Rows.Count > 0 ? Show(boe.Rows[0]["RESULT"]) : null;
+    if (boe.Final == DebugState.Completed && simGuard == realGuard && simGuard == "CAUGHT")
+        Pass("resumed → WHEN caught → RESULT == real", $"sim {simGuard} == real {realGuard}");
+    else Fail("break-on-exception outcome", $"final {boe.Final}, sim {simGuard} vs real {realGuard}");
+    var guardOff = await SimulateAsync("SP_DBG_GUARD", new(StringComparer.OrdinalIgnoreCase) { ["P_AMOUNT"] = -5m });
+    string? offGuard = guardOff.Rows.Count > 0 ? Show(guardOff.Rows[0]["RESULT"]) : null;
+    if (offGuard == realGuard)
+        Pass("break-OFF yields the identical RESULT — a pause, not a second handler (one routing path)", offGuard!);
+    else Fail("break-on-exception one-path", $"off {offGuard} vs real {realGuard}");
 }
 catch (Exception ex)
 {
@@ -638,3 +814,9 @@ finally
 Console.WriteLine();
 Console.WriteLine(failures == 0 ? "ALL PASS" : $"{failures} FAILURE(S)");
 return failures == 0 ? 0 : 1;
+
+// A single captured pause (D12 Seam D) — the reason, the paused statement text, how many SUSPEND rows have been
+// emitted so far, whether it is a Break-on-Exception pause, the changed data-breakpoint variable (if any), and
+// the requested live-frame variable values. Read AFTER a run command to prove WHEN the debugger stopped.
+record StopSnapshot(
+    StopReason Reason, string Stmt, int Emitted, bool PausedOnExc, string? DataVar, Dictionary<string, object?> Vars);
