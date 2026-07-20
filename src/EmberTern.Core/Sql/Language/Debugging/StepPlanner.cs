@@ -31,6 +31,12 @@ internal static class StepPlanner
             // detected in DebugSession (not a movement decision), never a step-point property.
             StepKind.RunToSuspend => false,
 
+            // Run To Loop Exit / Next Iteration (D13) run full speed like Continue; their stop is a loop
+            // lifecycle event (the loop leaving the control stack / entering another iteration), detected in
+            // DebugSession — not a movement decision, so never a step-point property here.
+            StepKind.RunToLoopExit => false,
+            StepKind.RunToNextIteration => false,
+
             // Run To Cursor stops when the next step point is the target statement.
             StepKind.RunToCursor => targetOffset is int t && nextStep.Start == t,
 

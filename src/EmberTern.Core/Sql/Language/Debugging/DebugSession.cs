@@ -183,6 +183,12 @@ public sealed class DebugSession
     /// <summary>Rows emitted by <c>SUSPEND</c> so far, in order.</summary>
     public IReadOnlyList<IReadOnlyDictionary<string, object?>> EmittedRows => _emittedRows;
 
+    /// <summary>True while the session is <b>Paused inside a loop</b> — the current frame's control stack has
+    /// an enclosing <c>WHILE</c> / <c>FOR SELECT</c> activation (including at the loop header). The gate for
+    /// the D13 loop fast-forward commands (<see cref="RunToLoopExit"/> / <see cref="RunToNextIteration"/>):
+    /// the UI enables them only when this is true. False when not paused or not inside a loop.</summary>
+    public bool IsInsideLoop => State == DebugState.Paused && CurrentFrame is { } f && f.IsInLoop;
+
     /// <summary>Begins the session: pushes the root frame (with its entry savepoint) and pauses at the
     /// first step point (or completes immediately for an empty body).</summary>
     public void Start()
@@ -222,10 +228,12 @@ public sealed class DebugSession
     /// <see cref="SetNextStatement"/> for the targeted commands.</summary>
     public void Step(StepKind kind)
     {
-        if (kind is StepKind.RunToCursor or StepKind.SetNext or StepKind.RunToSuspend)
+        if (kind is StepKind.RunToCursor or StepKind.SetNext or StepKind.RunToSuspend
+                 or StepKind.RunToLoopExit or StepKind.RunToNextIteration)
         {
             throw new ArgumentException(
-                "Use RunToCursor / SetNextStatement / RunToSuspend for their dedicated commands.", nameof(kind));
+                "Use RunToCursor / SetNextStatement / RunToSuspend / RunToLoopExit / RunToNextIteration for "
+                + "their dedicated commands.", nameof(kind));
         }
         RunStepping(kind, targetOffset: null);
     }
@@ -240,6 +248,19 @@ public sealed class DebugSession
     /// further <c>SUSPEND</c> the routine runs to completion. Breakpoints / data breakpoints still apply.
     /// The emitted rows accumulate in <see cref="EmittedRows"/>.</summary>
     public void RunToSuspend() => RunStepping(StepKind.RunToSuspend, targetOffset: null);
+
+    /// <summary>Runs at full speed (like Continue) until the <b>innermost enclosing loop</b> — the one the
+    /// current statement is inside — is left by any path (condition false / cursor exhausted / <c>EXIT</c> /
+    /// unlabeled <c>LEAVE</c>/<c>BREAK</c>), then pauses at the first step point after it (or completes if the
+    /// loop was the routine's last action, e.g. an <c>EXIT</c>). Breakpoints inside the loop still stop it
+    /// first. Requires <see cref="IsInsideLoop"/> — throws otherwise (the UI gates the command). D13.</summary>
+    public void RunToLoopExit() => RunStepping(StepKind.RunToLoopExit, targetOffset: null);
+
+    /// <summary>Runs at full speed (like Continue) until the innermost enclosing loop <b>begins its next
+    /// iteration</b>, then pauses at the first step point of that iteration's body; if the loop exits first it
+    /// pauses after the loop, exactly like <see cref="RunToLoopExit"/>. Breakpoints inside the loop still stop
+    /// it first. Requires <see cref="IsInsideLoop"/> — throws otherwise (the UI gates the command). D13.</summary>
+    public void RunToNextIteration() => RunStepping(StepKind.RunToNextIteration, targetOffset: null);
 
     /// <summary>Moves the instruction pointer to the step point beginning at <paramref name="targetOffset"/>
     /// within the current frame, executing nothing in between. Returns false (leaving the session where it
@@ -333,6 +354,22 @@ public sealed class DebugSession
         EnsurePaused();
         _conditionError = null;    // a fresh stop decision re-sets it if a condition raises again
         _dataBreakpointHit = null; // …likewise for a data breakpoint
+
+        // D13 loop fast-forward: capture the innermost enclosing loop of the current frame + its iteration
+        // count at the moment the command is issued. The stop is a lifecycle event on THIS activation (checked
+        // in the tail below), never a movement decision. The UI gates these commands on IsInsideLoop, so a
+        // missing loop here is a programming error.
+        LoopActivation? targetLoop = null;
+        Frame? loopFrame = null;
+        int startIteration = 0;
+        if (kind is StepKind.RunToLoopExit or StepKind.RunToNextIteration)
+        {
+            loopFrame = _frames[^1];
+            targetLoop = loopFrame.InnermostLoop()
+                ?? throw new InvalidOperationException("Cannot fast-forward: control is not inside a loop.");
+            startIteration = targetLoop.Iteration;
+        }
+
         int startDepth = _frames.Count;
         bool firstArrival = true;  // the statement we are RESUMING from: no movement stop, and the breakpoint
                                    // resume-guard applies only to this arrival (see TryStopBeforeExecuting)
@@ -444,6 +481,26 @@ public sealed class DebugSession
                 State = DebugState.Paused;
                 StopReason = StopReason.Suspend;
                 return;
+            }
+
+            // Run to loop exit / next iteration (D13): the run mode's target is a loop-lifecycle event on the
+            // captured innermost loop. Continue Until Loop Exit stops when that activation has LEFT the control
+            // stack (condition false / cursor exhausted / EXIT / LEAVE/BREAK); Next Iteration stops on that OR
+            // when the loop ENTERED a further iteration (its counter incremented past the captured value).
+            // Checked after the data breakpoint (more specific); a breakpoint INSIDE the loop wins earlier via
+            // the pre-execute gate. A loop that was the frame's last action (e.g. EXIT) completes the frame,
+            // which already returned above as Completed.
+            if (targetLoop is not null)
+            {
+                bool exited = !loopFrame!.ContainsActivation(targetLoop);
+                bool nextIteration = kind == StepKind.RunToNextIteration && targetLoop.Iteration > startIteration;
+                if (exited || nextIteration)
+                {
+                    _atDeliveredArrival = true;
+                    State = DebugState.Paused;
+                    StopReason = StopReason.Step;
+                    return;
+                }
             }
             // loop → the pre-execute stop gate decides the newly-arrived _currentStep
         }
@@ -587,6 +644,23 @@ public sealed class DebugSession
             return false;
         }
 
+        // (3) EXIT / LEAVE / BREAK are pure CONTROL FLOW (the client owns control, spec §3.1) — never a server
+        // round-trip (a bare LEAVE/EXIT in the harness would be a compile error / a no-op). EXIT terminates the
+        // whole frame; unlabeled LEAVE — and its synonym BREAK, which the parser maps to the same leaf kind —
+        // breaks the innermost enclosing loop. The control transfer discards the leaf's own sequence, so there
+        // is no AdvanceSequence. (LEAVE <label> to an OUTER loop is a §F boundary — treated as unlabeled; see
+        // Frame.LeaveInnermostLoop.) D13.
+        if (step is PsqlLeafStatement { Kind: PsqlLeafKind.Exit })
+        {
+            frame.ExitRoutine();
+            return false;
+        }
+        if (step is PsqlLeafStatement { Kind: PsqlLeafKind.Leave })
+        {
+            frame.LeaveInnermostLoop();
+            return false;
+        }
+
         switch (step)
         {
             case IfStatement iff:
@@ -602,7 +676,11 @@ public sealed class DebugSession
             {
                 var cond = _executor.EvaluateCondition(w, frame);
                 if (cond.Error is not null) { _error = cond.Error; return true; }
-                if (cond.Value == true) frame.PushBranch(w.Body);
+                if (cond.Value == true)
+                {
+                    ((WhileActivation)frame.Top!).Iteration++; // entering a body pass (D13 Next Iteration)
+                    frame.PushBranch(w.Body);
+                }
                 else frame.Pop(); // WhileActivation done
                 return false;
             }
@@ -612,7 +690,12 @@ public sealed class DebugSession
                 var fa = (ForActivation)frame.Top!;
                 if (!fa.Opened) { fa.Cursor = _executor.OpenCursor(f, frame); fa.Opened = true; }
                 var row = fa.Cursor!.FetchNext();
-                if (row is not null) { ApplyWrites(frame, row); frame.PushBranch(f.Body); }
+                if (row is not null)
+                {
+                    fa.Iteration++; // entering a body pass over this row (D13 Next Iteration)
+                    ApplyWrites(frame, row);
+                    frame.PushBranch(f.Body);
+                }
                 else { fa.Cursor.Close(); frame.Pop(); } // ForActivation done
                 return false;
             }

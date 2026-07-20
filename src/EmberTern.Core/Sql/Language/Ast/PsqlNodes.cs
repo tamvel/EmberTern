@@ -26,7 +26,8 @@ public enum PsqlLeafKind
     Suspend,
     /// <summary><c>EXIT;</c>.</summary>
     Exit,
-    /// <summary><c>LEAVE [label];</c>.</summary>
+    /// <summary><c>LEAVE [label];</c> or its legacy synonym <c>BREAK;</c> — both map here (one "break the
+    /// loop" leaf kind); an optional loop label is retained in the tokens but not modelled structurally.</summary>
     Leave,
     /// <summary><c>POST_EVENT …;</c>.</summary>
     PostEvent,

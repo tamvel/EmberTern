@@ -55,6 +55,24 @@ public enum StepKind
     /// breakpoints still apply as additional stop conditions, and with no further <c>SUSPEND</c> the routine
     /// runs to completion. The result grid over <see cref="DebugSession.EmittedRows"/> is a UI concern.</summary>
     RunToSuspend,
+
+    /// <summary>Run at full speed (like Continue) until the <b>innermost enclosing loop</b> — the loop the
+    /// caret is currently inside — is left, then stop at the first step point after it (D13 "Continue Until
+    /// Loop Exit"). "Left" covers every exit path: the loop condition going false / the cursor being
+    /// exhausted, an <c>EXIT</c>, and an unlabeled <c>LEAVE</c>/<c>BREAK</c>. The stop is the loop-lifecycle
+    /// event (the loop activation leaving the control stack), detected in <see cref="DebugSession"/> — not a
+    /// movement decision, so <see cref="StepPlanner"/> returns false for it. Breakpoints inside the loop
+    /// still win (the pre-execute gate). Only valid while <see cref="DebugSession.IsInsideLoop"/>.</summary>
+    RunToLoopExit,
+
+    /// <summary>Run at full speed (like Continue) until the innermost enclosing loop <b>begins its next
+    /// iteration</b>, then stop at the first step point of that iteration's body (D13 "Next Iteration"); if
+    /// the loop exits first (no next iteration) it stops after the loop exactly as
+    /// <see cref="RunToLoopExit"/>. The stop is the loop entering a further iteration (its iteration counter
+    /// incrementing) or leaving the control stack — a loop-lifecycle event detected in
+    /// <see cref="DebugSession"/>, so <see cref="StepPlanner"/> returns false for it. Breakpoints inside the
+    /// loop still win. Only valid while <see cref="DebugSession.IsInsideLoop"/>.</summary>
+    RunToNextIteration,
 }
 
 /// <summary>Why the session is currently paused (or ended).</summary>

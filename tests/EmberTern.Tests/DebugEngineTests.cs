@@ -1909,4 +1909,279 @@ public class DebugEngineTests
         Assert.Contains(Off(fSql, "return a + 1"), exec.ReturnsEvaluated);
         Assert.DoesNotContain(Off(fSql, "return a + 1"), exec.Executed); // NOT run as a statement
     }
+
+    // ── D13: loop fast-forward (Continue Until Loop Exit / Next Iteration) + LEAVE/BREAK/EXIT control flow ──
+
+    [Fact]
+    public void NextIteration_FromMidBody_StopsAtNextIterationsBody()
+    {
+        const string sql = "begin while (c) do begin a = 1; b = 2; end end";
+        int whileAt = Off(sql, "while (c)");
+        int aAt = Off(sql, "a = 1");
+        int bAt = Off(sql, "b = 2");
+        var exec = new FakeExecutor().Cond(whileAt, true, true, false);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();             // Entry at the while header
+        s.Step(StepKind.Into); // header (iter 1) → a = 1
+        s.Step(StepKind.Into); // a = 1 → b = 2 (mid-body, iteration 1)
+        Assert.Equal(bAt, s.CurrentStatement!.Start);
+
+        s.RunToNextIteration(); // finish iteration 1, stop at the start of iteration 2's body
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(StopReason.Step, s.StopReason);
+        Assert.Equal(aAt, s.CurrentStatement!.Start);
+        Assert.Equal(1, exec.Executed.Count(x => x == aAt)); // a ran once (iter 1); paused before iter-2's a
+    }
+
+    [Fact]
+    public void NextIteration_FromLoopHeader_StopsAtIterationBody()
+    {
+        const string sql = "begin while (c) do begin a = 1; end end";
+        int whileAt = Off(sql, "while (c)");
+        int aAt = Off(sql, "a = 1");
+        var exec = new FakeExecutor().Cond(whileAt, true, false);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        Assert.Equal(whileAt, s.CurrentStatement!.Start); // paused AT the header
+        Assert.True(s.IsInsideLoop);                      // the loop activation is on the control stack
+
+        s.RunToNextIteration();
+        Assert.Equal(aAt, s.CurrentStatement!.Start);     // the pending iteration's body
+        Assert.Equal(StopReason.Step, s.StopReason);
+    }
+
+    [Fact]
+    public void LoopExit_NaturalExit_StopsAfterLoop()
+    {
+        const string sql = "begin while (c) do begin a = 1; end done = 9; end";
+        int aAt = Off(sql, "a = 1");
+        int doneAt = Off(sql, "done = 9");
+        var exec = new FakeExecutor().Cond(Off(sql, "while (c)"), true, true, false);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.Step(StepKind.Into); // header (iter 1) → a = 1
+        Assert.Equal(aAt, s.CurrentStatement!.Start);
+
+        s.RunToLoopExit();
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(doneAt, s.CurrentStatement!.Start);
+        Assert.Equal(2, exec.Executed.Count(x => x == aAt)); // a ran on both iterations
+        Assert.False(s.IsInsideLoop);                        // control is past the loop now
+    }
+
+    [Fact]
+    public void LoopExit_ViaLeave_StopsAfterLoop_LeaveNotSentToServer()
+    {
+        const string sql = "begin while (c) do begin r = 1; leave; end done = 1; end";
+        int leaveAt = Off(sql, "leave");
+        int doneAt = Off(sql, "done = 1");
+        var exec = new FakeExecutor().Cond(Off(sql, "while (c)"), true, true, false);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.RunToLoopExit(); // enters iter 1, r = 1, then LEAVE breaks the loop
+        Assert.Equal(doneAt, s.CurrentStatement!.Start);
+        Assert.DoesNotContain(leaveAt, exec.Executed); // LEAVE is control flow, never a server round-trip
+    }
+
+    [Fact]
+    public void LoopExit_ViaBreak_BehavesLikeLeave()
+    {
+        const string sql = "begin while (c) do begin r = 1; break; end done = 1; end";
+        int breakAt = Off(sql, "break");
+        int doneAt = Off(sql, "done = 1");
+        var exec = new FakeExecutor().Cond(Off(sql, "while (c)"), true, true, false);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.RunToLoopExit();
+        Assert.Equal(doneAt, s.CurrentStatement!.Start);
+        Assert.DoesNotContain(breakAt, exec.Executed); // BREAK is the legacy synonym of LEAVE (same handling)
+    }
+
+    [Fact]
+    public void Leave_SkipsRemainingLoopBody_ThenResumesAfterLoop()
+    {
+        // Plain stepping (not fast-forward): LEAVE breaks the loop, so the body statement AFTER it never runs
+        // and control resumes at the statement after the loop. Pins the interpreter's LEAVE control flow.
+        const string sql = "begin while (c) do begin a = 1; leave; b = 2; end done = 1; end";
+        int aAt = Off(sql, "a = 1");
+        int bAt = Off(sql, "b = 2");
+        int doneAt = Off(sql, "done = 1");
+        var exec = new FakeExecutor().Cond(Off(sql, "while (c)"), true);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        int guard = 0;
+        while (s.State == DebugState.Paused) { Assert.True(guard++ < 100); s.Step(StepKind.Into); }
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Contains(aAt, exec.Executed);
+        Assert.DoesNotContain(bAt, exec.Executed);   // LEAVE skipped the rest of the body
+        Assert.Contains(doneAt, exec.Executed);       // control resumed after the loop
+    }
+
+    [Fact]
+    public void Exit_TerminatesWholeRoutine_SkippingEverythingAfter()
+    {
+        const string sql = "begin while (c) do begin a = 1; exit; b = 2; end done = 1; end";
+        int aAt = Off(sql, "a = 1");
+        int bAt = Off(sql, "b = 2");
+        int doneAt = Off(sql, "done = 1");
+        var exec = new FakeExecutor().Cond(Off(sql, "while (c)"), true);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        int guard = 0;
+        while (s.State == DebugState.Paused) { Assert.True(guard++ < 100); s.Step(StepKind.Into); }
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Contains(aAt, exec.Executed);
+        Assert.DoesNotContain(bAt, exec.Executed);    // EXIT ends the routine…
+        Assert.DoesNotContain(doneAt, exec.Executed); // …including the post-loop statement
+    }
+
+    [Fact]
+    public void LoopExit_WhenLoopIsLeftViaExit_CompletesSession()
+    {
+        const string sql = "begin while (c) do begin a = 1; exit; end done = 1; end";
+        int doneAt = Off(sql, "done = 1");
+        var exec = new FakeExecutor().Cond(Off(sql, "while (c)"), true);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.RunToLoopExit(); // iter 1 → a = 1 → EXIT terminates the frame → the session completes
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.DoesNotContain(doneAt, exec.Executed);
+    }
+
+    [Fact]
+    public void NestedLoops_LoopExit_ExitsInnermost_LandsInOuterBody()
+    {
+        const string sql = "begin while (o) do begin while (i) do begin x = 1; end y = 2; end end";
+        int innerAt = Off(sql, "while (i)");
+        int xAt = Off(sql, "x = 1");
+        int yAt = Off(sql, "y = 2");
+        var exec = new FakeExecutor()
+            .Cond(Off(sql, "while (o)"), true, false)      // one outer iteration
+            .Cond(innerAt, true, true, false);            // two inner iterations
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.Step(StepKind.Into); // outer header → inner header
+        Assert.Equal(innerAt, s.CurrentStatement!.Start);
+        s.Step(StepKind.Into); // inner header (iter 1) → x = 1
+        Assert.Equal(xAt, s.CurrentStatement!.Start);
+
+        s.RunToLoopExit();     // exits the INNERMOST loop, lands at y = 2 in the outer body
+        Assert.Equal(yAt, s.CurrentStatement!.Start);
+        Assert.True(s.IsInsideLoop); // still inside the OUTER loop
+        Assert.Equal(2, exec.Executed.Count(v => v == xAt));
+    }
+
+    [Fact]
+    public void NestedLoops_NextIteration_AdvancesInnermost()
+    {
+        const string sql = "begin while (o) do begin while (i) do begin x = 1; end end end";
+        int innerAt = Off(sql, "while (i)");
+        int xAt = Off(sql, "x = 1");
+        var exec = new FakeExecutor()
+            .Cond(Off(sql, "while (o)"), true, false)
+            .Cond(innerAt, true, true, false);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.Step(StepKind.Into); // outer → inner header
+        s.Step(StepKind.Into); // inner iter 1 → x = 1
+        Assert.Equal(xAt, s.CurrentStatement!.Start);
+
+        s.RunToNextIteration(); // inner iter 2 → x = 1
+        Assert.Equal(xAt, s.CurrentStatement!.Start);
+        Assert.Equal(1, exec.Executed.Count(v => v == xAt)); // x ran once (iter 1); paused before iter-2's x
+    }
+
+    [Fact]
+    public void NextIteration_OverForSelect_AdvancesToNextRow()
+    {
+        const string sql = "begin for select id from t into :i do begin x = 1; end end";
+        int xAt = Off(sql, "x = 1");
+        var exec = new FakeExecutor().CursorAt(Off(sql, "for select"), Row("I", 1), Row("I", 2), Row("I", 3));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.Step(StepKind.Into); // for header (fetch row 1) → x = 1
+        Assert.Equal(xAt, s.CurrentStatement!.Start);
+
+        s.RunToNextIteration(); // fetch row 2 → x = 1
+        Assert.Equal(xAt, s.CurrentStatement!.Start);
+        Assert.Equal(1, exec.Executed.Count(v => v == xAt));
+    }
+
+    [Fact]
+    public void LoopExit_OverForSelect_ExhaustsCursor_ClosesIt_StopsAfter()
+    {
+        const string sql = "begin for select id from t into :i do begin x = 1; end done = 1; end";
+        int xAt = Off(sql, "x = 1");
+        int doneAt = Off(sql, "done = 1");
+        var exec = new FakeExecutor().CursorAt(Off(sql, "for select"), Row("I", 1), Row("I", 2));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.Step(StepKind.Into); // fetch row 1 → x = 1
+        s.RunToLoopExit();
+        Assert.Equal(doneAt, s.CurrentStatement!.Start);
+        Assert.True(exec.Cursors.Single().Closed);
+        Assert.Equal(2, exec.Executed.Count(v => v == xAt));
+    }
+
+    [Fact]
+    public void BreakpointInsideLoop_WinsOverLoopExit()
+    {
+        const string sql = "begin while (c) do begin a = 1; b = 2; end done = 9; end";
+        int aAt = Off(sql, "a = 1");
+        int bAt = Off(sql, "b = 2");
+        var exec = new FakeExecutor().Cond(Off(sql, "while (c)"), true, true, false);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.Step(StepKind.Into); // header (iter 1) → a = 1
+        Assert.Equal(aAt, s.CurrentStatement!.Start);
+        s.Breakpoints.GetOrAdd(bAt); // breakpoint on b (inside the loop body)
+
+        s.RunToLoopExit();
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(StopReason.Breakpoint, s.StopReason); // the breakpoint wins over the loop-exit event
+        Assert.Equal(bAt, s.CurrentStatement!.Start);
+    }
+
+    [Fact]
+    public void IsInsideLoop_TracksLoopMembership_AndGatesTheCommands()
+    {
+        const string sql = "begin a = 1; while (c) do begin b = 2; end d = 3; end";
+        int aAt = Off(sql, "a = 1");
+        int whileAt = Off(sql, "while (c)");
+        int bAt = Off(sql, "b = 2");
+        int dAt = Off(sql, "d = 3");
+        var exec = new FakeExecutor().Cond(whileAt, true, false);
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();                                       // at a = 1 (not in a loop)
+        Assert.Equal(aAt, s.CurrentStatement!.Start);
+        Assert.False(s.IsInsideLoop);
+        Assert.Throws<InvalidOperationException>(() => s.RunToLoopExit());
+        Assert.Throws<InvalidOperationException>(() => s.RunToNextIteration());
+
+        s.Step(StepKind.Into);                           // → while header
+        Assert.Equal(whileAt, s.CurrentStatement!.Start);
+        Assert.True(s.IsInsideLoop);
+
+        s.Step(StepKind.Into);                           // → b = 2 (loop body)
+        Assert.Equal(bAt, s.CurrentStatement!.Start);
+        Assert.True(s.IsInsideLoop);
+
+        s.Step(StepKind.Into);                           // b = 2 → back to the while header (re-evaluate)
+        Assert.Equal(whileAt, s.CurrentStatement!.Start);
+        Assert.True(s.IsInsideLoop);
+
+        s.Step(StepKind.Into);                           // header (cond false) → d = 3 (past the loop)
+        Assert.Equal(dAt, s.CurrentStatement!.Start);
+        Assert.False(s.IsInsideLoop);
+    }
+
+    [Fact]
+    public void Step_RejectsLoopFastForwardKinds()
+    {
+        const string sql = "begin while (c) do begin a = 1; end end";
+        var s = new DebugSession(Body(sql), new FakeExecutor().Cond(Off(sql, "while (c)"), true, false));
+        s.Start();
+        Assert.Throws<ArgumentException>(() => s.Step(StepKind.RunToLoopExit));
+        Assert.Throws<ArgumentException>(() => s.Step(StepKind.RunToNextIteration));
+    }
 }

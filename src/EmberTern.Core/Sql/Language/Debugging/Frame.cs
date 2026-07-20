@@ -36,9 +36,19 @@ internal sealed class SequenceActivation : Activation
     public bool HandlerActive { get; set; }
 }
 
-// A WHILE loop in progress — its header is re-presented as the step point each time control returns here
-// (the loop re-evaluates its condition per iteration).
-internal sealed class WhileActivation : Activation
+// A loop (WHILE / FOR SELECT) in progress — the shared state the interpreter's loop fast-forward reasons
+// about (D13). Its header is re-presented as the step point each time control returns here (the loop
+// re-evaluates its condition / fetches the next row per iteration).
+internal abstract class LoopActivation : Activation
+{
+    // Times this loop has ENTERED its body (a completed condition-true pass / row fetch). D13 "Next
+    // Iteration" stops when this increments past the value captured at the command; "Continue Until Loop
+    // Exit" stops when this activation leaves the control stack (independent of the counter).
+    public int Iteration { get; set; }
+}
+
+// A WHILE loop in progress.
+internal sealed class WhileActivation : LoopActivation
 {
     public WhileActivation(WhileStatement node) => Node = node;
 
@@ -46,8 +56,8 @@ internal sealed class WhileActivation : Activation
 }
 
 // A FOR SELECT loop in progress — holds the live cursor across iterations (spec §7: the cursor must stay
-// open while the user steps the body). Its header is the per-iteration step point.
-internal sealed class ForActivation : Activation
+// open while the user steps the body).
+internal sealed class ForActivation : LoopActivation
 {
     public ForActivation(ForSelectStatement node) => Node = node;
 
@@ -281,6 +291,56 @@ public sealed class Frame
     }
 
     internal IReadOnlyList<Activation> Control => _control;
+
+    // ── Loop control flow + introspection (D13 — LEAVE/BREAK/EXIT and loop fast-forward) ─────────────
+
+    // EXIT terminates the WHOLE routine immediately, regardless of block/loop nesting (Firebird: EXIT jumps
+    // to the routine's end). Close any open cursors and clear the control stack so AdvanceToNextStepPoint
+    // pops this frame and runs its return / continuation. Shares its teardown shape with TerminateForReturn
+    // but carries no return-value semantics.
+    internal void ExitRoutine()
+    {
+        CloseOpenCursors();
+        _control.Clear();
+    }
+
+    // LEAVE (unlabeled) / BREAK breaks the INNERMOST enclosing loop: pop control activations from the top
+    // down to and INCLUDING the nearest loop activation (closing a FOR cursor via PopForUnwind). The parent
+    // block's SequenceActivation already advanced past the loop node when the loop was entered, so control
+    // resumes at the statement AFTER the loop. A malformed LEAVE with no enclosing loop is a no-op (§0
+    // tolerance). LEAVE <label> to an OUTER loop is not modelled (labels are not in the AST) — treated as
+    // unlabeled, a documented §F boundary for D13.
+    internal void LeaveInnermostLoop()
+    {
+        for (int i = _control.Count - 1; i >= 0; i--)
+        {
+            if (_control[i] is LoopActivation)
+            {
+                while (_control.Count > i + 1) Pop(); // discard the loop body's inner activations (no cursors:
+                                                      // a deeper loop would be the innermost one found first)
+                PopForUnwind();                       // pop the loop activation itself, closing a FOR cursor
+                return;
+            }
+        }
+    }
+
+    // The innermost enclosing loop activation on this frame's control stack, or null when control is not
+    // inside any loop. D13 captures it to fast-forward; IsInLoop / the UI gate read it.
+    internal LoopActivation? InnermostLoop()
+    {
+        for (int i = _control.Count - 1; i >= 0; i--)
+        {
+            if (_control[i] is LoopActivation loop) return loop;
+        }
+        return null;
+    }
+
+    // True while this frame's control is currently inside a loop body (or at a loop header).
+    internal bool IsInLoop => InnermostLoop() is not null;
+
+    // True while the given activation is still on this frame's control stack (D13: has the captured loop
+    // been left yet?).
+    internal bool ContainsActivation(Activation activation) => _control.Contains(activation);
 
     // Pushes a branch / loop body: a real BEGIN…END keeps its block (for handlers), a single statement is
     // wrapped as a one-item sequence. A null/empty branch pushes nothing.

@@ -720,6 +720,7 @@ public static partial class SqlParser
                 case "SUSPEND": return PsqlLeafKind.Suspend;
                 case "EXIT": return PsqlLeafKind.Exit;
                 case "LEAVE": return PsqlLeafKind.Leave;
+                case "BREAK": return PsqlLeafKind.Leave; // legacy synonym of unlabeled LEAVE (same leaf kind)
                 case "POST_EVENT": return PsqlLeafKind.PostEvent;
                 case "EXCEPTION": return PsqlLeafKind.Exception;
                 case "RETURN": return PsqlLeafKind.Return;
