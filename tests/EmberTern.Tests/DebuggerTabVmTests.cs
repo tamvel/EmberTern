@@ -106,8 +106,12 @@ public class DebuggerTabVmTests
         public Task<DebugRunHandle> LaunchAsync(DebugLaunchSpec spec, CancellationToken cancellationToken = default)
         {
             LastSpec = spec;
+            // Mirror the production launcher: share the spec's breakpoint / data-breakpoint sets and seed
+            // BreakOnException before Start, so the session honours a breakpoint on the first statement from entry.
             var session = new DebugSession(
-                spec.Body, _executor, spec.RoutineName, spec.RootValues, spec.Source, spec.Model);
+                spec.Body, _executor, spec.RoutineName, spec.RootValues, spec.Source, spec.Model,
+                spec.Breakpoints, spec.DataBreakpoints);
+            session.BreakOnException = spec.BreakOnException;
             session.Start();
             return Task.FromResult(new DebugRunHandle(session, () => { Disposed = true; return ValueTask.CompletedTask; }));
         }
@@ -506,6 +510,31 @@ public class DebuggerTabVmTests
     }
 
     // ── D12 Seam E — Breakpoints panel + Break-on-Exception + data breakpoints (spec §9.8) ──────────
+
+    [Fact]
+    public async Task Breakpoint_OnFirstStatement_IsHonoredAtLaunch()
+    {
+        // Regression (QA): a breakpoint on the FIRST executed statement must be honored at launch — the session
+        // shares the VM's breakpoint set, so Start pauses ON the first statement as a Breakpoint (through the
+        // same stop-decision as any statement), not a plain Entry that silently runs it on the next Continue.
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        vm.ToggleBreakpointAt(Off("v = a + b")); // the first statement, set before launch
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.Equal(Off("v = a + b"), vm.CurrentStart);           // paused ON it (before executing it)
+        Assert.Contains("breakpoint", vm.StatusText, StringComparison.OrdinalIgnoreCase); // honored as a breakpoint
+    }
+
+    [Fact]
+    public async Task NoBreakpoint_FirstPause_IsEntry()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        Assert.Contains("entry", vm.StatusText, StringComparison.OrdinalIgnoreCase);
+    }
 
     [Fact]
     public async Task BreakpointsPanel_ReflectsCoreBreakpoints_AndRemoveClearsThem()

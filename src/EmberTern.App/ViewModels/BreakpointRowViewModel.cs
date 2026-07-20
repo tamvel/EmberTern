@@ -11,20 +11,18 @@ namespace EmberTern.App.ViewModels;
 /// projection of the Core <see cref="Breakpoint"/> stop-policy object</b>. It holds NO breakpoint logic: the
 /// condition and hit-count edits pass straight through to the wrapped <see cref="Breakpoint"/> (which owns the
 /// policy and the hit tally), and constructing a <see cref="HitCountPolicy"/> from the picked kind + count is
-/// done by the Core factory (<see cref="HitCountPolicy.Of"/>), not here. After any edit it invokes the parent's
-/// <c>onPolicyChanged</c> callback so the change is mirrored to the live session's breakpoint — the panel
-/// decides nothing, it only presents and forwards.
+/// done by the Core factory (<see cref="HitCountPolicy.Of"/>), not here. The wrapped <see cref="Breakpoint"/>
+/// is the SAME object the live session holds (the debug tab shares its <see cref="BreakpointSet"/> with the
+/// session), so an edit is immediately in force — no callback, no mirroring. The panel only presents.
 /// </summary>
 public sealed partial class BreakpointRowViewModel : ObservableObject
 {
     private readonly Breakpoint _breakpoint;
-    private readonly Action _onPolicyChanged;
     private bool _suppress; // true while the ctor seeds the controls from the Core object (no echo back)
 
-    public BreakpointRowViewModel(Breakpoint breakpoint, int line, Action onPolicyChanged)
+    public BreakpointRowViewModel(Breakpoint breakpoint, int line)
     {
         _breakpoint = breakpoint ?? throw new ArgumentNullException(nameof(breakpoint));
-        _onPolicyChanged = onPolicyChanged ?? throw new ArgumentNullException(nameof(onPolicyChanged));
         Line = line;
 
         _suppress = true;
@@ -51,8 +49,7 @@ public sealed partial class BreakpointRowViewModel : ObservableObject
     partial void OnConditionChanged(string value)
     {
         if (_suppress) return;
-        _breakpoint.Condition = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-        _onPolicyChanged();
+        _breakpoint.Condition = string.IsNullOrWhiteSpace(value) ? null : value.Trim(); // live: same object the engine reads
     }
 
     /// <summary>The hit-count kind options, in <see cref="HitCountKind"/> order (Always / Exactly / AtLeast /
@@ -87,7 +84,6 @@ public sealed partial class BreakpointRowViewModel : ObservableObject
     {
         if (_suppress) return;
         int n = HitCountValue is { } v && v >= 1 ? (int)v : 1;
-        _breakpoint.HitCount = HitCountPolicy.Of((HitCountKind)HitCountKindIndex, n); // Core owns the mapping
-        _onPolicyChanged();
+        _breakpoint.HitCount = HitCountPolicy.Of((HitCountKind)HitCountKindIndex, n); // Core owns the mapping; live
     }
 }

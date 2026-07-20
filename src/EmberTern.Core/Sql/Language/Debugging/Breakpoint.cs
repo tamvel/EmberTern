@@ -53,6 +53,11 @@ public sealed class Breakpoint
         _hits++;
         return HitCount.IsMetAt(_hits);
     }
+
+    /// <summary>Resets the hit tally to zero — called when a session (re)starts, so each run counts hits from
+    /// scratch (the policy is unchanged). Lets one <see cref="Breakpoint"/> outlive a session (persist across
+    /// launch/restart) without its hit-count policy drifting.</summary>
+    public void ResetHits() => _hits = 0;
 }
 
 /// <summary>

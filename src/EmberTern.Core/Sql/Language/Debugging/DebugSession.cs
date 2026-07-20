@@ -32,8 +32,8 @@ public sealed class DebugSession
     private readonly string? _rootSource;
     private readonly SemanticModel? _rootModel;
     private readonly List<Frame> _frames = new();
-    private readonly BreakpointSet _breakpoints = new();
-    private readonly DataBreakpointSet _dataBreakpoints = new();
+    private readonly BreakpointSet _breakpoints;
+    private readonly DataBreakpointSet _dataBreakpoints;
     private readonly List<IReadOnlyDictionary<string, object?>> _emittedRows = new();
     private int _nextFrameId;
     private IExecutableStatement? _currentStep;
@@ -56,7 +56,9 @@ public sealed class DebugSession
         string? rootName = null,
         IReadOnlyDictionary<string, object?>? rootValues = null,
         string? rootSource = null,
-        SemanticModel? rootModel = null)
+        SemanticModel? rootModel = null,
+        BreakpointSet? breakpoints = null,
+        DataBreakpointSet? dataBreakpoints = null)
     {
         _rootBody = rootBody ?? throw new ArgumentNullException(nameof(rootBody));
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
@@ -64,6 +66,12 @@ public sealed class DebugSession
         _rootValues = rootValues;
         _rootSource = rootSource;
         _rootModel = rootModel;
+        // The breakpoint / data-breakpoint sets may be SHARED with the owner (the debug tab passes its own sets
+        // in, D12): so a breakpoint the user set — including on the first statement — is active from Start, and
+        // the panel edits the very objects the engine consults. Defaulting to fresh sets keeps every existing
+        // caller (tests, an owner that manages breakpoints after Start) byte-identical.
+        _breakpoints = breakpoints ?? new BreakpointSet();
+        _dataBreakpoints = dataBreakpoints ?? new DataBreakpointSet();
         State = DebugState.Ready;
         StopReason = StopReason.NotStarted;
     }
@@ -183,6 +191,8 @@ public sealed class DebugSession
             throw new InvalidOperationException("The debug session has already been started.");
         }
 
+        _breakpoints.ResetHitCounts(); // each run counts hits from scratch (the set may persist across restarts)
+
         PushFrame(_rootName, _rootBody, parent: null, lexicalParent: null, callSite: null,
             initialValues: _rootValues, outputParameterNames: null, source: _rootSource, model: _rootModel);
         _rootFrame = _frames[^1]; // retained for the terminal (Completed) snapshot, even after its pop
@@ -195,7 +205,12 @@ public sealed class DebugSession
         else
         {
             State = DebugState.Paused;
-            StopReason = StopReason.Entry;
+            // The first step point is an ARRIVAL like every other — run it through the SAME stop-decision, so a
+            // breakpoint on the first statement is honored (and hit-counted) exactly as one on any later
+            // statement (spec §9.8). With no breakpoint there it is the plain entry pause. This is the one
+            // stop-decision mechanism the user asked for: entry, first statement, and every statement all go
+            // through ShouldBreakAt on arrival.
+            StopReason = ShouldBreakAt(_currentStep) ? StopReason.Breakpoint : StopReason.Entry;
         }
     }
 

@@ -1097,6 +1097,66 @@ public class DebugEngineTests
         Assert.Equal(2, s.Depth);
     }
 
+    // ── D12: the FIRST statement goes through the same stop-decision as every arrival (spec §9.8) ────────
+
+    [Fact]
+    public void Start_BreakpointOnFirstStatement_StopsAsBreakpoint_NotEntry()
+    {
+        // A breakpoint on the first executed statement must be honored at Start through the SAME stop-decision
+        // as any later statement — the session pauses ON it (before executing it) as a Breakpoint, not a plain
+        // Entry that then runs the statement on the next Continue.
+        const string sql = "begin a = 1; b = 2; c = 3; end";
+        var exec = new FakeExecutor();
+        var s = new DebugSession(Body(sql), exec);
+        s.Breakpoints.Add(Off(sql, "a = 1")); // the FIRST statement
+        s.Start();
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(StopReason.Breakpoint, s.StopReason);
+        Assert.Equal("a = 1;", Text(sql, s.CurrentStatement!));
+        Assert.Empty(exec.Executed); // paused BEFORE executing the first statement
+    }
+
+    [Fact]
+    public void Start_NoBreakpoint_StopsAsEntry()
+    {
+        const string sql = "begin a = 1; b = 2; end";
+        var s = new DebugSession(Body(sql), new FakeExecutor());
+        s.Start();
+        Assert.Equal(StopReason.Entry, s.StopReason);
+    }
+
+    [Fact]
+    public void Start_ConditionalBreakpointOnFirstStatement_FalseCondition_StopsAsEntry()
+    {
+        // A conditional breakpoint on the first statement whose condition is false is NOT a stop (three-valued,
+        // same as any arrival) — the first pause is the plain Entry.
+        const string sql = "begin a = 1; b = 2; end";
+        var exec = new FakeExecutor().CondFragment("x", false);
+        var s = new DebugSession(Body(sql), exec);
+        s.Breakpoints.GetOrAdd(Off(sql, "a = 1")).Condition = "x";
+        s.Start();
+        Assert.Equal(StopReason.Entry, s.StopReason);
+    }
+
+    [Fact]
+    public void Start_HitCountBreakpointOnFirstStatement_CountsFromScratch_AcrossRestart()
+    {
+        // The set can outlive a session (the debug tab shares it across launch/restart); Start resets hit
+        // tallies so an Exactly(2) breakpoint on the first statement never stops at Start (2nd arrival never
+        // comes in a linear body) — and a re-Start behaves identically, not off-by-a-stale-tally.
+        const string sql = "begin a = 1; b = 2; end";
+        var bps = new BreakpointSet();
+        bps.GetOrAdd(Off(sql, "a = 1")).HitCount = HitCountPolicy.Exactly(2);
+
+        var s1 = new DebugSession(Body(sql), new FakeExecutor(), breakpoints: bps);
+        s1.Start();
+        Assert.Equal(StopReason.Entry, s1.StopReason); // 1st arrival, Exactly(2) not met
+
+        var s2 = new DebugSession(Body(sql), new FakeExecutor(), breakpoints: bps); // reuse the same set
+        s2.Start();
+        Assert.Equal(StopReason.Entry, s2.StopReason); // tally reset → still the 1st arrival, not the 2nd
+    }
+
     // ── D12: Conditional breakpoints + hit counts (spec §9.8.2) ─────────────────────────────────────
 
     [Fact]

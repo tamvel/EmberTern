@@ -554,7 +554,12 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         if (launch is not (var rootValues, var trigger)) return;
 
         _activeTrigger = trigger; // drives the Variables Context group (available NEW/OLD rows)
-        var spec = new DebugLaunchSpec(_source, _body, _model, RoutineName, rootValues, Isolation, trigger, _packageName);
+        // The session SHARES the VM's breakpoint / data-breakpoint sets (D12) — so a breakpoint on the FIRST
+        // statement is active from Start (honored by the same stop-decision as every statement), and the panel
+        // edits the very objects the engine consults (no mirroring). BreakOnException seeds the session toggle.
+        var spec = new DebugLaunchSpec(
+            _source, _body, _model, RoutineName, rootValues, Isolation, trigger, _packageName,
+            _breakpoints, _dataBreakpoints, BreakOnException);
 
         ClearExecutedSql(); // a fresh session starts a fresh audit log
         Phase = DebuggerPhase.Busy;
@@ -571,7 +576,6 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             return;
         }
 
-        ApplyBreakpointsToSession();
         RebuildBreakpointPanel(); // the panel reflects the (persisted) breakpoints now that a run exists
         await EvaluateWatchesAsync().ConfigureAwait(true); // show watch values immediately at entry
         RefreshFromSession();
@@ -861,50 +865,16 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         var target = StepPointAtOrAfter(caretOffset);
         if (target is null) return;
 
-        _breakpoints.Toggle(target.Value);         // add a plain breakpoint, or remove the existing one
-        Session?.Breakpoints.Toggle(target.Value); // mirror to the live session
+        _breakpoints.Toggle(target.Value); // add a plain breakpoint, or remove the existing one — the session
+                                           // SHARES this set, so the change is live with no mirroring
         RebuildBreakpointPanel();
         DebugMarkersChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    // Copies the VM's breakpoints (with their conditions + hit-count policies) and data breakpoints into the
-    // live session's sets at launch, and applies the break-on-exception toggle. The VM's sets are the authority
-    // (they persist across launch/restart); the session's are a mirror. Called after LaunchAsync opens the run.
-    private void ApplyBreakpointsToSession()
-    {
-        var session = Session;
-        if (session is null) return;
-        foreach (var offset in _breakpoints.Offsets)
-        {
-            var vm = _breakpoints.Get(offset);
-            if (vm is null) continue;
-            var live = session.Breakpoints.GetOrAdd(offset);
-            live.Condition = vm.Condition;
-            live.HitCount = vm.HitCount;
-        }
-        foreach (var name in _dataBreakpoints.Variables)
-        {
-            session.DataBreakpoints.Add(name);
-        }
-        session.BreakOnException = BreakOnException;
-    }
-
-    // Mirrors one breakpoint's edited condition / hit-count policy to the live session (called by a panel row
-    // after the user edits it). Incremental — it never rebuilds the session's set, so the other breakpoints'
-    // hit tallies are preserved. A no-op before launch / after stop (the VM set is applied afresh at launch).
-    private void SyncBreakpointToSession(int offset)
-    {
-        var session = Session;
-        var vm = _breakpoints.Get(offset);
-        if (session is null || vm is null) return;
-        var live = session.Breakpoints.GetOrAdd(offset);
-        live.Condition = vm.Condition;
-        live.HitCount = vm.HitCount;
-    }
-
     // Rebuilds the Breakpoints-panel rows from the VM's Core sets — the panel is a pure projection, so this is
     // called whenever the sets change (toggle / add / remove / launch). Line breakpoints are ordered by offset;
-    // each row wraps its Core Breakpoint and mirrors its edits to the live session via SyncBreakpointToSession.
+    // each row wraps its Core Breakpoint. The session shares these sets, so a row's condition / hit-count edit
+    // is live on the engine's own object — no callback, no sync.
     private void RebuildBreakpointPanel()
     {
         BreakpointRows.Clear();
@@ -912,8 +882,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         {
             var bp = _breakpoints.Get(offset);
             if (bp is null) continue;
-            int capturedOffset = offset;
-            BreakpointRows.Add(new BreakpointRowViewModel(bp, LineOf(offset), () => SyncBreakpointToSession(capturedOffset)));
+            BreakpointRows.Add(new BreakpointRowViewModel(bp, LineOf(offset)));
         }
 
         DataBreakpointRows.Clear();
@@ -935,33 +904,31 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     private void AddDataBreakpoint(DebugVariableRowViewModel? row)
     {
         if (row is null) return;
-        if (_dataBreakpoints.Add(row.ResolveName))
+        if (_dataBreakpoints.Add(row.ResolveName)) // the session shares this set → live, no mirroring
         {
             _dataBreakpointNames[row.ResolveName] = row.Name; // friendly label (NEW.col / plain name)
-            Session?.DataBreakpoints.Add(row.ResolveName);
             RebuildBreakpointPanel();
         }
     }
 
-    /// <summary>Removes a line breakpoint from the Breakpoints panel (and the editor gutter + live session).</summary>
+    /// <summary>Removes a line breakpoint from the Breakpoints panel (and the editor gutter + live session, which
+    /// shares the set).</summary>
     [RelayCommand]
     private void RemoveBreakpoint(BreakpointRowViewModel? row)
     {
         if (row is null) return;
         _breakpoints.Remove(row.Offset);
-        Session?.Breakpoints.Remove(row.Offset);
         RebuildBreakpointPanel();
         DebugMarkersChanged?.Invoke(this, EventArgs.Empty); // the gutter dot goes away
     }
 
-    /// <summary>Removes a data breakpoint from the Breakpoints panel (and the live session).</summary>
+    /// <summary>Removes a data breakpoint from the Breakpoints panel (and the live session, which shares the set).</summary>
     [RelayCommand]
     private void RemoveDataBreakpoint(DataBreakpointRowViewModel? row)
     {
         if (row is null) return;
         _dataBreakpoints.Remove(row.WatchedName);
         _dataBreakpointNames.Remove(row.WatchedName);
-        Session?.DataBreakpoints.Remove(row.WatchedName);
         RebuildBreakpointPanel();
     }
 

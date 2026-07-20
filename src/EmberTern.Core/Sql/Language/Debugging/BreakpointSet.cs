@@ -66,6 +66,14 @@ public sealed class BreakpointSet
     /// <summary>Removes every breakpoint.</summary>
     public void Clear() => _breakpoints.Clear();
 
+    /// <summary>Resets every breakpoint's hit tally (each <see cref="Breakpoint.ResetHits"/>) — called when a
+    /// session (re)starts so hit-count policies count from scratch, while the set itself (and its policies)
+    /// persists across launch/restart.</summary>
+    public void ResetHitCounts()
+    {
+        foreach (var bp in _breakpoints.Values) bp.ResetHits();
+    }
+
     /// <summary>The offsets with a breakpoint set (unordered).</summary>
     public IReadOnlyCollection<int> Offsets => _breakpoints.Keys;
 

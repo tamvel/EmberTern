@@ -46,7 +46,14 @@ internal sealed record DebugLaunchSpec(
     IReadOnlyDictionary<string, object?> RootValues,
     DebugIsolation Isolation,
     TriggerContext? Trigger = null,
-    string? PackageName = null);
+    string? PackageName = null,
+    // The owner's breakpoint / data-breakpoint sets (D12), passed so the session SHARES them from Start — a
+    // breakpoint on the first statement is then active before the first step, and the panel edits the live
+    // objects. Null keeps the pre-D12 behaviour (the session owns fresh sets). BreakOnException seeds the
+    // session's toggle so it is in force from the first resume.
+    BreakpointSet? Breakpoints = null,
+    DataBreakpointSet? DataBreakpoints = null,
+    bool BreakOnException = false);
 
 /// <summary>A live, started debug session and its teardown. Disposing rolls back + closes the session's
 /// attachment (best-effort, idempotent). The <see cref="Session"/> is already <see cref="DebugSession.Start"/>ed

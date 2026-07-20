@@ -40,8 +40,10 @@ internal sealed class FirebirdDebugSessionLauncher : IDebugSessionLauncher
                 .ConfigureAwait(false);
 
             var session = new DebugSession(
-                spec.Body, executor, spec.RoutineName, spec.RootValues, spec.Source, spec.Model);
-            session.Start(); // pushes the root frame (SAVEPOINT) + pauses at the first step point
+                spec.Body, executor, spec.RoutineName, spec.RootValues, spec.Source, spec.Model,
+                spec.Breakpoints, spec.DataBreakpoints);
+            session.BreakOnException = spec.BreakOnException; // in force from the first resume
+            session.Start(); // pushes the root frame (SAVEPOINT) + pauses at the first step point (breakpoint-aware)
 
             return new DebugRunHandle(session, async () => await connection.DisposeAsync().ConfigureAwait(false));
         }
