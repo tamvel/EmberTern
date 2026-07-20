@@ -1269,6 +1269,98 @@ public class DebugEngineTests
         Assert.Empty(exec.ConditionFragmentsEvaluated); // no condition → the D5 engine is never touched
     }
 
+    // ── D12: Data breakpoints (break when a watched variable changes, spec §9.8.4) ──────────────────
+
+    [Fact]
+    public void DataBreakpoint_ShouldBreak_OnChange_NullAndDbNullEquivalent()
+    {
+        var bp = new DataBreakpoint("X");
+        Assert.True(bp.ShouldBreak(5, 6));
+        Assert.False(bp.ShouldBreak(5, 5));
+        Assert.True(bp.ShouldBreak(null, 5));
+        Assert.False(bp.ShouldBreak(null, System.DBNull.Value)); // NULL and DBNull are one state
+        Assert.False(bp.ShouldBreak(null, null));
+    }
+
+    [Fact]
+    public void DataBreakpointSet_AddContainsToggleRemove_CaseInsensitive()
+    {
+        var set = new DataBreakpointSet();
+        Assert.True(set.Add("X"));
+        Assert.False(set.Add("x"));   // case-insensitive (Firebird folds unquoted identifiers)
+        Assert.True(set.Contains("X"));
+        Assert.Equal(1, set.Count);
+        Assert.False(set.Toggle("X")); // was set → removed
+        Assert.False(set.Contains("X"));
+        Assert.True(set.Toggle("X"));  // was clear → added
+        Assert.True(set.Remove("X"));
+        Assert.Equal(0, set.Count);
+    }
+
+    [Fact]
+    public void DataBreakpoint_StopsWhenWatchedVariableChanges()
+    {
+        // x = 1 writes X; the session stops right after that step (positioned at the next step point), with the
+        // reason DataBreakpoint and the changed variable identified.
+        const string sql = "begin a = 1; x = 1; c = 3; end";
+        var exec = new FakeExecutor().Outcome(Off(sql, "x = 1"), StatementOutcome.Normal(Row("X", 5)));
+        var s = new DebugSession(Body(sql), exec);
+        s.DataBreakpoints.Add("X");
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(StopReason.DataBreakpoint, s.StopReason);
+        Assert.Equal("X", s.DataBreakpointHit!.Variable);
+        Assert.Equal("c = 3;", Text(sql, s.CurrentStatement!)); // paused just AFTER the change
+    }
+
+    [Fact]
+    public void DataBreakpoint_DoesNotStop_WhenValueUnchanged()
+    {
+        const string sql = "begin a = 1; b = 2; end"; // nothing writes X
+        var exec = new FakeExecutor();
+        var s = new DebugSession(Body(sql), exec);
+        s.DataBreakpoints.Add("X");
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Null(s.DataBreakpointHit);
+    }
+
+    [Fact]
+    public void DataBreakpoint_HitClearedOnResume()
+    {
+        const string sql = "begin x = 1; c = 3; end";
+        var exec = new FakeExecutor().Outcome(Off(sql, "x = 1"), StatementOutcome.Normal(Row("X", 5)));
+        var s = new DebugSession(Body(sql), exec);
+        s.DataBreakpoints.Add("X");
+        s.Start();
+        s.Step(StepKind.Continue); // stop on X change
+        Assert.Equal(StopReason.DataBreakpoint, s.StopReason);
+        Assert.NotNull(s.DataBreakpointHit);
+        s.Step(StepKind.Continue); // resume → runs c = 3 → completes; the hit is cleared
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Null(s.DataBreakpointHit);
+    }
+
+    [Fact]
+    public void DataBreakpoint_StepInto_DoesNotFalsePositiveAcrossFrames()
+    {
+        // X is 5 in the caller and absent in the closed callee scope. Stepping into the callee changes the
+        // innermost frame, so the identity gate must skip the diff — an X:5→(absent) is NOT a data change.
+        const string sql = "begin execute procedure p; y = 2; end";
+        var callee = new DebugRoutine("P", Body(CalleeSql)); // "begin q1 = 1; q2 = 2; end"
+        var exec = new FakeExecutor().RoutineAt(Off(sql, "execute procedure p"), callee);
+        var s = new DebugSession(Body(sql), exec,
+            rootValues: new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["X"] = 5 });
+        s.DataBreakpoints.Add("X");
+        s.Start();
+        s.Step(StepKind.Into); // into P → frame changes; the gate prevents a spurious data breakpoint
+        Assert.Equal(StopReason.Step, s.StopReason); // stopped by the step, NOT a data breakpoint
+        Assert.Equal(2, s.Depth);
+        Assert.Null(s.DataBreakpointHit);
+    }
+
     // ── D5: expression evaluation (Evaluate / Watches / Immediate — one engine, §9.5) ──────────────
 
     [Fact]

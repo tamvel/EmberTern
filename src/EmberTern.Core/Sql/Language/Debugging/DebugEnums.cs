@@ -75,6 +75,10 @@ public enum StopReason
     /// <summary>Stopped after a <c>SUSPEND</c> emitted a row.</summary>
     Suspend,
 
+    /// <summary>Stopped because a <b>watched variable changed</b> during the step just executed — a data
+    /// breakpoint (D12, spec §9.8.4). The variable is <see cref="DebugSession.DataBreakpointHit"/>.</summary>
+    DataBreakpoint,
+
     /// <summary>The session ran to completion.</summary>
     Completed,
 }

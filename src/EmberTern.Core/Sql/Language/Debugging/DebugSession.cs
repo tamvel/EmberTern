@@ -33,6 +33,7 @@ public sealed class DebugSession
     private readonly SemanticModel? _rootModel;
     private readonly List<Frame> _frames = new();
     private readonly BreakpointSet _breakpoints = new();
+    private readonly DataBreakpointSet _dataBreakpoints = new();
     private readonly List<IReadOnlyDictionary<string, object?>> _emittedRows = new();
     private int _nextFrameId;
     private IExecutableStatement? _currentStep;
@@ -43,6 +44,7 @@ public sealed class DebugSession
     private List<Frame>? _faultStack;          // the call stack (innermost last) captured at the unhandled fault
     private (IExecutableStatement? Step, List<Frame> Stack)? _pendingRaise; // a raise held at a Break-on-Exception pause, routed on the next resume (§9.8.1)
     private DebugError? _conditionError;       // a conditional breakpoint whose condition RAISED on the stop that paused us (§9.8.2); cleared on resume
+    private DataBreakpoint? _dataBreakpointHit; // the watched variable whose change paused us (§9.8.4); cleared on resume
 
     /// <summary>Creates a session over <paramref name="rootBody"/>. <paramref name="rootValues"/> seeds the
     /// root frame's initial values — the routine's <b>input parameter</b> arguments supplied at launch (§9.3):
@@ -143,6 +145,16 @@ public sealed class DebugSession
     /// stops (<see cref="StopReason.Breakpoint"/>) and the error is surfaced here so the user can fix it. Null
     /// unless the current pause was caused by a failed condition; cleared on the next resume.</summary>
     public DebugError? BreakpointConditionError => _conditionError;
+
+    /// <summary>The data breakpoints — watch a variable, break when it changes (D12, spec §9.8.4). Mutable
+    /// during the session; the change is detected locally (snapshot before a step, diff after) by
+    /// <see cref="DataBreakpointSet"/>.</summary>
+    public DataBreakpointSet DataBreakpoints => _dataBreakpoints;
+
+    /// <summary>The watched variable whose change paused the session (<see cref="StopReason.DataBreakpoint"/>),
+    /// or null when the current pause was not a data breakpoint. Cleared on the next resume. Lets the UI say
+    /// which variable changed.</summary>
+    public DataBreakpoint? DataBreakpointHit => _dataBreakpointHit;
 
     /// <summary>When true, a raised exception <b>pauses</b> the session at the raising statement — frame
     /// intact, <see cref="DebugState.Paused"/> with <see cref="StopReason.Exception"/> — <i>before</i> the
@@ -290,11 +302,15 @@ public sealed class DebugSession
     private void RunStepping(StepKind kind, int? targetOffset)
     {
         EnsurePaused();
-        _conditionError = null; // a fresh stop decision re-sets it if a condition raises again
+        _conditionError = null;   // a fresh stop decision re-sets it if a condition raises again
+        _dataBreakpointHit = null; // …likewise for a data breakpoint
         int startDepth = _frames.Count;
 
         while (true)
         {
+            IReadOnlyDictionary<string, object?>? dataBefore = null; // watched values before this step (§9.8.4)
+            int frameIdBefore = -1;
+
             if (_pendingRaise is { } pending)
             {
                 // Resuming from a Break-on-Exception pause (spec §9.8.1): route the held raise NOW — the SAME
@@ -308,22 +324,35 @@ public sealed class DebugSession
                     return; // nothing caught it → Faulted (terminal)
                 }
             }
-            else if (ExecuteCurrent(kind))
+            else
             {
-                // A statement / condition raised. With Break-on-Exception armed, PAUSE here — before routing,
-                // frame intact — so the user sees where it raised; the next resume routes it (above). Snapshot
-                // the faulting line + call stack now, BEFORE any routing, exactly as the immediate route does.
-                if (BreakOnException)
+                // Snapshot the watched variables in the frame about to execute this step — the "before" side of
+                // the local data-breakpoint diff (DataBreakpointSet owns the detection; the loop only pairs this
+                // snapshot with the after-check below).
+                if (_dataBreakpoints.Count > 0)
                 {
-                    _pendingRaise = (_currentStep, new List<Frame>(_frames));
-                    State = DebugState.Paused;
-                    StopReason = StopReason.Exception;
-                    return;
+                    var frame = _frames[^1];
+                    dataBefore = _dataBreakpoints.Snapshot(frame);
+                    frameIdBefore = frame.Id;
                 }
-                // Disarmed: route immediately through the same one path (the pre-D12 behaviour).
-                if (RouteRaisedException(_currentStep, new List<Frame>(_frames)))
+
+                if (ExecuteCurrent(kind))
                 {
-                    return; // nothing caught it → Faulted (terminal)
+                    // A statement / condition raised. With Break-on-Exception armed, PAUSE here — before routing,
+                    // frame intact — so the user sees where it raised; the next resume routes it (above). Snapshot
+                    // the faulting line + call stack now, BEFORE any routing, exactly as the immediate route does.
+                    if (BreakOnException)
+                    {
+                        _pendingRaise = (_currentStep, new List<Frame>(_frames));
+                        State = DebugState.Paused;
+                        StopReason = StopReason.Exception;
+                        return;
+                    }
+                    // Disarmed: route immediately through the same one path (the pre-D12 behaviour).
+                    if (RouteRaisedException(_currentStep, new List<Frame>(_frames)))
+                    {
+                        return; // nothing caught it → Faulted (terminal)
+                    }
                 }
             }
 
@@ -334,6 +363,19 @@ public sealed class DebugSession
                 _lastStatement = justExecuted; // the routine's final executed line — kept for the terminal marker
                 State = DebugState.Completed;
                 StopReason = StopReason.Completed;
+                return;
+            }
+
+            // Data breakpoint (§9.8.4): a watched variable changed during the step just executed. Checked only
+            // when the innermost frame is unchanged — a step-into/out crosses scopes, so the identity gate
+            // prevents false positives (a cross-frame change on return is a documented boundary), mirroring the
+            // Variables change-highlight. A changed watch wins over a line/step stop (the more specific reason).
+            if (dataBefore is not null && _frames[^1].Id == frameIdBefore
+                && _dataBreakpoints.FindChanged(dataBefore, _frames[^1]) is { } changed)
+            {
+                _dataBreakpointHit = changed;
+                State = DebugState.Paused;
+                StopReason = StopReason.DataBreakpoint;
                 return;
             }
 
