@@ -2381,3 +2381,129 @@ executor.**
 both by stepping into them from a caller AND by launching a member directly as the root; one execution path,
 no parallel package executor, live-fidelity-proven. (A package FUNCTION call as a step-into remains the one §F
 boundary — step-over, faithful — to be added only when a real lab case needs it.)
+
+---
+
+## D12 — Advanced breakpoints (IN PROGRESS: Seam 0 + A + B + C1 done; C2 + D + E remain)
+
+D12 (spec §9.8, plan brief "D12 — Advanced breakpoints") adds cheap, high-value stop modes *given* the
+existing engine: **break on exception**, **conditional breakpoints + hit counts**, **data breakpoints**, and
+**run to next `SUSPEND`** (+ its result grid). The binding constraints (plan): every breakpoint condition is
+*just an expression* → the one D5 engine (no second evaluator); everything is **additive** over the existing
+components (`BreakpointSet`, `StepPlanner`, `ExceptionRouter`, D5 `Evaluate`, `FrameValues`); §F holds; verify
+before implement.
+
+**Session split** (mirroring D8–D11 — one committable seam at a time, each ending build 0/0 + green tests +
+independent commit + a user QA checkpoint):
+
+- **Seam 0** — lab verification + the `SP_DBG_LOOP` workhorse *(commit `211a629`)*.
+- **Seam A** — Core: Break on Exception *(commit `a8b160a`)*.
+- **Seam B** — Core: Conditional breakpoints + hit counts *(commit `f9beba7`)*.
+- **Seam C1** — Core: Data breakpoints *(commit `5561e10`)*.
+- **Seam C2** — Core: Run to next `SUSPEND` *(done — this session)*. **← current head.**
+- **Seam D** — Firebird + Live Fidelity (sim==real on the lab) *(not started)*.
+- **Seam E** — UI: Breakpoints panel, condition/hit-count editing, break-on-exception toggle, data-breakpoint
+  gesture, Run-to-SUSPEND command + result grid *(not started)*.
+
+C was **deliberately split into C1 (Data Breakpoints) and C2 (Run-to-SUSPEND)** — architecturally distinct (a
+post-step diff *policy* vs a new *run mode*), and the user prefers two small coherent seams over one wide one.
+
+### Seam 0 — lab verified + `SP_DBG_LOOP` (commit `211a629`)
+
+A formal confirmation that the lab covers all four D12 scenarios, plus the one deterministic routine the
+existing zoo lacked. Coverage (measured against the live FB5 lab): break-on-exception is covered by
+`SP_DBG_GUARD(-5)` (a real `FbException` at a known line, caught by a `WHEN` handler; the Faulted path is pure
+control flow proven by Seam A fake-executor tests → no new raise routine); data-bp by `SP_DBG_CURSOR`; but
+every loop-based routine was capped at 2 (row-data-driven) iterations — too thin for hit-count policies and a
+multi-row run-to-SUSPEND. The one minimal extension: **`SP_DBG_LOOP(N) RETURNS (IDX, ACC)`** — a deterministic
+counting `WHILE` loop, one `SUSPEND`/iteration, a running accumulator. Pure arithmetic → exact `N`; serves
+run-to-SUSPEND (N rows), hit-count (N hits), conditional (clean `IDX`), data-bp (`ACC` changes each iteration).
+Verified live: `SP_DBG_LOOP(5)` → `(1,5),(2,15),(3,30),(4,50),(5,75)`. `.fdb` rebuilt via the #149 dance.
+
+### Seam A — Break on Exception (commit `a8b160a`)
+
+**Constraint (user):** a **pause in front of the ONE existing routing path**, not an alternative exception
+mechanism; after a resume it must route exactly as an un-broken raise would. Realized by: **`RouteRaisedException`**
+(the inline raise-handling extracted into the single place a raise is routed — immediate OR after a break) +
+**`_pendingRaise`** (an armed raise is held — the raising step + a pre-routing call-stack snapshot — and the
+session pauses `Paused`/`StopReason.Exception`, frame intact, no savepoint touched; the next resume consumes it
+and calls the same `RouteRaisedException`). Routing cannot diverge because `AdvanceSequence` already runs before
+a raise is reported and nothing mutates `_frames` between pause and resume. `SetNextStatement` abandons a held
+raise. `StopReason.Exception` now means "an exception is why we stopped": `(Faulted, Exception)` terminal /
+`(Paused, Exception)` a break, told apart by **`IsPausedOnException`**. New `BreakOnException` (default false,
+toggleable). +6 `DebugEngineTests` incl. the "one path" proof (caught raise → SAME terminal state / rows /
+savepoint trace with the break on or off).
+
+### Seam B — Conditional breakpoints + hit counts (commit `f9beba7`)
+
+**Constraint (user):** `Breakpoint` is a **stop-policy object**, extensible by evolving the model — not parallel
+collections/flags. New Core: **`Breakpoint`** (`Offset`, `Condition`, `HitCount` policy, hit tally;
+`ShouldBreak(conditionSatisfied)` = the pure policy — a false/NULL condition never counts, a true one
+increments and breaks iff the hit-count policy is met); **`HitCountPolicy`** value object (`Always` /
+`Exactly(n)` / `AtLeast(n)` / `Multiple(n)`, `IsMetAt(hits)`) + `HitCountKind`; **`BreakpointSet`** promoted
+`HashSet<int>` → map `offset → Breakpoint`, whole prior API byte-compatible, + `Get`/`GetOrAdd` (`All` deferred
+to Seam E — no consumer yet, gotcha #233). **Condition = an expression through the ONE engine:**
+`IDebugExecutor.EvaluateCondition(string fragment, int scopeOffset, Frame)` — the SAME typed-`BOOLEAN`
+`EvaluateExpression` path `IF`/`WHILE` use, fed a string, `InScopeLocals` read set; result interpreted exactly
+as `IF`/`WHILE` (`NULL` → not-true, else `Convert.ToBoolean`) — **no boolean text parsed** (§F). `DebugSession`'s
+check became **`ShouldBreakAt(step)`**; a condition that **raises** stops + surfaces (`BreakpointConditionError`),
+never silently skipped, and does not count. Additive (a plain breakpoint never touches the condition engine).
++11 `DebugEngineTests`.
+
+### Seam C1 — Data breakpoints (commit `5561e10`)
+
+**Constraint (user):** the watched value is **another stop policy**, not a special case of the loop; the change
+detection is **local** (snapshot → diff → decision). New Core (mirroring `Breakpoint`/`BreakpointSet`):
+**`DataBreakpoint`** (owns the decision `ShouldBreak(old, new)` = "did it change?", `NULL`/`DBNull` equivalent,
+matching the Variables change-highlight's `ValuesEqual`); **`DataBreakpointSet`** (the collection AND the local
+detection — `Snapshot(frame)` before, `FindChanged(before, frame)` after; names resolve via
+`Frame.TryResolveValue`, so a closure variable (D9) is watchable). Engine hookup is minimal: new
+`StopReason.DataBreakpoint`; `DataBreakpoints` + `DataBreakpointHit` (cleared on resume); `RunStepping`
+snapshots before a step and — **only when the innermost frame is unchanged** — diffs after. **The
+frame-identity gate mirrors the D7 change-highlight** (`_previousFrameId == frame.Id`) so a step-into/out
+(scope crossing) can't false-positive; **a cross-frame change on a callee's return is a documented boundary.**
+Purely client-side (like the D7 highlight it reuses) — **no server round-trip, no Firebird change, no
+live-fidelity for C1**. Additive (the snapshot block is gated on `Count > 0`). +6 `DebugEngineTests`.
+
+### Seam C2 — Run to next `SUSPEND` (Core)
+
+**Constraint (user + plan):** run-to-SUSPEND is a **new run mode**, not a special case of the loop, and its
+stop is the SUSPEND **event** — not a step-point property. Realized additively over the existing engine, with
+the same shape as Continue/Data-breakpoints:
+
+- New **`StepKind.RunToSuspend`** — runs full speed (calls execute in place, like Continue). In `StepPlanner`
+  it returns `false` (never a *movement* stop); the stop is decided in `DebugSession`, exactly like a
+  breakpoint / data breakpoint is (a runtime event, not `StepPlanner`'s concern).
+- `StopReason.Suspend` (already in the enum since D1, previously never set) is now the reason.
+- **Detection is a row-count delta.** Only `ExecutionStatus.Suspended` appends to `_emittedRows`, so
+  `RunStepping` captures `rowsBefore` at the top of each iteration and `suspended = _emittedRows.Count >
+  rowsBefore` after `ExecuteCurrent`. No new signal on `ExecuteCurrent`, no new field on the outcome — the
+  SUSPEND event is already fully expressed by the emitted-rows list. It pauses at the step point **after** the
+  SUSPEND (so the user inspects the row + frame, then resumes for the next row); with no further SUSPEND the
+  routine runs to completion (rows unchanged).
+- **Public API:** a dedicated `DebugSession.RunToSuspend()` method (mirrors `RunToCursor(int)`); `Step(kind)`
+  now rejects `RunToSuspend` alongside `RunToCursor`/`SetNext` (dedicated commands).
+- **Precedence:** the SUSPEND check sits right after the data-breakpoint check and before the breakpoint /
+  step-planner check — mirroring data-bp (both are "the step just executed produced an event" stops that win
+  over a line stop). Data-bp stays first, so a watched change on the same step remains the more specific
+  reason; the **same coincidence boundary** as data-bp applies (a breakpoint exactly on the post-SUSPEND step
+  point is not separately re-reported — its hit-count is not incremented for that arrival). A breakpoint
+  reached *before* a SUSPEND still stops normally (breakpoints are checked every step, as under Continue).
+
+Purely client-side and additive: only the `RunToSuspend` mode reacts, so every existing mode is byte-identical
+(a SUSPEND during Continue still just emits its row and keeps running — pinned by a test). **No server
+round-trip, no Firebird change, no live-fidelity for C2** (that is Seam D). +6 `DebugEngineTests` (single
+suspend + position; multi-suspend one-row-per-resume + run-to-completion on the SP_DBG_LOOP shape; no-suspend
+→ completion; breakpoint-before-suspend still stops; Continue does not stop on suspend; `Step(RunToSuspend)`
+throws).
+
+### D12 current state (end of Seam C2)
+
+- **Done:** Seam 0 (`211a629`), Seam A (`a8b160a`), Seam B (`f9beba7`), Seam C1 (`5561e10`), Seam C2 (this
+  session).
+- **Next: Seam D** — Firebird + Live Fidelity (sim==real for run-to-SUSPEND on `SP_DBG_LOOP`/`SP_DBG_CURSOR`,
+  plus no regression for break-on-exception / conditional / data breakpoints on the real engine), then **Seam
+  E** (UI: Breakpoints panel, condition/hit-count editing, break-on-exception toggle, data-breakpoint gesture,
+  Run-to-SUSPEND command + result grid over `EmittedRows`). D12 closes after Seam E + user QA.
+- Build 0/0; **160 debugger tests green** (`dotnet test --filter FullyQualifiedName~Debug`); the full suite
+  still hangs in this env (#94/#226) → run the debugger subset.

@@ -1361,6 +1361,115 @@ public class DebugEngineTests
         Assert.Null(s.DataBreakpointHit);
     }
 
+    // ── D12: Run to next SUSPEND (spec §9.8) ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void RunToSuspend_StopsAfterSuspend_PositionedAtNextStep()
+    {
+        // Run full speed until the SUSPEND emits a row, then pause at the step point AFTER it so the user can
+        // inspect the row + frame before asking for the next one.
+        const string sql = "begin a = 1; suspend; b = 2; end";
+        var exec = new FakeExecutor().Outcome(Off(sql, "suspend"), StatementOutcome.Suspended(Row("R", 42)));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.RunToSuspend();
+        Assert.Equal(DebugState.Paused, s.State);
+        Assert.Equal(StopReason.Suspend, s.StopReason);
+        Assert.Equal("b = 2;", Text(sql, s.CurrentStatement!)); // paused just AFTER the SUSPEND
+        Assert.Equal(42, Assert.Single(s.EmittedRows)["R"]);
+        Assert.Equal(new[] { Off(sql, "a = 1"), Off(sql, "suspend") }, exec.Executed); // b not yet run
+    }
+
+    [Fact]
+    public void RunToSuspend_MultipleSuspends_OneRowPerResume()
+    {
+        // A selectable-procedure loop (the SP_DBG_LOOP shape): each resume yields exactly one more row; when no
+        // further SUSPEND fires the routine runs to completion (the emitted rows are unchanged).
+        const string sql = "begin while (c) do begin acc = acc + 1; suspend; end end";
+        int whileAt = Off(sql, "while (c)");
+        int suspendAt = Off(sql, "suspend");
+        var exec = new FakeExecutor()
+            .Cond(whileAt, true, true, true, false)
+            .Outcome(suspendAt, StatementOutcome.Suspended(Row("ACC", 1)))
+            .Outcome(suspendAt, StatementOutcome.Suspended(Row("ACC", 2)))
+            .Outcome(suspendAt, StatementOutcome.Suspended(Row("ACC", 3)));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+
+        s.RunToSuspend();
+        Assert.Equal(StopReason.Suspend, s.StopReason);
+        Assert.Single(s.EmittedRows);
+
+        s.RunToSuspend();
+        Assert.Equal(StopReason.Suspend, s.StopReason);
+        Assert.Equal(2, s.EmittedRows.Count);
+
+        s.RunToSuspend();
+        Assert.Equal(StopReason.Suspend, s.StopReason);
+        Assert.Equal(3, s.EmittedRows.Count);
+
+        s.RunToSuspend(); // no 4th SUSPEND (header now false) → run to completion, rows unchanged
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Equal(3, s.EmittedRows.Count);
+        Assert.Equal(new object?[] { 1, 2, 3 }, s.EmittedRows.Select(r => r["ACC"]).ToArray());
+    }
+
+    [Fact]
+    public void RunToSuspend_NoSuspend_RunsToCompletion()
+    {
+        // A non-selectable body (no SUSPEND) has nothing to stop on — the run mode runs it to the end.
+        const string sql = "begin a = 1; b = 2; end";
+        var s = new DebugSession(Body(sql), new FakeExecutor());
+        s.Start();
+        s.RunToSuspend();
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Empty(s.EmittedRows);
+    }
+
+    [Fact]
+    public void RunToSuspend_BreakpointBeforeSuspend_StillStops()
+    {
+        // Breakpoints remain an additional stop condition during run-to-SUSPEND: a breakpoint reached before
+        // any SUSPEND wins (it is checked every step, exactly as under Continue).
+        const string sql = "begin a = 1; b = 2; suspend; end";
+        var exec = new FakeExecutor().Outcome(Off(sql, "suspend"), StatementOutcome.Suspended(Row("R", 1)));
+        var s = new DebugSession(Body(sql), exec);
+        s.Breakpoints.Add(Off(sql, "b = 2"));
+        s.Start();
+        s.RunToSuspend();
+        Assert.Equal(StopReason.Breakpoint, s.StopReason);
+        Assert.Equal("b = 2;", Text(sql, s.CurrentStatement!));
+        Assert.Empty(s.EmittedRows); // stopped before the SUSPEND ran
+    }
+
+    [Fact]
+    public void Continue_DoesNotStopOnSuspend_EmitsAndContinues()
+    {
+        // Additive proof: only RunToSuspend reacts to a SUSPEND. Under Continue a SUSPEND just emits its row
+        // and the run keeps going to completion (the pre-D12 behaviour is unchanged).
+        const string sql = "begin while (c) do begin suspend; end end";
+        int whileAt = Off(sql, "while (c)");
+        int suspendAt = Off(sql, "suspend");
+        var exec = new FakeExecutor()
+            .Cond(whileAt, true, true, false)
+            .Outcome(suspendAt, StatementOutcome.Suspended(Row("R", 1)))
+            .Outcome(suspendAt, StatementOutcome.Suspended(Row("R", 2)));
+        var s = new DebugSession(Body(sql), exec);
+        s.Start();
+        s.Step(StepKind.Continue);
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Equal(2, s.EmittedRows.Count); // both SUSPENDs emitted, never paused on
+    }
+
+    [Fact]
+    public void Step_RejectsRunToSuspend_UseTheDedicatedCommand()
+    {
+        const string sql = "begin suspend; end";
+        var s = new DebugSession(Body(sql), new FakeExecutor());
+        s.Start();
+        Assert.Throws<ArgumentException>(() => s.Step(StepKind.RunToSuspend));
+    }
+
     // ── D5: expression evaluation (Evaluate / Watches / Immediate — one engine, §9.5) ──────────────
 
     [Fact]

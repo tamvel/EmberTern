@@ -27,6 +27,10 @@ internal static class StepPlanner
             // Continue runs to completion; DebugSession adds breakpoints as an additional stop condition.
             StepKind.Continue => false,
 
+            // Run To Suspend runs full speed like Continue; its stop is the SUSPEND row-emitted event,
+            // detected in DebugSession (not a movement decision), never a step-point property.
+            StepKind.RunToSuspend => false,
+
             // Run To Cursor stops when the next step point is the target statement.
             StepKind.RunToCursor => targetOffset is int t && nextStep.Start == t,
 

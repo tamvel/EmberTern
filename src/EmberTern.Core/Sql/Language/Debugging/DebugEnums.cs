@@ -48,6 +48,13 @@ public enum StepKind
 
     /// <summary>Run until the session completes (or hits a breakpoint / an unhandled exception).</summary>
     Continue,
+
+    /// <summary>Run at full speed (calls execute in place, like Continue) until the next <c>SUSPEND</c>
+    /// emits a row — a selectable procedure's "give me the next row" (D12, spec §9.8). Stops with
+    /// <see cref="StopReason.Suspend"/> at the step point after the <c>SUSPEND</c>; breakpoints and data
+    /// breakpoints still apply as additional stop conditions, and with no further <c>SUSPEND</c> the routine
+    /// runs to completion. The result grid over <see cref="DebugSession.EmittedRows"/> is a UI concern.</summary>
+    RunToSuspend,
 }
 
 /// <summary>Why the session is currently paused (or ended).</summary>

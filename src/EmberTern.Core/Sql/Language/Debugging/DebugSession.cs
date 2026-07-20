@@ -204,9 +204,10 @@ public sealed class DebugSession
     /// <see cref="SetNextStatement"/> for the targeted commands.</summary>
     public void Step(StepKind kind)
     {
-        if (kind is StepKind.RunToCursor or StepKind.SetNext)
+        if (kind is StepKind.RunToCursor or StepKind.SetNext or StepKind.RunToSuspend)
         {
-            throw new ArgumentException("Use RunToCursor / SetNextStatement for targeted commands.", nameof(kind));
+            throw new ArgumentException(
+                "Use RunToCursor / SetNextStatement / RunToSuspend for their dedicated commands.", nameof(kind));
         }
         RunStepping(kind, targetOffset: null);
     }
@@ -214,6 +215,13 @@ public sealed class DebugSession
     /// <summary>Runs until reaching the step point that begins at <paramref name="targetOffset"/> (or the
     /// session completes / faults). Calls execute in place (no descent), like Continue.</summary>
     public void RunToCursor(int targetOffset) => RunStepping(StepKind.RunToCursor, targetOffset);
+
+    /// <summary>Runs at full speed (calls execute in place, like Continue) until the next <c>SUSPEND</c>
+    /// emits a row, then pauses at the step point after it (<see cref="StopReason.Suspend"/>) — a selectable
+    /// procedure's "give me the next row" (D12, spec §9.8). Resume it again for the following row; with no
+    /// further <c>SUSPEND</c> the routine runs to completion. Breakpoints / data breakpoints still apply.
+    /// The emitted rows accumulate in <see cref="EmittedRows"/>.</summary>
+    public void RunToSuspend() => RunStepping(StepKind.RunToSuspend, targetOffset: null);
 
     /// <summary>Moves the instruction pointer to the step point beginning at <paramref name="targetOffset"/>
     /// within the current frame, executing nothing in between. Returns false (leaving the session where it
@@ -310,6 +318,7 @@ public sealed class DebugSession
         {
             IReadOnlyDictionary<string, object?>? dataBefore = null; // watched values before this step (§9.8.4)
             int frameIdBefore = -1;
+            int rowsBefore = _emittedRows.Count; // to detect a SUSPEND emitted by this step (run-to-SUSPEND)
 
             if (_pendingRaise is { } pending)
             {
@@ -356,6 +365,8 @@ public sealed class DebugSession
                 }
             }
 
+            bool suspended = _emittedRows.Count > rowsBefore; // a SUSPEND emitted a row during this step
+
             var justExecuted = _currentStep; // the step ExecuteCurrent just ran (before we advance past it)
             _currentStep = AdvanceToNextStepPoint();
             if (_currentStep is null)
@@ -376,6 +387,21 @@ public sealed class DebugSession
                 _dataBreakpointHit = changed;
                 State = DebugState.Paused;
                 StopReason = StopReason.DataBreakpoint;
+                return;
+            }
+
+            // Run to next SUSPEND (§9.8): the run mode's target event. A SUSPEND emitted a row during the step
+            // just executed — pause at the next step point (so the user can inspect the row + frame, then resume
+            // for the following row). Placed right after the data-breakpoint check, mirroring it: both are "the
+            // step just executed produced an event" stops that win over a line/breakpoint stop, and both share
+            // the same coincidence boundary (a breakpoint exactly on the post-event step point is not separately
+            // reported here; data breakpoint stays first, so a watched change on the same step is the more
+            // specific reason). Only the RunToSuspend mode reacts — every other mode keeps the pre-C2 behaviour
+            // (a SUSPEND during Continue just emits its row and keeps running).
+            if (kind == StepKind.RunToSuspend && suspended)
+            {
+                State = DebugState.Paused;
+                StopReason = StopReason.Suspend;
                 return;
             }
 
