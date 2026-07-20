@@ -2751,11 +2751,48 @@ throws-when-not-in-a-loop; `Step` rejects the new kinds.
 `TreatWarningsAsErrors`); full suite **5013 tests green in one run** (4998 baseline + 15 D13); parser/AST/§0
 regression after the `BREAK` change **260 green, no regression**; smoke n/a (no UI change).
 
-### Current state — STOPPED after Seam A (2026-07-20)
+### Seam B — Live Fidelity (probe-only; sim == real AND stop-moment fidelity) (2026-07-20)
 
-- **Done:** Seam 0 (`1049c71`), Seam A (`3fd541e`).
-- **Not started:** **Seam B (Live Fidelity)** — extend `DebuggerFidelityProbe` (probe-only, **no production
-  code**) with cases over `SP_DBG_LOOP_NESTED` / `_LEAVE` / `_BREAK` / `_EXIT` for `RunToLoopExit` /
-  `RunToNextIteration`, proving **simulated == real Firebird**; then **Seam C** (toolbar + keyboard + gating on
-  `IsInsideLoop`, thin presentation) and **Seam D** (docs/close). **D13 is NOT complete — do not mark it
-  COMPLETE.** Next session begins at **Seam B**, stopping for review when done.
+**Probe-only — NO production code.** Both D13 commands are pure client-side stop policies over the interpreter
+that already drives the REAL `FirebirdDebugExecutor` (the D12 `RunToSuspend` template: `StepPlanner` false, the
+stop is a loop-lifecycle event in `RunStepping`'s tail), so every value and the loop condition / `SUSPEND` /
+`LEAVE` / `BREAK` / `EXIT` that ends each stop is computed by Firebird. Seam B proves that on FB5 by extending
+`DebuggerFidelityProbe` with **+8 cases (27–34)** over the four Seam-0 workhorses × both modes — asserting not
+only the emitted-row set but the **logical moment** each fast-forward lands (statement, in-loop membership,
+rows-so-far, live variable state):
+
+- **27 `SP_DBG_LOOP_NESTED(2)` / Next Iteration** — from inside the INNER `J` loop, three `RunToNextIteration`s
+  walk inner iteration 1 → 2, then the inner loop **exits to the outer header** (row `(1,2,23)` emitted); the
+  innermost-loop capture is proven (Next Iteration advances `J`, not the outer `I`). Full set `== real`.
+- **28 `SP_DBG_LOOP_NESTED(2)` / Continue Until Loop Exit** — `RunToLoopExit` on the inner loop runs BOTH inner
+  iterations (`(1,1,11),(1,2,23)`) and lands at the OUTER loop header (the enclosing body), not the routine end.
+- **29/31 `_LEAVE` / `_BREAK` — Continue Until Loop Exit** — the loop is left via `LEAVE` (and its synonym
+  `BREAK`) at `R=3`; the stop lands at the post-loop `DONE = 1` (`R=3`, no row yet), then completes with the
+  single real row `(3,1)`. Proves `BREAK ≡ unlabeled LEAVE`.
+- **30/32 `_LEAVE` / `_BREAK` — Next Iteration** — stepping pass-by-pass, the 4th `RunToNextIteration` hits the
+  `LEAVE`/`BREAK` pass and **falls through to the same loop-exit landing** (`DONE = 1`, `R=3`); rows `== real`.
+- **33 `_EXIT` / Continue Until Loop Exit** — `EXIT` (at `R=3`) clears the frame's control stack → the routine
+  ends BEFORE the post-loop `SUSPEND`, so the fast-forward **completes the session** (never pauses after the
+  loop) with **0 rows == real**.
+- **34 `_EXIT` / Next Iteration** — walking the passes reaches the `EXIT` pass → the session completes with 0
+  rows `== real`.
+
+**A probe lesson recorded (not a code bug):** a `WhileStatement`'s span covers the WHOLE loop (header + body),
+so the outer while's text also contains the inner `"J < N"` — text matching cannot tell nested loops apart. The
+probe navigates to the inner loop by **variable state** (`J` is assigned only just before the inner loop, so
+"inside a loop AND `J` initialised" first holds at the inner header) and identifies a loop header with
+`StartsWith("WHILE (I < N)")` (the span starts at the `WHILE` keyword). This is a test-authoring nuance, not an
+engine fact — the interpreter's loop capture is by activation identity, never text.
+
+**Metrics:** probe builds 0/0; **`DebuggerFidelityProbe` 34/34 ALL PASS** (85 assertions) on FB5 — all 26 prior
+D8–D12 cases still green, +8 D13. Full solution build **0/0**. No production code touched ⇒ the debugger test
+suite is unchanged from the Seam-A baseline (5013 green). The incidental `Lab/EmberTern_Lab.fdb` header churn
+from attaching (Firebird bumps the on-disk transaction counter even though every debug/real transaction rolls
+back — no schema or data change) was restored to the committed file.
+
+### Current state — STOPPED after Seam B (2026-07-20)
+
+- **Done:** Seam 0 (`1049c71`), Seam A (`3fd541e`), **Seam B (Live Fidelity, probe-only)**.
+- **Not started:** **Seam C** (UI — toolbar + keyboard commands gated on `IsInsideLoop`, thin presentation over
+  `RunToLoopExit()` / `RunToNextIteration()`) and **Seam D** (docs/close). **D13 is NOT complete — do not mark
+  it COMPLETE.** Next session begins at **Seam C**, stopping for review when done.

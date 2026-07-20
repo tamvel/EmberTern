@@ -280,8 +280,8 @@ noted.
   Fidelity (`DebuggerFidelityProbe` 26/26 sim==real on FB5)** is the proof each mechanism matches Firebird's real
   values AND stop-moment. Build 0/0; full suite **4998 green**; user QA confirmed 2026-07-20 → **D12 formally
   closed.** D14 (Step-back) remains **optional — build only if real usage asks.**
-  **D13 (Fast Forward — loop fast-forward) — IN PROGRESS; Seam 0 + Seam A DONE, STOPPED after Seam A for review
-  (2026-07-20). NOT complete.** Scope (accepted, deliberately small): exactly **Continue Until Loop Exit** +
+  **D13 (Fast Forward — loop fast-forward) — IN PROGRESS; Seam 0 + Seam A + Seam B DONE, STOPPED after Seam B for
+  review (2026-07-20). NOT complete.** Scope (accepted, deliberately small): exactly **Continue Until Loop Exit** +
   **Next Iteration** — nothing else (Skip Current Iteration rejected = a control jump / new path; Continue Until
   RETURN deferred; Continue Until Exception / Variable-Changes / END subsumed by D12). **Hard constraint: no new
   execution path — Fast Forward only *controls* the existing `DebugSession`.** Both are pure stop policies on the
@@ -297,10 +297,16 @@ noted.
   `LEAVE`, and `BREAK` which the parser now maps to `PsqlLeafKind.Leave`, → `Frame.LeaveInnermostLoop`), plus a
   minimal `LoopActivation` base (only the iteration counter). **`LEAVE <label>` to an outer loop = §F boundary**
   (labels are not in the AST). Build 0/0; full suite **5013 green**; parser/AST/§0 after the `BREAK` change no
-  regression. **Next session starts at D13 — Seam B (Live Fidelity): probe-only, no production code — extend
-  `DebuggerFidelityProbe` (cases over the 4 lab routines × both run modes) to prove sim == real on FB5, then
-  stop for review.** Then Seam C (UI) + Seam D (docs/close).
-  D11 narrative + full D12 narrative + D13 (Seam 0/A) narrative:
+  regression. **Seam B (Live Fidelity — probe-only, NO production code):** extended `DebuggerFidelityProbe`
+  **+8 cases (27–34)** over the 4 lab workhorses × both run modes, proving **sim == real on FB5** (values AND the
+  logical stop-moment — statement, in-loop membership, rows-so-far, live vars): NESTED innermost-loop capture
+  (Next Iteration advances inner `J`; Loop Exit lands in the outer body), `LEAVE`/`BREAK` exit to the post-loop
+  statement (`BREAK ≡ LEAVE`), `EXIT` completes the session with 0 rows. **`DebuggerFidelityProbe` 34/34 ALL
+  PASS** (all 26 prior D8–D12 cases still green); probe builds 0/0; no production code ⇒ test suite unchanged
+  (5013 green). **Next session starts at D13 — Seam C (UI): toolbar + keyboard commands gated on `IsInsideLoop`,
+  thin presentation over `RunToLoopExit()`/`RunToNextIteration()`.** Then Seam D (docs/close). **D13 NOT
+  complete — do not mark COMPLETE.**
+  D11 narrative + full D12 narrative + D13 (Seam 0/A/B) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
   implementation spec). Execution plan: [firebird-debugger-implementation-plan.md](docs/design/firebird-debugger-implementation-plan.md)

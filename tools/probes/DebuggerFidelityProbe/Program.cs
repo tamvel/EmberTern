@@ -19,7 +19,11 @@ using FirebirdSql.Data.FirebirdClient;
 // DECLARE FUNCTION exercised server-side. D9 seam b Part 1: a local procedure that reads+writes an OUTER
 // variable (SP_DBG_CLOSURE → BUMP) — closure capture over the declaring frame (FB5), stepped INTO. D9 seam b
 // Part 2: the transitive read/write-set fixpoint — a local FUNCTION / PROCEDURE that reads+writes an outer
-// variable NOT named at the call site (SP_DBG_CLOSURE_FN / SP_DBG_CLOSURE_OVER), stepped OVER. The authority is
+// variable NOT named at the call site (SP_DBG_CLOSURE_FN / SP_DBG_CLOSURE_OVER), stepped OVER. D10: triggers.
+// D11: packages. D12 Seam D: advanced breakpoints (run-to-SUSPEND / conditional / hit-count / data / break-on-
+// exception) — the SEQUENCE of stops. D13 Seam B: fast forward — Continue Until Loop Exit (RunToLoopExit) /
+// Next Iteration (RunToNextIteration) over the four loop workhorses (SP_DBG_LOOP_NESTED/_LEAVE/_BREAK/_EXIT),
+// proving the loop-lifecycle stop lands at the same logical moment as real execution. The authority is
 // the engine, not us (Developer Contract #12: fidelity is proven against real execution).
 //
 //   $env:ET_LAB_PWD = "<local dev SYSDBA password>"
@@ -800,6 +804,211 @@ try
     if (offGuard == realGuard)
         Pass("break-OFF yields the identical RESULT — a pause, not a second handler (one routing path)", offGuard!);
     else Fail("break-on-exception one-path", $"off {offGuard} vs real {realGuard}");
+
+    // ══ Stage X / D13 — FAST FORWARD (loop fast-forward), Seam B: sim == real AND stop-MOMENT fidelity ══
+    // The two D13 commands — Continue Until Loop Exit (RunToLoopExit) and Next Iteration (RunToNextIteration) —
+    // are pure client-side stop POLICIES over the interpreter that already drives the REAL executor (the D12
+    // RunToSuspend pattern: StepPlanner returns false, the stop is a loop-lifecycle EVENT in RunStepping's tail).
+    // So every value and the loop condition / SUSPEND / LEAVE / BREAK / EXIT that ends each stop is computed by
+    // Firebird — these cases prove the debugger pauses at the SAME logical moment (and the emitted rows are the
+    // engine's), across the four Seam-0 loop workhorses × both modes. Probe-only: NO production code.
+
+    // Navigate a freshly-started session Into the FIRST enclosing loop (records nothing — just reaches the loop).
+    static void EnterLoop(DebugSession d)
+    {
+        int g = 0;
+        while (d.State == DebugState.Paused && !d.IsInsideLoop)
+        {
+            d.Step(StepKind.Into);
+            if (++g > 200) throw new Exception("no loop reached while navigating Into");
+        }
+    }
+    // The statement the IP is paused at (the next to execute), trimmed — used to prove WHERE a fast-forward landed.
+    static string StmtOf(DebugSession d, string src) =>
+        d.CurrentStatement is { } cs ? src.Substring(cs.Start, cs.Length).Trim() : "<none>";
+    static int? VarInt(DebugSession d, string name) =>
+        d.CurrentFrame is { } f && f.TryResolveValue(name, out var v) ? AsInt(v) : null;
+    // Exact per-column, type-agnostic comparison of the SIMULATED emitted rows against REAL selectable-proc rows.
+    static bool RowsEqual(IReadOnlyList<IReadOnlyDictionary<string, object?>> sim,
+        List<Dictionary<string, object?>> real, string[] cols) =>
+        sim.Count == real.Count &&
+        Enumerable.Range(0, real.Count).All(i => cols.All(c => Show(sim[i][c]) == Show(real[i][c])));
+    static string RowsShow(IReadOnlyList<IReadOnlyDictionary<string, object?>> rows, string[] cols) =>
+        string.Join(" ", rows.Select(r => "(" + string.Join(",", cols.Select(c => Show(r[c]))) + ")"));
+
+    // Build + start a debug session over a standalone loop routine and hand the LIVE session (+ its source) to a
+    // caller-supplied drive delegate, which does the fast-forwarding and the assertions inline (full control — the
+    // D13 modes land in different places per routine, so a generic runner would obscure the moment proof). Setup/
+    // teardown mirror SimulateAsync; the session drives the REAL FirebirdDebugExecutor.
+    async Task RunLoopScenarioAsync(string routine, Dictionary<string, object?> rootValues,
+        Action<DebugSession, string> drive)
+    {
+        string source = await reader.FetchProcedureSourceAsync(new MetadataObject(routine, MetadataObjectKind.Procedure));
+        var model = SemanticModel.Build(SqlParser.Parse(source).Root);
+        var body = model.Syntax.Statements.OfType<DdlStatement>().First(d => d.Body is not null).Body!;
+        var session = await service.CreateDebugSessionAsync(DebugIsolation.ReadCommitted);
+        try
+        {
+            var executor = await FirebirdDebugExecutor.CreateAsync(session, routine, source, body, model, fallback);
+            var dbg = new DebugSession(body, executor, routine, rootValues, source, model);
+            dbg.Start();
+            drive(dbg, source);
+        }
+        finally { await session.DisposeAsync(); }
+    }
+
+    // ── 27. SP_DBG_LOOP_NESTED(2) — Next Iteration captures the INNERMOST (inner J) loop ──
+    Head("27. SP_DBG_LOOP_NESTED(2) — Next Iteration advances the INNER J loop; the last one exits to the outer body");
+    var nestedReal = await RealRowsAsync("SELECT OI, OJ, ACC FROM SP_DBG_LOOP_NESTED(2) ORDER BY OI, OJ");
+    await RunLoopScenarioAsync("SP_DBG_LOOP_NESTED", new(StringComparer.OrdinalIgnoreCase) { ["N"] = 2 }, (dbg, src) =>
+    {
+        // Step Into until paused at the INNER loop header. A WhileStatement's span covers the WHOLE loop (header
+        // + body), so the outer while's text also contains "J < N" — text alone can't tell the loops apart. The
+        // unambiguous signal is variable state: J is assigned (J = 0) only just before the inner loop, so
+        // "inside a loop AND J is initialised" first holds exactly at the inner header.
+        int g = 0;
+        while (dbg.State == DebugState.Paused && !(dbg.IsInsideLoop && VarInt(dbg, "J") is not null))
+        {
+            dbg.Step(StepKind.Into);
+            if (++g > 200) throw new Exception("inner loop not reached");
+        }
+        // R1: enter inner iteration 1 → stop at the inner body's first statement (J not yet incremented), no row yet.
+        dbg.RunToNextIteration();
+        if (dbg.StopReason == StopReason.Step && dbg.IsInsideLoop && dbg.EmittedRows.Count == 0
+            && StmtOf(dbg, src).StartsWith("J = J + 1", StringComparison.Ordinal) && VarInt(dbg, "I") == 1)
+            Pass("Next Iteration #1 enters the inner body (I=1), no SUSPEND yet");
+        else Fail("nested next-iter #1", $"{dbg.StopReason}/{StmtOf(dbg, src)}/rows={dbg.EmittedRows.Count}");
+        // R2: run iteration 1 (emits (1,1,11)), enter inner iteration 2 → one row, still in the inner loop.
+        dbg.RunToNextIteration();
+        if (dbg.StopReason == StopReason.Step && dbg.IsInsideLoop && dbg.EmittedRows.Count == 1
+            && Show(dbg.EmittedRows[0]["OI"]) == Show(nestedReal[0]["OI"])
+            && Show(dbg.EmittedRows[0]["OJ"]) == Show(nestedReal[0]["OJ"])
+            && Show(dbg.EmittedRows[0]["ACC"]) == Show(nestedReal[0]["ACC"]))
+            Pass("Next Iteration #2: 1 row emitted == real (1,1,11), advanced to inner iteration 2");
+        else Fail("nested next-iter #2", $"{dbg.StopReason}/rows={dbg.EmittedRows.Count}/{RowsShow(dbg.EmittedRows, new[] { "OI", "OJ", "ACC" })}");
+        // R3: run inner iteration 2 (emits (1,2,23)); the inner loop then EXITS → lands at the OUTER loop header.
+        // The span starts at the WHILE keyword, so StartsWith("WHILE (I < N)") uniquely identifies the outer header.
+        dbg.RunToNextIteration();
+        if (dbg.StopReason == StopReason.Step && dbg.IsInsideLoop
+            && StmtOf(dbg, src).StartsWith("WHILE (I < N)", StringComparison.Ordinal)
+            && dbg.EmittedRows.Count == 2
+            && Show(dbg.EmittedRows[1]["ACC"]) == Show(nestedReal[1]["ACC"]))
+            Pass("Next Iteration #3: inner loop exits to the OUTER header (row (1,2,23) emitted)");
+        else Fail("nested next-iter #3", $"{dbg.StopReason}/{StmtOf(dbg, src)}/rows={dbg.EmittedRows.Count}");
+        // Finish the routine and prove the full emitted set == real.
+        if (dbg.State == DebugState.Paused) dbg.Step(StepKind.Continue);
+        if (dbg.State == DebugState.Completed && RowsEqual(dbg.EmittedRows, nestedReal, new[] { "OI", "OJ", "ACC" }))
+            Pass("SIMULATED rows == REAL", RowsShow(dbg.EmittedRows, new[] { "OI", "OJ", "ACC" }));
+        else Fail("nested next-iter rows", $"{dbg.State} / {RowsShow(dbg.EmittedRows, new[] { "OI", "OJ", "ACC" })}");
+    });
+
+    // ── 28. SP_DBG_LOOP_NESTED(2) — Continue Until Loop Exit on the INNER loop lands in the outer body ──
+    Head("28. SP_DBG_LOOP_NESTED(2) — Continue Until Loop Exit on the inner loop runs it out, lands at the outer header");
+    await RunLoopScenarioAsync("SP_DBG_LOOP_NESTED", new(StringComparer.OrdinalIgnoreCase) { ["N"] = 2 }, (dbg, src) =>
+    {
+        int g = 0;
+        while (dbg.State == DebugState.Paused && !(dbg.IsInsideLoop && VarInt(dbg, "J") is not null))
+        {
+            dbg.Step(StepKind.Into);
+            if (++g > 200) throw new Exception("inner loop not reached");
+        }
+        // From inside the inner loop (I=1): Loop Exit runs BOTH inner iterations, emits (1,1,11),(1,2,23), then
+        // the inner activation leaves the stack and control lands at the OUTER loop header (the enclosing body).
+        dbg.RunToLoopExit();
+        if (dbg.StopReason == StopReason.Step && dbg.IsInsideLoop
+            && StmtOf(dbg, src).StartsWith("WHILE (I < N)", StringComparison.Ordinal)
+            && dbg.EmittedRows.Count == 2 && dbg.State == DebugState.Paused
+            && RowsEqual(new[] { dbg.EmittedRows[0], dbg.EmittedRows[1] },
+                         nestedReal.Take(2).ToList(), new[] { "OI", "OJ", "ACC" }))
+            Pass("inner loop exit lands at the outer header; 2 rows == real (1,1,11),(1,2,23)");
+        else Fail("nested loop-exit", $"{dbg.StopReason}/{StmtOf(dbg, src)}/rows={dbg.EmittedRows.Count}");
+        if (dbg.State == DebugState.Paused) dbg.Step(StepKind.Continue);
+        if (dbg.State == DebugState.Completed && RowsEqual(dbg.EmittedRows, nestedReal, new[] { "OI", "OJ", "ACC" }))
+            Pass("SIMULATED rows == REAL", RowsShow(dbg.EmittedRows, new[] { "OI", "OJ", "ACC" }));
+        else Fail("nested loop-exit rows", $"{dbg.State} / {RowsShow(dbg.EmittedRows, new[] { "OI", "OJ", "ACC" })}");
+    });
+
+    // ── 29 & 30 — LEAVE and its synonym BREAK: identical control flow (proves BREAK ≡ unlabeled LEAVE) ──
+    // Shared driver: Continue Until Loop Exit stops at the post-loop 'DONE = 1' (the loop left via LEAVE/BREAK at
+    // R=3); Next Iteration steps iteration-by-iteration and, when the LEAVE/BREAK fires mid-iteration, falls
+    // through to the same loop-exit landing. Both then complete with the single real row (3,1).
+    async Task LeaveLikeAsync(string routine, int exitNo, int nextNo)
+    {
+        var real = await RealRowsAsync($"SELECT R, DONE FROM {routine}(5)"); // expect one row (3,1)
+
+        Head($"{exitNo}. {routine}(5) — Continue Until Loop Exit: LEAVE/BREAK exits to the post-loop statement (sim == real)");
+        await RunLoopScenarioAsync(routine, new(StringComparer.OrdinalIgnoreCase) { ["N"] = 5 }, (dbg, src) =>
+        {
+            EnterLoop(dbg);
+            dbg.RunToLoopExit();
+            if (dbg.State == DebugState.Paused && !dbg.IsInsideLoop && StmtOf(dbg, src).Contains("DONE = 1")
+                && VarInt(dbg, "R") == 3 && dbg.EmittedRows.Count == 0)
+                Pass($"{routine}: loop-exit lands at 'DONE = 1' (R=3, no row yet — the loop left via LEAVE/BREAK)");
+            else Fail($"{routine} loop-exit landing",
+                $"{dbg.State}/{StmtOf(dbg, src)}/R={VarInt(dbg, "R")}/rows={dbg.EmittedRows.Count}");
+            if (dbg.State == DebugState.Paused) dbg.Step(StepKind.Continue);
+            if (dbg.State == DebugState.Completed && RowsEqual(dbg.EmittedRows, real, new[] { "R", "DONE" }))
+                Pass($"{routine}: SIMULATED rows == REAL (loop-exit)", RowsShow(dbg.EmittedRows, new[] { "R", "DONE" }));
+            else Fail($"{routine} loop-exit rows", $"{dbg.State} / {RowsShow(dbg.EmittedRows, new[] { "R", "DONE" })}");
+        });
+
+        Head($"{nextNo}. {routine}(5) — Next Iteration steps each pass; the LEAVE/BREAK pass falls to loop-exit (sim == real)");
+        await RunLoopScenarioAsync(routine, new(StringComparer.OrdinalIgnoreCase) { ["N"] = 5 }, (dbg, src) =>
+        {
+            EnterLoop(dbg);
+            int passes = 0, g = 0;
+            while (dbg.State == DebugState.Paused && dbg.IsInsideLoop)
+            {
+                dbg.RunToNextIteration();
+                passes++;
+                if (++g > 50) throw new Exception("runaway next-iteration");
+            }
+            // After 3 in-loop iterations the 4th Next Iteration hits R=3 → LEAVE/BREAK → leaves the loop, landing
+            // at the post-loop 'DONE = 1'. (R1 enters iter1 from the header, so 4 total commands leave the loop.)
+            if (dbg.State == DebugState.Paused && !dbg.IsInsideLoop && StmtOf(dbg, src).Contains("DONE = 1")
+                && VarInt(dbg, "R") == 3 && passes == 4)
+                Pass($"{routine}: Next Iteration walked to the LEAVE/BREAK pass then exited the loop (4 passes, R=3)");
+            else Fail($"{routine} next-iteration exit",
+                $"{dbg.State}/{StmtOf(dbg, src)}/R={VarInt(dbg, "R")}/passes={passes}");
+            if (dbg.State == DebugState.Paused) dbg.Step(StepKind.Continue);
+            if (dbg.State == DebugState.Completed && RowsEqual(dbg.EmittedRows, real, new[] { "R", "DONE" }))
+                Pass($"{routine}: SIMULATED rows == REAL (next-iteration)", RowsShow(dbg.EmittedRows, new[] { "R", "DONE" }));
+            else Fail($"{routine} next-iteration rows", $"{dbg.State} / {RowsShow(dbg.EmittedRows, new[] { "R", "DONE" })}");
+        });
+    }
+    await LeaveLikeAsync("SP_DBG_LOOP_LEAVE", 29, 30);
+    await LeaveLikeAsync("SP_DBG_LOOP_BREAK", 31, 32);
+
+    // ── 33. SP_DBG_LOOP_EXIT(5) — Continue Until Loop Exit: EXIT ends the whole routine → session completes ──
+    Head("33. SP_DBG_LOOP_EXIT(5) — Continue Until Loop Exit: EXIT terminates the frame → session completes, 0 rows (sim == real)");
+    var exitReal = await RealRowsAsync("SELECT R, DONE FROM SP_DBG_LOOP_EXIT(5)"); // expect NO rows
+    await RunLoopScenarioAsync("SP_DBG_LOOP_EXIT", new(StringComparer.OrdinalIgnoreCase) { ["N"] = 5 }, (dbg, src) =>
+    {
+        EnterLoop(dbg);
+        dbg.RunToLoopExit();
+        // EXIT (at R=3) clears the frame's control stack → the routine ends BEFORE the post-loop SUSPEND, so the
+        // fast-forward completes the session (never pauses after the loop) with zero emitted rows.
+        if (dbg.State == DebugState.Completed && dbg.EmittedRows.Count == 0 && exitReal.Count == 0)
+            Pass("EXIT: loop-exit completes the session with 0 rows == real (EXIT ended the frame, SUSPEND never ran)");
+        else Fail("EXIT loop-exit", $"{dbg.State}/rows={dbg.EmittedRows.Count} (real {exitReal.Count})");
+    });
+
+    // ── 34. SP_DBG_LOOP_EXIT(5) — Next Iteration: walking the passes reaches EXIT → session completes ──
+    Head("34. SP_DBG_LOOP_EXIT(5) — Next Iteration reaches the EXIT pass → session completes with 0 rows (sim == real)");
+    await RunLoopScenarioAsync("SP_DBG_LOOP_EXIT", new(StringComparer.OrdinalIgnoreCase) { ["N"] = 5 }, (dbg, src) =>
+    {
+        EnterLoop(dbg);
+        int passes = 0, g = 0;
+        while (dbg.State == DebugState.Paused && dbg.IsInsideLoop)
+        {
+            dbg.RunToNextIteration();
+            passes++;
+            if (++g > 50) throw new Exception("runaway next-iteration");
+        }
+        if (dbg.State == DebugState.Completed && dbg.EmittedRows.Count == 0 && exitReal.Count == 0)
+            Pass($"EXIT: Next Iteration hit the EXIT pass → completed, 0 rows == real ({passes} passes)");
+        else Fail("EXIT next-iteration", $"{dbg.State}/rows={dbg.EmittedRows.Count}/passes={passes}");
+    });
 }
 catch (Exception ex)
 {
