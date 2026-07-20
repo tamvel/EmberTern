@@ -537,6 +537,32 @@ BEGIN
   SUSPEND;
 END^
 
+/* D12 (Advanced breakpoints): the deterministic D12 workhorse — a counting WHILE loop, one SUSPEND per
+   iteration, with a running accumulator that changes every iteration. Pure arithmetic (no row-data
+   dependency), so the iteration count is EXACTLY N — which the row-driven cursor procedures cannot promise.
+   One routine exercises four of the five D12 modes deterministically:
+     - Run to next SUSPEND: emits exactly N rows, one per iteration.
+     - Hit-count breakpoints: a breakpoint on any loop-body step is hit exactly N times (enables the
+       "break on the Nth hit" / "every Nth hit" policies that 2 iterations cannot).
+     - Conditional breakpoints: condition on the clean integer counter, e.g. IDX = 3 (stops once).
+     - Data breakpoints: ACC (and I / IDX) change on every iteration.
+   Selectable (SUSPEND). SP_DBG_LOOP(5) => (1,5),(2,15),(3,30),(4,50),(5,75); ACC(i) = ACC(i-1) + i*5. */
+CREATE PROCEDURE SP_DBG_LOOP(N INTEGER)
+RETURNS (IDX INTEGER, ACC INTEGER)
+AS
+  DECLARE VARIABLE I INTEGER;
+BEGIN
+  I = 0;
+  ACC = 0;
+  WHILE (I < N) DO
+  BEGIN
+    I = I + 1;
+    ACC = ACC + I * 5;
+    IDX = I;
+    SUSPEND;
+  END
+END^
+
 SET TERM ; ^
 
 /* ---------- Triggers (PSQL) ----------------------------------------
