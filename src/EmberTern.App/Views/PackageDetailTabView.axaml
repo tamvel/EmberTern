@@ -78,6 +78,16 @@
                 <Border HorizontalAlignment="Stretch"
                         Background="Transparent"
                         DoubleTapped="OnMemberNodeDoubleTapped">
+                  <!-- Debug entry point (Stage X / D11 seam C) — launch a package PROCEDURE member as a debug
+                       root. Reuses the sidebar's "Debug procedure…" label + the ONE launch path; visible only
+                       for procedure members (a package function-as-root is out of scope). -->
+                  <Border.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
+                                Click="OnMemberDebugClick"
+                                IsVisible="{Binding IsProcedure}" />
+                    </ContextMenu>
+                  </Border.ContextMenu>
                   <StackPanel Orientation="Horizontal" Spacing="5">
                     <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
                                       Width="15" Height="15"

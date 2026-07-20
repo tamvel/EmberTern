@@ -147,6 +147,20 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
     /// caret + selection in the matching editor and brings it into view.</summary>
     public event Action<PackageMemberLocation>? NavigateToMemberRequested;
 
+    /// <summary>Raised when the user picks "Debug procedure…" on a package PROCEDURE member (Stage X / D11
+    /// seam C) — carries the member name; the owner launches it as a debug ROOT via the ONE launch path
+    /// (<c>MainWindowViewModel.OpenDebuggerForPackageMember</c>). Mirrors the sidebar's
+    /// <c>DebugProcedureRequested</c>. This VM only signals intent — the debugger architecture is untouched.</summary>
+    public event Action<string>? DebugMemberRequested;
+
+    /// <summary>Signals a debug request for a package member. Only PROCEDURE members are debuggable (a package
+    /// function-as-root is out of scope, §F) — a non-procedure / null member is a no-op.</summary>
+    public void RequestDebugMember(PackageMember? member)
+    {
+        if (member is null || member.Kind != PackageMemberKind.Procedure) return;
+        DebugMemberRequested?.Invoke(member.Name);
+    }
+
     /// <summary>Navigates to a member's declaration/implementation: prefers the
     /// body (where you'd edit it), falling back to the header. No-op when the token
     /// can't be located in either source.</summary>
@@ -593,4 +607,7 @@ public sealed class PackageMemberItemNode
     public string DisplayName => Member.Name;
     public string IconGeometryKey { get; init; } = string.Empty;
     public string IconResourceKey { get; init; } = string.Empty;
+    /// <summary>True for a PROCEDURE member — gates the "Debug procedure…" context-menu item (D11 seam C).
+    /// A package function is not launchable as a debug root (§F).</summary>
+    public bool IsProcedure => Member?.Kind == PackageMemberKind.Procedure;
 }

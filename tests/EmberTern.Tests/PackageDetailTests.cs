@@ -320,6 +320,49 @@ public class PackageDetailTests
         Assert.Equal(PackageDetailTabViewModel.BodySubTabIndex, vm.ActiveSubTabIndex);
     }
 
+    // ─── Debug member entry point (D11 seam C) ─────────────────────────────
+
+    [Fact] // a PROCEDURE member raises DebugMemberRequested with its name
+    public void RequestDebugMember_Procedure_RaisesWithName()
+    {
+        var vm = new PackageDetailTabViewModel("PKG_DBG");
+        string? raised = null;
+        vm.DebugMemberRequested += name => raised = name;
+
+        vm.RequestDebugMember(new PackageMember("PUB_RUN", PackageMemberKind.Procedure));
+
+        Assert.Equal("PUB_RUN", raised);
+    }
+
+    [Fact] // a FUNCTION member is not launchable as a debug root (§F) → no-op
+    public void RequestDebugMember_Function_IsNoOp()
+    {
+        var vm = new PackageDetailTabViewModel("PKG_DBG");
+        var raised = false;
+        vm.DebugMemberRequested += _ => raised = true;
+
+        vm.RequestDebugMember(new PackageMember("ORDER_TOTAL", PackageMemberKind.Function));
+        vm.RequestDebugMember(null);
+
+        Assert.False(raised);
+    }
+
+    [Fact] // the context-menu visibility gate: only procedure member nodes offer Debug
+    public void MemberNode_IsProcedure_GatesDebug()
+    {
+        var vm = new PackageDetailTabViewModel("PKG_DBG");
+        vm.SetMembers(new[]
+        {
+            new PackageMember("ORDER_TOTAL", PackageMemberKind.Function),
+            new PackageMember("PUB_RUN", PackageMemberKind.Procedure),
+        });
+
+        var func = vm.MemberGroups.Single(g => g.Header.StartsWith("Functions", StringComparison.Ordinal)).Children.Single();
+        var proc = vm.MemberGroups.Single(g => g.Header.StartsWith("Procedures", StringComparison.Ordinal)).Children.Single();
+        Assert.False(func.IsProcedure);
+        Assert.True(proc.IsProcedure);
+    }
+
     // ─── TryParsePackageName (New flow reopen-by-name) ─────────────────────
 
     [Theory]

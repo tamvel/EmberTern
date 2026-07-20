@@ -243,6 +243,18 @@ public partial class PackageDetailTabView : UserControl
         }
     }
 
+    // "Debug procedure…" on a package member (D11 seam C) — the MenuItem inherits the member node as its
+    // DataContext from the ContextMenu's placement target. Mirrors the double-click handler; the VM raises the
+    // intent and the owner launches via the one debug-launch path.
+    private void OnMemberDebugClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: PackageMemberItemNode node } && _currentVm is not null)
+        {
+            _currentVm.RequestDebugMember(node.Member);
+            e.Handled = true;
+        }
+    }
+
     // The VM already switched ActiveSubTabIndex to the right tab; post the select so the
     // target editor is realized after the tab switch before we move the caret.
     private void OnNavigateToMember(PackageMemberLocation loc)

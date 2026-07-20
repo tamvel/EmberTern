@@ -3824,6 +3824,8 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.DeleteRequested += OnPackageDeleteRequested;
         detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
+        // D11 seam C — "Debug procedure…" on a package member launches it as a debug root via the one path.
+        detail.DebugMemberRequested += memberName => OpenDebuggerForPackageMember(detail.PackageName, memberName);
         return detail;
     }
 
