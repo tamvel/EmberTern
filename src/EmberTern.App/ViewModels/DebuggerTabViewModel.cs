@@ -414,6 +414,8 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     [NotifyCanExecuteChangedFor(nameof(StepOverCommand))]
     [NotifyCanExecuteChangedFor(nameof(StepOutCommand))]
     [NotifyCanExecuteChangedFor(nameof(RunToSuspendCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunToLoopExitCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunToNextIterationCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(RestartCommand))]
     [NotifyCanExecuteChangedFor(nameof(EvaluateImmediateCommand))]
@@ -700,6 +702,24 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// the Results grid. A non-selectable routine simply runs to completion. Pure delegation to the engine.</summary>
     [RelayCommand(CanExecute = nameof(CanStep))]
     private Task RunToSuspendAsync() => RunStepAsync(s => s.RunToSuspend());
+
+    // Loop fast-forward (D13) — enabled only while paused INSIDE a loop (the engine's own gate,
+    // DebugSession.IsInsideLoop). Both commands are pure delegation to the engine's stop policies; no business
+    // logic lives here. Re-evaluated on every Phase change (each step cycles Busy→Paused), so the buttons
+    // enable/disable as stepping enters and leaves loops.
+    private bool CanFastForward => Phase == DebuggerPhase.Paused && Session is { IsInsideLoop: true };
+
+    /// <summary>Continue Until Loop Exit (D13): runs full speed until the innermost enclosing loop is left by any
+    /// path (condition false / cursor exhausted / <c>LEAVE</c>/<c>BREAK</c>/<c>EXIT</c>), then pauses just after
+    /// it (or completes if the loop was the routine's last action). Pure delegation to the engine.</summary>
+    [RelayCommand(CanExecute = nameof(CanFastForward))]
+    private Task RunToLoopExitAsync() => RunStepAsync(s => s.RunToLoopExit());
+
+    /// <summary>Next Iteration (D13): runs full speed until the innermost enclosing loop begins its next
+    /// iteration, then pauses at that iteration's first step point; if the loop exits first it pauses after the
+    /// loop, like Continue Until Loop Exit. Pure delegation to the engine.</summary>
+    [RelayCommand(CanExecute = nameof(CanFastForward))]
+    private Task RunToNextIterationAsync() => RunStepAsync(s => s.RunToNextIteration());
 
     /// <summary>Run To Cursor: runs until the step point at (or first after) <paramref name="caretOffset"/>.
     /// A no-op when the offset does not map to a step point.</summary>

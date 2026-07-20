@@ -104,6 +104,15 @@
           <Button Classes="flat" Content="{x:Static app:UiStrings.DebuggerRunToSuspendContent}" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToSuspendTooltip}"
                   Command="{Binding RunToSuspendCommand}" />
+          <!-- Loop fast-forward (D13) — run modes delegated straight to the engine (DebugSession.RunToNextIteration
+               / RunToLoopExit); the commands' CanExecute uses DebugSession.IsInsideLoop, so the buttons enable
+               only while paused inside a WHILE / FOR loop. -->
+          <Button Classes="flat" Content="{x:Static app:UiStrings.DebuggerRunToNextIterationContent}" FontSize="11"
+                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToNextIterationTooltip}"
+                  Command="{Binding RunToNextIterationCommand}" />
+          <Button Classes="flat" Content="{x:Static app:UiStrings.DebuggerRunToLoopExitContent}" FontSize="11"
+                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToLoopExitTooltip}"
+                  Command="{Binding RunToLoopExitCommand}" />
           <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
           <Button Classes="flat" Content="■ Stop" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerStopTooltip}"

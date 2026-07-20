@@ -2790,9 +2790,38 @@ suite is unchanged from the Seam-A baseline (5013 green). The incidental `Lab/Em
 from attaching (Firebird bumps the on-disk transaction counter even though every debug/real transaction rolls
 back — no schema or data change) was restored to the committed file.
 
-### Current state — STOPPED after Seam B (2026-07-20)
+### Seam C — UI (thin presentation; awaits user visual confirmation) (2026-07-20)
 
-- **Done:** Seam 0 (`1049c71`), Seam A (`3fd541e`), **Seam B (Live Fidelity, probe-only)**.
-- **Not started:** **Seam C** (UI — toolbar + keyboard commands gated on `IsInsideLoop`, thin presentation over
-  `RunToLoopExit()` / `RunToNextIteration()`) and **Seam D** (docs/close). **D13 is NOT complete — do not mark
-  it COMPLETE.** Next session begins at **Seam C**, stopping for review when done.
+**Thin UI, no business logic** — the two D13 commands are surfaced exactly like D12's Run-to-`SUSPEND` (Seam E2):
+two `[RelayCommand]`s on `DebuggerTabViewModel` that **delegate straight to the engine** through the existing
+`RunStepAsync` background-step path (the same one every step/continue uses — Phase→Busy, run off the UI thread,
+re-render on pause):
+
+- `RunToLoopExitAsync()` → `s.RunToLoopExit()`
+- `RunToNextIterationAsync()` → `s.RunToNextIteration()`
+
+**Gating uses the engine's own `IsInsideLoop`** (no UI-side loop logic): a new `CanFastForward` computed gate
+(`Phase == Paused && Session is { IsInsideLoop: true }`) is the `CanExecute` for both commands, and both are
+added to the `Phase` property's `NotifyCanExecuteChangedFor` list — so their enabled state re-evaluates on every
+step (each step cycles Phase Busy→Paused), lighting the buttons up as stepping enters a loop and dimming them
+when it leaves. Because the fast-forward always targets the **innermost executing frame** (`_frames[^1]`), the
+gate is correct even while the editor is viewing a caller frame — no `IsViewingRootSource` restriction (unlike
+Run-To-Cursor, which targets root offsets).
+
+Two toolbar buttons (`↻ Next Iter`, `⤶ Loop Exit`) sit next to `⏭ SUSPEND` in the debugger toolbar, bound to the
+commands with tooltips (new `UiStrings.DebuggerRunToNextIteration*` / `DebuggerRunToLoopExit*`). **No keyboard
+shortcut** — mirroring Run-to-`SUSPEND` (also toolbar-only); the plan prescribed no gesture for these, and
+inventing one would be arbitrary. All theme tokens, both dictionaries unaffected (reuses the `flat` button
+style + existing brushes).
+
+**Metrics:** full solution build **0/0**; the view uses compiled bindings (`x:DataType` on the root), so the two
+new command bindings were validated **at compile time**; smoke clean (app launches). **Awaits the user's visual
+confirmation** (QA rule — a desktop-UI change isn't "done" on a green build alone; the button gating + fast-
+forward behaviour need a live debug session inside a loop to confirm).
+
+### Current state — STOPPED after Seam C (2026-07-20)
+
+- **Done:** Seam 0 (`1049c71`), Seam A (`3fd541e`), Seam B (Live Fidelity, probe-only), **Seam C (UI —
+  implementation done, awaits user visual confirmation)**.
+- **Not started:** **Seam D** (docs/close). **D13 is NOT complete — do not mark it COMPLETE.** Next session
+  begins at **Seam D** after the user confirms Seam C live, stopping for review when done.
