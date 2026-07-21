@@ -31,6 +31,9 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
 
     private readonly List<ScriptResultRowViewModel> _allRows = new();
     private IReadOnlyList<ScriptStatement> _lastStatements = Array.Empty<ScriptStatement>();
+    // For a Sequenced run, statement index → 1-based committed-step number (empty otherwise). Built
+    // from the SAME planner the engine ran, so the displayed boundaries match what actually committed.
+    private int[] _segmentMap = Array.Empty<int>();
     private CancellationTokenSource? _cts;
 
     public ScriptExecutorTabViewModel(
@@ -180,6 +183,7 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         }
 
         _lastStatements = statements;
+        _segmentMap = BuildSegmentMap(statements, Mode);
         _cts = new CancellationTokenSource();
         var progress = new Progress<ScriptStatementResult>(AddResultRow);
         try
@@ -323,7 +327,8 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
     {
         int offset = result.Index < _lastStatements.Count ? _lastStatements[result.Index].SourceOffset : -1;
         int length = result.Index < _lastStatements.Count ? _lastStatements[result.Index].SourceLength : 0;
-        var row = new ScriptResultRowViewModel(result, offset, length);
+        int step = result.Index < _segmentMap.Length ? _segmentMap[result.Index] : 0;
+        var row = new ScriptResultRowViewModel(result, offset, length, step);
         _allRows.Add(row);
         if (result.Success) SuccessCount++; else FailedCount++;
         if (PassesFilter(row)) Rows.Add(row);
@@ -420,6 +425,24 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         return ownLeftover ? UiStrings.ScriptBlockOwnTxOpen : UiStrings.ScriptBlockExternalTxOpen;
     }
 
+    // Pure: statement index → 1-based committed-step (Sequenced segment) number, reconstructed from
+    // the SAME planner the engine ran — so the displayed step boundaries match what actually committed.
+    // Empty for a non-Sequenced run (the whole script is one transaction — there are no steps). App
+    // presentation only; the planner is Core and unchanged.
+    internal static int[] BuildSegmentMap(IReadOnlyList<ScriptStatement> statements, ScriptTransactionMode mode)
+    {
+        if (mode != ScriptTransactionMode.Sequenced || statements.Count == 0) return Array.Empty<int>();
+
+        var map = new int[statements.Count];
+        int index = 0, step = 0;
+        foreach (var segment in ScriptSegmentPlanner.Plan(statements))
+        {
+            step++;
+            for (int i = 0; i < segment.Statements.Count && index < map.Length; i++) map[index++] = step;
+        }
+        return map;
+    }
+
     // Pure pre-flight gate: returns the block message when a single-transaction mode (Manual /
     // Auto-commit) is asked to run a MIXED DDL+DML script, else null. Sequenced is built for mixed
     // migrations, so it is never blocked. The engine is untouched — this only stops the run earlier,
@@ -468,9 +491,11 @@ public sealed class ScriptResultRowViewModel
 {
     private const int PreviewMaxLength = 100;
 
-    public ScriptResultRowViewModel(ScriptStatementResult result, int sourceOffset, int sourceLength)
+    public ScriptResultRowViewModel(ScriptStatementResult result, int sourceOffset, int sourceLength, int step = 0)
     {
         Line = result.Index + 1;
+        // Sequenced: the 1-based committed step; blank in single-transaction modes (step == 0).
+        StepText = step > 0 ? step.ToString(CultureInfo.CurrentCulture) : string.Empty;
         Statement = Elide(result.Text);
         TypeText = KindLabel(result.Kind);
         IsFailed = !result.Success;
@@ -483,6 +508,7 @@ public sealed class ScriptResultRowViewModel
     }
 
     public int Line { get; }
+    public string StepText { get; }
     public string Statement { get; }
     public string TypeText { get; }
     public string Result { get; }

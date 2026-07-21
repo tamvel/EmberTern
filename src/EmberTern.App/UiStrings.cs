@@ -155,6 +155,11 @@ internal static class UiStrings
     public const string ScriptTransactionOpenMarker = "● Transaction open — review, then Commit or Rollback";
     // Result grid column headers.
     public const string ScriptColumnLine = "#";
+    // Sequenced only: which committed step (segment/transaction) the statement ran in. Blank in the
+    // single-transaction modes, where the whole script is one transaction.
+    public const string ScriptColumnStep = "Step";
+    public const string ScriptColumnStepTooltip =
+        "In Sequenced mode, the committed step (transaction) this statement ran in. Each step commits before the next begins.";
     public const string ScriptColumnStatement = "Statement";
     public const string ScriptColumnType = "Type";
     public const string ScriptColumnResult = "Result";

@@ -392,8 +392,12 @@ noted.
   Manual/AutoCommit) DONE 2026-07-21** — pure `ScriptExecutorTabViewModel.ResolveMixedScriptBlock` stops the run
   BEFORE the first statement with a message that explains the single-transaction limitation and names
   `Sequenced` (`IsMixedMigration` classifies via the same AST `SqlStatementClassifier` the planner uses; engine
-  untouched); +11 `ScriptExecutorMixedScriptTests`. Build 0/0. **Next actionable is Step 5 seam C (results-grid
-  segment presentation) — NOT started, gated on the user.** Full record: review §6 "Results" + §7, and
+  untouched); +11 `ScriptExecutorMixedScriptTests`. **Seam C (results-grid segment presentation) assessed larger
+  than one seam, split C1/C2/C3; C1 (a "Step" column showing each statement's committed Sequenced step) DONE
+  2026-07-21** — pure `ScriptExecutorTabViewModel.BuildSegmentMap(statements, mode)` (statement index → 1-based
+  step from the same planner the engine ran; empty/blank for single-transaction modes) + `ScriptResultRowViewModel.StepText`;
+  +7 `ScriptExecutorSegmentPresentationTests`. Build 0/0. **Next actionable is Step 5 seam C2 (per-step
+  commit/rollback status) — NOT started, gated on the user.** Full record: review §6 "Results" + §7, and
   [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0/1/3/4).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:

@@ -38,8 +38,9 @@
 > third mode in the picker) — DONE**: `Sequenced` selectable, per-mode description on the picker, honest
 > summary. **Seam B (up-front rejection of a mixed script in Manual/AutoCommit) — DONE**: stopped before
 > the first statement with a message naming `Sequenced`; pure `ResolveMixedScriptBlock`, engine untouched.
-> **The next actionable is Step 5 seam C (results-grid segment presentation) — NOT started, gated on the
-> user.**
+> **Seam C (results-grid segment presentation) — assessed larger than one seam, split C1/C2/C3; C1 (a
+> "Step" column showing each statement's committed step) — DONE.** The next actionable is C2 (per-step
+> commit/rollback status) — NOT started, gated on the user.
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -603,9 +604,20 @@ sole planner; Firebird only executes). Split into two seams:
   that classifies via the same AST-based `SqlStatementClassifier` the planner uses (so "mixed here" and
   "segmented there" can never disagree), wired into the run pre-flight beside the existing gates. Engine
   untouched. Unit-pinned (+11 `ScriptExecutorMixedScriptTests`). Build 0/0.
-- **Seam C — segment presentation in the results grid — NOT started.** Per-statement segment membership
-  + commit/rollback boundary markers + a "which steps committed" detail (the App reconstructs boundaries
-  from `ScriptSegmentPlanner`). Larger UI seam; may split further.
+- **Seam C — segment presentation in the results grid.** Assessed as larger than one small seam, so
+  split into C1/C2/C3 (App presentation only; the App reconstructs everything from `ScriptSegmentPlanner`
+  — Core/Firebird untouched):
+  - **C1 — per-statement segment membership — DONE (2026-07-21).** A "Step" column in the results grid
+    shows which committed step (Sequenced segment/transaction) each statement ran in — the commit
+    boundaries made visible. Pure `ScriptExecutorTabViewModel.BuildSegmentMap(statements, mode)`
+    (statement index → 1-based step, reconstructed from the same planner the engine ran; empty for a
+    single-transaction run, so the column is blank in Manual/Auto-commit); `ScriptResultRowViewModel`
+    gained `StepText`. Unit-pinned (+7 `ScriptExecutorSegmentPresentationTests`). Build 0/0.
+  - **C2 — per-segment commit/rollback status — NOT started.** A visual marker of which steps committed
+    vs rolled back, reconstructed from the per-statement results (handling stop-on-error / continue /
+    cancel).
+  - **C3 — a "which steps committed" summary — NOT started.** e.g. "N of M steps committed" on the
+    status line.
 
 **Step 6 — Verify.** Build 0/0 + full suite + **live verification against the lab DB** with a real
 mixed migration script. Per the QA rule: not "fixed" until visually confirmed in the running app.

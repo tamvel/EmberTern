@@ -164,6 +164,8 @@
         <DataGrid.Columns>
           <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnLine}"
                               Binding="{Binding Line}" Width="46" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnStep}"
+                              Binding="{Binding StepText}" Width="52" />
           <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnStatement}"
                               Binding="{Binding Statement}" Width="2*" MinWidth="220"
                               FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
