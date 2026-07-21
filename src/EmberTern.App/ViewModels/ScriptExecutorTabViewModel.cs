@@ -193,7 +193,7 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
                 .ConfigureAwait(true);
             TransactionOpen = outcome.TransactionLeftOpen && _transactionService.IsActive;
             HasError = outcome.AnyFailed;
-            StatusText = BuildOutcomeStatus(outcome, Mode);
+            StatusText = BuildOutcomeStatus(outcome, Mode, _segmentMap);
             // Sequenced only (no-op otherwise): now the run is done, stamp each row with its step's
             // commit/rollback outcome so the grid can show which steps persisted, then append a muted
             // row for every statement a stop-on-error / cancellation left unexecuted.
@@ -387,15 +387,29 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         }
     }
 
-    // Internal + static so the summary wording per mode is unit-pinned without the VM's services.
+    // Internal + static so the summary wording per mode is unit-pinned without the VM's services. The
+    // optional segmentMap (Sequenced only) carries the plan the engine ran, so the summary can lead with
+    // a "N of M steps committed" headline (seam C3). It is empty/absent for single-transaction modes and
+    // in the existing 2-arg callers, where no headline is prepended.
     internal static string BuildOutcomeStatus(ScriptRunOutcome outcome, ScriptTransactionMode mode)
+        => BuildOutcomeStatus(outcome, mode, Array.Empty<int>());
+
+    internal static string BuildOutcomeStatus(
+        ScriptRunOutcome outcome, ScriptTransactionMode mode, int[] segmentMap)
     {
+        // Sequenced headline (empty otherwise): committed steps of all planned steps. Prefixed to both
+        // the deployment summary and the cancelled message, so the user always sees what persisted.
+        var stepPrefix = mode == ScriptTransactionMode.Sequenced
+            ? BuildStepSummary(segmentMap, outcome.Results)
+            : string.Empty;
+        string WithSteps(string body) => stepPrefix.Length == 0 ? body : stepPrefix + " " + body;
+
         if (outcome.Cancelled)
         {
             // Sequenced never leaves a transaction open, so the generic "transaction still open"
             // cancelled line would mislead — it committed step-by-step.
             return mode == ScriptTransactionMode.Sequenced
-                ? UiStrings.ScriptStatusSequencedCancelled
+                ? WithSteps(UiStrings.ScriptStatusSequencedCancelled)
                 : UiStrings.ScriptStatusCancelled;
         }
 
@@ -406,8 +420,9 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         if (mode == ScriptTransactionMode.Sequenced)
         {
             // Committed step-by-step — state the non-atomic reality, not a single verdict.
-            return string.Format(CultureInfo.CurrentCulture, UiStrings.ScriptStatusSequencedSummaryFormat,
-                outcome.SuccessCount, outcome.FailedCount, elapsedText);
+            return WithSteps(string.Format(CultureInfo.CurrentCulture,
+                UiStrings.ScriptStatusSequencedSummaryFormat,
+                outcome.SuccessCount, outcome.FailedCount, elapsedText));
         }
 
         if (!outcome.TransactionLeftOpen)
@@ -521,6 +536,25 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         var statuses = BuildStepStatuses(segmentMap, results);
         foreach (var row in rows)
             row.StepStatus = row.Step > 0 && statuses.TryGetValue(row.Step, out var s) ? s : ScriptStepStatus.NotRun;
+    }
+
+    // Pure: the Sequenced headline — how many steps (transactions) COMMITTED of all the steps the run
+    // planned (committed + rolled-back + not-run = statuses.Count). Reuses the existing step-status
+    // reconstruction (BuildStepStatuses — unchanged), so the count matches exactly what the grid shows;
+    // this only counts and formats. Empty for a single-transaction run (empty map) → no headline. App
+    // presentation only; the engine and the reconstruction are untouched.
+    internal static string BuildStepSummary(int[] segmentMap, IReadOnlyList<ScriptStatementResult> results)
+    {
+        if (segmentMap.Length == 0) return string.Empty;
+        var statuses = BuildStepStatuses(segmentMap, results);
+        if (statuses.Count == 0) return string.Empty;
+
+        int committed = 0;
+        foreach (var status in statuses.Values)
+            if (status == ScriptStepStatus.Committed) committed++;
+
+        return string.Format(CultureInfo.CurrentCulture,
+            UiStrings.ScriptStatusSequencedStepsFormat, committed, statuses.Count);
     }
 
     // Pure: the statement indices (in source order) a Sequenced run left UNEXECUTED — a stop-on-error

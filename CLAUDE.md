@@ -415,9 +415,16 @@ noted.
   not-run row is neither success nor failure — shown muted/italic via a new `IsSucceeded` (`= !IsFailed &&
   !IsNotRun`, so "OK" stays green only for a real success) + a `result-notrun` style; the "Success" filter excludes
   it; `SuccessCount`/`FailedCount` untouched. App presentation only; Core + Firebird untouched; +7
-  `ScriptExecutorNotRunTests`. Build 0/0.
-  **Next actionable is Step 5 seam C3 (a "N of M steps committed" status-line summary) — NOT started, gated on the
-  user.** Full record: review §6 "Results" + §7, and
+  `ScriptExecutorNotRunTests`. **Seam C3 (a "N of M steps committed" status-line headline) DONE 2026-07-21** — the
+  Sequenced status line now leads with committed steps of all planned steps (committed + rolled-back + not-run);
+  pure `ScriptExecutorTabViewModel.BuildStepSummary(segmentMap, results)` counts committed steps by REUSING the
+  unchanged `BuildStepStatuses` reconstruction (the count matches the grid — it only counts + formats), and
+  `BuildOutcomeStatus` gained an optional `segmentMap` arg prepending the headline to both the deployment summary
+  and the cancelled message (empty/absent for single-transaction modes + the existing 2-arg callers → no headline,
+  byte-identical); App presentation only, Core + Firebird + the reconstruction untouched; +7
+  `ScriptExecutorStepSummaryTests`. Build 0/0. **Step 5 seam C is COMPLETE; Steps 0–5 done.**
+  **Next actionable is Step 6 (live verification against the lab with a real mixed migration) — NOT started, gated
+  on the user.** Full record: review §6 "Results" + §7, and
   [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0/1/3/4).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:

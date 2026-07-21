@@ -205,6 +205,9 @@ internal static class UiStrings
     // rather than a single Committed/Rolled-back verdict.
     public const string ScriptStatusSequencedSummaryFormat =
         "Deployment: {0} succeeded, {1} failed in {2}. Committed steps stay applied — this mode is not all-or-nothing.";
+    // Sequenced headline: how many committed steps (transactions) of all the steps the run planned —
+    // committed + rolled-back + not-run. Prepended to the deployment / cancelled summary (seam C3).
+    public const string ScriptStatusSequencedStepsFormat = "{0} of {1} steps committed.";
     public const string ScriptStatusSequencedCancelled =
         "Deployment cancelled. Steps that already committed stay applied; the step in progress was rolled back.";
     public const string BatchResultsClose = "Close";

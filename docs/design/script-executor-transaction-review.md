@@ -41,8 +41,9 @@
 > **Seam C (results-grid segment presentation) — split C1/C2/C3; C1 (a "Step" column) DONE; C2 further
 > split C2a/C2b, C2a (pure per-step commit/rollback reconstruction, `BuildStepStatuses`) DONE; C2b further
 > split C2b-1/C2b-2, C2b-1 (colour the Step cell committed/rolled-back on executed rows) DONE, C2b-2
-> (surface "not run" statements as synthesized muted rows) DONE.** The next actionable is C3 (a "N of M
-> steps committed" status-line summary) — NOT started, gated on the user.
+> (surface "not run" statements as synthesized muted rows) DONE; C3 (a "N of M steps committed"
+> status-line headline) DONE — Step 5 seam C COMPLETE.** With Steps 0–5 done, Step 6 (live verification
+> against the lab with a real mixed migration) is the remaining actionable — gated on the user.
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -646,8 +647,15 @@ sole planner; Firebird only executes). Split into two seams:
         (`= !IsFailed && !IsNotRun`, so "OK" stays green only for a real success) and a `result-notrun`
         style, the "Success" filter excludes it, and `SuccessCount`/`FailedCount` are untouched. App
         presentation only; engine untouched. Unit-pinned (+7 `ScriptExecutorNotRunTests`). Build 0/0.
-  - **C3 — a "which steps committed" summary — NOT started.** e.g. "N of M steps committed" on the
-    status line.
+  - **C3 — a "which steps committed" summary — DONE (2026-07-21).** The Sequenced status line now leads
+    with a "N of M steps committed" headline — committed steps of all planned steps (committed +
+    rolled-back + not-run). Pure `ScriptExecutorTabViewModel.BuildStepSummary(segmentMap, results)` counts
+    COMMITTED steps by REUSING the unchanged `BuildStepStatuses` reconstruction (so the count matches
+    exactly what the grid shows — this only counts and formats), and `BuildOutcomeStatus` gained an
+    optional `segmentMap` arg that prepends the headline to both the deployment summary and the cancelled
+    message (empty/absent for single-transaction modes and the existing 2-arg callers → no headline, so
+    those stay byte-identical). App presentation only; Core + Firebird + the reconstruction untouched.
+    Unit-pinned (+7 `ScriptExecutorStepSummaryTests`). Build 0/0. **Step 5 seam C is COMPLETE.**
 
 **Step 6 — Verify.** Build 0/0 + full suite + **live verification against the lab DB** with a real
 mixed migration script. Per the QA rule: not "fixed" until visually confirmed in the running app.
