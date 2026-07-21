@@ -1049,6 +1049,47 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
     }
 
+    // D15.1 Seam B — the current-line marker is the BACKDROP. CurrentLineRenderer.Attach inserts itself
+    // FIRST in BackgroundRenderers, so the squiggle / related-element renderers (added earlier by the shared
+    // editor wiring) draw ON TOP and stay legible over the calm full-line wash. This pins that ordering
+    // decision and exercises the real full-line Draw path over a paused span (must not throw). Visual
+    // appearance (colour, alpha, the left bar) is user QA.
+    [Fact]
+    public async System.Threading.Tasks.Task CurrentLineRenderer_Attach_IsBackdropBelowOtherRenderers()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 400, Height = 200 };
+            var window = new Window { Width = 500, Height = 320, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            editor.Text = "begin\n  a = 1;\n  b = 2;\nend";
+            Dispatcher.UIThread.RunJobs();
+
+            // A sibling background renderer added FIRST, exactly as the shared editor wiring does before the
+            // current-line one.
+            using var svc = new EditorLanguageService(editor);
+            var related = RelatedElementsRenderer.Attach(editor, () => svc.Model);
+
+            int start = editor.Text.IndexOf("b = 2", System.StringComparison.Ordinal);
+            var current = CurrentLineRenderer.Attach(editor, () => (start, "b = 2".Length));
+
+            // Inserted first ⇒ it is the backdrop; the related renderer sits above it.
+            var bg = editor.TextArea.TextView.BackgroundRenderers;
+            Assert.Same(current, bg[0]);
+            Assert.True(bg.IndexOf(related) > bg.IndexOf(current));
+
+            // A real paint with a live paused span must not throw (full-line geometry path).
+            editor.TextArea.TextView.Redraw();
+            Dispatcher.UIThread.RunJobs();
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     // Etap 6 UX-polish regression pin — the "FROM view / FROM proc(…) don't resolve" report. A view /
     // selectable procedure used in FROM only resolves once its metadata category has loaded, which (on
     // connect) happens AFTER the model was first built (categories prefetch sequentially; Views /

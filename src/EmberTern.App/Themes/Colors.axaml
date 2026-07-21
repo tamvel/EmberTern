@@ -47,13 +47,16 @@
       <SolidColorBrush x:Key="RelatedElementHighlightBrush" Color="{StaticResource RelatedElementHighlightColor}" />
       <SolidColorBrush x:Key="RelatedElementHighlightBorderBrush" Color="{StaticResource RelatedElementHighlightBorderColor}" />
       <!-- Stage X / D4 — Debugger. The current-statement marker: a translucent amber band over the step
-           point the session is paused on (VS/IDE convention = yellow "here"). Alpha-first ARGB; ~33% over
-           the near-black editor so it reads without masking the syntax colours. The breakpoint glyph is a
-           solid red dot in the gutter — its own token (not ErrorColor: a breakpoint is a deliberate stop,
-           never an error). -->
-      <Color x:Key="DebugCurrentLineColor">#55C8A000</Color>
+           point the session is paused on. D15.1 Seam B rebuilt it: a CALM BLUE full-line wash (~16% over
+           the near-black editor — a quiet backdrop that leads the eye without the old amber "aggression")
+           plus a crisp accent bar at the line's left edge (DebugCurrentLineBarBrush). Alpha-first ARGB.
+           The breakpoint glyph is a solid red dot in the gutter — its own token (not ErrorColor: a
+           breakpoint is a deliberate stop, never an error). -->
+      <Color x:Key="DebugCurrentLineColor">#285A8AC8</Color>
+      <Color x:Key="DebugCurrentLineBarColor">#E65A8AC8</Color>
       <Color x:Key="DebugBreakpointColor">#E51400</Color>
       <SolidColorBrush x:Key="DebugCurrentLineBrush" Color="{StaticResource DebugCurrentLineColor}" />
+      <SolidColorBrush x:Key="DebugCurrentLineBarBrush" Color="{StaticResource DebugCurrentLineBarColor}" />
       <SolidColorBrush x:Key="DebugBreakpointBrush" Color="{StaticResource DebugBreakpointColor}" />
       <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4). -->
       <Color x:Key="DebugVariableChangedColor">#33C8A000</Color>
@@ -274,12 +277,15 @@
       <Color x:Key="RelatedElementHighlightBorderColor">#E6E0A030</Color>
       <SolidColorBrush x:Key="RelatedElementHighlightBrush" Color="{StaticResource RelatedElementHighlightColor}" />
       <SolidColorBrush x:Key="RelatedElementHighlightBorderBrush" Color="{StaticResource RelatedElementHighlightBorderColor}" />
-      <!-- Stage X / D4 — Debugger. Current-statement marker (translucent amber "here") + breakpoint glyph
-           (solid red dot). Light-theme values: a warmer amber that reads on the near-white editor, and a
-           deeper red for the breakpoint. See the dark dictionary for the rationale. -->
-      <Color x:Key="DebugCurrentLineColor">#55E0B000</Color>
+      <!-- Stage X / D4 — Debugger. Current-statement marker + breakpoint glyph (solid red dot).
+           D15.1 Seam B light-theme values: a calm blue full-line wash (~11% over the near-white editor)
+           + a crisp navy accent bar at the line's left edge; a deeper red for the breakpoint. See the dark
+           dictionary for the rationale. -->
+      <Color x:Key="DebugCurrentLineColor">#1C0033B3</Color>
+      <Color x:Key="DebugCurrentLineBarColor">#CC0033B3</Color>
       <Color x:Key="DebugBreakpointColor">#C42B1C</Color>
       <SolidColorBrush x:Key="DebugCurrentLineBrush" Color="{StaticResource DebugCurrentLineColor}" />
+      <SolidColorBrush x:Key="DebugCurrentLineBarBrush" Color="{StaticResource DebugCurrentLineBarColor}" />
       <SolidColorBrush x:Key="DebugBreakpointBrush" Color="{StaticResource DebugBreakpointColor}" />
       <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4). -->
       <Color x:Key="DebugVariableChangedColor">#3FE0B000</Color>

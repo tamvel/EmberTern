@@ -151,6 +151,25 @@ Replace "span-in-Selection-layer" with an IDE-grade marker inspired by (not copi
   function (e.g. `dziel(…)`) stays neutral by design — colouring those needs semantic resolution, a separate
   feature. (The Firebird 5 built-in list could later be extended with more functions — optional follow-up,
   not needed by any reported case since every example was already catalogued.)
+- **B (current-line rebuild) — DONE (impl 2026-07-21; awaits user visual confirmation).** Treated as the
+  *definitive review* of current-line rendering, not just a recolour. **Scope correction (important):** the
+  current-line marker is **debugger-only** — `CurrentLineRenderer` is attached solely in `DebuggerTabView`,
+  NOT in the shared `SqlEditorBehavior.Attach`, and no editor uses AvaloniaEdit's `HighlightCurrentLine`. So
+  "current line" = the debugger's **paused statement**; Seam B's visual change is confined to the debugger's
+  source editor (the app-wide part of D15.1 was the palette, Seam A). As-built: the old amber statement-span
+  band (`#55…`, "too aggressive" dark / "too weak" light) is replaced by a calm **full-line-width blue wash**
+  (`DebugCurrentLineColor` ~16% dark `#285A8AC8` / ~11% light `#1C0033B3`) **plus a crisp ~2.5px accent bar**
+  at the line's left edge (new token `DebugCurrentLineBarBrush`, both dictionaries). The renderer now draws
+  as the **backdrop** — `Attach` does `BackgroundRenderers.Insert(0, …)` so the squiggle / related-element
+  renderers (added earlier) and the text selection read ON TOP; the low alpha never masks glyphs or syntax
+  colour. Per-visual-line geometry from `BackgroundGeometryBuilder.GetRectsForSegment` (Y/Height reused, X
+  spanned to `textView.Bounds.Width`) keeps it correct under **word wrap** (one band per visual line),
+  **folding** (a hidden line has no geometry ⇒ not painted) and **variable line heights**. Repaint unchanged:
+  `TextView.Redraw()` on `DebugMarkersChanged` (gotcha #223, never `InvalidateVisual()`). Files:
+  `CurrentLineRenderer.cs` + `Themes/Colors.axaml` (both dicts). Pure Presentation; hex is tunable against
+  the running app. Build 0/0; +1 headless pin (`CurrentLineRenderer_Attach_IsBackdropBelowOtherRenderers` —
+  backdrop ordering + a non-throwing full-line Draw); **5098 tests green**; smoke clean. **D15.1 COMPLETE**
+  (Seam A + A2 + A3 + functions + B); next milestone is **D15.2**.
 
 ### 3.6 Seam A2 — domain-as-type resolution *(Feature)* — DONE (2026-07-21; awaits user visual confirmation)
 A follow-up found by QA: a builtin type (`VARCHAR`) was coloured but a **domain used as a type** (`T_STRING500`)

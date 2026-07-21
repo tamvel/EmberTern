@@ -391,7 +391,20 @@ noted.
   Procedure/Function/Trigger/View/Package/Domain/Generator/Exception/Index). Additive; build 0/0; semantic/
   highlight/syntax + headless editor-attach probe green. Minor known gap: trigger DDL preview doesn't resolve
   NEW/OLD context vars (no context provider on the read-only path).
-  **Seam B (current-line rebuild — full-width + calm-blue + gutter bar) NOT started.** Guide: d15 doc §3.
+  **Seam B (current-line rebuild) DONE 2026-07-21 (impl, awaits visual confirm) → D15.1 COMPLETE.** Treated
+  as the definitive review of current-line rendering. **Scope correction:** the current-line marker is
+  **debugger-only** (`CurrentLineRenderer`, attached only in `DebuggerTabView`, NOT the shared
+  `SqlEditorBehavior.Attach`; no editor uses `HighlightCurrentLine`) — it marks the debugger's **paused
+  statement**, so Seam B's visual change is confined to the debugger source editor (the app-wide part of
+  D15.1 was the palette). As-built: the old amber statement-span band → a calm **full-line-width blue wash**
+  (`DebugCurrentLineColor` dark `#285A8AC8` ~16% / light `#1C0033B3` ~11%) **+ a ~2.5px accent bar** at the
+  line's left edge (new `DebugCurrentLineBarBrush`, both dicts). Draws as the **backdrop**
+  (`BackgroundRenderers.Insert(0,…)`) so squiggle/related renderers + selection read on top; low alpha never
+  masks glyphs/syntax. Per-visual-line geometry via `GetRectsForSegment` (Y/Height reused, X → full viewport
+  width) → correct under word-wrap / folding / variable heights. Repaint unchanged (`TextView.Redraw()`,
+  gotcha #223). Pure Presentation; hex tunable. Build 0/0; +1 headless pin (backdrop ordering + non-throwing
+  Draw); 5098 tests green; smoke clean. Next: **D15.2** (Toolbar + own SVG icon system + Error Bar). Guide:
+  d15 doc §3.4/§4.
 - **CTE column diagnostics — false ET0002 on CTE-projected columns FIXED (2026-07-21; Stage-7/binder Feature,
   pure Core).** QA found `cte_alias.col` flagged **Unknown column** even for a column the CTE projects (e.g.
   `po.rodzajsprznagl` off a `WITH RECURSIVE`). **Root cause (deterministic, not the init-ordering staleness —
