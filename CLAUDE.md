@@ -392,6 +392,24 @@ noted.
   highlight/syntax + headless editor-attach probe green. Minor known gap: trigger DDL preview doesn't resolve
   NEW/OLD context vars (no context provider on the read-only path).
   **Seam B (current-line rebuild — full-width + calm-blue + gutter bar) NOT started.** Guide: d15 doc §3.
+- **CTE column diagnostics — false ET0002 on CTE-projected columns FIXED (2026-07-21; Stage-7/binder Feature,
+  pure Core).** QA found `cte_alias.col` flagged **Unknown column** even for a column the CTE projects (e.g.
+  `po.rodzajsprznagl` off a `WITH RECURSIVE`). **Root cause (deterministic, not the init-ordering staleness —
+  that stays unfixed, not reproducible):** `SemanticBinder.Query.BindDottedReference` resolved a CTE-alias's
+  columns via `ResolveColumn(TargetName, …)` → `_metadata.GetColumns(cteName)` — the **catalog**, which never
+  holds CTE columns — and `DiagnosticsEngine.QualifierResolvesTable` treated a CTE-backed
+  `TableReferenceSymbol{Target:CteSymbol}` as a verifiable table. **Fix — the binder/diagnostics now understand
+  the CTE's OWN projection** (user chose this over silencing ET0002): `CteSymbol` gained `OutputColumns` +
+  `ColumnsComplete`; `BindCte` fills them from the explicit column list (authoritative) else a new
+  `ExtractCteProjection` reading the body's **anchor SELECT** (leftmost of a set-op; Firebird's rule); it
+  accepts **only** unambiguous item shapes (`col` / `t.col` / `<expr> AS name`) and marks `*`/`t.*`/unaliased-
+  expression/empty as **incomplete — never a synthetic name (§0 / Paramount Law)**. `BindDottedReference` routes
+  a CTE qualifier through new `ResolveCteColumn` (resolves against `OutputColumns`, gives the member a real
+  `ColumnSymbol` → hover/Ctrl+Click work); `QualifierResolvesTable` flags a genuine typo only when
+  `ColumnsComplete`, else stays silent (safe degradation). No probe, no Firebird. Build 0/0; **5097 tests green**
+  (+9 `DiagnosticsEngineTests`: projected column silent, resolves-to-symbol, genuine-unknown-on-complete flagged,
+  star silent, unaliased-expr silent, explicit-list resolves+flags, AS-alias resolves, recursive `UNION ALL`
+  anchor). Reusable `ExtractCteProjection` could later serve derived-table columns (currently silent).
   **Script Executor Rewrite — Step 0 (Probe) DONE 2026-07-20; architecture stands, measurement-gated.** The
   `Sequenced`-mode plan is ratified ([docs/design/script-executor-transaction-review.md](docs/design/script-executor-transaction-review.md)
   §5/§6): fixes the KNOWN-BROKEN mixed DDL+DML defect (gotcha #213). **Step 0 (the Probe) — the blocking

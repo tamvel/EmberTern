@@ -153,6 +153,20 @@ public sealed class CteSymbol : Symbol
     /// <summary>The explicitly-declared column names (<c>WITH c (a, b) AS …</c>), when given.</summary>
     public IReadOnlyList<string> Columns { get; init; } = System.Array.Empty<string>();
 
+    /// <summary>The CTE's OUTPUT column names — the folded names a qualified reference (<c>cte.col</c>)
+    /// resolves against. Firebird takes these from the explicit column list when present, otherwise from
+    /// the body's first (anchor) SELECT projection. Empty when the projection could not be enumerated
+    /// unambiguously (see <see cref="ColumnsComplete"/>).</summary>
+    public IReadOnlyList<string> OutputColumns { get; init; } = System.Array.Empty<string>();
+
+    /// <summary><c>true</c> only when <see cref="OutputColumns"/> is the COMPLETE, authoritative set —
+    /// an explicit column list, or an anchor projection whose every item had an unambiguous output name
+    /// (a bare/qualified column or an explicit <c>AS</c> alias). <c>false</c> when the projection contains
+    /// a <c>*</c> / <c>t.*</c>, an unaliased expression, or an unrecognised body — cases where we must
+    /// NOT invent names (§0). A consumer treats an incomplete set as "cannot verify" and stays silent
+    /// (no diagnostic) rather than guessing.</summary>
+    public bool ColumnsComplete { get; init; }
+
     /// <summary>The scope of the CTE's inner query, when bound.</summary>
     public Scope? QueryScope { get; init; }
 }

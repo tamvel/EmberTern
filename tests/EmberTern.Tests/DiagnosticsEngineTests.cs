@@ -605,4 +605,126 @@ public class DiagnosticsEngineTests
             "end";
         Assert.Empty(DiagnosticsEngine.Analyze(SemanticModel.Build(sql)));
     }
+
+    // ══ CTE columns (Seam 2 — resolve cte.col against the CTE's own projection, not the catalog) ══
+
+    // The core fix: a column projected by a CTE (no explicit column list) resolves through the CTE's
+    // OWN projection, so cte.col is NOT falsely flagged as an unknown column — even though the CTE name
+    // is not a catalog table. (Before the fix cte.col went to GetColumns(cteName) = the catalog, found
+    // nothing, and was flagged ET0002.)
+    [Fact]
+    public void CteColumn_ProjectedColumn_IsNotFlagged()
+    {
+        var meta = new FakeMetadata().Col("SRC", "A", "INTEGER").Col("SRC", "B", "INTEGER");
+        const string sql =
+            "with cte as (select t.a, t.b from src t)\n" +
+            "select c.a, c.b from cte c";
+
+        Assert.Empty(Analyze(sql, meta));
+    }
+
+    // The reference actually RESOLVES (not merely un-flagged): the CTE-column member binds to a symbol,
+    // so hover / go-to reference work through the model too.
+    [Fact]
+    public void CteColumn_ProjectedColumn_ResolvesToSymbol()
+    {
+        var meta = new FakeMetadata().Col("SRC", "A", "INTEGER");
+        const string sql =
+            "with cte as (select t.a from src t)\n" +
+            "select c.a from cte c";
+
+        var model = SemanticModel.Build(sql, meta);
+        // The LAST 'a' occurrence is the outer c.a member reference.
+        var outerA = model.References
+            .Where(r => r.Role == ReferenceRole.Column && string.Equals(r.Text, "a", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(r => r.Span.Start)
+            .First();
+        Assert.True(outerA.IsResolved);
+    }
+
+    // A genuine typo — a column the CTE does NOT project — is still flagged, because the projection set
+    // is COMPLETE (every item had an unambiguous name). This is the real value beyond mere silence.
+    [Fact]
+    public void CteColumn_UnknownColumnOnCompleteProjection_IsFlagged()
+    {
+        var meta = new FakeMetadata().Col("SRC", "A", "INTEGER");
+        const string sql =
+            "with cte as (select t.a from src t)\n" +
+            "select c.zzz from cte c";
+
+        var d = Assert.Single(Analyze(sql, meta));
+        Assert.Equal(DiagnosticCategory.UnknownColumn, d.Category);
+        Assert.Equal("ET0002", d.Code);
+        Assert.Equal(sql.IndexOf("zzz", StringComparison.Ordinal), d.Start);
+    }
+
+    // A star projection (SELECT t.* ) cannot be enumerated without guessing → the CTE column set is
+    // INCOMPLETE → the model degrades to no diagnostic (never a false positive), per §0 / Paramount Law.
+    [Fact]
+    public void CteColumn_StarProjection_IsSilent()
+    {
+        var meta = new FakeMetadata().Col("SRC", "A", "INTEGER");
+        const string sql =
+            "with cte as (select t.* from src t)\n" +
+            "select c.anything from cte c";
+
+        Assert.Empty(Analyze(sql, meta));
+    }
+
+    // An unaliased expression in the projection is also unnameable → incomplete → silent (no guessed
+    // name like EXPR1).
+    [Fact]
+    public void CteColumn_UnaliasedExpression_IsSilent()
+    {
+        var meta = new FakeMetadata().Col("SRC", "A", "INTEGER").Col("SRC", "B", "INTEGER");
+        const string sql =
+            "with cte as (select t.a + t.b from src t)\n" +
+            "select c.whatever from cte c";
+
+        Assert.Empty(Analyze(sql, meta));
+    }
+
+    // An explicit column list (WITH cte (x, y) AS …) is authoritative: x resolves; an absent name flags.
+    [Fact]
+    public void CteColumn_ExplicitColumnList_ResolvesAndFlags()
+    {
+        var meta = new FakeMetadata().Col("SRC", "A", "INTEGER").Col("SRC", "B", "INTEGER");
+        const string sql =
+            "with cte (x, y) as (select t.a, t.b from src t)\n" +
+            "select c.x, c.zzz from cte c";
+
+        var d = Assert.Single(Analyze(sql, meta));
+        Assert.Equal(DiagnosticCategory.UnknownColumn, d.Category);
+        Assert.Equal(sql.LastIndexOf("zzz", StringComparison.Ordinal), d.Start);
+    }
+
+    // An AS alias in the projection is unambiguous → resolves (and 1 as lvl too).
+    [Fact]
+    public void CteColumn_AliasedProjection_IsNotFlagged()
+    {
+        var meta = new FakeMetadata().Col("SRC", "A", "INTEGER");
+        const string sql =
+            "with cte as (select t.a as foo, 1 as bar from src t)\n" +
+            "select c.foo, c.bar from cte c";
+
+        Assert.Empty(Analyze(sql, meta));
+    }
+
+    // The user's real shape: a recursive CTE (UNION ALL). Firebird takes the column names from the anchor
+    // (first) SELECT — so c.id / c.lvl resolve, and the recursive self-reference (cte not yet in scope
+    // inside its own body) stays silent. This is the exact false-positive from QA (po.rodzajsprznagl).
+    [Fact]
+    public void CteColumn_RecursiveCte_AnchorProjectionResolves()
+    {
+        var meta = new FakeMetadata().Col("SRC", "ID", "INTEGER").Col("SRC", "PARENT", "INTEGER");
+        const string sql =
+            "with recursive cte as (\n" +
+            "  select t.id, t.parent, 1 as lvl from src t where t.parent is null\n" +
+            "  union all\n" +
+            "  select t.id, t.parent, c.lvl + 1 from src t join cte c on t.parent = c.id\n" +
+            ")\n" +
+            "select c.id, c.lvl from cte c";
+
+        Assert.Empty(Analyze(sql, meta));
+    }
 }
