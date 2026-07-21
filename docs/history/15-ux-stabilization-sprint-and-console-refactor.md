@@ -278,8 +278,52 @@ The already-accurate *corrective* comments that describe #122/co-location as sup
 (`FirebirdConnectionService.ExecuteDdlAsync`, `FirebirdDdlExecutor`) were left untouched. The
 vestigial `Data/MetadataTransactionProfile` fields (review §6 "Separately") are **dead state, not a
 lying comment**, so they stay out of this pass. **Verification:** build 0/0; Script Executor +
-Developer Mode tests green (101/101). The next actionable is the `Sequenced` build (Steps 3–6, with
-Step 2's Dev Mode text) — not started, gated on the user scheduling it.
+Developer Mode tests green (101/101). The next actionable is the `Sequenced` build.
+
+## Script Executor Rewrite — Step 3 (Sequenced core) + folded Step 2, 2026-07-21
+
+The first *implementation* step of the rewrite — **Core only**, no Firebird execution path, no App,
+no UI (those are Steps 4/5). The user folded the old Step 2 (Dev Mode text) into this work.
+
+**Step 2 (Dev Mode text, review §4.2) — folded in, already truthful.** The review recommended stating
+Developer Mode's *scope* (it covers object-editor Compile/Recompile and the Script Executor's all-DDL
+path, not the SQL Editor). Reading `UiStrings` showed a prior milestone had already done exactly that:
+`DeveloperModeDescription` already says *"applies when you compile an object in its editor, and when
+the Script Executor runs a script that only creates or changes objects … The SQL Editor is not
+affected"*, and `DeveloperModeBadgeTooltip` already ends *"Does not affect the SQL Editor."* So there
+was nothing to change — the text is accurate for today's behaviour. (When the `Sequenced` build makes
+*every* schema segment Dev-Mode-aware in Step 4, the scope sentence can broaden — a one-line edit left
+for that step, so the text never over-claims ahead of the behaviour.)
+
+**Step 3 (Sequenced core).** Two additions to `EmberTern.Core.Scripting`:
+- `ScriptTransactionMode.Sequenced` — the third mode ("Deployment"). Its doc states the whole trade:
+  run in order on one lane, commit after each schema statement so a later statement can use what an
+  earlier one created (#213); **not atomic** — a committed segment stays applied if a later one fails
+  (Firebird cannot both let a transaction use an object it created and keep it rollbackable). No
+  execution path consumes it yet, and the App picker (a two-index map) never produces it, so adding the
+  member is inert until Step 4/5 wire it.
+- `ScriptSegmentPlanner` — a pure function `Plan(statements) → IReadOnlyList<ScriptSegment>`. Each
+  statement is classified by the **AST-based `SqlStatementClassifier`** (Schema / Data / Ambiguous),
+  never the driver's `ScriptStatementKind` — the single-classifier convergence the review (§7) asked
+  for, and pinned by a test whose statements carry a `Kind` that *disagrees* with their text. A
+  `ScriptSegment` is `(Statements, SegmentTransactionPolicy)`; the policy is an **intent**
+  (`DataNoWait` / `SchemaWait`), mapped to a real Firebird TPB only in Step 4 (Core stays free of
+  `FirebirdSql`).
+
+**The rule (conservative v1):** a schema statement is its OWN committed segment; data statements group
+into their own NOWAIT segments between schema statements. Every segment is homogeneous, exactly one
+transaction is ever open, so the §2.2(b) lane-split self-block is impossible by construction and #213
+is fixed by design. Review §5.1 *permits* grouping consecutive independent DDL into one segment (PROBE
+2a proved that safe), but this planner does **not** — telling independent DDL apart from *dependent*
+DDL (`CREATE TABLE T; CREATE INDEX … ON T;`, which #213 would break in one transaction) needs
+object-dependency analysis that does not exist yet, and committing after each DDL is always correct
+(exactly isql `SET AUTODDL ON`). The grouping is left as a documented future optimization, never a
+correctness risk — faithful to "verify, don't infer."
+
+**Verification:** build 0/0; +10 `ScriptSegmentPlannerTests` (empty, all-data, single-DDL,
+create-then-insert boundary, data/schema/data, consecutive-DDL-not-grouped, DCL-as-schema, AST-not-Kind
+classification, full-coverage-in-order); Script + Developer Mode suite green (110/110). The next
+actionable is Step 4 (the Firebird layer runs the segments) — not started, gated on the user.
 
 ---
 

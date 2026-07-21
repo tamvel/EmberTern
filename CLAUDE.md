@@ -363,10 +363,18 @@ noted.
   metadata working transaction"* — it owns none; `MainWindowViewModel.cs:200` falsely cited *"co-location, gotcha
   #122"* for why the Script Executor is on the Data lane — the real reason is that it IS the user working
   transaction, #89); the other two review-named targets (`ConnectionProfile.cs`, the `FirebirdScriptExecutor`
-  header) were already clean. Build 0/0; Script Executor + Dev Mode tests 101/101 green. **Next actionable is the
-  `Sequenced` build (Steps 3–6, with Step 2's Dev Mode text) — NOT started, gated on the user scheduling it.**
-  Full record: review §6 "Results" + §7, and
-  [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0 + Step 1).
+  header) were already clean. Build 0/0; Script Executor + Dev Mode tests 101/101 green. **Step 3 (Sequenced
+  core) DONE 2026-07-21** — Core-only, no Firebird/App/UI: `ScriptTransactionMode.Sequenced` (the "Deployment"
+  mode — commit after each schema statement so #213 is fixed by design; NOT atomic, trade-off surfaced) + a pure
+  `ScriptSegmentPlanner` (`EmberTern.Core.Scripting`) that splits a script into ordered `ScriptSegment`s over the
+  **AST-based `SqlStatementClassifier`** (not the driver enum — the single-classifier convergence), each carrying
+  a `SegmentTransactionPolicy` intent (`DataNoWait`/`SchemaWait`; the real Firebird TPB mapping is Step 4). v1 is
+  conservative — each schema statement is its own committed segment (isql `SET AUTODDL ON`); grouping independent
+  consecutive DDL (§5.1, PROBE 2a) is a documented deferred optimization. **Step 2 (Dev Mode text) folded in and
+  found already truthful** (`UiStrings` already states the scope + SQL-Editor boundary). Build 0/0; +10
+  `ScriptSegmentPlannerTests`; Script + Dev Mode suite 110/110 green. **Next actionable is Step 4 (Firebird layer
+  runs the segments) — NOT started, gated on the user.** Full record: review §6 "Results" + §7, and
+  [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0 + Step 1 + Step 3).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target

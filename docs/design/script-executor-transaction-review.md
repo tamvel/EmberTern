@@ -22,8 +22,12 @@
 > (PROBE 2a). Full report: see §6 "Results" and §7.
 >
 > **Step 1 (doc truth pass) — DONE 2026-07-21** (comment-only; §6). The stale comments that caused
-> the Data/Metadata-vs-Dev-Mode drift are fixed. **The next actionable is the `Sequenced` build
-> (Steps 3–6, with Step 2's Dev Mode text) — NOT started, gated on the user scheduling it.**
+> the Data/Metadata-vs-Dev-Mode drift are fixed.
+>
+> **Step 3 (Sequenced Core) — DONE 2026-07-21** (§6). `ScriptTransactionMode.Sequenced` + the pure
+> `ScriptSegmentPlanner` (segments over the AST classifier, per-segment TPB intent) land Core-only;
+> Step 2 (Dev Mode text) was folded in and found already truthful. **The next actionable is Step 4
+> (Firebird layer runs the segments) — NOT started, gated on the user scheduling it.**
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -519,15 +523,32 @@ cites the superseded gotcha #122). The remaining two false statements were corre
 
 The corrective comments that already describe #122/co-location as *superseded* (`FirebirdConnectionService`
 `ExecuteDdlAsync`, `FirebirdDdlExecutor`) are accurate and were left unchanged. Build 0/0; Script
-Executor + Developer Mode tests green (101). **Next actionable is Step 3** (the `Sequenced` Core mode,
-§5.1) — Step 2 (Dev Mode text, §4.2) is small and self-contained and may land alongside Step 4 if
-option (c) is chosen — **both gated on the user scheduling the build.**
+Executor + Developer Mode tests green (101).
 
-**Step 2 — Dev Mode text** (§4.2). Small, self-contained, no behaviour change. Decide (a)/(b)/(c)
-first — if (c), the text lands with Step 4.
+**Step 2 — Dev Mode text (§4.2) — FOLDED INTO STEP 3, and already in place (2026-07-21).** On review
+the user's decision (c) was effectively already shipped: `UiStrings.DeveloperModeDescription` already
+states the scope (*"applies when you compile an object in its editor, and when the Script Executor
+runs a script that only creates or changes objects"*) **and** the SQL-Editor boundary, and
+`DeveloperModeBadgeTooltip` already ends *"Does not affect the SQL Editor."* The text is truthful for
+today's behaviour (the all-DDL auto-commit path already reuses the Dev Mode WAIT policy), so **no edit
+was needed.** When the `Sequenced` build lands (Step 4) and *every* schema segment becomes
+Dev-Mode-aware, the scope sentence can broaden from *"a script that only creates or changes objects"*
+to *"the schema statements of any deployment script"* — a one-line text change to make with Step 4, not
+now.
 
-**Step 3 — `Sequenced` mode, Core.** `ScriptTransactionMode.Sequenced`; segment planner over the
-classifier (pure, unit-testable, no live DB); per-segment TPB selection.
+**Step 3 — `Sequenced` mode, Core — DONE (2026-07-21).** `ScriptTransactionMode.Sequenced` added; new
+pure `ScriptSegmentPlanner` (`EmberTern.Core.Scripting`) splits a parsed script into ordered
+`ScriptSegment`s over the AST-based `SqlStatementClassifier` (**not** the driver's statement enum — the
+single-classifier convergence the review asks for), each carrying a `SegmentTransactionPolicy` intent
+(`DataNoWait` / `SchemaWait`). Conservative v1 rule: **each schema statement is its own committed
+segment** (isql `SET AUTODDL ON`), data statements group into their own NOWAIT segments — every segment
+homogeneous, one transaction ever open, so the §2.2(b) self-block is impossible by construction and
+#213 is fixed by design. Grouping independent consecutive DDL (permitted by §5.1, proven safe by PROBE
+2a) is a **documented deferred optimization** — it needs object-dependency analysis to stay safe for
+dependent DDL, and committing after each DDL is always correct. Pure Core only — no Firebird execution
+path, no App, no UI (Steps 4/5). Build 0/0; +10 `ScriptSegmentPlannerTests`; Script + Dev Mode suite
+green (110). **Next actionable is Step 4** (Firebird layer runs the segments) — gated on the user
+scheduling it.
 
 **Step 4 — Firebird layer.** `FirebirdScriptExecutor` runs segments; Dev Mode-aware WAIT TPB on DDL
 segments; per-segment commit; committed-segments reporting.
