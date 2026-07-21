@@ -43,7 +43,10 @@
 > split C2b-1/C2b-2, C2b-1 (colour the Step cell committed/rolled-back on executed rows) DONE, C2b-2
 > (surface "not run" statements as synthesized muted rows) DONE; C3 (a "N of M steps committed"
 > status-line headline) DONE — Step 5 seam C COMPLETE.** With Steps 0–5 done, Step 6 (live verification
-> against the lab with a real mixed migration) is the remaining actionable — gated on the user.
+> against the lab with a real mixed migration) — **DONE 2026-07-21: Technical Review + Live Verification
+> (12 scenarios ALL PASS) + UX / Code / Performance Review + Final Verdict; the one finding (FINDING 1, a
+> stale `ScriptSegmentPlanner` docstring) was corrected in commit `8faf200`. → SCRIPT EXECUTOR REWRITE
+> (Steps 0–6) IS COMPLETE; nothing open.**
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -488,7 +491,9 @@ In `Sequenced`:
 
 ## 6. Implementation plan
 
-**Step 0 is DONE (2026-07-20). Steps 1–6 are not started.**
+**All steps DONE — Step 0 (2026-07-20) through Step 6 (2026-07-21). SCRIPT EXECUTOR REWRITE (Steps 0–6) IS
+COMPLETE (live-verified, 12 scenarios ALL PASS). The per-step notes below are the historical implementation
+log.**
 
 **Step 0 — MEASURE — RUN 2026-07-20 (blocking gate; cleared).**
 The probe (`scratchpad/LaneProbe/`, standalone, not in `EmberTern.slnx`; managed driver, non-ASCII
@@ -563,8 +568,7 @@ homogeneous, one transaction ever open, so the §2.2(b) self-block is impossible
 2a) is a **documented deferred optimization** — it needs object-dependency analysis to stay safe for
 dependent DDL, and committing after each DDL is always correct. Pure Core only — no Firebird execution
 path, no App, no UI (Steps 4/5). Build 0/0; +10 `ScriptSegmentPlannerTests`; Script + Dev Mode suite
-green (110). **Next actionable is Step 4** (Firebird layer runs the segments) — gated on the user
-scheduling it.
+green (110). *(Historical note — Steps 4/5/6 have since all been completed; see the banner above and §7.)*
 
 **Step 4 — Firebird layer.** `FirebirdScriptExecutor` runs the prepared plan (the planner stays the
 sole planner; Firebird only executes). Split into two seams:

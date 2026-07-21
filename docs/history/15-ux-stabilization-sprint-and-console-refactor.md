@@ -369,6 +369,35 @@ last statement is a duplicate-PK INSERT keeps the earlier table + row + index co
 only the failing segment (one row remains). Build 0/0; Script + Developer Mode + Transaction suite 165
 green (regression). The next actionable is Step 5 (App layer) — not started, gated on the user.
 
+## Script Executor Rewrite — Step 5 (App layer), 2026-07-21
+
+App/UX only — Core + Firebird untouched. Split into seams A/B/C, each pure + additive:
+- **Seam A** — `Sequenced` ("deployment, commits in steps") added to the mode picker with a per-mode
+  description tooltip stating the non-atomic trade-off where the mode is chosen (§5.3); pure
+  `ScriptExecutorTabViewModel.ResolveMode`/`ResolveModeDescription` + a mode-aware `BuildOutcomeStatus`
+  (honest Sequenced summary + cancelled message); +11 `ScriptExecutorModeTests`.
+- **Seam B** — up-front rejection of a mixed DDL+DML script in `Manual`/`AutoCommit`: pure
+  `ResolveMixedScriptBlock` stops the run before the first statement with a message naming `Sequenced`
+  (`IsMixedMigration` via the same AST `SqlStatementClassifier`); +11 `ScriptExecutorMixedScriptTests`.
+- **Seam C** (results-grid segment presentation, split C1/C2/C3): **C1** a "Step" column (per-statement
+  committed Sequenced step via `BuildSegmentMap`); **C2a** pure per-step commit/rollback reconstruction
+  (`ScriptStepStatus` + `BuildStepStatuses`, mirroring `RunSequencedAsync`); **C2b-1** colour the Step cell
+  committed/rolled-back on executed rows; **C2b-2** surface "not run" statements as synthesized muted rows
+  (`FindNotRunStatements` + `AppendNotRunRows`); **C3** a "N of M steps committed" status-line headline
+  (`BuildStepSummary` reusing `BuildStepStatuses`). Build 0/0.
+
+## Script Executor Rewrite — Step 6 (live verification) + Final Verdict, 2026-07-21
+
+**SCRIPT EXECUTOR REWRITE (Steps 0–6) IS COMPLETE.** The full close-out pass ran: **Technical Review**,
+**Live Verification (12 scenarios, ALL PASS)** on the FB5 lab, **UX Review**, **Code Review**, **Performance
+Review**, and a **Final Verdict**. The one issue found was documentation only — **FINDING 1**: a stale
+`ScriptSegmentPlanner` docstring about dependent DDL — corrected in commit
+`8faf200` (`docs(script-executor): Step 6 — correct ScriptSegmentPlanner docstring (dependent DDL)`).
+Outcome: the `Sequenced` ("Deployment") mode fixes the mixed-DDL+DML defect (#213) by design and is
+live-proven; the single-transaction modes (`Manual`/`AutoCommit`) still cannot run a mixed script (a Firebird
+truth) and now reject one up-front (Step 5 seam B). **No open Step 6, no "live verification gated on user"
+task remains.**
+
 ---
 
 ## Final architecture

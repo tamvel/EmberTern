@@ -55,11 +55,11 @@ object editors, and the debugger, in **both** themes.
 
 | # | Milestone | Class | Cost (sessions) | Depends on | Order |
 |---|---|---|---|---|---|
-| — | **Script Executor — Step 0 (Probe)** | measure | ~0.5 (probe run + record) | — | **1** |
-| **D15.1** | Editor Readability (syntax + current-line) | P | ~2 | — | **2** |
+| — | ~~**Script Executor — Step 0 (Probe)**~~ **✅ DONE** | measure | — | — | **1** |
+| **D15.1** | Editor Readability (syntax + current-line) — **Seam A DONE** | P | ~2 | — | **2** |
 | **D15.2** | Toolbar Visual System + Error Bar | P | ~2 | icon system before use | **3** |
 | **D15.3** | Launch & Entry Experience | P (+persist) | ~2 | — | **4** |
-| — | **Script Executor Rewrite (Steps 1–6)** | correctness | ~4–5 | Probe results | **5** |
+| — | ~~**Script Executor Rewrite (Steps 1–6)**~~ **✅ COMPLETE (0–6, live-verified 2026-07-21)** | correctness | — | — | **5** |
 | **D15.4** | Expression UX + Friendly Errors | P+F | ~2 | — | **6** |
 | **D15.5** | Inline Values | F | ~2 | D15.1 (renderer/token knowledge) | **7** |
 | **D15.6** | Debugger Performance (integration analysis) | F | ~1–2 | Performance Analysis module | **8** |
@@ -353,18 +353,18 @@ observations during every D15 seam. **Deliverable:** an inventory doc, not code.
 
 ## 11. Priorities & sequencing
 
-**Ratified order** (with my endorsement — the sequence is sound; no change recommended):
+**Ratified order** (with my endorsement — the sequence is sound; no change recommended). **Progress note
+(2026-07-21):** items 1 and 5 (the whole Script Executor track) are **COMPLETE**; D15.1 is **in progress**
+(Seam A done). The rewrite ran ahead of its slotted position 5 as a self-contained block.
 
-1. **Script Executor — Step 0 (Probe).** It is **measurement, not implementation**, it is already written and
-   builds, and it gates a real correctness-debt decision (§2.2b self-block is *reasoned, not measured* — and
-   the project's history says never trust an unmeasured Firebird inference: #213/#214/#215 were all falsified).
-   Cheap, unblocking, zero implementation risk → first.
+1. ~~**Script Executor — Step 0 (Probe).**~~ **✅ DONE** — measurement, not implementation; it gated the
+   §2.2b self-block decision (never trust an unmeasured Firebird inference: #213/#214/#215 were all falsified).
 2. **D15.1 — Editor Readability.** Highest daily value, lowest risk, and **app-wide** — so it should land
-   before other editor-surface work builds on the palette.
+   before other editor-surface work builds on the palette. **(In progress — Seam A done.)**
 3. **D15.2 — Toolbar + Error Bar.** High visibility on the freshly-shipped debugger; pure P.
 4. **D15.3 — Launch Experience.** Daily workflow; repeated launches; pure P + tiny persistence.
-5. **Script Executor Rewrite (Steps 1–6).** A self-contained correctness-debt block, slotted after the quick
-   visible wins so the polish momentum isn't lost but the debt gets paid before the heavier D15 features.
+5. ~~**Script Executor Rewrite (Steps 1–6).**~~ **✅ COMPLETE (Steps 0–6, live-verified 2026-07-21).** The
+   self-contained correctness-debt block; the mixed-DDL+DML defect (#213) is fixed by `Sequenced` mode.
 6. **D15.4 — Friendly Errors.** First of the feature-bearing D15 seams.
 7. **D15.5 — Inline Values.** After D15.1 (shares renderer/token knowledge).
 8. **D15.6 — Performance (integration).** Lightest now that debug-time timing is dropped; last.
@@ -406,6 +406,10 @@ are app-wide foundations; the rewrite is self-contained and loses nothing by fol
 
 ## 14. Script Executor Rewrite — parallel track (pointer)
 
+**STATUS: COMPLETE (Steps 0–6, live-verified 2026-07-21 — 12 scenarios ALL PASS).** This section is retained
+as the historical planning summary; the track is closed. Full record + verdict in
+[script-executor-transaction-review.md](script-executor-transaction-review.md) (§6/§7).
+
 Fully analysed and ratified in [script-executor-transaction-review.md](script-executor-transaction-review.md).
 Summary for planning:
 - **Why KNOWN-BROKEN:** the whole script runs in **one transaction**, and Firebird cannot use an object it
@@ -420,9 +424,10 @@ Summary for planning:
   → Step 3 `Sequenced` Core (segment planner over the classifier) → Step 4 Firebird (per-segment TPB + commit +
   committed-segments reporting) → Step 5 App (third mode, up-front rejection of mixed `Manual`, segment
   boundaries in the grid) → Step 6 verify live on the lab.
-- **Immediate action:** run **Step 0** and record results in the review doc's §7 evidence log before starting
-  the rewrite.
+- **Immediate action:** ~~run Step 0 and record results before starting the rewrite~~ — **done; the whole
+  rewrite (Steps 0–6) is complete and live-verified.**
 
 ---
 
-*End of D15 design. Nothing here is implemented. A future session starts a milestone from its § + seam list.*
+*End of D15 design. D15.1 Seam A is implemented (2026-07-21); the rest is unimplemented. A future session
+starts a milestone from its § + seam list.*

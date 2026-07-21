@@ -326,9 +326,9 @@ noted.
   irreversibles disclosed, not hidden**; fidelity via a round-trip invariant. **Difficulty High; ~5 sessions.**
   Full write-up: the plan's D14 STATUS block + [docs/history/19-...](docs/history/19-firebird-debugger.md) (D14)
   + [[project-d14-step-back-deferred]].
-  **⭐ NEXT STAGE — D15 (Debugger Experience & IDE Polish) — PLANNING PHASE COMPLETE (2026-07-20); NOTHING
-  IMPLEMENTED.** The debugger is now polished to professional-IDE level as a **full project**, designed +
-  ratified over two review passes. **One organising principle: Presentation vs Feature** (P = view/theme/tokens
+  **⭐ CURRENT STAGE — D15 (Debugger Experience & IDE Polish) — IN PROGRESS (planning complete 2026-07-20;
+  D15.1 Seam A implemented 2026-07-21, see below).** The debugger is now polished to professional-IDE level as
+  a **full project**, designed + ratified over two review passes. **One organising principle: Presentation vs Feature** (P = view/theme/tokens
   only, obeys "no logic in VM/Core"; F = new data/Core surface, full rigour + live fidelity). Milestones:
   **D15.1** Editor Readability (P, **app-wide** — readability-first palette, variables neutral; rebuilt
   full-width calm-blue current-line + gutter bar) · **D15.2** Toolbar + Error Bar (P — a whole **SVG icon
@@ -429,10 +429,15 @@ noted.
   `BuildOutcomeStatus` gained an optional `segmentMap` arg prepending the headline to both the deployment summary
   and the cancelled message (empty/absent for single-transaction modes + the existing 2-arg callers → no headline,
   byte-identical); App presentation only, Core + Firebird + the reconstruction untouched; +7
-  `ScriptExecutorStepSummaryTests`. Build 0/0. **Step 5 seam C is COMPLETE; Steps 0–5 done.**
-  **Next actionable is Step 6 (live verification against the lab with a real mixed migration) — NOT started, gated
-  on the user.** Full record: review §6 "Results" + §7, and
-  [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0/1/3/4).
+  `ScriptExecutorStepSummaryTests`. Build 0/0. **Step 5 seam C is COMPLETE.**
+  **Step 6 (live verification against the lab) — DONE 2026-07-21 → SCRIPT EXECUTOR REWRITE (Steps 0–6) IS
+  COMPLETE.** Full end-to-end verification passed: Technical Review + Live Verification (**12 scenarios, ALL
+  PASS**) + UX Review + Code Review + Performance Review + Final Verdict. The one issue found was documentation
+  only (FINDING 1 — a stale `ScriptSegmentPlanner` docstring about dependent DDL), corrected in commit
+  `8faf200` (`docs(script-executor): Step 6 — correct ScriptSegmentPlanner docstring (dependent DDL)`). The
+  `Sequenced` mode fixes the mixed-DDL+DML defect (#213) by design and is live-proven on the lab; nothing about
+  the rewrite is open. Full record: review §6 "Results" + §7, and
+  [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0/1/3/4/6).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target
@@ -1161,16 +1166,17 @@ noted.
   F5 would **join** it and silently get a WAIT console (gotcha #230). `TransactionService.BeginTransactionAsync`
   gained an optional `FbTransactionOptions`; the console never passes it and is unchanged. Full analysis:
   [docs/design/script-executor-transaction-review.md](docs/design/script-executor-transaction-review.md).
-- **⚠ `FirebirdScriptExecutor` is STILL KNOWN-BROKEN for mixed DDL+DML** (unchanged by the above — Dev
-  Mode is a wait policy, not a fix for #213) — it runs the whole script
-  in ONE transaction and its docstring claimed mixed DDL+DML migration is "all-or-nothing", which is
-  **false** (gotcha #213: a Firebird transaction cannot use an object it created but has not
-  committed). A deployment script that creates and then populates anything fails at the second
-  statement. It also still carries the last *"Commit or roll back the active transaction…"* guard,
-  and duplicates the classifier (its `FirebirdScriptParser.MapKind` uses the **driver's** statement
-  enum, while Core has the AST-based `SqlStatementClassifier`). **Deferred to a dedicated sprint by
-  user decision** — the Core classification infrastructure was deliberately KEPT, not deleted, as the
-  foundation of that future execution engine. See `docs/history/15-...`.
+- **✅ `FirebirdScriptExecutor` mixed-DDL+DML defect (#213) — FIXED by the Script Executor Rewrite (Steps
+  0–6 COMPLETE, live-verified 2026-07-21).** The `Sequenced` ("Deployment") mode runs a mixed migration one
+  committed segment at a time (commit after each schema statement, like isql `SET AUTODDL ON`), so a
+  create-then-populate script runs end-to-end — proven live (12 scenarios ALL PASS). The **single-transaction**
+  modes (`Manual` / `AutoCommit`) still cannot run a mixed DDL+DML script — that is a Firebird truth, not a bug
+  (a transaction cannot use an object it created but has not committed) — and the App now **rejects such a
+  script up-front** in those modes with a message naming `Sequenced` (Step 5 seam B). The old *"Commit or roll
+  back the active transaction…"* guard framing and the "all-or-nothing" docstring are gone. The Core
+  classification lives in the AST-based `SqlStatementClassifier` (the segment planner uses it; not the driver
+  enum). See `docs/history/15-...` and
+  [docs/design/script-executor-transaction-review.md](docs/design/script-executor-transaction-review.md).
 - **Verify Firebird behaviour, never infer it.** Three long-standing architectural beliefs were
   falsified by ~30 lines of probe against the Lab DB this sprint (#213, #214, #215). If a design
   rests on "Firebird does/doesn't allow X", measure it first.
