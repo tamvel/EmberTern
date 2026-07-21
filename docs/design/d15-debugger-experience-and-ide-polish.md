@@ -134,11 +134,33 @@ Replace "span-in-Selection-layer" with an IDE-grade marker inspired by (not copi
   (INTEGER/VARCHAR/TIMESTAMP/NUMERIC/… incl. domain-typed columns) matter in declarations, so they regain a
   **discreet muted-teal** accent (dark `#5FA894` / light `#2C7A70`); built-in functions + operators + ordinary
   identifiers stay neutral. Still a controlled palette (blue SQL / violet PSQL / soft-teal types + quiet
-  literals), not a Christmas tree. Pure xshd colour values (no catalog/test change). **Deferred follow-up
-  (user, "w dalszej perspektywie"):** give Firebird **domains** their own semantic accent instead of colouring
-  them like plain SQL types — a `SemanticModel`/binder-driven distinction (domain references resolve as schema
-  objects), not an xshd keyword change; scope it when a milestone needs it (§F / gotcha #233 — don't build the
-  empty hook early).
+  literals), not a Christmas tree. Pure xshd colour values (no catalog/test change).
+  **Bolder pass after further light QA (2026-07-21):** the light tuning was too timid — data types → a strong
+  elegant teal `#0F766E` (immediately recognizable, distinct from the blue keywords); comments → a cool
+  gray-green `#6E847A` (modern-IDE feel, no more yellow "olive").
+
+### 3.6 Seam A2 — domain-as-type resolution *(Feature)* — DONE (2026-07-21; awaits user visual confirmation)
+A follow-up found by QA: a builtin type (`VARCHAR`) was coloured but a **domain used as a type** (`T_STRING500`)
+stayed neutral, because the binder emitted **no reference** for a type-position name — the type was only a
+string on the symbol. That is a semantic-model gap, not a colour value, so it is a small **Feature** seam (it
+changes the model's reference set → feeds hover / Ctrl+Click / diagnostics). As-built:
+- **Binder (`SemanticBinder.Psql`):** a new `BindDomainTypeReference` emits a `SchemaObject` reference for the
+  type-position identifier in `DECLARE VARIABLE`, procedure/function **parameters**, `RETURNS (…)` columns, and
+  a scalar `RETURNS <domain>` — **only** when it resolves to a `Domain` via `ResolveObject`/metadata (builtins
+  are catalogued keywords, never identifiers; an unknown name emits nothing → no false reference, no false
+  diagnostic — §0 / "prefer silence"). The scan is bounded to the declaration/param segment so it can never
+  reach the routine body.
+- **Colour (App):** a resolved domain reference paints like a **SQL type** — new theme brush
+  `EditorDataTypeBrush` (both dictionaries, mirroring the xshd `DataType` hex) mapped in `SemanticHighlighter`
+  for `SchemaObject` of kind `Domain`; every other object keeps its tree-icon palette.
+- **Free participation:** because a domain now resolves to a real reference, hover, Ctrl+Click (go to the
+  domain) and diagnostics work through the existing model — no extra wiring.
+- Build 0/0; +4 `SemanticModelTests` (declare / parameter+returns / builtin-no-ref / unknown-no-ref) + the
+  semantic/highlight/diagnostics/nav/hover suites green.
+
+**Still deferred (user, "w dalszej perspektywie"):** giving domains their **own distinct accent** (visually
+different from plain SQL types) — a pure presentation change on top of the now-existing resolution; scope it
+when wanted.
 - **B (current-line):** rebuild `CurrentLineRenderer` for full-width + calm-blue + gutter bar; new/retuned
   tokens in both dictionaries; both themes. **NOT started.**
 

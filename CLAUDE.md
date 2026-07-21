@@ -356,8 +356,18 @@ noted.
   SUSPEND/EXECUTE/… — a second restrained **violet** accent, dark `#A88FD4` / light `#6C4C9E`, bold). The
   catalog partition is safe: `SqlKeywordCategory`/`CategoryOf`/`KeywordsInCategory` feed only `FirebirdSyntax`
   + the xshd drift-guard test (lexer `IsKeyword` + completion are category-agnostic). Files: `FirebirdSql.xshd`
-  + `.Light.xshd` + `Themes/Colors.axaml` + `FirebirdSyntax.cs` + `FirebirdSyntaxTests.cs`; hex is a tunable
-  conservative start; syntax 18/18 + lexer/completion/semantic 229/229 green; build 0/0.
+  + `.Light.xshd` + `Themes/Colors.axaml` + `FirebirdSyntax.cs` + `FirebirdSyntaxTests.cs`. **Light-theme
+  tuning (2026-07-21, bolder per user):** data types → strong teal `#0F766E`, comments → cool gray-green
+  `#6E847A` (no more "olive"), PSQL light violet deepened to `#5D30A6`.
+  **Seam A2 — domain-as-type resolution (Feature) DONE 2026-07-21 (awaits visual confirm):** a domain used as
+  a data type (`DECLARE VARIABLE`/param/`RETURNS`) was neutral because the binder emitted no reference for a
+  type-position name. `SemanticBinder.Psql.BindDomainTypeReference` now emits a `SchemaObject` reference for the
+  type identifier **only** when it resolves to a `Domain` via metadata (builtins are keywords, not identifiers;
+  unknown name → nothing, no false diagnostic; scan bounded to the segment so it never reaches the body). The
+  App paints a resolved domain like a SQL type via a new `EditorDataTypeBrush` (both dicts, mirrors the xshd
+  `DataType` hex) mapped in `SemanticHighlighter` for `Domain` objects; hover/Ctrl+Click/diagnostics work for
+  free through the model. +4 `SemanticModelTests`; semantic/highlight/nav/hover/diagnostics suites green; build
+  0/0. A **distinct** domain accent (vs plain types) stays deferred.
   **Seam B (current-line rebuild — full-width + calm-blue + gutter bar) NOT started.** Guide: d15 doc §3.
   **Script Executor Rewrite — Step 0 (Probe) DONE 2026-07-20; architecture stands, measurement-gated.** The
   `Sequenced`-mode plan is ratified ([docs/design/script-executor-transaction-review.md](docs/design/script-executor-transaction-review.md)

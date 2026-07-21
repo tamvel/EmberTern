@@ -107,7 +107,14 @@ internal sealed partial class SemanticBinder
                 BindParamList(t, k + 1, close - 1, scope, ddl, ParameterDirection.Output);
                 k = close;
             }
-            // else: a function's single return type — nothing to bind here.
+            else if (IsNameToken(At(t, k))
+                && ResolveObject(FoldedName(t[k])) is { Kind: SymbolKind.Domain } returnDomain)
+            {
+                // A function's single return type that is a domain (e.g. RETURNS T_ID) — bind just the
+                // one type token so it colours/navigates like a type; a builtin (RETURNS INTEGER) is a
+                // keyword and is skipped, and we never scan past it into the body.
+                AddReference(t[k], returnDomain, ReferenceRole.SchemaObject);
+            }
         }
 
         // The body (after the header's top-level AS) is the parser's BlockStatement tree.
@@ -578,6 +585,30 @@ internal sealed partial class SemanticBinder
         scope.Declare(v);
         AddSymbol(v);
         AddReference(nameTok, v, ReferenceRole.Variable, isDefinition: true);
+
+        // A domain used as the variable's type resolves + colours like any schema object (D15.1).
+        int afterName = 0;
+        while (afterName < toks.Count && toks[afterName].Start != nameTok.Start) afterName++;
+        BindDomainTypeReference(toks, afterName + 1, toks.Count);
+    }
+
+    // D15.1 — a domain used as a data type (DECLARE VARIABLE / parameter / RETURNS column) is emitted as a
+    // schema-object reference, so it colours, hovers and Ctrl+Click-navigates like any other database object
+    // (the App paints a domain-as-type like a SQL type until a dedicated domain accent is designed). The type
+    // name is the first bare identifier in [lo, hi) — the type position, right after the declared name; a
+    // builtin type is a catalogued keyword (TokenKind.Keyword), so only a user identifier is a candidate. A
+    // reference is added ONLY when the name resolves to a Domain in metadata: never guessing, so an unknown
+    // name (a typo, or a not-yet-warmed catalog) adds no reference and no false diagnostic. The caller MUST
+    // bound [lo, hi) to the declaration/parameter segment so the scan cannot reach the routine body.
+    private void BindDomainTypeReference(IReadOnlyList<SqlToken> t, int lo, int hi)
+    {
+        for (int i = lo; i < hi && i < t.Count; i++)
+        {
+            if (!IsNameToken(t[i])) continue;
+            if (ResolveObject(FoldedName(t[i])) is { Kind: SymbolKind.Domain } domain)
+                AddReference(t[i], domain, ReferenceRole.SchemaObject);
+            return; // only the first identifier (the type position) is a domain candidate
+        }
     }
 
     // The name token of a DECLARE VARIABLE/CURSOR node — the first identifier after DECLARE and an
@@ -714,6 +745,9 @@ internal sealed partial class SemanticBinder
             scope.Declare(p);
             AddSymbol(p);
             AddReference(nameTok, p, ReferenceRole.Parameter, isDefinition: true);
+
+            // A domain used as the parameter / RETURNS-column type (bounded to this segment).
+            BindDomainTypeReference(t, ni + 1, segHi);
         }
     }
 

@@ -101,6 +101,71 @@ public class SemanticModelTests
         Assert.Equal(SymbolKind.Procedure, procSym.Kind);
     }
 
+    // ══ Domain used as a data type resolves as a schema object (D15.1 domain Feature seam) ═══════════
+    //
+    // A Firebird domain in a type position (DECLARE VARIABLE / parameter / RETURNS column / scalar RETURNS)
+    // must be emitted as a Domain schema-object reference — so it colours, hovers and Ctrl+Click-navigates
+    // like any object — while a BUILTIN type (a catalogued keyword) must NOT produce a reference. Emission
+    // is gated on metadata: an unknown name produces nothing (no false reference, no false diagnostic).
+    // Built strict (whole CREATE stays one bound routine, gotcha #238), the editor's semantic path.
+
+    private static SemanticModel BuildStrict(string sql, ISqlMetadataProvider meta)
+        => SemanticModel.Build(SqlParser.Parse(sql).Root, meta);
+
+    [Fact]
+    public void DomainAsType_InDeclareVariable_ResolvesAsDomainObject()
+    {
+        var meta = new FakeMetadata().Object("T_STRING500", SymbolKind.Domain);
+        const string sql = "create procedure p as declare variable v_text t_string500; begin end";
+        var model = BuildStrict(sql, meta);
+
+        var r = RefAt(model, sql, "t_string500");
+        Assert.NotNull(r);
+        var sym = Assert.IsType<SchemaObjectSymbol>(r!.Symbol);
+        Assert.Equal(SymbolKind.Domain, sym.Kind);
+    }
+
+    [Fact]
+    public void DomainAsType_InParameterAndReturns_ResolvesAsDomainObject()
+    {
+        var meta = new FakeMetadata()
+            .Object("T_ID", SymbolKind.Domain)
+            .Object("T_NOTE", SymbolKind.Domain);
+        const string sql = "create procedure p (p_id t_id) returns (r_note t_note) as begin end";
+        var model = BuildStrict(sql, meta);
+
+        var pin = RefAt(model, sql, "t_id");
+        Assert.Equal(SymbolKind.Domain, Assert.IsType<SchemaObjectSymbol>(pin!.Symbol).Kind);
+
+        var rout = RefAt(model, sql, "t_note");
+        Assert.Equal(SymbolKind.Domain, Assert.IsType<SchemaObjectSymbol>(rout!.Symbol).Kind);
+    }
+
+    [Fact]
+    public void BuiltinType_InDeclaration_ProducesNoObjectReference()
+    {
+        // INTEGER is a catalogued keyword (coloured by the XSHD lexical layer), never a schema object —
+        // the binder must not emit a reference for it, and the default expression's function call must
+        // not be mistaken for a domain.
+        var meta = new FakeMetadata().Object("SOME_FUNC", SymbolKind.Function);
+        const string sql = "create procedure p as declare variable v_n integer; begin end";
+        var model = BuildStrict(sql, meta);
+
+        Assert.Null(RefAt(model, sql, "integer"));
+    }
+
+    [Fact]
+    public void UnknownDomainName_InDeclaration_ProducesNoReference()
+    {
+        // Not in metadata (typo, or catalog not warmed) → silence, never a guessed reference (§0 / Stage 7
+        // "prefer silence over false positives").
+        var meta = new FakeMetadata();
+        const string sql = "create procedure p as declare variable v_x t_unknown_dom; begin end";
+        var model = BuildStrict(sql, meta);
+
+        Assert.Null(RefAt(model, sql, "t_unknown_dom"));
+    }
+
     // INSERT … SELECT must NOT be split at its SELECT source (a false boundary would break the INSERT).
     [Fact]
     public void InsertSelect_WithoutSemicolon_StaysOneStatement()
