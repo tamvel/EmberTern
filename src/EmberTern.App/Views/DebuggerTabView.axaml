@@ -83,50 +83,115 @@
       <DockPanel LastChildFill="True">
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4"
                     IsVisible="{Binding IsDebugViewVisible}">
-          <Button Classes="flat" Content="▶ Continue" FontSize="11"
+          <!-- D15.2 Seam A — the toolbar on the EmberTern icon system (SvgIcon), colour as HIERARCHY, not
+               decoration: Continue = the single accent (primary); Into/Over/Out + Run-to = neutral (inherit
+               NeutralIconBrush, no Foreground); Next Iteration / Loop Exit share the teal "loop operations"
+               accent; Stop = danger; Restart = neutral; Break on exception = a warning-toned toggle (a mode,
+               not a destructive action). Labels stay neutral text so only the icon carries the category. -->
+          <Button Classes="flat" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerContinueTooltip}"
-                  Command="{Binding ContinueCommand}" />
-          <Button Classes="flat" Content="⤵ Into" FontSize="11"
+                  Command="{Binding ContinueCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.Play}" Width="14" Height="14"
+                                Foreground="{DynamicResource AccentIconBrush}" />
+              <TextBlock Text="Continue" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="flat" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepIntoTooltip}"
-                  Command="{Binding StepIntoCommand}" />
-          <Button Classes="flat" Content="↷ Over" FontSize="11"
+                  Command="{Binding StepIntoCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.StepInto}" Width="14" Height="14" />
+              <TextBlock Text="Into" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="flat" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepOverTooltip}"
-                  Command="{Binding StepOverCommand}" />
-          <Button Classes="flat" Content="⤴ Out" FontSize="11"
+                  Command="{Binding StepOverCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.StepOver}" Width="14" Height="14" />
+              <TextBlock Text="Over" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="flat" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepOutTooltip}"
-                  Command="{Binding StepOutCommand}" />
-          <Button Classes="flat" Content="⇥ To Cursor" FontSize="11"
+                  Command="{Binding StepOutCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.StepOut}" Width="14" Height="14" />
+              <TextBlock Text="Out" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="flat" FontSize="11"
                   IsEnabled="{Binding IsPaused}"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToCursorTooltip}"
-                  Click="OnRunToCursorClick" />
+                  Click="OnRunToCursorClick">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.RunToCursor}" Width="14" Height="14" />
+              <TextBlock Text="To cursor" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
           <!-- Run to next SUSPEND (D12, §9.8) — a selectable procedure's "give me the next row"; rows collect
                in the Results tab. A run mode delegated straight to the engine (DebugSession.RunToSuspend). -->
-          <Button Classes="flat" Content="{x:Static app:UiStrings.DebuggerRunToSuspendContent}" FontSize="11"
+          <Button Classes="flat" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToSuspendTooltip}"
-                  Command="{Binding RunToSuspendCommand}" />
+                  Command="{Binding RunToSuspendCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.RunToSuspend}" Width="14" Height="14" />
+              <TextBlock Text="Suspend" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
           <!-- Loop fast-forward (D13) — run modes delegated straight to the engine (DebugSession.RunToNextIteration
                / RunToLoopExit); the commands' CanExecute uses DebugSession.IsInsideLoop, so the buttons enable
-               only while paused inside a WHILE / FOR loop. -->
-          <Button Classes="flat" Content="{x:Static app:UiStrings.DebuggerRunToNextIterationContent}" FontSize="11"
+               only while paused inside a WHILE / FOR loop. Both share the teal "loop operations" accent. -->
+          <Button Classes="flat" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToNextIterationTooltip}"
-                  Command="{Binding RunToNextIterationCommand}" />
-          <Button Classes="flat" Content="{x:Static app:UiStrings.DebuggerRunToLoopExitContent}" FontSize="11"
+                  Command="{Binding RunToNextIterationCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.NextIteration}" Width="14" Height="14"
+                                Foreground="{DynamicResource DebugLoopIconBrush}" />
+              <TextBlock Text="Next iter" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="flat" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToLoopExitTooltip}"
-                  Command="{Binding RunToLoopExitCommand}" />
+                  Command="{Binding RunToLoopExitCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.LoopExit}" Width="14" Height="14"
+                                Foreground="{DynamicResource DebugLoopIconBrush}" />
+              <TextBlock Text="Loop exit" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
           <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
-          <Button Classes="flat" Content="■ Stop" FontSize="11"
+          <Button Classes="flat" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerStopTooltip}"
-                  Command="{Binding StopCommand}" />
-          <Button Classes="flat" Content="↻ Restart" FontSize="11"
+                  Command="{Binding StopCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.Stop}" Width="14" Height="14"
+                                Foreground="{DynamicResource DangerIconBrush}" />
+              <TextBlock Text="Stop" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="flat" FontSize="11"
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRestartTooltip}"
-                  Command="{Binding RestartCommand}" />
+                  Command="{Binding RestartCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.Restart}" Width="14" Height="14" />
+              <TextBlock Text="Restart" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
           <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
           <!-- Break on exception (D12, §9.8.1) — a pure toggle of DebugSession.BreakOnException; all pause +
-               routing logic is in Core. -->
+               routing logic is in Core. A behaviour MODE, so a warning tone, not the destructive danger. -->
           <CheckBox IsChecked="{Binding BreakOnException, Mode=TwoWay}"
-                    Content="{x:Static app:UiStrings.DebuggerBreakOnException}"
                     ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakOnExceptionTooltip}"
-                    FontSize="11" VerticalAlignment="Center" />
+                    VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.BreakException}" Width="14" Height="14"
+                                Foreground="{DynamicResource WarningIconBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.DebuggerBreakOnException}" FontSize="11"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+          </CheckBox>
         </StackPanel>
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                    Margin="10,0,0,0" FontSize="11"

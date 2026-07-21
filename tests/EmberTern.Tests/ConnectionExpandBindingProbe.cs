@@ -1090,6 +1090,40 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
     }
 
+    // D15.2 Seam A — the debugger toolbar's icon geometries and the new loop-category brush must resolve
+    // at runtime. The build already validates the compiled StaticResource Icon.* usages; this also covers
+    // the DynamicResource brush token (resolved at runtime, not compile) and pins it in BOTH themes.
+    [Fact]
+    public async System.Threading.Tasks.Task DebuggerToolbarIcons_GeometriesAndLoopBrush_Resolve()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var app = Avalonia.Application.Current!;
+
+            string[] geometries =
+            {
+                "Icon.Play", "Icon.Stop", "Icon.StepInto", "Icon.StepOver", "Icon.StepOut",
+                "Icon.RunToCursor", "Icon.RunToSuspend", "Icon.NextIteration", "Icon.LoopExit",
+                "Icon.Restart", "Icon.BreakException",
+            };
+            foreach (var key in geometries)
+            {
+                Assert.True(
+                    app.Resources.TryGetResource(key, null, out var g) && g is Avalonia.Media.Geometry,
+                    $"debugger icon geometry '{key}' does not resolve");
+            }
+
+            foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
+            {
+                Assert.True(
+                    app.Resources.TryGetResource("DebugLoopIconBrush", theme, out var b) && b is Avalonia.Media.IBrush,
+                    $"DebugLoopIconBrush does not resolve in {theme}");
+            }
+        }, CancellationToken.None);
+    }
+
     // Etap 6 UX-polish regression pin — the "FROM view / FROM proc(…) don't resolve" report. A view /
     // selectable procedure used in FROM only resolves once its metadata category has loaded, which (on
     // connect) happens AFTER the model was first built (categories prefetch sequentially; Views /

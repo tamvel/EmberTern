@@ -313,7 +313,24 @@ noted.
   = `Phase==Paused && Session is { IsInsideLoop: true }`, added to the `Phase` `NotifyCanExecuteChangedFor` list
   so it re-evaluates on every step). No keyboard shortcut (mirrors Run-to-`SUSPEND`, toolbar-only). Build 0/0;
   compiled bindings validate the commands at compile time; manual QA confirmed (buttons enable only inside a
-  loop; both fast-forward correctly on the live lab). **Philosophy held — no new execution path (Fast Forward
+  loop; both fast-forward correctly on the live lab).
+  **D15.2 (Toolbar Visual System & Error Bar) — STARTED; Seam A (icon system + toolbar) DONE 2026-07-21 (impl,
+  awaits visual confirm).** Ratified icon-system decision: EmberTern does NOT build a parallel icon family —
+  it extends the existing (Lucide-derived) `SvgIcon` system as the "EmberTern Icon System" (`.svg` canonical
+  under `Assets/Icons/`, `IconGeometries.axaml` the runtime representation, reuse-before-create). The debugger
+  toolbar was the last Unicode-glyph holdout (`▶ ⤵ ↷ ⤴ ■ ↻`); now on `SvgIcon`. Concept board approved (2
+  refinements: Next Iteration = two-arrow cycle vs Restart moved to skip-to-start; Break on Exception =
+  stop-octagon+`!`, not an energy bolt). 9 new geometries `Icon.StepInto/StepOver/StepOut/RunToCursor/
+  RunToSuspend/NextIteration/LoopExit/Restart/BreakException` (`Assets/Icons/Debug/*.svg` + mirrored);
+  Continue reuses `Icon.Play`, Stop reuses `Icon.Stop`. **Colour = hierarchy, not decoration:** Continue →
+  `AccentIconBrush` (sole primary); steps + run-to + Restart → neutral; Next Iteration + Loop Exit → new
+  shared `DebugLoopIconBrush` (teal, both dicts — NOT the PSQL-keyword violet, which would cross domains);
+  Stop → `DangerIconBrush`; Break on Exception → `WarningIconBrush` (a mode, not destruction). Labels stay
+  neutral text (only the icon carries the category → 6 neutral / 4 hues, calm). Removed 3 now-unused
+  `Debugger*Content` glyph strings. Pure Presentation. Build 0/0; +1 headless pin (all 11 toolbar geometries +
+  `DebugLoopIconBrush` both themes resolve); 5099 tests green; smoke clean. **Seam B (debugger identity icon —
+  playhead-on-flow, replacing `Icon.Bug`) + Seam C (Error Bar, own fixed-height row) NOT started.** Guide:
+  d15 doc §4. **Philosophy held — no new execution path (Fast Forward
   only *controls* the session), the new features are stop policies (the `RunToSuspend` template), `Simulator ==
   Real Firebird` (live-fidelity-proven). D13 formally CLOSED.**
   **D14 (Step Back) — ANALYZED + DEFERRED by user decision (2026-07-20). Not started.** Full

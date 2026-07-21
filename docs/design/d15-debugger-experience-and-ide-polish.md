@@ -272,10 +272,30 @@ A **separate thin bar below the toolbar** (its own `Grid.Row`), shown **only** o
 state (the current in-row `StatusText` is the bug being fixed).
 
 ### 4.5 Seams
-- **A (icon system + toolbar):** define the SVG system tokens; author the `Icon.*` set; rebuild the toolbar
-  buttons onto SvgIcon with the Continue/step/Stop hierarchy; new theme accent tokens if needed (both dicts).
-- **B (app/debugger metaphor icon):** design + wire the new debugger tab/entry-point icon.
-- **C (error bar):** extract the fault message into its own collapsible row with copy + expand.
+- **A (icon system + toolbar) — DONE (impl 2026-07-21; awaits user visual confirmation).** The icon
+  **system** decision was ratified with the user: EmberTern does **not** build a parallel icon family — it
+  extends the existing (Lucide-derived) `SvgIcon` system as the "EmberTern Icon System", `.svg` = canonical
+  source, `IconGeometries.axaml` = the runtime representation, reuse-before-create. The debugger toolbar was
+  the **last Unicode-glyph holdout** in the app; it now renders on `SvgIcon`. **Icon set** (concept board
+  approved, incl. two refinements: Next Iteration = a two-arrow cycle so it no longer collides with Restart,
+  which moved to a **skip-to-start** metaphor; Break on Exception = a **stop-octagon + `!`**, not the earlier
+  energy-bolt): 9 new geometries `Icon.StepInto/StepOver/StepOut/RunToCursor/RunToSuspend/NextIteration/
+  LoopExit/Restart/BreakException` authored under `Assets/Icons/Debug/*.svg` + mirrored in
+  `IconGeometries.axaml`; Continue reuses `Icon.Play`, Stop reuses `Icon.Stop`. **Colour = hierarchy, not
+  decoration** (ratified mapping, existing tokens + ONE new): Continue → `AccentIconBrush` (the single
+  primary); Into/Over/Out + Run-to-Cursor + Run-to-SUSPEND + Restart → neutral (inherit `NeutralIconBrush`);
+  Next Iteration + Loop Exit → a new shared **`DebugLoopIconBrush` (teal, both dicts)** marking the
+  "loop-operations" category — **teal, not the D15.1 PSQL-keyword violet** (that would cross the syntax domain
+  into the toolbar); Stop → `DangerIconBrush`; Break on Exception → `WarningIconBrush` (a behaviour mode, not
+  a destructive action). Labels stay neutral text so only the icon carries the category → 6 neutral / 4
+  meaning-bearing hues, calm after D15.1. The three now-unused `Debugger*Content` glyph strings were removed;
+  the results-empty hint reworded off the old glyph. Build 0/0; +1 headless pin (all 11 toolbar geometries +
+  `DebugLoopIconBrush` in both themes resolve at runtime); 5099 tests green; smoke clean.
+- **B (app/debugger metaphor icon):** design + wire the new debugger tab/entry-point icon (the
+  playhead-on-a-branching-path metaphor from the concept board, replacing `Icon.Bug` on the procedure-editor
+  debug button + the debugger tab). **NOT started.**
+- **C (error bar):** extract the fault message into its own collapsible row with copy + expand; fixed toolbar
+  height so an error never shifts the editor. **NOT started.**
 
 ### 4.6 DoD
 Toolbar has clear primary/secondary/toggle hierarchy in EmberTern's own style; icons share one geometry;

@@ -107,6 +107,11 @@
       <Color x:Key="WarningIconColor">#DBA13C</Color>
       <Color x:Key="InfoIconColor">#5BA7D0</Color>
       <Color x:Key="NeutralIconColor">#C8CCD2</Color>
+      <!-- D15.2 Seam A: shared subtle accent for the "loop operations" category (Next Iteration /
+           Loop Exit). Teal — deliberately NOT the PSQL-keyword violet from D15.1 (that would cross
+           the syntax domain into the toolbar). Colour marks the category, not each icon. -->
+      <Color x:Key="DebugLoopIconColor">#4FC1B5</Color>
+      <SolidColorBrush x:Key="DebugLoopIconBrush" Color="{StaticResource DebugLoopIconColor}" />
       <!-- Icon-button hover overlay — a touch stronger than HoverOverlay so a
            toolbar icon's hover reads clearly. ARGB: ~13% white on dark. -->
       <Color x:Key="IconHoverColor">#22FFFFFF</Color>
@@ -331,6 +336,10 @@
       <Color x:Key="WarningIconColor">#B5790E</Color>
       <Color x:Key="InfoIconColor">#2A7AA8</Color>
       <Color x:Key="NeutralIconColor">#3C3C3C</Color>
+      <!-- D15.2 Seam A: shared subtle accent for the "loop operations" category (Next Iteration /
+           Loop Exit). Teal — deliberately NOT the PSQL-keyword violet from D15.1. -->
+      <Color x:Key="DebugLoopIconColor">#0E8074</Color>
+      <SolidColorBrush x:Key="DebugLoopIconBrush" Color="{StaticResource DebugLoopIconColor}" />
       <!-- ARGB: ~9% black on light. -->
       <Color x:Key="IconHoverColor">#18000000</Color>
 

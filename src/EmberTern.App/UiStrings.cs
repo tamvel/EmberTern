@@ -1808,19 +1808,17 @@ internal static class UiStrings
     public const string DebuggerBottomTabCallStack = "Call Stack";
     public const string DebuggerBottomTabBreakpoints = "Breakpoints";
     public const string DebuggerBottomTabResults = "Results";
-    // Run to next SUSPEND + its result grid (D12 Seam E2, spec §9.8).
-    public const string DebuggerRunToSuspendContent = "⏭ SUSPEND";
+    // Run to next SUSPEND + its result grid (D12 Seam E2, spec §9.8). The button label is now an
+    // SvgIcon + text (D15.2 Seam A); only the tooltip remains here.
     public const string DebuggerRunToSuspendTooltip =
         "Run to next SUSPEND — produce the next result row of a selectable procedure (rows collect in the Results tab).";
     // Loop fast-forward (D13) — enabled only while paused inside a WHILE / FOR loop.
-    public const string DebuggerRunToNextIterationContent = "↻ Next Iter";
     public const string DebuggerRunToNextIterationTooltip =
         "Next Iteration — finish the current loop iteration and pause at the start of the next (or after the loop if it exits). Available inside a loop.";
-    public const string DebuggerRunToLoopExitContent = "⤶ Loop Exit";
     public const string DebuggerRunToLoopExitTooltip =
         "Continue Until Loop Exit — run the rest of the current loop and pause just after it (any exit: condition, LEAVE/BREAK, EXIT). Available inside a loop.";
     public const string DebuggerResultsEmpty =
-        "No rows yet. Use “⏭ SUSPEND” to run a selectable procedure to its next SUSPEND; each emitted row is collected here.";
+        "No rows yet. Use “Suspend” to run a selectable procedure to its next SUSPEND; each emitted row is collected here.";
     // Breakpoints panel (D12 Seam E, spec §9.8) — a pure view of the Core Breakpoint / DataBreakpoint objects.
     public const string DebuggerBreakpointsEmpty =
         "No breakpoints. Click the editor gutter to add a line breakpoint; right-click a variable → " +
