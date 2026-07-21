@@ -443,6 +443,46 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         return map;
     }
 
+    // Pure: reconstructs each Sequenced step's commit/rollback outcome from the segment map (the plan
+    // the engine ran) + the per-statement results, mirroring FirebirdScriptExecutor.RunSequencedAsync
+    // EXACTLY — a step commits only if every one of its planned statements ran and none failed;
+    // otherwise it rolled back (any failure, OR a partial run with no failure = cancelled mid-step),
+    // and a step with no results at all was never reached. This is why a statement can be Success yet
+    // its step rolled back: a LATER statement in the same step (transaction) failed. Empty in →
+    // empty out (non-Sequenced run). App reconstruction only; the engine is untouched.
+    internal static IReadOnlyDictionary<int, ScriptStepStatus> BuildStepStatuses(
+        int[] segmentMap, IReadOnlyList<ScriptStatementResult> results)
+    {
+        var statuses = new Dictionary<int, ScriptStepStatus>();
+        if (segmentMap.Length == 0) return statuses;
+
+        var planned = new Dictionary<int, int>();
+        foreach (var step in segmentMap)
+            planned[step] = planned.TryGetValue(step, out var c) ? c + 1 : 1;
+
+        var executed = new Dictionary<int, int>();
+        var failed = new Dictionary<int, int>();
+        foreach (var r in results)
+        {
+            if (r.Index < 0 || r.Index >= segmentMap.Length) continue;
+            int step = segmentMap[r.Index];
+            executed[step] = executed.TryGetValue(step, out var e) ? e + 1 : 1;
+            if (!r.Success) failed[step] = failed.TryGetValue(step, out var f) ? f + 1 : 1;
+        }
+
+        foreach (var (step, plannedCount) in planned)
+        {
+            int exec = executed.TryGetValue(step, out var e) ? e : 0;
+            int fail = failed.TryGetValue(step, out var f) ? f : 0;
+            statuses[step] =
+                exec == 0 ? ScriptStepStatus.NotRun
+                : fail > 0 ? ScriptStepStatus.RolledBack
+                : exec == plannedCount ? ScriptStepStatus.Committed
+                : ScriptStepStatus.RolledBack; // partial run, no failure ⇒ cancelled mid-step
+        }
+        return statuses;
+    }
+
     // Pure pre-flight gate: returns the block message when a single-transaction mode (Manual /
     // Auto-commit) is asked to run a MIXED DDL+DML script, else null. Sequenced is built for mixed
     // migrations, so it is never blocked. The engine is untouched — this only stops the run earlier,
@@ -484,6 +524,20 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         while (flat.Contains("  ", StringComparison.Ordinal)) flat = flat.Replace("  ", " ");
         return flat.Length > 40 ? flat.Substring(0, 40) + "…" : flat;
     }
+}
+
+/// <summary>
+/// A Sequenced step's (committed transaction's) outcome, reconstructed by the App from the plan +
+/// results. Distinct from a statement's own success: a <see cref="Committed"/> step's changes
+/// persisted; a <see cref="RolledBack"/> step's changes vanished (a statement in it failed, or it was
+/// cancelled mid-way) even if this particular statement reported success; <see cref="NotRun"/> = the
+/// step was never reached.
+/// </summary>
+public enum ScriptStepStatus
+{
+    NotRun,
+    Committed,
+    RolledBack,
 }
 
 /// <summary>One row in the Script Executor results grid.</summary>

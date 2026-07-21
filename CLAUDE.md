@@ -396,8 +396,13 @@ noted.
   than one seam, split C1/C2/C3; C1 (a "Step" column showing each statement's committed Sequenced step) DONE
   2026-07-21** — pure `ScriptExecutorTabViewModel.BuildSegmentMap(statements, mode)` (statement index → 1-based
   step from the same planner the engine ran; empty/blank for single-transaction modes) + `ScriptResultRowViewModel.StepText`;
-  +7 `ScriptExecutorSegmentPresentationTests`. Build 0/0. **Next actionable is Step 5 seam C2 (per-step
-  commit/rollback status) — NOT started, gated on the user.** Full record: review §6 "Results" + §7, and
+  +7 `ScriptExecutorSegmentPresentationTests`. **Seam C2 (per-step commit/rollback status) assessed larger
+  than one seam, split C2a/C2b; C2a (pure reconstruction) DONE 2026-07-21** — `ScriptStepStatus`
+  (Committed/RolledBack/NotRun) + pure `ScriptExecutorTabViewModel.BuildStepStatuses(segmentMap, results)`
+  mirrors `RunSequencedAsync` exactly (captures a `Success` statement whose step still rolled back because a
+  later statement in the same transaction failed); engine untouched; +7 `ScriptExecutorStepStatusTests`. Build
+  0/0. **Next actionable is Step 5 seam C2b (present the step status on the rows) — NOT started, gated on the
+  user.** Full record: review §6 "Results" + §7, and
   [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0/1/3/4).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:

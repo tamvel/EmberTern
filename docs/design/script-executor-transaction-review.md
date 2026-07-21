@@ -38,9 +38,9 @@
 > third mode in the picker) — DONE**: `Sequenced` selectable, per-mode description on the picker, honest
 > summary. **Seam B (up-front rejection of a mixed script in Manual/AutoCommit) — DONE**: stopped before
 > the first statement with a message naming `Sequenced`; pure `ResolveMixedScriptBlock`, engine untouched.
-> **Seam C (results-grid segment presentation) — assessed larger than one seam, split C1/C2/C3; C1 (a
-> "Step" column showing each statement's committed step) — DONE.** The next actionable is C2 (per-step
-> commit/rollback status) — NOT started, gated on the user.
+> **Seam C (results-grid segment presentation) — split C1/C2/C3; C1 (a "Step" column) DONE; C2 further
+> split C2a/C2b, C2a (pure per-step commit/rollback reconstruction, `BuildStepStatuses`) DONE.** The next
+> actionable is C2b (present the step status on the rows) — NOT started, gated on the user.
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -613,9 +613,17 @@ sole planner; Firebird only executes). Split into two seams:
     (statement index → 1-based step, reconstructed from the same planner the engine ran; empty for a
     single-transaction run, so the column is blank in Manual/Auto-commit); `ScriptResultRowViewModel`
     gained `StepText`. Unit-pinned (+7 `ScriptExecutorSegmentPresentationTests`). Build 0/0.
-  - **C2 — per-segment commit/rollback status — NOT started.** A visual marker of which steps committed
-    vs rolled back, reconstructed from the per-statement results (handling stop-on-error / continue /
-    cancel).
+  - **C2 — per-segment commit/rollback status.** Assessed larger than one seam (reconstruction has real
+    nuance + presentation needs observable rows / rebuild + colouring), so split C2a/C2b:
+    - **C2a — the pure reconstruction — DONE (2026-07-21).** `ScriptStepStatus` (Committed / RolledBack /
+      NotRun) + pure `ScriptExecutorTabViewModel.BuildStepStatuses(segmentMap, results)` rebuilds each
+      step's outcome from the plan + per-statement results, mirroring `RunSequencedAsync` exactly (a step
+      commits only if all its planned statements ran and none failed; any failure — or a partial run with
+      no failure = cancelled mid-step — rolls it back; no results = never reached). Captures the key
+      nuance: a `Success` statement whose step still rolled back because a LATER statement in the same
+      transaction failed. App reconstruction only; engine untouched. Unit-pinned (+7
+      `ScriptExecutorStepStatusTests`). Build 0/0.
+    - **C2b — presentation — NOT started.** Apply the statuses to the rows (colour / marker + tooltip).
   - **C3 — a "which steps committed" summary — NOT started.** e.g. "N of M steps committed" on the
     status line.
 
