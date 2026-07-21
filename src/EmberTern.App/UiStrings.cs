@@ -120,6 +120,15 @@ internal static class UiStrings
     public const string ScriptTransactionLabel = "Transaction:";
     public const string ScriptModeManual = "Manual (review, then commit)";
     public const string ScriptModeAutoCommit = "Auto-commit on success";
+    public const string ScriptModeSequenced = "Sequenced (deployment, commits in steps)";
+    // Per-mode descriptions — surfaced where the user picks the mode (the picker's tooltip), so the
+    // Sequenced trade-off is stated at the point of choice (not buried). No transaction jargon.
+    public const string ScriptModeManualDescription =
+        "Runs the whole script as one transaction and leaves it open so you can review the results, then Commit or Roll back. All-or-nothing.";
+    public const string ScriptModeAutoCommitDescription =
+        "Runs the whole script as one transaction and commits it automatically if nothing failed, otherwise rolls the whole script back. All-or-nothing.";
+    public const string ScriptModeSequencedDescription =
+        "For deployments: runs the script in steps, committing after each schema change so a later statement can use an object an earlier one created. NOT all-or-nothing — steps that already committed stay applied if a later step fails.";
     public const string ScriptStopOnError = "Stop on error";
     public const string ScriptOpenTooltip = "Open a .sql script…";
     public const string ScriptSaveTooltip = "Save the script to a .sql file…";
@@ -170,6 +179,12 @@ internal static class UiStrings
     public const string ScriptStatusManualSummaryFormat =
         "{0} succeeded, {1} failed in {2}. Transaction open — Commit or Rollback.";
     public const string ScriptStatusAutoSummaryFormat = "{0} {1} succeeded, {2} failed in {3}.";
+    // Sequenced (deployment) — committed step-by-step, so the summary states the non-atomic reality
+    // rather than a single Committed/Rolled-back verdict.
+    public const string ScriptStatusSequencedSummaryFormat =
+        "Deployment: {0} succeeded, {1} failed in {2}. Committed steps stay applied — this mode is not all-or-nothing.";
+    public const string ScriptStatusSequencedCancelled =
+        "Deployment cancelled. Steps that already committed stay applied; the step in progress was rolled back.";
     public const string BatchResultsClose = "Close";
     // Preparation phase — the dialog opens here immediately so feedback is instant while
     // the object list + per-object SQL are still being built (Batch Operations UX sprint).

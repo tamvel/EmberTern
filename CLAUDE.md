@@ -383,9 +383,14 @@ noted.
   lab untouched), **ALL PASS**: (A) mixed CREATE+INSERT+INDEX migration runs end-to-end + persists (#213 fixed by
   design), (B) same migration under AutoCommit still fails at the INSERT + rolls back (the #213 contrast), (C)
   mid-script failure keeps earlier segments committed + rolls back only the failing one. Build 0/0; Script + Dev
-  Mode + Transaction suite 165 green (regression). **Next actionable is Step 5 (App: third picker mode,
-  results-grid segment boundaries, up-front rejection of a mixed script in Manual) — NOT started, gated on the
-  user.** Full record: review §6 "Results" + §7, and
+  Mode + Transaction suite 165 green (regression). **Step 5 (App layer — App/UX only) STARTED 2026-07-21, split
+  into seams A/B/C; Seam A (third mode in the picker) DONE** — `Sequenced` ("deployment, commits in steps")
+  added to the mode ComboBox with a per-mode description tooltip (the non-atomic trade-off stated where the mode
+  is picked, §5.3); pure `ScriptExecutorTabViewModel.ResolveMode`/`ResolveModeDescription` + a mode-aware
+  `BuildOutcomeStatus` (honest Sequenced summary + cancelled message); +11 `ScriptExecutorModeTests`;
+  Manual/AutoCommit wording unchanged. Build 0/0. **Next actionable is Step 5 seam B (up-front rejection of a
+  mixed DDL+DML script in Manual/AutoCommit, pointing at Sequenced) — NOT started; then seam C (results-grid
+  segment presentation) — gated on the user.** Full record: review §6 "Results" + §7, and
   [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0/1/3/4).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:

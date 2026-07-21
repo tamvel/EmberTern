@@ -32,9 +32,13 @@
 > resolution): pure `ResolveSegmentTransactionOptions`, unit-pinned. **Seam B** (Sequenced execution
 > loop): `RunSequencedAsync` runs the plan one committed segment at a time — **live-verified on FB5**
 > (`tools/probes/ScriptExecutorSequencedProbe`, ALL PASS: mixed migration runs / #213 contrast /
-> partial-commit). Core untouched; Manual/AutoCommit unchanged. **The next actionable is Step 5 (App:
-> third picker mode, results-grid segment boundaries, up-front rejection of a mixed script in Manual) —
-> NOT started, gated on the user scheduling it.**
+> partial-commit). Core untouched; Manual/AutoCommit unchanged.
+>
+> **Step 5 (App layer) — STARTED 2026-07-21** (§6, split into seams A/B/C; App/UX only). **Seam A (the
+> third mode in the picker) — DONE**: `Sequenced` selectable, per-mode description on the picker (the
+> trade-off stated where picked), honest Sequenced summary; pure mappings unit-pinned. **The next
+> actionable is Step 5 seam B (up-front rejection of a mixed script in Manual/AutoCommit) — NOT started,
+> gated on the user.**
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -581,8 +585,22 @@ sole planner; Firebird only executes). Split into two seams:
   the failing duplicate INSERT. Build 0/0; Script/Dev Mode/Transaction suite 165 green (regression). **The
   next actionable is Step 5 (App).**
 
-**Step 5 — App layer.** Third mode in the picker with the atomicity trade-off stated in the UI;
-up-front rejection of mixed scripts in `Manual`; results grid shows segment boundaries.
+**Step 5 — App layer.** App/UX only (no Core/Firebird change). Split into seams:
+- **Seam A — the third mode in the picker — DONE (2026-07-21).** `Sequenced` ("deployment, commits in
+  steps") added to the mode ComboBox; the picker now carries a per-mode description (tooltip) so the
+  Sequenced non-atomic trade-off is stated where the mode is chosen (§5.3). Pure
+  `ScriptExecutorTabViewModel.ResolveMode` (index→mode) + `ResolveModeDescription`, and a mode-aware
+  `BuildOutcomeStatus` giving Sequenced its own honest summary + cancelled message (not a single
+  Committed/Rolled-back verdict). Unit-pinned (+11 `ScriptExecutorModeTests`); Manual/AutoCommit wording
+  unchanged. Build 0/0. *(Visual confirmation of the picker is the user's; the Sequenced execution it
+  drives is already live-verified in Step 4.)*
+- **Seam B — up-front rejection of a mixed script in the single-transaction modes — NOT started.** A
+  mixed DDL+DML script in `Manual`/`AutoCommitOnSuccess` is rejected before running with a message
+  pointing at `Sequenced` (§5.1/§5.3), instead of failing on statement 2 with `Table unknown`. Pure
+  detector + message wired into the pre-flight.
+- **Seam C — segment presentation in the results grid — NOT started.** Per-statement segment membership
+  + commit/rollback boundary markers + a "which steps committed" detail (the App reconstructs boundaries
+  from `ScriptSegmentPlanner`). Larger UI seam; may split further.
 
 **Step 6 — Verify.** Build 0/0 + full suite + **live verification against the lab DB** with a real
 mixed migration script. Per the QA rule: not "fixed" until visually confirmed in the running app.

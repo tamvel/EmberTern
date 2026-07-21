@@ -49,9 +49,14 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
     // Editor content — pushed in from the view's TextChanged (two-way TextEditor.Text is flaky).
     [ObservableProperty] private string _scriptText = string.Empty;
 
-    // 0 = Manual (review then commit, DEFAULT), 1 = Auto-commit on success.
+    // 0 = Manual (review then commit, DEFAULT), 1 = Auto-commit on success, 2 = Sequenced (deployment).
+    [NotifyPropertyChangedFor(nameof(SelectedModeDescription))]
     [ObservableProperty] private int _transactionModeIndex;
     [ObservableProperty] private bool _stopOnError = true;
+
+    /// <summary>The selected execution mode's description — surfaced on the picker so the Sequenced
+    /// (non-atomic) trade-off is stated where the mode is chosen. Recomputed on selection change.</summary>
+    public string SelectedModeDescription => ResolveModeDescription(TransactionModeIndex);
 
     [NotifyCanExecuteChangedFor(nameof(RunCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
@@ -87,8 +92,24 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
 
     public bool HasResults => _allRows.Count > 0;
 
-    private ScriptTransactionMode Mode
-        => TransactionModeIndex == 1 ? ScriptTransactionMode.AutoCommitOnSuccess : ScriptTransactionMode.Manual;
+    private ScriptTransactionMode Mode => ResolveMode(TransactionModeIndex);
+
+    // Pure picker-index → mode mapping (0 Manual · 1 Auto-commit · 2 Sequenced; anything else Manual).
+    // Internal + static so the mapping is unit-pinned without the VM's services.
+    internal static ScriptTransactionMode ResolveMode(int index) => index switch
+    {
+        1 => ScriptTransactionMode.AutoCommitOnSuccess,
+        2 => ScriptTransactionMode.Sequenced,
+        _ => ScriptTransactionMode.Manual,
+    };
+
+    // Pure picker-index → description mapping (same order as ResolveMode).
+    internal static string ResolveModeDescription(int index) => index switch
+    {
+        1 => UiStrings.ScriptModeAutoCommitDescription,
+        2 => UiStrings.ScriptModeSequencedDescription,
+        _ => UiStrings.ScriptModeManualDescription,
+    };
 
     /// <summary>The view writes the TSV to the clipboard (VM holds no clipboard type).</summary>
     public event Action<string>? CopyToClipboardRequested;
@@ -157,7 +178,7 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
                 .ConfigureAwait(true);
             TransactionOpen = outcome.TransactionLeftOpen && _transactionService.IsActive;
             HasError = outcome.AnyFailed;
-            StatusText = BuildOutcomeStatus(outcome);
+            StatusText = BuildOutcomeStatus(outcome, Mode);
         }
         catch (OperationCanceledException)
         {
@@ -323,13 +344,28 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         }
     }
 
-    private string BuildOutcomeStatus(ScriptRunOutcome outcome)
+    // Internal + static so the summary wording per mode is unit-pinned without the VM's services.
+    internal static string BuildOutcomeStatus(ScriptRunOutcome outcome, ScriptTransactionMode mode)
     {
-        if (outcome.Cancelled) return UiStrings.ScriptStatusCancelled;
+        if (outcome.Cancelled)
+        {
+            // Sequenced never leaves a transaction open, so the generic "transaction still open"
+            // cancelled line would mislead — it committed step-by-step.
+            return mode == ScriptTransactionMode.Sequenced
+                ? UiStrings.ScriptStatusSequencedCancelled
+                : UiStrings.ScriptStatusCancelled;
+        }
 
         var elapsed = TimeSpan.Zero;
         foreach (var r in outcome.Results) elapsed += r.Elapsed;
         var elapsedText = FormatDuration(elapsed);
+
+        if (mode == ScriptTransactionMode.Sequenced)
+        {
+            // Committed step-by-step — state the non-atomic reality, not a single verdict.
+            return string.Format(CultureInfo.CurrentCulture, UiStrings.ScriptStatusSequencedSummaryFormat,
+                outcome.SuccessCount, outcome.FailedCount, elapsedText);
+        }
 
         if (!outcome.TransactionLeftOpen)
         {

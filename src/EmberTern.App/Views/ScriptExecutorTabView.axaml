@@ -49,9 +49,11 @@
         <TextBlock Text="{x:Static app:UiStrings.ScriptTransactionLabel}"
                    VerticalAlignment="Center" Foreground="{DynamicResource SubtleForegroundBrush}" />
         <ComboBox SelectedIndex="{Binding TransactionModeIndex, Mode=TwoWay}" MinWidth="200"
-                  VerticalAlignment="Center">
+                  VerticalAlignment="Center"
+                  ToolTip.Tip="{Binding SelectedModeDescription}">
           <ComboBoxItem Content="{x:Static app:UiStrings.ScriptModeManual}" />
           <ComboBoxItem Content="{x:Static app:UiStrings.ScriptModeAutoCommit}" />
+          <ComboBoxItem Content="{x:Static app:UiStrings.ScriptModeSequenced}" />
         </ComboBox>
         <CheckBox Content="{x:Static app:UiStrings.ScriptStopOnError}"
                   IsChecked="{Binding StopOnError, Mode=TwoWay}" VerticalAlignment="Center" />
