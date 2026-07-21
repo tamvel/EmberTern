@@ -59,6 +59,7 @@ public partial class FunctionDetailTabView : UserControl
         _sqlEditor = this.FindControl<TextEditor>("FuncSqlEditor");
         _bodyEditor = this.FindControl<TextEditor>("FuncBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("FuncDdlEditor");
+        if (_ddlEditor is not null) SqlEditorBehavior.AttachReadOnlyHighlighting(_ddlEditor);
         _cursorEditor = this.FindControl<TextEditor>("FuncCursorEditor");
         _subprogramEditor = this.FindControl<TextEditor>("FuncSubprogramEditor");
         _execResultGrid = this.FindControl<DataGrid>("FuncExecResultGrid");

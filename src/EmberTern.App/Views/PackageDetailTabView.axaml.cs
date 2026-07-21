@@ -43,6 +43,7 @@ public partial class PackageDetailTabView : UserControl
         _headerEditor = this.FindControl<TextEditor>("PackageHeaderEditor");
         _bodyEditor = this.FindControl<TextEditor>("PackageBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("PackageDdlEditor");
+        if (_ddlEditor is not null) SqlEditorBehavior.AttachReadOnlyHighlighting(_ddlEditor);
         // S5: the panel's activation gestures navigate the active SQL document.
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("PackageDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;

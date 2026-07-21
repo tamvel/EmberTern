@@ -161,6 +161,26 @@ changes the model's reference set → feeds hover / Ctrl+Click / diagnostics). A
 **Still deferred (user, "w dalszej perspektywie"):** giving domains their **own distinct accent** (visually
 different from plain SQL types) — a pure presentation change on top of the now-existing resolution; scope it
 when wanted.
+
+### 3.7 Seam A3 — DDL preview highlighting parity (bug fix)  — DONE (2026-07-21; awaits user visual confirmation)
+A regression found by QA: the object editors' **DDL tab** (and the sidebar DDL preview) coloured differently
+from the Editor tab. Root cause — **app-wide highlighting has two layers, and only one reached the DDL
+preview.** Every DDL editor already got the lexical **XSHD** layer (each view's `ApplyEditorTheme` applies the
+theme-matched `FirebirdSql[.Light].xshd` to `_ddlEditor`), but the **semantic** layer (`SemanticHighlighter`,
+which colours schema objects + domains) is installed only by `SqlEditorBehavior.Attach`, and the read-only DDL
+editors never called it — so objects/domains stayed the default foreground while the Editor tab coloured them
+(the D15.1 domain teal made the gap newly obvious). Fix: a new **highlight-only** attach
+`SqlEditorBehavior.AttachReadOnlyHighlighting(editor)` adds the `SemanticHighlighter` layer **without** the
+interactive machinery (completion / squiggles / ergonomics) a read-only preview must not have — it rebuilds the
+model from the editor text + the window's metadata snapshot on text-change and on metadata load, resolves the
+`MainWindowViewModel` from the visual tree (so each call site is one line, no VM plumbing), and is leak-free
+(metadata subscription released on detach). Wired into **all 11 DDL previews** (MainWindow sidebar + Table /
+Procedure / Function / Trigger / View / Package / Domain / Generator / Exception / Index editors). Now the DDL
+surface colours objects/domains like the Editor tab, closing the app-wide gap. Additive (only adds a colour
+layer to read-only editors; if metadata isn't warmed it shows nothing extra — no behaviour change). Build 0/0;
+semantic/highlight/syntax suites + the headless editor-attach probe green. **Minor known gap:** a trigger DDL
+preview does not resolve `NEW`/`OLD` context vars (no trigger-table context provider on the read-only path) —
+those stay neutral in the preview; deferred, not in scope.
 - **B (current-line):** rebuild `CurrentLineRenderer` for full-width + calm-blue + gutter bar; new/retuned
   tokens in both dictionaries; both themes. **NOT started.**
 

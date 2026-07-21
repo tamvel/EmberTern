@@ -131,6 +131,7 @@ public partial class MainWindow : Window
             reveal: _ => { if (_resultsMaximized) ToggleResultsMaximized(); });
         _editor = this.FindControl<TextEditor>("SqlEditor");
         _ddlEditor = this.FindControl<TextEditor>("DdlEditor");
+        if (_ddlEditor is not null) SqlEditorBehavior.AttachReadOnlyHighlighting(_ddlEditor);
         _resultGrid = this.FindControl<DataGrid>("ResultGrid");
         _maxRestoreGlyph = this.FindControl<SvgIcon>("MaxRestoreGlyph");
 

@@ -367,7 +367,21 @@ noted.
   App paints a resolved domain like a SQL type via a new `EditorDataTypeBrush` (both dicts, mirrors the xshd
   `DataType` hex) mapped in `SemanticHighlighter` for `Domain` objects; hover/Ctrl+Click/diagnostics work for
   free through the model. +4 `SemanticModelTests`; semantic/highlight/nav/hover/diagnostics suites green; build
-  0/0. A **distinct** domain accent (vs plain types) stays deferred.
+  0/0. A **distinct** domain accent (vs plain types) stays deferred. **Palette recalibration (2026-07-21, user
+  clarified the goal):** the point is FEWER coloured categories (most identifiers stay plain text), not lower
+  intensity — colours should be vivid + elegant (VS Code-like). So dark types → vivid `#4EC9B0` (+ mirrored
+  `EditorDataTypeBrush`); light comments → elegant green `#2E8B57` (back to green, not gray/olive). SQL blue /
+  PSQL violet already read as vivid; functions/operators/locals/columns stay neutral.
+  **Seam A3 — DDL preview highlighting parity (bug fix) DONE 2026-07-21 (awaits visual confirm):** the object
+  editors' DDL tab (+ sidebar DDL preview) coloured differently from the Editor tab — app-wide highlighting has
+  TWO layers and only the lexical (xshd) one reached the DDL previews; the **semantic** layer
+  (`SemanticHighlighter`, objects+domains) is installed only by `SqlEditorBehavior.Attach`, which the read-only
+  DDL editors never called. New highlight-only `SqlEditorBehavior.AttachReadOnlyHighlighting(editor)` adds the
+  semantic layer WITHOUT completion/squiggles/ergonomics (rebuilds model from text + metadata on change/load,
+  resolves the VM from the visual tree, leak-free); wired into all **11** DDL previews (MainWindow + Table/
+  Procedure/Function/Trigger/View/Package/Domain/Generator/Exception/Index). Additive; build 0/0; semantic/
+  highlight/syntax + headless editor-attach probe green. Minor known gap: trigger DDL preview doesn't resolve
+  NEW/OLD context vars (no context provider on the read-only path).
   **Seam B (current-line rebuild — full-width + calm-blue + gutter bar) NOT started.** Guide: d15 doc §3.
   **Script Executor Rewrite — Step 0 (Probe) DONE 2026-07-20; architecture stands, measurement-gated.** The
   `Sequenced`-mode plan is ratified ([docs/design/script-executor-transaction-review.md](docs/design/script-executor-transaction-review.md)

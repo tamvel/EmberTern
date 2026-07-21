@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
 
 namespace EmberTern.App.Views;
@@ -21,6 +22,7 @@ public partial class DomainDetailTabView : UserControl
     {
         InitializeComponent();
         _ddlEditor = this.FindControl<TextEditor>("DomainDdlEditor");
+        if (_ddlEditor is not null) SqlEditorBehavior.AttachReadOnlyHighlighting(_ddlEditor);
         ApplyEditorTheme();
         ActualThemeVariantChanged += (_, _) => ApplyEditorTheme();
         DataContextChanged += OnDataContextChanged;

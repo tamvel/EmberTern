@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Avalonia.Controls;
+using Avalonia.VisualTree;
 using AvaloniaEdit;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Sql.Language.Semantics;
@@ -121,5 +123,53 @@ internal static class SqlEditorBehavior
         // handler, no duplicate here (§10 / P6).
 
         return completion;
+    }
+
+    /// <summary>
+    /// Attaches the SEMANTIC highlighting layer ONLY to a <b>read-only SQL preview</b> editor — the DDL
+    /// tabs of the object editors and the sidebar DDL preview — so those surfaces colour schema objects
+    /// and domains exactly like the main Editor tab (D15.1's "app-wide highlighting"). It deliberately
+    /// does NOT wire the interactive machinery (<see cref="SqlCompletionController"/> completion,
+    /// squiggles, typing ergonomics) that a read-only preview must not have. The lexical XSHD layer is
+    /// applied by each view's own theme code (<c>ApplyEditorTheme</c>); this adds the missing semantic
+    /// accent layer, which was the DDL/Editor inconsistency.
+    /// <para>The model is rebuilt from the editor's text + the window's <see cref="MainWindowViewModel"/>
+    /// metadata snapshot on every text change and whenever a metadata category finishes loading (so
+    /// late-loaded objects begin to resolve). The VM is resolved from the visual tree on attach — every
+    /// DDL preview calls this with just the editor, no per-view VM plumbing — and the metadata
+    /// subscription is released on detach, so it is leak-free.</para>
+    /// </summary>
+    public static void AttachReadOnlyHighlighting(TextEditor editor)
+    {
+        if (editor is null) return;
+
+        SemanticModel? model = null;
+        MainWindowViewModel? vm = null;
+
+        void Rebuild()
+        {
+            var text = editor.Text;
+            model = string.IsNullOrEmpty(text) || vm is null
+                ? null
+                : SemanticModel.Build(text, vm.CreateMetadataSnapshot());
+            editor.TextArea.TextView.Redraw();
+        }
+
+        // Highlight-only: a bare model source (the test/read-only seam), no controller.
+        SemanticHighlighter.Attach(editor, () => model);
+
+        void OnObjectsChanged() => Rebuild();
+
+        editor.TextChanged += (_, _) => Rebuild();
+        editor.AttachedToVisualTree += (_, _) =>
+        {
+            vm = editor.FindAncestorOfType<Window>()?.DataContext as MainWindowViewModel;
+            if (vm is not null) vm.Metadata.ObjectsChanged += OnObjectsChanged;
+            Rebuild();
+        };
+        editor.DetachedFromVisualTree += (_, _) =>
+        {
+            if (vm is not null) vm.Metadata.ObjectsChanged -= OnObjectsChanged;
+        };
     }
 }
