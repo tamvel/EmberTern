@@ -372,8 +372,13 @@ noted.
   conservative — each schema statement is its own committed segment (isql `SET AUTODDL ON`); grouping independent
   consecutive DDL (§5.1, PROBE 2a) is a documented deferred optimization. **Step 2 (Dev Mode text) folded in and
   found already truthful** (`UiStrings` already states the scope + SQL-Editor boundary). Build 0/0; +10
-  `ScriptSegmentPlannerTests`; Script + Dev Mode suite 110/110 green. **Next actionable is Step 4 (Firebird layer
-  runs the segments) — NOT started, gated on the user.** Full record: review §6 "Results" + §7, and
+  `ScriptSegmentPlannerTests`; Script + Dev Mode suite 110/110 green. **Step 4 (Firebird layer) STARTED
+  2026-07-21, split into seams A+B; Seam A (per-segment TPB resolution) DONE** — pure internal
+  `FirebirdScriptExecutor.ResolveSegmentTransactionOptions(SegmentTransactionPolicy, bool)` maps `SchemaWait` →
+  the same Dev-Mode-aware WAIT policy Compile uses / `DataNoWait` → NOWAIT default; unit-pinned (+5), no
+  execution path yet. **Next actionable is Step 4 seam B (the Sequenced execution loop, `RunAsync` per-segment
+  begin/run/commit + rollback-on-failure) — NOT started, gated on the user; requires live verification.** Full
+  record: review §6 "Results" + §7, and
   [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0 + Step 1 + Step 3).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:

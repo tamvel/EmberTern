@@ -186,6 +186,27 @@ public sealed class FirebirdScriptExecutor
         && statements.Count > 0
         && statements.All(s => s.Kind == ScriptStatementKind.Ddl);
 
+    /// <summary>
+    /// The TPB a <see cref="ScriptTransactionMode.Sequenced"/> segment begins with, from the
+    /// <see cref="SegmentTransactionPolicy"/> the planner assigned it. A
+    /// <see cref="SegmentTransactionPolicy.SchemaWait"/> segment reuses the SAME
+    /// Developer-Mode-aware WAIT policy object-editor Compile uses
+    /// (<see cref="FirebirdDdlExecutor.BuildDdlTransactionOptions(bool)"/> — one definition of "the
+    /// Dev Mode wait policy", never a copy that can drift), so deploying an object another SESSION
+    /// holds waits for it instead of failing instantly. A
+    /// <see cref="SegmentTransactionPolicy.DataNoWait"/> segment returns <c>null</c> = the working
+    /// transaction's usual NOWAIT ReadCommitted default, so a deployment's DML never blocks on an
+    /// ordinary row lock. Pure + internal so the mapping is unit-pinned without a live Firebird.
+    /// <para>This only MAPS a plan the planner already made — it never decides a segment's kind
+    /// (<see cref="ScriptSegmentPlanner"/> is the sole planner; the Firebird layer just executes
+    /// the prepared plan). Consumed by the Sequenced execution loop (Step 4 seam B).</para>
+    /// </summary>
+    internal static FbTransactionOptions? ResolveSegmentTransactionOptions(
+        SegmentTransactionPolicy policy, bool developerMode)
+        => policy == SegmentTransactionPolicy.SchemaWait
+            ? FirebirdDdlExecutor.BuildDdlTransactionOptions(developerMode)
+            : null;
+
     // Runs one statement on the already-open script transaction. Row-bearing kinds go through
     // ExecuteReader (counting rows up to the cap without materializing a grid); everything else
     // through ExecuteNonQuery (RecordsAffected). A statement failure is captured as a result row

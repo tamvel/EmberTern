@@ -26,8 +26,12 @@
 >
 > **Step 3 (Sequenced Core) — DONE 2026-07-21** (§6). `ScriptTransactionMode.Sequenced` + the pure
 > `ScriptSegmentPlanner` (segments over the AST classifier, per-segment TPB intent) land Core-only;
-> Step 2 (Dev Mode text) was folded in and found already truthful. **The next actionable is Step 4
-> (Firebird layer runs the segments) — NOT started, gated on the user scheduling it.**
+> Step 2 (Dev Mode text) was folded in and found already truthful.
+>
+> **Step 4 (Firebird layer) — STARTED 2026-07-21** (§6, split into seams A + B). **Seam A (per-segment
+> TPB resolution) — DONE**: pure `ResolveSegmentTransactionOptions`, unit-pinned, no execution path.
+> **The next actionable is Step 4 seam B (the Sequenced execution loop) — NOT started, gated on the
+> user scheduling it.**
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -550,8 +554,21 @@ path, no App, no UI (Steps 4/5). Build 0/0; +10 `ScriptSegmentPlannerTests`; Scr
 green (110). **Next actionable is Step 4** (Firebird layer runs the segments) — gated on the user
 scheduling it.
 
-**Step 4 — Firebird layer.** `FirebirdScriptExecutor` runs segments; Dev Mode-aware WAIT TPB on DDL
-segments; per-segment commit; committed-segments reporting.
+**Step 4 — Firebird layer.** `FirebirdScriptExecutor` runs the prepared plan (the planner stays the
+sole planner; Firebird only executes). Split into two seams:
+- **Seam A — per-segment TPB resolution — DONE (2026-07-21).** Pure internal
+  `FirebirdScriptExecutor.ResolveSegmentTransactionOptions(SegmentTransactionPolicy, bool)` maps a
+  planner-assigned policy to a Firebird TPB: `SchemaWait` → the SAME Dev-Mode-aware WAIT policy
+  Compile uses (`FirebirdDdlExecutor.BuildDdlTransactionOptions`, one definition, no drift);
+  `DataNoWait` → null (the working transaction's NOWAIT ReadCommitted default). Unit-pinned in
+  `DeveloperModeTests` (+5); no execution path, no behaviour change to any existing mode. Build 0/0.
+- **Seam B — Sequenced execution loop — NOT started.** `RunAsync` gains a Sequenced branch: call
+  `ScriptSegmentPlanner.Plan`, then per segment begin a transaction with seam A's TPB, run its
+  statements via the existing `RunOneAsync`, commit on success / roll back the OPEN segment on failure
+  (stop or continue per `StopOnError`). Manual/AutoCommit paths unchanged. Committed segments stay
+  applied — the per-statement results already record what succeeded, and the App reconstructs segment
+  boundaries + the "which segments committed" summary in Step 5. **Requires live verification** against
+  the lab with a real mixed migration (clean + failing).
 
 **Step 5 — App layer.** Third mode in the picker with the atomicity trade-off stated in the UI;
 up-front rejection of mixed scripts in `Manual`; results grid shows segment boundaries.
