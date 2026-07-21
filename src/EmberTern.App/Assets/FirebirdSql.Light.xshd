@@ -18,7 +18,9 @@
 <SyntaxDefinition name="Firebird SQL Light" extensions=".sql"
                   xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
 
-  <Color name="Comment"          foreground="#3F6B1F" />
+  <!-- Comments: a cool, muted gray-green — clearly a comment, but easy on the eye across long blocks
+       (replaces the earlier "rotten olive" #3F6B1F). -->
+  <Color name="Comment"          foreground="#5A7266" />
   <Color name="String"           foreground="#A31515" />
   <Color name="Number"           foreground="#0B6A5C" />
   <!-- SQL keywords (query + DML-action + DDL) share ONE restrained blue. -->
@@ -27,8 +29,8 @@
   <!-- PSQL control-flow / routine-body keywords: a distinct restrained violet (SQL vs PSQL),
        a touch more saturated than the first cut so it reads clearly on the near-white background. -->
   <Color name="PsqlKeyword"      foreground="#5D30A6" fontWeight="bold" />
-  <!-- Data types keep a discreet muted-teal accent — they matter in declarations. -->
-  <Color name="DataType"         foreground="#2C7A70" />
+  <!-- Data types keep a discreet muted-teal accent — same hue, darker for contrast on the near-white bg. -->
+  <Color name="DataType"         foreground="#175C52" />
   <!-- Built-in functions neutral (default foreground); operators a soft grey. -->
   <Color name="Function"         foreground="#1F1F1F" />
   <Color name="Operator"         foreground="#4D4D4D" />
