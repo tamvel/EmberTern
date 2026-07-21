@@ -12,12 +12,13 @@ namespace EmberTern.Firebird;
 /// <summary>
 /// Which physical attachment a command runs on. Three connections to the same database:
 /// <see cref="Data"/> (#1) carries user SQL/DML (SQL editor F5, table-data edits, Execute
-/// Procedure) and the data working transaction; <see cref="Metadata"/> (#2) carries metadata
-/// browsing and the metadata working transaction; <see cref="Ddl"/> (#3) carries
-/// Compile/structure DDL and NOTHING else — it never holds a working transaction, so DDL can
-/// always begin its own autonomous transaction without waiting on the user to settle theirs.
-/// Separate attachments are required because the managed FirebirdClient forbids two
-/// transactions on one FbConnection (gotcha #89).
+/// Procedure) and the data working transaction; <see cref="Metadata"/> (#2) carries read-only
+/// catalog browsing and owns NO transaction — reads use an implicit per-command transaction
+/// (see <see cref="MetadataLane"/>), so they never entangle with, block, or are blocked by the
+/// user's working transaction; <see cref="Ddl"/> (#3) carries Compile/structure DDL and NOTHING
+/// else — it never holds a working transaction, so DDL can always begin its own autonomous
+/// transaction without waiting on the user to settle theirs. Separate attachments are required
+/// because the managed FirebirdClient forbids two transactions on one FbConnection (gotcha #89).
 /// </summary>
 public enum ConnectionRole
 {

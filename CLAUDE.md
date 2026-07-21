@@ -358,9 +358,15 @@ noted.
   never rested on inference). #213 **re-confirmed** (PROBE 2); the commit-boundary fix **works** (PROBE 3);
   independent DDL **can share a segment** (PROBE 2a). **The architecture did NOT change** — the Sequenced design
   cannot self-block by construction (never two txns open at once); the review's §2.2(b)/§6/§7 were corrected in
-  place. **Next actionable is Step 1 (doc truth pass)**; the `Sequenced` build (Steps 3–6) proceeds only when the
-  user schedules it. Full record: review §6 "Results" + §7, and
-  [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0).
+  place. **Step 1 (Documentation Truth Pass) DONE 2026-07-21** — comment-only, no behaviour/UI/App change: the
+  two remaining stale comments were corrected (`ConnectionRole` docstring falsely said Metadata *"carries … the
+  metadata working transaction"* — it owns none; `MainWindowViewModel.cs:200` falsely cited *"co-location, gotcha
+  #122"* for why the Script Executor is on the Data lane — the real reason is that it IS the user working
+  transaction, #89); the other two review-named targets (`ConnectionProfile.cs`, the `FirebirdScriptExecutor`
+  header) were already clean. Build 0/0; Script Executor + Dev Mode tests 101/101 green. **Next actionable is the
+  `Sequenced` build (Steps 3–6, with Step 2's Dev Mode text) — NOT started, gated on the user scheduling it.**
+  Full record: review §6 "Results" + §7, and
+  [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0 + Step 1).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target

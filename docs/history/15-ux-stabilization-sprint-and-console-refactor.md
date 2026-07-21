@@ -254,6 +254,33 @@ code was touched — Step 0 is validation only. The next actionable is Step 1 (t
 pass); the `Sequenced` build (Steps 3–6) proceeds only when the user schedules it. The lab `.fdb` was
 churned by the probe's temporary tables and restored to pristine (`git checkout`) afterward.
 
+## Script Executor Rewrite — Step 1 (Documentation Truth Pass), 2026-07-21
+
+A small, safe cleanup step: bring the code comments into agreement with the Step 0 findings, with
+**no** behaviour, execution-path, UI, or App change. The review (§6) named three stale-comment
+targets; by the time this ran, **two were already clean** — `ConnectionProfile.cs` no longer claims
+Dev Mode "OFF ⇒ NOWAIT" (it correctly describes a WAIT policy whose modes differ only in timeout),
+and the `FirebirdScriptExecutor` header no longer cites the superseded gotcha #122 co-location
+rationale. Two false statements remained and were corrected:
+
+- **`ConnectionRole` enum docstring** (`FirebirdConnectionService.cs`) still advertised the Metadata
+  attachment as carrying *"the metadata working transaction"* — directly contradicted by
+  `MetadataLane`'s own docstring (*"It owns NO transaction"*). This was the exact place §1.2 said the
+  Data/Metadata-routing and Developer-Mode mechanisms blur together. Rewritten to state that Metadata
+  carries read-only catalog browsing on an **implicit per-command** transaction and owns none.
+- **`MainWindowViewModel.cs:200`** cited *"co-location, gotcha #122"* as the reason the Script
+  Executor is on the Data lane. #122 (DDL co-location) was superseded by #214 (the "object in use"
+  lock is a transient NOWAIT-only cache pin, cleared by WAIT). The real reason the Script Executor
+  lives on the Data lane is that it **IS** the user working transaction (long-lived, manual
+  Commit/Rollback, one tx per connection — #89). Corrected.
+
+The already-accurate *corrective* comments that describe #122/co-location as superseded
+(`FirebirdConnectionService.ExecuteDdlAsync`, `FirebirdDdlExecutor`) were left untouched. The
+vestigial `Data/MetadataTransactionProfile` fields (review §6 "Separately") are **dead state, not a
+lying comment**, so they stay out of this pass. **Verification:** build 0/0; Script Executor +
+Developer Mode tests green (101/101). The next actionable is the `Sequenced` build (Steps 3–6, with
+Step 2's Dev Mode text) — not started, gated on the user scheduling it.
+
 ---
 
 ## Final architecture

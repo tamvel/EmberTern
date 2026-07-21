@@ -197,7 +197,8 @@ public partial class MainWindowViewModel : ViewModelBase
         // Catalog (indexes/selectivity/cardinality) for the advisor — read on the metadata lane
         // for the profiled query's tables when the Performance panel builds (Phase 3a).
         _catalogReader = new FirebirdCatalogReader(_service, _metadataLane);
-        // Script Executor runs on the DATA lane (co-location, gotcha #122) as the working tx.
+        // Script Executor runs on the DATA lane because it IS the user working transaction
+        // (long-lived, manual Commit/Rollback; one tx per connection, gotcha #89) — not co-location.
         _scriptExecutor = new FirebirdScriptExecutor(_service, _transactionService);
         _performanceAnalyzer = new PerformanceAnalyzer();
         // The SQL Editor gets its OWN Performance context (its own captured run). Procedure/

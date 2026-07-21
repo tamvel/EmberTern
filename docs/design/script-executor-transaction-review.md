@@ -19,8 +19,11 @@
 > ADD COLUMN`) does **not** (it is metadata-only on FB5). §2.2(b) is therefore **restated, not
 > withdrawn**; the lane-split rejection is unchanged (decisive on §2.2(a) alone). #213 re-confirmed
 > (PROBE 2); the Sequenced commit-boundary fix works (PROBE 3); independent DDL can share a segment
-> (PROBE 2a). Full report: see §6 "Results" and §7. **The next actionable is Step 1** (doc truth
-> pass), then the `Sequenced` build (Steps 3–6) if/when the user schedules it.
+> (PROBE 2a). Full report: see §6 "Results" and §7.
+>
+> **Step 1 (doc truth pass) — DONE 2026-07-21** (comment-only; §6). The stale comments that caused
+> the Data/Metadata-vs-Dev-Mode drift are fixed. **The next actionable is the `Sequenced` build
+> (Steps 3–6, with Step 2's Dev Mode text) — NOT started, gated on the user scheduling it.**
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -502,10 +505,23 @@ validate the three engine facts the Sequenced planner rests on. The gate is clea
 safe to freeze. Full write-up in the Step 0 report kept with this session's scratchpad; §2.2(b) and
 §7 updated in place.
 
-**Step 1 — Documentation truth pass** *(independent of the outcome; safe to do now).*
-Fix the stale comments that caused this drift: `ConnectionProfile.cs:19` (NOWAIT claim),
-`ConnectionRole` docstring (metadata working transaction), `FirebirdScriptExecutor.cs:12` (still cites
-the superseded gotcha #122 co-location rationale).
+**Step 1 — Documentation truth pass — DONE (2026-07-21).** *(Comment-only; no behaviour change.)*
+Fixed the stale comments that caused this drift. Two of the three originally-named targets had
+**already** been corrected by the time this ran — `ConnectionProfile.cs:19` (the NOWAIT claim; now
+correctly describes Dev Mode as a WAIT policy) and the `FirebirdScriptExecutor` header (no longer
+cites the superseded gotcha #122). The remaining two false statements were corrected in place:
+- **`ConnectionRole` docstring** (`FirebirdConnectionService.cs`) — claimed Metadata *"carries …
+  the metadata working transaction"*, contradicted by `MetadataLane` (which owns **no** transaction).
+  Now: Metadata carries read-only catalog browsing on an implicit per-command transaction, owns none.
+- **`MainWindowViewModel.cs:200`** — cited *"co-location, gotcha #122"* as the reason the Script
+  Executor runs on the Data lane. That rationale was superseded by #214; the real reason is that the
+  Script Executor **IS** the user working transaction (one tx per connection, #89). Corrected.
+
+The corrective comments that already describe #122/co-location as *superseded* (`FirebirdConnectionService`
+`ExecuteDdlAsync`, `FirebirdDdlExecutor`) are accurate and were left unchanged. Build 0/0; Script
+Executor + Developer Mode tests green (101). **Next actionable is Step 3** (the `Sequenced` Core mode,
+§5.1) — Step 2 (Dev Mode text, §4.2) is small and self-contained and may land alongside Step 4 if
+option (c) is chosen — **both gated on the user scheduling the build.**
 
 **Step 2 — Dev Mode text** (§4.2). Small, self-contained, no behaviour change. Decide (a)/(b)/(c)
 first — if (c), the text lands with Step 4.
