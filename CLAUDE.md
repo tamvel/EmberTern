@@ -372,14 +372,21 @@ noted.
   conservative — each schema statement is its own committed segment (isql `SET AUTODDL ON`); grouping independent
   consecutive DDL (§5.1, PROBE 2a) is a documented deferred optimization. **Step 2 (Dev Mode text) folded in and
   found already truthful** (`UiStrings` already states the scope + SQL-Editor boundary). Build 0/0; +10
-  `ScriptSegmentPlannerTests`; Script + Dev Mode suite 110/110 green. **Step 4 (Firebird layer) STARTED
-  2026-07-21, split into seams A+B; Seam A (per-segment TPB resolution) DONE** — pure internal
-  `FirebirdScriptExecutor.ResolveSegmentTransactionOptions(SegmentTransactionPolicy, bool)` maps `SchemaWait` →
-  the same Dev-Mode-aware WAIT policy Compile uses / `DataNoWait` → NOWAIT default; unit-pinned (+5), no
-  execution path yet. **Next actionable is Step 4 seam B (the Sequenced execution loop, `RunAsync` per-segment
-  begin/run/commit + rollback-on-failure) — NOT started, gated on the user; requires live verification.** Full
-  record: review §6 "Results" + §7, and
-  [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0 + Step 1 + Step 3).
+  `ScriptSegmentPlannerTests`; Script + Dev Mode suite 110/110 green. **Step 4 (Firebird layer) DONE 2026-07-21
+  (seams A+B).** Seam A: pure `FirebirdScriptExecutor.ResolveSegmentTransactionOptions` (`SchemaWait` → the same
+  Dev-Mode-aware WAIT policy Compile uses / `DataNoWait` → NOWAIT default; +5 unit tests). Seam B: `RunAsync`
+  dispatches `Sequenced` to `RunSequencedAsync`, which runs the plan one committed segment at a time (per-segment
+  begin with seam-A TPB → `RunOneAsync` → commit on success / roll back the OPEN segment on failure; one tx ever
+  open, `TransactionLeftOpen` always false). **Core untouched; Manual/AutoCommit byte-unchanged.** The now-false
+  "KNOWN BROKEN — a mixed migration cannot run" class docstring was corrected (single-tx modes still can't; use
+  `Sequenced`). **Live-verified on FB5** — new throwaway `tools/probes/ScriptExecutorSequencedProbe` (scratch DB,
+  lab untouched), **ALL PASS**: (A) mixed CREATE+INSERT+INDEX migration runs end-to-end + persists (#213 fixed by
+  design), (B) same migration under AutoCommit still fails at the INSERT + rolls back (the #213 contrast), (C)
+  mid-script failure keeps earlier segments committed + rolls back only the failing one. Build 0/0; Script + Dev
+  Mode + Transaction suite 165 green (regression). **Next actionable is Step 5 (App: third picker mode,
+  results-grid segment boundaries, up-front rejection of a mixed script in Manual) — NOT started, gated on the
+  user.** Full record: review §6 "Results" + §7, and
+  [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0/1/3/4).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:
   [firebird-debugger.md](docs/design/firebird-debugger.md) (**v2, decisions ratified** — the target

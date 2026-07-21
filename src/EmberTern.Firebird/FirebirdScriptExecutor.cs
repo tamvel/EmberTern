@@ -28,19 +28,20 @@ namespace EmberTern.Firebird;
 /// per-statement commits, no routing by statement kind (gotcha #215) — is unchanged; this is one TPB
 /// flag chosen at BEGIN, not an execution model.</para>
 ///
-/// <para><b>KNOWN BROKEN — do not trust the old claim that "Firebird DDL is transactional, so a
-/// mixed DDL+DML migration is genuinely all-or-nothing".</b> That was assumed, never measured, and
-/// it is FALSE. Measured on FB5: a transaction CANNOT use an object it created but has not
-/// committed — <c>CREATE TABLE T …; INSERT INTO T …;</c> in one transaction fails the INSERT with
-/// <c>Table unknown (-204)</c>. Since every mode here runs the whole script in ONE transaction,
-/// a mixed migration script — the very thing this tool exists for — cannot work today. Firebird
-/// cannot both (a) let a transaction use an object it created and (b) keep that object
-/// rollbackable; isql picks (a) via <c>SET AUTODDL ON</c>. Fixing this needs a real execution
-/// policy (commit-after-DDL / AUTODDL, DDL-aware WAIT, up-front rejection of mixed scripts in
-/// single-transaction mode) driven by the AST classifier
-/// (<see cref="EmberTern.Core.Sql.SqlStatementClassifier"/>) rather than the driver's statement
-/// enum. Deliberately deferred to its own sprint — see docs/history. This comment is the only
-/// change made to this file by the SQL-Editor console refactor.</para>
+/// <para><b>Mixed DDL+DML migrations — single-transaction modes still cannot run them; use
+/// <see cref="ScriptTransactionMode.Sequenced"/>.</b> Firebird DDL is <em>not</em> "all-or-nothing":
+/// a transaction CANNOT use an object it created but has not committed — <c>CREATE TABLE T …;
+/// INSERT INTO T …;</c> in ONE transaction fails the INSERT with <c>Table unknown (-204)</c>
+/// (measured on FB5, gotcha #213). So <see cref="ScriptTransactionMode.Manual"/> and
+/// <see cref="ScriptTransactionMode.AutoCommitOnSuccess"/> — which run the whole script in one
+/// transaction — still cannot run a mixed migration. That is exactly what <c>Sequenced</c> fixes
+/// (<see cref="RunSequencedAsync"/>): the AST classifier
+/// (<see cref="EmberTern.Core.Sql.SqlStatementClassifier"/>, via
+/// <see cref="ScriptSegmentPlanner"/>) splits the script into per-transaction segments committed
+/// one at a time, so a later statement sees an object an earlier segment created — what isql does
+/// with <c>SET AUTODDL ON</c>, and live-verified (Step 4 seam B: tools/probes/ScriptExecutorSequencedProbe).
+/// Up-front rejection of a mixed script in a single-transaction mode (so the user is pointed at
+/// <c>Sequenced</c> rather than failing on statement 2) is Step 5, in the App layer.</para>
 ///
 /// The whole statement loop holds the connection's command lock (gotcha #31) so nothing
 /// interleaves on the data connection mid-run; the lock is released before returning while the
@@ -69,6 +70,9 @@ public sealed class FirebirdScriptExecutor
     /// <see cref="ScriptTransactionMode.AutoCommitOnSuccess"/> it is committed when nothing
     /// failed, otherwise rolled back. Cancellation stops before the next statement (already-run
     /// ones remain in the open transaction for the user to Commit/Rollback).
+    /// <para><see cref="ScriptTransactionMode.Sequenced"/> takes a different execution shape entirely
+    /// — many transactions, one committed segment at a time — after the same shared up-front checks;
+    /// see <see cref="RunSequencedAsync"/>.</para>
     /// </summary>
     public async Task<ScriptRunOutcome> RunAsync(
         IReadOnlyList<ScriptStatement> statements,
@@ -97,6 +101,14 @@ public sealed class FirebirdScriptExecutor
         if (statements.Count == 0)
         {
             return new ScriptRunOutcome(Array.Empty<ScriptStatementResult>(), TransactionLeftOpen: false, AnyFailed: false, Cancelled: false);
+        }
+
+        // Sequenced deployment: many transactions, one segment at a time (§5). Everything above —
+        // the active-transaction guard, the disallowed-statement check, the empty short-circuit —
+        // is shared; only the execution shape differs.
+        if (mode == ScriptTransactionMode.Sequenced)
+        {
+            return await RunSequencedAsync(statements, stopOnError, progress, cancellationToken).ConfigureAwait(false);
         }
 
         try
@@ -147,6 +159,111 @@ public sealed class FirebirdScriptExecutor
         }
 
         return new ScriptRunOutcome(results, leftOpen, anyFailed, cancelled);
+    }
+
+    /// <summary>
+    /// Runs the script as a SEQUENCE of segments (<see cref="ScriptTransactionMode.Sequenced"/>). The
+    /// planner (<see cref="ScriptSegmentPlanner"/>) splits it into ordered segments; each runs in its
+    /// OWN transaction on the data lane — begun with the segment's
+    /// <see cref="SegmentTransactionPolicy"/> TPB (<see cref="ResolveSegmentTransactionOptions"/>),
+    /// committed on success, rolled back on failure. Exactly one transaction is open at a time, so a
+    /// later statement sees an object an earlier segment created (gotcha #213, fixed by design) and a
+    /// segment can never block on our own still-open work. Committed segments STAY applied if a later
+    /// one fails — the honest, non-atomic cost of a mixed migration, surfaced through the per-statement
+    /// results (the App reconstructs segment boundaries in Step 5). The Firebird layer only EXECUTES
+    /// the prepared plan; it never decides a segment's shape.
+    /// <para>Nothing is ever left open (every begun segment is committed or rolled back), so the
+    /// outcome's <c>TransactionLeftOpen</c> is always false — Sequenced is never the "review then
+    /// Commit" flow.</para>
+    /// </summary>
+    private async Task<ScriptRunOutcome> RunSequencedAsync(
+        IReadOnlyList<ScriptStatement> statements,
+        bool stopOnError,
+        IProgress<ScriptStatementResult>? progress,
+        CancellationToken cancellationToken)
+    {
+        var plan = ScriptSegmentPlanner.Plan(statements);
+        bool developerMode = _connectionService.ActiveProfile?.DeveloperMode ?? false;
+
+        var results = new List<ScriptStatementResult>(statements.Count);
+        bool anyFailed = false;
+        bool cancelled = false;
+        // The original index into `statements`; segments are contiguous and in source order, so a
+        // running counter reconstructs each statement's real index without the segment carrying one.
+        int globalIndex = 0;
+
+        foreach (var segment in plan)
+        {
+            if (cancellationToken.IsCancellationRequested) { cancelled = true; break; }
+
+            try
+            {
+                await _transactionService
+                    .BeginTransactionAsync(ResolveSegmentTransactionOptions(segment.Policy, developerMode))
+                    .ConfigureAwait(false);
+            }
+            catch (TransactionFailedException ex)
+            {
+                throw new ScriptExecutionException(ex.Message, ex);
+            }
+
+            bool segmentFailed = false;
+            bool stopRequested = false;
+
+            // Hold the command lock only around this segment's statements — Begin/Commit/Rollback
+            // acquire it themselves, so holding it across them would deadlock (the single-tx path
+            // above releases before committing for the same reason).
+            var commandLock = _transactionService.CommandLock;
+            await commandLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                var connection = _transactionService.RequireOpenConnection();
+                foreach (var statement in segment.Statements)
+                {
+                    if (cancellationToken.IsCancellationRequested) { cancelled = true; break; }
+
+                    var result = await RunOneAsync(connection, globalIndex, statement, cancellationToken)
+                        .ConfigureAwait(false);
+                    globalIndex++;
+                    results.Add(result);
+                    progress?.Report(result);
+
+                    if (!result.Success)
+                    {
+                        segmentFailed = true;
+                        anyFailed = true;
+                        // stopOnError → stop the whole run now. Otherwise keep running this segment's
+                        // remaining statements — they roll back with it, exactly as AutoCommit runs a
+                        // whole script then rolls back (a schema segment is a singleton, so it has no
+                        // "rest"; only a data segment ever continues past a failure here).
+                        if (stopOnError) { stopRequested = true; break; }
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancelled mid-statement — fall through to settle (roll back) the open segment so it
+                // is never leaked, then stop.
+                cancelled = true;
+            }
+            finally
+            {
+                commandLock.Release();
+            }
+
+            if (segmentFailed || cancelled)
+            {
+                await _transactionService.RollbackAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                await _transactionService.CommitAsync().ConfigureAwait(false);
+            }
+
+            if (stopRequested || cancelled) break;
+        }
+
+        return new ScriptRunOutcome(results, TransactionLeftOpen: false, AnyFailed: anyFailed, Cancelled: cancelled);
     }
 
     /// <summary>

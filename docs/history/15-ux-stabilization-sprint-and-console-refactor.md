@@ -325,6 +325,50 @@ create-then-insert boundary, data/schema/data, consecutive-DDL-not-grouped, DCL-
 classification, full-coverage-in-order); Script + Developer Mode suite green (110/110). The next
 actionable is Step 4 (the Firebird layer runs the segments) — not started, gated on the user.
 
+## Script Executor Rewrite — Step 4 (Firebird layer runs the plan), 2026-07-21
+
+The Firebird layer now *executes* the Sequenced plan the Core planner prepares — **Firebird never
+plans; the planner stays the sole planner**. Split into two committable seams.
+
+**Seam A — per-segment TPB resolution (pure, no execution).** A tiny internal
+`FirebirdScriptExecutor.ResolveSegmentTransactionOptions(SegmentTransactionPolicy, bool)` maps a
+segment's planner-assigned policy to a Firebird TPB: `SchemaWait` → the SAME Developer-Mode-aware WAIT
+policy object-editor Compile uses (`FirebirdDdlExecutor.BuildDdlTransactionOptions` — one definition, no
+drift), so a deployment can outlast another session's transient hold; `DataNoWait` → `null` = the working
+transaction's NOWAIT ReadCommitted default, so deployment DML never blocks on an ordinary row lock. Pure +
+internal, unit-pinned in `DeveloperModeTests` (+5). Zero execution path, zero behaviour change to any
+existing mode.
+
+**Seam B — the Sequenced execution loop (live-verified).** `RunAsync` now dispatches — after the same
+shared up-front checks (active-tx guard, disallowed-statement rejection, empty short-circuit) — to a new
+`RunSequencedAsync`. It calls `ScriptSegmentPlanner.Plan(statements)` and runs each segment in its OWN
+transaction on the data lane: begin with seam A's TPB, run the segment's statements through the existing
+`RunOneAsync`, then **commit on success / roll back the OPEN segment on failure**. `stopOnError` stops the
+whole run on the first failure; otherwise a data segment runs to its end and rolls back as a unit (exactly
+as AutoCommit runs a whole script then rolls back — a schema segment is a singleton, so it never has a
+"rest"). A running index reconstructs each statement's original position (segments are contiguous and in
+order, so `ScriptSegment` needs no `StartIndex`). The command lock is held only around a segment's
+statements — Begin/Commit/Rollback acquire it themselves, so holding it across them would deadlock (the
+single-tx path releases before committing for the same reason); a mid-statement `OperationCanceledException`
+is caught so the open segment is rolled back rather than leaked. Exactly one transaction is ever open →
+the §2.2(b) self-block is impossible by construction; `TransactionLeftOpen` is always false (Sequenced is
+never the "review then Commit" flow). **Core is untouched** — no `ScriptRunOutcome` change; Manual/AutoCommit
+are byte-unchanged; and the now-false "KNOWN BROKEN — a mixed migration cannot run" class docstring was
+corrected to "single-transaction modes still can't; use `Sequenced`."
+
+**Live verification.** Seam B needs a real `FbConnection`, so — per the project's "verify, don't infer"
+rule — a new throwaway probe `tools/probes/ScriptExecutorSequencedProbe` drives the REAL
+`FirebirdScriptExecutor` in Sequenced mode against a scratch DB (`C:\Temp\…`, created + deleted; the lab
+is never touched, per the probe rules). **ALL PASS on FB5 (`WI-V5.0.3.1683`):** (A) a mixed
+`CREATE TABLE → INSERT → INSERT → CREATE INDEX → INSERT` migration runs end-to-end — 3 rows + the index
+persist — proving #213 is fixed by design (and that the table-scanning `CREATE INDEX` after inserts, the
+PROBE-1c self-block case for a lane split, runs fine here because segments are sequential); (B) the SAME
+`CREATE + INSERT` under `AutoCommitOnSuccess` still fails the INSERT with a -204 and rolls the whole run
+back (the table does not exist) — Sequenced is the fix, not a coincidence; (C) a Sequenced script whose
+last statement is a duplicate-PK INSERT keeps the earlier table + row + index committed and rolls back
+only the failing segment (one row remains). Build 0/0; Script + Developer Mode + Transaction suite 165
+green (regression). The next actionable is Step 5 (App layer) — not started, gated on the user.
+
 ---
 
 ## Final architecture
