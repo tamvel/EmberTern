@@ -35,10 +35,11 @@
 > partial-commit). Core untouched; Manual/AutoCommit unchanged.
 >
 > **Step 5 (App layer) — STARTED 2026-07-21** (§6, split into seams A/B/C; App/UX only). **Seam A (the
-> third mode in the picker) — DONE**: `Sequenced` selectable, per-mode description on the picker (the
-> trade-off stated where picked), honest Sequenced summary; pure mappings unit-pinned. **The next
-> actionable is Step 5 seam B (up-front rejection of a mixed script in Manual/AutoCommit) — NOT started,
-> gated on the user.**
+> third mode in the picker) — DONE**: `Sequenced` selectable, per-mode description on the picker, honest
+> summary. **Seam B (up-front rejection of a mixed script in Manual/AutoCommit) — DONE**: stopped before
+> the first statement with a message naming `Sequenced`; pure `ResolveMixedScriptBlock`, engine untouched.
+> **The next actionable is Step 5 seam C (results-grid segment presentation) — NOT started, gated on the
+> user.**
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -594,10 +595,14 @@ sole planner; Firebird only executes). Split into two seams:
   Committed/Rolled-back verdict). Unit-pinned (+11 `ScriptExecutorModeTests`); Manual/AutoCommit wording
   unchanged. Build 0/0. *(Visual confirmation of the picker is the user's; the Sequenced execution it
   drives is already live-verified in Step 4.)*
-- **Seam B — up-front rejection of a mixed script in the single-transaction modes — NOT started.** A
-  mixed DDL+DML script in `Manual`/`AutoCommitOnSuccess` is rejected before running with a message
-  pointing at `Sequenced` (§5.1/§5.3), instead of failing on statement 2 with `Table unknown`. Pure
-  detector + message wired into the pre-flight.
+- **Seam B — up-front rejection of a mixed script in the single-transaction modes — DONE (2026-07-21).**
+  A mixed DDL+DML script in `Manual`/`AutoCommitOnSuccess` is now stopped BEFORE the first statement with
+  a message that explains the single-transaction limitation and names `Sequenced` (§5.1/§5.3), instead of
+  failing on statement 2 with `Table unknown`. Pure `ScriptExecutorTabViewModel.ResolveMixedScriptBlock`
+  (mode + statements → message or null; `Sequenced` is never blocked) over a private `IsMixedMigration`
+  that classifies via the same AST-based `SqlStatementClassifier` the planner uses (so "mixed here" and
+  "segmented there" can never disagree), wired into the run pre-flight beside the existing gates. Engine
+  untouched. Unit-pinned (+11 `ScriptExecutorMixedScriptTests`). Build 0/0.
 - **Seam C — segment presentation in the results grid — NOT started.** Per-statement segment membership
   + commit/rollback boundary markers + a "which steps committed" detail (the App reconstructs boundaries
   from `ScriptSegmentPlanner`). Larger UI seam; may split further.

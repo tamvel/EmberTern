@@ -176,6 +176,11 @@ internal static class UiStrings
         "This script's previous run left a transaction open. Commit or Roll back (buttons above) before running again.";
     public const string ScriptBlockExternalTxOpen =
         "A transaction is already open (e.g. an uncommitted SQL Editor statement). Commit or roll back that transaction before running a script.";
+    // Pre-flight: a mixed DDL+DML script cannot run in a single-transaction mode (Manual / Auto-commit)
+    // because Firebird cannot use an object a statement created until it is committed (#213). Stop before
+    // the first statement and point the user at Sequenced, which is built for exactly this.
+    public const string ScriptStatusMixedNeedsSequenced =
+        "This script mixes schema changes (CREATE / ALTER / …) with data statements (INSERT / UPDATE / …). In Manual and Auto-commit the whole script runs as a single transaction, and Firebird cannot use an object a statement just created until that change is committed — so a later statement would fail. Choose the “Sequenced (deployment)” transaction mode: it commits each schema change before the statements that depend on it.";
     public const string ScriptStatusManualSummaryFormat =
         "{0} succeeded, {1} failed in {2}. Transaction open — Commit or Rollback.";
     public const string ScriptStatusAutoSummaryFormat = "{0} {1} succeeded, {2} failed in {3}.";

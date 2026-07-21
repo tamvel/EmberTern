@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.Core.Scripting;
+using EmberTern.Core.Sql;
 using EmberTern.Firebird;
 
 namespace EmberTern.App.ViewModels;
@@ -165,6 +166,16 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         if (disallowed.Count > 0)
         {
             Fail(BuildDisallowedMessage(disallowed));
+            return;
+        }
+
+        // A single-transaction mode (Manual / Auto-commit) cannot run a mixed DDL+DML migration
+        // (gotcha #213). Stop BEFORE the first statement with a message that points at Sequenced,
+        // rather than letting the executor fail on a later statement with "Table unknown".
+        var mixedBlock = ResolveMixedScriptBlock(statements, Mode);
+        if (mixedBlock is not null)
+        {
+            Fail(mixedBlock);
             return;
         }
 
@@ -407,6 +418,33 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
     {
         if (!transactionActive) return null;
         return ownLeftover ? UiStrings.ScriptBlockOwnTxOpen : UiStrings.ScriptBlockExternalTxOpen;
+    }
+
+    // Pure pre-flight gate: returns the block message when a single-transaction mode (Manual /
+    // Auto-commit) is asked to run a MIXED DDL+DML script, else null. Sequenced is built for mixed
+    // migrations, so it is never blocked. The engine is untouched — this only stops the run earlier,
+    // with a message that explains the single-transaction limitation and names Sequenced, instead of
+    // letting a later statement fail on "Table unknown" (gotcha #213).
+    internal static string? ResolveMixedScriptBlock(IReadOnlyList<ScriptStatement> statements, ScriptTransactionMode mode)
+    {
+        if (mode == ScriptTransactionMode.Sequenced) return null;
+        return IsMixedMigration(statements) ? UiStrings.ScriptStatusMixedNeedsSequenced : null;
+    }
+
+    // Pure: true when the script contains BOTH a schema statement (DDL/DCL) and a non-schema one —
+    // the #213 risk surface. Classification comes from the AST-based SqlStatementClassifier (the same
+    // authority the Sequenced planner uses), so "mixed" here and "segmented there" can never disagree.
+    // A non-schema (Data or Ambiguous) statement counts as the data side (the classifier's safe default).
+    private static bool IsMixedMigration(IReadOnlyList<ScriptStatement> statements)
+    {
+        bool hasSchema = false, hasNonSchema = false;
+        foreach (var statement in statements)
+        {
+            if (SqlStatementClassifier.Classify(statement.Text) == SqlStatementCategory.Schema) hasSchema = true;
+            else hasNonSchema = true;
+            if (hasSchema && hasNonSchema) return true;
+        }
+        return false;
     }
 
     // Pure: lists the offending transaction-control / session statements so the message is

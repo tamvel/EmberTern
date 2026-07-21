@@ -388,9 +388,12 @@ noted.
   added to the mode ComboBox with a per-mode description tooltip (the non-atomic trade-off stated where the mode
   is picked, §5.3); pure `ScriptExecutorTabViewModel.ResolveMode`/`ResolveModeDescription` + a mode-aware
   `BuildOutcomeStatus` (honest Sequenced summary + cancelled message); +11 `ScriptExecutorModeTests`;
-  Manual/AutoCommit wording unchanged. Build 0/0. **Next actionable is Step 5 seam B (up-front rejection of a
-  mixed DDL+DML script in Manual/AutoCommit, pointing at Sequenced) — NOT started; then seam C (results-grid
-  segment presentation) — gated on the user.** Full record: review §6 "Results" + §7, and
+  Manual/AutoCommit wording unchanged. **Seam B (up-front rejection of a mixed DDL+DML script in
+  Manual/AutoCommit) DONE 2026-07-21** — pure `ScriptExecutorTabViewModel.ResolveMixedScriptBlock` stops the run
+  BEFORE the first statement with a message that explains the single-transaction limitation and names
+  `Sequenced` (`IsMixedMigration` classifies via the same AST `SqlStatementClassifier` the planner uses; engine
+  untouched); +11 `ScriptExecutorMixedScriptTests`. Build 0/0. **Next actionable is Step 5 seam C (results-grid
+  segment presentation) — NOT started, gated on the user.** Full record: review §6 "Results" + §7, and
   [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0/1/3/4).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:
