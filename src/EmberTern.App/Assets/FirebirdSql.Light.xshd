@@ -18,9 +18,9 @@
 <SyntaxDefinition name="Firebird SQL Light" extensions=".sql"
                   xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
 
-  <!-- Comments: a cool gray-green (modern-IDE feel) — clearly a comment and easy on the eye across long
-       blocks, deliberately NOT the old yellow "olive" green (#3F6B1F). -->
-  <Color name="Comment"          foreground="#6E847A" />
+  <!-- Comments: an elegant modern-IDE green (SeaGreen) — clearly green and readable, not the old yellow
+       "olive" (#3F6B1F) and not a washed-out gray. -->
+  <Color name="Comment"          foreground="#2E8B57" />
   <Color name="String"           foreground="#A31515" />
   <Color name="Number"           foreground="#0B6A5C" />
   <!-- SQL keywords (query + DML-action + DDL) share ONE restrained blue. -->

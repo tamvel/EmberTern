@@ -27,8 +27,8 @@
   <Color name="StatementKeyword" foreground="#5A8AC8" fontWeight="bold" />
   <!-- PSQL control-flow / routine-body keywords: a distinct restrained violet (SQL vs PSQL). -->
   <Color name="PsqlKeyword"      foreground="#A88FD4" fontWeight="bold" />
-  <!-- Data types keep a discreet muted-teal accent — they matter in declarations. -->
-  <Color name="DataType"         foreground="#5FA894" />
+  <!-- Data types: a vivid teal — they matter in declarations and should read as a clear accent. -->
+  <Color name="DataType"         foreground="#4EC9B0" />
   <!-- Built-in functions + operators stay neutral (default foreground). -->
   <Color name="Function"         foreground="#D4D4D4" />
   <Color name="Operator"         foreground="#D4D4D4" />
