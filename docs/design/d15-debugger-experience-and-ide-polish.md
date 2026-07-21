@@ -108,11 +108,19 @@ Replace "span-in-Selection-layer" with an IDE-grade marker inspired by (not copi
   #223 — never `InvalidateVisual()`).
 
 ### 3.4 Seams
-- **A (syntax palette):** redesign `FirebirdSql.xshd` + `.Light.xshd` to the 3-tier hierarchy; retune the
-  semantic-highlight tokens in `Themes/Colors.axaml` (both dictionaries) so they don't re-inflate the palette;
-  app-wide QA (main editor / object editors / debugger, both themes).
+- **A (syntax palette) — DONE (impl 2026-07-21; awaits user visual confirmation).** `FirebirdSql.xshd` +
+  `.Light.xshd` collapsed to the 3-tier hierarchy: DML + DML-action + DDL keywords share ONE restrained blue
+  (dark `#5A8AC8` / light `#0033B3`, bold); data types + built-in functions demoted to the neutral default
+  foreground (dark `#D4D4D4` / light `#1F1F1F`); comments + literals unchanged (legible-but-quiet). Semantic
+  tokens retuned **with** the xshd (not separately — Risk register): `EditorLocalBrush` → the default
+  foreground in **both** dictionaries, so ordinary variables/locals are neutral; navigable objects
+  (`IconColor_*`) and trigger-context variables (`EditorContextVariableBrush`) keep their restrained accent;
+  columns were already paint-opted-out. Presentation-only (no VM/Core change); `FirebirdSyntaxTests` pin only
+  keyword-block membership per category (not hex) → 18/18 green; build 0/0. Hex is a conservative start,
+  tunable against the running app. App-wide QA (main editor / object editors / debugger, both themes) is the
+  user-side confirmation step.
 - **B (current-line):** rebuild `CurrentLineRenderer` for full-width + calm-blue + gutter bar; new/retuned
-  tokens in both dictionaries; both themes.
+  tokens in both dictionaries; both themes. **NOT started.**
 
 ### 3.5 DoD
 Code reads calmly in both themes on all editor surfaces; variables neutral; current line unmistakable but not

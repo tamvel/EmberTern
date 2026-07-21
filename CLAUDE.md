@@ -346,6 +346,13 @@ noted.
   D15.6 (D15.7 in the background). Full self-contained guide (architecture / seams / decisions / rationale /
   priorities / deps / risks — start a milestone from it without re-analysing):
   [docs/design/d15-debugger-experience-and-ide-polish.md](docs/design/d15-debugger-experience-and-ide-polish.md).
+  **D15.1 (Editor Readability) — STARTED; Seam A (syntax palette, app-wide) DONE 2026-07-21 (impl, awaits user
+  visual confirmation).** Presentation-only 3-tier palette: DML+action+DDL keywords collapse to ONE restrained
+  blue (bold); types + built-in functions demoted to neutral foreground; comments/literals legible-but-quiet;
+  `EditorLocalBrush` neutralized in both dictionaries so ordinary variables are neutral (objects + trigger
+  context keep a restrained accent). Both `FirebirdSql.xshd` + `.Light.xshd` + `Themes/Colors.axaml`; hex is a
+  tunable conservative start; `FirebirdSyntaxTests` 18/18 green (pin category membership, not hex); build 0/0.
+  **Seam B (current-line rebuild — full-width + calm-blue + gutter bar) NOT started.** Guide: d15 doc §3.
   **Script Executor Rewrite — Step 0 (Probe) DONE 2026-07-20; architecture stands, measurement-gated.** The
   `Sequenced`-mode plan is ratified ([docs/design/script-executor-transaction-review.md](docs/design/script-executor-transaction-review.md)
   §5/§6): fixes the KNOWN-BROKEN mixed DDL+DML defect (gotcha #213). **Step 0 (the Probe) — the blocking

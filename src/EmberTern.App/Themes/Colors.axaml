@@ -210,14 +210,15 @@
       <!-- Query (SQL Editor) tab icon — neutral on dark, distinct from blue Table. -->
       <SolidColorBrush x:Key="IconColor_Query"       Color="#B0BEC5" />
 
-      <!-- Editor semantic-highlight accent (Etap 6, §9.2 "calm base, semantic accent").
-           Navigable schema objects reuse the IconColor_* palette above (editor colour ==
-           tree icon), so only two extra tokens are needed: columns get one calm readable
-           colour; local names (FROM/JOIN aliases, PSQL variables/parameters, cursors, CTEs,
-           NEW/OLD) a distinct low-chroma "local scope" hue. Hex is a conservative default —
-           final visual tuning in both themes is a follow-up. -->
+      <!-- Editor semantic-highlight accents — D15.1 readability pass (readability first,
+           colour = the exception that leads the eye). Navigable schema objects reuse the
+           IconColor_* palette above (editor colour == tree icon). Ordinary local names
+           (FROM/JOIN aliases, PSQL variables/parameters, cursors, CTEs) are now NEUTRAL —
+           EditorLocalBrush == the default foreground — so variables no longer claim a hue.
+           EditorColumnBrush is retained but the in-editor paint opts columns out (see
+           SemanticHighlighter); trigger-context variables keep a restrained accent below. -->
       <SolidColorBrush x:Key="EditorColumnBrush"     Color="#A8C7E0" />
-      <SolidColorBrush x:Key="EditorLocalBrush"      Color="#C8A8D8" />
+      <SolidColorBrush x:Key="EditorLocalBrush"      Color="#D4D4D4" />
       <!-- Trigger context variables (NEW/OLD/INSERTING/UPDATING/DELETING). Amber, the same family as
            the built-in context constants (CURRENT_DATE / CURRENT_USER) so they read as core language
            constructs — but with more chroma than the pale Function keyword (#DCDCAA) so they clearly
@@ -415,7 +416,8 @@
            kept distinct in both hue AND lightness from the object palette above (§9.3).
            Conservative default; final visual tuning is a follow-up. -->
       <SolidColorBrush x:Key="EditorColumnBrush"     Color="#2E5C82" />
-      <SolidColorBrush x:Key="EditorLocalBrush"      Color="#7A4E86" />
+      <!-- D15.1: ordinary locals neutral (== default foreground); see the Dark block comment. -->
+      <SolidColorBrush x:Key="EditorLocalBrush"      Color="#1F1F1F" />
       <!-- Trigger context variables — mirrors the Light "Function" lexical colour (#8C6600). -->
       <SolidColorBrush x:Key="EditorContextVariableBrush" Color="#8C6600" />
     </ResourceDictionary>

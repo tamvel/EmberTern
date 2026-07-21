@@ -1,13 +1,17 @@
 <?xml version="1.0"?>
 <!--
-  Dark-theme Firebird SQL highlighter. Palette inspired by VS Code "Dark+":
-  DML keywords blue, DML-action + DDL keywords purple, data types teal,
-  built-in functions yellow.
+  Dark-theme Firebird SQL highlighter — D15.1 readability palette (3-tier).
+  Colour leads the eye; it is not the field:
+    * Structural keywords (DML + DML-action + DDL) share ONE restrained blue, bold.
+    * Comments and literals (strings / numbers) stay legible but quiet.
+    * Data types, built-in functions, operators and identifiers are NEUTRAL
+      (default foreground) — they no longer each claim their own hue.
+  The semantic highlighter layers navigable-object / trigger-context accents on top
+  (Themes/Colors.axaml); ordinary variables/locals are neutral there too.
 
   The Functions Keywords block is declared BEFORE the DDL/DML blocks so
-  CASE/WHEN/THEN/ELSE/END win as functions (they're also valid PSQL
-  control-flow tokens but reading them as expression keywords is more useful
-  for typical query work).
+  CASE/WHEN/THEN/ELSE/END win as functions — a tokenisation-ordering concern,
+  independent of the now-neutral Function colour.
 -->
 <SyntaxDefinition name="Firebird SQL" extensions=".sql"
                   xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
@@ -15,10 +19,12 @@
   <Color name="Comment"          foreground="#7FB86B" />
   <Color name="String"           foreground="#CE9178" />
   <Color name="Number"           foreground="#B5CEA8" />
+  <!-- Structural keywords: DML + DML-action + DDL collapse to ONE restrained blue. -->
   <Color name="DmlKeyword"       foreground="#5A8AC8" fontWeight="bold" />
-  <Color name="StatementKeyword" foreground="#C586C0" fontWeight="bold" />
-  <Color name="DataType"         foreground="#4EC9B0" />
-  <Color name="Function"         foreground="#DCDCAA" />
+  <Color name="StatementKeyword" foreground="#5A8AC8" fontWeight="bold" />
+  <!-- Types + built-in functions demoted to neutral foreground (readability first). -->
+  <Color name="DataType"         foreground="#D4D4D4" />
+  <Color name="Function"         foreground="#D4D4D4" />
   <Color name="Operator"         foreground="#D4D4D4" />
 
   <RuleSet ignoreCase="true">
