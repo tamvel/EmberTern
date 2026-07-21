@@ -39,8 +39,9 @@
 > summary. **Seam B (up-front rejection of a mixed script in Manual/AutoCommit) — DONE**: stopped before
 > the first statement with a message naming `Sequenced`; pure `ResolveMixedScriptBlock`, engine untouched.
 > **Seam C (results-grid segment presentation) — split C1/C2/C3; C1 (a "Step" column) DONE; C2 further
-> split C2a/C2b, C2a (pure per-step commit/rollback reconstruction, `BuildStepStatuses`) DONE.** The next
-> actionable is C2b (present the step status on the rows) — NOT started, gated on the user.
+> split C2a/C2b, C2a (pure per-step commit/rollback reconstruction, `BuildStepStatuses`) DONE; C2b further
+> split C2b-1/C2b-2, C2b-1 (colour the Step cell committed/rolled-back on executed rows) DONE.** The next
+> actionable is C2b-2 (surface "not run" statements) — NOT started, gated on the user.
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -623,7 +624,17 @@ sole planner; Firebird only executes). Split into two seams:
       nuance: a `Success` statement whose step still rolled back because a LATER statement in the same
       transaction failed. App reconstruction only; engine untouched. Unit-pinned (+7
       `ScriptExecutorStepStatusTests`). Build 0/0.
-    - **C2b — presentation — NOT started.** Apply the statuses to the rows (colour / marker + tooltip).
+    - **C2b — presentation.** Split C2b-1/C2b-2 (executed rows can only be Committed/RolledBack;
+      surfacing "not run" needs synthesized rows — a separate concern):
+      - **C2b-1 — per-row committed/rolled-back status — DONE (2026-07-21).** After the run,
+        `ScriptExecutorTabViewModel.ApplyStepStatuses(rows, segmentMap, results)` stamps each executed
+        row with its step's outcome (from `BuildStepStatuses`, unchanged); `ScriptResultRowViewModel`
+        became observable with `StepStatus` + derived `IsStepCommitted`/`IsStepRolledBack`/tooltip, and
+        the results grid's Step cell is coloured (committed = green, rolled back = amber, existing
+        tokens) with an explanatory tooltip — so a `Success` statement whose step rolled back is visibly
+        marked. Unit-pinned (+4 `ScriptExecutorStepStatusPresentationTests`). Build 0/0.
+      - **C2b-2 — surface "not run" statements — NOT started.** Synthesized rows (or a marker) for
+        statements a stop-on-error / cancellation left unexecuted.
   - **C3 — a "which steps committed" summary — NOT started.** e.g. "N of M steps committed" on the
     status line.
 

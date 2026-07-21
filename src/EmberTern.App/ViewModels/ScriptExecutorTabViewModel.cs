@@ -194,6 +194,9 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
             TransactionOpen = outcome.TransactionLeftOpen && _transactionService.IsActive;
             HasError = outcome.AnyFailed;
             StatusText = BuildOutcomeStatus(outcome, Mode);
+            // Sequenced only (no-op otherwise): now the run is done, stamp each row with its step's
+            // commit/rollback outcome so the grid can show which steps persisted.
+            ApplyStepStatuses(_allRows, _segmentMap, outcome.Results);
         }
         catch (OperationCanceledException)
         {
@@ -483,6 +486,19 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         return statuses;
     }
 
+    // Presentation: stamps each row with its Sequenced step's outcome (from BuildStepStatuses), so the
+    // grid can colour the Step cell. Static + pure over the rows/map/results it is given (no services)
+    // so it is unit-pinned. A no-op for a non-Sequenced run (empty map). Does NOT change the
+    // reconstruction — it only distributes the step outcome onto the rows of that step.
+    internal static void ApplyStepStatuses(
+        IReadOnlyList<ScriptResultRowViewModel> rows, int[] segmentMap, IReadOnlyList<ScriptStatementResult> results)
+    {
+        if (segmentMap.Length == 0) return;
+        var statuses = BuildStepStatuses(segmentMap, results);
+        foreach (var row in rows)
+            row.StepStatus = row.Step > 0 && statuses.TryGetValue(row.Step, out var s) ? s : ScriptStepStatus.NotRun;
+    }
+
     // Pure pre-flight gate: returns the block message when a single-transaction mode (Manual /
     // Auto-commit) is asked to run a MIXED DDL+DML script, else null. Sequenced is built for mixed
     // migrations, so it is never blocked. The engine is untouched — this only stops the run earlier,
@@ -541,13 +557,14 @@ public enum ScriptStepStatus
 }
 
 /// <summary>One row in the Script Executor results grid.</summary>
-public sealed class ScriptResultRowViewModel
+public sealed partial class ScriptResultRowViewModel : ObservableObject
 {
     private const int PreviewMaxLength = 100;
 
     public ScriptResultRowViewModel(ScriptStatementResult result, int sourceOffset, int sourceLength, int step = 0)
     {
         Line = result.Index + 1;
+        Step = step;
         // Sequenced: the 1-based committed step; blank in single-transaction modes (step == 0).
         StepText = step > 0 ? step.ToString(CultureInfo.CurrentCulture) : string.Empty;
         Statement = Elide(result.Text);
@@ -562,6 +579,26 @@ public sealed class ScriptResultRowViewModel
     }
 
     public int Line { get; }
+    /// <summary>1-based Sequenced step (0 in single-transaction modes). See <see cref="StepText"/>.</summary>
+    public int Step { get; }
+
+    // The step's commit/rollback outcome — set once after the run (via ScriptExecutorTabViewModel
+    // .ApplyStepStatuses). Observable so the grid recolours the Step cell when it lands. A step's
+    // outcome is NOT the statement's own result: a Success statement can still be RolledBack.
+    [NotifyPropertyChangedFor(nameof(IsStepCommitted))]
+    [NotifyPropertyChangedFor(nameof(IsStepRolledBack))]
+    [NotifyPropertyChangedFor(nameof(StepStatusTooltip))]
+    [ObservableProperty] private ScriptStepStatus _stepStatus;
+
+    public bool IsStepCommitted => StepStatus == ScriptStepStatus.Committed;
+    public bool IsStepRolledBack => StepStatus == ScriptStepStatus.RolledBack;
+    public string StepStatusTooltip => StepStatus switch
+    {
+        ScriptStepStatus.Committed => UiStrings.ScriptStepCommittedTooltip,
+        ScriptStepStatus.RolledBack => UiStrings.ScriptStepRolledBackTooltip,
+        _ => UiStrings.ScriptColumnStepTooltip,
+    };
+
     public string StepText { get; }
     public string Statement { get; }
     public string TypeText { get; }

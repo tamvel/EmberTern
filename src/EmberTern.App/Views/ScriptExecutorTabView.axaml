@@ -160,12 +160,29 @@
           <Style Selector="TextBlock.result-failed">
             <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
           </Style>
+          <!-- Sequenced per-step outcome (Step cell): committed = green, rolled back = amber. -->
+          <Style Selector="TextBlock.step-committed">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessIconBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+          </Style>
+          <Style Selector="TextBlock.step-rolledback">
+            <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+          </Style>
         </DataGrid.Styles>
         <DataGrid.Columns>
           <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnLine}"
                               Binding="{Binding Line}" Width="46" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnStep}"
-                              Binding="{Binding StepText}" Width="52" />
+          <DataGridTemplateColumn Header="{x:Static app:UiStrings.ScriptColumnStep}" Width="52">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="vm:ScriptResultRowViewModel">
+                <TextBlock Text="{Binding StepText}" VerticalAlignment="Center" Margin="8,0"
+                           ToolTip.Tip="{Binding StepStatusTooltip}"
+                           Classes.step-committed="{Binding IsStepCommitted}"
+                           Classes.step-rolledback="{Binding IsStepRolledBack}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnStatement}"
                               Binding="{Binding Statement}" Width="2*" MinWidth="220"
                               FontFamily="Cascadia Code,Consolas,Menlo,monospace" />

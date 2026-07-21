@@ -160,6 +160,12 @@ internal static class UiStrings
     public const string ScriptColumnStep = "Step";
     public const string ScriptColumnStepTooltip =
         "In Sequenced mode, the committed step (transaction) this statement ran in. Each step commits before the next begins.";
+    // Per-step outcome, shown by colouring the Step cell (Sequenced only). A step's outcome is distinct
+    // from a statement's own result: a statement can have succeeded yet its step still rolled back.
+    public const string ScriptStepCommittedTooltip =
+        "This step committed — its changes are permanent.";
+    public const string ScriptStepRolledBackTooltip =
+        "This step rolled back — its changes were undone because a statement in this step failed (or the run was cancelled). Steps committed earlier stay applied.";
     public const string ScriptColumnStatement = "Statement";
     public const string ScriptColumnType = "Type";
     public const string ScriptColumnResult = "Result";

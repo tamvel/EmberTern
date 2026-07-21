@@ -400,9 +400,14 @@ noted.
   than one seam, split C2a/C2b; C2a (pure reconstruction) DONE 2026-07-21** — `ScriptStepStatus`
   (Committed/RolledBack/NotRun) + pure `ScriptExecutorTabViewModel.BuildStepStatuses(segmentMap, results)`
   mirrors `RunSequencedAsync` exactly (captures a `Success` statement whose step still rolled back because a
-  later statement in the same transaction failed); engine untouched; +7 `ScriptExecutorStepStatusTests`. Build
-  0/0. **Next actionable is Step 5 seam C2b (present the step status on the rows) — NOT started, gated on the
-  user.** Full record: review §6 "Results" + §7, and
+  later statement in the same transaction failed); engine untouched; +7 `ScriptExecutorStepStatusTests`. **Seam
+  C2b (presentation) split C2b-1/C2b-2; C2b-1 (colour the Step cell committed/rolled-back on executed rows) DONE
+  2026-07-21** — post-run `ScriptExecutorTabViewModel.ApplyStepStatuses` stamps each row from `BuildStepStatuses`
+  (unchanged); `ScriptResultRowViewModel` became observable (`StepStatus` + derived flags/tooltip); the grid's
+  Step cell is coloured (committed = green / rolled back = amber, existing tokens) with a tooltip, so a `Success`
+  statement whose step rolled back is visibly marked; +4 `ScriptExecutorStepStatusPresentationTests`. Build 0/0.
+  **Next actionable is Step 5 seam C2b-2 (surface "not run" statements) — NOT started, gated on the user.** Full
+  record: review §6 "Results" + §7, and
   [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0/1/3/4).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:
