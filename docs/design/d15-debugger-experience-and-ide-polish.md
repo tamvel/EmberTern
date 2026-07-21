@@ -129,6 +129,16 @@ Replace "span-in-Selection-layer" with an IDE-grade marker inspired by (not copi
   are consumed only by `FirebirdSyntax` + the xshd drift-guard test (the lexer's `IsKeyword` and completion
   are category-agnostic), so the re-partition changes only colour grouping — build 0/0; syntax 18/18 +
   lexer/completion/semantic 229/229 green.
+  **Palette tuning after light-theme QA (2026-07-21):** (a) the light PSQL violet was too pale → deepened,
+  same hue (`#6C4C9E` → `#5D30A6`); (b) demoting data types all the way to neutral went too far — types
+  (INTEGER/VARCHAR/TIMESTAMP/NUMERIC/… incl. domain-typed columns) matter in declarations, so they regain a
+  **discreet muted-teal** accent (dark `#5FA894` / light `#2C7A70`); built-in functions + operators + ordinary
+  identifiers stay neutral. Still a controlled palette (blue SQL / violet PSQL / soft-teal types + quiet
+  literals), not a Christmas tree. Pure xshd colour values (no catalog/test change). **Deferred follow-up
+  (user, "w dalszej perspektywie"):** give Firebird **domains** their own semantic accent instead of colouring
+  them like plain SQL types — a `SemanticModel`/binder-driven distinction (domain references resolve as schema
+  objects), not an xshd keyword change; scope it when a milestone needs it (§F / gotcha #233 — don't build the
+  empty hook early).
 - **B (current-line):** rebuild `CurrentLineRenderer` for full-width + calm-blue + gutter bar; new/retuned
   tokens in both dictionaries; both themes. **NOT started.**
 

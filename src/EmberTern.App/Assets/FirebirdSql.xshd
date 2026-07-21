@@ -6,9 +6,9 @@
     * PSQL control-flow / routine-body keywords (BEGIN/END/IF/WHILE/FOR/DECLARE/SUSPEND/
       EXECUTE/…) get a SECOND restrained accent (violet), bold — so SQL and PSQL read as
       two distinct groups without returning to the "Christmas tree".
+    * Data types keep a discreet muted-teal accent (they matter in declarations).
     * Comments and literals (strings / numbers) stay legible but quiet.
-    * Data types, built-in functions, operators and identifiers are NEUTRAL
-      (default foreground) — they no longer each claim their own hue.
+    * Built-in functions, operators and identifiers are NEUTRAL (default foreground).
   The semantic highlighter layers navigable-object / trigger-context accents on top
   (Themes/Colors.axaml); ordinary variables/locals are neutral there too.
 
@@ -27,8 +27,9 @@
   <Color name="StatementKeyword" foreground="#5A8AC8" fontWeight="bold" />
   <!-- PSQL control-flow / routine-body keywords: a distinct restrained violet (SQL vs PSQL). -->
   <Color name="PsqlKeyword"      foreground="#A88FD4" fontWeight="bold" />
-  <!-- Types + built-in functions demoted to neutral foreground (readability first). -->
-  <Color name="DataType"         foreground="#D4D4D4" />
+  <!-- Data types keep a discreet muted-teal accent — they matter in declarations. -->
+  <Color name="DataType"         foreground="#5FA894" />
+  <!-- Built-in functions + operators stay neutral (default foreground). -->
   <Color name="Function"         foreground="#D4D4D4" />
   <Color name="Operator"         foreground="#D4D4D4" />
 

@@ -5,9 +5,9 @@
     * SQL keywords (query clauses + DML-action + DDL) share ONE restrained blue, bold.
     * PSQL control-flow / routine-body keywords (BEGIN/END/IF/WHILE/FOR/DECLARE/SUSPEND/
       EXECUTE/…) get a SECOND restrained accent (violet), bold — SQL vs PSQL as two groups.
+    * Data types keep a discreet muted-teal accent (they matter in declarations).
     * Comments and literals (strings / numbers) stay legible but quiet.
-    * Data types, built-in functions and identifiers are NEUTRAL (default foreground);
-      operators stay a soft grey.
+    * Built-in functions and identifiers are NEUTRAL (default foreground); operators a soft grey.
   All foregrounds stay dark enough to read (~WCAG AA-ish). Exact hex is tunable with visual
   verification in the running app.
 
@@ -24,10 +24,12 @@
   <!-- SQL keywords (query + DML-action + DDL) share ONE restrained blue. -->
   <Color name="DmlKeyword"       foreground="#0033B3" fontWeight="bold" />
   <Color name="StatementKeyword" foreground="#0033B3" fontWeight="bold" />
-  <!-- PSQL control-flow / routine-body keywords: a distinct restrained violet (SQL vs PSQL). -->
-  <Color name="PsqlKeyword"      foreground="#6C4C9E" fontWeight="bold" />
-  <!-- Types + built-in functions demoted to neutral foreground (readability first). -->
-  <Color name="DataType"         foreground="#1F1F1F" />
+  <!-- PSQL control-flow / routine-body keywords: a distinct restrained violet (SQL vs PSQL),
+       a touch more saturated than the first cut so it reads clearly on the near-white background. -->
+  <Color name="PsqlKeyword"      foreground="#5D30A6" fontWeight="bold" />
+  <!-- Data types keep a discreet muted-teal accent — they matter in declarations. -->
+  <Color name="DataType"         foreground="#2C7A70" />
+  <!-- Built-in functions neutral (default foreground); operators a soft grey. -->
   <Color name="Function"         foreground="#1F1F1F" />
   <Color name="Operator"         foreground="#4D4D4D" />
 
