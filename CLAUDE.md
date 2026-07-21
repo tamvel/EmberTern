@@ -359,6 +359,15 @@ noted.
   + `.Light.xshd` + `Themes/Colors.axaml` + `FirebirdSyntax.cs` + `FirebirdSyntaxTests.cs`. **Light-theme
   tuning (2026-07-21, bolder per user):** data types → strong teal `#0F766E`, comments → cool gray-green
   `#6E847A` (no more "olive"), PSQL light violet deepened to `#5D30A6`.
+  **Built-in functions coloured (2026-07-21, user-requested — reverses the "functions neutral"
+  recalibration):** QA found built-in functions (ROUND/COALESCE/CAST/TRIM/UPPER/LOWER/SUBSTRING/…) reading as
+  plain text. Root cause was NOT a classifier/list gap — all are catalogued in `FirebirdSyntax.FunctionWords`
+  (category `Function`) + the xshd `Function` block; the only cause was the recalibration painting the
+  `Function` colour neutral. Reversed: `Function` now gets a soft yellow accent (VS Code-style, dark `#DCDCAA`
+  / light `#795E26`), a fourth hue distinct from SQL blue / PSQL violet / type teal; operators stay neutral.
+  Pure Presentation (only the two xshd `<Color name="Function">` values + comments) — the drift-guard pins
+  block *membership* not hex → no test change; build 0/0, 52 syntax/highlight tests green. A user-defined
+  function stays neutral by design (needs semantic resolution — separate feature).
   **Seam A2 — domain-as-type resolution (Feature) DONE 2026-07-21 (awaits visual confirm):** a domain used as
   a data type (`DECLARE VARIABLE`/param/`RETURNS`) was neutral because the binder emitted no reference for a
   type-position name. `SemanticBinder.Psql.BindDomainTypeReference` now emits a `SchemaObject` reference for the

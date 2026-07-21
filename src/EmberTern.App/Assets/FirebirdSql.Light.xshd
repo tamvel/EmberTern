@@ -6,8 +6,9 @@
     * PSQL control-flow / routine-body keywords (BEGIN/END/IF/WHILE/FOR/DECLARE/SUSPEND/
       EXECUTE/…) get a SECOND restrained accent (violet), bold — SQL vs PSQL as two groups.
     * Data types keep a discreet muted-teal accent (they matter in declarations).
+    * Built-in functions get a readable dark-gold accent (VS Code light style), a clear fourth hue.
     * Comments and literals (strings / numbers) stay legible but quiet.
-    * Built-in functions and identifiers are NEUTRAL (default foreground); operators a soft grey.
+    * Operators a soft grey; ordinary identifiers are NEUTRAL (default foreground).
   All foregrounds stay dark enough to read (~WCAG AA-ish). Exact hex is tunable with visual
   verification in the running app.
 
@@ -32,8 +33,10 @@
   <!-- Data types: a strong, elegant teal — immediately recognizable in declarations, clearly distinct
        from the blue SQL keywords. -->
   <Color name="DataType"         foreground="#0F766E" />
-  <!-- Built-in functions neutral (default foreground); operators a soft grey. -->
-  <Color name="Function"         foreground="#1F1F1F" />
+  <!-- Built-in functions: a readable dark gold (VS Code light-theme style) — a clear accent, distinct
+       from the blue keywords / violet PSQL / teal types, readable on the near-white background. -->
+  <Color name="Function"         foreground="#795E26" />
+  <!-- Operators a soft grey. -->
   <Color name="Operator"         foreground="#4D4D4D" />
 
   <RuleSet ignoreCase="true">

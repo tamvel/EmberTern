@@ -138,6 +138,19 @@ Replace "span-in-Selection-layer" with an IDE-grade marker inspired by (not copi
   **Bolder pass after further light QA (2026-07-21):** the light tuning was too timid — data types → a strong
   elegant teal `#0F766E` (immediately recognizable, distinct from the blue keywords); comments → a cool
   gray-green `#6E847A` (modern-IDE feel, no more yellow "olive").
+  **Built-in functions coloured after QA (2026-07-21, user-requested — reverses the "functions neutral"
+  recalibration):** QA found built-in functions (ROUND/COALESCE/CAST/TRIM/UPPER/LOWER/SUBSTRING/
+  CURRENT_TIMESTAMP/…) reading as plain text. **Root cause was NOT a classifier/list gap** — every such
+  function is already catalogued in `FirebirdSyntax.FunctionWords` (category `Function`) and in the xshd
+  `<Keywords color="Function">` block; the only cause was the D15.1 recalibration painting the `Function`
+  colour neutral (`#D4D4D4` dark / `#1F1F1F` light). The user reversed that: `Function` now gets a soft
+  elegant **yellow** accent (VS Code-style — dark `#DCDCAA` / light `#795E26`), a clear fourth hue distinct
+  from SQL blue / PSQL violet / type teal; **operators** stay neutral. Pure Presentation (only the two
+  `<Color name="Function">` values + header comments) — `FirebirdSyntaxTests` pins keyword-block *membership*
+  per category, never the hex, so no test change; build 0/0, 52 syntax/highlight tests green. A **user-defined**
+  function (e.g. `dziel(…)`) stays neutral by design — colouring those needs semantic resolution, a separate
+  feature. (The Firebird 5 built-in list could later be extended with more functions — optional follow-up,
+  not needed by any reported case since every example was already catalogued.)
 
 ### 3.6 Seam A2 — domain-as-type resolution *(Feature)* — DONE (2026-07-21; awaits user visual confirmation)
 A follow-up found by QA: a builtin type (`VARCHAR`) was coloured but a **domain used as a type** (`T_STRING500`)

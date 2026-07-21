@@ -7,8 +7,9 @@
       EXECUTE/…) get a SECOND restrained accent (violet), bold — so SQL and PSQL read as
       two distinct groups without returning to the "Christmas tree".
     * Data types keep a discreet muted-teal accent (they matter in declarations).
+    * Built-in functions get a soft yellow accent (VS Code-style), a clear fourth hue.
     * Comments and literals (strings / numbers) stay legible but quiet.
-    * Built-in functions, operators and identifiers are NEUTRAL (default foreground).
+    * Operators and ordinary identifiers are NEUTRAL (default foreground).
   The semantic highlighter layers navigable-object / trigger-context accents on top
   (Themes/Colors.axaml); ordinary variables/locals are neutral there too.
 
@@ -29,8 +30,10 @@
   <Color name="PsqlKeyword"      foreground="#A88FD4" fontWeight="bold" />
   <!-- Data types: a vivid teal — they matter in declarations and should read as a clear accent. -->
   <Color name="DataType"         foreground="#4EC9B0" />
-  <!-- Built-in functions + operators stay neutral (default foreground). -->
-  <Color name="Function"         foreground="#D4D4D4" />
+  <!-- Built-in functions: a soft, elegant yellow (VS Code-style) — a clear accent distinct from the
+       blue keywords / violet PSQL / teal types, so ROUND/COALESCE/CAST/TRIM/… read as functions. -->
+  <Color name="Function"         foreground="#DCDCAA" />
+  <!-- Operators stay neutral (default foreground). -->
   <Color name="Operator"         foreground="#D4D4D4" />
 
   <RuleSet ignoreCase="true">
