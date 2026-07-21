@@ -405,9 +405,19 @@ noted.
   2026-07-21** — post-run `ScriptExecutorTabViewModel.ApplyStepStatuses` stamps each row from `BuildStepStatuses`
   (unchanged); `ScriptResultRowViewModel` became observable (`StepStatus` + derived flags/tooltip); the grid's
   Step cell is coloured (committed = green / rolled back = amber, existing tokens) with a tooltip, so a `Success`
-  statement whose step rolled back is visibly marked; +4 `ScriptExecutorStepStatusPresentationTests`. Build 0/0.
-  **Next actionable is Step 5 seam C2b-2 (surface "not run" statements) — NOT started, gated on the user.** Full
-  record: review §6 "Results" + §7, and
+  statement whose step rolled back is visibly marked; +4 `ScriptExecutorStepStatusPresentationTests`. **Seam C2b-2
+  (surface "not run" statements) DONE 2026-07-21** — a Sequenced stop-on-error / cancellation leaves later
+  statements unexecuted (they get NO result row — rows arrive only via the progress callback); pure
+  `ScriptExecutorTabViewModel.FindNotRunStatements(segmentMap, results)` reconstructs their indices (plan minus the
+  covered indices; empty for single-transaction modes so nothing is synthesized there) and `AppendNotRunRows`
+  appends a synthesized `ScriptResultRowViewModel` per index (new statement-based ctor: `IsNotRun`, Result = "Not
+  run", `StepStatus = NotRun`, its would-be step number, source range preserved so double-click still navigates). A
+  not-run row is neither success nor failure — shown muted/italic via a new `IsSucceeded` (`= !IsFailed &&
+  !IsNotRun`, so "OK" stays green only for a real success) + a `result-notrun` style; the "Success" filter excludes
+  it; `SuccessCount`/`FailedCount` untouched. App presentation only; Core + Firebird untouched; +7
+  `ScriptExecutorNotRunTests`. Build 0/0.
+  **Next actionable is Step 5 seam C3 (a "N of M steps committed" status-line summary) — NOT started, gated on the
+  user.** Full record: review §6 "Results" + §7, and
   [docs/history/15-...](docs/history/15-ux-stabilization-sprint-and-console-refactor.md) (Step 0/1/3/4).
   D11 narrative + full D12 narrative + D13 (Seam 0/A/B/C + close) narrative:
   [docs/history/19-firebird-debugger.md](docs/history/19-firebird-debugger.md). Spec:

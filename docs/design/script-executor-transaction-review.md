@@ -40,8 +40,9 @@
 > the first statement with a message naming `Sequenced`; pure `ResolveMixedScriptBlock`, engine untouched.
 > **Seam C (results-grid segment presentation) — split C1/C2/C3; C1 (a "Step" column) DONE; C2 further
 > split C2a/C2b, C2a (pure per-step commit/rollback reconstruction, `BuildStepStatuses`) DONE; C2b further
-> split C2b-1/C2b-2, C2b-1 (colour the Step cell committed/rolled-back on executed rows) DONE.** The next
-> actionable is C2b-2 (surface "not run" statements) — NOT started, gated on the user.
+> split C2b-1/C2b-2, C2b-1 (colour the Step cell committed/rolled-back on executed rows) DONE, C2b-2
+> (surface "not run" statements as synthesized muted rows) DONE.** The next actionable is C3 (a "N of M
+> steps committed" status-line summary) — NOT started, gated on the user.
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -633,8 +634,18 @@ sole planner; Firebird only executes). Split into two seams:
         the results grid's Step cell is coloured (committed = green, rolled back = amber, existing
         tokens) with an explanatory tooltip — so a `Success` statement whose step rolled back is visibly
         marked. Unit-pinned (+4 `ScriptExecutorStepStatusPresentationTests`). Build 0/0.
-      - **C2b-2 — surface "not run" statements — NOT started.** Synthesized rows (or a marker) for
-        statements a stop-on-error / cancellation left unexecuted.
+      - **C2b-2 — surface "not run" statements — DONE (2026-07-21).** A Sequenced stop-on-error /
+        cancellation leaves later statements unexecuted, so they produce NO result row (rows arrive only
+        via the progress callback). Pure `ScriptExecutorTabViewModel.FindNotRunStatements(segmentMap,
+        results)` reconstructs their indices from the plan (segment map, one entry per statement) minus
+        the indices the results cover (empty for single-transaction modes → nothing synthesized there),
+        and `AppendNotRunRows` appends a synthesized `ScriptResultRowViewModel` per index (new
+        statement-based constructor: `IsNotRun`, Result = "Not run", `StepStatus = NotRun`, its would-be
+        step number shown, source range preserved so double-click still navigates). A not-run row is
+        neither success nor failure — the grid shows it muted/italic via a new `IsSucceeded`
+        (`= !IsFailed && !IsNotRun`, so "OK" stays green only for a real success) and a `result-notrun`
+        style, the "Success" filter excludes it, and `SuccessCount`/`FailedCount` are untouched. App
+        presentation only; engine untouched. Unit-pinned (+7 `ScriptExecutorNotRunTests`). Build 0/0.
   - **C3 — a "which steps committed" summary — NOT started.** e.g. "N of M steps committed" on the
     status line.
 

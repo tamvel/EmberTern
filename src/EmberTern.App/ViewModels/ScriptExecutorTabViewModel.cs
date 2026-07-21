@@ -195,8 +195,10 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
             HasError = outcome.AnyFailed;
             StatusText = BuildOutcomeStatus(outcome, Mode);
             // Sequenced only (no-op otherwise): now the run is done, stamp each row with its step's
-            // commit/rollback outcome so the grid can show which steps persisted.
+            // commit/rollback outcome so the grid can show which steps persisted, then append a muted
+            // row for every statement a stop-on-error / cancellation left unexecuted.
             ApplyStepStatuses(_allRows, _segmentMap, outcome.Results);
+            AppendNotRunRows(outcome.Results);
         }
         catch (OperationCanceledException)
         {
@@ -347,9 +349,31 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasResults));
     }
 
+    // Appends a synthesized "not run" row for every statement a Sequenced stop-on-error / cancellation
+    // left unexecuted (from FindNotRunStatements — empty for single-transaction modes, so a no-op there).
+    // Not-run statements are always a contiguous suffix (execution stops/cancels and never resumes), so
+    // appending in index order keeps the grid in source order. They are neither success nor failure, so
+    // SuccessCount/FailedCount are untouched.
+    private void AppendNotRunRows(IReadOnlyList<ScriptStatementResult> results)
+    {
+        var notRun = FindNotRunStatements(_segmentMap, results);
+        if (notRun.Count == 0) return;
+
+        foreach (int index in notRun)
+        {
+            if (index >= _lastStatements.Count) continue;
+            int step = index < _segmentMap.Length ? _segmentMap[index] : 0;
+            var row = new ScriptResultRowViewModel(_lastStatements[index], index, step);
+            _allRows.Add(row);
+            if (PassesFilter(row)) Rows.Add(row);
+        }
+        OnPropertyChanged(nameof(HasResults));
+    }
+
     private bool PassesFilter(ScriptResultRowViewModel row) => SelectedFilterIndex switch
     {
-        1 => !row.IsFailed,
+        // "Success" = statements that actually succeeded — a not-run row succeeded no more than it failed.
+        1 => !row.IsFailed && !row.IsNotRun,
         2 => row.IsFailed,
         _ => true,
     };
@@ -499,6 +523,27 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
             row.StepStatus = row.Step > 0 && statuses.TryGetValue(row.Step, out var s) ? s : ScriptStepStatus.NotRun;
     }
 
+    // Pure: the statement indices (in source order) a Sequenced run left UNEXECUTED — a stop-on-error
+    // stopped the run, or a cancellation ended it, before them, so they produced NO result row (rows
+    // arrive only via the progress callback). Reconstructed from the plan (segmentMap has one entry per
+    // statement) minus the indices the results cover. Empty for a single-transaction run (empty map),
+    // so nothing is synthesized there — this is Sequenced presentation only, like the rest of seam C.
+    // App reconstruction only; the engine is untouched.
+    internal static IReadOnlyList<int> FindNotRunStatements(
+        int[] segmentMap, IReadOnlyList<ScriptStatementResult> results)
+    {
+        if (segmentMap.Length == 0) return Array.Empty<int>();
+
+        var ran = new HashSet<int>();
+        foreach (var r in results)
+            if (r.Index >= 0 && r.Index < segmentMap.Length) ran.Add(r.Index);
+
+        var notRun = new List<int>();
+        for (int i = 0; i < segmentMap.Length; i++)
+            if (!ran.Contains(i)) notRun.Add(i);
+        return notRun;
+    }
+
     // Pure pre-flight gate: returns the block message when a single-transaction mode (Manual /
     // Auto-commit) is asked to run a MIXED DDL+DML script, else null. Sequenced is built for mixed
     // migrations, so it is never blocked. The engine is untouched — this only stops the run earlier,
@@ -578,6 +623,30 @@ public sealed partial class ScriptResultRowViewModel : ObservableObject
         SourceLength = sourceLength;
     }
 
+    /// <summary>
+    /// A synthesized "not run" row (Step 5 seam C2b-2): a statement a Sequenced stop-on-error /
+    /// cancellation left unexecuted. It has no <see cref="ScriptStatementResult"/> — the fields come
+    /// from the source statement, and it is neither a success nor a failure. Its would-be step number
+    /// is shown so the user sees which step never ran.
+    /// </summary>
+    public ScriptResultRowViewModel(ScriptStatement statement, int index, int step)
+    {
+        Line = index + 1;
+        Step = step;
+        StepText = step > 0 ? step.ToString(CultureInfo.CurrentCulture) : string.Empty;
+        Statement = Elide(statement.Text);
+        TypeText = KindLabel(statement.Kind);
+        IsNotRun = true;
+        IsFailed = false;
+        Result = UiStrings.ScriptResultNotRun;
+        RowsText = string.Empty;
+        Duration = string.Empty;
+        Error = string.Empty;
+        SourceOffset = statement.SourceOffset;
+        SourceLength = statement.SourceLength;
+        StepStatus = ScriptStepStatus.NotRun;
+    }
+
     public int Line { get; }
     /// <summary>1-based Sequenced step (0 in single-transaction modes). See <see cref="StepText"/>.</summary>
     public int Step { get; }
@@ -604,6 +673,14 @@ public sealed partial class ScriptResultRowViewModel : ObservableObject
     public string TypeText { get; }
     public string Result { get; }
     public bool IsFailed { get; }
+    /// <summary>A statement a stop-on-error / cancellation left unexecuted (Sequenced). Neither
+    /// succeeded nor failed — shown muted. See <see cref="IsSucceeded"/>.</summary>
+    public bool IsNotRun { get; }
+    /// <summary>Actually succeeded — excludes the not-run rows, so the Result cell colours "OK"
+    /// green only for a real success and shows "Not run" muted (never green) otherwise.</summary>
+    public bool IsSucceeded => !IsFailed && !IsNotRun;
+    /// <summary>Explains a not-run row on the Result cell; null for executed rows (no tooltip).</summary>
+    public string? ResultTooltip => IsNotRun ? UiStrings.ScriptResultNotRunTooltip : null;
     public string RowsText { get; }
     public string Duration { get; }
     public string Error { get; }

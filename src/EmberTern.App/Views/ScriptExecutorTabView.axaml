@@ -160,6 +160,11 @@
           <Style Selector="TextBlock.result-failed">
             <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
           </Style>
+          <!-- Sequenced: a statement a stop / cancellation never reached — muted, neither OK nor failed. -->
+          <Style Selector="TextBlock.result-notrun">
+            <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+            <Setter Property="FontStyle" Value="Italic" />
+          </Style>
           <!-- Sequenced per-step outcome (Step cell): committed = green, rolled back = amber. -->
           <Style Selector="TextBlock.step-committed">
             <Setter Property="Foreground" Value="{DynamicResource SuccessIconBrush}" />
@@ -192,8 +197,10 @@
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="vm:ScriptResultRowViewModel">
                 <TextBlock Text="{Binding Result}" VerticalAlignment="Center" Margin="8,0"
+                           ToolTip.Tip="{Binding ResultTooltip}"
                            Classes.result-failed="{Binding IsFailed}"
-                           Classes.result-ok="{Binding !IsFailed}" />
+                           Classes.result-ok="{Binding IsSucceeded}"
+                           Classes.result-notrun="{Binding IsNotRun}" />
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>

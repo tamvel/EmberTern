@@ -169,6 +169,12 @@ internal static class UiStrings
     public const string ScriptColumnStatement = "Statement";
     public const string ScriptColumnType = "Type";
     public const string ScriptColumnResult = "Result";
+    // Sequenced only: a statement a stop-on-error / cancellation left unexecuted. It never ran, so it
+    // is neither a success nor a failure — surfaced as a muted "Not run" row so the grid shows exactly
+    // what the deployment did NOT reach.
+    public const string ScriptResultNotRun = "Not run";
+    public const string ScriptResultNotRunTooltip =
+        "This statement was never reached — the run stopped (an earlier step failed) or was cancelled before it. It had no effect.";
     public const string ScriptColumnRows = "Rows";
     public const string ScriptColumnDuration = "Duration";
     public const string ScriptColumnError = "Error";
