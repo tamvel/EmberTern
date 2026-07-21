@@ -47,11 +47,15 @@ public sealed record ScriptSegment(IReadOnlyList<ScriptStatement> Statements, Se
 ///
 /// <para><b>Deferred optimization.</b> Review §5.1 <em>permits</em> consecutive DDL to SHARE one
 /// segment, and Step 0's PROBE 2a proved two INDEPENDENT <c>CREATE TABLE</c>s commit together
-/// safely. This planner does not group them: telling independent DDL apart from DEPENDENT DDL
-/// (<c>CREATE TABLE T; CREATE INDEX … ON T;</c>, which #213 physics would break inside one
-/// transaction) needs object-dependency analysis that does not exist yet. Committing after each
-/// schema statement is always correct — it is exactly what isql's <c>SET AUTODDL ON</c> does — so
-/// the grouping is left as a future optimization, never a correctness risk.</para>
+/// safely. This planner does not group them — but NOT because dependent DDL would break in one
+/// transaction: it does not. Measured live on FB5 (Step 6 review), <c>CREATE TABLE T; CREATE INDEX
+/// … ON T;</c> and <c>CREATE TABLE T; ALTER TABLE T ADD …;</c> both SUCCEED inside a single
+/// transaction — Firebird applies each DDL's metadata change so a later DDL in the same transaction
+/// sees it. (#213 is a DDL→<em>DML</em> rule: a transaction cannot use an object it created for
+/// data/reads until commit; it does not apply to DDL→DDL.) Grouping is deferred simply because
+/// committing after each schema statement is always correct — exactly what isql's
+/// <c>SET AUTODDL ON</c> does — while grouping to reduce commit count would need object-dependency
+/// analysis that does not exist yet; it is a future optimization, never a correctness risk.</para>
 ///
 /// <para><b>Ambiguous statements.</b> A statement the classifier cannot confidently place
 /// (<see cref="SqlStatementCategory.Ambiguous"/>) is treated as non-schema and grouped into a data
