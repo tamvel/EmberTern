@@ -139,6 +139,7 @@ public class FirebirdSyntaxTests
     {
         ("DmlKeyword", SqlKeywordCategory.Dml),
         ("StatementKeyword", SqlKeywordCategory.Statement),
+        ("PsqlKeyword", SqlKeywordCategory.Psql),
         ("DataType", SqlKeywordCategory.DataType),
         ("Function", SqlKeywordCategory.Function),
     };

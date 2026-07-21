@@ -115,10 +115,20 @@ Replace "span-in-Selection-layer" with an IDE-grade marker inspired by (not copi
   tokens retuned **with** the xshd (not separately — Risk register): `EditorLocalBrush` → the default
   foreground in **both** dictionaries, so ordinary variables/locals are neutral; navigable objects
   (`IconColor_*`) and trigger-context variables (`EditorContextVariableBrush`) keep their restrained accent;
-  columns were already paint-opted-out. Presentation-only (no VM/Core change); `FirebirdSyntaxTests` pin only
-  keyword-block membership per category (not hex) → 18/18 green; build 0/0. Hex is a conservative start,
-  tunable against the running app. App-wide QA (main editor / object editors / debugger, both themes) is the
-  user-side confirmation step.
+  columns were already paint-opted-out. Presentation-only; `FirebirdSyntaxTests` pin only keyword-block
+  membership per category (not hex) → green; build 0/0. Hex is a conservative start, tunable against the
+  running app. App-wide QA (main editor / object editors / debugger, both themes) is the user-side step.
+  **Refinement after user QA (2026-07-21):** collapsing *all* keywords to one blue erased the SQL-vs-PSQL
+  language hierarchy (SELECT/FROM and BEGIN/END/WHILE/DECLARE looked identical). Per the user, SQL and PSQL
+  must read as two groups **without** returning to the Christmas tree. Resolved by **splitting the keyword
+  catalog** (not duplicating a keyword list in the xshd — that would defeat the single-source guard): the
+  Core `FirebirdSyntax` `Statement` category was split into `Statement` (DML-action + DDL + transaction +
+  constraints, **blue** — SQL) and a new `Psql` category (BEGIN/END/IF/WHILE/FOR/DO/EXIT/SUSPEND/LEAVE/
+  DECLARE/VARIABLE/CURSOR/EXECUTE/BLOCK/STATEMENT/RETURN/RETURNS) painted a **second restrained accent —
+  violet** (dark `#A88FD4` / light `#6C4C9E`, bold). `SqlKeywordCategory`/`CategoryOf`/`KeywordsInCategory`
+  are consumed only by `FirebirdSyntax` + the xshd drift-guard test (the lexer's `IsKeyword` and completion
+  are category-agnostic), so the re-partition changes only colour grouping — build 0/0; syntax 18/18 +
+  lexer/completion/semantic 229/229 green.
 - **B (current-line):** rebuild `CurrentLineRenderer` for full-width + calm-blue + gutter bar; new/retuned
   tokens in both dictionaries; both themes. **NOT started.**
 

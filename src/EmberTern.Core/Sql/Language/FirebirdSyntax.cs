@@ -5,23 +5,27 @@ using System.Linq;
 namespace EmberTern.Core.Sql.Language;
 
 /// <summary>
-/// Highlight/role category of a recognised Firebird keyword. The first four values
-/// map 1:1 onto the four <c>&lt;Keywords color="…"&gt;</c> blocks of the XSHD syntax
+/// Highlight/role category of a recognised Firebird keyword. The first five values
+/// map 1:1 onto the five <c>&lt;Keywords color="…"&gt;</c> blocks of the XSHD syntax
 /// definitions (verified by tests); <see cref="Keyword"/> is a recognised keyword that
 /// carries no dedicated highlight colour (e.g. <c>ANY</c>, <c>ESCAPE</c>, <c>CASCADE</c>).
 /// </summary>
 public enum SqlKeywordCategory
 {
-    /// <summary>Query clause + logical/comparison + set-ops + pagination (blue).</summary>
+    /// <summary>Query clause + logical/comparison + set-ops + pagination — SQL (blue).</summary>
     Dml,
 
-    /// <summary>DML-action + DDL + PSQL control-flow + transaction + constraints (purple).</summary>
+    /// <summary>DML-action + DDL + transaction + constraints — SQL (blue, same accent as <see cref="Dml"/>).</summary>
     Statement,
 
-    /// <summary>Built-in data types (teal).</summary>
+    /// <summary>PSQL control-flow / routine-body keywords (BEGIN/END/IF/WHILE/FOR/DECLARE/SUSPEND/EXECUTE/…) —
+    /// a second restrained accent (violet), distinct from the SQL blue so SQL and PSQL read as two groups (D15.1).</summary>
+    Psql,
+
+    /// <summary>Built-in data types — neutral foreground since D15.1.</summary>
     DataType,
 
-    /// <summary>Built-in functions, CASE/WHEN family, context constants, window keywords (gold).</summary>
+    /// <summary>Built-in functions, CASE/WHEN family, context constants, window keywords — neutral since D15.1.</summary>
     Function,
 
     /// <summary>A recognised keyword with no dedicated highlight colour.</summary>
@@ -67,6 +71,8 @@ public static class FirebirdSyntax
         "TRUE", "FALSE", "UNKNOWN", "PLAN", "NATURAL",
     };
 
+    // SQL statement keywords (DML-action + DDL + transaction + constraints). Same blue accent
+    // as the Dml block — together they are "SQL". PSQL control-flow moved to PsqlWords (D15.1).
     private static readonly string[] StatementWords =
     {
         "INSERT", "UPDATE", "DELETE", "MERGE", "INTO", "VALUES", "SET",
@@ -74,12 +80,21 @@ public static class FirebirdSyntax
         "CREATE", "RECREATE", "ALTER", "DROP",
         "TABLE", "VIEW", "INDEX", "SEQUENCE", "GENERATOR",
         "PROCEDURE", "FUNCTION", "TRIGGER", "DOMAIN", "EXCEPTION", "ROLE",
-        "GRANT", "REVOKE", "EXECUTE", "RETURNS", "RETURN",
-        "BEGIN", "END", "FOR", "WHILE", "DO", "IF",
-        "EXIT", "SUSPEND", "LEAVE", "DECLARE", "VARIABLE", "CURSOR", "BLOCK", "STATEMENT",
+        "GRANT", "REVOKE",
         "COMMIT", "ROLLBACK", "SAVEPOINT", "TRANSACTION",
         "PRIMARY", "FOREIGN", "KEY", "REFERENCES", "CONSTRAINT", "UNIQUE", "CHECK", "DEFAULT",
         "NEXT", "VALUE",
+    };
+
+    // PSQL control-flow / routine-body keywords — a distinct restrained violet accent, so PSQL
+    // reads as its own group beside the blue SQL keywords (D15.1). EXECUTE / BLOCK / STATEMENT are
+    // here for EXECUTE BLOCK / EXECUTE PROCEDURE / EXECUTE STATEMENT; RETURNS/RETURN for the routine
+    // signature + body. Kept disjoint from StatementWords (AddCategory enforces one category per word).
+    private static readonly string[] PsqlWords =
+    {
+        "BEGIN", "END", "FOR", "WHILE", "DO", "IF",
+        "EXIT", "SUSPEND", "LEAVE", "DECLARE", "VARIABLE", "CURSOR",
+        "EXECUTE", "BLOCK", "STATEMENT", "RETURNS", "RETURN",
     };
 
     private static readonly string[] DataTypeWords =
@@ -184,6 +199,7 @@ public static class FirebirdSyntax
 
         AddCategory(DmlWords, SqlKeywordCategory.Dml);
         AddCategory(StatementWords, SqlKeywordCategory.Statement);
+        AddCategory(PsqlWords, SqlKeywordCategory.Psql);
         AddCategory(DataTypeWords, SqlKeywordCategory.DataType);
         AddCategory(FunctionWords, SqlKeywordCategory.Function);
 
@@ -236,6 +252,7 @@ public static class FirebirdSyntax
     {
         SqlKeywordCategory.Dml => DmlWords,
         SqlKeywordCategory.Statement => StatementWords,
+        SqlKeywordCategory.Psql => PsqlWords,
         SqlKeywordCategory.DataType => DataTypeWords,
         SqlKeywordCategory.Function => FunctionWords,
         SqlKeywordCategory.Keyword => KeywordCategoryWords,

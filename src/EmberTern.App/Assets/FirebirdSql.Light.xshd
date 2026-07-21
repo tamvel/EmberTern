@@ -2,7 +2,9 @@
 <!--
   Light-theme variant of the Firebird SQL highlighter — D15.1 readability palette (3-tier).
   Mirrors FirebirdSql.xshd's hierarchy on the near-white background (BackgroundColor #F3F3F3):
-    * Structural keywords (DML + DML-action + DDL) share ONE restrained blue, bold.
+    * SQL keywords (query clauses + DML-action + DDL) share ONE restrained blue, bold.
+    * PSQL control-flow / routine-body keywords (BEGIN/END/IF/WHILE/FOR/DECLARE/SUSPEND/
+      EXECUTE/…) get a SECOND restrained accent (violet), bold — SQL vs PSQL as two groups.
     * Comments and literals (strings / numbers) stay legible but quiet.
     * Data types, built-in functions and identifiers are NEUTRAL (default foreground);
       operators stay a soft grey.
@@ -19,9 +21,11 @@
   <Color name="Comment"          foreground="#3F6B1F" />
   <Color name="String"           foreground="#A31515" />
   <Color name="Number"           foreground="#0B6A5C" />
-  <!-- Structural keywords: DML + DML-action + DDL collapse to ONE restrained blue. -->
+  <!-- SQL keywords (query + DML-action + DDL) share ONE restrained blue. -->
   <Color name="DmlKeyword"       foreground="#0033B3" fontWeight="bold" />
   <Color name="StatementKeyword" foreground="#0033B3" fontWeight="bold" />
+  <!-- PSQL control-flow / routine-body keywords: a distinct restrained violet (SQL vs PSQL). -->
+  <Color name="PsqlKeyword"      foreground="#6C4C9E" fontWeight="bold" />
   <!-- Types + built-in functions demoted to neutral foreground (readability first). -->
   <Color name="DataType"         foreground="#1F1F1F" />
   <Color name="Function"         foreground="#1F1F1F" />
@@ -78,7 +82,7 @@
       <Word>SUB_TYPE</Word><Word>SEGMENT</Word><Word>SIZE</Word>
     </Keywords>
 
-    <!-- DML-action + DDL share the same purple. -->
+    <!-- SQL statement keywords (DML-action + DDL + transaction + constraints) — blue, same as DmlKeyword. -->
     <Keywords color="StatementKeyword">
       <!-- DML action -->
       <Word>INSERT</Word><Word>UPDATE</Word><Word>DELETE</Word><Word>MERGE</Word>
@@ -89,18 +93,22 @@
       <Word>TABLE</Word><Word>VIEW</Word><Word>INDEX</Word><Word>SEQUENCE</Word><Word>GENERATOR</Word>
       <Word>PROCEDURE</Word><Word>FUNCTION</Word><Word>TRIGGER</Word>
       <Word>DOMAIN</Word><Word>EXCEPTION</Word><Word>ROLE</Word>
-      <Word>GRANT</Word><Word>REVOKE</Word><Word>EXECUTE</Word>
-      <Word>RETURNS</Word><Word>RETURN</Word>
-      <Word>BEGIN</Word><Word>END</Word>
-      <Word>FOR</Word><Word>WHILE</Word><Word>DO</Word>
-      <Word>IF</Word>
-      <Word>EXIT</Word><Word>SUSPEND</Word><Word>LEAVE</Word>
-      <Word>DECLARE</Word><Word>VARIABLE</Word><Word>CURSOR</Word><Word>BLOCK</Word>
-      <Word>STATEMENT</Word>
+      <Word>GRANT</Word><Word>REVOKE</Word>
+      <!-- transaction + constraints -->
       <Word>COMMIT</Word><Word>ROLLBACK</Word><Word>SAVEPOINT</Word><Word>TRANSACTION</Word>
       <Word>PRIMARY</Word><Word>FOREIGN</Word><Word>KEY</Word><Word>REFERENCES</Word>
       <Word>CONSTRAINT</Word><Word>UNIQUE</Word><Word>CHECK</Word><Word>DEFAULT</Word>
       <Word>NEXT</Word><Word>VALUE</Word>
+    </Keywords>
+
+    <!-- PSQL control-flow / routine-body keywords — the second (violet) structural accent. -->
+    <Keywords color="PsqlKeyword">
+      <Word>BEGIN</Word><Word>END</Word>
+      <Word>FOR</Word><Word>WHILE</Word><Word>DO</Word><Word>IF</Word>
+      <Word>EXIT</Word><Word>SUSPEND</Word><Word>LEAVE</Word>
+      <Word>DECLARE</Word><Word>VARIABLE</Word><Word>CURSOR</Word>
+      <Word>EXECUTE</Word><Word>BLOCK</Word><Word>STATEMENT</Word>
+      <Word>RETURNS</Word><Word>RETURN</Word>
     </Keywords>
 
     <Keywords color="DmlKeyword">
