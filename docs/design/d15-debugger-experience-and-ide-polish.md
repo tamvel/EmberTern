@@ -403,7 +403,20 @@ the smallest scope).
   `Spacing` 14→10). Shared by the proc/func launch grid AND the trigger NEW/OLD grids → consistent
   everywhere. Pure Presentation (XAML + 2 `UiStrings` for the NULL toggle label/tooltip); no VM change.
   Build 0/0; smoke clean.
-- **B (isolation → Advanced + plain-language copy):** view + `UiStrings` rewrite.
+- **B (isolation → Advanced + plain-language copy) — DONE 2026-07-22 (impl, awaits visual confirm).** Isolation
+  moved into an **Advanced disclosure** (a flat chevron+"Advanced" button toggling a VM view-state flag
+  `IsAdvancedExpanded`, mirroring the bottom-panel collapse — no unstyled FluentTheme `Expander`), **collapsed
+  by default**. Inside: the note now leads with **what the option changes** (Read Committed vs Snapshot in plain
+  language, plus the own-transaction/rolled-back caveat), then the level selector; the level labels dropped the
+  `(rec_version)` jargon. Default stays Read Committed. The main Launch flow is now just parameters (if any) →
+  Start. View + `UiStrings` rewrite + one trivial VM toggle (precedent: `IsBottomPanelCollapsed`). Build 0/0; +1
+  `DebuggerTabVmTests` (collapsed-by-default); smoke clean.
+
+  **Launch-panel Visual Polish backlog (user, 2026-07-22 — candidates for the future Visual Polish sprint, NOT
+  this milestone):** (1) cap the launch panel's max width (it stretches too far on wide monitors); (2) refine
+  the History-section hierarchy relative to the parameters; (3) reconsider the final placement of the Start
+  Debugging button; (4) give the "No issues detected" pre-flight line a gentler success cue (a success icon or
+  colour).
 - **D (Quick Relaunch):** command reusing the existing param-history/last-values; minimal persistence, no new
   favorites store. (Note: `Ctrl+Shift+F5` = Restart already exists in the debug-view key handler.)
 - **E (Members-tab Debug button):** toolbar button + a `CanExecute` gated on the selected member's kind

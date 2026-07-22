@@ -542,6 +542,16 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     [RelayCommand]
     private void ToggleBottomPanel() => IsBottomPanelCollapsed = !IsBottomPanelCollapsed;
 
+    /// <summary>Presentation state (D15.3 Seam B): whether the launch panel's Advanced section (transaction
+    /// isolation) is expanded. Collapsed by default — most users never change isolation, so it stays out of
+    /// the main Launch flow. Mirrors <see cref="IsBottomPanelCollapsed"/>: a pure view-state toggle, no logic.</summary>
+    [ObservableProperty]
+    private bool _isAdvancedExpanded;
+
+    /// <summary>Expands / collapses the launch panel's Advanced (isolation) section.</summary>
+    [RelayCommand]
+    private void ToggleAdvanced() => IsAdvancedExpanded = !IsAdvancedExpanded;
+
     // ── Preparation ───────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Fetches + parses the routine, derives the launch panel (parameters + pre-flight). Kicked once

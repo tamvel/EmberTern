@@ -269,6 +269,19 @@ public class DebuggerTabVmTests
         Assert.Equal(new[] { "A", "B" }, vm.Parameters!.Params.Select(p => p.Name)); // both defaulted params offered
     }
 
+    // D15.3 Seam B — the Advanced (transaction-isolation) section is collapsed by default (isolation is out
+    // of the main flow), and toggles open on demand.
+    [Fact]
+    public void AdvancedSection_IsCollapsedByDefault_AndToggles()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        Assert.False(vm.IsAdvancedExpanded);
+        vm.ToggleAdvancedCommand.Execute(null);
+        Assert.True(vm.IsAdvancedExpanded);
+        vm.ToggleAdvancedCommand.Execute(null);
+        Assert.False(vm.IsAdvancedExpanded);
+    }
+
     // ── Launch / stepping ─────────────────────────────────────────────────────────────────────────
 
     [Fact]

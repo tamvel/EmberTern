@@ -1723,12 +1723,18 @@ internal static class UiStrings
     // Compact launch form (D15.3 Seam A) — the inline NULL toggle beside each value field.
     public const string DebuggerParamNullLabel = "null";
     public const string DebuggerParamNullTooltip = "Set this parameter to NULL";
-    public const string DebuggerLaunchIsolationLabel = "Transaction isolation:";
-    public const string DebuggerIsolationReadCommitted = "Read Committed (rec_version)";
+    // Advanced section (D15.3 Seam B) — collapsed by default; transaction isolation lives here, out of the
+    // main Launch flow (most users never change it). The note leads with WHAT the option changes, then names
+    // the levels; the selector below shows the current level.
+    public const string DebuggerAdvancedSection = "Advanced";
+    public const string DebuggerLaunchIsolationLabel = "Transaction isolation";
+    public const string DebuggerIsolationReadCommitted = "Read Committed";
     public const string DebuggerIsolationSnapshot = "Snapshot";
     public const string DebuggerIsolationNote =
-        "The debug session runs in its own transaction (NOWAIT). It cannot see the SQL editor's " +
-        "uncommitted data and may conflict with it. Everything is rolled back when the session ends.";
+        "Controls which committed changes from other sessions you see while stepping. Read Committed shows " +
+        "changes other sessions commit during the run; Snapshot gives a consistent view from the moment you " +
+        "start, unchanged to the end. Either way the debug session runs in its own transaction and is rolled " +
+        "back when it ends.";
     public const string DebuggerLaunchButton = "Start debugging";
     public const string DebuggerLaunchPreparing = "Preparing…";
     // Pre-flight report (§9.2 / §4.6).

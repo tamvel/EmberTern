@@ -370,9 +370,15 @@ noted.
   form) — DONE 2026-07-22 (impl, awaits visual confirm):** `ParamRowTemplate` rebuilt — name primary + type
   subordinate (smaller/greyed) on one line, value beside, NULL an **inline toggle** (no standing column),
   tighter rows + less whitespace; shared by proc/func + trigger NEW/OLD grids. Pure Presentation (XAML + 2
-  `UiStrings`); no VM change. **Seams B (isolation→Advanced) / D (Quick Relaunch — reuses
-  `ParameterHistoryStore`; `Ctrl+Shift+F5` Restart already exists) / E (Members-tab Debug button) NOT
-  started.** Guide: d15 doc §5.
+  `UiStrings`); no VM change. **Seam B (isolation→Advanced) — DONE 2026-07-22 (impl, awaits visual confirm):**
+  isolation moved into an **Advanced disclosure** (flat chevron+"Advanced" toggle → VM view-state
+  `IsAdvancedExpanded`, mirroring the bottom-panel collapse; no unstyled `Expander`), **collapsed by default**;
+  the note now leads with what the option changes (plain language, `(rec_version)` jargon dropped), then the
+  level selector; default Read Committed. Main flow = params (if any) → Start. View + `UiStrings` + one trivial
+  VM toggle. **Launch-panel Visual Polish backlog (user, deferred to the future Visual Polish sprint):** cap
+  panel max-width on wide monitors · refine History-vs-parameters hierarchy · reconsider Start-button placement ·
+  gentler success cue for "No issues detected". **Seams D (Quick Relaunch — reuses `ParameterHistoryStore`;
+  `Ctrl+Shift+F5` Restart already exists) / E (Members-tab Debug button) NOT started.** Guide: d15 doc §5.
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);
