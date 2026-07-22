@@ -1752,7 +1752,8 @@ internal static class UiStrings
     public const string DebuggerStatusPausedFormat = "Paused at line {0} — {1}";
     public const string DebuggerStatusRunning = "Running…";
     public const string DebuggerStatusCompleted = "Completed — transaction rolled back.";
-    public const string DebuggerStatusFaultedFormat = "Unhandled exception: {0}";
+    // Short, fixed-height headline; the full Firebird message goes to the Error Bar (D15.2 Seam C).
+    public const string DebuggerStatusFaulted = "Unhandled exception — transaction rolled back.";
     public const string DebuggerStatusStopped = "Stopped — transaction rolled back.";
     public const string DebuggerStatusLaunchFailedFormat = "Could not start the debug session: {0}";
     public const string DebuggerStopReasonEntry = "entry";
@@ -1764,6 +1765,12 @@ internal static class UiStrings
     public const string DebuggerStopReasonDataBreakpoint = "data change";
     public const string DebuggerStopReasonDataChangedFormat = "data breakpoint — {0} changed";
     public const string DebuggerStopReasonConditionErrorFormat = "breakpoint condition error — {0}";
+    // Error Bar (D15.2 Seam C) — its own thin row below the toolbar; shows on a fault / Break-on-Exception pause.
+    public const string DebuggerErrorUnknown = "Unknown error";
+    public const string DebuggerErrorCopyTooltip = "Copy error message";
+    public const string DebuggerErrorExpandTooltip = "Show full message";
+    public const string DebuggerErrorCollapseTooltip = "Collapse message";
+    public const string DebuggerErrorDismissTooltip = "Dismiss";
     // Variables panel.
     public const string DebuggerVariablesHeader = "Variables";
     public const string DebuggerVariablesEmpty = "No variables in the current frame.";

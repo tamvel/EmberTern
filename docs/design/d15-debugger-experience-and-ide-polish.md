@@ -291,7 +291,7 @@ state (the current in-row `StatusText` is the bug being fixed).
   meaning-bearing hues, calm after D15.1. The three now-unused `Debugger*Content` glyph strings were removed;
   the results-empty hint reworded off the old glyph. Build 0/0; +1 headless pin (all 11 toolbar geometries +
   `DebugLoopIconBrush` in both themes resolve at runtime); 5099 tests green; smoke clean.
-- **B (app/debugger metaphor icon) — DONE (impl 2026-07-22; awaits user visual confirmation).** `Icon.Bug`
+- **B (app/debugger metaphor icon) — DONE + user-accepted 2026-07-22.** `Icon.Bug`
   replaced at all three debugger entry points (Procedure + Trigger editor toolbar "Debug…" buttons + the
   Debugger tab, which had been misusing the Continue `Icon.Play`) with a single unified debugger identity mark.
   **First metaphor (playhead-on-a-branching-path) was authored, shipped, and REJECTED by the user** — not a
@@ -307,8 +307,17 @@ state (the current in-row `StatusText` is the bug being fixed).
   tests green; smoke clean. **NOTE: the geometry redesign for the debugger identity stays an OPEN topic for the
   future Visual Polish sprint** — the current composite is the accepted interim; if Visual Polish designs a
   better mark, `DebuggerIcon`'s ControlTheme is the single place to change.
-- **C (error bar):** extract the fault message into its own collapsible row with copy + expand; fixed toolbar
-  height so an error never shifts the editor. **NOT started.**
+- **C (error bar) — DONE (impl 2026-07-22; awaits user visual confirmation). D15.2 COMPLETE.** The fault
+  message moved out of the toolbar status line into its **own row** (`Grid.Row=1`, root grid now
+  `Auto,Auto,*`) shown only on a fault OR a Break-on-Exception pause (`ShowErrorBar`); hidden it collapses to
+  zero height so the toolbar never moves. Calm, not dominating: `PanelBrush` background + a thin 3px
+  `ErrorBrush` left stripe + an error-toned icon carry the signal (no loud fill). **Copy** (clipboard, in the
+  view code-behind — Avalonia concern), **Expand/Collapse** (one ellipsised line ↔ a scrollable `MaxHeight=120`
+  wrapped block; `ChevronsDown`/`ChevronsUp`), **Dismiss** (`Icon.X`). The status line is now a **short,
+  fixed-height headline** (`DebuggerStatusFaulted`), the full Firebird message lives only in the bar — the
+  "current in-row `StatusText`" bug fixed. Pure Presentation: the VM projects `ErrorDetail`/`ShowErrorBar`
+  (over the engine's `DebugError`) + owns the expand/dismiss view-state; the engine is untouched. Build 0/0;
+  +2 `DebuggerTabVmTests`; smoke clean.
 
 ### 4.6 DoD
 Toolbar has clear primary/secondary/toggle hierarchy in EmberTern's own style; icons share one geometry;

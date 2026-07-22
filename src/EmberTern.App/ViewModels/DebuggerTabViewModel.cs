@@ -460,6 +460,68 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
     public bool HasVariables => Variables.Count > 0;
 
+    // ── D15.2 Seam C — Error Bar ────────────────────────────────────────────────────────────────
+    // A faulted session (or a Break-on-Exception pause) surfaces the raw Firebird error in its OWN
+    // thin row below the toolbar — never crammed into the toolbar status (which keeps a fixed height).
+    // Pure presentation over the engine's DebugError: this VM only projects the message + owns the
+    // bar's expand/dismiss view-state; Copy (clipboard) lives in the view. The bar shows while there is
+    // an error message and the user has not dismissed it; a new fault/pause re-shows it (SetError clears
+    // the dismiss), and leaving the error state clears it (ClearError).
+
+    /// <summary>The full error text shown in the Error Bar (empty ⇒ no error). Set on a fault / an
+    /// unexpected engine crash / a Break-on-Exception pause; cleared when the session leaves that state.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowErrorBar))]
+    private string _errorDetail = string.Empty;
+
+    /// <summary>Error Bar expanded (full multi-line message) vs collapsed (one line, ellipsised).</summary>
+    [ObservableProperty]
+    private bool _isErrorExpanded;
+
+    private bool _errorDismissed;
+
+    /// <summary>The Error Bar is visible while there is an error message and it has not been dismissed.</summary>
+    public bool ShowErrorBar => !_errorDismissed && ErrorDetail.Length > 0;
+
+    // Enter an error state: show the bar (un-dismissed, collapsed) with the given full message.
+    private void SetError(string detail)
+    {
+        ErrorDetail = detail ?? string.Empty; // NotifyPropertyChangedFor raises ErrorDetail + ShowErrorBar
+        IsErrorExpanded = false;
+        _errorDismissed = false;
+        OnPropertyChanged(nameof(ShowErrorBar));
+    }
+
+    // Leave the error state: hide the bar. Cheap no-op when already clear.
+    private void ClearError()
+    {
+        if (ErrorDetail.Length == 0 && !_errorDismissed) return;
+        _errorDismissed = false;
+        ErrorDetail = string.Empty; // raises ErrorDetail + ShowErrorBar
+    }
+
+    [RelayCommand]
+    private void ToggleErrorExpanded() => IsErrorExpanded = !IsErrorExpanded;
+
+    [RelayCommand]
+    private void DismissError()
+    {
+        _errorDismissed = true;
+        OnPropertyChanged(nameof(ShowErrorBar));
+    }
+
+    // A readable one-string description of a DebugError for the bar (prefer the server message; the
+    // exception name / SQLSTATE / GDS are fallbacks). Never parses the message — just picks the best field.
+    private static string DescribeError(DebugError? e)
+    {
+        if (e is null) return string.Empty;
+        if (!string.IsNullOrWhiteSpace(e.Message)) return e.Message!.Trim();
+        if (!string.IsNullOrWhiteSpace(e.ExceptionName)) return e.ExceptionName!;
+        if (!string.IsNullOrWhiteSpace(e.SqlState)) return $"SQLSTATE {e.SqlState}";
+        if (e.GdsCode is { } g) return $"GDS {g}";
+        return UiStrings.DebuggerErrorUnknown;
+    }
+
     /// <summary>Type-to-filter for the Variables panel (by name, case-insensitive contains — mirrors the
     /// sidebar). Presentation only: it re-groups the existing roster, it never re-reads the frame.</summary>
     [ObservableProperty]
@@ -737,6 +799,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
         Phase = DebuggerPhase.Busy;
         StatusText = UiStrings.DebuggerStatusRunning;
+        ClearError(); // resuming (incl. routing a held raise) — drop any shown error until the run settles
         SetCurrentMarker(null, null);
         try
         {
@@ -745,7 +808,8 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         catch (Exception ex)
         {
             Phase = DebuggerPhase.Faulted;
-            StatusText = string.Format(CultureInfo.CurrentCulture, UiStrings.DebuggerStatusFaultedFormat, ex.Message);
+            SetError(ex.Message);
+            StatusText = UiStrings.DebuggerStatusFaulted;
             ClearVariables(); // an unexpected engine crash: no live frame to inspect
             ResetWatches();
             return;
@@ -935,6 +999,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         ClearVariables();
         ClearExecutedSql();
         ClearSuspendRows();
+        ClearError();
         ResetWatches(); // keep the (persisted) watch rows, clear their live values
         Phase = DebuggerPhase.Idle;
         StatusText = UiStrings.DebuggerStatusStopped;
@@ -946,6 +1011,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         await TeardownRunAsync().ConfigureAwait(true);
         SetCurrentMarker(null, null);
         ClearVariables();
+        ClearError();
         // Reuse the last parameter values (§9.3 — Restart re-runs without re-prompting).
         await LaunchAsync().ConfigureAwait(true);
     }
@@ -1077,6 +1143,10 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
                 StatusText = string.Format(
                     CultureInfo.CurrentCulture, UiStrings.DebuggerStatusPausedFormat,
                     line, PausedReasonText(session));
+                // Break-on-Exception pause: the raise is held, frame intact — surface its message in the
+                // Error Bar. Any other (ordinary) pause has no error, so the bar clears.
+                if (session.IsPausedOnException) SetError(DescribeError(session.CurrentError));
+                else ClearError();
                 RebuildCallStack();
                 RebuildBreadcrumbs();
                 if (session.CurrentFrame is { } current) ApplySelectedFrame(current, computeChanges: true);
@@ -1090,6 +1160,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
                 // frame + last statement for exactly this (DebugSession.FinalFrame / LastStatement).
                 Phase = DebuggerPhase.Completed;
                 StatusText = UiStrings.DebuggerStatusCompleted;
+                ClearError();
                 ShowCompletedState(session);
                 return;
 
@@ -1099,10 +1170,10 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
                 // back (§4.5), but the client-side variable values at the raise survive — the useful debugging
                 // info. Stepping is disabled; Restart / Stop stay enabled, and Stop tears the session down.
                 Phase = DebuggerPhase.Faulted;
-                var err = session.CurrentError;
-                StatusText = string.Format(
-                    CultureInfo.CurrentCulture, UiStrings.DebuggerStatusFaultedFormat,
-                    err?.Message ?? err?.ExceptionName ?? "?");
+                // The full Firebird message goes to the Error Bar (its own row); the status line stays a
+                // short, fixed-height headline (D15.2 Seam C — no more cramming the message in-row).
+                SetError(DescribeError(session.CurrentError));
+                StatusText = UiStrings.DebuggerStatusFaulted;
                 ShowFaultState(session);
                 return;
 

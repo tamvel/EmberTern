@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -256,6 +257,17 @@ public partial class DebuggerTabView : UserControl
         if (_vm is null || (sender as Control)?.DataContext is not DebugVariableRowViewModel row) return;
         if (_vm.AddDataBreakpointCommand.CanExecute(row)) _vm.AddDataBreakpointCommand.Execute(row);
         e.Handled = true;
+    }
+
+    // Error Bar (D15.2 Seam C) — Copy the full fault message to the clipboard. Clipboard is a view-layer
+    // (Avalonia) concern, so it lives here, not in the VM; Expand/Dismiss are VM view-state commands.
+    private async void OnCopyErrorClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        var text = _vm?.ErrorDetail;
+        if (string.IsNullOrEmpty(text)) return;
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is not null) await clipboard.SetTextAsync(text);
     }
 
     private void OnDebugMarkersChanged(object? sender, EventArgs e) => RepaintMarkers();

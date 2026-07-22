@@ -460,6 +460,11 @@ public class DebuggerTabVmTests
 
         Assert.Equal(DebuggerPhase.Faulted, vm.Phase);
         Assert.True(vm.IsFaulted); // drives the red status line
+        // D15.2 Seam C — the full Firebird message goes to the Error Bar (its own row), not the status line.
+        Assert.True(vm.ShowErrorBar);
+        Assert.Equal("boom", vm.ErrorDetail);
+        Assert.DoesNotContain("boom", vm.StatusText); // status is a short, fixed-height headline
+        Assert.False(vm.IsErrorExpanded);
         // Stops ON the faulting statement (not cleared): marker + variables + call stack all preserved.
         Assert.Equal(Off("v = a + b"), vm.CurrentStart);
         Assert.NotEmpty(vm.Variables);
@@ -471,13 +476,46 @@ public class DebuggerTabVmTests
         Assert.True(vm.StopCommand.CanExecute(null));
         Assert.True(vm.RestartCommand.CanExecute(null));
 
-        // Stop finally clears everything.
+        // Stop finally clears everything (incl. the Error Bar).
         await vm.StopCommand.ExecuteAsync(null);
         Assert.Equal(DebuggerPhase.Idle, vm.Phase);
         Assert.False(vm.IsFaulted);
+        Assert.False(vm.ShowErrorBar);
+        Assert.Equal(string.Empty, vm.ErrorDetail);
         Assert.Null(vm.CurrentStart);
         Assert.Empty(vm.Variables);
         Assert.False(vm.HasCallStack);
+    }
+
+    // D15.2 Seam C — the Error Bar's expand + dismiss view-state, and re-showing on a fresh fault.
+    [Fact]
+    public async Task ErrorBar_ExpandAndDismiss_AreViewState_AndReshowOnNewFault()
+    {
+        var vm = Vm(Sql, new FakeExecutor().Raise(Off("v = a + b")), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        await vm.ContinueCommand.ExecuteAsync(null);
+
+        Assert.True(vm.ShowErrorBar);
+
+        // Expand toggles the full-message view without touching the message text.
+        vm.ToggleErrorExpandedCommand.Execute(null);
+        Assert.True(vm.IsErrorExpanded);
+        Assert.Equal("boom", vm.ErrorDetail);
+        vm.ToggleErrorExpandedCommand.Execute(null);
+        Assert.False(vm.IsErrorExpanded);
+
+        // Dismiss hides the bar but keeps the faulted state (marker/variables untouched).
+        vm.DismissErrorCommand.Execute(null);
+        Assert.False(vm.ShowErrorBar);
+        Assert.True(vm.IsFaulted);
+
+        // A fresh run + fault re-shows the bar (dismiss does not stick across faults).
+        await vm.RestartCommand.ExecuteAsync(null);
+        await vm.ContinueCommand.ExecuteAsync(null);
+        Assert.True(vm.ShowErrorBar);
+        Assert.Equal("boom", vm.ErrorDetail);
+        Assert.False(vm.IsErrorExpanded);
     }
 
     // ── Stop / breakpoints ──────────────────────────────────────────────────────────────────────

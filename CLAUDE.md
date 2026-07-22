@@ -329,7 +329,7 @@ noted.
   neutral text (only the icon carries the category → 6 neutral / 4 hues, calm). Removed 3 now-unused
   `Debugger*Content` glyph strings. Pure Presentation. Build 0/0; +1 headless pin (all 11 toolbar geometries +
   `DebugLoopIconBrush` both themes resolve); 5099 tests green; smoke clean. **Seam B (debugger identity icon,
-  replacing `Icon.Bug`) — DONE 2026-07-22 (impl, awaits visual confirm).** `Icon.Bug` replaced at all THREE
+  replacing `Icon.Bug`) — DONE + user-accepted 2026-07-22.** `Icon.Bug` replaced at all THREE
   debugger entry points — Procedure + Trigger editor toolbar "Debug…" buttons + the Debugger **tab** (which had
   been misusing the Continue `Icon.Play`) — with one unified identity mark. **First metaphor
   (playhead-on-a-branching-path) was shipped then REJECTED by the user** — not a quality problem, the metaphor
@@ -341,9 +341,17 @@ noted.
   `DebugBreakpointBrush`), both dicts, same idiom (24×24, 2px stroke, round caps/joins). Tab branches on a new
   presentation-only `WorkspaceTabViewModel.IsDebuggerTab`; the orphan `Icon.Bug` geometry removed. Pure
   Presentation. Build 0/0; pin test extended (constructs `DebuggerIcon` + pins both brushes both themes);
-  tests green; smoke clean. **The identity-mark redesign stays an OPEN topic for the future Visual Polish sprint
-  — the current composite is the accepted interim; `DebuggerIcon`'s ControlTheme is the one place to change.**
-  **Seam C (Error Bar, own fixed-height row) NOT started.** Guide: d15 doc §4.
+  tests green; smoke clean. **User-accepted 2026-07-22** (a better mark may be revisited in the future Visual
+  Polish sprint; `DebuggerIcon`'s ControlTheme is the one place to change).
+  **Seam C (Error Bar) — DONE 2026-07-22 (impl, awaits visual confirm) → D15.2 COMPLETE.** The fault message
+  moved out of the toolbar status line into its **own row** (root grid `Auto,Auto,*`; `Grid.Row=1`), shown only
+  on a fault / Break-on-Exception pause (`ShowErrorBar`), collapsing to zero height otherwise so the toolbar
+  never moves. Calm: `PanelBrush` + a thin 3px `ErrorBrush` left stripe + an error-toned icon (no loud fill).
+  **Copy** (clipboard, view code-behind), **Expand/Collapse** (one ellipsised line ↔ scrollable `MaxHeight=120`
+  wrapped block), **Dismiss**. The status line is now a short fixed-height headline (`DebuggerStatusFaulted`);
+  the full FB message lives only in the bar (the in-row `StatusText` bug fixed). Pure Presentation — the VM
+  projects `ErrorDetail`/`ShowErrorBar` over the engine's `DebugError` + owns the expand/dismiss view-state,
+  Core untouched. Build 0/0; +2 `DebuggerTabVmTests`; smoke clean. Guide: d15 doc §4.
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);
