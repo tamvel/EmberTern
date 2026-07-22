@@ -282,6 +282,66 @@ public class DebuggerTabVmTests
         Assert.False(vm.IsAdvancedExpanded);
     }
 
+    // D15.3 Seam D — Quick Relaunch was delivered by REUSE (Smart Parameters + ParameterHistoryStore + Seam C's
+    // F5), not a separate implementation. These two tests prove the reuse works through the debugger's own path.
+
+    // Pre-fill: opening the debugger launch form auto-applies the newest recorded parameter set for the routine
+    // (so a repeat debug — even in a fresh tab / after an app restart — starts with the last-used arguments).
+    [Fact]
+    public async Task Prepare_PreFillsLaunchForm_WithNewestHistorySet()
+    {
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "EmberTern-dbg-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var inputs = new (string, string)[] { ("A", "INTEGER"), ("B", "INTEGER") };
+            // Record a set under the SAME key the debugger uses (connection "c1", kind Procedure, name SP_TEST).
+            var seed = new ExecuteProcedureDialogViewModel(inputs, "SP_TEST", "c1", "Procedure", new ParameterHistoryStore(dir));
+            seed.Params[0].IsNull = false; seed.Params[0].NumericValue = 7m;
+            seed.Params[1].IsNull = false; seed.Params[1].NumericValue = 9m;
+            seed.AcceptCommand.Execute(null);
+
+            var vm = new DebuggerTabViewModel("SP_TEST", _ => Task.FromResult<string?>(Sql),
+                new FakeLauncher(new FakeExecutor()), new ParameterHistoryStore(dir), "c1");
+            await vm.PrepareAsync();
+
+            Assert.True(vm.Parameters!.HasHistory);
+            Assert.Same(vm.Parameters.History[0], vm.Parameters.SelectedHistory); // newest auto-selected
+            Assert.Equal(7m, vm.Parameters.Params[0].NumericValue);               // …and applied to the form
+            Assert.Equal(9m, vm.Parameters.Params[1].NumericValue);
+        }
+        finally { if (System.IO.Directory.Exists(dir)) System.IO.Directory.Delete(dir, recursive: true); }
+    }
+
+    // Restart reuses the last set of values (no re-prompt): the relaunch spec carries the same arguments.
+    [Fact]
+    public async Task Restart_ReusesLastParameterValues()
+    {
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "EmberTern-dbg-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var inputs = new (string, string)[] { ("A", "INTEGER"), ("B", "INTEGER") };
+            var seed = new ExecuteProcedureDialogViewModel(inputs, "SP_TEST", "c1", "Procedure", new ParameterHistoryStore(dir));
+            seed.Params[0].IsNull = false; seed.Params[0].NumericValue = 7m;
+            seed.Params[1].IsNull = false; seed.Params[1].NumericValue = 9m;
+            seed.AcceptCommand.Execute(null);
+
+            var launcher = new FakeLauncher(new FakeExecutor());
+            var vm = new DebuggerTabViewModel("SP_TEST", _ => Task.FromResult<string?>(Sql),
+                launcher, new ParameterHistoryStore(dir), "c1");
+            await vm.PrepareAsync();
+            await vm.LaunchCommand.ExecuteAsync(null);
+
+            Assert.Equal(7L, Convert.ToInt64(launcher.LastSpec!.RootValues["A"]));
+            Assert.Equal(9L, Convert.ToInt64(launcher.LastSpec!.RootValues["B"]));
+
+            await vm.RestartCommand.ExecuteAsync(null); // re-run without re-prompting
+
+            Assert.Equal(7L, Convert.ToInt64(launcher.LastSpec!.RootValues["A"]));
+            Assert.Equal(9L, Convert.ToInt64(launcher.LastSpec!.RootValues["B"]));
+        }
+        finally { if (System.IO.Directory.Exists(dir)) System.IO.Directory.Delete(dir, recursive: true); }
+    }
+
     // ── Launch / stepping ─────────────────────────────────────────────────────────────────────────
 
     [Fact]

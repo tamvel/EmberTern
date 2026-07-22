@@ -377,8 +377,13 @@ noted.
   level selector; default Read Committed. Main flow = params (if any) → Start. View + `UiStrings` + one trivial
   VM toggle. **Launch-panel Visual Polish backlog (user, deferred to the future Visual Polish sprint):** cap
   panel max-width on wide monitors · refine History-vs-parameters hierarchy · reconsider Start-button placement ·
-  gentler success cue for "No issues detected". **Seams D (Quick Relaunch — reuses `ParameterHistoryStore`;
-  `Ctrl+Shift+F5` Restart already exists) / E (Members-tab Debug button) NOT started.** Guide: d15 doc §5.
+  gentler success cue for "No issues detected". **Seam D (Quick Relaunch) — COMPLETE via REUSE 2026-07-22
+  (verified, no new production code):** already delivered by deliberate reuse — the launch form is the shared
+  `ExecuteProcedureDialogViewModel`, whose ctor auto-applies the newest `ParameterHistoryStore` set (persisted
+  per-routine, across tabs/restarts; each launch's `Accept()` records it), plus the existing `RestartCommand`
+  (toolbar + `Ctrl+Shift+F5`) reusing last values and Seam C's F5 on the pre-filled panel. Named favorites stay
+  DEFERRED. +2 `DebuggerTabVmTests` (pre-fill via the debugger path; Restart reuses last values); build 0/0.
+  **Seam E (Members-tab Debug button) NOT started** — next.** Guide: d15 doc §5.
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);

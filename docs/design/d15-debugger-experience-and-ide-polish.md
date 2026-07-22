@@ -417,8 +417,17 @@ the smallest scope).
   the History-section hierarchy relative to the parameters; (3) reconsider the final placement of the Start
   Debugging button; (4) give the "No issues detected" pre-flight line a gentler success cue (a success icon or
   colour).
-- **D (Quick Relaunch):** command reusing the existing param-history/last-values; minimal persistence, no new
-  favorites store. (Note: `Ctrl+Shift+F5` = Restart already exists in the debug-view key handler.)
+- **D (Quick Relaunch) — COMPLETE via REUSE 2026-07-22 (verified, no new production code).** A state review
+  found Quick Relaunch was **already delivered** by deliberate reuse — not a separate feature to build:
+  the debugger's launch form is the shared `ExecuteProcedureDialogViewModel`, whose ctor **auto-selects the
+  newest history set (`History[0]`, `Record` inserts at front) and applies it to the fields**, backed by the
+  persistent per-routine `ParameterHistoryStore` (`settings.dat`); each launch's `Accept()` records the set
+  (closing the loop, across tabs + app restarts). In-session re-run is the existing **`RestartCommand`**
+  (toolbar button + **`Ctrl+Shift+F5`** in the debug-view key handler), which re-uses the last values with no
+  re-prompt; and **Seam C's F5** launches the pre-filled panel in one keypress. **Named favorites stay
+  DEFERRED.** Scope reduced from "implement" to "verify + pin": +2 `DebuggerTabVmTests`
+  (`Prepare_PreFillsLaunchForm_WithNewestHistorySet`, `Restart_ReusesLastParameterValues`) drive the
+  **debugger's own path** and prove both behaviours. No production change; build 0/0; smoke clean.
 - **E (Members-tab Debug button):** toolbar button + a `CanExecute` gated on the selected member's kind
   (procedure now; function only once the "function as debug root" gap is closed).
 
