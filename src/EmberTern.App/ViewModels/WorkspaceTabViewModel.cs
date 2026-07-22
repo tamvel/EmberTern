@@ -342,7 +342,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ConnectionProfileId = connectionProfileId,
             Icon = string.Empty,
             IconResourceKey = "AccentBrush",
-            IconGeometryKey = "Icon.Play",
+            IconGeometryKey = "Icon.Debugger",
             Debugger = debugger,
         };
 

@@ -136,8 +136,16 @@ are neutral; only the load-bearing actions take a token. Continue reuses `Icon.P
 | `Icon.Restart` | Debugger/restart.svg | Restart (skip-to-start) | Neutral |
 | `Icon.BreakException` | Debugger/break-on-exception.svg | Break on exception (toggle) | Warning |
 
-The debugger tab/entry-point identity icon (the flow/tracing metaphor replacing `Icon.Bug`)
-is D15.2 Seam B; the fault message bar is Seam C.
+### Catalog (D15.2 Seam B) — debugger identity
+
+The debugger's tab + entry-point identity icon, replacing the old `Icon.Bug`. Same idiom
+(24×24, 2px stroke, round caps/joins); source `Debugger/debugger.svg`.
+
+| Geometry key | Debug source | Purpose | Used in |
+|---|---|---|---|
+| `Icon.Debugger` | Debugger/debugger.svg | Debugger identity — a playhead (play triangle = the execution pointer) on a flow path that forks (tracing branching control flow), NOT a bug | Debugger tab (AccentBrush); Procedure + Trigger editor toolbar "Debug…" buttons (Info) |
+
+The fault message bar is Seam C.
 
 ### Migration status — COMPLETE
 

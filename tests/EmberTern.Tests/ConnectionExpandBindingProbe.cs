@@ -1107,6 +1107,8 @@ public sealed class ConnectionExpandBindingProbe
                 "Icon.Play", "Icon.Stop", "Icon.StepInto", "Icon.StepOver", "Icon.StepOut",
                 "Icon.RunToCursor", "Icon.RunToSuspend", "Icon.NextIteration", "Icon.LoopExit",
                 "Icon.Restart", "Icon.BreakException",
+                // D15.2 Seam B — the debugger tab + entry-point identity icon (replaces Icon.Bug).
+                "Icon.Debugger",
             };
             foreach (var key in geometries)
             {
