@@ -68,11 +68,15 @@ public partial class DebuggerTabView : UserControl
             _editor.AddHandler(KeyDownEvent, OnEditorKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             _editor.AddHandler(PointerPressedEvent, OnEditorPointerPressed, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         }
-        // D15.3 Seam C — keyboard-first launch. Tunnelled so a focused parameter field never swallows the keys
-        // first: F5 = Start Debugging; Enter = Launch ONLY from the Launch button or the last parameter field
-        // (every other field keeps its natural Enter). See OnLaunchKeyDown.
-        this.FindControl<ScrollViewer>("LaunchPanel")?
-            .AddHandler(KeyDownEvent, OnLaunchKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        // D15.3 Seam C — keyboard-first launch, at the DEBUGGER-TAB scope (this UserControl root), tunnelled.
+        // F5 = Start Debugging is a TAB-level command (VS-standard "F5 = Go"), and MainWindow defines a global
+        // KeyBinding F5 = Execute Query that fires when F5 bubbles up to the window unhandled. A tab-root TUNNEL
+        // handler pre-empts that binding whenever focus is anywhere inside the debugger tab — the earlier
+        // LaunchPanel-scoped handler only pre-empted it while focus was inside the panel subtree, which is not
+        // reliably the case (see FocusLaunchStart). Phase-gated in OnLaunchKeyDown so the debug view's own keys
+        // (F5 = Continue, …, OnEditorKeyDown) are untouched. Enter still launches ONLY from the Launch button or
+        // the last parameter field (checked against the focused element), so every other field keeps its Enter.
+        this.AddHandler(KeyDownEvent, OnLaunchKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 #if DEBUG
         // The Harness Log tab is a DEBUG-only diagnostic surface (Sprint D10.5) — it exists in development
         // builds only, so it is added here rather than in the XAML. In RELEASE this call is compiled out and
@@ -86,21 +90,29 @@ public partial class DebuggerTabView : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        if (_attached || _editor is null) return;
-        if (this.FindAncestorOfType<Window>()?.DataContext is not MainWindowViewModel mainVm) return;
 
         // Intrinsic editor block via the one D3 seam (highlighting/hover/related elements over the read-only
-        // source). The debugger adds a data-tip source (spec §9.4) so a plain hover over a variable shows its
-        // live frame value — read from the VM's roster at hover time, never the server. Then the renderers.
-        SqlEditorBehavior.Attach(_editor, mainVm, debugValueLookup: DebugValueFor);
-        CurrentLineRenderer.Attach(_editor, () => (_vm?.CurrentStart, _vm?.CurrentLength));
-        _margin = new BreakpointMargin(
-            () => _vm?.BreakpointOffsets ?? Array.Empty<int>(),
-            offset => _vm?.ToggleBreakpointAt(offset));
-        _editor.TextArea.LeftMargins.Insert(0, _margin);
+        // source), once, when the host VM is available. The debugger adds a data-tip source (spec §9.4) so a
+        // plain hover over a variable shows its live frame value — read from the VM's roster at hover time,
+        // never the server. Then the renderers.
+        if (!_attached && _editor is not null
+            && this.FindAncestorOfType<Window>()?.DataContext is MainWindowViewModel mainVm)
+        {
+            SqlEditorBehavior.Attach(_editor, mainVm, debugValueLookup: DebugValueFor);
+            CurrentLineRenderer.Attach(_editor, () => (_vm?.CurrentStart, _vm?.CurrentLength));
+            _margin = new BreakpointMargin(
+                () => _vm?.BreakpointOffsets ?? Array.Empty<int>(),
+                offset => _vm?.ToggleBreakpointAt(offset));
+            _editor.TextArea.LeftMargins.Insert(0, _margin);
 
-        _attached = true;
-        SyncEditorText();
+            _attached = true;
+            SyncEditorText();
+        }
+
+        // Land keyboard focus in the launch panel now the view is in the tree — independent of the Phase event
+        // (which this view may have missed if preparation finished before it subscribed) and of where focus was
+        // (opening from the sidebar leaves it on the tree, outside the tab). See FocusLaunchStart.
+        FocusLaunchStart();
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)
@@ -122,6 +134,9 @@ public partial class DebuggerTabView : UserControl
         RepaintMarkers();
         RebuildSuspendColumns();
         ApplyBottomPanel();
+        // If the VM arrived already ReadyToLaunch (the view realized after preparation finished), the Phase
+        // transition is in the past — establish launch focus here too. No-op unless attached + panel visible.
+        FocusLaunchStart();
     }
 
     // Rebuilds the Results DataGrid's columns from the VM's SuspendColumns (D12 Seam E2) — dynamic columns, the
@@ -185,9 +200,17 @@ public partial class DebuggerTabView : UserControl
         Dispatcher.UIThread.Post(() => _editor.TextArea.Focus(), DispatcherPriority.Background);
     }
 
+    // Puts keyboard focus into the launch panel so F5 / typing / Enter act on the debugger. Driven by EVERY
+    // event that can complete the "shown + ready" state (view attached, DataContext set, Phase → ReadyToLaunch)
+    // — whichever happens LAST succeeds. Relying only on the Phase-change event was the bug: a freshly-realized
+    // view subscribes during PrepareAsync's await, so if preparation reaches ReadyToLaunch first (a fast/cached
+    // source fetch), the transition is missed and focus never enters the tab — then the tab-scoped F5 handler
+    // never sees the key and the window's global F5 = Execute Query binding consumes it. No-op unless the launch
+    // panel is visible and the view is attached (an earlier trigger simply skips; a later one lands it).
     private void FocusLaunchStart() => Dispatcher.UIThread.Post(() =>
     {
-        if (_vm?.IsLaunchPanelVisible != true) return; // a fast-path auto-launch may have moved on already
+        if (_vm?.IsLaunchPanelVisible != true) return;   // a fast-path auto-launch may have moved on already
+        if (TopLevel.GetTopLevel(this) is null) return;  // not attached yet — a later trigger will retry
         var first = FirstFormInput();
         if (first is not null) first.Focus();
         else this.FindControl<Button>("LaunchButton")?.Focus();
@@ -198,7 +221,10 @@ public partial class DebuggerTabView : UserControl
     // last parameter field — every other field keeps its natural Enter (a multiline text box gets a newline).
     private void OnLaunchKeyDown(object? sender, KeyEventArgs e)
     {
-        if (_vm is null) return;
+        // Tab-scoped, but the LAUNCH phase's keys only. During the debug view the editor owns the keys
+        // (OnEditorKeyDown: F5 = Continue, F10/F11, …), so this does nothing there and lets the event tunnel
+        // on down to the editor — never swallowing a debug-phase F5.
+        if (_vm is null || !_vm.IsLaunchPanelVisible) return;
         if (e.Key == Key.F5)
         {
             TryLaunch();

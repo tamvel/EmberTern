@@ -40,7 +40,9 @@ public class DebuggerTabVmTests
 
     // Default-Normal executor: every leaf runs normally (optionally with scripted writes), every condition
     // is true; no cursors, no step-into. Records savepoint ops. Mirrors DebugEngineTests' scripted fake.
-    private sealed class FakeExecutor : IDebugExecutor
+    // internal (not private) so the headless view regression test in ConnectionExpandBindingProbe can reuse
+    // this exact scripted executor — one test double, no parallel implementation.
+    internal sealed class FakeExecutor : IDebugExecutor
     {
         private readonly Dictionary<int, IReadOnlyDictionary<string, object?>> _writes = new();
         private readonly HashSet<int> _raises = new();
@@ -110,7 +112,7 @@ public class DebuggerTabVmTests
         public void RollbackFrameSavepoint(string name) { }
     }
 
-    private sealed class FakeLauncher : IDebugSessionLauncher
+    internal sealed class FakeLauncher : IDebugSessionLauncher
     {
         private readonly IDebugExecutor _executor;
         public bool Disposed { get; private set; }
