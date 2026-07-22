@@ -138,12 +138,19 @@ are neutral; only the load-bearing actions take a token. Continue reuses `Icon.P
 
 ### Catalog (D15.2 Seam B) — debugger identity
 
-The debugger's tab + entry-point identity icon, replacing the old `Icon.Bug`. Same idiom
-(24×24, 2px stroke, round caps/joins); source `Debugger/debugger.svg`.
+The debugger's tab + entry-point identity mark, replacing the old `Icon.Bug`. It is a
+**two-colour composite**, not a single stroked geometry: a **blue Play triangle** (the
+execution pointer, dominant) + a **small red breakpoint dot** nested into its lower-right,
+overlapping the tip so the two read as one "Start Debugging" glyph. Two colours + a filled
+dot can't be a single `SvgIcon`, so it is a dedicated control — `Controls/DebuggerIcon.cs`
+with its ControlTheme in `Themes/IconGeometries.axaml`. Both colours are **reused theme
+tokens**: `AccentIconBrush` (Play) + `DebugBreakpointBrush` (the same red the gutter
+breakpoint dot uses). Same idiom (24×24, 2px stroke, round caps/joins); canonical source
+`Debugger/debugger.svg`.
 
-| Geometry key | Debug source | Purpose | Used in |
+| Control | Source | Purpose | Used in |
 |---|---|---|---|
-| `Icon.Debugger` | Debugger/debugger.svg | Debugger identity — a playhead (play triangle = the execution pointer) on a flow path that forks (tracing branching control flow), NOT a bug | Debugger tab (AccentBrush); Procedure + Trigger editor toolbar "Debug…" buttons (Info) |
+| `DebuggerIcon` | Debugger/debugger.svg | Debugger identity — blue Play + red breakpoint = "Start Debugging" | Debugger tab; Procedure + Trigger editor toolbar "Debug…" buttons |
 
 The fault message bar is Seam C.
 

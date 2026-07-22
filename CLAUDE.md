@@ -328,9 +328,30 @@ noted.
   Stop → `DangerIconBrush`; Break on Exception → `WarningIconBrush` (a mode, not destruction). Labels stay
   neutral text (only the icon carries the category → 6 neutral / 4 hues, calm). Removed 3 now-unused
   `Debugger*Content` glyph strings. Pure Presentation. Build 0/0; +1 headless pin (all 11 toolbar geometries +
-  `DebugLoopIconBrush` both themes resolve); 5099 tests green; smoke clean. **Seam B (debugger identity icon —
-  playhead-on-flow, replacing `Icon.Bug`) + Seam C (Error Bar, own fixed-height row) NOT started.** Guide:
-  d15 doc §4. **Philosophy held — no new execution path (Fast Forward
+  `DebugLoopIconBrush` both themes resolve); 5099 tests green; smoke clean. **Seam B (debugger identity icon,
+  replacing `Icon.Bug`) — DONE 2026-07-22 (impl, awaits visual confirm).** `Icon.Bug` replaced at all THREE
+  debugger entry points — Procedure + Trigger editor toolbar "Debug…" buttons + the Debugger **tab** (which had
+  been misusing the Continue `Icon.Play`) — with one unified identity mark. **First metaphor
+  (playhead-on-a-branching-path) was shipped then REJECTED by the user** — not a quality problem, the metaphor
+  itself didn't read as "debugger" (less legible than the bug). **Ratified replacement: a two-colour composite
+  — a blue Play triangle (execution pointer, dominant) + a small red breakpoint dot nested into its lower-right,
+  overlapping the tip so the two read as ONE "Start Debugging" glyph.** Two colours + a filled dot can't be a
+  single stroked `SvgIcon`, so it is a dedicated composite control `Controls/DebuggerIcon.cs` + its ControlTheme
+  in `IconGeometries.axaml`; both colours are **reused tokens** (`AccentIconBrush` + the gutter
+  `DebugBreakpointBrush`), both dicts, same idiom (24×24, 2px stroke, round caps/joins). Tab branches on a new
+  presentation-only `WorkspaceTabViewModel.IsDebuggerTab`; the orphan `Icon.Bug` geometry removed. Pure
+  Presentation. Build 0/0; pin test extended (constructs `DebuggerIcon` + pins both brushes both themes);
+  tests green; smoke clean. **The identity-mark redesign stays an OPEN topic for the future Visual Polish sprint
+  — the current composite is the accepted interim; `DebuggerIcon`'s ControlTheme is the one place to change.**
+  **Seam C (Error Bar, own fixed-height row) NOT started.** Guide: d15 doc §4.
+  **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
+  implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
+  disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);
+  today debugging a member is context-menu-only → undiscoverable. (2) **Debugging standalone/packaged PSQL
+  FUNCTIONS as a debug ROOT** — a functional gap (the debugger launches procedures/triggers/packaged procedures
+  as a root, not a function-as-entry-point — a §F boundary; distinct from D9's local-function step-into). Both
+  in d15 doc §5.2/§5.3-E. See [[project-d15-debugger-experience-planned]].
+  **Philosophy held — no new execution path (Fast Forward
   only *controls* the session), the new features are stop policies (the `RunToSuspend` template), `Simulator ==
   Real Firebird` (live-fidelity-proven). D13 formally CLOSED.**
   **D14 (Step Back) — ANALYZED + DEFERRED by user decision (2026-07-20). Not started.** Full

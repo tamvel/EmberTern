@@ -341,12 +341,17 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ObjectKind = MetadataObjectKind.Procedure,
             ConnectionProfileId = connectionProfileId,
             Icon = string.Empty,
-            IconResourceKey = "AccentBrush",
-            IconGeometryKey = "Icon.Debugger",
+            // The debugger tab renders the DebuggerIcon composite (IsDebuggerTab), so the
+            // single-colour geometry/resource keys are unused for this kind.
+            IconResourceKey = string.Empty,
+            IconGeometryKey = string.Empty,
             Debugger = debugger,
         };
 
     public WorkspaceTabKind Kind { get; private init; }
+    // The debugger tab wears the two-colour DebuggerIcon identity mark instead of a
+    // single-colour keyed SvgIcon (D15.2 Seam B); the tab template branches on this.
+    public bool IsDebuggerTab => Kind == WorkspaceTabKind.Debugger;
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
     public string? ObjectName { get; private init; }

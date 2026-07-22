@@ -1107,8 +1107,6 @@ public sealed class ConnectionExpandBindingProbe
                 "Icon.Play", "Icon.Stop", "Icon.StepInto", "Icon.StepOver", "Icon.StepOut",
                 "Icon.RunToCursor", "Icon.RunToSuspend", "Icon.NextIteration", "Icon.LoopExit",
                 "Icon.Restart", "Icon.BreakException",
-                // D15.2 Seam B — the debugger tab + entry-point identity icon (replaces Icon.Bug).
-                "Icon.Debugger",
             };
             foreach (var key in geometries)
             {
@@ -1122,7 +1120,21 @@ public sealed class ConnectionExpandBindingProbe
                 Assert.True(
                     app.Resources.TryGetResource("DebugLoopIconBrush", theme, out var b) && b is Avalonia.Media.IBrush,
                     $"DebugLoopIconBrush does not resolve in {theme}");
+
+                // D15.2 Seam B — the debugger identity mark (DebuggerIcon, replaces Icon.Bug)
+                // is a two-colour composite: pin both of its REUSED brush tokens in both themes.
+                Assert.True(
+                    app.Resources.TryGetResource("AccentIconBrush", theme, out var a) && a is Avalonia.Media.IBrush,
+                    $"AccentIconBrush does not resolve in {theme}");
+                Assert.True(
+                    app.Resources.TryGetResource("DebugBreakpointBrush", theme, out var d) && d is Avalonia.Media.IBrush,
+                    $"DebugBreakpointBrush does not resolve in {theme}");
             }
+
+            // The DebuggerIcon composite must construct + apply its ControlTheme (it is not a
+            // keyed geometry, so the StaticResource build-validation above does not cover it).
+            var dbgIcon = new EmberTern.App.Controls.DebuggerIcon();
+            Assert.NotNull(dbgIcon);
         }, CancellationToken.None);
     }
 

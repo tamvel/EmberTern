@@ -291,9 +291,22 @@ state (the current in-row `StatusText` is the bug being fixed).
   meaning-bearing hues, calm after D15.1. The three now-unused `Debugger*Content` glyph strings were removed;
   the results-empty hint reworded off the old glyph. Build 0/0; +1 headless pin (all 11 toolbar geometries +
   `DebugLoopIconBrush` in both themes resolve at runtime); 5099 tests green; smoke clean.
-- **B (app/debugger metaphor icon):** design + wire the new debugger tab/entry-point icon (the
-  playhead-on-a-branching-path metaphor from the concept board, replacing `Icon.Bug` on the procedure-editor
-  debug button + the debugger tab). **NOT started.**
+- **B (app/debugger metaphor icon) — DONE (impl 2026-07-22; awaits user visual confirmation).** `Icon.Bug`
+  replaced at all three debugger entry points (Procedure + Trigger editor toolbar "Debug…" buttons + the
+  Debugger tab, which had been misusing the Continue `Icon.Play`) with a single unified debugger identity mark.
+  **First metaphor (playhead-on-a-branching-path) was authored, shipped, and REJECTED by the user** — not a
+  quality/SVG problem but the metaphor itself failed to read as "debugger / execution tracing" (less legible
+  than the old bug). **Ratified replacement (user-directed): a two-colour composite — a blue Play triangle (the
+  execution pointer, dominant ~80–85%) + a small red breakpoint dot (~20–25% dia) nested into its lower-right,
+  overlapping the tip so the two read as ONE "Start Debugging" glyph.** Two colours + a filled dot cannot be a
+  single stroked `SvgIcon`, so it is a dedicated composite control `Controls/DebuggerIcon.cs` with its
+  ControlTheme in `Themes/IconGeometries.axaml`; both colours are **reused theme tokens** (`AccentIconBrush` +
+  the very `DebugBreakpointBrush` the gutter breakpoint uses), both dicts, same idiom (24×24, 2px stroke, round
+  caps/joins). The tab template branches on a new presentation-only `WorkspaceTabViewModel.IsDebuggerTab`. Pure
+  Presentation. Build 0/0; pin test extended (constructs `DebuggerIcon` + pins both brushes in both themes);
+  tests green; smoke clean. **NOTE: the geometry redesign for the debugger identity stays an OPEN topic for the
+  future Visual Polish sprint** — the current composite is the accepted interim; if Visual Polish designs a
+  better mark, `DebuggerIcon`'s ControlTheme is the single place to change.
 - **C (error bar):** extract the fault message into its own collapsible row with copy + expand; fixed toolbar
   height so an error never shifts the editor. **NOT started.**
 
@@ -334,6 +347,22 @@ converge with the user on the icon-set sketch before mass-authoring.
   `TextArea` so `F10/F11/…` work immediately without a click.
 - **Quick Relaunch (YES) — favorites (DEFERRED):** one gesture/shortcut to re-launch with the last parameters.
   **Named favorite configurations are deferred** — parameter history already covers most cases (ratified §9).
+- **Debugger discoverability — Debug button on the Package "Members" tab toolbar (BACKLOG, added 2026-07-22
+  from Seam B QA; NOT yet implemented).** Today the only way to debug a package member is the Members-tab
+  **context menu** — a new user has virtually no chance of discovering it. Add a **Debug** button to the Members
+  tab toolbar, **disabled by default**, that enables only when the selected member is a debuggable kind
+  (procedure / trigger / function) and stays disabled for the rest. Reuses the existing member-launch path
+  (`PackageDetailTabViewModel.DebugMemberRequested`); pure App/UX. *(Blocked in part by the function-debugging
+  gap below — a function member can only enable this once the debugger supports functions.)*
+- **Debugging standalone/stored PSQL FUNCTIONS as a debug ROOT — FUNCTIONAL GAP (BACKLOG, added 2026-07-22
+  from Seam B QA; NOT a D15 item — a debugger feature, recorded here for the plan).** The debugger today
+  launches **procedures, triggers, and packaged procedures** as a root; a **standalone (or packaged) function
+  launched as its own debug session is NOT supported** (a §F boundary — cf. "a function-as-root is out of
+  scope" / a package FUNCTION call is not modelled on the call side, gotcha #233). Note this is distinct from
+  D9, which already makes a **local** `DECLARE FUNCTION` a faithful step-into/over frame *within* a routine —
+  the gap is a function as the **entry point**. Needs its own debugger milestone (a function root frame +
+  return-value surface), sequenced with the other debugger work, before the Members-tab Debug button can light
+  up for function members.
 
 ### 5.3 Seams
 - **A (compact form + type styling + NULL affordance):** view-only re-layout.
@@ -341,6 +370,7 @@ converge with the user on the icon-set sketch before mass-authoring.
 - **C (launch shortcut + Enter-to-launch + post-launch focus):** view/keybinding + focus.
 - **D (Quick Relaunch):** command reusing the existing param-history/last-values; minimal persistence, no new
   favorites store.
+- **E (Members-tab Debug button):** toolbar button + a `CanExecute` gated on the selected member's kind.
 
 ### 5.4 DoD
 Launch is compact and keyboard-drivable end-to-end; type never dominates name; isolation is out of the way with

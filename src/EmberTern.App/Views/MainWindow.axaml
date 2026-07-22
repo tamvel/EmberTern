@@ -704,9 +704,14 @@
                               BorderThickness="0"
                               Command="{Binding ActivateCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                          <!-- The debugger tab wears the two-colour debugger identity mark
+                               (D15.2 Seam B); every other tab uses its single-colour SvgIcon. -->
+                          <controls:DebuggerIcon Width="14" Height="14" VerticalAlignment="Center"
+                                                 IsVisible="{Binding IsDebuggerTab}" />
                           <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
                                             Width="14" Height="14"
-                                            VerticalAlignment="Center">
+                                            VerticalAlignment="Center"
+                                            IsVisible="{Binding !IsDebuggerTab}">
                             <controls:SvgIcon.Foreground>
                               <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                                 <Binding Path="IconResourceKey" />
@@ -999,7 +1004,7 @@
               <!-- Debugger entry point (Stage X / D5) — same launch as the sidebar "Debug procedure…". -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureDebugTooltip}"
                       Command="{Binding ActiveProcedureDetail.DebugProcedureCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Debugger}" Foreground="{DynamicResource InfoIconBrush}" />
+                <controls:DebuggerIcon />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveProcedureDetail.FormatSqlCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
@@ -1017,7 +1022,7 @@
               <!-- Debugger entry point (Stage X / D10) — same launch as the sidebar "Debug trigger…". -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TriggerDebugTooltip}"
                       Command="{Binding ActiveTriggerDetail.DebugTriggerCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Debugger}" Foreground="{DynamicResource InfoIconBrush}" />
+                <controls:DebuggerIcon />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveTriggerDetail.FormatSqlCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">

@@ -191,13 +191,6 @@
   <StreamGeometry x:Key="Icon.Restart">M6 5 V19 M19 6 L10 12 L19 18 Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.BreakException">M8 3 H16 L21 8 V16 L16 21 H8 L3 16 V8 Z M12 8 V13 M12 16 h.01</StreamGeometry>
 
-  <!-- Debugger identity (Stage X / D15.2 Seam B) — the debugger tab + entry-point icon,
-       replacing the old Icon.Bug. Metaphor: a playhead (play triangle = the execution
-       pointer) sitting on a flow path that forks — i.e. tracing branching control flow,
-       not "an insect". Same idiom (24×24, 2px stroke, round caps/joins); source
-       Assets/Icons/Debugger/debugger.svg. -->
-  <StreamGeometry x:Key="Icon.Debugger">M4 7 L11 12 L4 17 Z M11 12 H15 M15 12 L20 6 M15 12 L20 18</StreamGeometry>
-
   <!-- ============================================================================
        SvgIcon ControlTheme — the single render path for every icon above.
        A fixed 24×24 Canvas inside a Uniform Viewbox guarantees a consistent
@@ -219,6 +212,38 @@
                   StrokeThickness="2"
                   StrokeLineCap="Round"
                   StrokeJoin="Round" />
+          </Canvas>
+        </Viewbox>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- ============================================================================
+       DebuggerIcon ControlTheme — the debugger's two-colour identity mark
+       (Stage X / D15.2 Seam B), replacing the old Icon.Bug at every debugger
+       entry point. A blue Play triangle (the execution pointer, dominant) with a
+       small red breakpoint dot nested into its lower-right, overlapping the tip so
+       the two read as ONE "Start Debugging" glyph. Two colours + a filled dot can't
+       be a single stroked SvgIcon, hence a dedicated composite; both brushes are
+       REUSED theme tokens (accent blue + the very DebugBreakpointBrush the gutter
+       dot uses), so it stays inside the central theme system and recolours per
+       theme. Same idiom: 24×24, 2px stroke, round caps/joins. Default 16; the tab
+       overrides to 14. Canonical source: Assets/Icons/Debugger/debugger.svg.
+       ============================================================================ -->
+  <ControlTheme x:Key="{x:Type controls:DebuggerIcon}" TargetType="controls:DebuggerIcon">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Viewbox Stretch="Uniform">
+          <Canvas Width="24" Height="24">
+            <Path Data="M6 4 L18 12 L6 20 Z"
+                  Stroke="{DynamicResource AccentIconBrush}"
+                  StrokeThickness="2"
+                  StrokeLineCap="Round"
+                  StrokeJoin="Round" />
+            <Ellipse Canvas.Left="13" Canvas.Top="12.5" Width="6" Height="6"
+                     Fill="{DynamicResource DebugBreakpointBrush}" />
           </Canvas>
         </Viewbox>
       </ControlTemplate>
