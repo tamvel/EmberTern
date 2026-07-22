@@ -248,6 +248,27 @@ public class DebuggerTabVmTests
         Assert.NotEmpty(vm.Preflight);
     }
 
+    // D15.3 Seam C boundary — a parameter with a DEFAULT (Firebird's "optional parameter": both `= v` and
+    // `DEFAULT v` forms) is still a decision (accept the default OR override it), so the Fast Path must NOT
+    // fire — the panel stays and the parameter is offered. Pins that the model surfaces defaulted params as
+    // input parameters (if it dropped them, Params.Count would be 0 and the routine would wrongly auto-launch).
+    [Fact]
+    public async Task Prepare_ParametersWithDefaults_ShowPanel_NoAutoLaunch()
+    {
+        const string sql = """
+            create procedure sp_defaults (a integer = 5, b integer default 10) returns (r integer) as
+            begin
+              r = a + b;
+            end
+            """;
+        var vm = new DebuggerTabViewModel("SP_DEFAULTS", _ => Task.FromResult<string?>(sql), new FakeLauncher(new FakeExecutor()));
+        await vm.PrepareAsync();
+
+        Assert.Equal(DebuggerPhase.ReadyToLaunch, vm.Phase); // panel shown, NOT auto-launched
+        Assert.True(vm.IsLaunchPanelVisible);
+        Assert.Equal(new[] { "A", "B" }, vm.Parameters!.Params.Select(p => p.Name)); // both defaulted params offered
+    }
+
     // ── Launch / stepping ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
