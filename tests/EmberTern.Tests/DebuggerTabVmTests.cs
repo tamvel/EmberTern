@@ -195,6 +195,59 @@ public class DebuggerTabVmTests
         Assert.True(vm.LaunchBlocked);
     }
 
+    // D15.3 Seam C — a routine with no decision to make (non-trigger, no input parameters, clean pre-flight)
+    // launches straight through: Prepare goes Debug → session, skipping the launch panel (no Launch click).
+    [Fact]
+    public async Task Prepare_NoParametersCleanPreflight_AutoLaunches()
+    {
+        const string sql = """
+            create procedure sp_noargs returns (r integer) as
+            declare v integer;
+            begin
+              v = 1;
+              r = v;
+            end
+            """;
+        var vm = new DebuggerTabViewModel("SP_NOARGS", _ => Task.FromResult<string?>(sql), new FakeLauncher(new FakeExecutor()));
+        await vm.PrepareAsync();
+
+        // Went straight to the running session (paused at entry), never resting on the launch panel.
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.True(vm.IsDebugViewVisible);
+        Assert.False(vm.IsLaunchPanelVisible);
+        Assert.Empty(vm.Parameters!.Params);
+    }
+
+    // A routine WITH parameters keeps the launch panel — the user has a decision (the argument values).
+    [Fact]
+    public async Task Prepare_WithParameters_DoesNotAutoLaunch()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+
+        Assert.Equal(DebuggerPhase.ReadyToLaunch, vm.Phase);
+        Assert.True(vm.IsLaunchPanelVisible);
+    }
+
+    // A pre-flight note (a §4.6 data-safety warning is a decision) keeps the panel even with no parameters.
+    [Fact]
+    public async Task Prepare_NoParametersButPreflightNote_DoesNotAutoLaunch()
+    {
+        const string sql = """
+            create procedure sp_side_noargs as
+            declare v integer;
+            begin
+              v = gen_id(g_seq, 1);
+            end
+            """;
+        var vm = new DebuggerTabViewModel("SP_SIDE_NOARGS", _ => Task.FromResult<string?>(sql), new FakeLauncher(new FakeExecutor()));
+        await vm.PrepareAsync();
+
+        Assert.Equal(DebuggerPhase.ReadyToLaunch, vm.Phase);
+        Assert.True(vm.IsLaunchPanelVisible);
+        Assert.NotEmpty(vm.Preflight);
+    }
+
     // ── Launch / stepping ─────────────────────────────────────────────────────────────────────────
 
     [Fact]

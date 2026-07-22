@@ -68,6 +68,11 @@ public partial class DebuggerTabView : UserControl
             _editor.AddHandler(KeyDownEvent, OnEditorKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             _editor.AddHandler(PointerPressedEvent, OnEditorPointerPressed, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         }
+        // D15.3 Seam C — keyboard-first launch. Tunnelled so a focused parameter field never swallows the keys
+        // first: F5 = Start Debugging; Enter = Launch ONLY from the Launch button or the last parameter field
+        // (every other field keeps its natural Enter). See OnLaunchKeyDown.
+        this.FindControl<ScrollViewer>("LaunchPanel")?
+            .AddHandler(KeyDownEvent, OnLaunchKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 #if DEBUG
         // The Harness Log tab is a DEBUG-only diagnostic surface (Sprint D10.5) — it exists in development
         // builds only, so it is added here rather than in the XAML. In RELEASE this call is compiled out and
@@ -149,6 +154,107 @@ public partial class DebuggerTabView : UserControl
     {
         if (e.PropertyName == nameof(DebuggerTabViewModel.SourceText)) SyncEditorText();
         else if (e.PropertyName == nameof(DebuggerTabViewModel.IsBottomPanelCollapsed)) ApplyBottomPanel();
+        else if (e.PropertyName == nameof(DebuggerTabViewModel.Phase)) OnPhaseChanged();
+    }
+
+    // Tracks the launch-panel⇄debug-view transition so focus lands where the keyboard should act next
+    // (D15.3 Seam C): ready-to-launch → the first parameter field (or the Launch button); launch → the editor
+    // TextArea, so F10/F11/… work immediately without a click. Starts true (Preparing is launch-visible).
+    private bool _launchPanelWasVisible = true;
+
+    private void OnPhaseChanged()
+    {
+        if (_vm is null) return;
+        bool launchVisible = _vm.IsLaunchPanelVisible;
+
+        // Launch → debug view: give the editor keyboard focus once (not on every step — both sides of a step
+        // are debug-visible, so this only fires on the launch/relaunch transition, never stealing focus from
+        // the Immediate box mid-session).
+        if (!launchVisible && _launchPanelWasVisible) FocusEditor();
+
+        // Ready to launch (panel shown): put the caret where the user starts typing / can press Enter.
+        if (launchVisible && _vm.Phase == DebuggerPhase.ReadyToLaunch) FocusLaunchStart();
+
+        _launchPanelWasVisible = launchVisible;
+    }
+
+    private void FocusEditor()
+    {
+        if (_editor is null) return;
+        // TextArea holds keyboard focus (the TextEditor itself is not focusable — gotcha #225).
+        Dispatcher.UIThread.Post(() => _editor.TextArea.Focus(), DispatcherPriority.Background);
+    }
+
+    private void FocusLaunchStart() => Dispatcher.UIThread.Post(() =>
+    {
+        if (_vm?.IsLaunchPanelVisible != true) return; // a fast-path auto-launch may have moved on already
+        var first = FirstFormInput();
+        if (first is not null) first.Focus();
+        else this.FindControl<Button>("LaunchButton")?.Focus();
+    }, DispatcherPriority.Background);
+
+    // Keyboard-first launch (D15.3 Seam C). F5 = Start Debugging (consistent with "F5 = Go"; the debug view's
+    // F5 = Continue is a different phase, so no conflict). Enter launches ONLY from the Launch button or the
+    // last parameter field — every other field keeps its natural Enter (a multiline text box gets a newline).
+    private void OnLaunchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_vm is null) return;
+        if (e.Key == Key.F5)
+        {
+            TryLaunch();
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Enter && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            if ((TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement()) is not Visual focused) return;
+            var launchBtn = this.FindControl<Button>("LaunchButton");
+            bool onButton = launchBtn is not null
+                && (ReferenceEquals(focused, launchBtn) || focused.GetVisualAncestors().Contains(launchBtn));
+            if (onButton || IsInLastFormInput(focused))
+            {
+                TryLaunch();
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void TryLaunch()
+    {
+        if (_vm?.LaunchCommand.CanExecute(null) == true) _vm.LaunchCommand.Execute(null);
+    }
+
+    // The focusable value controls of the visible parameter area, in visual order. A multiline TextBox is
+    // excluded (its Enter is a newline). Trigger mode hides the proc-parameter list, so its controls are not
+    // effectively visible and are skipped (the Launch button becomes the focus target instead).
+    private System.Collections.Generic.List<Control> FormInputs()
+    {
+        var result = new System.Collections.Generic.List<Control>();
+        if (this.FindControl<ItemsControl>("ParamsList") is not { } list) return result;
+        foreach (var c in list.GetVisualDescendants().OfType<Control>())
+        {
+            if (c.IsEffectivelyVisible && IsFormInput(c)) result.Add(c);
+        }
+        return result;
+    }
+
+    private static bool IsFormInput(Control c) => c switch
+    {
+        TextBox tb => !tb.AcceptsReturn, // a multiline value box keeps Enter = newline
+        NumericUpDown => true,
+        CalendarDatePicker => true,
+        CheckBox => true,
+        _ => false,
+    };
+
+    private Control? FirstFormInput() => FormInputs().FirstOrDefault();
+
+    private bool IsInLastFormInput(Visual focused)
+    {
+        var inputs = FormInputs();
+        if (inputs.Count == 0) return false;
+        var last = inputs[^1];
+        return ReferenceEquals(focused, last) || focused.GetVisualAncestors().Contains(last);
     }
 
     // The ONE re-normalization point (mirrors MainWindow.ApplyResultsRowForActiveTab): it always sets BOTH

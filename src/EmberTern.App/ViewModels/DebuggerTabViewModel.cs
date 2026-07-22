@@ -597,7 +597,24 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
         Phase = DebuggerPhase.ReadyToLaunch;
         StatusText = UiStrings.DebuggerStatusReady;
+
+        // No-decision fast path (D15.3 Seam C): if the user has nothing to decide before launching — a
+        // non-trigger routine with no input parameters and a clean pre-flight — skip the launch panel
+        // entirely (Debug → Preparing → session). Any parameter, trigger context (NEW/OLD), or pre-flight
+        // note (a §4.6 data-safety warning is a decision) keeps the panel shown. Isolation is NOT a required
+        // decision (it defaults to Read Committed and lives in Advanced), so it never blocks the fast path.
+        if (ShouldAutoLaunch()) await LaunchAsync().ConfigureAwait(true);
     }
+
+    /// <summary>The launch panel offers no decision — a non-trigger routine with no input parameters and a
+    /// clean pre-flight — so launching is immediate (D15.3 Seam C). Only valid right after preparation
+    /// (ReadyToLaunch), never from Idle after a Stop (the user deliberately stopped).</summary>
+    private bool ShouldAutoLaunch()
+        => Phase == DebuggerPhase.ReadyToLaunch
+           && !IsTriggerMode
+           && Parameters is { Params.Count: 0 }
+           && Preflight.Count == 0
+           && CanLaunch;
 
     // Prepares the trigger launch editor (Stage X / D10): reads the header facts (target table / timing / DML
     // events) from the AST via the Core reader, derives the referenced NEW/OLD columns (reference-driven, never

@@ -355,6 +355,19 @@ noted.
   the full FB message lives only in the bar (the in-row `StatusText` bug fixed). Pure Presentation — the VM
   projects `ErrorDetail`/`ShowErrorBar` over the engine's `DebugError` + owns the expand/dismiss view-state,
   Core untouched. Build 0/0; +2 `DebuggerTabVmTests`; smoke clean. Guide: d15 doc §4.
+  **D15.3 (Launch & Entry Experience) — STARTED; architecture re-reviewed + ratified 2026-07-22; seam order
+  C→A→B→D→E.** Ratified decisions: **F5 = always "Go"** (launch panel → Start Debugging, session → Continue);
+  **Enter launches only from the last parameter field or the Launch button** (not any field); **Transaction
+  Isolation → an Advanced section (collapsed)**, description-before-level, default Read Committed; **no-decision
+  fast path** — a non-trigger routine with no parameters and a clean pre-flight skips the launch panel entirely
+  (Debug → Preparing → session; a pre-flight warning or any parameter/trigger context keeps the panel).
+  **Seam C — DONE 2026-07-22 (impl, awaits visual confirm):** keyboard-first launch (F5 in the panel; Enter
+  scoped via a tunnelled handler to the last `ParamsList` input / Launch button; multiline value boxes keep
+  Enter=newline), post-launch focus → editor `TextArea` (once per launch/relaunch, gotcha #225), ready-to-launch
+  focus → first field / Launch button, and the no-decision auto-launch (`ShouldAutoLaunch()` in `PrepareAsync`).
+  Pure Presentation + one VM guard; engine untouched. Build 0/0; +3 `DebuggerTabVmTests`; smoke clean. **Seams
+  A (compact form) / B (isolation→Advanced) / D (Quick Relaunch — reuses `ParameterHistoryStore`; `Ctrl+Shift+F5`
+  Restart already exists) / E (Members-tab Debug button) NOT started.** Guide: d15 doc §5.
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);

@@ -260,7 +260,9 @@
     <Panel Grid.Row="2">
 
       <!-- ── Launch panel ─────────────────────────────────────────────────── -->
-      <ScrollViewer IsVisible="{Binding IsLaunchPanelVisible}" VerticalScrollBarVisibility="Auto">
+      <!-- D15.3 Seam C — keyboard-first launch: a tunnelled KeyDown handler (code-behind) makes F5 =
+           Start Debugging, and Enter = Launch only from the last parameter field or the Launch button. -->
+      <ScrollViewer x:Name="LaunchPanel" IsVisible="{Binding IsLaunchPanelVisible}" VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="20,16" Spacing="14" MaxWidth="720" HorizontalAlignment="Left">
 
           <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchHeader}" Classes="h1" />
@@ -292,7 +294,7 @@
                 </ComboBox>
               </Grid>
 
-              <ItemsControl ItemsSource="{Binding Params}" IsVisible="{Binding Params.Count}"
+              <ItemsControl x:Name="ParamsList" ItemsSource="{Binding Params}" IsVisible="{Binding Params.Count}"
                             ItemTemplate="{StaticResource ParamRowTemplate}" />
             </StackPanel>
           </StackPanel>
@@ -360,7 +362,7 @@
             </ItemsControl>
           </StackPanel>
 
-          <Button Classes="primary" HorizontalAlignment="Left"
+          <Button x:Name="LaunchButton" Classes="primary" HorizontalAlignment="Left"
                   Content="{x:Static app:UiStrings.DebuggerLaunchButton}"
                   Command="{Binding LaunchCommand}" />
         </StackPanel>

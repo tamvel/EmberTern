@@ -354,10 +354,18 @@ converge with the user on the icon-set sketch before mass-authoring.
   the note so it says **what the option changes** before naming the level, e.g. *"You see data other sessions
   commit while you debug (Read Committed)"* / *"A consistent snapshot from the moment you start, unchanged to
   the end (Snapshot)"*. Default stays Read Committed.
-- **Start Debugging — keyboard shortcut (ratified):** add a launch shortcut (recommend **F5** in the launch
-  context — consistent with "F5 = Continue/go" in the debug view; alternative `Ctrl+Enter`) + **Enter-to-launch**
-  when focus is in a parameter field. **Focus management (added):** after launch, focus lands on the editor
-  `TextArea` so `F10/F11/…` work immediately without a click.
+- **Start Debugging — keyboard (ratified 2026-07-22):** **F5 = Start Debugging** in the launch panel (F5 is
+  always "Go"; the debug view's F5 = Continue is a different phase → no conflict). **Enter launches ONLY from
+  the last parameter field or the Launch button** (user refinement — Enter from any field was rejected); every
+  other field keeps its natural Enter (a multiline value box → newline). **Focus management:** after launch,
+  focus lands on the editor `TextArea` so `F10/F11/…` work immediately without a click; on the launch panel,
+  focus lands on the first parameter field (or the Launch button when there are none).
+- **No-decision fast path (ratified 2026-07-22, changed from the earlier "focus Launch" answer):** if the user
+  has **nothing to decide** before launching — a non-trigger routine with **no input parameters** and a
+  **clean pre-flight** — the launch panel is **not shown at all**: Debug → Preparing → session. A pre-flight
+  note (a §4.6 data-safety warning) or any parameter/trigger context keeps the panel. Isolation is never a
+  required decision (defaults to Read Committed, lives in Advanced). Principle: *don't show a step the user has
+  no decision in.* A future "Debug with options…" path could force the panel, but must not slow the default.
 - **Quick Relaunch (YES) — favorites (DEFERRED):** one gesture/shortcut to re-launch with the last parameters.
   **Named favorite configurations are deferred** — parameter history already covers most cases (ratified §9).
 - **Debugger discoverability — Debug button on the Package "Members" tab toolbar (BACKLOG, added 2026-07-22
@@ -378,12 +386,22 @@ converge with the user on the icon-set sketch before mass-authoring.
   up for function members.
 
 ### 5.3 Seams
+**Ratified order (2026-07-22): C → A → B → D → E** (keyboard/flow first — the biggest daily-workflow win at
+the smallest scope).
+- **C (keyboard-first launch + focus + no-decision fast path) — DONE 2026-07-22 (impl, awaits visual
+  confirm).** F5 = Start Debugging in the launch panel; Enter launches only from the last parameter field or
+  the Launch button (a tunnelled handler on the panel; multiline value boxes keep Enter = newline); after
+  launch focus → editor `TextArea` (gotcha #225), on ready-to-launch focus → first parameter field / Launch
+  button. **No-decision fast path:** a non-trigger routine with no parameters and a clean pre-flight
+  auto-launches (skips the panel) via `ShouldAutoLaunch()` in `PrepareAsync`. Pure Presentation + one VM
+  guard; engine untouched. Build 0/0; +3 `DebuggerTabVmTests` (auto-launch, with-params keeps panel, pre-flight
+  note keeps panel); smoke clean.
 - **A (compact form + type styling + NULL affordance):** view-only re-layout.
 - **B (isolation → Advanced + plain-language copy):** view + `UiStrings` rewrite.
-- **C (launch shortcut + Enter-to-launch + post-launch focus):** view/keybinding + focus.
 - **D (Quick Relaunch):** command reusing the existing param-history/last-values; minimal persistence, no new
-  favorites store.
-- **E (Members-tab Debug button):** toolbar button + a `CanExecute` gated on the selected member's kind.
+  favorites store. (Note: `Ctrl+Shift+F5` = Restart already exists in the debug-view key handler.)
+- **E (Members-tab Debug button):** toolbar button + a `CanExecute` gated on the selected member's kind
+  (procedure now; function only once the "function as debug root" gap is closed).
 
 ### 5.4 DoD
 Launch is compact and keyboard-drivable end-to-end; type never dominates name; isolation is out of the way with
