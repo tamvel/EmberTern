@@ -1720,6 +1720,9 @@ internal static class UiStrings
     public const string DebuggerLaunchHeader = "Launch debug session";
     public const string DebuggerLaunchParametersHeader = "Input parameters";
     public const string DebuggerLaunchNoParameters = "This routine takes no input parameters.";
+    // Compact launch form (D15.3 Seam A) — the inline NULL toggle beside each value field.
+    public const string DebuggerParamNullLabel = "null";
+    public const string DebuggerParamNullTooltip = "Set this parameter to NULL";
     public const string DebuggerLaunchIsolationLabel = "Transaction isolation:";
     public const string DebuggerIsolationReadCommitted = "Read Committed (rec_version)";
     public const string DebuggerIsolationSnapshot = "Snapshot";

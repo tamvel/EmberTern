@@ -365,9 +365,14 @@ noted.
   scoped via a tunnelled handler to the last `ParamsList` input / Launch button; multiline value boxes keep
   Enter=newline), post-launch focus → editor `TextArea` (once per launch/relaunch, gotcha #225), ready-to-launch
   focus → first field / Launch button, and the no-decision auto-launch (`ShouldAutoLaunch()` in `PrepareAsync`).
-  Pure Presentation + one VM guard; engine untouched. Build 0/0; +3 `DebuggerTabVmTests`; smoke clean. **Seams
-  A (compact form) / B (isolation→Advanced) / D (Quick Relaunch — reuses `ParameterHistoryStore`; `Ctrl+Shift+F5`
-  Restart already exists) / E (Members-tab Debug button) NOT started.** Guide: d15 doc §5.
+  Pure Presentation + one VM guard; engine untouched. Build 0/0; +3 `DebuggerTabVmTests` (+1 boundary pin:
+  defaulted/optional params keep the panel — a default is still a decision); smoke clean. **Seam A (compact
+  form) — DONE 2026-07-22 (impl, awaits visual confirm):** `ParamRowTemplate` rebuilt — name primary + type
+  subordinate (smaller/greyed) on one line, value beside, NULL an **inline toggle** (no standing column),
+  tighter rows + less whitespace; shared by proc/func + trigger NEW/OLD grids. Pure Presentation (XAML + 2
+  `UiStrings`); no VM change. **Seams B (isolation→Advanced) / D (Quick Relaunch — reuses
+  `ParameterHistoryStore`; `Ctrl+Shift+F5` Restart already exists) / E (Members-tab Debug button) NOT
+  started.** Guide: d15 doc §5.
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);

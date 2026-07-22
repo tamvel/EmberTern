@@ -396,7 +396,13 @@ the smallest scope).
   auto-launches (skips the panel) via `ShouldAutoLaunch()` in `PrepareAsync`. Pure Presentation + one VM
   guard; engine untouched. Build 0/0; +3 `DebuggerTabVmTests` (auto-launch, with-params keeps panel, pre-flight
   note keeps panel); smoke clean.
-- **A (compact form + type styling + NULL affordance):** view-only re-layout.
+- **A (compact form + type styling + NULL affordance) — DONE 2026-07-22 (impl, awaits visual confirm).**
+  `ParamRowTemplate` rebuilt: **name PRIMARY + type SUBORDINATE** (smaller/greyed `SubtleForegroundBrush`) on
+  one line, value beside, **NULL an inline toggle** at the value's right edge (no standing 40px column);
+  tighter rows (`MinHeight` 30→26, `Margin` 0,3→0,2) and less panel whitespace (`Margin` 20,16→16,14,
+  `Spacing` 14→10). Shared by the proc/func launch grid AND the trigger NEW/OLD grids → consistent
+  everywhere. Pure Presentation (XAML + 2 `UiStrings` for the NULL toggle label/tooltip); no VM change.
+  Build 0/0; smoke clean.
 - **B (isolation → Advanced + plain-language copy):** view + `UiStrings` rewrite.
 - **D (Quick Relaunch):** command reusing the existing param-history/last-values; minimal persistence, no new
   favorites store. (Note: `Ctrl+Shift+F5` = Restart already exists in the debug-view key handler.)

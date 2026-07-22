@@ -42,32 +42,46 @@
   <UserControl.Resources>
     <!-- One Smart-Parameters value row, shared by the procedure/function launch grid AND the trigger NEW/OLD
          context grids (D10) — reuse, not a second parameter UI. -->
+    <!-- Compact parameter row (D15.3 Seam A): name PRIMARY + type SUBORDINATE (smaller, greyed) on one line,
+         value beside, NULL an inline toggle at the value's right edge (no standing checkbox column). Tighter
+         rows (MinHeight 26, Margin 0,2) than the old ERP-scale layout. Shared by the proc/func launch grid AND
+         the trigger NEW/OLD grids (D10) — reuse, one parameter row everywhere. -->
     <DataTemplate x:Key="ParamRowTemplate" x:DataType="vm:ExecuteProcedureParamRowViewModel">
-      <Grid ColumnDefinitions="180,130,40,*" Margin="0,3" MinHeight="30">
-        <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" />
-        <TextBlock Grid.Column="1" Text="{Binding TypeText}" FontSize="11"
-                   Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
-        <CheckBox Grid.Column="2" IsChecked="{Binding IsNull, Mode=TwoWay}" VerticalAlignment="Center" />
-        <Panel Grid.Column="3" VerticalAlignment="Center">
-          <TextBox IsVisible="{Binding IsSingleLineTextKind}" IsEnabled="{Binding IsValueEnabled}"
-                   Text="{Binding TextValue, Mode=TwoWay}" FontSize="11" />
-          <TextBox IsVisible="{Binding IsMultilineKind}" IsEnabled="{Binding IsValueEnabled}"
-                   Text="{Binding TextValue, Mode=TwoWay}"
-                   AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" FontSize="11" />
-          <NumericUpDown IsVisible="{Binding IsNumericKind}" IsEnabled="{Binding IsValueEnabled}"
-                         Value="{Binding NumericValue, Mode=TwoWay}" FontSize="11" />
-          <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsDateTimeKind}">
-            <CalendarDatePicker IsVisible="{Binding IsDateKind}"
-                                SelectedDate="{Binding DateValue, Mode=TwoWay}"
-                                IsEnabled="{Binding IsValueEnabled}" />
-            <TextBox IsVisible="{Binding IsTimeKind}" IsEnabled="{Binding IsValueEnabled}"
-                     Text="{Binding TimeText, Mode=TwoWay}"
-                     Classes.time-error="{Binding HasTimeError}"
-                     Width="92" FontSize="11" />
-          </StackPanel>
-          <CheckBox IsVisible="{Binding IsBooleanKind}" IsEnabled="{Binding IsValueEnabled}"
-                    IsChecked="{Binding BoolValue, Mode=TwoWay}" />
-        </Panel>
+      <Grid ColumnDefinitions="200,*" Margin="0,2" MinHeight="26">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
+                    VerticalAlignment="Center" Margin="0,0,12,0">
+          <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="{Binding TypeText}" FontSize="10" VerticalAlignment="Center"
+                     Foreground="{DynamicResource SubtleForegroundBrush}" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <Grid Grid.Column="1" ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+          <Panel Grid.Column="0" VerticalAlignment="Center">
+            <TextBox IsVisible="{Binding IsSingleLineTextKind}" IsEnabled="{Binding IsValueEnabled}"
+                     Text="{Binding TextValue, Mode=TwoWay}" FontSize="11" />
+            <TextBox IsVisible="{Binding IsMultilineKind}" IsEnabled="{Binding IsValueEnabled}"
+                     Text="{Binding TextValue, Mode=TwoWay}"
+                     AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" FontSize="11" />
+            <NumericUpDown IsVisible="{Binding IsNumericKind}" IsEnabled="{Binding IsValueEnabled}"
+                           Value="{Binding NumericValue, Mode=TwoWay}" FontSize="11" />
+            <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsDateTimeKind}">
+              <CalendarDatePicker IsVisible="{Binding IsDateKind}"
+                                  SelectedDate="{Binding DateValue, Mode=TwoWay}"
+                                  IsEnabled="{Binding IsValueEnabled}" />
+              <TextBox IsVisible="{Binding IsTimeKind}" IsEnabled="{Binding IsValueEnabled}"
+                       Text="{Binding TimeText, Mode=TwoWay}"
+                       Classes.time-error="{Binding HasTimeError}"
+                       Width="92" FontSize="11" />
+            </StackPanel>
+            <CheckBox IsVisible="{Binding IsBooleanKind}" IsEnabled="{Binding IsValueEnabled}"
+                      IsChecked="{Binding BoolValue, Mode=TwoWay}" />
+          </Panel>
+          <CheckBox Grid.Column="1" IsChecked="{Binding IsNull, Mode=TwoWay}"
+                    Margin="10,0,0,0" VerticalAlignment="Center" FontSize="10"
+                    Content="{x:Static app:UiStrings.DebuggerParamNullLabel}"
+                    ToolTip.Tip="{x:Static app:UiStrings.DebuggerParamNullTooltip}"
+                    Foreground="{DynamicResource SubtleForegroundBrush}" />
+        </Grid>
       </Grid>
     </DataTemplate>
   </UserControl.Resources>
@@ -263,7 +277,7 @@
       <!-- D15.3 Seam C — keyboard-first launch: a tunnelled KeyDown handler (code-behind) makes F5 =
            Start Debugging, and Enter = Launch only from the last parameter field or the Launch button. -->
       <ScrollViewer x:Name="LaunchPanel" IsVisible="{Binding IsLaunchPanelVisible}" VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="20,16" Spacing="14" MaxWidth="720" HorizontalAlignment="Left">
+        <StackPanel Margin="16,14" Spacing="10" MaxWidth="720" HorizontalAlignment="Left">
 
           <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchHeader}" Classes="h1" />
 
