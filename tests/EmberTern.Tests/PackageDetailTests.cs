@@ -363,6 +363,59 @@ public class PackageDetailTests
         Assert.True(proc.IsProcedure);
     }
 
+    // ─── Members-tab Debug button (D15.3 Seam E) ───────────────────────────
+
+    [Fact] // enabled + its tooltip reflect the selection: procedure = ready, function = later, group/none = pick one
+    public void DebugButton_EnablementAndTooltip_FollowSelection()
+    {
+        var vm = new PackageDetailTabViewModel("PKG_DBG");
+        vm.SetMembers(new[]
+        {
+            new PackageMember("ORDER_TOTAL", PackageMemberKind.Function),
+            new PackageMember("PUB_RUN", PackageMemberKind.Procedure),
+        });
+        var funcGroup = vm.MemberGroups.Single(g => g.Header.StartsWith("Functions", StringComparison.Ordinal));
+        var func = funcGroup.Children.Single();
+        var proc = vm.MemberGroups.Single(g => g.Header.StartsWith("Procedures", StringComparison.Ordinal)).Children.Single();
+
+        // nothing selected
+        Assert.False(vm.CanDebugSelectedMember);
+        Assert.False(vm.DebugSelectedMemberCommand.CanExecute(null));
+        Assert.Equal(EmberTern.App.UiStrings.PackageDebugMemberTooltipNoSelection, vm.DebugMemberTooltip);
+
+        // a group node is not a member
+        vm.SelectedMemberNode = funcGroup;
+        Assert.False(vm.CanDebugSelectedMember);
+        Assert.Equal(EmberTern.App.UiStrings.PackageDebugMemberTooltipNoSelection, vm.DebugMemberTooltip);
+
+        // a FUNCTION member → disabled, "later milestone" tooltip (Function-as-Root)
+        vm.SelectedMemberNode = func;
+        Assert.False(vm.CanDebugSelectedMember);
+        Assert.False(vm.DebugSelectedMemberCommand.CanExecute(null));
+        Assert.Equal(EmberTern.App.UiStrings.PackageDebugMemberTooltipFunctionLater, vm.DebugMemberTooltip);
+
+        // a PROCEDURE member → enabled, "ready" tooltip
+        vm.SelectedMemberNode = proc;
+        Assert.True(vm.CanDebugSelectedMember);
+        Assert.True(vm.DebugSelectedMemberCommand.CanExecute(null));
+        Assert.Equal(EmberTern.App.UiStrings.PackageDebugMemberTooltipReady, vm.DebugMemberTooltip);
+    }
+
+    [Fact] // the button reuses the ONE launch path — it raises DebugMemberRequested, no parallel logic
+    public void DebugButton_RoutesThroughDebugMemberRequested()
+    {
+        var vm = new PackageDetailTabViewModel("PKG_DBG");
+        vm.SetMembers(new[] { new PackageMember("PUB_RUN", PackageMemberKind.Procedure) });
+        var proc = vm.MemberGroups.Single().Children.Single();
+        string? raised = null;
+        vm.DebugMemberRequested += name => raised = name;
+
+        vm.SelectedMemberNode = proc;
+        vm.DebugSelectedMemberCommand.Execute(null);
+
+        Assert.Equal("PUB_RUN", raised);
+    }
+
     // ─── TryParsePackageName (New flow reopen-by-name) ─────────────────────
 
     [Theory]

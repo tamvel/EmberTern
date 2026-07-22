@@ -48,15 +48,39 @@
       <!-- Members — read-only grouped tree (Functions / Procedures), built from the
            catalog. Double-click a member to jump to it in the Package or Body editor. -->
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.PackageDetailTabMembers}">
-        <Grid>
-          <TextBlock Text="{x:Static app:UiStrings.PackageDetailMembersEmpty}"
-                     Classes="subtle"
-                     Margin="10,8"
-                     FontSize="11"
-                     IsVisible="{Binding ShowMembersEmpty}" />
-          <TreeView ItemsSource="{Binding MemberGroups}"
-                    IsVisible="{Binding HasMembers}"
-                    Background="{DynamicResource BackgroundBrush}">
+        <Grid RowDefinitions="Auto,*">
+          <!-- Members toolbar (D15.3 Seam E) — a persistent, discoverable Debug entry point. Always visible;
+               enabled only for a debuggable member (a procedure today; functions arrive with Function-as-Root).
+               Wrapped in a hit-testable Border so its explanatory tooltip shows even while the button is
+               disabled (a disabled button raises no pointer events). Reuses the ONE debug-launch path
+               (DebugSelectedMemberCommand → RequestDebugMember → DebugMemberRequested). -->
+          <Border Grid.Row="0"
+                  BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+                  Padding="6,4">
+            <Border Background="Transparent" HorizontalAlignment="Left"
+                    ToolTip.Tip="{Binding DebugMemberTooltip}">
+              <Button Classes="flat" FontSize="11"
+                      Command="{Binding DebugSelectedMemberCommand}"
+                      ToolTip.Tip="{Binding DebugMemberTooltip}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <controls:DebuggerIcon Width="14" Height="14" VerticalAlignment="Center" />
+                  <TextBlock Text="{x:Static app:UiStrings.PackageDebugMemberButton}"
+                             FontSize="11" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </Border>
+          </Border>
+
+          <Grid Grid.Row="1">
+            <TextBlock Text="{x:Static app:UiStrings.PackageDetailMembersEmpty}"
+                       Classes="subtle"
+                       Margin="10,8"
+                       FontSize="11"
+                       IsVisible="{Binding ShowMembersEmpty}" />
+            <TreeView ItemsSource="{Binding MemberGroups}"
+                      SelectedItem="{Binding SelectedMemberNode, Mode=TwoWay}"
+                      IsVisible="{Binding HasMembers}"
+                      Background="{DynamicResource BackgroundBrush}">
             <TreeView.DataTemplates>
               <TreeDataTemplate DataType="vm:PackageMemberGroupNode"
                                 ItemsSource="{Binding Children}">
@@ -104,7 +128,8 @@
                 </Border>
               </DataTemplate>
             </TreeView.DataTemplates>
-          </TreeView>
+            </TreeView>
+          </Grid>
         </Grid>
       </TabItem>
 

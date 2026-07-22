@@ -780,6 +780,13 @@ internal static class UiStrings
     public const string PackageDetailTabDdl = "DDL";
     public const string PackageDetailDescriptionEmpty = "No description.";
     public const string PackageDetailMembersEmpty = "This package has no members.";
+    // Members-tab Debug button (D15.3 Seam E) — always-visible entry point; the tooltip explains availability.
+    public const string PackageDebugMemberButton = "Debug";
+    public const string PackageDebugMemberTooltipReady = "Debug the selected procedure";
+    public const string PackageDebugMemberTooltipFunctionLater =
+        "Debugging package functions will be supported in a later update.";
+    public const string PackageDebugMemberTooltipNotDebuggable = "The selected member cannot be debugged.";
+    public const string PackageDebugMemberTooltipNoSelection = "Select a procedure in the list to debug it.";
     public const string PackageDetailLoadingHint = "Loading package…";
     public const string PackageDetailDependsOnHeader = "Depends on";
     public const string PackageDetailDependedOnByHeader = "Used by";

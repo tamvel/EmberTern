@@ -161,6 +161,44 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
         DebugMemberRequested?.Invoke(member.Name);
     }
 
+    // ── Members-tab Debug button (D15.3 Seam E) ─────────────────────────────────────────────────────
+    // A persistent, discoverable Debug entry point on the Members tab, driving the SAME DebugMemberRequested
+    // path as the context menu (no parallel launch logic). It is always visible; enabled only for a currently
+    // debuggable member kind. Extending support to package FUNCTIONS (the Function-as-Root milestone) is the
+    // ONLY change needed here — widen CanDebugSelectedMember + its tooltip case; the button/XAML are already
+    // data-driven, so the UI does not change.
+
+    /// <summary>The Members tree's current selection (a group or member node, or null) — bound to the
+    /// TreeView's SelectedItem. The single source of truth for the Debug button's enabled state + tooltip.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanDebugSelectedMember))]
+    [NotifyPropertyChangedFor(nameof(DebugMemberTooltip))]
+    [NotifyCanExecuteChangedFor(nameof(DebugSelectedMemberCommand))]
+    private object? _selectedMemberNode;
+
+    /// <summary>True when the selected member is a currently-debuggable kind. Today that is a PROCEDURE only;
+    /// widening this to package FUNCTIONS is the sole change the Function-as-Root milestone needs here.</summary>
+    public bool CanDebugSelectedMember
+        => SelectedMemberNode is PackageMemberItemNode { Member.Kind: PackageMemberKind.Procedure };
+
+    /// <summary>The contextual reason shown on the (possibly disabled) Debug button, so it explains its own
+    /// availability: ready / a package function (later milestone) / not debuggable / nothing selected.</summary>
+    public string DebugMemberTooltip => SelectedMemberNode switch
+    {
+        PackageMemberItemNode { Member.Kind: PackageMemberKind.Procedure } => UiStrings.PackageDebugMemberTooltipReady,
+        PackageMemberItemNode { Member.Kind: PackageMemberKind.Function } => UiStrings.PackageDebugMemberTooltipFunctionLater,
+        PackageMemberItemNode => UiStrings.PackageDebugMemberTooltipNotDebuggable,
+        _ => UiStrings.PackageDebugMemberTooltipNoSelection,
+    };
+
+    /// <summary>Debug the selected member — routes through the SAME <see cref="RequestDebugMember"/> path as the
+    /// context menu (no second launch logic). Gated by <see cref="CanDebugSelectedMember"/>.</summary>
+    [RelayCommand(CanExecute = nameof(CanDebugSelectedMember))]
+    private void DebugSelectedMember()
+    {
+        if (SelectedMemberNode is PackageMemberItemNode node) RequestDebugMember(node.Member);
+    }
+
     /// <summary>Navigates to a member's declaration/implementation: prefers the
     /// body (where you'd edit it), falling back to the header. No-op when the token
     /// can't be located in either source.</summary>
