@@ -347,8 +347,11 @@ noted.
   moved out of the toolbar status line into its **own row** (root grid `Auto,Auto,*`; `Grid.Row=1`), shown only
   on a fault / Break-on-Exception pause (`ShowErrorBar`), collapsing to zero height otherwise so the toolbar
   never moves. Calm: `PanelBrush` + a thin 3px `ErrorBrush` left stripe + an error-toned icon (no loud fill).
-  **Copy** (clipboard, view code-behind), **Expand/Collapse** (one ellipsised line ↔ scrollable `MaxHeight=120`
-  wrapped block), **Dismiss**. The status line is now a short fixed-height headline (`DebuggerStatusFaulted`);
+  **Shows the FULL message by default** (user QA refinement — FB errors are short (2–6 lines), so
+  default-collapse gave no benefit); sizes to content, capped ~8–10 lines (`MaxHeight=190`) + scrolled for the
+  rare long one; **Expand/Collapse** is the opt-in one-line safety valve; font 12 + `LineHeight=18` for
+  readability. **Copy** (clipboard, view code-behind), **Dismiss**. The status line is now a short fixed-height
+  headline (`DebuggerStatusFaulted`);
   the full FB message lives only in the bar (the in-row `StatusText` bug fixed). Pure Presentation — the VM
   projects `ErrorDetail`/`ShowErrorBar` over the engine's `DebugError` + owns the expand/dismiss view-state,
   Core untouched. Build 0/0; +2 `DebuggerTabVmTests`; smoke clean. Guide: d15 doc §4.

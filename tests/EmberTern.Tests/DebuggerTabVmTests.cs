@@ -464,7 +464,7 @@ public class DebuggerTabVmTests
         Assert.True(vm.ShowErrorBar);
         Assert.Equal("boom", vm.ErrorDetail);
         Assert.DoesNotContain("boom", vm.StatusText); // status is a short, fixed-height headline
-        Assert.False(vm.IsErrorExpanded);
+        Assert.True(vm.IsErrorExpanded); // the full message shows by default (FB errors are short)
         // Stops ON the faulting statement (not cleared): marker + variables + call stack all preserved.
         Assert.Equal(Off("v = a + b"), vm.CurrentStart);
         Assert.NotEmpty(vm.Variables);
@@ -497,25 +497,27 @@ public class DebuggerTabVmTests
         await vm.ContinueCommand.ExecuteAsync(null);
 
         Assert.True(vm.ShowErrorBar);
+        Assert.True(vm.IsErrorExpanded); // full message shown by default
 
-        // Expand toggles the full-message view without touching the message text.
-        vm.ToggleErrorExpandedCommand.Execute(null);
-        Assert.True(vm.IsErrorExpanded);
-        Assert.Equal("boom", vm.ErrorDetail);
+        // Collapse is the opt-in one-line "safety valve"; the toggle never changes the message text.
         vm.ToggleErrorExpandedCommand.Execute(null);
         Assert.False(vm.IsErrorExpanded);
+        Assert.Equal("boom", vm.ErrorDetail);
+        vm.ToggleErrorExpandedCommand.Execute(null);
+        Assert.True(vm.IsErrorExpanded);
 
         // Dismiss hides the bar but keeps the faulted state (marker/variables untouched).
         vm.DismissErrorCommand.Execute(null);
         Assert.False(vm.ShowErrorBar);
         Assert.True(vm.IsFaulted);
 
-        // A fresh run + fault re-shows the bar (dismiss does not stick across faults).
+        // A fresh run + fault re-shows the bar, re-expanded to the full message (dismiss + a previous
+        // manual collapse do not carry over).
         await vm.RestartCommand.ExecuteAsync(null);
         await vm.ContinueCommand.ExecuteAsync(null);
         Assert.True(vm.ShowErrorBar);
         Assert.Equal("boom", vm.ErrorDetail);
-        Assert.False(vm.IsErrorExpanded);
+        Assert.True(vm.IsErrorExpanded);
     }
 
     // ── Stop / breakpoints ──────────────────────────────────────────────────────────────────────

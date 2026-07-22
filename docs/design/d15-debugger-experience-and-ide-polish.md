@@ -307,17 +307,21 @@ state (the current in-row `StatusText` is the bug being fixed).
   tests green; smoke clean. **NOTE: the geometry redesign for the debugger identity stays an OPEN topic for the
   future Visual Polish sprint** — the current composite is the accepted interim; if Visual Polish designs a
   better mark, `DebuggerIcon`'s ControlTheme is the single place to change.
-- **C (error bar) — DONE (impl 2026-07-22; awaits user visual confirmation). D15.2 COMPLETE.** The fault
-  message moved out of the toolbar status line into its **own row** (`Grid.Row=1`, root grid now
-  `Auto,Auto,*`) shown only on a fault OR a Break-on-Exception pause (`ShowErrorBar`); hidden it collapses to
-  zero height so the toolbar never moves. Calm, not dominating: `PanelBrush` background + a thin 3px
-  `ErrorBrush` left stripe + an error-toned icon carry the signal (no loud fill). **Copy** (clipboard, in the
-  view code-behind — Avalonia concern), **Expand/Collapse** (one ellipsised line ↔ a scrollable `MaxHeight=120`
-  wrapped block; `ChevronsDown`/`ChevronsUp`), **Dismiss** (`Icon.X`). The status line is now a **short,
-  fixed-height headline** (`DebuggerStatusFaulted`), the full Firebird message lives only in the bar — the
-  "current in-row `StatusText`" bug fixed. Pure Presentation: the VM projects `ErrorDetail`/`ShowErrorBar`
-  (over the engine's `DebugError`) + owns the expand/dismiss view-state; the engine is untouched. Build 0/0;
-  +2 `DebuggerTabVmTests`; smoke clean.
+- **C (error bar) — DONE (impl 2026-07-22; a UX refinement applied after first QA — see below). D15.2
+  COMPLETE.** The fault message moved out of the toolbar status line into its **own row** (`Grid.Row=1`, root
+  grid now `Auto,Auto,*`) shown only on a fault OR a Break-on-Exception pause (`ShowErrorBar`); hidden it
+  collapses to zero height so the toolbar never moves. Calm, not dominating: `PanelBrush` background + a thin
+  3px `ErrorBrush` left stripe + an error-toned icon carry the signal (no loud fill). **Shows the FULL message
+  by default** (user QA refinement — FB errors are short (2–6 lines) and are exactly what the user wants to
+  read, so default-collapse gave no benefit): the message sizes to its content, capped at ~8–10 lines
+  (`MaxHeight=190`) then scrolled so a rare long one never dominates the editor. **Copy** (clipboard, in the
+  view code-behind — Avalonia concern), **Expand/Collapse** is the opt-in one-line **safety valve** for a very
+  long message (`ChevronsDown`/`ChevronsUp`), **Dismiss** (`Icon.X`). Font 12 + `LineHeight=18` for easy
+  reading (the bar keeps its thin, no-fill character). The status line is now a **short, fixed-height
+  headline** (`DebuggerStatusFaulted`), the full Firebird message lives only in the bar — the "current in-row
+  `StatusText`" bug fixed. Pure Presentation: the VM projects `ErrorDetail`/`ShowErrorBar` (over the engine's
+  `DebugError`) + owns the expand/dismiss view-state; the engine is untouched. Build 0/0; +2
+  `DebuggerTabVmTests`; smoke clean.
 
 ### 4.6 DoD
 Toolbar has clear primary/secondary/toggle hierarchy in EmberTern's own style; icons share one geometry;

@@ -474,20 +474,23 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     [NotifyPropertyChangedFor(nameof(ShowErrorBar))]
     private string _errorDetail = string.Empty;
 
-    /// <summary>Error Bar expanded (full multi-line message) vs collapsed (one line, ellipsised).</summary>
+    /// <summary>Error Bar shows the full message by default (Firebird errors are short — 2–6 lines); the
+    /// height is capped + scrolled for the rare long one. Collapse is the opt-in "safety valve" that shrinks
+    /// it to a single ellipsised line to reclaim editor space. Defaults to expanded (full).</summary>
     [ObservableProperty]
-    private bool _isErrorExpanded;
+    private bool _isErrorExpanded = true;
 
     private bool _errorDismissed;
 
     /// <summary>The Error Bar is visible while there is an error message and it has not been dismissed.</summary>
     public bool ShowErrorBar => !_errorDismissed && ErrorDetail.Length > 0;
 
-    // Enter an error state: show the bar (un-dismissed, collapsed) with the given full message.
+    // Enter an error state: show the bar (un-dismissed, full message) with the given text. A new error always
+    // re-expands to the full message (a previous manual collapse does not carry over).
     private void SetError(string detail)
     {
         ErrorDetail = detail ?? string.Empty; // NotifyPropertyChangedFor raises ErrorDetail + ShowErrorBar
-        IsErrorExpanded = false;
+        IsErrorExpanded = true;
         _errorDismissed = false;
         OnPropertyChanged(nameof(ShowErrorBar));
     }
