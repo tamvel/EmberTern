@@ -1057,6 +1057,21 @@
                       Command="{Binding ActiveFunctionDetail.UncommentBodyCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
+              <!-- Package: debug the selected Members-tab member (D15.3 Seam E) — the action lives on the
+                   editor toolbar, like the procedure/trigger Debug buttons, rather than as a row inside the
+                   Members tab. Reuses the ONE launch path (DebugSelectedMemberCommand); enabled only for a
+                   debuggable selection; the contextual tooltip explains a disabled state. Wrapped in a
+                   hit-testable Border so the tooltip shows even while the button is disabled (a disabled button
+                   raises no pointer events). Pure presentation — no VM change (selection is tracked by the
+                   Members TreeView's SelectedItem binding). -->
+              <Border Background="Transparent" IsVisible="{Binding IsPackageDetailTabActive}"
+                      ToolTip.Tip="{Binding ActivePackageDetail.DebugMemberTooltip}">
+                <Button Classes="icon"
+                        Command="{Binding ActivePackageDetail.DebugSelectedMemberCommand}"
+                        ToolTip.Tip="{Binding ActivePackageDetail.DebugMemberTooltip}">
+                  <controls:DebuggerIcon />
+                </Button>
+              </Border>
               <!-- Package: format / comment / uncomment (act on the active Package/Body editor) -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActivePackageDetail.FormatSqlCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
