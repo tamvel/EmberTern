@@ -1726,7 +1726,7 @@ internal static class UiStrings
     // Advanced section (D15.3 Seam B) — collapsed by default; transaction isolation lives here, out of the
     // main Launch flow (most users never change it). The note leads with WHAT the option changes, then names
     // the levels; the selector below shows the current level.
-    public const string DebuggerAdvancedSection = "Advanced";
+    public const string DebuggerAdvancedSection = "Advanced options";
     public const string DebuggerLaunchIsolationLabel = "Transaction isolation";
     public const string DebuggerIsolationReadCommitted = "Read Committed";
     public const string DebuggerIsolationSnapshot = "Snapshot";
@@ -1735,11 +1735,13 @@ internal static class UiStrings
         "changes other sessions commit during the run; Snapshot gives a consistent view from the moment you " +
         "start, unchanged to the end. Either way the debug session runs in its own transaction and is rolled " +
         "back when it ends.";
-    public const string DebuggerLaunchButton = "Start debugging";
+    // The (F5) hint surfaces Seam C's keyboard-first launch — the whole operation is reachable from the keyboard.
+    public const string DebuggerLaunchButton = "Start debugging (F5)";
     public const string DebuggerLaunchPreparing = "Preparing…";
-    // Pre-flight report (§9.2 / §4.6).
-    public const string DebuggerPreflightHeader = "Before you start";
-    public const string DebuggerPreflightClean = "No issues detected.";
+    // Pre-flight report (§9.2 / §4.6). D15.3 polish: the section is shown ONLY when it has something to say —
+    // no header, and no "all clear" line when clean (a clean launch form stays maximally quiet). Each surfaced
+    // item is a severity-striped row in the Error Bar visual language (warning = Alert Triangle / WarningBrush,
+    // blocking = octagon / ErrorBrush), so there is no header/clean string here anymore.
     public const string DebuggerPreflightAutonomousTx =
         "Contains IN AUTONOMOUS TRANSACTION — work committed there is permanent and survives the debug rollback.";
     public const string DebuggerPreflightGenerator =

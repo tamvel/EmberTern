@@ -353,14 +353,16 @@
                a VM view-state flag, mirroring the bottom-panel collapse. Inside: the note leads with WHAT the
                option changes, then the level selector shows the current choice. -->
           <StackPanel Spacing="6">
-            <Button Classes="flat" Padding="2,2" HorizontalAlignment="Left"
+            <!-- D15.3 polish — a larger, clearer disclosure: bigger hitbox (Padding) + bigger chevron +
+                 "Advanced options", while staying calm (flat, subtle foreground, no fill). -->
+            <Button Classes="flat" Padding="6,6" HorizontalAlignment="Left"
                     Command="{Binding ToggleAdvancedCommand}">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="12" Height="12"
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="16" Height="16"
                                   VerticalAlignment="Center" IsVisible="{Binding !IsAdvancedExpanded}" />
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="16" Height="16"
                                   VerticalAlignment="Center" IsVisible="{Binding IsAdvancedExpanded}" />
-                <TextBlock Text="{x:Static app:UiStrings.DebuggerAdvancedSection}" FontSize="11"
+                <TextBlock Text="{x:Static app:UiStrings.DebuggerAdvancedSection}" FontSize="12"
                            Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
@@ -374,23 +376,42 @@
             </StackPanel>
           </StackPanel>
 
-          <!-- Pre-flight -->
-          <StackPanel Spacing="4">
-            <TextBlock Text="{x:Static app:UiStrings.DebuggerPreflightHeader}" Classes="field-label" />
-            <TextBlock Text="{x:Static app:UiStrings.DebuggerPreflightClean}"
-                       Classes="subtle" FontSize="11"
-                       IsVisible="{Binding !Preflight.Count}" />
-            <ItemsControl ItemsSource="{Binding Preflight}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="dbg:DebugPreflightItem">
-                  <Grid ColumnDefinitions="Auto,*" Margin="0,2">
-                    <TextBlock Grid.Column="0" Text="{Binding Glyph}" FontSize="11" Margin="0,0,6,0" />
-                    <TextBlock Grid.Column="1" Text="{Binding Message}" FontSize="11" TextWrapping="Wrap" />
+          <!-- Pre-flight (D15.3 polish) — shown ONLY when there is something to say (no header, no "all clear"
+               line): a clean launch form stays quiet. Each surfaced item is a severity-striped row reusing the
+               Error Bar (D15.2 Seam C) visual language — a thin left stripe + a severity icon + the message,
+               calm PanelBrush chrome, no loud fill. Blocking (§F unsteppable etc.) = octagon + ErrorBrush;
+               everything else = Alert Triangle + WarningBrush ("you can continue, but you should know"). The
+               severity split is driven by the Core item's own IsBlocking flag — no brush leaks into data. -->
+          <ItemsControl ItemsSource="{Binding Preflight}" IsVisible="{Binding Preflight.Count}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="dbg:DebugPreflightItem">
+                <Border Background="{DynamicResource PanelBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1" Margin="0,0,0,4">
+                  <Grid ColumnDefinitions="3,Auto,*">
+                    <!-- Left stripe: error-toned when blocking, warning-toned otherwise. -->
+                    <Panel Grid.Column="0">
+                      <Border Background="{DynamicResource ErrorBrush}" IsVisible="{Binding IsBlocking}" />
+                      <Border Background="{DynamicResource WarningBrush}" IsVisible="{Binding !IsBlocking}" />
+                    </Panel>
+                    <!-- Severity icon: octagon (error) reserved for blocking, Alert Triangle for warnings. -->
+                    <Panel Grid.Column="1" Margin="8,0,6,0" VerticalAlignment="Center">
+                      <controls:SvgIcon Data="{StaticResource Icon.BreakException}" Width="14" Height="14"
+                                        Foreground="{DynamicResource ErrorBrush}"
+                                        IsVisible="{Binding IsBlocking}" />
+                      <controls:SvgIcon Data="{StaticResource Icon.AlertTriangle}" Width="14" Height="14"
+                                        Foreground="{DynamicResource WarningBrush}"
+                                        IsVisible="{Binding !IsBlocking}" />
+                    </Panel>
+                    <TextBlock Grid.Column="2" Text="{Binding Message}"
+                               FontSize="12" LineHeight="18" TextWrapping="Wrap"
+                               Margin="0,6,8,6" VerticalAlignment="Center"
+                               Foreground="{DynamicResource ForegroundBrush}" />
                   </Grid>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
 
           <Button x:Name="LaunchButton" Classes="primary" HorizontalAlignment="Left"
                   Content="{x:Static app:UiStrings.DebuggerLaunchButton}"

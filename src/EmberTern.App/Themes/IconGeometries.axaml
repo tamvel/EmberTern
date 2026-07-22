@@ -190,6 +190,11 @@
   <StreamGeometry x:Key="Icon.LoopExit">M6 18 a6 6 0 1 1 6 -6 M12 12 L20 4 M15 4 H20 M20 4 V9</StreamGeometry>
   <StreamGeometry x:Key="Icon.Restart">M6 5 V19 M19 6 L10 12 L19 18 Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.BreakException">M8 3 H16 L21 8 V16 L16 21 H8 L3 16 V8 Z M12 8 V13 M12 16 h.01</StreamGeometry>
+  <!-- Alert Triangle — the universally-recognised WARNING mark ("you can continue, but you should know").
+       Shares the canonical Lucide triangle-alert shape (Assets/Icons/Metadata/triangle-alert.svg) but has its
+       OWN semantic key: the octagon (Icon.BreakException) stays reserved for blocking/error + stop, so a
+       warning never wears an error shape. Used by the launch-panel pre-flight rows (D15.3), toned WarningBrush. -->
+  <StreamGeometry x:Key="Icon.AlertTriangle">M21.73 18 l-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3 M12 9 v4 M12 17 h.01</StreamGeometry>
 
   <!-- ============================================================================
        SvgIcon ControlTheme — the single render path for every icon above.

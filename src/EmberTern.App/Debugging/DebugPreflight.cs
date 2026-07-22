@@ -16,17 +16,7 @@ public enum DebugPreflightSeverity
 /// <summary>One line of the launch panel's pre-flight report (spec §9.2). <see cref="IsBlocking"/> items
 /// prevent the session from starting (there is nothing to debug); warnings are surfaced but the user may
 /// proceed.</summary>
-public sealed record DebugPreflightItem(DebugPreflightSeverity Severity, string Message, bool IsBlocking = false)
-{
-    /// <summary>A severity glyph so the row conveys severity without a colour (rule #1: no brush leaks into
-    /// data). ⛔ blocking / error, ⚠ warning, ℹ info.</summary>
-    public string Glyph => Severity switch
-    {
-        DebugPreflightSeverity.Error => "⛔",
-        DebugPreflightSeverity.Warning => "⚠",
-        _ => "ℹ",
-    };
-}
+public sealed record DebugPreflightItem(DebugPreflightSeverity Severity, string Message, bool IsBlocking = false);
 
 /// <summary>
 /// The launch panel's pre-flight scan (Stage X / D4, spec §9.2 + §4.6). Tells the user what a run cannot

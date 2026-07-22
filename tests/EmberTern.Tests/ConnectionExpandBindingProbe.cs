@@ -1138,6 +1138,38 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
     }
 
+    // D15.3 launch-panel polish — the pre-flight rows adopt the Error Bar visual language: a warning row
+    // uses the new semantic Icon.AlertTriangle + WarningBrush, a blocking row the Icon.BreakException octagon
+    // + ErrorBrush. The build validates the compiled StaticResource geometry usages; this pins the NEW
+    // geometry resolves and both severity brushes resolve in BOTH themes (DynamicResource, runtime-only).
+    [Fact]
+    public async System.Threading.Tasks.Task DebuggerPreflightSeverity_GeometryAndBrushes_Resolve()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var app = Avalonia.Application.Current!;
+
+            foreach (var key in new[] { "Icon.AlertTriangle", "Icon.BreakException" })
+            {
+                Assert.True(
+                    app.Resources.TryGetResource(key, null, out var g) && g is Avalonia.Media.Geometry,
+                    $"pre-flight severity geometry '{key}' does not resolve");
+            }
+
+            foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
+            {
+                foreach (var token in new[] { "WarningBrush", "ErrorBrush" })
+                {
+                    Assert.True(
+                        app.Resources.TryGetResource(token, theme, out var b) && b is Avalonia.Media.IBrush,
+                        $"pre-flight severity brush '{token}' does not resolve in {theme}");
+                }
+            }
+        }, CancellationToken.None);
+    }
+
     // Etap 6 UX-polish regression pin — the "FROM view / FROM proc(…) don't resolve" report. A view /
     // selectable procedure used in FROM only resolves once its metadata category has loaded, which (on
     // connect) happens AFTER the model was first built (categories prefetch sequentially; Views /
