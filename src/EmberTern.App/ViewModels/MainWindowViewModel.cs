@@ -5558,6 +5558,24 @@ public partial class MainWindowViewModel : ViewModelBase
         return hash.ToString("x16", CultureInfo.InvariantCulture);
     }
 
+    // F5 is an APPLICATION-level "Go" shortcut whose meaning depends on the active workspace tab — like modern
+    // IDEs — NOT a synonym for Execute Query. This is the ONE window-level interpreter of F5 (bound in
+    // MainWindow.axaml); the debugger participates HERE instead of fighting the global binding with a local,
+    // focus-dependent key handler (which only won while focus happened to sit inside the debugger tab). Kept out
+    // of ExecuteQueryCommand so that command's meaning stays unambiguous (execute the SQL editor). Routing:
+    //   • Debugger tab active → the debugger decides (launch panel = Start Debugging, paused session = Continue).
+    //   • anything else       → Execute Query (the SQL editor), exactly as F5 always behaved for other tabs.
+    // Scope is F5 only; Shift+F5 / Ctrl+Shift+F5 stay on the query commands (a deliberate later follow-up).
+    [RelayCommand]
+    private Task GoAsync()
+    {
+        if (ActiveDebugger is { } debugger)
+        {
+            return debugger.RequestGoAsync();
+        }
+        return ExecuteQueryAsync();
+    }
+
     [RelayCommand(CanExecute = nameof(CanExecute))]
     public Task ExecuteQueryAsync() => RunExecuteAsync(ExecutionIntent.Preview);
 

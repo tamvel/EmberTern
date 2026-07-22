@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EmberTern.App.Debugging;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Settings;
 using EmberTern.Core.Sql.Debugging;
@@ -229,6 +230,80 @@ public class DebuggerTabVmTests
 
         Assert.Equal(DebuggerPhase.ReadyToLaunch, vm.Phase);
         Assert.True(vm.IsLaunchPanelVisible);
+    }
+
+    // ── F5 = the application-level "Go" router (D15.3) ──────────────────────────────────────────────
+
+    // The debugger's response to F5: from the launch panel it Starts Debugging.
+    [Fact]
+    public async Task RequestGo_FromLaunchPanel_StartsDebugging()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        Assert.Equal(DebuggerPhase.ReadyToLaunch, vm.Phase);
+
+        await vm.RequestGoAsync();
+
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase); // launched, paused at entry
+    }
+
+    // The debugger's response to F5: while paused it Continues (runs to completion here — no breakpoints).
+    [Fact]
+    public async Task RequestGo_WhilePaused_Continues()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.RequestGoAsync();
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+
+        await vm.RequestGoAsync();
+
+        Assert.Equal(DebuggerPhase.Completed, vm.Phase);
+    }
+
+    // The debugger's response to F5 is a no-op in a non-actionable phase (e.g. a finished session) — F5 must
+    // not throw or mis-fire. (Restart-on-F5 for a finished session is deliberately out of scope for now.)
+    [Fact]
+    public async Task RequestGo_WhenCompleted_IsNoOp()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.RequestGoAsync();   // launch
+        await vm.RequestGoAsync();   // continue → Completed
+        Assert.Equal(DebuggerPhase.Completed, vm.Phase);
+
+        await vm.RequestGoAsync();   // F5 again — nothing to do
+
+        Assert.Equal(DebuggerPhase.Completed, vm.Phase);
+    }
+
+    // The WINDOW-level Go router (bound to F5) dispatches by the active workspace tab: with a Debugger tab
+    // active it routes to the debugger (Start Debugging), NOT Execute Query. This is the fix for "F5 ran
+    // Execute Query while a debugger tab was open" — the routing decision now lives in one window-level command
+    // instead of being contested by a focus-dependent local key handler.
+    [Fact]
+    public async Task GoCommand_WithDebuggerTabActive_RoutesToDebugger()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "et-go-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var store = new ConnectionProfileStore(dir);
+        using var service = new FirebirdConnectionService();
+        var main = new MainWindowViewModel(store, service);
+
+        var debugger = new DebuggerTabViewModel("SP_TEST", _ => Task.FromResult<string?>(Sql),
+            new FakeLauncher(new FakeExecutor()));
+        await debugger.PrepareAsync();
+        Assert.Equal(DebuggerPhase.ReadyToLaunch, debugger.Phase);
+
+        var tab = WorkspaceTabViewModel.CreateDebugger(main, debugger, "SP_TEST", null);
+        main.WorkspaceTabs.Add(tab);
+        main.SelectTab(tab);
+        Assert.True(main.IsDebuggerTabActive);
+        Assert.Same(debugger, main.ActiveDebugger);
+
+        await main.GoCommand.ExecuteAsync(null); // F5
+
+        Assert.Equal(DebuggerPhase.Paused, debugger.Phase); // launched via the router, not Execute Query
     }
 
     // A pre-flight note (a §4.6 data-safety warning is a decision) keeps the panel even with no parameters.

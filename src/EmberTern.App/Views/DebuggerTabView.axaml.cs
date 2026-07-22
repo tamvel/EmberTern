@@ -68,15 +68,13 @@ public partial class DebuggerTabView : UserControl
             _editor.AddHandler(KeyDownEvent, OnEditorKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             _editor.AddHandler(PointerPressedEvent, OnEditorPointerPressed, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         }
-        // D15.3 Seam C — keyboard-first launch, at the DEBUGGER-TAB scope (this UserControl root), tunnelled.
-        // F5 = Start Debugging is a TAB-level command (VS-standard "F5 = Go"), and MainWindow defines a global
-        // KeyBinding F5 = Execute Query that fires when F5 bubbles up to the window unhandled. A tab-root TUNNEL
-        // handler pre-empts that binding whenever focus is anywhere inside the debugger tab — the earlier
-        // LaunchPanel-scoped handler only pre-empted it while focus was inside the panel subtree, which is not
-        // reliably the case (see FocusLaunchStart). Phase-gated in OnLaunchKeyDown so the debug view's own keys
-        // (F5 = Continue, …, OnEditorKeyDown) are untouched. Enter still launches ONLY from the Launch button or
-        // the last parameter field (checked against the focused element), so every other field keeps its Enter.
-        this.AddHandler(KeyDownEvent, OnLaunchKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        // D15.3 Seam C — Enter-to-launch on the launch panel (tunnelled so the last field's Enter launches
+        // instead of inserting a newline). Scoped to the panel because that is where the only launchable focus
+        // targets live. F5 is deliberately NOT handled here — it is the application-level "Go" shortcut routed by
+        // the window (MainWindowViewModel.GoCommand), so the debugger participates in F5 routing rather than
+        // grabbing the key with a focus-dependent local handler that only won while focus sat inside the tab.
+        this.FindControl<ScrollViewer>("LaunchPanel")?
+            .AddHandler(KeyDownEvent, OnLaunchKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 #if DEBUG
         // The Harness Log tab is a DEBUG-only diagnostic surface (Sprint D10.5) — it exists in development
         // builds only, so it is added here rather than in the XAML. In RELEASE this call is compiled out and
@@ -200,13 +198,13 @@ public partial class DebuggerTabView : UserControl
         Dispatcher.UIThread.Post(() => _editor.TextArea.Focus(), DispatcherPriority.Background);
     }
 
-    // Puts keyboard focus into the launch panel so F5 / typing / Enter act on the debugger. Driven by EVERY
-    // event that can complete the "shown + ready" state (view attached, DataContext set, Phase → ReadyToLaunch)
-    // — whichever happens LAST succeeds. Relying only on the Phase-change event was the bug: a freshly-realized
-    // view subscribes during PrepareAsync's await, so if preparation reaches ReadyToLaunch first (a fast/cached
-    // source fetch), the transition is missed and focus never enters the tab — then the tab-scoped F5 handler
-    // never sees the key and the window's global F5 = Execute Query binding consumes it. No-op unless the launch
-    // panel is visible and the view is attached (an earlier trigger simply skips; a later one lands it).
+    // Puts keyboard focus into the launch panel on show, so the user can type parameters immediately and
+    // Enter-to-launch from the last field works. Driven by EVERY event that can complete the "shown + ready"
+    // state (view attached, DataContext set, Phase → ReadyToLaunch) — whichever happens LAST succeeds; relying
+    // only on the Phase-change event was unreliable, because a freshly-realized view subscribes during
+    // PrepareAsync's await and can miss a ReadyToLaunch reached first (a fast/cached source fetch). (F5 itself no
+    // longer depends on this — it is the window-level Go router — so this is purely a typing/Enter convenience.)
+    // No-op unless the launch panel is visible and the view is attached (an earlier trigger skips; a later lands).
     private void FocusLaunchStart() => Dispatcher.UIThread.Post(() =>
     {
         if (_vm?.IsLaunchPanelVisible != true) return;   // a fast-path auto-launch may have moved on already
@@ -216,21 +214,14 @@ public partial class DebuggerTabView : UserControl
         else this.FindControl<Button>("LaunchButton")?.Focus();
     }, DispatcherPriority.Background);
 
-    // Keyboard-first launch (D15.3 Seam C). F5 = Start Debugging (consistent with "F5 = Go"; the debug view's
-    // F5 = Continue is a different phase, so no conflict). Enter launches ONLY from the Launch button or the
-    // last parameter field — every other field keeps its natural Enter (a multiline text box gets a newline).
+    // Enter-to-launch (D15.3 Seam C). Enter launches ONLY from the Launch button or the last parameter field —
+    // every other field keeps its natural Enter (a multiline text box gets a newline). F5 is NOT handled here:
+    // it is the application-level "Go" shortcut, routed by the window (MainWindowViewModel.GoCommand →
+    // DebuggerTabViewModel.RequestGoAsync), so the debugger no longer contests F5 with a local key handler.
     private void OnLaunchKeyDown(object? sender, KeyEventArgs e)
     {
-        // Tab-scoped, but the LAUNCH phase's keys only. During the debug view the editor owns the keys
-        // (OnEditorKeyDown: F5 = Continue, F10/F11, …), so this does nothing there and lets the event tunnel
-        // on down to the editor — never swallowing a debug-phase F5.
+        // The launch phase only; during the debug view Enter has no launch meaning.
         if (_vm is null || !_vm.IsLaunchPanelVisible) return;
-        if (e.Key == Key.F5)
-        {
-            TryLaunch();
-            e.Handled = true;
-            return;
-        }
         if (e.Key == Key.Enter && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             if ((TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement()) is not Visual focused) return;

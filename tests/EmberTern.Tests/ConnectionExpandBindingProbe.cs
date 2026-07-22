@@ -1170,83 +1170,9 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
     }
 
-    // A trivial ICommand that records whether it fired — stands in for MainWindow's global F5 = Execute Query
-    // binding so the test can prove the debugger's tab-scoped F5 pre-empts it.
-    private sealed class RelayFlagCommand : System.Windows.Input.ICommand
-    {
-        private readonly Action _run;
-        public RelayFlagCommand(Action run) => _run = run;
-        public event EventHandler? CanExecuteChanged { add { } remove { } }
-        public bool CanExecute(object? parameter) => true;
-        public void Execute(object? parameter) => _run();
-    }
-
-    // D15.3 Seam C regression — F5 must Start Debugging, and it must win over MainWindow's global KeyBinding
-    // F5 = Execute Query. The shipped bug had two causes: (1) the F5 handler was scoped to the LaunchPanel
-    // subtree, so it only pre-empted the window binding while focus was inside the panel; (2) focus did not
-    // reliably enter the panel (it was moved only when the view caught the Phase → ReadyToLaunch event, which a
-    // freshly-realized view misses if preparation finished first). With F5 arriving anywhere but inside the
-    // panel, it bubbled to the window and ran Execute Query instead of launching.
-    //
-    // This pins the architectural core (cause 1): F5 is now handled at the DEBUGGER-TAB scope. The event is
-    // raised at the tab root (view) — the route the tunnel takes when the key arrives with focus anywhere in
-    // the tab but NOT deep in the panel. Pre-fix the handler sat on LaunchPanel, a DESCENDANT of the source, so
-    // it was not on the route and the window's Execute Query binding fired; post-fix the handler is on the tab
-    // root, on the route, so it launches and pre-empts the window binding. (Cause 2 — auto-focus landing in the
-    // tab on show — is a focus-timing behaviour the headless harness does not register for a Background-posted
-    // Focus(); it is confirmed by manual QA.)
-    [Fact]
-    public async System.Threading.Tasks.Task DebuggerLaunch_F5_StartsDebugging_NotWindowExecuteQuery()
-    {
-        var session = SharedSession;
-
-        await session.Dispatch(() =>
-        {
-            const string sql = """
-                create procedure sp_probe (a integer, b integer) returns (r integer) as
-                declare v integer;
-                begin
-                  v = a + b;
-                  r = v;
-                end
-                """;
-
-            var vm = new DebuggerTabViewModel(
-                "SP_PROBE",
-                _ => System.Threading.Tasks.Task.FromResult<string?>(sql),
-                new DebuggerTabVmTests.FakeLauncher(new DebuggerTabVmTests.FakeExecutor()));
-
-            // Reach ReadyToLaunch BEFORE the view exists — the race the bug lost. A FromResult source completes
-            // synchronously, so preparation settles here; the view (created below) then subscribes AFTER the
-            // Phase transition, exactly as in the field.
-            _ = vm.PrepareAsync();
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(DebuggerPhase.ReadyToLaunch, vm.Phase);
-
-            bool windowF5Fired = false;
-            var view = new DebuggerTabView { DataContext = vm };
-            var window = new Window { Content = view };
-            window.KeyBindings.Add(new KeyBinding
-            {
-                Gesture = new KeyGesture(Key.F5),
-                Command = new RelayFlagCommand(() => windowF5Fired = true),
-            });
-            window.Show();
-            for (var i = 0; i < 3; i++) Dispatcher.UIThread.RunJobs();
-
-            // F5 at the tab root (see the method comment for why this discriminates the fix).
-            view.RaiseEvent(new KeyEventArgs
-            {
-                RoutedEvent = InputElement.KeyDownEvent,
-                Key = Key.F5,
-                KeyModifiers = KeyModifiers.None,
-            });
-            Dispatcher.UIThread.RunJobs();
-
-            Assert.Equal(DebuggerPhase.Paused, vm.Phase);   // launched via the tab-scoped handler
-            Assert.False(windowF5Fired);                    // window's Execute Query binding pre-empted
-        }, CancellationToken.None);
-    }
+    // (D15.3 F5 routing is now a window-level Go router — MainWindowViewModel.GoCommand → DebuggerTabViewModel
+    //  .RequestGoAsync — tested deterministically at the VM level in DebuggerTabVmTests, so the earlier headless
+    //  view test that raised F5 into a hosted DebuggerTabView is retired.)
 
     // Etap 6 UX-polish regression pin — the "FROM view / FROM proc(…) don't resolve" report. A view /
     // selectable procedure used in FROM only resolves once its metadata category has loaded, which (on

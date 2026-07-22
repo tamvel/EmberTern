@@ -700,6 +700,18 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
     // ── Launch ────────────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>The debugger's response to the application-level F5 ("Go", routed by
+    /// <c>MainWindowViewModel.GoCommand</c>): Start Debugging from the launch panel, Continue while paused, and
+    /// a no-op in any other phase (Preparing / Busy / Completed / Faulted). It reuses the existing command gates
+    /// (<see cref="LaunchCommand"/> / <see cref="ContinueCommand"/>) so there is no second definition of when
+    /// each action is valid — the debugger owns "what F5 means in my context", the window owns "which tab".</summary>
+    public Task RequestGoAsync()
+    {
+        if (LaunchCommand.CanExecute(null)) return LaunchCommand.ExecuteAsync(null);
+        if (ContinueCommand.CanExecute(null)) return ContinueCommand.ExecuteAsync(null);
+        return Task.CompletedTask;
+    }
+
     private bool CanLaunch => Phase is DebuggerPhase.ReadyToLaunch or DebuggerPhase.Idle
                               && !LaunchBlocked && _body is not null
                               && (Parameters is not null || (IsTriggerMode && TriggerEditor is not null));

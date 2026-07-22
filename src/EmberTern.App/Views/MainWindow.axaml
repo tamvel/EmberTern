@@ -26,7 +26,11 @@
   </Design.DataContext>
 
   <Window.KeyBindings>
-    <KeyBinding Gesture="F5" Command="{Binding ExecuteQueryCommand}" />
+    <!-- F5 is the application-level "Go" router (MainWindowViewModel.GoCommand): it means Execute Query in the
+         SQL editor, Start Debugging on a debugger launch panel, and Continue in a paused debug session — the
+         active workspace tab decides. Ctrl+Enter stays a SQL-editor-specific Execute. Shift+F5 stays Execute
+         (full) for now; making it debugger-aware (Stop) is a scoped follow-up. -->
+    <KeyBinding Gesture="F5" Command="{Binding GoCommand}" />
     <KeyBinding Gesture="Ctrl+Enter" Command="{Binding ExecuteQueryCommand}" />
     <KeyBinding Gesture="Shift+F5" Command="{Binding ExecuteQueryFullCommand}" />
     <KeyBinding Gesture="Alt+F" Command="{Binding FormatSqlCommand}" />
