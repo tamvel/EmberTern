@@ -383,7 +383,34 @@ noted.
   per-routine, across tabs/restarts; each launch's `Accept()` records it), plus the existing `RestartCommand`
   (toolbar + `Ctrl+Shift+F5`) reusing last values and Seam C's F5 on the pre-filled panel. Named favorites stay
   DEFERRED. +2 `DebuggerTabVmTests` (pre-fill via the debugger path; Restart reuses last values); build 0/0.
-  **Seam E (Members-tab Debug button) NOT started** — next.** Guide: d15 doc §5.
+  **Seam E (Members-tab Debug button) NOT started** (folded into the discoverability backlog below).** Guide:
+  d15 doc §5. **D15.3 CLOSED by the user 2026-07-20.**
+  **D15.4 (Expression UX + Friendly Errors) — COMPLETE 2026-07-23 (Seams A+B); Seam C DEFERRED.** Split into
+  three seams. **Seam A — Expression Hints (P, `ea6957e`):** terse input placeholders each carry a concise
+  valid-expression example + a subtle monospace examples line under the Immediate/Watches empty-states (new
+  shared `UiStrings.DebuggerExpressionExamples`); pure `UiStrings` + two empty-states. **Seam B — Friendly Error
+  Mapping (P+F, `a7d34cf`):** Core `DebugErrorClassifier.Classify(DebugError) → FriendlyErrorCategory
+  { UserException, ConstraintViolation, SqlError, Unknown }`, keyed on **SQLSTATE/GDS codes only** (never
+  message text, §F), unit-tested; App `DebugErrorPresenter` (`Raw` = best raw field; `Describe` = friendly
+  one-liner, `Unknown → Raw`) — the ONE text composer that removed the duplicated `?? Message ?? ExceptionName`
+  from all four surfaces (`DebugExecutedSqlRowViewModel`, `WatchRowViewModel`, `PausedReasonText`,
+  `DescribeError`). Friendly text on the three expression surfaces with the **raw FB message kept as a tooltip**
+  ("Friendly + raw available", ratified); Error Bar keeps the raw body (D15.2). **GDS codes MEASURED live on the
+  FB5 lab** (throwaway probe, removed): user `EXCEPTION` → `ExceptionName`; `{335544879 NOT NULL, 335544347
+  CHECK, 335544665 PK/UNIQUE}` → constraint; `335544569` (isc_dsql_error) → SqlError. **Key finding:**
+  token-unknown (-104), table-unknown (-204), column-unknown (-206) ALL arrive as `335544569` (DebugError
+  carries only the leading GDS code) ⇒ one honest `SqlError` bucket; the precise split is Seam C's job. **Seam C
+  — Local Pre-validation — DEFERRED to backlog (prove-before-build spike, NO production code).** The mandatory
+  empirical gate FAILED cleanly: `DiagnosticsEngine` (semantic) flags an unresolved variable **only for a
+  `:name` reference inside a PSQL body**; a **bare** identifier (`v_counter * 2` — the typical Immediate input)
+  is a column candidate, gated on metadata, so with `metadata:null` it is **silent** (measured: 0 diagnostics
+  for every bare shape). Reuse-only local pre-validation therefore can't see the common case without an engine
+  change (binder resolving bare expressions against ambient) — out of D15.4's reuse-only scope, and SQL
+  synthesis / colon-injection / `BEGIN…END` wrapping were rejected. **Ratified:** no debugger-only validator, no
+  silent-in-the-common-case component; Seam B already gives friendly server errors. Seam C stays backlog — a
+  future **separate Core Feature** ("resolve bare expressions against ambient", full engine-change rigour) if
+  real usage asks. Build 0/0; 5132 tests green (A+B); smoke clean. **D15 next: D15.5 (Inline Values).** Guide:
+  d15 doc §6.
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);

@@ -60,7 +60,7 @@ object editors, and the debugger, in **both** themes.
 | **D15.2** | Toolbar Visual System + Error Bar | P | ~2 | icon system before use | **3** |
 | **D15.3** | Launch & Entry Experience | P (+persist) | ~2 | — | **4** |
 | — | ~~**Script Executor Rewrite (Steps 1–6)**~~ **✅ COMPLETE (0–6, live-verified 2026-07-21)** | correctness | — | — | **5** |
-| **D15.4** | Expression UX + Friendly Errors | P+F | ~2 | — | **6** |
+| **D15.4** | Expression UX + Friendly Errors — **DONE (A+B); Seam C deferred** | P+F | ~2 | — | **6** |
 | **D15.5** | Inline Values | F | ~2 | D15.1 (renderer/token knowledge) | **7** |
 | **D15.6** | Debugger Performance (integration analysis) | F | ~1–2 | Performance Analysis module | **8** |
 | **D15.7** | Global UI Audit | analysis | ~1 (or in-the-background) | — | parallel |
@@ -443,12 +443,12 @@ Quick-Relaunch's "last values", which history already stores.
 **Goal.** The Immediate / Watches / Breakpoint-condition inputs tell the user what to type, and errors are
 friendly, not raw SQL.
 
-**STARTED 2026-07-23; split ratified into three seams (A → B → C), Seam A DONE.** The plan's original two
-seams were split for cleaner risk profiles + smaller verifiable units: **A** Expression Hints (P) · **B**
-Friendly Error Mapping (Core-first, pure) · **C** Local Pre-validation (Core reuse, advisory only). **Seam B
-presentation decision (ratified 2026-07-23): "Friendly + raw available"** — the user sees a friendly,
-categorised message by default; the full Firebird message stays always reachable (Executed SQL audit, Error
-Bar expand, Details) so no diagnostic information or auditability is lost (§F / §0).
+**COMPLETE 2026-07-23 (A + B); Seam C DEFERRED to backlog.** Split into three seams (cleaner risk profiles +
+smaller verifiable units): **A** Expression Hints (P) — DONE · **B** Friendly Error Mapping (Core-first) —
+DONE · **C** Local Pre-validation (reuse) — **DEFERRED** (the empirical gate showed it needs an engine change,
+not reuse — see §6.3). **Seam B presentation decision (ratified 2026-07-23): "Friendly + raw available"** —
+the user sees a friendly, categorised message by default; the full Firebird message stays always reachable
+(Executed SQL audit, Error Bar expand, Details) so no diagnostic information or auditability is lost (§F / §0).
 
 ### 6.1 Current state (measured)
 - Placeholders are terse (`DebuggerImmediateWatermark`, `DebuggerWatchWatermark`,
@@ -492,16 +492,32 @@ Bar expand, Details) so no diagnostic information or auditability is lost (§F /
   they are ONE honest `SqlError` bucket, and the precise split (unclosed paren / unknown variable / unknown
   function) is exactly Seam C's job (local pre-validation, richer context before the send). Build 0/0; 5132 tests
   green (+18); smoke clean.
-- **C (F, reuse) — Local Pre-validation.** Advisory-only syntax/unknown-name check of a fragment via the
-  existing Language Service (Lexer/Parser/`DiagnosticsEngine`) BEFORE the `EXECUTE BLOCK`, with the paused
-  frame's in-scope variables seeded as ambient symbols (else a real local reads as "unknown"); NEVER blocks a
-  fragment the server would accept (§F — the server owns semantics). Live-verify a valid expression still
-  evaluates identically.
+- **C (reuse) — Local Pre-validation — DEFERRED to backlog 2026-07-23 (a "prove before build" spike closed it,
+  no production code).** The intent: advisory-only unknown-name check of an Immediate/Watch/condition fragment
+  via the existing engine (`SemanticModel.Build` → `DiagnosticsEngine.Analyze`, the same path
+  `EditorLanguageService` uses — no second analyzer), frame roster seeded as ambient, never gating Evaluate
+  (§F). **The mandatory empirical gate FAILED, cleanly:** measured (throwaway spike, removed) that
+  `DiagnosticsEngine` — a **semantic** engine — flags an unresolved variable **only for a `:name` / `@name`
+  reference inside a PSQL body** (`begin … end`). A **bare** identifier (`v_counter`, `v_conter * 2` — exactly
+  what a user types in Immediate) is treated as a **column candidate**, gated on live metadata, so with
+  `metadata:null` it is **silent** (0 diagnostics for every bare-expression shape; 1 only for
+  `begin x = :typo; end`). So local pre-validation of the *typical* Immediate expression **cannot** be achieved
+  by REUSE ALONE — it would need either SQL synthesis / colon-injection / artificial `BEGIN…END` wrapping (all
+  rejected — inventing a code path, and semantically wrong: a bare name can legitimately be a column) or a
+  **binder/`DiagnosticsEngine` change** to resolve bare identifiers against ambient in a debug/expression
+  context. That crosses the D15.4 **reuse-only** boundary. **Ratified decision (user):** do NOT take that path
+  inside D15.4; build no debugger-only validator and no silent-in-the-common-case component (it would be dead
+  code / false confidence). Seam B already gives a friendly server error for a bad expression. **Backlog:** if
+  real usage asks, add "resolve bare expressions against ambient" as a **separate Core Feature** with its own
+  architectural analysis and full engine-change rigour — then this advisory becomes a thin client of it.
 
 ### 6.4 DoD
-The user knows what to type; a bad expression yields a friendly, categorised message (with a fix hint when
-possible) rather than raw SQL; valid expressions behave exactly as before. **Risk:** the local validator must
-be advisory only — never block a fragment the server would accept (§F: the server owns semantics).
+The user knows what to type (Seam A — richer placeholders + examples); a bad expression yields a friendly,
+categorised message rather than raw SQL, with the full server message still reachable (Seam B). **Met by A + B.**
+Local pre-validation (the "with a fix hint before sending" ambition) is **deferred** — the semantic engine
+cannot see bare Immediate expressions without an engine change (§6.3), which is out of D15.4's reuse-only
+scope. **Risk that closed the seam:** a reuse-only validator would be silent in the common case (dead code /
+false confidence); the honest move was to stop at the spike and defer.
 
 ---
 
@@ -591,8 +607,9 @@ observations during every D15 seam. **Deliverable:** an inventory doc, not code.
 ## 11. Priorities & sequencing
 
 **Ratified order** (with my endorsement — the sequence is sound; no change recommended). **Progress note
-(2026-07-21):** items 1 and 5 (the whole Script Executor track) are **COMPLETE**; D15.1 is **in progress**
-(Seam A done). The rewrite ran ahead of its slotted position 5 as a self-contained block.
+(2026-07-23):** the Script Executor track, **D15.1, D15.2, D15.3** and **D15.4** are all **COMPLETE**
+(D15.4 = Seams A+B; Seam C deferred, §6.3). Next in sequence: **D15.5 — Inline Values**. The rewrite ran ahead
+of its slotted position 5 as a self-contained block.
 
 1. ~~**Script Executor — Step 0 (Probe).**~~ **✅ DONE** — measurement, not implementation; it gated the
    §2.2b self-block decision (never trust an unmeasured Firebird inference: #213/#214/#215 were all falsified).
@@ -602,8 +619,9 @@ observations during every D15 seam. **Deliverable:** an inventory doc, not code.
 4. **D15.3 — Launch Experience.** Daily workflow; repeated launches; pure P + tiny persistence.
 5. ~~**Script Executor Rewrite (Steps 1–6).**~~ **✅ COMPLETE (Steps 0–6, live-verified 2026-07-21).** The
    self-contained correctness-debt block; the mixed-DDL+DML defect (#213) is fixed by `Sequenced` mode.
-6. **D15.4 — Friendly Errors.** First of the feature-bearing D15 seams.
-7. **D15.5 — Inline Values.** After D15.1 (shares renderer/token knowledge).
+6. **D15.4 — Friendly Errors.** **✅ DONE (Seams A+B).** Seam C (local pre-validation) deferred — needs an
+   engine change, not reuse (§6.3).
+7. **D15.5 — Inline Values.** After D15.1 (shares renderer/token knowledge). **← next.**
 8. **D15.6 — Performance (integration).** Lightest now that debug-time timing is dropped; last.
 
 D15.7 (Global UI Audit) runs **in the background** throughout.
