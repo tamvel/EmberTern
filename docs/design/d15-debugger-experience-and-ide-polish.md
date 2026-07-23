@@ -443,6 +443,13 @@ Quick-Relaunch's "last values", which history already stores.
 **Goal.** The Immediate / Watches / Breakpoint-condition inputs tell the user what to type, and errors are
 friendly, not raw SQL.
 
+**STARTED 2026-07-23; split ratified into three seams (A → B → C), Seam A DONE.** The plan's original two
+seams were split for cleaner risk profiles + smaller verifiable units: **A** Expression Hints (P) · **B**
+Friendly Error Mapping (Core-first, pure) · **C** Local Pre-validation (Core reuse, advisory only). **Seam B
+presentation decision (ratified 2026-07-23): "Friendly + raw available"** — the user sees a friendly,
+categorised message by default; the full Firebird message stays always reachable (Executed SQL audit, Error
+Bar expand, Details) so no diagnostic information or auditability is lost (§F / §0).
+
 ### 6.1 Current state (measured)
 - Placeholders are terse (`DebuggerImmediateWatermark`, `DebuggerWatchWatermark`,
   `DebuggerBreakpointConditionWatermark`).
@@ -460,9 +467,24 @@ friendly, not raw SQL.
   `DebugErrorMapper` — never parse the raw message text.
 
 ### 6.3 Seams
-- **A (P):** placeholders + examples (pure view/UiStrings).
-- **B (F):** local pre-validation via Language Service + friendly mapping; live-verify that a valid expression
-  still evaluates identically (no behaviour change to the harness).
+- **A (P) — Expression Hints — DONE 2026-07-23 (impl, awaits user visual confirm).** Pure Presentation
+  (`UiStrings` + two empty-states in `DebuggerTabView.axaml`; no VM/Core change). The terse input placeholders
+  now each carry one concise valid-expression example (`DebuggerImmediateWatermark` → `…, e.g. v_counter * 2`;
+  `DebuggerWatchWatermark` → `…, e.g. v_status = 'OK'`; `DebuggerBreakpointConditionWatermark` style aligned),
+  and a subtle monospace examples line (new shared `DebuggerExpressionExamples` = `v_counter * 2 · v_status =
+  'OK' · char_length(v_text)`) sits under the Immediate and Watches empty-states. Build 0/0; 5114 tests green;
+  smoke clean. Commit `ea6957e`.
+- **B (F, Core-first) — Friendly Error Mapping.** A pure Core formatter over `DebugError` (→ category +
+  friendly message + optional fix hint), unit-tested without a server (like `DebugErrorMapper.Build`), then
+  consumed by ALL FOUR error surfaces that today duplicate `?? Message ?? ExceptionName` —
+  `DebugExecutedSqlRowViewModel`, `WatchRowViewModel.Apply`, `DebuggerTabViewModel.PausedReasonText` (condition
+  error), `DebuggerTabViewModel.DescribeError` (D15.2 Error Bar). **"Friendly + raw available"** (ratified): the
+  raw FB message stays reachable (Executed SQL, Error Bar expand). No engine change → no live-fidelity needed.
+- **C (F, reuse) — Local Pre-validation.** Advisory-only syntax/unknown-name check of a fragment via the
+  existing Language Service (Lexer/Parser/`DiagnosticsEngine`) BEFORE the `EXECUTE BLOCK`, with the paused
+  frame's in-scope variables seeded as ambient symbols (else a real local reads as "unknown"); NEVER blocks a
+  fragment the server would accept (§F — the server owns semantics). Live-verify a valid expression still
+  evaluates identically.
 
 ### 6.4 DoD
 The user knows what to type; a bad expression yields a friendly, categorised message (with a fix hint when
