@@ -430,6 +430,18 @@ noted.
   (`NEW.STATUS`) isn't a single token → not "used". Build 0/0; 5136 tests green (used shown + anchor,
   changed-not-used excluded, empty when not paused; + renderer pin); smoke clean. **D15 next: D15.6 (Debugger
   Performance — integration).** Guide: d15 doc §7.
+  **D15.6 (Debugger Performance) — DROPPED 2026-07-23 (ratified; spike done, no product justification).** A
+  prove-before-build spike (`tools/probes/DebugPerfBlockProbe`, since removed) tested **variant M-A** — the
+  whole procedure body as ONE `EXECUTE BLOCK` fed to the existing Performance Analysis module (wired exactly as
+  `MainWindowViewModel`), over selectable / non-selectable / full-scan scenarios on a 20k-row scratch table:
+  M-A is **feasible and its DATA is trustworthy** (per-table reads + advisor findings match the baseline, plan
+  is real) — **only execution TIME is tainted** (harness overhead). **Dropped anyway on product judgement:** an
+  M-A Performance tab profiles the WHOLE procedure, which the user already gets from the Procedure editor's
+  Performance tab; the extra plan richness + same-params convenience is too little to justify a second
+  performance surface in the debugger. The debugger's only unique value is **per-statement** profiling of the
+  currently-executing instruction — a separate, much larger feature (own architecture + spikes), out of scope
+  now. Guide: d15 doc §8. **D15 is now effectively complete** (D15.1–D15.5 done, D15.6 dropped, D15.7 audit is
+  background).
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);

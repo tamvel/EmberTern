@@ -62,7 +62,7 @@ object editors, and the debugger, in **both** themes.
 | — | ~~**Script Executor Rewrite (Steps 1–6)**~~ **✅ COMPLETE (0–6, live-verified 2026-07-21)** | correctness | — | — | **5** |
 | **D15.4** | Expression UX + Friendly Errors — **DONE (A+B); Seam C deferred** | P+F | ~2 | — | **6** |
 | **D15.5** | Inline Values — **DONE (A+B)** | F | ~2 | D15.1 (renderer/token knowledge) | **7** |
-| **D15.6** | Debugger Performance (integration analysis) | F | ~1–2 | Performance Analysis module | **8** |
+| ~~**D15.6**~~ | ~~Debugger Performance (integration)~~ **DROPPED (spike done, no product justification)** | — | — | **8** |
 | **D15.7** | Global UI Audit | analysis | ~1 (or in-the-background) | — | parallel |
 
 **D15 total ≈ 11–13 implementation sessions** (+ the Script Executor track ≈ 5). Sequencing rationale in §11.
@@ -588,25 +588,33 @@ clutter; keep the visibility rule strict.
 
 ---
 
-## 8. D15.6 — Debugger Performance *(Feature — direction CHANGED at review)*
+## 8. D15.6 — Debugger Performance — DROPPED (2026-07-23, ratified; spike done, no product justification)
 
-**Reversed decision (ratified):** **do NOT measure debugger step time.** Because every step runs as a separate
-`EXECUTE BLOCK` harness (separate round-trips + harness overhead), debug-time timing is **not representative of
-real procedure performance** — it would mislead. Real profiling is the job of the existing **Performance
-Analysis** module (`docs/history/10`).
+**Decision: D15.6 will NOT be implemented.** Not because it is infeasible — the prove-before-build spike showed
+the opposite — but because, after weighing cost vs. user value, the gain is too small to justify carrying
+another feature in the debugger.
 
-**Design.** Analyse **integration with the existing Performance Analysis** rather than building a debug-time
-profiler:
-- Provide a path from the debugged routine to the existing Performance Analysis (profile the real procedure
-  once via the established module — real plan + per-table reads), reusing `PerformancePanelView`/VM (already
-  hosted as a peer tab in the object editors, so the pattern is proven).
-- **If** debug-time metrics are ever added later, they **must be labelled unmistakably as "debugger runtime"
-  (with harness overhead), NOT real procedure performance** — a permanent labelling requirement.
+**Spike results (worth keeping).** A throwaway probe (`tools/probes/DebugPerfBlockProbe`, since removed —
+"served its purpose") tested **variant M-A**: run the WHOLE procedure body as ONE `EXECUTE BLOCK` and feed it to
+the **existing Performance Analysis module**, wired exactly as `MainWindowViewModel` wires it (same
+`FirebirdPlanReader` / `FirebirdPerfStatsReader` MON$-delta / `PerformanceAnalyzer` / `FirebirdCatalogReader`),
+against a 20 000-row scratch table with a real index-vs-scan choice. Baseline = exactly the SQL the Procedure
+editor records today. Findings, over selectable / non-selectable / full-scan scenarios:
+- **M-A is feasible and produces trustworthy DATA:** the **per-table reads** and the **advisor findings** match
+  the baseline, and the **plan** is real (a full scan surfaces as a full scan). The module consumes an M-A
+  block honestly.
+- **Only TIME is a tainted metric** under M-A (the harness adds round-trip + block overhead) — the same reason
+  the direction was reversed away from debug-time timing in the first place.
 
-**Seam.** Analysis + a reuse-of-Performance-Analysis entry point; no engine timing. **DoD:** the user can reach
-a real, honest performance profile of the debugged routine through the existing module; no misleading debug-time
-number is presented as "procedure performance". **Cost ~1–2 sessions** (reduced from the earlier 3 — the
-timing-capture engine work is dropped). **Risk:** scope creep back toward debug-time timing — resist.
+**Why dropped anyway (product judgement, ratified).** An M-A-based Performance tab would profile the **whole
+procedure** — which the user can already obtain today from the **Procedure editor's** Performance tab. The only
+extra benefits would be a slightly richer plan and the convenience of launching with the same parameters — too
+little to justify a second performance surface inside the debugger. **The debugger's only genuinely unique
+performance value is per-statement analysis of the currently-executing instruction** — but that is a different,
+much larger feature needing its own architecture and its own spikes, and is explicitly **out of scope now**.
+
+**Status:** closed. Revisit only if per-statement (currently-executing-instruction) profiling is taken on as its
+own feature; the M-A feasibility result above is the reusable starting point for the whole-procedure half.
 
 ---
 
@@ -646,8 +654,9 @@ observations during every D15 seam. **Deliverable:** an inventory doc, not code.
 
 **Ratified order** (with my endorsement — the sequence is sound; no change recommended). **Progress note
 (2026-07-23):** the Script Executor track, **D15.1, D15.2, D15.3, D15.4** and **D15.5** are all **COMPLETE**
-(D15.4 = Seams A+B, Seam C deferred §6.3; D15.5 = Seams A+B). Next in sequence: **D15.6 — Debugger Performance
-(integration)**; **D15.7** (Global UI Audit) runs in the background. The rewrite ran ahead
+(D15.4 = Seams A+B, Seam C deferred §6.3; D15.5 = Seams A+B). **D15.6 is DROPPED** (spike done, no product
+justification, §8). **D15.7** (Global UI Audit) runs in the background. With D15.6 dropped, the D15 milestones
+are effectively complete bar the background audit. The rewrite ran ahead
 of its slotted position 5 as a self-contained block.
 
 1. ~~**Script Executor — Step 0 (Probe).**~~ **✅ DONE** — measurement, not implementation; it gated the
@@ -662,7 +671,9 @@ of its slotted position 5 as a self-contained block.
    engine change, not reuse (§6.3).
 7. **D15.5 — Inline Values.** **✅ DONE (Seams A+B).** Used-in-statement primary + changed supplementary,
    end-of-line, no text shift.
-8. **D15.6 — Performance (integration).** Lightest now that debug-time timing is dropped; last.
+8. ~~**D15.6 — Performance (integration).**~~ **DROPPED 2026-07-23** — spike proved M-A feasible (reads +
+   findings + plan trustworthy; only time tainted) but there is no product justification (whole-procedure
+   profiling already exists in the Procedure editor; per-statement is a separate larger feature). See §8.
 
 D15.7 (Global UI Audit) runs **in the background** throughout.
 
