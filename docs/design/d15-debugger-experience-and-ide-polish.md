@@ -474,12 +474,24 @@ Bar expand, Details) so no diagnostic information or auditability is lost (§F /
   and a subtle monospace examples line (new shared `DebuggerExpressionExamples` = `v_counter * 2 · v_status =
   'OK' · char_length(v_text)`) sits under the Immediate and Watches empty-states. Build 0/0; 5114 tests green;
   smoke clean. Commit `ea6957e`.
-- **B (F, Core-first) — Friendly Error Mapping.** A pure Core formatter over `DebugError` (→ category +
-  friendly message + optional fix hint), unit-tested without a server (like `DebugErrorMapper.Build`), then
-  consumed by ALL FOUR error surfaces that today duplicate `?? Message ?? ExceptionName` —
-  `DebugExecutedSqlRowViewModel`, `WatchRowViewModel.Apply`, `DebuggerTabViewModel.PausedReasonText` (condition
-  error), `DebuggerTabViewModel.DescribeError` (D15.2 Error Bar). **"Friendly + raw available"** (ratified): the
-  raw FB message stays reachable (Executed SQL, Error Bar expand). No engine change → no live-fidelity needed.
+- **B (F, Core-first) — Friendly Error Mapping — DONE 2026-07-23 (impl, awaits user visual confirm). Commit
+  `a7d34cf`.** **Core:** `DebugErrorClassifier.Classify(DebugError) → FriendlyErrorCategory { UserException,
+  ConstraintViolation, SqlError, Unknown }`, keyed on **SQLSTATE/GDS codes only** (never message text, §F),
+  unit-tested without a server. **App:** `DebugErrorPresenter` with `Raw` (best raw field — Error Bar / tooltip)
+  and `Describe` (friendly one-liner; `Unknown → Raw`), the single text composer consumed by all four surfaces
+  that used to duplicate `?? Message ?? ExceptionName`; `DebuggerTabViewModel.DescribeError` now delegates to
+  `Raw` (duplication removed). Friendly text lands on the **three expression surfaces** (Immediate result / Watch
+  value / breakpoint-condition reason) with the **raw FB message kept as a tooltip** ("friendly + raw available",
+  ratified); the Error Bar (fault) keeps the full raw message (D15.2, the raw surface). No engine change → no
+  live-fidelity. **GDS codes MEASURED live on the FB5 lab** (throwaway D15.4 probe, removed after use — the
+  leading at-or-above-ISC number the driver surfaces, = what `DebugErrorMapper` stores on `DebugError.GdsCode`):
+  user `EXCEPTION` → `ExceptionName` (isc_except 335544517); **NOT NULL** var validation `335544879`, **CHECK**
+  `335544347` (isc_not_valid), **PK/UNIQUE** `335544665` → ConstraintViolation; **`335544569`** (isc_dsql_error)
+  → SqlError. **Key finding:** token-unknown (-104), table-unknown (-204) and column-unknown (-206) **all** arrive
+  as `335544569` (SQLSTATE 42000) — `DebugError` carries only the leading GDS code, not the SQLCODE/sub-code — so
+  they are ONE honest `SqlError` bucket, and the precise split (unclosed paren / unknown variable / unknown
+  function) is exactly Seam C's job (local pre-validation, richer context before the send). Build 0/0; 5132 tests
+  green (+18); smoke clean.
 - **C (F, reuse) — Local Pre-validation.** Advisory-only syntax/unknown-name check of a fragment via the
   existing Language Service (Lexer/Parser/`DiagnosticsEngine`) BEFORE the `EXECUTE BLOCK`, with the paused
   frame's in-scope variables seeded as ambient symbols (else a real local reads as "unknown"); NEVER blocks a
