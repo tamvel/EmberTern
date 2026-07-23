@@ -103,6 +103,14 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         _fallback = fallback;
     }
 
+    /// <summary>When the root routine is a <b>function</b> (D-function), the RETURNS <b>base type</b> resolved
+    /// ONCE during the root's frame-variable read (<see cref="FirebirdDebugMetadata.BuildFunctionFrameVariablesAsync"/>).
+    /// The launcher reads it and passes it to <c>new DebugSession(rootReturnType: …)</c> so the root becomes a
+    /// function frame — "resolve once, pass through": there is no re-derivation downstream (the interpreter and
+    /// <see cref="EvaluateReturn"/> both read it off the frame). Null for a procedure / trigger / package /
+    /// anonymous-block root.</summary>
+    public string? RootReturnType { get; private set; }
+
     /// <summary>Creates the executor for a standalone routine (the root frame): resolves its frame variable
     /// templates (verbatim declarations R3 + base types R2) from metadata once, then registers its context.
     /// <paramref name="source"/> is the routine's full source (the span backing for fragments + declarations),
@@ -135,7 +143,8 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         Encoding fallback,
         TriggerContext? trigger,
         CancellationToken cancellationToken = default,
-        string? packageName = null)
+        string? packageName = null,
+        bool isFunctionRoot = false)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(source);
@@ -144,6 +153,21 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         ArgumentNullException.ThrowIfNull(fallback);
 
         var executor = new FirebirdDebugExecutor(session, fallback);
+
+        // D-function: a standalone FUNCTION launched as the debug ROOT. Its input args + RETURNS base type come
+        // from ONE catalog read; the RETURNS base type is exposed on RootReturnType for the launcher to pass to
+        // DebugSession (making the root a function frame — RETURN via the Expression Harness). A function has no
+        // output params / SUSPEND and is a closed scope, so Execute/EvaluateCondition/BindValues are untouched
+        // (as for a stored/package root). (isFunctionRoot is mutually exclusive with trigger + packageName.)
+        if (isFunctionRoot)
+        {
+            var fnLayout = await FirebirdDebugMetadata
+                .BuildFunctionFrameVariablesAsync(session, routineName!, body, source, cancellationToken)
+                .ConfigureAwait(false);
+            executor.Register(body, source, model, fnLayout.Variables, fnLayout.OutputParameters);
+            executor.RootReturnType = fnLayout.ReturnType;
+            return executor;
+        }
 
         // D11 seam C: a package member launched as the debug ROOT. Built the SAME way a stepped-into package
         // member is (seam B): package-keyed catalog params (the ONE catalog difference), and the package's

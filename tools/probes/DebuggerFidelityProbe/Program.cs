@@ -156,6 +156,47 @@ try
         }
     }
 
+    // D-function — simulate a standalone FUNCTION launched as the debug ROOT. Fetches its source, builds the
+    // executor with isFunctionRoot (which resolves the RETURNS base type ONCE and exposes it on RootReturnType),
+    // constructs the DebugSession with that rootReturnType (so the root is a function frame), steps to
+    // completion, and returns the RETURN value kept on FinalFrame — the value compared to the REAL SELECT FN(…).
+    async Task<(object? Return, int MaxDepth, List<string> Frames)>
+        SimulateFunctionRootAsync(string function, Dictionary<string, object?> rootValues, StepKind step = StepKind.Into)
+    {
+        string source = await reader.FetchFunctionSourceAsync(new MetadataObject(function, MetadataObjectKind.Function));
+        var model = SemanticModel.Build(SqlParser.Parse(source).Root);
+        var body = model.Syntax.Statements.OfType<DdlStatement>().First(d => d.Body is not null).Body!;
+
+        var session = await service.CreateDebugSessionAsync(DebugIsolation.ReadCommitted);
+        try
+        {
+            var executor = await FirebirdDebugExecutor.CreateAsync(
+                session, function, source, body, model, fallback,
+                trigger: null, cancellationToken: default, packageName: null, isFunctionRoot: true);
+            var dbg = new DebugSession(body, executor, function, rootValues, source, model,
+                rootReturnType: executor.RootReturnType);
+            dbg.Start();
+
+            int maxDepth = 0;
+            var frames = new List<string>();
+            int guard = 0;
+            while (dbg.State == DebugState.Paused)
+            {
+                if (dbg.Depth > maxDepth) maxDepth = dbg.Depth;
+                if (dbg.CurrentFrame is { } f && !frames.Contains(f.RoutineName)) frames.Add(f.RoutineName);
+                dbg.Step(step);
+                if (++guard > 5000) throw new Exception("runaway stepping");
+            }
+            if (dbg.State == DebugState.Faulted)
+                throw new Exception($"faulted: {dbg.CurrentError?.Message ?? dbg.CurrentError?.ExceptionName}");
+            return (dbg.FinalFrame?.ReturnValue, maxDepth, frames);
+        }
+        finally
+        {
+            await session.DisposeAsync();
+        }
+    }
+
     // D12 Seam D — drive a standalone routine while capturing the SEQUENCE OF STOPS, to prove not only WHAT the
     // final state is but WHEN (and in what order) the debugger pauses relative to the executing code. `configure`
     // sets breakpoints / data breakpoints / BreakOnException before Start (it is handed the source so it can
@@ -1009,6 +1050,44 @@ try
             Pass($"EXIT: Next Iteration hit the EXIT pass → completed, 0 rows == real ({passes} passes)");
         else Fail("EXIT next-iteration", $"{dbg.State}/rows={dbg.EmittedRows.Count}/passes={passes}");
     });
+
+    // ── D-function: a standalone FUNCTION launched as the debug ROOT (sim == real) ───────────────────
+    // The root is a function frame (rootReturnType resolved ONCE in the Firebird layer); its RETURN <expr> is
+    // computed by the Expression Harness and kept on FinalFrame — compared to the REAL SELECT FN(…).
+    static bool SameVal(object? a, object? b)
+    {
+        if (a is null || a is DBNull) return b is null || b is DBNull;
+        if (b is null || b is DBNull) return false;
+        var sa = (Convert.ToString(a, CultureInfo.InvariantCulture) ?? "").Trim();
+        var sb = (Convert.ToString(b, CultureInfo.InvariantCulture) ?? "").Trim();
+        if (decimal.TryParse(sa, NumberStyles.Any, CultureInfo.InvariantCulture, out var da)
+            && decimal.TryParse(sb, NumberStyles.Any, CultureInfo.InvariantCulture, out var db))
+            return da == db;
+        return string.Equals(sa, sb, StringComparison.Ordinal);
+    }
+
+    Head("35. FN_ADD_TAX(100, 20) — standalone FUNCTION as debug ROOT; RETURN via Expression Harness (sim == real)");
+    var fnTax = await SimulateFunctionRootAsync("FN_ADD_TAX",
+        new(StringComparer.OrdinalIgnoreCase) { ["AMOUNT"] = 100m, ["RATE"] = 20m });
+    var realTax = await RealScalarAsync("SELECT FN_ADD_TAX(100, 20) FROM RDB$DATABASE");
+    if (SameVal(fnTax.Return, realTax)) Pass("FN_ADD_TAX", $"sim {fnTax.Return} == real {realTax}");
+    else Fail("FN_ADD_TAX", $"sim {fnTax.Return} != real {realTax}");
+    if (fnTax.MaxDepth == 1) Pass("depth == 1 (the function IS the root frame)");
+    else Fail("FN_ADD_TAX depth", $"expected 1, got {fnTax.MaxDepth}");
+
+    Head("36. FN_FULL_LABEL('ABC','Widget') — root FUNCTION: local + IF/ELSE (else), VARCHAR return (sim == real)");
+    var fnLbl = await SimulateFunctionRootAsync("FN_FULL_LABEL",
+        new(StringComparer.OrdinalIgnoreCase) { ["CODE"] = "ABC", ["NAME"] = "Widget" });
+    var realLbl = await RealScalarAsync("SELECT FN_FULL_LABEL('ABC', 'Widget') FROM RDB$DATABASE");
+    if (SameVal(fnLbl.Return, realLbl)) Pass("FN_FULL_LABEL (else branch)", $"sim '{fnLbl.Return}' == real '{realLbl}'");
+    else Fail("FN_FULL_LABEL (else branch)", $"sim '{fnLbl.Return}' != real '{realLbl}'");
+
+    Head("37. FN_FULL_LABEL(NULL,'Widget') — root FUNCTION: IF branch on a NULL input param (sim == real)");
+    var fnNull = await SimulateFunctionRootAsync("FN_FULL_LABEL",
+        new(StringComparer.OrdinalIgnoreCase) { ["CODE"] = null, ["NAME"] = "Widget" });
+    var realNull = await RealScalarAsync("SELECT FN_FULL_LABEL(NULL, 'Widget') FROM RDB$DATABASE");
+    if (SameVal(fnNull.Return, realNull)) Pass("FN_FULL_LABEL (if/null branch)", $"sim '{fnNull.Return}' == real '{realNull}'");
+    else Fail("FN_FULL_LABEL (if/null branch)", $"sim '{fnNull.Return}' != real '{realNull}'");
 }
 catch (Exception ex)
 {

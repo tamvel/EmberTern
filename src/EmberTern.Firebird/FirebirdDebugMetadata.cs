@@ -95,6 +95,48 @@ internal static class FirebirdDebugMetadata
         return new DebugFrameLayout(result, outputs, inputs);
     }
 
+    /// <summary>Builds the frame variable templates for a standalone PSQL <b>function</b> launched as the debug
+    /// ROOT (D-function). The function's input arguments <b>and</b> its <c>RETURNS</c> base type come from the
+    /// SAME single <c>RDB$FUNCTION_ARGUMENTS</c> read (<see cref="ReadFunctionParametersAsync"/>) — "resolve
+    /// once": each input base-typed exactly as a procedure parameter is (R2 for injection, the user domain kept
+    /// for the declaration R3), and the <c>RETURNS</c> base type is the one the Expression Harness gives the
+    /// <c>RETURN</c> result column (surfaced as <see cref="DebugFrameLayout.ReturnType"/> → the root
+    /// <see cref="Frame.ReturnType"/>). Body locals as usual. A function has <b>no output parameters and no
+    /// <c>SUSPEND</c></b>, so the outputs list is empty. FB3+ standalone (<c>RDB$PACKAGE_NAME IS NULL</c>).</summary>
+    public static async Task<DebugFrameLayout> BuildFunctionFrameVariablesAsync(
+        DebugSessionConnection session,
+        string functionName,
+        BlockStatement body,
+        string source,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(functionName);
+        ArgumentNullException.ThrowIfNull(body);
+        ArgumentNullException.ThrowIfNull(source);
+
+        var result = new List<HarnessVariable>();
+        var inputs = new List<HarnessVariable>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var (funcInputs, returnType) = await ReadFunctionParametersAsync(session, functionName, cancellationToken).ConfigureAwait(false);
+        foreach (var v in funcInputs)
+        {
+            if (!seen.Add(v.Name)) continue;
+            result.Add(v);
+            inputs.Add(v); // ordered input args — seeded from the launch arguments (D8 seeding, reused)
+        }
+
+        foreach (var local in PsqlDeclarationExtractor.Extract(body, source).Locals)
+        {
+            if (!seen.Add(local.Name)) continue;
+            string baseType = await ResolveBaseTypeAsync(session, local.TypeSpec, local.Name, cancellationToken).ConfigureAwait(false);
+            result.Add(new HarnessVariable(local.Name, local.Verbatim, baseType));
+        }
+
+        return new DebugFrameLayout(result, new List<string>(), inputs, returnType);
+    }
+
     /// <summary>Builds the frame variable templates for a <b>local</b> sub-routine (Stage X / D9 seam a part
     /// 2). A local <c>DECLARE PROCEDURE/FUNCTION</c> is <b>not</b> a catalog object — it has no
     /// <c>RDB$PROCEDURE_PARAMETERS</c> row — so its parameter and <c>RETURNS</c> types come from the parsed AST
@@ -308,6 +350,65 @@ internal static class FirebirdDebugMetadata
             session.CommandLock.Release();
         }
         return list;
+    }
+
+    // ── Function arguments (RDB$FUNCTION_ARGUMENTS) — the function-root layout source ─────────────────
+
+    // A standalone PSQL function's input arguments + its RETURNS base type, from ONE catalog read (D-function,
+    // "resolve once"). The return argument is the one at RDB$FUNCTIONS.RDB$RETURN_ARGUMENT; every other argument
+    // is an input. Types are base types via RDB$FIELDS (FormatType — derivation, R2), exactly as a procedure's
+    // parameters (ReadProcedureParametersAsync); an input keeps its user domain for the declaration (R3) but is
+    // injected as the base type (R2). FB3+ standalone (RDB$PACKAGE_NAME IS NULL — packaged functions are a later
+    // follow-up); the debugger is FB3+ (P2 gate), so RDB$PACKAGE_NAME always exists.
+    private static async Task<(List<HarnessVariable> Inputs, string? ReturnBaseType)> ReadFunctionParametersAsync(
+        DebugSessionConnection session, string functionName, CancellationToken cancellationToken)
+    {
+        const string sql =
+            "SELECT fa.RDB$ARGUMENT_POSITION, fa.RDB$ARGUMENT_NAME, fa.RDB$FIELD_SOURCE, " +
+            "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
+            "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, f.RDB$CHARACTER_LENGTH, " +
+            "       fn.RDB$RETURN_ARGUMENT " +
+            "FROM RDB$FUNCTION_ARGUMENTS fa " +
+            "JOIN RDB$FUNCTIONS fn ON fn.RDB$FUNCTION_NAME = fa.RDB$FUNCTION_NAME AND fn.RDB$PACKAGE_NAME IS NULL " +
+            "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = fa.RDB$FIELD_SOURCE " +
+            "WHERE fa.RDB$FUNCTION_NAME = @fn AND fa.RDB$PACKAGE_NAME IS NULL " +
+            "ORDER BY fa.RDB$ARGUMENT_POSITION";
+
+        var inputs = new List<HarnessVariable>();
+        string? returnType = null;
+        await session.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = session.Connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.CommandTimeout = 0;
+            cmd.Transaction = session.Transaction;
+            cmd.Parameters.Add(new FbParameter("@fn", functionName.ToUpperInvariant()));
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                short pos = Sh(reader, 0) ?? -1;
+                string name = TrimStr(reader, 1);
+                string fieldSource = TrimStr(reader, 2);
+                string baseType = FirebirdDdlReader.FormatType(
+                    Sh(reader, 3), Sh(reader, 4), Sh(reader, 5), Sh(reader, 6), Sh(reader, 7), Sh(reader, 8));
+                short returnPos = Sh(reader, 9) ?? 0;
+                if (pos == returnPos)
+                {
+                    returnType = baseType; // the RETURNS base type — the Expression Harness's RETURN result column
+                }
+                else if (name.Length > 0)
+                {
+                    string declType = IsUserDomain(fieldSource) ? fieldSource : baseType;
+                    inputs.Add(new HarnessVariable(name, $"DECLARE {name} {declType};", baseType));
+                }
+            }
+        }
+        finally
+        {
+            session.CommandLock.Release();
+        }
+        return (inputs, returnType);
     }
 
     // ── Base-type derivation (R2) ───────────────────────────────────────────────────────────────────
