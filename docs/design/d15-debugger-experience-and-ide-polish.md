@@ -540,8 +540,26 @@ already projects (`Frame.Values` + model roster) — **zero new analysis**; the 
 the same signal the Variables change-highlight already uses (`FrameValues.Snapshot()` diff).
 
 ### 7.3 Seams
-- **A:** the renderer/generator + paused-state integration (draw current-line-used values).
-- **B:** the "changed since last step" set + visibility policy + tuning + both themes.
+**Ratified order swap (2026-07-23): risk-first — the renderer mechanism is proven on the most unambiguous data
+set (changed-since-step) BEFORE adding the mapping-dependent "used" set.**
+- **A (renderer + changed-since-step) — DONE 2026-07-23 (impl, awaits user visual confirm). Commit `efbc89f`.**
+  New `InlineValuesRenderer` (App/Completion) — a member of the `IBackgroundRenderer` family (mirrors
+  `CurrentLineRenderer`): draws greyed `name = value` annotations in the empty space PAST each line's text end
+  (position from `BackgroundGeometryBuilder.GetRectsForSegment`, the same geometry the current-line marker uses
+  → correct under word wrap / folding), so it **never shifts the document text** and never touches the
+  formatter/layout. Appended after the current-line renderer (paints on top of the wash); repaints on the
+  existing `DebugMarkersChanged` → `TextView.Redraw()` path. The VM computes the set: new
+  `DebuggerTabViewModel.InlineValues` (`IReadOnlyList<InlineValueAnnotation>`), recomputed once per pause
+  (`RebuildInlineValues`) = the **changed-since-last-step** rows (the existing `DebugVariableRowViewModel.IsChanged`
+  signal), anchored on the current line; empty when not paused. `ApplySelectedFrame` reordered so the roster
+  refreshes before `SetCurrentMarker` recomputes the set + fires the repaint. Clean P/VM split — the VM decides
+  WHICH values / WHERE, the renderer only draws. Pure Presentation; Core + engine untouched. Build 0/0; +3 tests
+  (2 `DebuggerTabVmTests`, +1 headless renderer pin); smoke clean. **Positioning quality is the mandatory
+  manual-QA gate before Seam B.**
+- **B (used-in-current-statement set + visibility policy) — NOT started.** Add the "variables referenced in the
+  current statement" set (via the existing `SqlLexer` tokenizing the current statement span, matched to the
+  roster names — no new analysis), unioned with the changed set; final visibility rule, value truncation reuse
+  (`MaxInlineLength`), greyed-tuning, both themes.
 
 ### 7.4 DoD
 Inline values appear only for current-line-used or just-changed variables, never shift text, greyed and
