@@ -108,7 +108,8 @@ internal static class FirebirdDebugMetadata
         string functionName,
         BlockStatement body,
         string source,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? packageName = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(functionName);
@@ -119,7 +120,7 @@ internal static class FirebirdDebugMetadata
         var inputs = new List<HarnessVariable>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        var (funcInputs, returnType) = await ReadFunctionParametersAsync(session, functionName, cancellationToken).ConfigureAwait(false);
+        var (funcInputs, returnType) = await ReadFunctionParametersAsync(session, functionName, packageName, cancellationToken).ConfigureAwait(false);
         foreach (var v in funcInputs)
         {
             if (!seen.Add(v.Name)) continue;
@@ -354,24 +355,27 @@ internal static class FirebirdDebugMetadata
 
     // ── Function arguments (RDB$FUNCTION_ARGUMENTS) — the function-root layout source ─────────────────
 
-    // A standalone PSQL function's input arguments + its RETURNS base type, from ONE catalog read (D-function,
-    // "resolve once"). The return argument is the one at RDB$FUNCTIONS.RDB$RETURN_ARGUMENT; every other argument
-    // is an input. Types are base types via RDB$FIELDS (FormatType — derivation, R2), exactly as a procedure's
+    // A PSQL function's input arguments + its RETURNS base type, from ONE catalog read (D-function, "resolve
+    // once"). The return argument is the one at RDB$FUNCTIONS.RDB$RETURN_ARGUMENT; every other argument is an
+    // input. Types are base types via RDB$FIELDS (FormatType — derivation, R2), exactly as a procedure's
     // parameters (ReadProcedureParametersAsync); an input keeps its user domain for the declaration (R3) but is
-    // injected as the base type (R2). FB3+ standalone (RDB$PACKAGE_NAME IS NULL — packaged functions are a later
-    // follow-up); the debugger is FB3+ (P2 gate), so RDB$PACKAGE_NAME always exists.
+    // injected as the base type (R2). A STANDALONE function has RDB$PACKAGE_NAME IS NULL; a PACKAGE member's
+    // args are keyed by the package (Stage X / Seam D) — the SAME query/join/typing, only the package filter
+    // differs (exactly the standalone-vs-packaged parity ReadProcedureParametersAsync already has). The debugger
+    // is FB3+ (P2 gate), so RDB$PACKAGE_NAME always exists.
     private static async Task<(List<HarnessVariable> Inputs, string? ReturnBaseType)> ReadFunctionParametersAsync(
-        DebugSessionConnection session, string functionName, CancellationToken cancellationToken)
+        DebugSessionConnection session, string functionName, string? packageName, CancellationToken cancellationToken)
     {
-        const string sql =
+        string pkgFilter = packageName is null ? "IS NULL" : "= @pkg";
+        string sql =
             "SELECT fa.RDB$ARGUMENT_POSITION, fa.RDB$ARGUMENT_NAME, fa.RDB$FIELD_SOURCE, " +
             "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
             "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, f.RDB$CHARACTER_LENGTH, " +
             "       fn.RDB$RETURN_ARGUMENT " +
             "FROM RDB$FUNCTION_ARGUMENTS fa " +
-            "JOIN RDB$FUNCTIONS fn ON fn.RDB$FUNCTION_NAME = fa.RDB$FUNCTION_NAME AND fn.RDB$PACKAGE_NAME IS NULL " +
+            "JOIN RDB$FUNCTIONS fn ON fn.RDB$FUNCTION_NAME = fa.RDB$FUNCTION_NAME AND fn.RDB$PACKAGE_NAME " + pkgFilter + " " +
             "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = fa.RDB$FIELD_SOURCE " +
-            "WHERE fa.RDB$FUNCTION_NAME = @fn AND fa.RDB$PACKAGE_NAME IS NULL " +
+            "WHERE fa.RDB$FUNCTION_NAME = @fn AND fa.RDB$PACKAGE_NAME " + pkgFilter + " " +
             "ORDER BY fa.RDB$ARGUMENT_POSITION";
 
         var inputs = new List<HarnessVariable>();
@@ -384,6 +388,7 @@ internal static class FirebirdDebugMetadata
             cmd.CommandTimeout = 0;
             cmd.Transaction = session.Transaction;
             cmd.Parameters.Add(new FbParameter("@fn", functionName.ToUpperInvariant()));
+            if (packageName is not null) cmd.Parameters.Add(new FbParameter("@pkg", packageName.ToUpperInvariant()));
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {

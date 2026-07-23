@@ -154,47 +154,44 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
 
         var executor = new FirebirdDebugExecutor(session, fallback);
 
-        // D-function: a standalone FUNCTION launched as the debug ROOT. Its input args + RETURNS base type come
-        // from ONE catalog read; the RETURNS base type is exposed on RootReturnType for the launcher to pass to
-        // DebugSession (making the root a function frame — RETURN via the Expression Harness). A function has no
-        // output params / SUSPEND and is a closed scope, so Execute/EvaluateCondition/BindValues are untouched
-        // (as for a stored/package root). (isFunctionRoot is mutually exclusive with trigger + packageName.)
+        // D-function: a FUNCTION launched as the debug ROOT — STANDALONE or a PACKAGE member (Seam D). Its input
+        // args + RETURNS base type come from ONE catalog read (package-keyed iff packageName is set); the RETURNS
+        // base type is exposed on RootReturnType for the launcher to pass to DebugSession (making the root a
+        // function frame — RETURN via the Expression Harness). A function has no output params / SUSPEND and is a
+        // closed scope, so Execute/EvaluateCondition/BindValues are untouched (as for a stored/package root). The
+        // ONLY difference between a standalone and a packaged function root is packageName — it selects the
+        // package-keyed args AND (via RegisterRootAsync) the package sibling context (R5); there is no separate
+        // execution path. Checked BEFORE the procedure-package branch so a packaged function is framed as a
+        // function, not a procedure. (isFunctionRoot is mutually exclusive with trigger.)
         if (isFunctionRoot)
         {
             var fnLayout = await FirebirdDebugMetadata
-                .BuildFunctionFrameVariablesAsync(session, routineName!, body, source, cancellationToken)
+                .BuildFunctionFrameVariablesAsync(session, routineName!, body, source, cancellationToken, packageName)
                 .ConfigureAwait(false);
-            executor.Register(body, source, model, fnLayout.Variables, fnLayout.OutputParameters);
+            await executor.RegisterRootAsync(
+                body, source, model, fnLayout.Variables, fnLayout.OutputParameters, packageName, cancellationToken)
+                .ConfigureAwait(false);
             executor.RootReturnType = fnLayout.ReturnType;
             return executor;
         }
 
-        // D11 seam C: a package member launched as the debug ROOT. Built the SAME way a stepped-into package
-        // member is (seam B): package-keyed catalog params (the ONE catalog difference), and the package's
-        // routines declared as harness sub-routines (R5) so a sibling call — public OR private — resolves inside
-        // the harness like a D9 local routine (§15.12), with the package + its members carried on the frame's
-        // context so an unqualified sibling resolves. <paramref name="source"/> is the member reconstructed as a
-        // standalone CREATE PROCEDURE (the App/probe source provider does the same reconstruction). A closed
-        // scope (LexicalParent null) — Execute/EvaluateCondition/BindValues are untouched, as for a step-into
-        // package frame. (trigger + packageName are mutually exclusive.)
+        // D11 seam C: a package PROCEDURE member launched as the debug ROOT. Built the SAME way a stepped-into
+        // package member is (seam B): package-keyed catalog params (the ONE catalog difference), and the
+        // package's routines declared as harness sub-routines (R5) so a sibling call — public OR private —
+        // resolves inside the harness like a D9 local routine (§15.12), with the package + its members carried on
+        // the frame's context so an unqualified sibling resolves. <paramref name="source"/> is the member
+        // reconstructed as a standalone CREATE PROCEDURE (the App/probe source provider does the same
+        // reconstruction). A closed scope (LexicalParent null) — Execute/EvaluateCondition/BindValues are
+        // untouched. (A packaged FUNCTION member was already handled by the function branch above; trigger +
+        // packageName are mutually exclusive.)
         if (packageName is not null)
         {
             var pkgLayout = await FirebirdDebugMetadata
                 .BuildFrameVariablesAsync(session, routineName, body, source, cancellationToken, packageName)
                 .ConfigureAwait(false);
-            var pkg = await executor.PackageBodyFor(packageName, cancellationToken).ConfigureAwait(false);
-            if (pkg is not null)
-            {
-                executor.RegisterPackageMember(
-                    body, source, model, pkgLayout.Variables, pkgLayout.OutputParameters, packageName, pkg);
-            }
-            else
-            {
-                // No readable package body → register as a plain routine (sibling calls won't resolve → step
-                // over, faithful). Reaching launch without a body is not expected (the source was reconstructed
-                // from it), but never guess (§F).
-                executor.Register(body, source, model, pkgLayout.Variables, pkgLayout.OutputParameters);
-            }
+            await executor.RegisterRootAsync(
+                body, source, model, pkgLayout.Variables, pkgLayout.OutputParameters, packageName, cancellationToken)
+                .ConfigureAwait(false);
             return executor;
         }
 
@@ -235,6 +232,33 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         var subRoutines = PsqlDeclarationExtractor.Extract(body, source).SubRoutines;
         _contexts[body] = new RoutineContext(
             source, model, templates, new HashSet<string>(outputs, StringComparer.OrdinalIgnoreCase), subRoutines, trigger);
+    }
+
+    // Registers a ROOT frame's context, package-aware — the ONE registration path shared by the
+    // package-procedure root (D11 seam C) and the (standalone OR packaged) function root (Seam D), so
+    // standalone vs packaged differs ONLY by packageName, never a parallel code path. A standalone routine →
+    // Register; a package member → RegisterPackageMember (package sibling context + R5) when the package body
+    // is readable, else Register (siblings won't resolve → step over, faithful — §F; reaching launch without a
+    // body is not expected since the source was reconstructed from it, but never guess).
+    private async Task RegisterRootAsync(
+        BlockStatement body, string source, SemanticModel model,
+        IReadOnlyList<HarnessVariable> variables, IReadOnlyList<string> outputs,
+        string? packageName, CancellationToken cancellationToken)
+    {
+        if (packageName is null)
+        {
+            Register(body, source, model, variables, outputs);
+            return;
+        }
+        var pkg = await PackageBodyFor(packageName, cancellationToken).ConfigureAwait(false);
+        if (pkg is not null)
+        {
+            RegisterPackageMember(body, source, model, variables, outputs, packageName, pkg);
+        }
+        else
+        {
+            Register(body, source, model, variables, outputs);
+        }
     }
 
     // The context for the routine the given frame activates — keyed by its Body. Every step / condition /

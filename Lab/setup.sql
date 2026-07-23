@@ -765,6 +765,9 @@ AS
 BEGIN
   PROCEDURE PUB_RUN(P_N INTEGER) RETURNS (R INTEGER);
   PROCEDURE PUB_ADD(P_N INTEGER) RETURNS (R INTEGER);
+  /* Seam D: a PUBLIC package FUNCTION, debuggable as a ROOT. Calls the PRIVATE sibling PRIV_DOUBLE so a
+     package-function root exercises the package sibling context (R5), just like PUB_RUN does. */
+  FUNCTION PUB_FN(P_N INTEGER) RETURNS INTEGER;
 END^
 
 CREATE PACKAGE BODY PKG_DBG
@@ -793,6 +796,16 @@ BEGIN
     EXECUTE PROCEDURE PRIV_DOUBLE(:P_N) RETURNING_VALUES :A;   /* private sibling call */
     EXECUTE PROCEDURE PUB_ADD(:P_N)     RETURNING_VALUES :B;   /* public  sibling call */
     R = A + B;
+  END
+
+  /* Seam D — a PUBLIC package FUNCTION debugged as a ROOT: calls the PRIVATE sibling PRIV_DOUBLE (resolved via
+     the package context / R5), then RETURNs. PKG_DBG.PUB_FN(5) => 5*2 + 1 = 11. */
+  FUNCTION PUB_FN(P_N INTEGER) RETURNS INTEGER
+  AS
+    DECLARE VARIABLE V INTEGER;
+  BEGIN
+    EXECUTE PROCEDURE PRIV_DOUBLE(:P_N) RETURNING_VALUES :V;   /* private sibling call */
+    RETURN V + 1;
   END
 END^
 

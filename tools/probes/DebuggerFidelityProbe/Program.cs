@@ -161,9 +161,17 @@ try
     // constructs the DebugSession with that rootReturnType (so the root is a function frame), steps to
     // completion, and returns the RETURN value kept on FinalFrame — the value compared to the REAL SELECT FN(…).
     async Task<(object? Return, int MaxDepth, List<string> Frames)>
-        SimulateFunctionRootAsync(string function, Dictionary<string, object?> rootValues, StepKind step = StepKind.Into)
+        SimulateFunctionRootAsync(string function, Dictionary<string, object?> rootValues, StepKind step = StepKind.Into,
+                                  string? packageName = null)
     {
-        string source = await reader.FetchFunctionSourceAsync(new MetadataObject(function, MetadataObjectKind.Function));
+        // Standalone vs packaged differs ONLY by packageName (Seam D): a packaged member's source is the
+        // reconstructed CREATE FUNCTION (the SAME reader/reconstructor the App uses), and packageName threads
+        // through CreateAsync — no second simulate path.
+        string source = packageName is null
+            ? await reader.FetchFunctionSourceAsync(new MetadataObject(function, MetadataObjectKind.Function))
+            : (await reader.FetchPackageMemberSourceAsync(
+                  packageName, function, EmberTern.Core.Sql.Language.Ast.SubroutineKind.Function))
+              ?? throw new Exception($"member source unavailable: {packageName}.{function}");
         var model = SemanticModel.Build(SqlParser.Parse(source).Root);
         var body = model.Syntax.Statements.OfType<DdlStatement>().First(d => d.Body is not null).Body!;
 
@@ -172,7 +180,7 @@ try
         {
             var executor = await FirebirdDebugExecutor.CreateAsync(
                 session, function, source, body, model, fallback,
-                trigger: null, cancellationToken: default, packageName: null, isFunctionRoot: true);
+                trigger: null, cancellationToken: default, packageName: packageName, isFunctionRoot: true);
             var dbg = new DebugSession(body, executor, function, rootValues, source, model,
                 rootReturnType: executor.RootReturnType);
             dbg.Start();
@@ -1088,6 +1096,19 @@ try
     var realNull = await RealScalarAsync("SELECT FN_FULL_LABEL(NULL, 'Widget') FROM RDB$DATABASE");
     if (SameVal(fnNull.Return, realNull)) Pass("FN_FULL_LABEL (if/null branch)", $"sim '{fnNull.Return}' == real '{realNull}'");
     else Fail("FN_FULL_LABEL (if/null branch)", $"sim '{fnNull.Return}' != real '{realNull}'");
+
+    Head("38. PKG_DBG.PUB_FN(5) — a PACKAGE FUNCTION as debug ROOT; RETURN + private sibling (sim == real)");
+    var pkgFn = await SimulateFunctionRootAsync("PUB_FN",
+        new(StringComparer.OrdinalIgnoreCase) { ["P_N"] = 5 }, packageName: "PKG_DBG");
+    var realPkgFn = AsInt(await RealScalarAsync("SELECT PKG_DBG.PUB_FN(5) FROM RDB$DATABASE"));
+    if (SameVal(pkgFn.Return, realPkgFn)) Pass("PKG_DBG.PUB_FN", $"sim {pkgFn.Return} == real {realPkgFn}");
+    else Fail("PKG_DBG.PUB_FN", $"sim {pkgFn.Return} != real {realPkgFn}");
+    // Step INTO reaches the private sibling PRIV_DOUBLE (resolved via the package context / R5) — the same
+    // sibling machinery D11 proved, now under a FUNCTION root: depth 2, frame chain PUB_FN → PRIV_DOUBLE.
+    if (pkgFn.MaxDepth == 2) Pass("depth == 2 (stepped into the private sibling PRIV_DOUBLE)");
+    else Fail("PKG_DBG.PUB_FN depth", $"expected 2, got {pkgFn.MaxDepth}");
+    if (pkgFn.Frames.Contains("PRIV_DOUBLE")) Pass("frame chain", string.Join(" → ", pkgFn.Frames));
+    else Fail("PKG_DBG.PUB_FN frames", string.Join(" → ", pkgFn.Frames));
 }
 catch (Exception ex)
 {

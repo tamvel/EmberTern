@@ -454,10 +454,14 @@ public sealed class FirebirdDdlReader
     /// D11 seam C) so the debugger can launch it as a ROOT frame with the SAME machinery a stored routine uses:
     /// reads the raw <c>RDB$PACKAGE_BODY_SOURCE</c> blob and slices out the member via the one shared reconstructor
     /// (<see cref="EmberTern.Core.Sql.Language.SqlParser.ReconstructPackageMemberSource(string?, string, EmberTern.Core.Sql.Language.Ast.SubroutineKind)"/>).
-    /// Returns null when the package has no readable body or has no such procedure member. Only PROCEDURE members
-    /// are launchable (a package function-as-root is out of scope, §F).</summary>
+    /// Returns null when the package has no readable body or has no such member of that kind. Both PROCEDURE and
+    /// FUNCTION members are launchable (Seam D added the function root); <paramref name="kind"/> selects which,
+    /// defaulting to PROCEDURE for the D11 callers. The reconstruction itself is kind-generic — a FUNCTION member
+    /// slice includes its <c>RETURNS</c>, so it reconstructs as a valid standalone <c>CREATE FUNCTION</c>.</summary>
     public async Task<string?> FetchPackageMemberSourceAsync(
-        string packageName, string memberName, CancellationToken cancellationToken = default)
+        string packageName, string memberName,
+        EmberTern.Core.Sql.Language.Ast.SubroutineKind kind = EmberTern.Core.Sql.Language.Ast.SubroutineKind.Procedure,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageName);
         ArgumentException.ThrowIfNullOrWhiteSpace(memberName);
@@ -471,8 +475,7 @@ public sealed class FirebirdDdlReader
         {
             var body = await ReadPackageBodySourceAsync(connection, tx, packageName, fallback, cancellationToken)
                 .ConfigureAwait(false);
-            return EmberTern.Core.Sql.Language.SqlParser.ReconstructPackageMemberSource(
-                body, memberName, EmberTern.Core.Sql.Language.Ast.SubroutineKind.Procedure);
+            return EmberTern.Core.Sql.Language.SqlParser.ReconstructPackageMemberSource(body, memberName, kind);
         }
         catch (FbException ex)
         {

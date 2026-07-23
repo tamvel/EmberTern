@@ -4885,7 +4885,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         try
         {
-            return await _ddlReader.FetchPackageMemberSourceAsync(packageName, memberName, cancellationToken).ConfigureAwait(true);
+            return await _ddlReader.FetchPackageMemberSourceAsync(packageName, memberName, cancellationToken: cancellationToken).ConfigureAwait(true);
         }
         catch (MetadataReadException)
         {
