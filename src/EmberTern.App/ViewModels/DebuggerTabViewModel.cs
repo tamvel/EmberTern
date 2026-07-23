@@ -592,10 +592,12 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         _model = SemanticModel.Build(SqlParser.Parse(source).Root);
         var ddl = _model.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);
         _body = ddl?.Body;
-        // D-function: a standalone function launched as the debug root. The launcher (via DebugLaunchSpec.IsFunction)
-        // then builds a function-root executor + a function root frame. A packaged member is not a function root
-        // here (packaged functions as root are a later follow-up), so require no package context.
-        _isFunction = ddl?.ObjectKind == DdlObjectKind.Function && _packageName is null;
+        // D-function: a function launched as the debug root — STANDALONE or a PACKAGE member (Seam D). The
+        // launcher (via DebugLaunchSpec.IsFunction) builds a function root frame; when a package context is also
+        // present the executor keys it by package (D1's combined path). Detected purely from the parsed source
+        // (a packaged function member's source is reconstructed as CREATE FUNCTION), so packageName is NOT part
+        // of the condition — the ONLY difference standalone↔packaged stays the presence of _packageName.
+        _isFunction = ddl?.ObjectKind == DdlObjectKind.Function;
         _stepPoints = _body is null
             ? Array.Empty<IExecutableStatement>()
             : _body.DescendantNodesAndSelf().OfType<IExecutableStatement>().ToList();

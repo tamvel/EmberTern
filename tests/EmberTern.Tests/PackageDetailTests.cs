@@ -322,33 +322,39 @@ public class PackageDetailTests
 
     // ─── Debug member entry point (D11 seam C) ─────────────────────────────
 
-    [Fact] // a PROCEDURE member raises DebugMemberRequested with its name
-    public void RequestDebugMember_Procedure_RaisesWithName()
+    [Fact] // a PROCEDURE member raises DebugMemberRequested with the member (name + kind)
+    public void RequestDebugMember_Procedure_RaisesWithMember()
     {
         var vm = new PackageDetailTabViewModel("PKG_DBG");
-        string? raised = null;
-        vm.DebugMemberRequested += name => raised = name;
+        PackageMember? raised = null;
+        vm.DebugMemberRequested += member => raised = member;
 
         vm.RequestDebugMember(new PackageMember("PUB_RUN", PackageMemberKind.Procedure));
 
-        Assert.Equal("PUB_RUN", raised);
+        Assert.NotNull(raised);
+        Assert.Equal("PUB_RUN", raised!.Name);
+        Assert.Equal(PackageMemberKind.Procedure, raised.Kind);
     }
 
-    [Fact] // a FUNCTION member is not launchable as a debug root (§F) → no-op
-    public void RequestDebugMember_Function_IsNoOp()
+    [Fact] // Seam D: a FUNCTION member IS launchable as a debug root — it raises with the member; null is a no-op
+    public void RequestDebugMember_Function_RaisesWithMember()
     {
         var vm = new PackageDetailTabViewModel("PKG_DBG");
-        var raised = false;
-        vm.DebugMemberRequested += _ => raised = true;
+        PackageMember? raised = null;
+        vm.DebugMemberRequested += member => raised = member;
 
         vm.RequestDebugMember(new PackageMember("ORDER_TOTAL", PackageMemberKind.Function));
-        vm.RequestDebugMember(null);
+        Assert.NotNull(raised);
+        Assert.Equal("ORDER_TOTAL", raised!.Name);
+        Assert.Equal(PackageMemberKind.Function, raised.Kind);
 
-        Assert.False(raised);
+        raised = null;
+        vm.RequestDebugMember(null); // null → no-op
+        Assert.Null(raised);
     }
 
-    [Fact] // the context-menu visibility gate: only procedure member nodes offer Debug
-    public void MemberNode_IsProcedure_GatesDebug()
+    [Fact] // the context-menu visibility gates: a procedure node offers "Debug procedure…", a function node "Debug function…"
+    public void MemberNode_KindGatesDebug()
     {
         var vm = new PackageDetailTabViewModel("PKG_DBG");
         vm.SetMembers(new[]
@@ -360,12 +366,14 @@ public class PackageDetailTests
         var func = vm.MemberGroups.Single(g => g.Header.StartsWith("Functions", StringComparison.Ordinal)).Children.Single();
         var proc = vm.MemberGroups.Single(g => g.Header.StartsWith("Procedures", StringComparison.Ordinal)).Children.Single();
         Assert.False(func.IsProcedure);
+        Assert.True(func.IsFunction);   // Seam D — the "Debug function…" menu item gate
         Assert.True(proc.IsProcedure);
+        Assert.False(proc.IsFunction);
     }
 
     // ─── Members-tab Debug button (D15.3 Seam E) ───────────────────────────
 
-    [Fact] // enabled + its tooltip reflect the selection: procedure = ready, function = later, group/none = pick one
+    [Fact] // enabled + its tooltip reflect the selection: procedure/function = ready, group/none = pick one
     public void DebugButton_EnablementAndTooltip_FollowSelection()
     {
         var vm = new PackageDetailTabViewModel("PKG_DBG");
@@ -388,11 +396,11 @@ public class PackageDetailTests
         Assert.False(vm.CanDebugSelectedMember);
         Assert.Equal(EmberTern.App.UiStrings.PackageDebugMemberTooltipNoSelection, vm.DebugMemberTooltip);
 
-        // a FUNCTION member → disabled, "later milestone" tooltip (Function-as-Root)
+        // a FUNCTION member → enabled, "ready" tooltip (Seam D — packaged function as a debug root)
         vm.SelectedMemberNode = func;
-        Assert.False(vm.CanDebugSelectedMember);
-        Assert.False(vm.DebugSelectedMemberCommand.CanExecute(null));
-        Assert.Equal(EmberTern.App.UiStrings.PackageDebugMemberTooltipFunctionLater, vm.DebugMemberTooltip);
+        Assert.True(vm.CanDebugSelectedMember);
+        Assert.True(vm.DebugSelectedMemberCommand.CanExecute(null));
+        Assert.Equal(EmberTern.App.UiStrings.PackageDebugMemberTooltipReady, vm.DebugMemberTooltip);
 
         // a PROCEDURE member → enabled, "ready" tooltip
         vm.SelectedMemberNode = proc;
@@ -407,13 +415,13 @@ public class PackageDetailTests
         var vm = new PackageDetailTabViewModel("PKG_DBG");
         vm.SetMembers(new[] { new PackageMember("PUB_RUN", PackageMemberKind.Procedure) });
         var proc = vm.MemberGroups.Single().Children.Single();
-        string? raised = null;
-        vm.DebugMemberRequested += name => raised = name;
+        PackageMember? raised = null;
+        vm.DebugMemberRequested += member => raised = member;
 
         vm.SelectedMemberNode = proc;
         vm.DebugSelectedMemberCommand.Execute(null);
 
-        Assert.Equal("PUB_RUN", raised);
+        Assert.Equal("PUB_RUN", raised!.Name);
     }
 
     // ─── TryParsePackageName (New flow reopen-by-name) ─────────────────────

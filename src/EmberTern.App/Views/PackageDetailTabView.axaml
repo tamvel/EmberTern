@@ -81,14 +81,17 @@
                 <Border HorizontalAlignment="Stretch"
                         Background="Transparent"
                         DoubleTapped="OnMemberNodeDoubleTapped">
-                  <!-- Debug entry point (Stage X / D11 seam C) — launch a package PROCEDURE member as a debug
-                       root. Reuses the sidebar's "Debug procedure…" label + the ONE launch path; visible only
-                       for procedure members (a package function-as-root is out of scope). -->
+                  <!-- Debug entry point (Stage X / D11 seam C — procedures; Seam D — functions) — launch a
+                       package member as a debug root. Reuses the sidebar's labels + the ONE launch path
+                       (OnMemberDebugClick → RequestDebugMember, kind-aware); one item per debuggable kind. -->
                   <Border.ContextMenu>
                     <ContextMenu>
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
                                 Click="OnMemberDebugClick"
                                 IsVisible="{Binding IsProcedure}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
+                                Click="OnMemberDebugClick"
+                                IsVisible="{Binding IsFunction}" />
                     </ContextMenu>
                   </Border.ContextMenu>
                   <StackPanel Orientation="Horizontal" Spacing="5">

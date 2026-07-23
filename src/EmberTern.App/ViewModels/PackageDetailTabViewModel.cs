@@ -147,18 +147,19 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
     /// caret + selection in the matching editor and brings it into view.</summary>
     public event Action<PackageMemberLocation>? NavigateToMemberRequested;
 
-    /// <summary>Raised when the user picks "Debug procedure…" on a package PROCEDURE member (Stage X / D11
-    /// seam C) — carries the member name; the owner launches it as a debug ROOT via the ONE launch path
-    /// (<c>MainWindowViewModel.OpenDebuggerForPackageMember</c>). Mirrors the sidebar's
-    /// <c>DebugProcedureRequested</c>. This VM only signals intent — the debugger architecture is untouched.</summary>
-    public event Action<string>? DebugMemberRequested;
+    /// <summary>Raised when the user debugs a package member (Stage X / D11 seam C — procedures; Seam D —
+    /// functions) — carries the whole <see cref="PackageMember"/> (name + kind) so the owner reconstructs it as
+    /// the right CREATE PROCEDURE/FUNCTION and launches it as a debug ROOT via the ONE launch path
+    /// (<c>MainWindowViewModel.OpenDebuggerForPackageMember</c>). This VM only signals intent — the debugger
+    /// architecture is untouched.</summary>
+    public event Action<PackageMember>? DebugMemberRequested;
 
-    /// <summary>Signals a debug request for a package member. Only PROCEDURE members are debuggable (a package
-    /// function-as-root is out of scope, §F) — a non-procedure / null member is a no-op.</summary>
+    /// <summary>Signals a debug request for a package member. PROCEDURE and FUNCTION members are debuggable
+    /// (both launch as a ROOT — the packaged-function root, Seam D); a null member is a no-op.</summary>
     public void RequestDebugMember(PackageMember? member)
     {
-        if (member is null || member.Kind != PackageMemberKind.Procedure) return;
-        DebugMemberRequested?.Invoke(member.Name);
+        if (member is null || member.Kind is not (PackageMemberKind.Procedure or PackageMemberKind.Function)) return;
+        DebugMemberRequested?.Invoke(member);
     }
 
     // ── Members-tab Debug button (D15.3 Seam E) ─────────────────────────────────────────────────────
@@ -176,17 +177,17 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
     [NotifyCanExecuteChangedFor(nameof(DebugSelectedMemberCommand))]
     private object? _selectedMemberNode;
 
-    /// <summary>True when the selected member is a currently-debuggable kind. Today that is a PROCEDURE only;
-    /// widening this to package FUNCTIONS is the sole change the Function-as-Root milestone needs here.</summary>
+    /// <summary>True when the selected member is a debuggable kind — a PROCEDURE (D11) or a FUNCTION (Seam D),
+    /// both launched as a ROOT.</summary>
     public bool CanDebugSelectedMember
-        => SelectedMemberNode is PackageMemberItemNode { Member.Kind: PackageMemberKind.Procedure };
+        => SelectedMemberNode is PackageMemberItemNode { Member.Kind: PackageMemberKind.Procedure or PackageMemberKind.Function };
 
     /// <summary>The contextual reason shown on the (possibly disabled) Debug button, so it explains its own
-    /// availability: ready / a package function (later milestone) / not debuggable / nothing selected.</summary>
+    /// availability: ready (procedure or function) / not debuggable / nothing selected.</summary>
     public string DebugMemberTooltip => SelectedMemberNode switch
     {
-        PackageMemberItemNode { Member.Kind: PackageMemberKind.Procedure } => UiStrings.PackageDebugMemberTooltipReady,
-        PackageMemberItemNode { Member.Kind: PackageMemberKind.Function } => UiStrings.PackageDebugMemberTooltipFunctionLater,
+        PackageMemberItemNode { Member.Kind: PackageMemberKind.Procedure or PackageMemberKind.Function }
+            => UiStrings.PackageDebugMemberTooltipReady,
         PackageMemberItemNode => UiStrings.PackageDebugMemberTooltipNotDebuggable,
         _ => UiStrings.PackageDebugMemberTooltipNoSelection,
     };
@@ -645,7 +646,9 @@ public sealed class PackageMemberItemNode
     public string DisplayName => Member.Name;
     public string IconGeometryKey { get; init; } = string.Empty;
     public string IconResourceKey { get; init; } = string.Empty;
-    /// <summary>True for a PROCEDURE member — gates the "Debug procedure…" context-menu item (D11 seam C).
-    /// A package function is not launchable as a debug root (§F).</summary>
+    /// <summary>True for a PROCEDURE member — gates the "Debug procedure…" context-menu item (D11 seam C).</summary>
     public bool IsProcedure => Member?.Kind == PackageMemberKind.Procedure;
+    /// <summary>True for a FUNCTION member — gates the "Debug function…" context-menu item (Seam D — a packaged
+    /// function launches as a debug root).</summary>
+    public bool IsFunction => Member?.Kind == PackageMemberKind.Function;
 }

@@ -3827,7 +3827,8 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.DeleteRequested += OnPackageDeleteRequested;
         detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
         // D11 seam C — "Debug procedure…" on a package member launches it as a debug root via the one path.
-        detail.DebugMemberRequested += memberName => OpenDebuggerForPackageMember(detail.PackageName, memberName);
+        detail.DebugMemberRequested += member => OpenDebuggerForPackageMember(
+            detail.PackageName, member.Name, member.Kind == PackageMemberKind.Function);
         return detail;
     }
 
@@ -4843,14 +4844,14 @@ public partial class MainWindowViewModel : ViewModelBase
         _ = debugger.PrepareAsync();
     }
 
-    // Debugger launch for a PACKAGE PROCEDURE member (Stage X / D11 seam C) — the Package editor's Members tab
-    // "Debug procedure…" entry point. Reuses the ONE launch path (OpenDebuggerForObject's shape): the only
-    // differences are that the source provider reconstructs the member as a standalone CREATE PROCEDURE and the
-    // package name is threaded into the launch so the executor builds a package root frame (sibling-call
-    // resolution + package-keyed catalog params). Only procedure members are launchable — a package
-    // function-as-root is out of scope (§F). The tab title is the qualified PKG.MEMBER name; the frame name is
-    // the member name (matching how a stepped-into package member is named, seam B).
-    internal void OpenDebuggerForPackageMember(string packageName, string memberName)
+    // Debugger launch for a PACKAGE member (Stage X / D11 seam C — procedures; Seam D — functions) — the Package
+    // editor's Members-tab Debug entry point. Reuses the ONE launch path (OpenDebuggerForObject's shape): the
+    // source provider reconstructs the member as a standalone CREATE PROCEDURE/FUNCTION (by kind) and the package
+    // name is threaded into the launch so the executor builds a package root frame (sibling-call resolution +
+    // package-keyed catalog params). A FUNCTION member reconstructs as CREATE FUNCTION → the VM sets IsFunction →
+    // the launcher builds a packaged function root (D1). The tab title is the qualified PKG.MEMBER name; the
+    // frame name is the member name (matching how a stepped-into package member is named, seam B).
+    internal void OpenDebuggerForPackageMember(string packageName, string memberName, bool isFunction)
     {
         if (string.IsNullOrWhiteSpace(packageName) || string.IsNullOrWhiteSpace(memberName)) return;
         if (!_service.IsConnected)
@@ -4862,7 +4863,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var launcher = new EmberTern.App.Debugging.FirebirdDebugSessionLauncher(_service);
         var debugger = new DebuggerTabViewModel(
             memberName,
-            ct => FetchPackageMemberSourceAsync(packageName, memberName, ct),
+            ct => FetchPackageMemberSourceAsync(packageName, memberName, isFunction, ct),
             launcher,
             _parameterHistory,
             _service.ActiveProfile?.Id,
@@ -4877,15 +4878,19 @@ public partial class MainWindowViewModel : ViewModelBase
         _ = debugger.PrepareAsync();
     }
 
-    // Source provider for a package member launch: the member reconstructed as a standalone CREATE PROCEDURE
-    // (the same reconstruction the step-into path uses, via the one shared SqlParser reconstructor). Returns null
-    // on a read failure / missing member → the VM reports "source unavailable".
+    // Source provider for a package member launch: the member reconstructed as a standalone CREATE
+    // PROCEDURE/FUNCTION by kind (the same reconstruction the step-into path uses, via the one shared SqlParser
+    // reconstructor). A FUNCTION reconstructs as CREATE FUNCTION so the VM detects IsFunction. Returns null on a
+    // read failure / missing member → the VM reports "source unavailable".
     private async Task<string?> FetchPackageMemberSourceAsync(
-        string packageName, string memberName, CancellationToken cancellationToken)
+        string packageName, string memberName, bool isFunction, CancellationToken cancellationToken)
     {
+        var kind = isFunction
+            ? EmberTern.Core.Sql.Language.Ast.SubroutineKind.Function
+            : EmberTern.Core.Sql.Language.Ast.SubroutineKind.Procedure;
         try
         {
-            return await _ddlReader.FetchPackageMemberSourceAsync(packageName, memberName, cancellationToken: cancellationToken).ConfigureAwait(true);
+            return await _ddlReader.FetchPackageMemberSourceAsync(packageName, memberName, kind, cancellationToken).ConfigureAwait(true);
         }
         catch (MetadataReadException)
         {

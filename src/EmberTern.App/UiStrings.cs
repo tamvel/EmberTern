@@ -782,11 +782,9 @@ internal static class UiStrings
     public const string PackageDetailMembersEmpty = "This package has no members.";
     // Members Debug toolbar button (D15.3 Seam E) — an icon-only editor-toolbar action; the tooltip explains
     // availability (the button carries no text label, so there is no button-caption string).
-    public const string PackageDebugMemberTooltipReady = "Debug the selected procedure";
-    public const string PackageDebugMemberTooltipFunctionLater =
-        "Debugging package functions will be supported in a later update.";
+    public const string PackageDebugMemberTooltipReady = "Debug the selected member";
     public const string PackageDebugMemberTooltipNotDebuggable = "The selected member cannot be debugged.";
-    public const string PackageDebugMemberTooltipNoSelection = "Select a procedure in the list to debug it.";
+    public const string PackageDebugMemberTooltipNoSelection = "Select a procedure or function in the list to debug it.";
     public const string PackageDetailLoadingHint = "Loading package…";
     public const string PackageDetailDependsOnHeader = "Depends on";
     public const string PackageDetailDependedOnByHeader = "Used by";
