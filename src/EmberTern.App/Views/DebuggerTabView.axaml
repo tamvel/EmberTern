@@ -658,10 +658,14 @@
                             Command="{Binding EvaluateImmediateCommand}" />
                   </Grid>
 
-                  <TextBlock Grid.Row="1" Margin="10,4"
-                             Text="{x:Static app:UiStrings.DebuggerImmediateEmpty}"
-                             Classes="subtle" FontSize="11" TextWrapping="Wrap"
-                             IsVisible="{Binding !HasLatestEvaluation}" />
+                  <StackPanel Grid.Row="1" Margin="10,4" Spacing="4"
+                              IsVisible="{Binding !HasLatestEvaluation}">
+                    <TextBlock Text="{x:Static app:UiStrings.DebuggerImmediateEmpty}"
+                               Classes="subtle" FontSize="11" TextWrapping="Wrap" />
+                    <TextBlock Text="{x:Static app:UiStrings.DebuggerExpressionExamples}"
+                               Classes="subtle" FontSize="10" TextWrapping="Wrap"
+                               FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
+                  </StackPanel>
                   <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                                 IsVisible="{Binding HasLatestEvaluation}">
                     <StackPanel Margin="10,4" Spacing="2">
@@ -705,10 +709,14 @@
                             Command="{Binding AddWatchCommand}" />
                   </Grid>
 
-                  <TextBlock Grid.Row="1" Margin="10,6"
-                             Text="{x:Static app:UiStrings.DebuggerWatchesEmpty}"
-                             Classes="subtle" FontSize="11" TextWrapping="Wrap"
-                             IsVisible="{Binding !HasWatches}" />
+                  <StackPanel Grid.Row="1" Margin="10,6" Spacing="4"
+                              IsVisible="{Binding !HasWatches}">
+                    <TextBlock Text="{x:Static app:UiStrings.DebuggerWatchesEmpty}"
+                               Classes="subtle" FontSize="11" TextWrapping="Wrap" />
+                    <TextBlock Text="{x:Static app:UiStrings.DebuggerExpressionExamples}"
+                               Classes="subtle" FontSize="10" TextWrapping="Wrap"
+                               FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
+                  </StackPanel>
                   <ListBox Grid.Row="1" ItemsSource="{Binding Watches}"
                            Background="Transparent" BorderThickness="0"
                            IsVisible="{Binding HasWatches}">

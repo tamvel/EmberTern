@@ -1851,7 +1851,7 @@ internal static class UiStrings
     public const string DebuggerBreakpointsLineHeader = "Line breakpoints";
     public const string DebuggerBreakpointsDataHeader = "Data breakpoints (break on change)";
     public const string DebuggerBreakpointLineFormat = "Line {0}";
-    public const string DebuggerBreakpointConditionWatermark = "condition (e.g. IDX = 3)";
+    public const string DebuggerBreakpointConditionWatermark = "condition, e.g. IDX = 3";
     public const string DebuggerBreakpointWhenLabel = "when";
     public const string DebuggerBreakpointHitsLabel = "hits";
     public const string DebuggerBreakpointRemoveTooltip = "Remove breakpoint";
@@ -1886,7 +1886,11 @@ internal static class UiStrings
     public const string DebuggerCallStackPeekHeaderFormat = "{0} — line {1}";
     // Expression evaluation — Evaluate / Immediate / Executed SQL (D5, spec §9.5 / §10.3).
     public const string DebuggerImmediateHeader = "Immediate / Executed SQL";
-    public const string DebuggerImmediateWatermark = "Evaluate an expression against the current frame…";
+    public const string DebuggerImmediateWatermark = "Evaluate an expression, e.g. v_counter * 2";
+    // A short line of valid-expression examples shown under the Immediate/Watches empty-state (D15.4 Seam A —
+    // hints). Kept concise and separated by "·"; these are illustrative shapes, not references to real vars.
+    public const string DebuggerExpressionExamples =
+        "Examples: v_counter * 2 · v_status = 'OK' · char_length(v_text)";
     public const string DebuggerImmediateAsStatement = "as statement";
     public const string DebuggerImmediateAsStatementTooltip =
         "Run the text as a PSQL statement against the live frame (may assign variables). Off: evaluate it as an expression.";
@@ -1900,7 +1904,7 @@ internal static class UiStrings
     public const string DebuggerEvalErrorUnknown = "evaluation failed";
     // Watches panel (D5 seam b, §9.5).
     public const string DebuggerWatchesHeader = "Watches";
-    public const string DebuggerWatchWatermark = "Watch an expression…";
+    public const string DebuggerWatchWatermark = "Watch an expression, e.g. v_status = 'OK'";
     public const string DebuggerWatchAddButton = "Add";
     public const string DebuggerWatchAddTooltip = "Add a watch (re-evaluated after every step)";
     public const string DebuggerWatchRemoveTooltip = "Remove watch";
