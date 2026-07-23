@@ -442,6 +442,21 @@ noted.
   currently-executing instruction — a separate, much larger feature (own architecture + spikes), out of scope
   now. Guide: d15 doc §8. **D15 is now effectively complete** (D15.1–D15.5 done, D15.6 dropped, D15.7 audit is
   background).
+  **⭐ CURRENT WORK — Debugging standalone PSQL FUNCTIONS as a debug ROOT (the functional gap; NOT D15).**
+  Distinct from D9 (which already makes a LOCAL `DECLARE FUNCTION` a faithful step-into/over frame *within* a
+  routine) — this is a function as the **entry point**. Standalone-first (A/B/C1/C2 ratified); packaged
+  functions as root = a later follow-up. **Seam A (Core function root frame) — DONE (`765272c`; pure Core,
+  additive).** `DebugSession` gained optional `rootReturnType`; when non-null, `Start()` pushes the root as a
+  **function frame** so a root `RETURN <expr>` is computed via the Expression Harness (`EvaluateReturn` — the
+  same path D9 proved) and its value is kept on `FinalFrame` (no caller to deliver to). `Frame.IsFunctionFrame`
+  widened **additively** to `ReturnContinuation is not null || ReturnType is not null` (local function still
+  qualifies via its continuation; root function via its return type; only one usage — the RETURN gate — and
+  `ApplyReturnContinuation` independently guards on the continuation, so a root's value stays on the frame with
+  no delivery). Procedures/triggers/package-proc/anonymous-block roots pass null → not function frames →
+  byte-identical. +2 `DebugEngineTests`. **Next: Seam B** — Firebird function-root layout (input params +
+  `RETURNS` base type, reuse D9 AST-derivation) + live-fidelity probe (function as root, sim==real); then
+  **C1** App launch wiring (`DdlObjectKind.Function` → thread return type), **C2** entry points ("Debug
+  function…" sidebar/editor) + return-value UI surface (UX proposal to be ratified before C2 impl).
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);
