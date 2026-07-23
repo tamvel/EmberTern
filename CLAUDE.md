@@ -453,10 +453,23 @@ noted.
   qualifies via its continuation; root function via its return type; only one usage — the RETURN gate — and
   `ApplyReturnContinuation` independently guards on the continuation, so a root's value stays on the frame with
   no delivery). Procedures/triggers/package-proc/anonymous-block roots pass null → not function frames →
-  byte-identical. +2 `DebugEngineTests`. **Next: Seam B** — Firebird function-root layout (input params +
-  `RETURNS` base type, reuse D9 AST-derivation) + live-fidelity probe (function as root, sim==real); then
-  **C1** App launch wiring (`DdlObjectKind.Function` → thread return type), **C2** entry points ("Debug
-  function…" sidebar/editor) + return-value UI surface (UX proposal to be ratified before C2 impl).
+  byte-identical. +2 `DebugEngineTests`. **Seam B (Firebird function-root layout + live fidelity) — DONE
+  (`618dc13`).** "Resolve once, pass through" (ratified): the RETURNS **base type** is resolved ONCE in the
+  Firebird layer during the SAME `RDB$FUNCTION_ARGUMENTS` read that builds the function's input params, then
+  threaded — no re-derivation. `FirebirdDebugMetadata.BuildFunctionFrameVariablesAsync` +
+  `ReadFunctionParametersAsync` (return arg = `RDB$FUNCTIONS.RDB$RETURN_ARGUMENT`; inputs base-typed via
+  `RDB$FIELDS`/`FormatType` R2, domain kept for the declaration R3 — mirrors `ReadProcedureParametersAsync`; no
+  outputs/SUSPEND; FB3+ standalone). `FirebirdDebugExecutor.CreateAsync` gained `isFunctionRoot` → builds the
+  function layout, registers the closed-scope root context, exposes the resolved type on new `RootReturnType`
+  (the launcher will pass it to `DebugSession(rootReturnType:)` — C1); a function is a closed scope so
+  Execute/EvaluateCondition/BindValues untouched, and `EvaluateReturn` (D9) already computes RETURN via the
+  Expression Harness typed as `frame.ReturnType`. **Live fidelity PROVEN** (`DebuggerFidelityProbe` +3, reusing
+  lab `FN_ADD_TAX`/`FN_FULL_LABEL` — no lab change): `FN_ADD_TAX(100,20)` as ROOT → sim 120==real 120, depth 1;
+  `FN_FULL_LABEL` else → `'ABC - Widget'`; if/null branch → `'Widget'`; all 34 prior cases pass → ALL PASS.
+  Build 0/0; full suite 5138 green (two partitions #94/#226); smoke clean. **Next: C1** App launch wiring
+  (VM detects `DdlObjectKind.Function` → spec `IsFunction` flag → launcher passes `isFunctionRoot` +
+  `executor.RootReturnType` → `DebugSession`), then **C2** entry points ("Debug function…" sidebar/editor) +
+  return-value UI surface (UX proposal to be ratified before C2 impl).
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);
