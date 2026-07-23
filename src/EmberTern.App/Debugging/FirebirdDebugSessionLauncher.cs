@@ -36,12 +36,15 @@ internal sealed class FirebirdDebugSessionLauncher : IDebugSessionLauncher
             // stepped-into callee's source (D8) — the same resolution the metadata readers use.
             var fallback = EmberTern.Core.Connections.CharsetCatalog.Resolve(_service.ActiveProfile?.Charset);
             var executor = await FirebirdDebugExecutor
-                .CreateAsync(connection, spec.RoutineName, spec.Source, spec.Body, spec.Model, fallback, spec.Trigger, cancellationToken, spec.PackageName)
+                .CreateAsync(connection, spec.RoutineName, spec.Source, spec.Body, spec.Model, fallback, spec.Trigger, cancellationToken, spec.PackageName, spec.IsFunction)
                 .ConfigureAwait(false);
 
+            // D-function: the executor resolved the RETURNS base type ONCE (isFunctionRoot); passing it here
+            // makes the root a function frame (RETURN via the Expression Harness). Null for every non-function
+            // root, so the session is byte-identical to before.
             var session = new DebugSession(
                 spec.Body, executor, spec.RoutineName, spec.RootValues, spec.Source, spec.Model,
-                spec.Breakpoints, spec.DataBreakpoints);
+                spec.Breakpoints, spec.DataBreakpoints, executor.RootReturnType);
             session.BreakOnException = spec.BreakOnException; // in force from the first resume
             session.Start(); // pushes the root frame (SAVEPOINT) + pauses at the first step point (breakpoint-aware)
 

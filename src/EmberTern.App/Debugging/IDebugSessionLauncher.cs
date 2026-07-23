@@ -53,7 +53,13 @@ internal sealed record DebugLaunchSpec(
     // session's toggle so it is in force from the first resume.
     BreakpointSet? Breakpoints = null,
     DataBreakpointSet? DataBreakpoints = null,
-    bool BreakOnException = false);
+    bool BreakOnException = false,
+    // True when the root routine is a standalone FUNCTION launched as the debug root (D-function): the launcher
+    // builds a function-root executor (isFunctionRoot) and passes the executor's resolved RETURNS base type to
+    // the DebugSession so the root is a function frame (RETURN via the Expression Harness). Resolved ONCE in the
+    // VM from DdlObjectKind.Function; the return TYPE itself is resolved once in the Firebird layer and threaded
+    // (resolve once, pass through). False for a procedure / trigger / package member.
+    bool IsFunction = false);
 
 /// <summary>A live, started debug session and its teardown. Disposing rolls back + closes the session's
 /// attachment (best-effort, idempotent). The <see cref="Session"/> is already <see cref="DebugSession.Start"/>ed

@@ -75,6 +75,9 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     private BlockStatement? _body;
     private SemanticModel? _model;
     private IReadOnlyList<IExecutableStatement> _stepPoints = Array.Empty<IExecutableStatement>();
+    // True when the launched routine is a standalone FUNCTION (D-function) — threaded to DebugLaunchSpec.IsFunction
+    // so the launcher builds a function-root executor + a function root frame. Resolved once in PrepareAsync.
+    private bool _isFunction;
 
     // The live run (null before launch / after stop). The session is already Started when set.
     private DebugRunHandle? _run;
@@ -587,6 +590,10 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         _model = SemanticModel.Build(SqlParser.Parse(source).Root);
         var ddl = _model.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);
         _body = ddl?.Body;
+        // D-function: a standalone function launched as the debug root. The launcher (via DebugLaunchSpec.IsFunction)
+        // then builds a function-root executor + a function root frame. A packaged member is not a function root
+        // here (packaged functions as root are a later follow-up), so require no package context.
+        _isFunction = ddl?.ObjectKind == DdlObjectKind.Function && _packageName is null;
         _stepPoints = _body is null
             ? Array.Empty<IExecutableStatement>()
             : _body.DescendantNodesAndSelf().OfType<IExecutableStatement>().ToList();
@@ -677,7 +684,8 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             .ToList();
 
         Parameters = new ExecuteProcedureDialogViewModel(
-            inputs, RoutineName, _connectionId, objectKind: "Procedure", historyStore: _historyStore);
+            inputs, RoutineName, _connectionId,
+            objectKind: _isFunction ? "Function" : "Procedure", historyStore: _historyStore);
     }
 
     private void BuildPreflight(bool hasStepPoints)
@@ -732,7 +740,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         // edits the very objects the engine consults (no mirroring). BreakOnException seeds the session toggle.
         var spec = new DebugLaunchSpec(
             _source, _body, _model, RoutineName, rootValues, Isolation, trigger, _packageName,
-            _breakpoints, _dataBreakpoints, BreakOnException);
+            _breakpoints, _dataBreakpoints, BreakOnException, IsFunction: _isFunction);
 
         ClearExecutedSql();  // a fresh session starts a fresh audit log
         ClearSuspendRows();  // …and a fresh (empty) result set

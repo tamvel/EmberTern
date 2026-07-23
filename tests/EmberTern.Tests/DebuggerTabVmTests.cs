@@ -143,6 +143,42 @@ public class DebuggerTabVmTests
 
     private static int Off(string sub) => Sql.IndexOf(sub, StringComparison.Ordinal);
 
+    // ── D-function: launching a standalone FUNCTION as the debug root (Seam C1 — App launch wiring) ──
+
+    private const string FunctionSql = """
+        create function fn_test (a integer) returns integer as
+        declare v integer;
+        begin
+          v = a + 1;
+          return v;
+        end
+        """;
+
+    [Fact]
+    public async Task Launch_Function_SetsIsFunctionOnSpec()
+    {
+        // C1: the VM detects DdlObjectKind.Function and threads it to DebugLaunchSpec.IsFunction, so the
+        // launcher builds a function-root executor + function root frame (the Firebird side, Seam B).
+        var vm = Vm(FunctionSql, new FakeExecutor(), out var launcher);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        Assert.NotNull(launcher.LastSpec);
+        Assert.True(launcher.LastSpec!.IsFunction);
+    }
+
+    [Fact]
+    public async Task Launch_Procedure_SpecIsNotFunction()
+    {
+        // A procedure root must NOT be flagged as a function (additive — every existing launch unchanged).
+        var vm = Vm(Sql, new FakeExecutor(), out var launcher);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        Assert.NotNull(launcher.LastSpec);
+        Assert.False(launcher.LastSpec!.IsFunction);
+    }
+
     // ── Preparation ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
