@@ -434,6 +434,13 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     public int? CurrentStart { get; private set; }
     public int? CurrentLength { get; private set; }
 
+    /// <summary>Inline value annotations for the current pause (Stage X / D15.5 — Inline Values); the view's
+    /// InlineValuesRenderer reads this and draws them at line ends (never shifting text). Presentation data
+    /// the VM computes from the roster (the renderer only draws). Seam A shows the <b>changed-since-last-step</b>
+    /// set (the same <see cref="DebugVariableRowViewModel.IsChanged"/> signal the Variables highlight uses),
+    /// anchored on the current line; "used in the current statement" is Seam B. Empty when not paused.</summary>
+    public IReadOnlyList<InlineValueAnnotation> InlineValues { get; private set; } = Array.Empty<InlineValueAnnotation>();
+
     /// <summary>The breakpoint step-point offsets — the BreakpointMargin reads this. Breakpoints belong to the
     /// launched (root) routine; while the editor shows a <em>different</em> frame's source (a stepped-into
     /// callee, or a selected caller other than the root) the offsets are in a different coordinate space, so
@@ -1406,11 +1413,13 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         SelectedFrameId = frame.Id;
 
         var (offset, length) = FramePosition(frame);
-        // Source first (the view sets the editor text synchronously on the property change), then the marker
-        // (its offset is in THIS frame's source, so the renderer reads the freshly-set document).
+        // Source first (the view sets the editor text synchronously on the property change). Then the roster
+        // (values + IsChanged), THEN the marker — SetCurrentMarker recomputes the inline values (D15.5) from
+        // the just-refreshed roster before it fires the repaint, so the marker's offset is in THIS frame's
+        // freshly-set source AND the inline annotations reflect this pause.
         SourceText = frame.Source ?? _source ?? string.Empty;
-        SetCurrentMarker(offset, length);
         ShowFrameVariables(frame, computeChanges);
+        SetCurrentMarker(offset, length);
 
         _syncingFrameSelection = true;
         SelectedFrameRow = CallStack.FirstOrDefault(r => r.FrameId == frame.Id);
@@ -1748,7 +1757,33 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     {
         CurrentStart = start;
         CurrentLength = length;
+        RebuildInlineValues(); // recompute BEFORE the repaint so the inline renderer draws the fresh set
         DebugMarkersChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // Computes the inline value annotations for the current pause (D15.5 Seam A): the CHANGED-since-last-step
+    // variables, anchored on the current line (the paused statement). Reads only the already-updated roster
+    // (DebugVariableRowViewModel.IsChanged / ValueText) — zero new analysis. Empty unless paused with a known
+    // current line, so a completed / faulted / cleared state shows nothing. Callers invoke it once per pause
+    // (from SetCurrentMarker, after ShowFrameVariables has refreshed the roster). "Used in the current
+    // statement" is Seam B — a union added here later.
+    private void RebuildInlineValues()
+    {
+        if (Phase != DebuggerPhase.Paused || CurrentStart is not { } anchor)
+        {
+            InlineValues = Array.Empty<InlineValueAnnotation>();
+            return;
+        }
+
+        var list = new List<InlineValueAnnotation>();
+        foreach (var row in Variables)
+        {
+            if (row.IsChanged)
+            {
+                list.Add(new InlineValueAnnotation(anchor, $"{row.Name} = {row.ValueText}"));
+            }
+        }
+        InlineValues = list;
     }
 
     private int LineOf(int offset) => LineOf(_source, offset);

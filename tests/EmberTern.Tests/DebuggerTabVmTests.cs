@@ -584,6 +584,40 @@ public class DebuggerTabVmTests
     }
 
     [Fact]
+    public async Task InlineValues_ShowChangedVariable_AnchoredOnCurrentLine()
+    {
+        // D15.5 Seam A — the inline value set is the changed-since-last-step variables, anchored on the
+        // current line, computed from the roster (zero new analysis).
+        var writes = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["V"] = 15 };
+        var vm = Vm(Sql, new FakeExecutor().Write(Off("v = a + b"), writes), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        // At entry nothing has changed yet → no inline annotations.
+        Assert.Empty(vm.InlineValues);
+
+        await vm.StepOverCommand.ExecuteAsync(null);
+
+        var annotation = Assert.Single(vm.InlineValues);
+        Assert.Contains("V = 15", annotation.Text);
+        Assert.Equal(vm.CurrentStart, annotation.AnchorOffset); // anchored on the current line
+    }
+
+    [Fact]
+    public async Task InlineValues_Empty_WhenNotPaused()
+    {
+        var writes = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["V"] = 15 };
+        var vm = Vm(Sql, new FakeExecutor().Write(Off("v = a + b"), writes), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        await vm.StepOverCommand.ExecuteAsync(null);
+        Assert.NotEmpty(vm.InlineValues); // paused with a change
+
+        await vm.StopCommand.ExecuteAsync(null); // teardown → not paused
+        Assert.Empty(vm.InlineValues);
+    }
+
+    [Fact]
     public async Task TogglePin_MovesVariable_ToPinnedGroup()
     {
         var vm = Vm(Sql, new FakeExecutor(), out _);

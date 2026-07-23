@@ -1090,6 +1090,42 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
     }
 
+    // D15.5 Seam A — the inline-values renderer paints greyed name=value annotations at line ends. It is
+    // APPENDED after the current-line renderer (so it draws on top of the calm wash) and never shifts text
+    // (it paints past the line's text end). This pins the ordering + exercises the real annotation Draw path
+    // (must not throw); appearance/positioning is user QA.
+    [Fact]
+    public async System.Threading.Tasks.Task InlineValuesRenderer_Attach_AppendedAboveCurrentLine_DrawsWithoutThrow()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 400, Height = 200 };
+            var window = new Window { Width = 500, Height = 320, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            editor.Text = "begin\n  a = 1;\n  b = 2;\nend";
+            Dispatcher.UIThread.RunJobs();
+
+            int start = editor.Text.IndexOf("b = 2", System.StringComparison.Ordinal);
+            var current = CurrentLineRenderer.Attach(editor, () => (start, "b = 2".Length));
+            var inline = InlineValuesRenderer.Attach(editor,
+                () => new[] { new InlineValueAnnotation(start, "B = 2") });
+
+            // Appended after the current-line renderer ⇒ it paints on top of the wash.
+            var bg = editor.TextArea.TextView.BackgroundRenderers;
+            Assert.True(bg.IndexOf(inline) > bg.IndexOf(current));
+
+            // A real paint with a live annotation must not throw (FormattedText + line-end geometry path).
+            editor.TextArea.TextView.Redraw();
+            Dispatcher.UIThread.RunJobs();
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     // D15.2 Seam A — the debugger toolbar's icon geometries and the new loop-category brush must resolve
     // at runtime. The build already validates the compiled StaticResource Icon.* usages; this also covers
     // the DynamicResource brush token (resolved at runtime, not compile) and pins it in BOTH themes.

@@ -98,6 +98,10 @@ public partial class DebuggerTabView : UserControl
         {
             SqlEditorBehavior.Attach(_editor, mainVm, debugValueLookup: DebugValueFor);
             CurrentLineRenderer.Attach(_editor, () => (_vm?.CurrentStart, _vm?.CurrentLength));
+            // D15.5 — inline values, painted on top of the current-line wash (appended after it). Reads the
+            // VM's ready-made annotation set; repaints on the same DebugMarkersChanged → TextView.Redraw() path.
+            InlineValuesRenderer.Attach(_editor,
+                () => _vm?.InlineValues ?? (System.Collections.Generic.IReadOnlyList<InlineValueAnnotation>)Array.Empty<InlineValueAnnotation>());
             _margin = new BreakpointMargin(
                 () => _vm?.BreakpointOffsets ?? Array.Empty<int>(),
                 offset => _vm?.ToggleBreakpointAt(offset));
