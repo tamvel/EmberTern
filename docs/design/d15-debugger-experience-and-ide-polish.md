@@ -61,7 +61,7 @@ object editors, and the debugger, in **both** themes.
 | **D15.3** | Launch & Entry Experience | P (+persist) | ~2 | — | **4** |
 | — | ~~**Script Executor Rewrite (Steps 1–6)**~~ **✅ COMPLETE (0–6, live-verified 2026-07-21)** | correctness | — | — | **5** |
 | **D15.4** | Expression UX + Friendly Errors — **DONE (A+B); Seam C deferred** | P+F | ~2 | — | **6** |
-| **D15.5** | Inline Values | F | ~2 | D15.1 (renderer/token knowledge) | **7** |
+| **D15.5** | Inline Values — **DONE (A+B)** | F | ~2 | D15.1 (renderer/token knowledge) | **7** |
 | **D15.6** | Debugger Performance (integration analysis) | F | ~1–2 | Performance Analysis module | **8** |
 | **D15.7** | Global UI Audit | analysis | ~1 (or in-the-background) | — | parallel |
 
@@ -525,6 +525,11 @@ false confidence); the honest move was to stop at the spike and defer.
 
 **Goal.** Show current variable values next to the code, **without cluttering the editor**.
 
+**COMPLETE 2026-07-23 (Seams A + B; impl, awaits final user visual confirm of the combined effect).** Seam A
+proved the renderer mechanism (end-of-line, no text shift) on the changed set; Seam B set the ratified
+visibility policy (used-in-statement primary + changed supplementary). Pure Presentation throughout — Core +
+engine untouched.
+
 ### 7.1 Design (ratified visibility rule)
 Show **only**: (a) **variables used on the current line**, **or** (b) **variables changed since the previous
 step**. Never all variables. Render as **greyed end-of-line annotations** (`nazwa = wartość`), for the current
@@ -556,10 +561,21 @@ set (changed-since-step) BEFORE adding the mapping-dependent "used" set.**
   WHICH values / WHERE, the renderer only draws. Pure Presentation; Core + engine untouched. Build 0/0; +3 tests
   (2 `DebuggerTabVmTests`, +1 headless renderer pin); smoke clean. **Positioning quality is the mandatory
   manual-QA gate before Seam B.**
-- **B (used-in-current-statement set + visibility policy) — NOT started.** Add the "variables referenced in the
-  current statement" set (via the existing `SqlLexer` tokenizing the current statement span, matched to the
-  roster names — no new analysis), unioned with the changed set; final visibility rule, value truncation reuse
-  (`MaxInlineLength`), greyed-tuning, both themes.
+- **B (used-in-current-statement set + visibility policy) — DONE 2026-07-23 (impl, awaits user visual confirm).
+  Commit `f004144`.** The visibility policy (spec §7.1), ratified with the user: **PRIMARY = variables the
+  current statement USES** (shown even when unchanged — they are what the executing instruction refers to),
+  **SUPPLEMENTARY = variables CHANGED since the last step** (`IsChanged`) the statement does not use, appended
+  after. Real current values only — no prediction (the session pauses BEFORE executing the statement). The used
+  set is derived by tokenizing the current statement's source span with the one `SqlLexer` (reuse, like
+  `WatchSideEffectDetector` — no new analysis/parser) and matching token text to the roster names
+  (case-insensitive; a string literal / keyword never matches). Anchoring unchanged (end of current line).
+  Pure Presentation in the VM (`RebuildInlineValues` + `CollectUsedVariableNames`); the renderer + Core are
+  untouched. **This fixed the QA note that changed-only anchoring read as if it referred to the line's
+  instruction.** **Boundary (§F):** a trigger context column's dotted name (`NEW.STATUS`) is not a single token
+  → not detected as "used"; it still shows when changed. **User QA lever (ratified):** if `changed-not-used`
+  clutters in practice, reduce the policy to `used` only rather than clinging to `used ∪ changed`. Build 0/0;
+  +3 `DebuggerTabVmTests` (used-primary + anchor, changed-not-used appended last, empty when not paused);
+  smoke clean.
 
 ### 7.4 DoD
 Inline values appear only for current-line-used or just-changed variables, never shift text, greyed and
@@ -625,8 +641,9 @@ observations during every D15 seam. **Deliverable:** an inventory doc, not code.
 ## 11. Priorities & sequencing
 
 **Ratified order** (with my endorsement — the sequence is sound; no change recommended). **Progress note
-(2026-07-23):** the Script Executor track, **D15.1, D15.2, D15.3** and **D15.4** are all **COMPLETE**
-(D15.4 = Seams A+B; Seam C deferred, §6.3). Next in sequence: **D15.5 — Inline Values**. The rewrite ran ahead
+(2026-07-23):** the Script Executor track, **D15.1, D15.2, D15.3, D15.4** and **D15.5** are all **COMPLETE**
+(D15.4 = Seams A+B, Seam C deferred §6.3; D15.5 = Seams A+B). Next in sequence: **D15.6 — Debugger Performance
+(integration)**; **D15.7** (Global UI Audit) runs in the background. The rewrite ran ahead
 of its slotted position 5 as a self-contained block.
 
 1. ~~**Script Executor — Step 0 (Probe).**~~ **✅ DONE** — measurement, not implementation; it gated the
@@ -639,7 +656,8 @@ of its slotted position 5 as a self-contained block.
    self-contained correctness-debt block; the mixed-DDL+DML defect (#213) is fixed by `Sequenced` mode.
 6. **D15.4 — Friendly Errors.** **✅ DONE (Seams A+B).** Seam C (local pre-validation) deferred — needs an
    engine change, not reuse (§6.3).
-7. **D15.5 — Inline Values.** After D15.1 (shares renderer/token knowledge). **← next.**
+7. **D15.5 — Inline Values.** **✅ DONE (Seams A+B).** Used-in-statement primary + changed supplementary,
+   end-of-line, no text shift.
 8. **D15.6 — Performance (integration).** Lightest now that debug-time timing is dropped; last.
 
 D15.7 (Global UI Audit) runs **in the background** throughout.
