@@ -29,6 +29,7 @@ public sealed class DebugSession
     private readonly BlockStatement _rootBody;
     private readonly string _rootName;
     private readonly IReadOnlyDictionary<string, object?>? _rootValues;
+    private readonly string? _rootReturnType;
     private readonly string? _rootSource;
     private readonly SemanticModel? _rootModel;
     private readonly List<Frame> _frames = new();
@@ -50,7 +51,12 @@ public sealed class DebugSession
     /// <summary>Creates a session over <paramref name="rootBody"/>. <paramref name="rootValues"/> seeds the
     /// root frame's initial values — the routine's <b>input parameter</b> arguments supplied at launch (§9.3):
     /// the root frame has no caller to provide them, so the launch does, exactly as a callee frame receives a
-    /// call's arguments. Null (the default) starts every variable unassigned.</summary>
+    /// call's arguments. Null (the default) starts every variable unassigned.
+    /// <para><paramref name="rootReturnType"/> is the RETURNS base type when the root routine is a <b>function</b>
+    /// launched as the debug root (D-function): it makes the root a function frame, so a <c>RETURN &lt;expr&gt;</c>
+    /// is computed via the Expression Harness and its value is kept on <see cref="FinalFrame"/> (no caller to
+    /// deliver to). Null (the default) for a procedure / trigger / package-procedure / anonymous-block root,
+    /// which keeps every existing caller byte-identical.</para></summary>
     public DebugSession(
         BlockStatement rootBody,
         IDebugExecutor executor,
@@ -59,7 +65,8 @@ public sealed class DebugSession
         string? rootSource = null,
         SemanticModel? rootModel = null,
         BreakpointSet? breakpoints = null,
-        DataBreakpointSet? dataBreakpoints = null)
+        DataBreakpointSet? dataBreakpoints = null,
+        string? rootReturnType = null)
     {
         _rootBody = rootBody ?? throw new ArgumentNullException(nameof(rootBody));
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
@@ -67,6 +74,7 @@ public sealed class DebugSession
         _rootValues = rootValues;
         _rootSource = rootSource;
         _rootModel = rootModel;
+        _rootReturnType = rootReturnType;
         // The breakpoint / data-breakpoint sets may be SHARED with the owner (the debug tab passes its own sets
         // in, D12): so a breakpoint the user set — including on the first statement — is active from Start, and
         // the panel edits the very objects the engine consults. Defaulting to fresh sets keeps every existing
@@ -201,7 +209,8 @@ public sealed class DebugSession
         _breakpoints.ResetHitCounts(); // each run counts hits from scratch (the set may persist across restarts)
 
         PushFrame(_rootName, _rootBody, parent: null, lexicalParent: null, callSite: null,
-            initialValues: _rootValues, outputParameterNames: null, source: _rootSource, model: _rootModel);
+            initialValues: _rootValues, outputParameterNames: null, source: _rootSource, model: _rootModel,
+            returnType: _rootReturnType); // non-null ⇒ the root is a FUNCTION frame (RETURN via Expression Harness)
         _rootFrame = _frames[^1]; // retained for the terminal (Completed) snapshot, even after its pop
         _currentStep = AdvanceToNextStepPoint();
         if (_currentStep is null)

@@ -204,11 +204,15 @@ public sealed class Frame
     /// it (§6.4); null for the root and for a procedure/EXECUTE-BLOCK frame.</summary>
     internal FunctionReturnContinuation? ReturnContinuation { get; }
 
-    /// <summary>True for a stepped-into local <b>function</b> frame — its <c>RETURN &lt;expr&gt;</c> leaves are
-    /// evaluated via the Expression Harness (a bare <c>RETURN</c> is invalid inside <c>EXECUTE BLOCK</c>) and
-    /// its computed value is delivered by <see cref="ReturnContinuation"/> on normal exit. Equivalently: this
-    /// frame was entered through <c>ResolveFunction</c>, so it carries a continuation.</summary>
-    internal bool IsFunctionFrame => ReturnContinuation is not null;
+    /// <summary>True for a <b>function</b> frame — one whose <c>RETURN &lt;expr&gt;</c> leaves are evaluated via
+    /// the Expression Harness (a bare <c>RETURN</c> is invalid inside <c>EXECUTE BLOCK</c>). Two cases:
+    /// a stepped-into local function (entered through <c>ResolveFunction</c>, so it carries a
+    /// <see cref="ReturnContinuation"/> that delivers its value to the caller position, §6.4), and a
+    /// <b>function launched as the debug ROOT</b> (no caller ⇒ no continuation, but it carries a
+    /// <see cref="ReturnType"/>; its value stays on the frame and is surfaced via
+    /// <see cref="DebugSession.FinalFrame"/>). Either signal marks a function frame; a procedure / trigger /
+    /// EXECUTE-BLOCK / procedure-root frame has neither.</summary>
+    internal bool IsFunctionFrame => ReturnContinuation is not null || ReturnType is not null;
 
     /// <summary>Records this function frame's computed <c>RETURN</c> value.</summary>
     internal void SetReturnValue(object? value) => ReturnValue = value;

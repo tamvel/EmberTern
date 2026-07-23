@@ -1910,6 +1910,43 @@ public class DebugEngineTests
         Assert.DoesNotContain(Off(fSql, "return a + 1"), exec.Executed); // NOT run as a statement
     }
 
+    // ── D-function: a FUNCTION launched as the debug ROOT (Seam A — Core) ───────────────────────────
+
+    [Fact]
+    public void FunctionRoot_ReturnComputesResult_ViaEvaluateReturn_KeptOnFinalFrame()
+    {
+        // rootReturnType makes the ROOT a function frame (no caller ⇒ no continuation): a RETURN <expr> is
+        // computed via EvaluateReturn (Expression Harness, never the Statement Harness) and its value stays on
+        // FinalFrame for the UI to surface.
+        const string sql = "begin v = a + 1; return v; end";
+        var exec = new FakeExecutor().ReturnAt(Off(sql, "return v"), 42);
+        var s = new DebugSession(Body(sql), exec, rootName: "FN", rootReturnType: "integer");
+        s.Start();
+        s.Step(StepKind.Into); // v = a + 1 → return v
+        s.Step(StepKind.Into); // evaluate the RETURN operand → frame completes
+
+        Assert.Equal(DebugState.Completed, s.State);
+        Assert.Equal(42, s.FinalFrame!.ReturnValue);
+        Assert.Contains(Off(sql, "return v"), exec.ReturnsEvaluated);   // via EvaluateReturn…
+        Assert.DoesNotContain(Off(sql, "return v"), exec.Executed);     // …NOT run as a statement
+    }
+
+    [Fact]
+    public void ProcedureRoot_NullReturnType_DoesNotRouteReturnThroughEvaluateReturn()
+    {
+        // Additive gate: with rootReturnType null (a procedure / trigger / anonymous-block root — every
+        // existing caller) the root is NOT a function frame, so a RETURN leaf is handled exactly as before
+        // (falls to the statement path), never through EvaluateReturn. Pins that D-function is opt-in.
+        const string sql = "begin v = a + 1; return v; end";
+        var exec = new FakeExecutor().ReturnAt(Off(sql, "return v"), 42);
+        var s = new DebugSession(Body(sql), exec, rootName: "P"); // rootReturnType defaults to null
+        s.Start();
+        s.Step(StepKind.Into);
+        s.Step(StepKind.Into);
+
+        Assert.DoesNotContain(Off(sql, "return v"), exec.ReturnsEvaluated); // NOT a function frame
+    }
+
     // ── D13: loop fast-forward (Continue Until Loop Exit / Next Iteration) + LEAVE/BREAK/EXIT control flow ──
 
     [Fact]
