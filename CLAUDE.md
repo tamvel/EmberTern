@@ -466,10 +466,18 @@ noted.
   Expression Harness typed as `frame.ReturnType`. **Live fidelity PROVEN** (`DebuggerFidelityProbe` +3, reusing
   lab `FN_ADD_TAX`/`FN_FULL_LABEL` — no lab change): `FN_ADD_TAX(100,20)` as ROOT → sim 120==real 120, depth 1;
   `FN_FULL_LABEL` else → `'ABC - Widget'`; if/null branch → `'Widget'`; all 34 prior cases pass → ALL PASS.
-  Build 0/0; full suite 5138 green (two partitions #94/#226); smoke clean. **Next: C1** App launch wiring
-  (VM detects `DdlObjectKind.Function` → spec `IsFunction` flag → launcher passes `isFunctionRoot` +
-  `executor.RootReturnType` → `DebugSession`), then **C2** entry points ("Debug function…" sidebar/editor) +
-  return-value UI surface (UX proposal to be ratified before C2 impl).
+  Build 0/0; full suite 5138 green (two partitions #94/#226); smoke clean. **Seam C1 (App launch wiring) —
+  DONE (`5aa75d0`).** `DebugLaunchSpec.IsFunction` (additive); `DebuggerTabViewModel.PrepareAsync` resolves
+  `_isFunction` once from `ddl.ObjectKind == DdlObjectKind.Function` (excluding a package context — packaged
+  functions as root are a later follow-up), `LaunchAsync` threads it, `BuildParameters` labels the panel
+  "Function"; `FirebirdDebugSessionLauncher` passes `spec.IsFunction` → `CreateAsync(isFunctionRoot:)` and the
+  executor's `RootReturnType` → `DebugSession(rootReturnType:)` — resolve-once-pass-through end to end. Every
+  non-function root → `IsFunction=false` → `RootReturnType` null → byte-identical. +2 `DebuggerTabVmTests`.
+  Build 0/0; 5140 green; smoke clean. **Next: C2** — entry points ("Debug function…" sidebar leaf + function
+  editor toolbar button + `DebugFunctionRequested`/`OnDebugFunctionRequested` + `OpenDebuggerForObject`
+  Function support + MenuItem/`UiStrings`) **and the return-value UI surface** (a function returns one scalar,
+  no output params / SUSPEND). **⚠ C2 UX (return-value presentation) is to be RATIFIED with the user BEFORE
+  implementation** — present the proposal + rationale first.
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);
