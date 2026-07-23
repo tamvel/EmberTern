@@ -495,8 +495,24 @@ noted.
   parses to `DdlStatement{Function, Body}` → C1 `_isFunction` → B function root → C2a Return group). Build 0/0;
   5142 green; smoke clean. **⚠ gotcha:** a lingering smoke-test `EmberTern.exe` locks the output DLLs and a
   rebuild then reports MSB3021/MSB3027 copy "errors" (not compile errors) — `taskkill /F /IM EmberTern.exe`
-  before rebuilding. **Follow-up (backlog): packaged functions as a debug root** (reuses D11 member
-  reconstruction + this function-root work) — deliberately out of v1.
+  before rebuilding. **Packaged functions as a debug root — STARTED (follow-up to the standalone feature),
+  D1→D2; directive: extend existing paths with `packageName`, NO parallel standalone-vs-packaged code.**
+  **Seam D1 (engine + live fidelity) — DONE (`ebaa036`).** After D1 the ONLY difference between a standalone
+  and a packaged function root is the presence of `packageName`: `ReadFunctionParametersAsync`/
+  `BuildFunctionFrameVariablesAsync` gained an optional `packageName` (same query/join/typing, only the
+  `RDB$FUNCTION_ARGUMENTS`/`RDB$FUNCTIONS` filter `IS NULL`↔`= @pkg`); the `isFunctionRoot` branch is
+  package-aware (checked BEFORE the procedure-package branch so a packaged function is framed as a function);
+  and both the function-root and the D11 procedure-package roots now register through ONE new package-aware
+  `RegisterRootAsync` (standalone → `Register`; package member → `RegisterPackageMember` sibling context/R5).
+  `FetchPackageMemberSourceAsync` gained a `kind` param (default Procedure; reconstruction already kind-generic
+  — a FUNCTION slice keeps its `RETURNS`). Lab `PKG_DBG` +PUBLIC `PUB_FN` (calls private `PRIV_DOUBLE`), `.fdb`
+  rebuilt (#149). **Live fidelity PROVEN** (`DebuggerFidelityProbe` case 38, `SimulateFunctionRootAsync` gained
+  an optional `packageName` — one simulate path): `PKG_DBG.PUB_FN(5)` as ROOT → sim 11==real 11, depth 2, chain
+  `PUB_FN → PRIV_DOUBLE`; all 37 prior cases pass → ALL PASS. Build 0/0; 5142 green; smoke clean. **Next: D2**
+  — App entry point: `FetchObjectDefinitionAsync`/VM `_isFunction` include packaged (drop the `_packageName is
+  null` exclusion), package editor Members-tab Debug enabled for FUNCTION members (widen `CanDebugSelectedMember`
+  + tooltip + `RequestDebugMember`; carry the member kind through `DebugMemberRequested` →
+  `OpenDebuggerForPackageMember` → `FetchPackageMemberSourceAsync(Function)`) + live QA.
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);
