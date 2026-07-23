@@ -191,6 +191,8 @@ public partial class MetadataNodeViewModel : ViewModelBase
     public bool IsTriggerGroup => IsGroup && Kind == MetadataObjectKind.Trigger;
     // Procedure leaf → Execute.
     public bool IsProcedureLeaf => IsActionable && Kind == MetadataObjectKind.Procedure;
+    // Function leaf → Debug (standalone function as debug root, D-function).
+    public bool IsFunctionLeaf => IsActionable && Kind == MetadataObjectKind.Function;
     // Trigger leaf → single activate/deactivate (show only the applicable one). Both hide while a
     // multi-trigger selection is active — the leaf menu then offers the "Selected (N)" bulk ops
     // instead (see below), so the user never scrolls back to the Triggers group header for them.
@@ -344,6 +346,16 @@ public partial class MetadataNodeViewModel : ViewModelBase
         if (IsTriggerLeaf && Object is { } obj)
         {
             _owner.RequestDebugTrigger(obj);
+        }
+    }
+
+    // Function leaf → Debug (D-function). Opens a debugger tab for the standalone function (launched as root).
+    [RelayCommand]
+    private void DebugFunction()
+    {
+        if (IsFunctionLeaf && Object is { } obj)
+        {
+            _owner.RequestDebugFunction(obj);
         }
     }
 

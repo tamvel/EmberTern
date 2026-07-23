@@ -568,6 +568,9 @@
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugTrigger}"
                                 Command="{Binding DebugTriggerCommand}"
                                 IsVisible="{Binding IsTriggerLeaf}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
+                                Command="{Binding DebugFunctionCommand}"
+                                IsVisible="{Binding IsFunctionLeaf}" />
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
                                 Command="{Binding ActivateCommand}"
                                 IsVisible="{Binding ShowActivate}" />
@@ -1040,10 +1043,16 @@
                       Command="{Binding ActiveTriggerDetail.UncommentBodyCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
-              <!-- Function: execute / format / comment / uncomment -->
+              <!-- Function: execute / debug / format / comment / uncomment -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FunctionExecuteTooltip}"
                       Command="{Binding ActiveFunctionDetail.ExecuteFunctionCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+              </Button>
+              <!-- Debugger entry point (D-function) — same launch as the sidebar "Debug function…"; the
+                   function runs as the debug root (Return group in Variables). -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FunctionDebugTooltip}"
+                      Command="{Binding ActiveFunctionDetail.DebugFunctionCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
+                <controls:DebuggerIcon />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveFunctionDetail.FormatSqlCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">

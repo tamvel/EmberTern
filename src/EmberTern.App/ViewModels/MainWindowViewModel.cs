@@ -215,6 +215,7 @@ public partial class MainWindowViewModel : ViewModelBase
         Metadata.ExecuteProcedureRequested += OnExecuteProcedureRequested;
         Metadata.DebugProcedureRequested += OnDebugProcedureRequested;
         Metadata.DebugTriggerRequested += OnDebugTriggerRequested;
+        Metadata.DebugFunctionRequested += OnDebugFunctionRequested;
         Metadata.RecompileGroupRequested += OnRecompileGroupRequested;
         Metadata.SetObjectActiveRequested += OnSetObjectActiveRequested;
         Metadata.BulkSetActiveRequested += OnBulkSetActiveRequested;
@@ -4258,6 +4259,9 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
         detail.RunExecuteRequested = RunFunctionExecuteAsync;
+        // Editor-toolbar Debug entry point (D-function) — reuses the one debugger-launch path; the function
+        // launches as the debug root (DebugLaunchSpec.IsFunction → function root frame + Return group).
+        detail.DebugRequested = () => OpenDebuggerForObject(detail.FunctionName, MetadataObjectKind.Function);
         // Its OWN Performance context — analyzes only this function tab's Execute.
         detail.PerformanceContext = CreatePerformanceContext();
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
@@ -4802,6 +4806,12 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (obj.Kind != MetadataObjectKind.Trigger) return;
         OpenDebuggerForObject(obj.Name, MetadataObjectKind.Trigger);
+    }
+
+    private void OnDebugFunctionRequested(MetadataObject obj)
+    {
+        if (obj.Kind != MetadataObjectKind.Function) return;
+        OpenDebuggerForObject(obj.Name, MetadataObjectKind.Function);
     }
 
     // The one debugger-launch path, reused by the sidebar "Debug procedure…" / "Debug trigger…" and the

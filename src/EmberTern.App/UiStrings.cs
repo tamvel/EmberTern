@@ -1722,6 +1722,7 @@ internal static class UiStrings
     // ─── Debugger (Stage X / D4 — Debugger tab MVP) ───────────────────────────
     public const string MetadataContextDebugProcedure = "Debug procedure…";
     public const string MetadataContextDebugTrigger = "Debug trigger…";
+    public const string MetadataContextDebugFunction = "Debug function…";
     public const string DebuggerTabTitleFormat = "Debug: {0}";
     // Launch panel.
     public const string DebuggerLaunchHeader = "Launch debug session";
@@ -1831,6 +1832,7 @@ internal static class UiStrings
     public const string DebuggerNoConnection = "Connect to a database before debugging.";
     public const string ProcedureDebugTooltip = "Debug procedure";
     public const string TriggerDebugTooltip = "Debug trigger";
+    public const string FunctionDebugTooltip = "Debug function";
     public const string DebuggerSourceUnavailableFormat = "Could not load the source of {0}.";
     // Trigger debugging (Stage X / D10) — the launch panel's NEW/OLD context editors + the out-of-scope refusal.
     public const string DebuggerTriggerOutOfScope =
