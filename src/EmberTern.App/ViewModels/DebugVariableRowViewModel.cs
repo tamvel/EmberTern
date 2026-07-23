@@ -13,6 +13,7 @@ public enum DebugVariableKind
     Local,
     ContextNew,
     ContextOld,
+    Return,
 }
 
 /// <summary>
@@ -62,6 +63,7 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
         DebugVariableKind.ParameterOut => "◆",  // output / RETURNS
         DebugVariableKind.ContextNew => "▲",    // trigger NEW record column
         DebugVariableKind.ContextOld => "▽",    // trigger OLD record column
+        DebugVariableKind.Return => "↩",        // a function's returned value (D-function)
         _ => "●",                                // local
     };
 
@@ -72,6 +74,7 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
         DebugVariableKind.ParameterOut => UiStrings.DebuggerVariableKindOut,
         DebugVariableKind.ContextNew => UiStrings.DebuggerVariableKindContextNew,
         DebugVariableKind.ContextOld => UiStrings.DebuggerVariableKindContextOld,
+        DebugVariableKind.Return => UiStrings.DebuggerVariableKindReturn,
         _ => UiStrings.DebuggerVariableKindLocal,
     };
 
@@ -82,6 +85,9 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
         DebugVariableKind.ParameterIn => "DebugParamInBrush",
         DebugVariableKind.ParameterOut => "DebugParamOutBrush",
         DebugVariableKind.ContextNew or DebugVariableKind.ContextOld => "DebugContextBrush",
+        // A function's return is its output — reuse the OUT-parameter accent (no new theme token); the ↩ glyph
+        // and the dedicated "Return" group carry the distinct semantics.
+        DebugVariableKind.Return => "DebugParamOutBrush",
         _ => "DebugLocalBrush",
     };
 
@@ -148,6 +154,17 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
     {
         IsEditing = false;
         HasEditError = false;
+    }
+
+    /// <summary>Shows a non-value placeholder (D-function: the Return row before <c>RETURN</c> has run —
+    /// "not returned yet"). Distinct from a returned NULL (<see cref="Update"/> with a null value shows
+    /// <c>&lt;null&gt;</c>): here <see cref="IsNull"/> is false so it does not render in the null style.</summary>
+    public void ShowPending(string text)
+    {
+        RawValue = null;
+        IsNull = false;
+        IsChanged = false;
+        ValueText = text;
     }
 
     /// <summary>Refreshes the live value + change cue in place (identity is untouched).</summary>

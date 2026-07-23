@@ -102,11 +102,14 @@ public class DebuggerTabVmTests
         public DebugRoutine? ResolveRoutine(IExecutableStatement call, Frame frame)
             => call is ExecuteProcedureStatement ? _callee : null;
 
-        // D9 seam c — the VM tests never step into a local function; the null resolver keeps every call a
-        // step-over, and EvaluateReturn is then unreachable (no function frame is ever pushed).
+        // D9 seam c — the VM tests never step INTO a local function; the null resolver keeps every call a
+        // step-over. EvaluateReturn IS reached for a FUNCTION-root frame (D-function): it yields a scripted
+        // value (default null) — the value the Return row surfaces at completion.
         public DebugRoutine? ResolveFunction(CallExpression call, Frame frame) => null;
+        private object? _returnValue;
+        public FakeExecutor WithReturn(object? value) { _returnValue = value; return this; }
         public ReturnOutcome EvaluateReturn(IExecutableStatement returnStatement, Frame frame)
-            => throw new NotSupportedException();
+            => ReturnOutcome.Of(_returnValue);
 
         public void EnterFrameSavepoint(string name) { }
         public void LeaveFrameSavepoint(string name) { }
@@ -128,7 +131,11 @@ public class DebuggerTabVmTests
             // BreakOnException before Start, so the session honours a breakpoint on the first statement from entry.
             var session = new DebugSession(
                 spec.Body, _executor, spec.RoutineName, spec.RootValues, spec.Source, spec.Model,
-                spec.Breakpoints, spec.DataBreakpoints);
+                spec.Breakpoints, spec.DataBreakpoints,
+                // Mirror the production launcher: a function root carries a RETURNS type (making it a function
+                // frame). The real launcher passes executor.RootReturnType; the fake has no catalog, so a fixed
+                // non-null type is enough to exercise the function-root RETURN path.
+                rootReturnType: spec.IsFunction ? "integer" : null);
             session.BreakOnException = spec.BreakOnException;
             session.Start();
             return Task.FromResult(new DebugRunHandle(session, () => { Disposed = true; return ValueTask.CompletedTask; }));
@@ -177,6 +184,36 @@ public class DebuggerTabVmTests
 
         Assert.NotNull(launcher.LastSpec);
         Assert.False(launcher.LastSpec!.IsFunction);
+    }
+
+    [Fact]
+    public async Task Function_ReturnRow_PendingWhilePaused_ThenValueOnCompletion()
+    {
+        // C2a: a function root shows a synthetic "Return" row — "not returned yet" while stepping, then the
+        // returned value once RETURN runs (the session completes at RETURN). Real state only, no prediction.
+        var vm = Vm(FunctionSql, new FakeExecutor().WithReturn(42), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        var ret = vm.Variables.SingleOrDefault(r => r.Kind == DebugVariableKind.Return);
+        Assert.NotNull(ret);                                        // the Return row exists for a function
+        Assert.Equal(EmberTern.App.UiStrings.DebuggerReturnPending, ret!.ValueText); // pending while paused
+
+        await vm.StepOverCommand.ExecuteAsync(null);                // v = a + 1  → return v
+        await vm.StepOverCommand.ExecuteAsync(null);                // return v   → completes
+        Assert.Equal(DebuggerPhase.Completed, vm.Phase);
+        Assert.Equal("42", ret.ValueText);                          // the returned value is now shown
+    }
+
+    [Fact]
+    public async Task Procedure_HasNoReturnRow()
+    {
+        // The Return group/row is function-only (like the trigger Context group) — a procedure never shows it.
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain(vm.Variables, r => r.Kind == DebugVariableKind.Return);
     }
 
     // ── Preparation ─────────────────────────────────────────────────────────────────────────────

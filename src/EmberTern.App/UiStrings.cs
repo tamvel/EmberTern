@@ -1811,10 +1811,16 @@ internal static class UiStrings
     public const string DebuggerVariableKindOut = "OUT";
     public const string DebuggerVariableKindContextNew = "NEW record";
     public const string DebuggerVariableKindContextOld = "OLD record";
+    public const string DebuggerVariableKindReturn = "return";
     public const string DebuggerVariableGroupPinned = "Pinned";
     public const string DebuggerVariableGroupContext = "Context";
     public const string DebuggerVariableGroupParameters = "Parameters";
     public const string DebuggerVariableGroupLocals = "Locals";
+    // D-function: the return-value row/group shown only when a function is the debug root. The row displays
+    // "not returned yet" until RETURN runs (the session completes at RETURN), then the returned value.
+    public const string DebuggerVariableGroupReturn = "Return";
+    public const string DebuggerReturnRowName = "«return»";
+    public const string DebuggerReturnPending = "— (not returned yet)";
     public const string DebuggerVariableFilterWatermark = "Filter variables…";
     public const string DebuggerVariablePinTooltip = "Pin to top / unpin";
     public const string DebuggerVariableEditTooltip = "Double-click to edit (Enter to apply, Esc to cancel)";

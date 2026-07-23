@@ -115,6 +115,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         Preflight = new ObservableCollection<DebugPreflightItem>();
         Variables = new ObservableCollection<DebugVariableRowViewModel>();
         VariableGroups = new ObservableCollection<DebugVariableGroupViewModel>();
+        _returnGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupReturn);
         _pinnedGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupPinned);
         _contextGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupContext);
         _parametersGroup = new DebugVariableGroupViewModel(UiStrings.DebuggerVariableGroupParameters);
@@ -166,6 +167,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     public ObservableCollection<DebugVariableGroupViewModel> VariableGroups { get; }
 
     // Persistent group instances (reused across pauses so IsExpanded survives a step-by-step rebuild).
+    private readonly DebugVariableGroupViewModel _returnGroup; // a function's return value (D-function) — function mode only
     private readonly DebugVariableGroupViewModel _pinnedGroup;
     private readonly DebugVariableGroupViewModel _contextGroup; // trigger NEW/OLD (D10) — only in trigger mode
     private readonly DebugVariableGroupViewModel _parametersGroup;
@@ -1261,7 +1263,25 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
         RebuildTerminalCallStack(new[] { frame }, end?.Start ?? -1);
         ShowFrameVariables(frame, computeChanges: false); // final values, no change-highlight
+        UpdateReturnRowValue(frame);                       // D-function: the RETURN value is now known
         SetCurrentMarker(end?.Start, end?.Length);
+    }
+
+    // D-function: on normal completion, fill the synthetic Return row from the terminal frame's ReturnValue
+    // (possibly null → <null> for a function that returned NULL — distinct from the "not returned yet"
+    // placeholder shown while stepping / on a fault). No-op unless the root is a function. The row instance is
+    // shared with its group, so this updates it in place.
+    private void UpdateReturnRowValue(Frame frame)
+    {
+        if (!_isFunction) return;
+        foreach (var row in Variables)
+        {
+            if (row.Kind == DebugVariableKind.Return)
+            {
+                row.Update(hasValue: true, frame.ReturnValue, changed: false);
+                break;
+            }
+        }
     }
 
     // Renders the terminal (Faulted) state: stop ON the faulting line (marked), showing the innermost fault
@@ -1520,6 +1540,10 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         bool haveBaseline = computeChanges && _previousValues is not null && _previousFrameId == frame.Id;
         foreach (var row in Variables)
         {
+            // The synthetic Return row (D-function) is not a frame variable — its value comes from
+            // Frame.ReturnValue and is set only at completion (ShowCompletedState). Leave it at its pending
+            // placeholder here so the generic resolve never clobbers it to <null>.
+            if (row.Kind == DebugVariableKind.Return) continue;
             bool hasValue = frame.TryResolveValue(row.ResolveName, out var value);
             bool changed = haveBaseline
                 && _previousValues!.TryGetValue(row.ResolveName, out var prev)
@@ -1547,6 +1571,19 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     private void BuildRoster(SemanticModel model, bool includeContext)
     {
         Variables.Clear();
+
+        // D-function: a synthetic "Return" row — the function's single returned value (it has no OUT params).
+        // Added FIRST so its group sits at the top (mirrors the trigger Context group's mode-specific presence).
+        // It is NOT a model symbol and is not resolved via the frame (ResolveName is a sentinel that never
+        // matches a frame variable); its value is set from Frame.ReturnValue only at completion (ShowCompletedState).
+        // Starts "not returned yet" — no prediction (RETURN completes the session in one step).
+        if (_isFunction)
+        {
+            var returnRow = new DebugVariableRowViewModel(
+                UiStrings.DebuggerReturnRowName, DebugVariableKind.Return, typeText: null);
+            returnRow.ShowPending(UiStrings.DebuggerReturnPending);
+            Variables.Add(returnRow);
+        }
 
         // Trigger NEW/OLD context columns first (only the referenced ones, and only those AVAILABLE for the
         // simulated event — spec §8.1). Each resolves through its synthetic frame variable (ResolveName); the
@@ -1587,6 +1624,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     // only — it reads the existing rows, never the frame.
     private void RebuildVariableGroups()
     {
+        _returnGroup.Rows.Clear();
         _pinnedGroup.Rows.Clear();
         _contextGroup.Rows.Clear();
         _parametersGroup.Rows.Clear();
@@ -1597,21 +1635,24 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         {
             if (filter.Length > 0 && row.Name.IndexOf(filter, System.StringComparison.OrdinalIgnoreCase) < 0)
                 continue;
-            var target = row.IsPinned ? _pinnedGroup
+            // Return is never pinned (a synthetic row with no pin affordance), so it is routed by kind first.
+            var target = row.Kind == DebugVariableKind.Return ? _returnGroup
+                : row.IsPinned ? _pinnedGroup
                 : row.Kind is DebugVariableKind.ContextNew or DebugVariableKind.ContextOld ? _contextGroup
                 : row.Kind == DebugVariableKind.Local ? _localsGroup
                 : _parametersGroup;
             target.Rows.Add(row);
         }
 
+        SyncGroupVisibility(_returnGroup);
         SyncGroupVisibility(_pinnedGroup);
         SyncGroupVisibility(_contextGroup);
         SyncGroupVisibility(_parametersGroup);
         SyncGroupVisibility(_localsGroup);
     }
 
-    // Keeps a group in VariableGroups iff it has rows, preserving the fixed order (Pinned, Context, Parameters,
-    // Locals).
+    // Keeps a group in VariableGroups iff it has rows, preserving the fixed order (Return, Pinned, Context,
+    // Parameters, Locals).
     private void SyncGroupVisibility(DebugVariableGroupViewModel group)
     {
         bool present = VariableGroups.Contains(group);
@@ -1633,10 +1674,11 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     }
 
     private int OrderIndex(DebugVariableGroupViewModel group)
-        => group == _pinnedGroup ? 0
-        : group == _contextGroup ? 1
-        : group == _parametersGroup ? 2
-        : 3;
+        => group == _returnGroup ? 0       // a function's returned value sits at the very top (D-function)
+        : group == _pinnedGroup ? 1
+        : group == _contextGroup ? 2
+        : group == _parametersGroup ? 3
+        : 4;
 
     // Pin / unpin a variable to the top group (session-scoped; not a Watch — §9.5).
     [RelayCommand]
