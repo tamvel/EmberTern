@@ -508,11 +508,18 @@ noted.
   — a FUNCTION slice keeps its `RETURNS`). Lab `PKG_DBG` +PUBLIC `PUB_FN` (calls private `PRIV_DOUBLE`), `.fdb`
   rebuilt (#149). **Live fidelity PROVEN** (`DebuggerFidelityProbe` case 38, `SimulateFunctionRootAsync` gained
   an optional `packageName` — one simulate path): `PKG_DBG.PUB_FN(5)` as ROOT → sim 11==real 11, depth 2, chain
-  `PUB_FN → PRIV_DOUBLE`; all 37 prior cases pass → ALL PASS. Build 0/0; 5142 green; smoke clean. **Next: D2**
-  — App entry point: `FetchObjectDefinitionAsync`/VM `_isFunction` include packaged (drop the `_packageName is
-  null` exclusion), package editor Members-tab Debug enabled for FUNCTION members (widen `CanDebugSelectedMember`
-  + tooltip + `RequestDebugMember`; carry the member kind through `DebugMemberRequested` →
-  `OpenDebuggerForPackageMember` → `FetchPackageMemberSourceAsync(Function)`) + live QA.
+  `PUB_FN → PRIV_DOUBLE`; all 37 prior cases pass → ALL PASS. Build 0/0; 5142 green; smoke clean. **Seam D2
+  (App entry point) — DONE (`96c184a`) → packaged-function-as-root is COMPLETE, awaits manual QA.** VM dropped
+  the `_packageName is null` exclusion (a packaged function member's source is reconstructed as CREATE FUNCTION
+  → `_isFunction` true → launcher threads packageName + IsFunction → D1 combined path); `DebugMemberRequested`
+  now carries the whole `PackageMember` (name + kind); `RequestDebugMember`/`CanDebugSelectedMember`/tooltip
+  widened to FUNCTION members; a "Debug function…" Members-tab context-menu item gated on new
+  `PackageMemberItemNode.IsFunction` (the toolbar Debug button is data-driven → auto-enables);
+  `OpenDebuggerForPackageMember`/`FetchPackageMemberSourceAsync` gained `isFunction` → reconstruct as CREATE
+  FUNCTION. Dead "FunctionLater" tooltip removed; tooltips made kind-neutral. Tests updated (function member now
+  RAISES + enables Debug; node `IsFunction`). Build 0/0; 5142 green; smoke clean. **⭐ The whole function-as-
+  debug-root feature (standalone A/B/C1/C2 + packaged D1/D2) is now complete end to end — no known function
+  debugging gap remains.**
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);
