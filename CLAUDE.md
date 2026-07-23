@@ -483,9 +483,20 @@ noted.
   `FinalFrame.ReturnValue` only at completion (`UpdateReturnRowValue`; a NULL return shows `<null>`, distinct
   from pending). Real state only. VM-test infra extended (FakeLauncher passes `rootReturnType` for a function
   spec; `FakeExecutor.EvaluateReturn` yields a scripted value) → +3 `DebuggerTabVmTests`. Build 0/0; 5142
-  green; smoke clean. **Next: C2b** — entry points: sidebar "Debug function…" leaf + function editor toolbar
-  button + `DebugFunctionRequested`/`OnDebugFunctionRequested` + `OpenDebuggerForObject` Function support +
-  MenuItem/`UiStrings`. C2b is where the whole feature becomes live-launchable → full manual QA.
+  green; smoke clean. **Seam C2b (entry points) — DONE (`c132e18`) → the whole standalone-function-as-root
+  feature is COMPLETE (A/B/C1/C2a/C2b), live-launchable, awaits full manual QA.** Reuses the ONE launch path
+  (`OpenDebuggerForObject`), mirroring the procedure/trigger pattern — no new debugger logic: sidebar "Debug
+  function…" on a function leaf (`MetadataNodeViewModel.IsFunctionLeaf` + `DebugFunctionCommand` →
+  `MetadataExplorerViewModel.RequestDebugFunction`/`DebugFunctionRequested` →
+  `MainWindowViewModel.OnDebugFunctionRequested`); function-editor toolbar Debug button (`DebuggerIcon`, gated
+  `IsFunctionDetailTabActive`, `ActiveFunctionDetail.DebugFunctionCommand`); `FunctionDetailTabViewModel`
+  gained `DebugRequested`/`CanDebugFunction`(`!IsNew`)/`DebugFunctionCommand`; `CreateFunctionDetail` wires
+  `DebugRequested`. Source = the existing `FetchObjectDefinitionAsync`/`FetchDdlAsync` (a CREATE FUNCTION
+  parses to `DdlStatement{Function, Body}` → C1 `_isFunction` → B function root → C2a Return group). Build 0/0;
+  5142 green; smoke clean. **⚠ gotcha:** a lingering smoke-test `EmberTern.exe` locks the output DLLs and a
+  rebuild then reports MSB3021/MSB3027 copy "errors" (not compile errors) — `taskkill /F /IM EmberTern.exe`
+  before rebuilding. **Follow-up (backlog): packaged functions as a debug root** (reuses D11 member
+  reconstruction + this function-root work) — deliberately out of v1.
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);
