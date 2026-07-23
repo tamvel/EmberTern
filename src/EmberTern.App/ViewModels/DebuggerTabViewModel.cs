@@ -513,17 +513,9 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         OnPropertyChanged(nameof(ShowErrorBar));
     }
 
-    // A readable one-string description of a DebugError for the bar (prefer the server message; the
-    // exception name / SQLSTATE / GDS are fallbacks). Never parses the message — just picks the best field.
-    private static string DescribeError(DebugError? e)
-    {
-        if (e is null) return string.Empty;
-        if (!string.IsNullOrWhiteSpace(e.Message)) return e.Message!.Trim();
-        if (!string.IsNullOrWhiteSpace(e.ExceptionName)) return e.ExceptionName!;
-        if (!string.IsNullOrWhiteSpace(e.SqlState)) return $"SQLSTATE {e.SqlState}";
-        if (e.GdsCode is { } g) return $"GDS {g}";
-        return UiStrings.DebuggerErrorUnknown;
-    }
+    // The Error Bar shows the FULL Firebird message (D15.2 — its purpose is the raw text; D15.4 keeps it "raw
+    // available"). DebugErrorPresenter.Raw is the one place that picks the best raw field.
+    private static string DescribeError(DebugError? e) => DebugErrorPresenter.Raw(e);
 
     /// <summary>Type-to-filter for the Variables panel (by name, case-insensitive contains — mirrors the
     /// sidebar). Presentation only: it re-groups the existing roster, it never re-reads the frame.</summary>
@@ -1780,8 +1772,9 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     {
         if (session.BreakpointConditionError is { } ce)
         {
+            // Friendly, categorised reason (D15.4 Seam B); the raw message stays in the Error Bar / audit.
             return string.Format(CultureInfo.CurrentCulture,
-                UiStrings.DebuggerStopReasonConditionErrorFormat, ce.Message ?? ce.ExceptionName ?? "?");
+                UiStrings.DebuggerStopReasonConditionErrorFormat, DebugErrorPresenter.Describe(ce));
         }
         if (session.StopReason == StopReason.DataBreakpoint && session.DataBreakpointHit is { } hit)
         {

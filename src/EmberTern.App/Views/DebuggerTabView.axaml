@@ -674,7 +674,8 @@
                                  TextWrapping="Wrap" />
                       <TextBlock Text="{Binding LatestEvaluation.ResultText}" FontSize="11"
                                  FontFamily="Cascadia Code,Consolas,Menlo,monospace" TextWrapping="Wrap"
-                                 IsVisible="{Binding LatestEvaluation.IsError}" Foreground="{DynamicResource ErrorBrush}" />
+                                 IsVisible="{Binding LatestEvaluation.IsError}" Foreground="{DynamicResource ErrorBrush}"
+                                 ToolTip.Tip="{Binding LatestEvaluation.RawError}" />
                       <TextBlock Text="{Binding LatestEvaluation.ResultText}" FontSize="11"
                                  FontFamily="Cascadia Code,Consolas,Menlo,monospace" TextWrapping="Wrap"
                                  IsVisible="{Binding !LatestEvaluation.IsError}" Foreground="{DynamicResource ForegroundBrush}" />
@@ -736,7 +737,8 @@
                                          FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                                          TextTrimming="CharacterEllipsis"
                                          IsVisible="{Binding IsError}"
-                                         Foreground="{DynamicResource ErrorBrush}" />
+                                         Foreground="{DynamicResource ErrorBrush}"
+                                         ToolTip.Tip="{Binding RawError}" />
                               <TextBlock Text="{Binding ValueText}" FontSize="10"
                                          FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                                          TextTrimming="CharacterEllipsis"

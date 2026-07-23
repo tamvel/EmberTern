@@ -15,7 +15,8 @@ namespace EmberTern.App.ViewModels;
 public sealed class DebugExecutedSqlRowViewModel
 {
     private DebugExecutedSqlRowViewModel(
-        string fragment, string kindLabel, string resultText, string sql, bool isError, bool hasSideEffect)
+        string fragment, string kindLabel, string resultText, string sql, bool isError, bool hasSideEffect,
+        string? rawError = null)
     {
         Fragment = fragment;
         KindLabel = kindLabel;
@@ -23,6 +24,9 @@ public sealed class DebugExecutedSqlRowViewModel
         Sql = sql;
         IsError = isError;
         HasSideEffect = hasSideEffect;
+        // The full Firebird message, kept alongside the friendly ResultText so it stays reachable on a friendly
+        // error (D15.4 Seam B — "friendly + raw available"); null / empty when there is nothing extra to show.
+        RawError = string.IsNullOrEmpty(rawError) || rawError == resultText ? null : rawError;
         TimestampText = DateTime.Now.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
     }
 
@@ -41,6 +45,14 @@ public sealed class DebugExecutedSqlRowViewModel
     /// <summary>True when the fragment raised — the row renders in the error colour.</summary>
     public bool IsError { get; }
 
+    /// <summary>The full raw Firebird message behind a friendly <see cref="ResultText"/>, or null when there
+    /// is nothing extra (client-side failure, success, or a friendly text identical to the raw). Shown as the
+    /// error line's tooltip so the raw message stays reachable (D15.4 Seam B).</summary>
+    public string? RawError { get; }
+
+    /// <summary>Whether a raw-message tooltip should be offered on the error line.</summary>
+    public bool HasRawError => !string.IsNullOrEmpty(RawError);
+
     /// <summary>True when a statement wrote frame variables — flagged (spec §9.5 side-effect guard).</summary>
     public bool HasSideEffect { get; }
 
@@ -58,9 +70,11 @@ public sealed class DebugExecutedSqlRowViewModel
 
         if (!result.Success)
         {
-            var err = result.Error;
-            string message = err?.Message ?? err?.ExceptionName ?? UiStrings.DebuggerEvalErrorUnknown;
-            return new DebugExecutedSqlRowViewModel(fragment, kindLabel, message, result.Sql, isError: true, hasSideEffect: false);
+            // Friendly, categorised text (D15.4 Seam B) with the full Firebird message kept as the raw tooltip.
+            string message = DebugErrorPresenter.Describe(result.Error);
+            string raw = DebugErrorPresenter.Raw(result.Error);
+            return new DebugExecutedSqlRowViewModel(
+                fragment, kindLabel, message, result.Sql, isError: true, hasSideEffect: false, rawError: raw);
         }
 
         // A statement ran real SQL against the live frame + debug transaction: it is side-effect-capable by

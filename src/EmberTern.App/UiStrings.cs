@@ -1785,6 +1785,15 @@ internal static class UiStrings
     public const string DebuggerStopReasonConditionErrorFormat = "breakpoint condition error — {0}";
     // Error Bar (D15.2 Seam C) — its own thin row below the toolbar; shows on a fault / Break-on-Exception pause.
     public const string DebuggerErrorUnknown = "Unknown error";
+    // Friendly error text (D15.4 Seam B) — one short, categorised line per FriendlyErrorCategory, shown on the
+    // three expression surfaces (Immediate result / Watch value / breakpoint-condition reason). The raw
+    // Firebird message stays reachable (row tooltip, Executed SQL, Error Bar) — "friendly + raw available".
+    public const string DebuggerFriendlyUserExceptionFormat = "Exception raised: {0}";
+    public const string DebuggerFriendlyConstraint =
+        "A database constraint was violated (NOT NULL, CHECK, or unique key).";
+    public const string DebuggerFriendlySqlError =
+        "SQL error — check the expression's syntax and that all names exist.";
+    public const string DebuggerFriendlyRawTooltip = "Full Firebird message";
     public const string DebuggerErrorCopyTooltip = "Copy error message";
     public const string DebuggerErrorExpandTooltip = "Show full message";
     public const string DebuggerErrorCollapseTooltip = "Collapse message";

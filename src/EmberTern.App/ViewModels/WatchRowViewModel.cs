@@ -45,6 +45,12 @@ public sealed partial class WatchRowViewModel : ObservableObject
     [ObservableProperty]
     private bool _evaluated;
 
+    /// <summary>The full raw Firebird message behind a friendly error <see cref="ValueText"/> (D15.4 Seam B —
+    /// "friendly + raw available"), or null when there is nothing extra to show. Surfaced as the value's
+    /// tooltip when <see cref="IsError"/>.</summary>
+    [ObservableProperty]
+    private string? _rawError;
+
     /// <summary>Applies an evaluation result (value on success, error text on a raise).</summary>
     public void Apply(EvaluationResult? result)
     {
@@ -52,17 +58,21 @@ public sealed partial class WatchRowViewModel : ObservableObject
         if (result is null)
         {
             IsError = true;
+            RawError = null;
             ValueText = UiStrings.DebuggerEvalErrorUnknown;
             return;
         }
         if (!result.Success)
         {
             IsError = true;
-            var err = result.Error;
-            ValueText = err?.Message ?? err?.ExceptionName ?? UiStrings.DebuggerEvalErrorUnknown;
+            // Friendly, categorised text (D15.4 Seam B) with the raw Firebird message kept for the tooltip.
+            ValueText = DebugErrorPresenter.Describe(result.Error);
+            string raw = DebugErrorPresenter.Raw(result.Error);
+            RawError = string.IsNullOrEmpty(raw) || raw == ValueText ? null : raw;
             return;
         }
         IsError = false;
+        RawError = null;
         ValueText = FormatValue(result.Value);
     }
 
@@ -71,6 +81,7 @@ public sealed partial class WatchRowViewModel : ObservableObject
     {
         Evaluated = false;
         IsError = false;
+        RawError = null;
         ValueText = UiStrings.DebuggerWatchNotEvaluated;
     }
 
