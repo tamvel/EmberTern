@@ -436,9 +436,10 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
 
     /// <summary>Inline value annotations for the current pause (Stage X / D15.5 — Inline Values); the view's
     /// InlineValuesRenderer reads this and draws them at line ends (never shifting text). Presentation data
-    /// the VM computes from the roster (the renderer only draws). Seam A shows the <b>changed-since-last-step</b>
-    /// set (the same <see cref="DebugVariableRowViewModel.IsChanged"/> signal the Variables highlight uses),
-    /// anchored on the current line; "used in the current statement" is Seam B. Empty when not paused.</summary>
+    /// the VM computes from the roster (the renderer only draws), anchored on the current line. Visibility
+    /// (spec §7.1): PRIMARY = variables USED in the current statement (even if unchanged), SUPPLEMENTARY =
+    /// variables CHANGED since the last step (<see cref="DebugVariableRowViewModel.IsChanged"/>) the statement
+    /// does not use. Real current values only (no prediction). Empty when not paused.</summary>
     public IReadOnlyList<InlineValueAnnotation> InlineValues { get; private set; } = Array.Empty<InlineValueAnnotation>();
 
     /// <summary>The breakpoint step-point offsets — the BreakpointMargin reads this. Breakpoints belong to the
@@ -1761,12 +1762,14 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         DebugMarkersChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    // Computes the inline value annotations for the current pause (D15.5 Seam A): the CHANGED-since-last-step
-    // variables, anchored on the current line (the paused statement). Reads only the already-updated roster
-    // (DebugVariableRowViewModel.IsChanged / ValueText) — zero new analysis. Empty unless paused with a known
-    // current line, so a completed / faulted / cleared state shows nothing. Callers invoke it once per pause
-    // (from SetCurrentMarker, after ShowFrameVariables has refreshed the roster). "Used in the current
-    // statement" is Seam B — a union added here later.
+    // Computes the inline value annotations for the current pause (D15.5), anchored on the current line (the
+    // paused statement). Reads only the already-updated roster (DebugVariableRowViewModel) — zero new analysis.
+    // Empty unless paused with a known current line, so a completed / faulted / cleared state shows nothing.
+    // Called once per pause (from SetCurrentMarker, after ShowFrameVariables has refreshed the roster).
+    // Visibility policy (Seam B, spec §7.1): PRIMARY = variables USED in the current statement (shown even if
+    // unchanged), SUPPLEMENTARY = variables CHANGED since the last step that the statement does not use. All
+    // are the real current values (no prediction). The used set is derived by tokenizing the current statement
+    // with the one SqlLexer (reuse) — see CollectUsedVariableNames.
     private void RebuildInlineValues()
     {
         if (Phase != DebuggerPhase.Paused || CurrentStart is not { } anchor)
@@ -1775,15 +1778,56 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             return;
         }
 
+        var used = CollectUsedVariableNames(anchor, CurrentLength);
+
         var list = new List<InlineValueAnnotation>();
+        // Primary: variables the current statement uses (roster order), shown even when unchanged.
         foreach (var row in Variables)
         {
-            if (row.IsChanged)
+            if (used.Contains(row.Name))
+            {
+                list.Add(new InlineValueAnnotation(anchor, $"{row.Name} = {row.ValueText}"));
+            }
+        }
+        // Supplementary: variables changed by the previous step that the current statement does not use.
+        foreach (var row in Variables)
+        {
+            if (row.IsChanged && !used.Contains(row.Name))
             {
                 list.Add(new InlineValueAnnotation(anchor, $"{row.Name} = {row.ValueText}"));
             }
         }
         InlineValues = list;
+    }
+
+    // The roster variable names REFERENCED in the current statement's source span. Reuses the one SqlLexer
+    // (no new analysis, no parser — like WatchSideEffectDetector): a token matches a variable only when its
+    // bare text equals a roster name (case-insensitive), so a string literal / keyword — whose token text
+    // keeps its own form — never matches. Empty for an unknown / zero-length span or an empty roster.
+    // (Boundary: a trigger context column's dotted display name, e.g. NEW.STATUS, is not a single token and so
+    // is not detected as "used"; it still shows when changed — a documented §F boundary, not new analysis.)
+    private HashSet<string> CollectUsedVariableNames(int start, int? length)
+    {
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var src = SourceText;
+        if (string.IsNullOrEmpty(src) || length is not { } len || len <= 0 || Variables.Count == 0)
+        {
+            return used;
+        }
+
+        int s = Math.Clamp(start, 0, src.Length);
+        int e = Math.Clamp(start + len, s, src.Length);
+        if (e <= s) return used;
+
+        var rosterNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in Variables) rosterNames.Add(row.Name);
+
+        foreach (var token in SqlLexer.Tokenize(src.Substring(s, e - s)))
+        {
+            if (token.IsEndOfFile) break;
+            if (rosterNames.Contains(token.Text)) used.Add(token.Text);
+        }
+        return used;
     }
 
     private int LineOf(int offset) => LineOf(_source, offset);

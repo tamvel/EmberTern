@@ -583,35 +583,60 @@ public class DebuggerTabVmTests
         Assert.False(vm.Variables.First(r => r.Name == "A").IsChanged);
     }
 
+    private static List<string> InlineNames(DebuggerTabViewModel vm)
+        => vm.InlineValues.Select(a => a.Text.Split(" = ")[0]).ToList();
+
     [Fact]
-    public async Task InlineValues_ShowChangedVariable_AnchoredOnCurrentLine()
+    public async Task InlineValues_ShowVariablesUsedInCurrentStatement_AnchoredOnCurrentLine()
     {
-        // D15.5 Seam A — the inline value set is the changed-since-last-step variables, anchored on the
-        // current line, computed from the roster (zero new analysis).
-        var writes = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["V"] = 15 };
-        var vm = Vm(Sql, new FakeExecutor().Write(Off("v = a + b"), writes), out _);
+        // D15.5 Seam B — PRIMARY set = variables the current statement USES, shown even when unchanged. At
+        // entry we are paused on `v = a + b`, which uses V, A, B (but not R). Anchored on the current line.
+        var vm = Vm(Sql, new FakeExecutor(), out _);
         await vm.PrepareAsync();
         await vm.LaunchCommand.ExecuteAsync(null);
 
-        // At entry nothing has changed yet → no inline annotations.
-        Assert.Empty(vm.InlineValues);
+        var names = InlineNames(vm);
+        Assert.Contains("V", names);
+        Assert.Contains("A", names);
+        Assert.Contains("B", names);
+        Assert.DoesNotContain("R", names); // not used in `v = a + b`, and unchanged
+        Assert.All(vm.InlineValues, a => Assert.Equal(vm.CurrentStart, a.AnchorOffset));
+    }
 
-        await vm.StepOverCommand.ExecuteAsync(null);
+    [Fact]
+    public async Task InlineValues_AppendChangedNotUsed_AfterUsed()
+    {
+        // D15.5 Seam B — SUPPLEMENTARY set = variables CHANGED by the previous step that the current statement
+        // does NOT use, appended after the used ones. Step over `v = a` (changes V), pausing on `r = a`, which
+        // uses R and A but not V → V is the changed-not-used tail.
+        const string sql = """
+            create procedure p (a integer) returns (r integer) as
+            declare v integer;
+            begin
+              v = a;
+              r = a;
+            end
+            """;
+        var writes = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["V"] = 7 };
+        var vm = Vm(sql, new FakeExecutor().Write(sql.IndexOf("v = a", StringComparison.Ordinal), writes), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        await vm.StepOverCommand.ExecuteAsync(null); // execute `v = a` → paused on `r = a`
 
-        var annotation = Assert.Single(vm.InlineValues);
-        Assert.Contains("V = 15", annotation.Text);
-        Assert.Equal(vm.CurrentStart, annotation.AnchorOffset); // anchored on the current line
+        var names = InlineNames(vm);
+        Assert.Contains("A", names);           // used
+        Assert.Contains("R", names);           // used
+        Assert.Contains("V", names);           // changed, not used → supplementary
+        Assert.Equal("V", names[^1]);          // appended AFTER the used ones
     }
 
     [Fact]
     public async Task InlineValues_Empty_WhenNotPaused()
     {
-        var writes = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["V"] = 15 };
-        var vm = Vm(Sql, new FakeExecutor().Write(Off("v = a + b"), writes), out _);
+        var vm = Vm(Sql, new FakeExecutor(), out _);
         await vm.PrepareAsync();
         await vm.LaunchCommand.ExecuteAsync(null);
-        await vm.StepOverCommand.ExecuteAsync(null);
-        Assert.NotEmpty(vm.InlineValues); // paused with a change
+        Assert.NotEmpty(vm.InlineValues); // paused: the entry statement's used variables
 
         await vm.StopCommand.ExecuteAsync(null); // teardown → not paused
         Assert.Empty(vm.InlineValues);
