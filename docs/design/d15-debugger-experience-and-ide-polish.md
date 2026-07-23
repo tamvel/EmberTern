@@ -525,15 +525,20 @@ false confidence); the honest move was to stop at the spike and defer.
 
 **Goal.** Show current variable values next to the code, **without cluttering the editor**.
 
-**COMPLETE 2026-07-23 (Seams A + B; impl, awaits final user visual confirm of the combined effect).** Seam A
-proved the renderer mechanism (end-of-line, no text shift) on the changed set; Seam B set the ratified
-visibility policy (used-in-statement primary + changed supplementary). Pure Presentation throughout — Core +
-engine untouched.
+**COMPLETE 2026-07-23 (Seams A + B).** Seam A proved the renderer mechanism (end-of-line, no text shift); Seam B
+set the visibility policy, **simplified after QA to used-only** — show only the variables the current statement
+uses (the changed-not-used half was dropped as noise, §7.1). Pure Presentation throughout — Core + engine
+untouched.
 
-### 7.1 Design (ratified visibility rule)
-Show **only**: (a) **variables used on the current line**, **or** (b) **variables changed since the previous
-step**. Never all variables. Render as **greyed end-of-line annotations** (`nazwa = wartość`), for the current
-frame's assigned values only, on visible lines.
+### 7.1 Design (visibility rule — ratified, then simplified after QA 2026-07-23)
+**Final rule: show ONLY the variables the current statement USES** — their real current values (no prediction).
+Render as **greyed end-of-line annotations** (`nazwa = wartość`), on visible lines.
+
+> The original rule was "used **OR** changed-since-last-step". After seeing it live (Seam B QA) the user
+> dropped the changed-not-used half: a changed variable the statement does not use (e.g. `V_SUM = 10` at
+> `v_text = p_text;`) added noise without helping read the executing instruction. Used-only makes the inline
+> values correspond exactly to what the user is analysing at that step. (`IsChanged` is unaffected elsewhere —
+> the Variables-panel change-highlight still uses it.)
 
 ### 7.2 AvaloniaEdit mechanism
 Two viable approaches — decide in the seam:
@@ -561,21 +566,20 @@ set (changed-since-step) BEFORE adding the mapping-dependent "used" set.**
   WHICH values / WHERE, the renderer only draws. Pure Presentation; Core + engine untouched. Build 0/0; +3 tests
   (2 `DebuggerTabVmTests`, +1 headless renderer pin); smoke clean. **Positioning quality is the mandatory
   manual-QA gate before Seam B.**
-- **B (used-in-current-statement set + visibility policy) — DONE 2026-07-23 (impl, awaits user visual confirm).
-  Commit `f004144`.** The visibility policy (spec §7.1), ratified with the user: **PRIMARY = variables the
-  current statement USES** (shown even when unchanged — they are what the executing instruction refers to),
-  **SUPPLEMENTARY = variables CHANGED since the last step** (`IsChanged`) the statement does not use, appended
-  after. Real current values only — no prediction (the session pauses BEFORE executing the statement). The used
-  set is derived by tokenizing the current statement's source span with the one `SqlLexer` (reuse, like
-  `WatchSideEffectDetector` — no new analysis/parser) and matching token text to the roster names
-  (case-insensitive; a string literal / keyword never matches). Anchoring unchanged (end of current line).
-  Pure Presentation in the VM (`RebuildInlineValues` + `CollectUsedVariableNames`); the renderer + Core are
-  untouched. **This fixed the QA note that changed-only anchoring read as if it referred to the line's
-  instruction.** **Boundary (§F):** a trigger context column's dotted name (`NEW.STATUS`) is not a single token
-  → not detected as "used"; it still shows when changed. **User QA lever (ratified):** if `changed-not-used`
-  clutters in practice, reduce the policy to `used` only rather than clinging to `used ∪ changed`. Build 0/0;
-  +3 `DebuggerTabVmTests` (used-primary + anchor, changed-not-used appended last, empty when not paused);
-  smoke clean.
+- **B (used-in-current-statement visibility policy) — DONE 2026-07-23; SIMPLIFIED after QA to used-only.**
+  Final policy (§7.1): **show ONLY the variables the current statement USES** — their real current values, no
+  prediction (the session pauses BEFORE executing the statement). The used set is derived by tokenizing the
+  current statement's source span with the one `SqlLexer` (reuse, like `WatchSideEffectDetector` — no new
+  analysis/parser) and matching token text to the roster names (case-insensitive; a string literal / keyword
+  never matches). Anchoring unchanged (end of current line). Pure Presentation in the VM (`RebuildInlineValues`
+  + `CollectUsedVariableNames`); the renderer + Core are untouched. **QA arc:** B first shipped
+  `used ∪ changed-not-used` (used primary, changed appended — commit `f004144`); the QA lever built into that
+  design was then pulled — seeing it live, the changed-not-used tail (e.g. `V_SUM = 10` at `v_text = p_text;`)
+  read as noise, so the changed-not-used loop was removed and the policy is now used-only. Fixes the note that
+  changed anchoring read as if it referred to the line's instruction. **Boundary (§F):** a trigger context
+  column's dotted name (`NEW.STATUS`) is not a single token, so it is not detected as "used" (a documented gap;
+  not new analysis). Build 0/0; `DebuggerTabVmTests` (used shown + anchor, changed-not-used excluded, empty when
+  not paused); smoke clean.
 
 ### 7.4 DoD
 Inline values appear only for current-line-used or just-changed variables, never shift text, greyed and

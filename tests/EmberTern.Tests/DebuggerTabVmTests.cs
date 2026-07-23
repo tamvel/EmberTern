@@ -604,11 +604,12 @@ public class DebuggerTabVmTests
     }
 
     [Fact]
-    public async Task InlineValues_AppendChangedNotUsed_AfterUsed()
+    public async Task InlineValues_ExcludeChangedNotUsed()
     {
-        // D15.5 Seam B — SUPPLEMENTARY set = variables CHANGED by the previous step that the current statement
-        // does NOT use, appended after the used ones. Step over `v = a` (changes V), pausing on `r = a`, which
-        // uses R and A but not V → V is the changed-not-used tail.
+        // D15.5 Seam B — final policy (ratified after QA 2026-07-23): show ONLY variables the current statement
+        // uses; a variable changed by the previous step but NOT used in the current statement is NOT shown (it
+        // added noise). Step over `v = a` (changes V), pausing on `r = a`, which uses R and A but not V → V is
+        // absent even though it just changed.
         const string sql = """
             create procedure p (a integer) returns (r integer) as
             declare v integer;
@@ -623,11 +624,13 @@ public class DebuggerTabVmTests
         await vm.LaunchCommand.ExecuteAsync(null);
         await vm.StepOverCommand.ExecuteAsync(null); // execute `v = a` → paused on `r = a`
 
+        // Sanity: V really did change (so this proves the policy, not a missing change).
+        Assert.True(vm.Variables.First(r => r.Name == "V").IsChanged);
+
         var names = InlineNames(vm);
         Assert.Contains("A", names);           // used
         Assert.Contains("R", names);           // used
-        Assert.Contains("V", names);           // changed, not used → supplementary
-        Assert.Equal("V", names[^1]);          // appended AFTER the used ones
+        Assert.DoesNotContain("V", names);     // changed but NOT used → excluded
     }
 
     [Fact]

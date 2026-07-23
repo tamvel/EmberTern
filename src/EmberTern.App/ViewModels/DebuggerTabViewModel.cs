@@ -437,9 +437,8 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// <summary>Inline value annotations for the current pause (Stage X / D15.5 — Inline Values); the view's
     /// InlineValuesRenderer reads this and draws them at line ends (never shifting text). Presentation data
     /// the VM computes from the roster (the renderer only draws), anchored on the current line. Visibility
-    /// (spec §7.1): PRIMARY = variables USED in the current statement (even if unchanged), SUPPLEMENTARY =
-    /// variables CHANGED since the last step (<see cref="DebugVariableRowViewModel.IsChanged"/>) the statement
-    /// does not use. Real current values only (no prediction). Empty when not paused.</summary>
+    /// (ratified after QA 2026-07-23): the variables the current statement USES — their real current values
+    /// (no prediction). The changed-not-used set was dropped as noise. Empty when not paused.</summary>
     public IReadOnlyList<InlineValueAnnotation> InlineValues { get; private set; } = Array.Empty<InlineValueAnnotation>();
 
     /// <summary>The breakpoint step-point offsets — the BreakpointMargin reads this. Breakpoints belong to the
@@ -1766,10 +1765,12 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     // paused statement). Reads only the already-updated roster (DebugVariableRowViewModel) — zero new analysis.
     // Empty unless paused with a known current line, so a completed / faulted / cleared state shows nothing.
     // Called once per pause (from SetCurrentMarker, after ShowFrameVariables has refreshed the roster).
-    // Visibility policy (Seam B, spec §7.1): PRIMARY = variables USED in the current statement (shown even if
-    // unchanged), SUPPLEMENTARY = variables CHANGED since the last step that the statement does not use. All
-    // are the real current values (no prediction). The used set is derived by tokenizing the current statement
-    // with the one SqlLexer (reuse) — see CollectUsedVariableNames.
+    // Visibility policy (Seam B, ratified after QA 2026-07-23): show ONLY the variables the current statement
+    // USES — their real current values (no prediction). The earlier "OR changed-since-last-step" set (spec
+    // §7.1's original rule) was dropped: in practice a changed variable the statement does not use (e.g.
+    // V_SUM at `v_text = p_text;`) added noise without helping read the executing instruction. Inline values
+    // now correspond exactly to what the user is analysing at that step. The used set is derived by tokenizing
+    // the current statement with the one SqlLexer (reuse) — see CollectUsedVariableNames.
     private void RebuildInlineValues()
     {
         if (Phase != DebuggerPhase.Paused || CurrentStart is not { } anchor)
@@ -1781,18 +1782,9 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         var used = CollectUsedVariableNames(anchor, CurrentLength);
 
         var list = new List<InlineValueAnnotation>();
-        // Primary: variables the current statement uses (roster order), shown even when unchanged.
         foreach (var row in Variables)
         {
             if (used.Contains(row.Name))
-            {
-                list.Add(new InlineValueAnnotation(anchor, $"{row.Name} = {row.ValueText}"));
-            }
-        }
-        // Supplementary: variables changed by the previous step that the current statement does not use.
-        foreach (var row in Variables)
-        {
-            if (row.IsChanged && !used.Contains(row.Name))
             {
                 list.Add(new InlineValueAnnotation(anchor, $"{row.Name} = {row.ValueText}"));
             }

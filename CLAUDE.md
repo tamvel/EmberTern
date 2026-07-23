@@ -419,17 +419,17 @@ noted.
   repaints on the existing `DebugMarkersChanged → TextView.Redraw()` path. VM: `InlineValues`
   (`IReadOnlyList<InlineValueAnnotation>`), recomputed once per pause in `RebuildInlineValues`;
   `ApplySelectedFrame` reordered so the roster refreshes before `SetCurrentMarker` recomputes + fires the
-  repaint. Clean P/VM split (VM decides which/where, renderer only draws). **Seam B (`f004144`):** the ratified
-  visibility policy (§7.1) — **PRIMARY = variables the current statement USES** (shown even if unchanged),
-  **SUPPLEMENTARY = variables CHANGED since the last step** (`IsChanged`) the statement does not use, appended
-  after; real current values only (paused BEFORE executing → no prediction). The used set = tokenize the current
-  statement span with the one `SqlLexer` (reuse, like `WatchSideEffectDetector` — no new analysis) matched to
-  roster names (case-insensitive; string/keyword never matches). Fixed the QA note that changed-only anchoring
-  read as if it referred to the line's instruction. **Boundary (§F):** a trigger context column's dotted name
-  (`NEW.STATUS`) isn't a single token → not "used"; still shows when changed. **User QA lever:** reduce to
-  `used`-only if `changed-not-used` clutters. Build 0/0; 5136 tests green (+ renderer pin in
-  `ConnectionExpandBindingProbe`); smoke clean. **D15 next: D15.6 (Debugger Performance — integration).** Guide:
-  d15 doc §7.
+  repaint. Clean P/VM split (VM decides which/where, renderer only draws). **Seam B — visibility policy, SIMPLIFIED after
+  QA to used-only:** final rule (§7.1) = **show ONLY the variables the current statement USES** — real current
+  values, no prediction (paused BEFORE executing). Used set = tokenize the current statement span with the one
+  `SqlLexer` (reuse, like `WatchSideEffectDetector` — no new analysis) matched to roster names (case-insensitive;
+  string/keyword never matches). **QA arc:** B first shipped `used ∪ changed-not-used` (used primary, changed
+  appended, commit `f004144`); seeing it live, the changed-not-used tail (e.g. `V_SUM = 10` at `v_text = p_text;`)
+  read as noise, so the changed-not-used loop was removed → used-only. Fixes the note that changed anchoring read
+  as if it referred to the line's instruction. **Boundary (§F):** a trigger context column's dotted name
+  (`NEW.STATUS`) isn't a single token → not "used". Build 0/0; 5136 tests green (used shown + anchor,
+  changed-not-used excluded, empty when not paused; + renderer pin); smoke clean. **D15 next: D15.6 (Debugger
+  Performance — integration).** Guide: d15 doc §7.
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);
