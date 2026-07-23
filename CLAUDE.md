@@ -473,11 +473,19 @@ noted.
   "Function"; `FirebirdDebugSessionLauncher` passes `spec.IsFunction` → `CreateAsync(isFunctionRoot:)` and the
   executor's `RootReturnType` → `DebugSession(rootReturnType:)` — resolve-once-pass-through end to end. Every
   non-function root → `IsFunction=false` → `RootReturnType` null → byte-identical. +2 `DebuggerTabVmTests`.
-  Build 0/0; 5140 green; smoke clean. **Next: C2** — entry points ("Debug function…" sidebar leaf + function
-  editor toolbar button + `DebugFunctionRequested`/`OnDebugFunctionRequested` + `OpenDebuggerForObject`
-  Function support + MenuItem/`UiStrings`) **and the return-value UI surface** (a function returns one scalar,
-  no output params / SUSPEND). **⚠ C2 UX (return-value presentation) is to be RATIFIED with the user BEFORE
-  implementation** — present the proposal + rationale first.
+  Build 0/0; 5140 green; smoke clean. **C2 UX RATIFIED (2026-07-23):** the return value is presented as a
+  dedicated **"Return" group in the Variables panel** (function-only, top — mirrors the trigger "Context"
+  group), "— (not returned yet)" while stepping → the real value at completion; status line stays simple (no
+  return value in it). C2 split into **C2a (Return surface) + C2b (entry points)**. **Seam C2a — DONE
+  (`b02dee0`).** `DebugVariableKind.Return` + `↩` glyph + reuse of the OUT accent brush (no new token); a
+  synthetic Return row (`DebuggerTabViewModel.BuildRoster`, function-only) in the new top-most `_returnGroup`,
+  skipped in the generic frame-resolve loop, showing the pending placeholder while stepping and
+  `FinalFrame.ReturnValue` only at completion (`UpdateReturnRowValue`; a NULL return shows `<null>`, distinct
+  from pending). Real state only. VM-test infra extended (FakeLauncher passes `rootReturnType` for a function
+  spec; `FakeExecutor.EvaluateReturn` yields a scripted value) → +3 `DebuggerTabVmTests`. Build 0/0; 5142
+  green; smoke clean. **Next: C2b** — entry points: sidebar "Debug function…" leaf + function editor toolbar
+  button + `DebugFunctionRequested`/`OnDebugFunctionRequested` + `OpenDebuggerForObject` Function support +
+  MenuItem/`UiStrings`. C2b is where the whole feature becomes live-launchable → full manual QA.
   **⭐ Backlog captured during D15.2 Seam B QA (2026-07-22; user directive: record in the plan, do NOT
   implement yet):** (1) **Debugger discoverability** — a **Debug button on the Package "Members" tab toolbar**,
   disabled by default, enabled only when the selected member is a debuggable kind (procedure/trigger/function);
