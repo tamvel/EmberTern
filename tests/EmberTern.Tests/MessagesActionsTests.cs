@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using EmberTern.App.Controls;
 using EmberTern.App.ViewModels;
 using Xunit;
 

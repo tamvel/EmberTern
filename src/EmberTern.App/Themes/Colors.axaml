@@ -58,8 +58,12 @@
       <SolidColorBrush x:Key="DebugCurrentLineBrush" Color="{StaticResource DebugCurrentLineColor}" />
       <SolidColorBrush x:Key="DebugCurrentLineBarBrush" Color="{StaticResource DebugCurrentLineBarColor}" />
       <SolidColorBrush x:Key="DebugBreakpointBrush" Color="{StaticResource DebugBreakpointColor}" />
-      <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4). -->
-      <Color x:Key="DebugVariableChangedColor">#33E0A830</Color>
+      <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4).
+           Deliberately the SAME hue as the debugger's current-line wash (DebugCurrentLineColor #5A8AC8) —
+           "this changed" is part of the debugger's own visual language, not a separate colour accent. The
+           two never share a control (marker = editor, wash = Variables panel), so no ambiguity; alpha sits
+           just under the editor wash because PanelBrush makes the same value read stronger here. -->
+      <Color x:Key="DebugVariableChangedColor">#3D5A8AC8</Color>
       <SolidColorBrush x:Key="DebugVariableChangedBrush" Color="{StaticResource DebugVariableChangedColor}" />
       <!-- Variables panel: per-kind glyph colours (distinct hues for fast recognition) + the pin (gold). -->
       <Color x:Key="DebugParamInColor">#5B9BD5</Color>
@@ -292,8 +296,9 @@
       <SolidColorBrush x:Key="DebugCurrentLineBrush" Color="{StaticResource DebugCurrentLineColor}" />
       <SolidColorBrush x:Key="DebugCurrentLineBarBrush" Color="{StaticResource DebugCurrentLineBarColor}" />
       <SolidColorBrush x:Key="DebugBreakpointBrush" Color="{StaticResource DebugBreakpointColor}" />
-      <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4). -->
-      <Color x:Key="DebugVariableChangedColor">#3FD69E24</Color>
+      <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4).
+           Same hue as this theme's current-line wash (DebugCurrentLineColor #0033B3) — see the Dark note. -->
+      <Color x:Key="DebugVariableChangedColor">#330033B3</Color>
       <SolidColorBrush x:Key="DebugVariableChangedBrush" Color="{StaticResource DebugVariableChangedColor}" />
       <!-- Variables panel: per-kind glyph colours (distinct hues for fast recognition) + the pin (gold). -->
       <Color x:Key="DebugParamInColor">#2D6BBF</Color>

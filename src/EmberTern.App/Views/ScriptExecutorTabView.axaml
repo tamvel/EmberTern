@@ -156,7 +156,7 @@
             <Setter Property="Foreground" Value="{DynamicResource SuccessIconBrush}" />
           </Style>
           <Style Selector="TextBlock.result-failed">
-            <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
           </Style>
           <!-- Sequenced: a statement a stop / cancellation never reached — muted, neither OK nor failed. -->
           <Style Selector="TextBlock.result-notrun">

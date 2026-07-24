@@ -110,7 +110,7 @@
 
     <!-- Validation line (invalid time blocks Execute) — the IDE's ONE message surface (UX Polish Seam 4). -->
     <controls:MessageBanner Grid.Row="4" Margin="16,0,16,8"
-                            Severity="Error" BorderThickness="1"
+                            Severity="Error"
                             Message="{x:Static app:UiStrings.ProcedureExecuteDialogTimeInvalid}"
                             IsVisible="{Binding HasValidationError}" />
 

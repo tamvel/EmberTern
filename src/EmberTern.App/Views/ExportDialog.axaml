@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:app="using:EmberTern.App"
+        xmlns:controls="using:EmberTern.App.Controls"
         xmlns:vm="using:EmberTern.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -97,11 +98,8 @@
         </StackPanel>
 
         <!-- Error (stays in the options view so the user can retry) -->
-        <TextBlock Text="{Binding ErrorMessage}"
-                   IsVisible="{Binding HasError}"
-                   TextWrapping="Wrap"
-                   Foreground="{DynamicResource ErrorBrush}"
-                   FontSize="12" />
+        <controls:MessageBanner Severity="Error" Message="{Binding ErrorMessage}"
+                                IsVisible="{Binding HasError}" />
       </StackPanel>
 
       <!-- Progress -->

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using EmberTern.App.Controls;
 using EmberTern.App.Debugging;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Connections;

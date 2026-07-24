@@ -3,6 +3,7 @@
              xmlns:vm="using:EmberTern.App.ViewModels"
              xmlns:perf="using:EmberTern.Core.Performance"
              xmlns:app="using:EmberTern.App"
+             xmlns:controls="using:EmberTern.App.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="480"
@@ -84,9 +85,8 @@
           <TextBlock Text="{x:Static app:UiStrings.PerformanceProfilingHint}" FontSize="12"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
                      IsVisible="{Binding IsProfiling}" />
-          <TextBlock Text="{Binding ErrorMessage}" FontSize="12" TextWrapping="Wrap"
-                     Foreground="{DynamicResource DangerIconBrush}"
-                     IsVisible="{Binding HasError}" />
+          <controls:MessageBanner Severity="Error" Message="{Binding ErrorMessage}"
+                                  IsVisible="{Binding HasError}" />
         </StackPanel>
 
         <Button Grid.Column="1" Classes="flat"

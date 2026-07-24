@@ -1,6 +1,26 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:EmberTern.App.Controls"
         xmlns:aecc="using:AvaloniaEdit.CodeCompletion">
+
+  <!-- ============================================================================================
+       MessageBanner — the IDE's ONE message surface. Its chrome lives here, in exactly TWO variants,
+       so no host can invent a third:
+         · (default) STANDALONE — the banner sits inside content: a full border on all four sides.
+         · .docked   — the banner is a full-width strip attached to a panel edge (under a toolbar, at
+                       the foot of an editor): horizontal rules only, no side borders.
+       Nothing else about the banner is per-host: padding, stripe, icon and typography are fixed in
+       the control itself, and the message text carries the severity colour in full. Only outer
+       Margin stays with the host, because that is placement inside a layout, not chrome.
+       ============================================================================================ -->
+  <Style Selector="controls|MessageBanner">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="controls|MessageBanner.docked">
+    <Setter Property="BorderThickness" Value="0,1,0,1" />
+  </Style>
 
   <!-- Autocomplete popup: give it an ELEVATED background + border so it reads as a floating panel
        ABOVE the editor. AvaloniaEdit's default leaves it the same colour as the editor surface, which

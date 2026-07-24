@@ -45,7 +45,7 @@ public partial class MessageBanner : UserControl
         AvaloniaProperty.Register<MessageBanner, string>(nameof(Message), defaultValue: string.Empty);
 
     public static readonly StyledProperty<bool> ShowCopyProperty =
-        AvaloniaProperty.Register<MessageBanner, bool>(nameof(ShowCopy));
+        AvaloniaProperty.Register<MessageBanner, bool>(nameof(ShowCopy), defaultValue: true);
 
     public static readonly StyledProperty<bool> ShowExpandProperty =
         AvaloniaProperty.Register<MessageBanner, bool>(nameof(ShowExpand));
@@ -95,7 +95,9 @@ public partial class MessageBanner : UserControl
         set => SetValue(MessageProperty, value);
     }
 
-    /// <summary>Show the Copy button (copies <see cref="Message"/> to the clipboard).</summary>
+    /// <summary>Show the Copy button (copies <see cref="Message"/> to the clipboard). On by default — every
+    /// message worth showing is worth copying, and a per-host decision here is exactly the divergence this
+    /// control exists to remove.</summary>
     public bool ShowCopy
     {
         get => GetValue(ShowCopyProperty);

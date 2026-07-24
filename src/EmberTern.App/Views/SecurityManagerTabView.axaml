@@ -646,8 +646,8 @@
     </TabControl>
 
     <!-- Error banner — the IDE's ONE message surface (UX Polish Seam 4). -->
-    <controls:MessageBanner Grid.Row="1" IsVisible="{Binding HasError}"
-                            Severity="Error" Message="{Binding ErrorMessage}"
-                            ShowCopy="True" BorderThickness="0,1,0,0" />
+    <controls:MessageBanner Grid.Row="1" Classes="docked"
+                            IsVisible="{Binding HasError}"
+                            Severity="Error" Message="{Binding ErrorMessage}" />
   </Grid>
 </UserControl>

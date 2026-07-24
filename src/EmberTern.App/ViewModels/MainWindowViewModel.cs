@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Completion;
+using EmberTern.App.Controls;
 using EmberTern.App.Diagnostics;
 using EmberTern.App.Export;
 using EmberTern.App.Security;

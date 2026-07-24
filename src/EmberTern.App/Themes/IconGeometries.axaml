@@ -247,7 +247,10 @@
                   StrokeThickness="2"
                   StrokeLineCap="Round"
                   StrokeJoin="Round" />
-            <Ellipse Canvas.Left="13" Canvas.Top="12.5" Width="6" Height="6"
+            <!-- The breakpoint dot is an accent on the pointer, not a second subject: kept at the same
+                 centre (16, 15.5) and the same overlap with the triangle's tip, diameter trimmed 6 → 4.5
+                 so it reads as a mark rather than competing with the play shape. -->
+            <Ellipse Canvas.Left="13.75" Canvas.Top="13.25" Width="4.5" Height="4.5"
                      Fill="{DynamicResource DebugBreakpointBrush}" />
           </Canvas>
         </Viewbox>

@@ -970,22 +970,19 @@
                      Margin="8,0,8,4"
                      VerticalAlignment="Center"
                      IsVisible="{Binding EditModeHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-          <TextBlock Grid.Row="2"
-                     Text="{Binding EditStatusMessage}"
-                     Classes="subtle error"
-                     FontSize="11"
-                     Margin="8,0,8,4"
-                     TextWrapping="Wrap"
-                     IsVisible="{Binding HasEditStatusMessage}" />
+          <controls:MessageBanner Grid.Row="2"
+                                  Severity="Error"
+                                  Message="{Binding EditStatusMessage}"
+                                  Margin="8,0,8,4"
+                                  IsVisible="{Binding HasEditStatusMessage}" />
           <views:FilterPanelView Grid.Row="3" DataContext="{Binding DataFilterPanel}" />
           <views:AggregationBarView Grid.Row="4" DataContext="{Binding DataAggregationBar}" />
-          <TextBlock Grid.Row="5"
-                     Text="{Binding DataError}"
-                     Classes="subtle error"
-                     FontSize="11"
-                     Margin="8,4"
-                     TextWrapping="Wrap"
-                     IsVisible="{Binding ShowDataError}" />
+          <controls:MessageBanner Grid.Row="5"
+                                  Severity="Error"
+                                  Message="{Binding DataError}"
+                                  Margin="8,4"
+                                  VerticalAlignment="Top"
+                                  IsVisible="{Binding ShowDataError}" />
           <DataGrid Grid.Row="5"
                     x:Name="DataPreviewGrid"
                     behaviors:GridLayoutBehavior.GridId="TableDetail.Data"
@@ -1099,10 +1096,8 @@
            so without this the user would see no feedback at all. -->
       <!-- Compile / load errors go through the IDE's ONE message surface (UX Polish Seam 4) —
            same severity stripe, icon, wrapping and Copy affordance on every editor. -->
-      <controls:MessageBanner Severity="Error"
+      <controls:MessageBanner Classes="docked" Severity="Error"
                               Message="{Binding ErrorMessage}"
-                              ShowCopy="True"
-                              BorderThickness="0,1,0,0"
                               IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
       <!-- Non-error completion info (e.g. "Recomputed statistics for N of M indexes"). -->
       <TextBlock Text="{Binding StatusMessage}"

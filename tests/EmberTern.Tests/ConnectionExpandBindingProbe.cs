@@ -1214,10 +1214,69 @@ public sealed class ConnectionExpandBindingProbe
             // The control loads, and changing Severity re-derives BOTH keys (the bindings paint from these).
             var banner = new EmberTern.App.Controls.MessageBanner { Message = "boom" };
             Assert.Equal("ErrorBrush", banner.SeverityBrushKey); // default severity is Error
+            Assert.True(banner.ShowCopy); // Copy is on by default — no per-host decision
             banner.Severity = EmberTern.App.Controls.MessageSeverity.Warning;
             Assert.Equal("WarningBrush", banner.SeverityBrushKey);
             Assert.Equal("Icon.AlertTriangle", banner.SeverityGeometryKey);
         }, CancellationToken.None);
+    }
+
+    // UX Polish Seam 4 (QA) — the banner's chrome comes from exactly TWO shared variants in
+    // ControlStyles.axaml, never from a per-host local value. Style setters only apply once the control is
+    // in a styled tree, so this hosts them in a real window and asserts the applied values: standalone =
+    // a full border, .docked = horizontal rules only, both on PanelBrush.
+    [Fact]
+    public async System.Threading.Tasks.Task MessageBannerChrome_HasExactlyTwoVariants()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var standalone = new EmberTern.App.Controls.MessageBanner { Message = "x" };
+            var docked = new EmberTern.App.Controls.MessageBanner { Message = "x" };
+            docked.Classes.Add("docked");
+
+            var window = new Avalonia.Controls.Window
+            {
+                Content = new Avalonia.Controls.StackPanel { Children = { standalone, docked } },
+            };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(new Avalonia.Thickness(1), standalone.BorderThickness);
+            Assert.Equal(new Avalonia.Thickness(0, 1, 0, 1), docked.BorderThickness);
+            Assert.NotNull(standalone.Background);
+            Assert.Equal(standalone.Background, docked.Background);
+            Assert.Equal(standalone.BorderBrush, docked.BorderBrush);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // UX Polish Seam 4 (QA) — the SQL Editor's Messages panel stays a log, but a problem entry speaks the
+    // one message language: its stripe/icon/colour come from the SAME MessageBanner mapping. An Info line
+    // keeps the normal reading colour and earns no marker.
+    [Fact]
+    public void QueryMessage_SeverityPresentation_MatchesTheBanner()
+    {
+        var error = new QueryMessageViewModel(EmberTern.App.Controls.MessageSeverity.Error, "boom");
+        var warning = new QueryMessageViewModel(EmberTern.App.Controls.MessageSeverity.Warning, "careful");
+        var info = new QueryMessageViewModel(EmberTern.App.Controls.MessageSeverity.Info, "done");
+
+        Assert.Equal(
+            EmberTern.App.Controls.MessageBanner.BrushKeyFor(EmberTern.App.Controls.MessageSeverity.Error),
+            error.SeverityBrushKey);
+        Assert.Equal(
+            EmberTern.App.Controls.MessageBanner.GeometryKeyFor(EmberTern.App.Controls.MessageSeverity.Error),
+            error.SeverityGeometryKey);
+
+        Assert.True(error.ShowSeverityMarker);
+        Assert.True(warning.ShowSeverityMarker);
+        Assert.False(info.ShowSeverityMarker);
+
+        Assert.Equal("ErrorBrush", error.MessageBrushKey);
+        Assert.Equal("WarningBrush", warning.MessageBrushKey);
+        Assert.Equal("ForegroundBrush", info.MessageBrushKey); // a log is mostly Info — keep it legible
     }
 
     // UX Polish Seam 4 — a blocking pre-flight item is an Error row, everything else a Warning row. The

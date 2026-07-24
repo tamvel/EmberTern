@@ -220,12 +220,12 @@
          whole visual language (PanelBrush chrome + a thin severity stripe + a severity icon, calm, no loud
          fill; full message by default, capped + scrolled, with Copy / Expand / Dismiss) — this row now only
          says WHEN it shows and WHAT it says. Expand state stays on the VM so a fresh fault re-expands. -->
-    <controls:MessageBanner Grid.Row="1"
+    <controls:MessageBanner Grid.Row="1" Classes="docked"
                             IsVisible="{Binding ShowErrorBar}"
                             Severity="Error"
                             Message="{Binding ErrorDetail}"
                             IsExpanded="{Binding IsErrorExpanded, Mode=TwoWay}"
-                            ShowCopy="True" ShowExpand="True" ShowDismiss="True"
+                            ShowExpand="True" ShowDismiss="True"
                             DismissCommand="{Binding DismissErrorCommand}" />
 
     <Panel Grid.Row="2">
@@ -343,7 +343,7 @@
               <DataTemplate x:DataType="dbg:DebugPreflightItem">
                 <controls:MessageBanner Severity="{Binding BannerSeverity}"
                                         Message="{Binding Message}"
-                                        BorderThickness="1" Margin="0,0,0,4" />
+                                        Margin="0,0,0,4" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
