@@ -59,7 +59,7 @@
       <SolidColorBrush x:Key="DebugCurrentLineBarBrush" Color="{StaticResource DebugCurrentLineBarColor}" />
       <SolidColorBrush x:Key="DebugBreakpointBrush" Color="{StaticResource DebugBreakpointColor}" />
       <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4). -->
-      <Color x:Key="DebugVariableChangedColor">#33C8A000</Color>
+      <Color x:Key="DebugVariableChangedColor">#33E0A830</Color>
       <SolidColorBrush x:Key="DebugVariableChangedBrush" Color="{StaticResource DebugVariableChangedColor}" />
       <!-- Variables panel: per-kind glyph colours (distinct hues for fast recognition) + the pin (gold). -->
       <Color x:Key="DebugParamInColor">#5B9BD5</Color>
@@ -293,7 +293,7 @@
       <SolidColorBrush x:Key="DebugCurrentLineBarBrush" Color="{StaticResource DebugCurrentLineBarColor}" />
       <SolidColorBrush x:Key="DebugBreakpointBrush" Color="{StaticResource DebugBreakpointColor}" />
       <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4). -->
-      <Color x:Key="DebugVariableChangedColor">#3FE0B000</Color>
+      <Color x:Key="DebugVariableChangedColor">#3FD69E24</Color>
       <SolidColorBrush x:Key="DebugVariableChangedBrush" Color="{StaticResource DebugVariableChangedColor}" />
       <!-- Variables panel: per-kind glyph colours (distinct hues for fast recognition) + the pin (gold). -->
       <Color x:Key="DebugParamInColor">#2D6BBF</Color>

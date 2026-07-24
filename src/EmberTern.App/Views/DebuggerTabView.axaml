@@ -491,7 +491,7 @@
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:DebugVariableGroupViewModel">
                       <StackPanel Margin="0,2,0,0">
-                        <Border Background="Transparent" Padding="6,3"
+                        <Border Background="Transparent" Padding="8,4"
                                 Tapped="OnVariableGroupHeaderTapped">
                           <StackPanel Orientation="Horizontal" Spacing="4">
                             <TextBlock FontSize="10" VerticalAlignment="Center"
@@ -510,7 +510,7 @@
                         <ItemsControl ItemsSource="{Binding Rows}" IsVisible="{Binding IsExpanded}">
                           <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:DebugVariableRowViewModel">
-                              <Border Classes.var-changed="{Binding IsChanged}" Padding="4,1" Margin="0,0,0,1">
+                              <Border Classes.var-changed="{Binding IsChanged}" Padding="8,3,12,3" Margin="0,0,0,1">
                                 <!-- Right-click → add a data breakpoint on this variable (D12, §9.8.4). The
                                      change detection lives entirely in Core; this only registers the watch.
                                      Routed via code-behind (an ElementName binding can't cross into a
@@ -521,7 +521,7 @@
                                               Click="OnBreakWhenChangesClick" />
                                   </ContextMenu>
                                 </Border.ContextMenu>
-                                <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,1">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0">
                                   <!-- Pin-to-top toggle — gold ★ pinned / faint ☆ not, so it never blends into
                                        the kind glyph beside it. Not a Watch (§9.5). -->
                                   <Button Grid.Column="0" Classes="icon" Width="18" Height="18" Padding="0"
