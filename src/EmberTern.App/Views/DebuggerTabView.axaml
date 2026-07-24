@@ -414,8 +414,12 @@
           </ItemsControl>
 
           <Button x:Name="LaunchButton" Classes="primary" HorizontalAlignment="Left"
-                  Content="{x:Static app:UiStrings.DebuggerLaunchButton}"
-                  Command="{Binding LaunchCommand}" />
+                  Command="{Binding LaunchCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchButton}" VerticalAlignment="Center" />
+              <TextBlock Classes="shortcut-chip" Text="{x:Static app:UiStrings.DebuggerLaunchShortcut}" />
+            </StackPanel>
+          </Button>
         </StackPanel>
       </ScrollViewer>
 

@@ -43,6 +43,15 @@
     <Setter Property="Margin" Value="0,0,0,4" />
   </Style>
 
+  <!-- The keyboard-shortcut hint shown beside a command's label on an accent (primary) button — e.g.
+       Execute F5, Start debugging F5. ONE presentation for every such chip across the app; the shortcut
+       is carried in this chip, never baked into the label string with parentheses. -->
+  <Style Selector="TextBlock.shortcut-chip">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentSubtleBrush}" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
   <Style Selector="TextBlock.title">
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="FontSize" Value="14" />

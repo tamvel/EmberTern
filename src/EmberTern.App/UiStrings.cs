@@ -111,7 +111,7 @@ internal static class UiStrings
     public const string ScriptExecutorTabTitle = "Script Executor";
     public const string ToolbarScriptExecutorTooltip = "Script Executor (migrations & multi-object DDL)";
     public const string ScriptRun = "Run";
-    public const string ScriptRunTooltip = "Run the whole script in one transaction (F5)";
+    public const string ScriptRunTooltip = "Run the whole script in one transaction · F5";
     public const string ScriptStopTooltip = "Stop after the current statement";
     public const string ScriptCommit = "Commit";
     public const string ScriptCommitTooltip = "Commit the open script transaction";
@@ -412,7 +412,7 @@ internal static class UiStrings
     public const string ToolbarToggleQueryPanelIcon = "▤";
     public const string ToolbarToggleQueryPanelTooltip = "Show / hide saved queries panel";
     public const string ToolbarFormatSqlIcon = "⎄";
-    public const string ToolbarFormatSqlTooltip = "Format SQL (Alt+F)";
+    public const string ToolbarFormatSqlTooltip = "Format SQL · Alt+F";
     public const string ToolbarRefreshDataIcon = "↺";
     public const string ToolbarRefreshDataTooltip = "Refresh data preview";
 
@@ -1113,7 +1113,7 @@ internal static class UiStrings
     public const string FieldsContextMenuDrop = "Delete field";
     public const string FieldsContextMenuCreateForeignKey = "Create foreign key…";
     public const string FieldEditEditIcon = "✎";
-    public const string FieldEditEditTooltip = "Edit selected field (F2)";
+    public const string FieldEditEditTooltip = "Edit selected field · F2";
     public const string FieldEditForeignKeyIcon = "⛓";
     public const string FieldEditForeignKeyTooltip = "Create foreign key…";
 
@@ -1641,7 +1641,7 @@ internal static class UiStrings
     public const string SessionManagerLastRefreshFormat = "Last refresh {0:HH:mm:ss}";
 
     // Global Search (Etap 3 — Search Results)
-    public const string ToolbarGlobalSearchTooltip = "Global Search (Ctrl+Shift+F)";
+    public const string ToolbarGlobalSearchTooltip = "Global Search · Ctrl+Shift+F";
 
     // Export DDL to .sql (portable object script — structure + comments, no grants).
     public const string ToolbarExportDdlTooltip = "Export DDL to .sql";
@@ -1741,8 +1741,10 @@ internal static class UiStrings
         "changes other sessions commit during the run; Snapshot gives a consistent view from the moment you " +
         "start, unchanged to the end. Either way the debug session runs in its own transaction and is rolled " +
         "back when it ends.";
-    // The (F5) hint surfaces Seam C's keyboard-first launch — the whole operation is reachable from the keyboard.
-    public const string DebuggerLaunchButton = "Start debugging (F5)";
+    // The shortcut surfaces Seam C's keyboard-first launch — the whole operation is reachable from the keyboard.
+    // The label carries no parenthesised shortcut; the key is rendered in the shared shortcut-chip beside it.
+    public const string DebuggerLaunchButton = "Start debugging";
+    public const string DebuggerLaunchShortcut = "F5";
     public const string DebuggerLaunchPreparing = "Preparing…";
     // Pre-flight report (§9.2 / §4.6). D15.3 polish: the section is shown ONLY when it has something to say —
     // no header, and no "all clear" line when clean (a clean launch form stays maximally quiet). Each surfaced
@@ -1755,15 +1757,15 @@ internal static class UiStrings
     public const string DebuggerPreflightUnsteppable =
         "The routine source could not be parsed into step points — debugging cannot start.";
     // Toolbar / commands.
-    public const string DebuggerContinueTooltip = "Continue (F5)";
-    public const string DebuggerStepIntoTooltip = "Step Into (F11)";
-    public const string DebuggerStepOverTooltip = "Step Over (F10)";
-    public const string DebuggerStepOutTooltip = "Step Out (Shift+F11)";
-    public const string DebuggerRunToCursorTooltip = "Run To Cursor (Ctrl+F10)";
+    public const string DebuggerContinueTooltip = "Continue · F5";
+    public const string DebuggerStepIntoTooltip = "Step Into · F11";
+    public const string DebuggerStepOverTooltip = "Step Over · F10";
+    public const string DebuggerStepOutTooltip = "Step Out · Shift+F11";
+    public const string DebuggerRunToCursorTooltip = "Run To Cursor · Ctrl+F10";
     public const string DebuggerRunToCursorMenu = "Run to Cursor";
-    public const string DebuggerStopTooltip = "Stop debugging (Shift+F5)";
-    public const string DebuggerRestartTooltip = "Restart (Ctrl+Shift+F5)";
-    public const string DebuggerToggleBreakpointTooltip = "Toggle breakpoint (F9)";
+    public const string DebuggerStopTooltip = "Stop debugging · Shift+F5";
+    public const string DebuggerRestartTooltip = "Restart · Ctrl+Shift+F5";
+    public const string DebuggerToggleBreakpointTooltip = "Toggle breakpoint · F9";
     // Status line.
     public const string DebuggerStatusReady = "Ready to launch.";
     public const string DebuggerStatusPausedFormat = "Paused at line {0} — {1}";
@@ -1911,7 +1913,7 @@ internal static class UiStrings
         "Run the text as a PSQL statement against the live frame (may assign variables). Off: evaluate it as an expression.";
     public const string DebuggerImmediateEvaluateButton = "Evaluate";
     public const string DebuggerImmediateClearTooltip = "Clear";
-    public const string DebuggerEvaluateSelectionTooltip = "Evaluate the selected expression (Shift+F9)";
+    public const string DebuggerEvaluateSelectionTooltip = "Evaluate the selected expression · Shift+F9";
     public const string DebuggerImmediateEmpty = "No evaluations yet. Evaluate an expression, or select one in the source and press Shift+F9.";
     public const string DebuggerEvalKindExpression = "expression";
     public const string DebuggerEvalKindStatement = "statement";

@@ -813,8 +813,7 @@
                   <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource OnAccentBrush}"
                                     Width="14" Height="14" VerticalAlignment="Center" />
                   <TextBlock Text="{Binding ExecuteLabel}" VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding ExecuteHint}" FontSize="10"
-                             Foreground="{DynamicResource OnAccentSubtleBrush}" VerticalAlignment="Center" />
+                  <TextBlock Classes="shortcut-chip" Text="{Binding ExecuteHint}" />
                 </StackPanel>
               </Button>
               <Button Classes="flat" Padding="10,4"
