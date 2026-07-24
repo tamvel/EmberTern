@@ -332,9 +332,44 @@ noted.
     Seams 0–4 (bare-var squiggles, shortcut chips, current-line wash, Variables spacing + the new blue
     changed-value wash, every message banner, the Messages-log problem rows, and the smaller debugger-icon dot,
     in **both** themes) **await the user's visual QA**.
-  - **NEXT SESSION STARTS AT Seam 5 (edit during debugging)** — largest/riskiest, touches the close guard + a
-    live session; checkpoint before starting it. Then **Seam 6** (Quick Fix design doc only). Grounding facts
-    for Seam 5 in the plan file: source editor is `IsReadOnly="True"`
+  - **Seam 5 — edit code during debugging → DONE (5a `7401060` · 5b `846ecf2` · 5c `19aa236`).**
+    **5a (editable editor + change tracking):** the debugger source editor is a **normal editor at every
+    phase**, incl. a live/paused session — typing never ends a session, *saving* does. The hazard was that
+    stepping rewrites the display on every frame change, so the **edit buffer is now separate from the
+    frame-source display**: `_source` = what the DB holds (the baseline the running session was compiled
+    from), `_editBuffer` = the root routine's editable text, `SourceText` = the buffer for the **root** frame
+    / that frame's own source otherwise. **ONE helper `SourceForFrame(frame)` makes that choice and all four
+    `SourceText` assignments go through it.** `IsReadOnly` survives with a narrower, **structural** meaning —
+    while a callee/caller frame is selected the editor shows *another routine's* source, which this tab cannot
+    save; `IsSourceEditable` says so and the VM **also rejects the edit**, and frame selection runs through the
+    one `SetSelectedFrame` funnel that raises it. `IsSourceDirty` is a **diff**, not a flag (edit back → clean).
+    Editor text flows both ways (`SyncEditorText` suppresses its own write). The three debug renderers already
+    clamp to the document, so a shortened buffer can't make them throw.
+    **5b (save + compile):** reuses the object editors' machinery — same Ddl-lane `FirebirdDdlExecutor`, same
+    `ConfirmRequest` dialog, same `ISavableObjectEditor`. Flow: live session → warn plainly → `Stop` (rollback
+    + close attachment, §4.4) → compile → on success adopt the text, **re-parse**, and land **ReadyToLaunch
+    with the pre-flight re-run against the NEW code**; on failure the error goes to the shared `MessageBanner`
+    Error Bar and the buffer is kept. Declining returns failure without touching session or buffer (Cancel is a
+    real cancel). **Breakpoints are cleared on save** — their offsets belong to the old text and "keep the line
+    number" would silently move them (§0). **⚠ A PACKAGE member tab can NEVER save** (`IsSavable` false): its
+    source is *reconstructed* as a standalone `CREATE PROCEDURE/FUNCTION`, so compiling it would create a
+    standalone routine instead of altering the package (rule #11) — the refusal is **in the VM**, not just the
+    wiring. Toolbar Save + **Ctrl+S**.
+    **5c (close guard):** `DebuggerTabViewModel` implements `IUnsavedWorkSource`; `WorkspaceTabViewModel`'s
+    `UnsavedWork`/`SavableEditor` stop returning null for `Debugger` (`SavableEditor` is **conditional** —
+    a package-member tab reports its work but is never offered Save). **Per-tab close promoted from
+    Discard/Cancel to three-way Save / Discard / Cancel** for every tab with somewhere to save — benefits ALL
+    editor tabs, matching disconnect + app close. **⚠ Hardening worth knowing:** the close proceeds only if
+    `tab.UnsavedWork` is genuinely null afterwards, **not merely if `SaveAsync` reported success** — the
+    adapters can return success without compiling anything (no `DdlExecutor` ⇒ `ExecuteCompileAsync`
+    early-returns, `ErrorMessage` stays null), and this is the one place where a wrong "success" destroys code.
+    *(The adapter contract itself is a separate fix — see the spawned task.)* Three existing close-guard tests
+    moved `ConfirmationRequested` → `ChoiceRequested` (Confirmed → Discarded). Build 0/0; **5169 green** (+12
+    across the three seams); smoke clean. **Live QA still owed:** the successful save+compile path needs a
+    server (edit a paused routine → Save → warning → session ends → recompiles → ReadyToLaunch with the new
+    code; a deliberate compile error surfaces in the Error Bar; closing a dirty debugger tab offers Save).
+  - **NEXT: Seam 6 (Quick Fix / Light Bulb) — DESIGN DOC ONLY, no implementation.** Grounding facts kept from
+    the plan (now historical for Seam 5): the source editor used to be `IsReadOnly="True"`
     (`DebuggerTabView.axaml:441`) and `SourceText` is overwritten during stepping (`:1256/1307/1450` — needs an
     editable buffer separate from the frame-source display); `ISavableObjectEditor.SaveAsync` pattern in
     `SourceObjectDetailTabViewModel.cs:489-544`; per-tab close is Discard/Cancel-only
