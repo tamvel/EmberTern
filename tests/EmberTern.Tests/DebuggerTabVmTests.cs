@@ -1567,6 +1567,104 @@ public class DebuggerTabVmTests
         Assert.True(vm.IsSourceDirty);
     }
 
+    // ── Seam 5b — save + compile from the debugger tab ──────────────────────────────────────────────
+
+    // The tests below wire a DDL executor over a NOT-connected service: enough to make the tab savable,
+    // and its ExecuteAsync fails the way a real compile error does (an exception the save path maps into
+    // the Error Bar). The SUCCESS path needs a live server and is covered by manual QA on the lab.
+
+    [Fact]
+    public async Task Save_WithoutADdlExecutor_IsUnavailable()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        vm.ApplySourceEdit(Sql + "\n-- touched");
+
+        Assert.False(vm.CanSaveSource);
+        var result = await vm.SaveAsync();
+        Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task Save_OnAPackageMember_IsRefused_EvenWithAnExecutor()
+    {
+        // §0 / rule #11: a package member's source is RECONSTRUCTED as a standalone CREATE PROCEDURE, so
+        // compiling it would create a standalone routine instead of altering the package. The refusal lives
+        // in the VM, not only in the wiring — handing this tab an executor must not change that.
+        using var service = new FirebirdConnectionService();
+        var launcher = new FakeLauncher(new FakeExecutor());
+        var vm = new DebuggerTabViewModel(
+            "PUB_RUN", _ => Task.FromResult<string?>(Sql), launcher, packageName: "PKG_DBG")
+        {
+            DdlExecutor = new FirebirdDdlExecutor(service),
+        };
+        await vm.PrepareAsync();
+        vm.ApplySourceEdit(Sql + "\n-- touched");
+
+        Assert.False(vm.CanSaveSource);
+        var result = await vm.SaveAsync();
+        Assert.False(result.Success);
+        Assert.True(vm.IsSourceDirty); // the edit is kept — refusing to save never discards work
+    }
+
+    [Fact]
+    public async Task Save_CleanTab_IsANoOp_AndNeverTouchesTheSession()
+    {
+        using var service = new FirebirdConnectionService();
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        vm.DdlExecutor = new FirebirdDdlExecutor(service);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        var result = await vm.SaveAsync();
+
+        Assert.True(result.Success);
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase); // nothing to save ⇒ no warning, no teardown
+    }
+
+    [Fact]
+    public async Task Save_DuringALiveSession_Cancelled_KeepsTheSessionAndTheEdit()
+    {
+        using var service = new FirebirdConnectionService();
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        vm.DdlExecutor = new FirebirdDdlExecutor(service);
+        vm.ConfirmationRequested += _ => Task.FromResult(false); // the user backs out of the warning
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        var edited = Sql + "\n-- touched";
+        vm.ApplySourceEdit(edited);
+        var result = await vm.SaveAsync();
+
+        Assert.False(result.Success);              // Cancel is a real cancel, not a silent success
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase); // the session is still live
+        Assert.True(vm.IsSourceDirty);
+        Assert.Equal(edited, vm.SourceText);
+    }
+
+    [Fact]
+    public async Task Save_DuringALiveSession_Confirmed_EndsTheSessionBeforeCompiling()
+    {
+        using var service = new FirebirdConnectionService();
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        vm.DdlExecutor = new FirebirdDdlExecutor(service); // offline ⇒ the compile itself fails
+        bool warned = false;
+        vm.ConfirmationRequested += _ => { warned = true; return Task.FromResult(true); };
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        var edited = Sql + "\n-- touched";
+        vm.ApplySourceEdit(edited);
+        var result = await vm.SaveAsync();
+
+        Assert.True(warned);                        // the user was told, before anything happened
+        Assert.Equal(DebuggerPhase.Idle, vm.Phase);  // session stopped + its transaction closed FIRST
+        Assert.False(result.Success);                // ... then the compile failed (no connection)
+        Assert.True(vm.ShowErrorBar);                // and the failure is in the shared Error Bar
+        Assert.Equal(edited, vm.SourceText);         // the user's text is never discarded on failure
+        Assert.True(vm.IsSourceDirty);
+    }
+
     [Fact]
     public async Task Breakpoints_AreRootScoped_HiddenWhileViewingACallee()
     {

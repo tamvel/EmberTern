@@ -62,7 +62,7 @@ public enum DebuggerPhase
 /// server = step-over, 100% faithful §5.3); triggers/packages/local routines/cursors and the Watches/Immediate
 /// surfaces are later milestones.</para>
 /// </summary>
-public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposable
+public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposable, ISavableObjectEditor
 {
     private readonly Func<CancellationToken, Task<string?>> _sourceProvider;
     private readonly IDebugSessionLauncher _launcher;
@@ -488,6 +488,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         _editBuffer = text;
         SourceText = text;
         OnPropertyChanged(nameof(IsSourceDirty));
+        SaveSourceCommand.NotifyCanExecuteChanged();
     }
 
     // The text to display for a frame: the root routine's frame shows the live EDIT BUFFER (so an unsaved
@@ -1981,6 +1982,127 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     }
 
     public async ValueTask DisposeAsync() => await TeardownRunAsync().ConfigureAwait(false);
+
+    // ── Save + compile (Seam 5b) ──────────────────────────────────────────────────────────────────
+    //
+    // Saving is the deliberate act that starts a NEW work cycle. The ratified flow: if a session is
+    // live, warn plainly that saving ends it → tear the session down (rollback + close its attachment,
+    // §4.4) → compile through the SAME FirebirdDdlExecutor path the object editors use → on success
+    // stay right here with the new code re-parsed and ready to launch; on failure the compile error
+    // surfaces in the shared Error Bar and the tab keeps the user's text.
+
+    /// <summary>The DDL executor (Ddl lane, autonomous + auto-committed) used to compile a saved routine.
+    /// Null in tests / when unwired — then the tab simply cannot save.</summary>
+    internal FirebirdDdlExecutor? DdlExecutor { get; set; }
+
+    /// <summary>Confirmation gate, wired by the owner to the shared ConfirmDialog. With no handler
+    /// (tests) it proceeds.</summary>
+    public event Func<ConfirmRequest, Task<bool>>? ConfirmationRequested;
+
+    private Task<bool> RequestConfirmAsync(ConfirmRequest request)
+        => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
+
+    /// <summary>True when there is unsaved work AND somewhere to save it.
+    /// <para>
+    /// A PACKAGE member tab can never save (§0 / rule #11): its source is <em>reconstructed</em> as a
+    /// standalone <c>CREATE PROCEDURE/FUNCTION</c> so the engine can frame it, and compiling that text would
+    /// create a standalone routine rather than alter the package. Editing a member stays the Package editor's
+    /// job. The refusal lives here, not only in the wiring, so no future caller can hand this tab an executor
+    /// and silently get the wrong DDL.
+    /// </para></summary>
+    public bool CanSaveSource
+        => DdlExecutor is not null && _packageName is null && IsSourceDirty && _body is not null;
+
+    [RelayCommand(CanExecute = nameof(CanSaveSource))]
+    private Task SaveSource() => SaveAsync();
+
+    /// <summary>
+    /// <see cref="ISavableObjectEditor"/> — compiles the edit buffer, ending a live session first (with
+    /// the user's explicit consent). Returns failure without touching the session if the user declines,
+    /// so "Cancel" on the warning is a real cancel, not a silent no-op that reports success.
+    /// </summary>
+    public async Task<EditorSaveResult> SaveAsync(CancellationToken cancellationToken = default)
+    {
+        if (DdlExecutor is null || _packageName is not null)
+        {
+            return new EditorSaveResult(false, UiStrings.DebuggerSaveUnavailable);
+        }
+        if (!IsSourceDirty) return new EditorSaveResult(true, null); // nothing to do
+        var sql = _editBuffer;
+        if (string.IsNullOrWhiteSpace(sql)) return new EditorSaveResult(false, UiStrings.DebuggerSaveEmpty);
+
+        // A live session was compiled from the OLD code — saving invalidates it, so say so before doing it.
+        if (IsSessionLive)
+        {
+            var confirmed = await RequestConfirmAsync(new ConfirmRequest
+            {
+                Title = UiStrings.DebuggerSaveEndsSessionTitle,
+                Message = string.Format(
+                    CultureInfo.CurrentCulture, UiStrings.DebuggerSaveEndsSessionMessage, RoutineName),
+                ConfirmLabel = UiStrings.DebuggerSaveEndsSessionConfirm,
+                CancelLabel = UiStrings.DialogCancel,
+            }).ConfigureAwait(true);
+            if (!confirmed) return new EditorSaveResult(false, null); // cancelled: session + buffer untouched
+
+            await StopAsync().ConfigureAwait(true); // rollback + close the debug attachment, back to Idle
+        }
+
+        ClearError();
+        try
+        {
+            await DdlExecutor.ExecuteAsync(sql, cancellationToken).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is DdlExecutionException or InvalidOperationException)
+        {
+            var message = string.Format(
+                CultureInfo.CurrentCulture, UiStrings.DebuggerSaveCompileFailedFormat, ex.Message);
+            SetError(message);
+            return new EditorSaveResult(false, message);
+        }
+
+        AdoptSavedSource(sql);
+
+        // The compiled routine is now the one on screen, so the tab lands in the state that is one keystroke
+        // from debugging it: ready to launch, with the pre-flight re-run against the NEW code (a fresh edit
+        // can introduce a fresh §4.6 warning, and the old report described the old text).
+        BuildPreflight(hasStepPoints: _stepPoints.Count > 0 && _body is not null);
+        Phase = DebuggerPhase.ReadyToLaunch;
+        StatusText = UiStrings.DebuggerStatusSaved;
+        return new EditorSaveResult(true, null);
+    }
+
+    /// <summary>A session exists that saving would invalidate — running or paused, or a terminal state whose
+    /// frame/attachment is still held for inspection.</summary>
+    private bool IsSessionLive => _run is not null;
+
+    // The compile succeeded, so the database now holds the buffer: it becomes the new saved baseline and the
+    // parse is redone from it, so step points, breakpoint snapping and the launch panel all describe the code
+    // that is actually deployed. Re-parsing here (rather than reloading from the server) keeps the exact text
+    // the user compiled — no round-trip, no risk of a reformatted round-trip differing from what they see.
+    private void AdoptSavedSource(string sql)
+    {
+        _source = sql;
+        _editBuffer = sql;
+        SourceText = sql;
+        OnPropertyChanged(nameof(IsSourceDirty));
+        SaveSourceCommand.NotifyCanExecuteChanged();
+
+        _model = SemanticModel.Build(SqlParser.Parse(sql).Root);
+        var ddl = _model.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);
+        _body = ddl?.Body;
+        _isFunction = ddl?.ObjectKind == DdlObjectKind.Function;
+        _stepPoints = _body is null
+            ? Array.Empty<IExecutableStatement>()
+            : _body.DescendantNodesAndSelf().OfType<IExecutableStatement>().ToList();
+        OnPropertyChanged(nameof(IsSourceEditable));
+
+        // Offsets from the old text mean nothing in the new one — a breakpoint kept by number would land on
+        // an unrelated statement. Clearing is the honest option (§0: never pretend to know where it moved).
+        foreach (var offset in _breakpoints.Offsets.ToList()) _breakpoints.Remove(offset);
+        RebuildBreakpointPanel();
+        OnPropertyChanged(nameof(BreakpointOffsets));
+        DebugMarkersChanged?.Invoke(this, EventArgs.Empty);
+    }
 }
 
 /// <summary>The content of a Peek Frame preview (Stage X / D8, spec §5): a frame's routine name, its full

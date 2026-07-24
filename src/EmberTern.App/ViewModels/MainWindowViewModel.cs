@@ -4839,6 +4839,11 @@ public partial class MainWindowViewModel : ViewModelBase
             _watchStore,
             columnsProvider: (t, ct) => EnsureColumnsAsync(t, ct));
 
+        // Seam 5b — the debugger tab saves + compiles the routine it is debugging through the SAME Ddl-lane
+        // executor and the SAME confirmation dialog every object editor uses; no second save mechanism.
+        debugger.DdlExecutor = _ddlExecutor;
+        debugger.ConfirmationRequested += RequestConfirmAsync;
+
         var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, name, _service.ActiveProfile?.Id);
         WorkspaceTabs.Add(tab);
         SelectTab(tab);
@@ -4872,6 +4877,10 @@ public partial class MainWindowViewModel : ViewModelBase
             columnsProvider: (t, ct) => EnsureColumnsAsync(t, ct),
             packageName: packageName);
 
+        // No DdlExecutor here on purpose (Seam 5b): a package member's source is RECONSTRUCTED as a
+        // standalone CREATE PROCEDURE/FUNCTION so the engine can frame it — compiling that text would create
+        // a standalone routine instead of altering the package. Editing a package member stays the Package
+        // editor's job; the VM refuses to save a package tab regardless, this just never offers it.
         var title = string.Format(CultureInfo.CurrentCulture, "{0}.{1}", packageName, memberName);
         var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, title, _service.ActiveProfile?.Id);
         WorkspaceTabs.Add(tab);

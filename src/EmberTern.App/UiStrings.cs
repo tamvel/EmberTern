@@ -1803,6 +1803,20 @@ internal static class UiStrings
     public const string DebuggerFriendlySqlError =
         "SQL error — check the expression's syntax and that all names exist.";
     public const string DebuggerFriendlyRawTooltip = "Full Firebird message";
+    // Save + compile from the debugger tab (UX Polish Seam 5b). Saving is a deliberate new work cycle: it
+    // ends a live session (which was compiled from the old code) before recompiling the routine.
+    public const string DebuggerSave = "Save";
+    public const string DebuggerSaveTooltip = "Save and compile the routine · Ctrl+S";
+    public const string DebuggerSaveUnavailable = "This debugger tab cannot save (no connection).";
+    public const string DebuggerSaveEmpty = "There is nothing to compile.";
+    public const string DebuggerSaveEndsSessionTitle = "Save ends the debug session";
+    public const string DebuggerSaveEndsSessionMessage =
+        "Saving recompiles {0}, so the running debug session no longer matches the code.\n\n"
+        + "The session will be stopped and its transaction rolled back before compiling. "
+        + "You can start debugging again straight away with the new code.";
+    public const string DebuggerSaveEndsSessionConfirm = "Stop session and save";
+    public const string DebuggerSaveCompileFailedFormat = "Compile failed: {0}";
+    public const string DebuggerStatusSaved = "Saved and compiled.";
     // Variables panel.
     public const string DebuggerVariablesHeader = "Variables";
     public const string DebuggerVariablesEmpty = "No variables in the current frame.";

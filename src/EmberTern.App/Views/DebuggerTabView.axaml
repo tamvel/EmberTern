@@ -194,6 +194,17 @@
             </StackPanel>
           </Button>
           <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+          <!-- Save + compile (Seam 5b). Enabled only when there is unsaved work; saving a live session warns
+               first, then ends it. Neutral icon: saving is not a debugger run command. -->
+          <Button Classes="flat" FontSize="11"
+                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerSaveTooltip}"
+                  Command="{Binding SaveSourceCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <controls:SvgIcon Data="{StaticResource Icon.Save}" Width="14" Height="14" />
+              <TextBlock Text="{x:Static app:UiStrings.DebuggerSave}" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
           <!-- Break on exception (D12, §9.8.1) — a pure toggle of DebugSession.BreakOnException; all pause +
                routing logic is in Core. A behaviour MODE, so a warning tone, not the destructive danger. -->
           <CheckBox IsChecked="{Binding BreakOnException, Mode=TwoWay}"

@@ -470,6 +470,9 @@ public partial class DebuggerTabView : UserControl
             case Key.F11: Invoke(_vm.StepIntoCommand); break;
             case Key.F9 when shift: EvaluateSelection(); break;
             case Key.F9: ToggleBreakpointAtCaret(); break;
+            // Seam 5b — Ctrl+S saves + compiles, the same key it is in every object editor. Handled even
+            // when there is nothing to save, so it never falls through to some other surface's Save.
+            case Key.S when ctrl: Invoke(_vm.SaveSourceCommand); break;
             // Ctrl+Alt+Up/Down move the frame selection up/down the call stack (VS/Rider-standard, spec §5.2).
             case Key.Up when ctrl && alt: _vm.MoveFrameSelection(-1); break;
             case Key.Down when ctrl && alt: _vm.MoveFrameSelection(+1); break;
