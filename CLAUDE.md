@@ -170,6 +170,11 @@ noted.
   [docs/design/sql-data-export.md](docs/design/sql-data-export.md). **Milestone COMPLETE + user-confirmed
   (2026-07-17)**, including the follow-up fix for environments that hand every cell back as a `string`
   (the writer parses each kind strictly under InvariantCulture/ISO, refusing anything ambiguous — §0).
+- **Shared `MessageBanner`** (`App/Controls/MessageBanner.axaml`) — the IDE's ONE message surface: a calm
+  severity-striped bar (Info/Success/Warning/Error) with the full message wrapped + selectable and optional
+  Copy / Expand / Dismiss. Live on the debugger Error Bar + launch pre-flight, all 10 object editors, Execute
+  Procedure/Function, the Execute Procedure dialog and the Security Manager. **Use it for any new error /
+  warning / info message on a work surface — never a locally-styled coloured `TextBlock`.** *(UX Polish Seam 4)*
 - **Global Search** — search metadata by name and by source/field/message content
   (server-side `CONTAINING`), 2-panel results with a live DDL preview. *(history: 12)*
 - **Script Executor, Recompile Dependents, Smart SQL Parameters** — run a multi-statement `.sql`
@@ -256,18 +261,43 @@ noted.
     since the last step"), which the user chose to **keep** (deliberately distinct from selection/current-line)
     — only de-olived to a cleaner warm amber-gold, same low alpha: dark `#C8A000` → `#E0A830`, light `#E0B000`
     → `#D69E24`. Build 0/0; 5156 green.
-  - **Build/Test/Smoke:** build 0/0 and full suite **5156 green** after every seam. **Smoke: the app was NOT
-    launched this session** — all Seam 0–3 changes are Core-tested + presentation; the visual results (bare-var
-    squiggles, shortcut chips, current-line wash, Variables spacing/amber) **await the user's visual QA**.
-  - **NEXT SESSION STARTS AT Seam 4 (MessageBanner).** Sub-seams: **4a** build the `MessageBanner` control
-    (generalize the debugger Error Bar `DebuggerTabView.axaml:217-272`: severity enum reusing the
-    `DiagnosticRowViewModel.cs:52` severity→brush-key convention, header, selectable wrapping body, optional
-    Copy/Dismiss/Expand, `PanelBrush`+`BorderBrush` + severity stripe/icon). **4b** migrate the debugger Error
-    Bar + Preflight rows onto it (zero visual change — proves the abstraction). **4c** mechanical adoption
-    across object editors + Execute Procedure (+ Script Executor/Batch Results normalizing their local
-    `DangerIconBrush`→`ErrorBrush`, + Security Manager). Then **Seam 5** (edit-during-debug, checkpoint before
-    starting it — largest/riskiest, touches the close guard + live session), then **Seam 6** (Quick Fix design
-    doc). Grounding facts for Seam 5 in the plan file: source editor is `IsReadOnly="True"`
+  - **Seam 4 — shared `MessageBanner` → DONE (commit `1e25ce5`).** The IDE now has **ONE message surface**.
+    **4a** — new `Controls/MessageBanner` (`UserControl` + `MessageSeverity` Info/Success/Warning/Error),
+    generalized from the debugger Error Bar: `PanelBrush` chrome + a thin severity stripe + severity icon, the
+    full message wrapped + selectable (capped `MaxExpandedHeight=190`, then scrolled), optional
+    `ShowCopy`/`ShowExpand`/`ShowDismiss` (+ `DismissCommand`), `IsExpanded` **TwoWay**. Severity→brush-key
+    **reuses the `DiagnosticRowViewModel` convention** (`BrushKeyFor`/`GeometryKeyFor` are public statics, so the
+    mapping is testable); every binding inside the control is an **element binding onto itself** (`#Root.…`), so
+    the host's DataContext flows through untouched; chrome overridable per host via `BorderThickness`/`Margin`;
+    **Copy is self-contained** (clipboard from `TopLevel`). No `Header` property — nothing needed one (#233).
+    **4b** — the debugger Error Bar + the launch Preflight rows migrated (no visual change). Preflight's severity
+    split is now the item's own `DebugPreflightItem.BannerSeverity` (blocking → Error, else Warning) so **no
+    severity logic stays in the view**. Deleted as redundant: `DebuggerTabView.OnCopyErrorClick` (the banner
+    copies) and the VM's `ToggleErrorExpandedCommand` (expand is the banner's own gesture, two-way bound to
+    `IsErrorExpanded`, which the VM still owns so a fresh fault re-expands). **4c** — mechanical adoption:
+    the `ErrorMessage` status line on **all 10 object editors** (Domain/Exception/Function/Generator/Index/
+    Package/Procedure/Table/Trigger/View), the **Execute Procedure/Function failure** in the results area
+    (`ExecError`, `VerticalAlignment=Top` so it stays a bar over the hidden grid), the **Execute Procedure
+    dialog** validation line, and the **Security Manager** banner; **Script Executor + Batch Results** dropped
+    their local `DangerIconBrush` override for the shared `ErrorBrush` (`DangerIconBrush` is for
+    destructive-action *icons*). **⚠ Latent bug found + fixed:** the Batch Results headline also set `Foreground`
+    **locally**, which outranks any style setter — so its `Classes.error` "failed" tint could never have applied;
+    removing the local value realizes the intent. **No module's behaviour/workflow changed.** Deliberately NOT
+    migrated (documented scope): the SQL Editor **Messages log** (a scrolling row list), the **in-grid data-error
+    empty states** (Table `DataError`/`EditStatusMessage`, View `DataError` — a grid empty-state, not a banner),
+    and dialog **field-level** validation hints (`AddFieldDialog`), plus the Procedure/Function `ExecInfo` error
+    note inside the compact metrics strip. New `UiStrings.MessageBanner{Copy,Expand,Collapse,Dismiss}Tooltip`
+    replace the four `DebuggerError*Tooltip` constants. +2 tests (headless pin: every severity's brush resolves
+    in **both** themes + its geometry resolves + the control constructs and re-derives both keys on a severity
+    change; `BannerSeverity` follows `IsBlocking`); −1 (the superseded preflight-token pin). Build 0/0;
+    **5157 green**; smoke clean.
+  - **Build/Test/Smoke:** build 0/0 and full suite green after every seam (**5156** through Seam 3, **5157**
+    after Seam 4). Smoke: the app launches clean. The visual results of Seams 0–4 (bare-var squiggles, shortcut
+    chips, current-line wash, Variables spacing/amber, and every migrated message banner in **both** themes)
+    **await the user's visual QA**.
+  - **NEXT SESSION STARTS AT Seam 5 (edit during debugging)** — largest/riskiest, touches the close guard + a
+    live session; checkpoint before starting it. Then **Seam 6** (Quick Fix design doc only). Grounding facts
+    for Seam 5 in the plan file: source editor is `IsReadOnly="True"`
     (`DebuggerTabView.axaml:441`) and `SourceText` is overwritten during stepping (`:1256/1307/1450` — needs an
     editable buffer separate from the frame-source display); `ISavableObjectEditor.SaveAsync` pattern in
     `SourceObjectDetailTabViewModel.cs:489-544`; per-tab close is Discard/Cancel-only
@@ -2275,7 +2305,9 @@ The app has **one** central theming system. Every new window, dialog, UserContro
 
 Before adding any of the following, **search the project first** and prefer extending/sharing over a parallel implementation:
 - a new **style** → check `Themes/ControlStyles.axaml` for an existing class (`Button.icon`, `field-label`, `bottom-tab`, …) before writing one;
-- a new **component / control** → check `Views/` and `ViewModels/` for an existing one to extend;
+- a new **component / control** → check `Controls/`, `Views/` and `ViewModels/` for an existing one to extend;
+- a new **error / warning / info message** on a work surface → use `Controls/MessageBanner` (severity +
+  message + optional Copy/Expand/Dismiss); never a locally-styled coloured `TextBlock`;
 - a new **dialog layout** → reuse the dialog skeleton (`Background`/`Foreground` tokens + `h1` header + `field-label` captions + `Button.primary`/`flat` footer) used by the existing dialogs;
 - a new **DataGrid behavior** → reuse `Behaviors/GridLayoutBehavior.cs` (column order/width/auto-fit), the `RowIndexComparer` (object?[] sort), and the dynamic-column build pattern in `TableDetailTabView` / `MainWindow.PopulateResultGrid`;
 - a new **pagination mechanism** → reuse the page-state shape already in `TableDetailTabViewModel` (CurrentPage / PageSize / First/Prev/Next/Last + `HasNextPage`/`HasPreviousPage` + hint string) and the shared `TableDetailPagination*Icon/Tooltip` strings — do **not** stand up a second paging system;
