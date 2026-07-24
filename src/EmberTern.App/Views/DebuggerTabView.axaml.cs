@@ -25,7 +25,7 @@ namespace EmberTern.App.Views;
 
 /// <summary>
 /// The Firebird debugger tab view (Stage X / D4). A thin shell over <see cref="DebuggerTabViewModel"/>:
-/// a launch panel + a read-only source editor with the current-line marker (<see cref="CurrentLineRenderer"/>)
+/// a launch panel + an editable source editor with the current-line marker (<see cref="CurrentLineRenderer"/>)
 /// and breakpoint gutter (<see cref="BreakpointMargin"/>), plus a basic variables panel. The editor reuses
 /// the D3 single wiring seam (<see cref="SqlEditorBehavior.Attach"/>) for intrinsic highlighting/hover — the
 /// debugger renderers attach alongside it (spec §11.1). Keyboard is VS-standard and <b>tab-scoped</b>: F5 =
@@ -49,6 +49,10 @@ public partial class DebuggerTabView : UserControl
     private double _bottomHeight = 220;
     private const double MinBottomHeight = 80;
 
+    // True while SyncEditorText is writing the VM's text into the editor, so that write is not mistaken for
+    // the user typing (Seam 5a — the editor's text now flows both ways).
+    private bool _suppressEditorTextSync;
+
     public DebuggerTabView()
     {
         InitializeComponent();
@@ -67,6 +71,10 @@ public partial class DebuggerTabView : UserControl
         {
             _editor.AddHandler(KeyDownEvent, OnEditorKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             _editor.AddHandler(PointerPressedEvent, OnEditorPointerPressed, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            // Seam 5a — the editor is a normal editor now, so its text flows BOTH ways. This is the view→VM
+            // half; SyncEditorText is the VM→view half and suppresses this handler while it writes, so the
+            // two can never chase each other.
+            _editor.TextChanged += OnSourceEditorTextChanged;
         }
         // D15.3 Seam C — Enter-to-launch on the launch panel (tunnelled so the last field's Enter launches
         // instead of inserting a newline). Scoped to the panel because that is where the only launchable focus
@@ -89,7 +97,7 @@ public partial class DebuggerTabView : UserControl
     {
         base.OnAttachedToVisualTree(e);
 
-        // Intrinsic editor block via the one D3 seam (highlighting/hover/related elements over the read-only
+        // Intrinsic editor block via the one D3 seam (highlighting/hover/related elements over the routine
         // source), once, when the host VM is available. The debugger adds a data-tip source (spec §9.4) so a
         // plain hover over a variable shows its live frame value — read from the VM's roster at hover time,
         // never the server. Then the renderers.
@@ -109,6 +117,7 @@ public partial class DebuggerTabView : UserControl
 
             _attached = true;
             SyncEditorText();
+            SyncEditability();
         }
 
         // Land keyboard focus in the launch panel now the view is in the tree — independent of the Phase event
@@ -133,6 +142,7 @@ public partial class DebuggerTabView : UserControl
             _vm.SuspendColumnsChanged += OnSuspendColumnsChanged;
         }
         SyncEditorText();
+        SyncEditability();
         RepaintMarkers();
         RebuildSuspendColumns();
         ApplyBottomPanel();
@@ -170,6 +180,7 @@ public partial class DebuggerTabView : UserControl
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(DebuggerTabViewModel.SourceText)) SyncEditorText();
+        else if (e.PropertyName == nameof(DebuggerTabViewModel.IsSourceEditable)) SyncEditability();
         else if (e.PropertyName == nameof(DebuggerTabViewModel.IsBottomPanelCollapsed)) ApplyBottomPanel();
         else if (e.PropertyName == nameof(DebuggerTabViewModel.Phase)) OnPhaseChanged();
     }
@@ -388,11 +399,39 @@ public partial class DebuggerTabView : UserControl
 
     private void OnDebugMarkersChanged(object? sender, EventArgs e) => RepaintMarkers();
 
+    // VM → view. Guarded so the write does not come back through OnSourceEditorTextChanged as if the user had
+    // typed it (which would, among other things, mark a clean tab dirty on every step).
     private void SyncEditorText()
     {
         if (_editor is null || _vm is null) return;
         var text = _vm.SourceText ?? string.Empty;
-        if (_editor.Text != text) _editor.Text = text;
+        if (_editor.Text == text) return;
+
+        _suppressEditorTextSync = true;
+        try
+        {
+            _editor.Text = text;
+        }
+        finally
+        {
+            _suppressEditorTextSync = false;
+        }
+    }
+
+    // View → VM. Only real typing reaches the VM's edit buffer; the VM itself rejects an edit while a
+    // callee frame is displayed, so a stale event can never write another routine's text into the buffer.
+    private void OnSourceEditorTextChanged(object? sender, EventArgs e)
+    {
+        if (_suppressEditorTextSync || _editor is null || _vm is null) return;
+        _vm.ApplySourceEdit(_editor.Text ?? string.Empty);
+    }
+
+    // Read-only means "this frame's source is not ours to save" (a callee/caller frame), never "a session is
+    // running" — Seam 5a's ratified rule.
+    private void SyncEditability()
+    {
+        if (_editor is null || _vm is null) return;
+        _editor.IsReadOnly = !_vm.IsSourceEditable;
     }
 
     // Repaint the current-line renderer + breakpoint gutter. TextView.Redraw() (never InvalidateVisual) —

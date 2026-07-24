@@ -374,10 +374,12 @@
               <controls:BreadcrumbBar ItemsSource="{Binding Breadcrumbs}"
                                       SelectedIndex="{Binding SelectedBreadcrumbIndex, Mode=TwoWay}" />
             </Border>
+            <!-- A NORMAL editor: editable at every phase, including a live/paused session (UX Polish Seam 5a).
+                 Read-only is driven from the VM (IsSourceEditable) and means only "you are looking at another
+                 routine's frame", never "the debugger is running". -->
             <ae:TextEditor x:Name="SourceEditor"
                            Grid.Row="1"
                            ShowLineNumbers="True"
-                           IsReadOnly="True"
                            FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                            FontSize="13"
                            HorizontalScrollBarVisibility="Auto"

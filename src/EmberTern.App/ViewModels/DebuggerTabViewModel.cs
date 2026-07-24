@@ -144,9 +144,16 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// <summary>The routine being debugged (a standalone procedure in D4).</summary>
     public string RoutineName { get; }
 
-    /// <summary>The read-only routine source shown in the editor (set once preparation completes).</summary>
+    /// <summary>The text currently shown in the editor. While the ROOT routine's frame is selected this is
+    /// the live edit buffer (<see cref="_editBuffer"/>); while a callee/caller frame is selected it is that
+    /// frame's own source, which belongs to another routine and is therefore not editable here.</summary>
     [ObservableProperty]
     private string _sourceText = string.Empty;
+
+    // The root routine's editable text. Separate from _source (the last text loaded/saved, i.e. what the
+    // database currently holds and what the running session was compiled from), so stepping — which
+    // overwrites the DISPLAY on every frame change — can never clobber an unsaved edit.
+    private string _editBuffer = string.Empty;
 
     /// <summary>The launch-panel parameter editor (reuses Smart Parameters: typed rows + history +
     /// validation + resolve). Null until preparation resolves the routine's input parameters.</summary>
@@ -458,6 +465,47 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     private bool IsViewingRootSource
         => _selectedFrame is null || (_body is not null && ReferenceEquals(_selectedFrame.Body, _body));
 
+    /// <summary>Whether the editor accepts typing right now. The debugger source editor is a NORMAL editor —
+    /// editable at every phase, including a live or paused session (ratified: saving, not typing, is the
+    /// deliberate act that ends a session). The one exception is structural, not a policy: while a
+    /// callee/caller frame is selected the editor shows <em>another routine's</em> source, which this tab
+    /// cannot save, so it is read-only until the root frame is selected again.</summary>
+    public bool IsSourceEditable => _body is not null && IsViewingRootSource;
+
+    /// <summary>True while the edit buffer differs from the text the database holds — i.e. there is unsaved
+    /// work in this tab. A live session does not affect this: the session runs the COMPILED routine, the
+    /// buffer is the next work cycle.</summary>
+    public bool IsSourceDirty => !string.Equals(_editBuffer, _source ?? string.Empty, StringComparison.Ordinal);
+
+    /// <summary>Called by the view when the user types in the source editor. Updates the buffer <em>and</em>
+    /// <see cref="SourceText"/> together, so the VM and the editor never disagree — otherwise the next step
+    /// would push a stale <see cref="SourceText"/> back over the user's edit.</summary>
+    public void ApplySourceEdit(string text)
+    {
+        if (!IsSourceEditable) return; // a callee frame's source is not ours to edit
+        text ??= string.Empty;
+        if (string.Equals(_editBuffer, text, StringComparison.Ordinal)) return;
+        _editBuffer = text;
+        SourceText = text;
+        OnPropertyChanged(nameof(IsSourceDirty));
+    }
+
+    // The text to display for a frame: the root routine's frame shows the live EDIT BUFFER (so an unsaved
+    // edit survives every step, frame switch and terminal state); any other frame shows its own source.
+    // The ONE place that decision is made — every SourceText assignment goes through it.
+    private string SourceForFrame(Frame frame)
+        => _body is not null && ReferenceEquals(frame.Body, _body)
+            ? _editBuffer
+            : frame.Source ?? _editBuffer;
+
+    // Assigns the inspected frame and raises everything derived from WHICH frame is shown. The one funnel, so
+    // "can I type here?" can never disagree with what the editor is displaying.
+    private void SetSelectedFrame(Frame? frame)
+    {
+        _selectedFrame = frame;
+        OnPropertyChanged(nameof(IsSourceEditable));
+    }
+
     /// <summary>Raised when the current-statement marker or the breakpoint set changes, so the view can
     /// repaint the renderers (via <c>TextView.Redraw()</c>, never <c>InvalidateVisual()</c> — gotcha #223).</summary>
     public event EventHandler? DebugMarkersChanged;
@@ -582,8 +630,12 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             return;
         }
 
+        // _source = what the database holds (the saved baseline the running session is compiled from);
+        // _editBuffer = the editable working copy. They start equal, so the tab opens clean.
         _source = source;
+        _editBuffer = source;
         SourceText = source;
+        OnPropertyChanged(nameof(IsSourceDirty));
 
         // The strict whole-routine parse: CREATE PROCEDURE stays ONE DdlStatement whose Body is bound with its
         // declares in scope, so body identifiers resolve to Variable/Parameter symbols (gotcha #238). Built
@@ -592,6 +644,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         _model = SemanticModel.Build(SqlParser.Parse(source).Root);
         var ddl = _model.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);
         _body = ddl?.Body;
+        OnPropertyChanged(nameof(IsSourceEditable)); // a parsed body is what makes the source ours to edit
         // D-function: a function launched as the debug root — STANDALONE or a PACKAGE member (Seam D). The
         // launcher (via DebugLaunchSpec.IsFunction) builds a function root frame; when a package context is also
         // present the executor keys it by package (D1's combined path). Detected purely from the parsed source
@@ -1189,7 +1242,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             case DebugState.Paused:
                 // Reset the inspected frame to the innermost (current) frame on every pause; the call stack /
                 // breadcrumbs / keyboard repoint it afterwards without a step.
-                _selectedFrame = session.CurrentFrame;
+                SetSelectedFrame(session.CurrentFrame);
                 Phase = DebuggerPhase.Paused;
                 var step = session.CurrentStatement;
                 int line = step is null ? 0 : LineOf(session.CurrentFrame?.Source ?? _source, step.Start);
@@ -1251,9 +1304,9 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
             return;
         }
 
-        _selectedFrame = frame;
+        SetSelectedFrame(frame);
         SelectedFrameId = frame.Id;
-        SourceText = frame.Source ?? _source ?? string.Empty;
+        SourceText = SourceForFrame(frame);
 
         // The closing END of the routine's block (the terminal frame's own body). Fall back to the last executed
         // step point only if the END can't be located (malformed) — but never a callee-space offset (#243).
@@ -1302,9 +1355,9 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         }
 
         var stmt = session.FaultStatement;
-        _selectedFrame = frame;
+        SetSelectedFrame(frame);
         SelectedFrameId = frame.Id;
-        SourceText = frame.Source ?? _source ?? string.Empty;
+        SourceText = SourceForFrame(frame);
 
         RebuildCallStackFrom(session.FaultStack, stmt?.Start ?? -1);
         RebuildBreadcrumbsFrom(session.FaultStack);
@@ -1439,7 +1492,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     // baseline.
     private void ApplySelectedFrame(Frame frame, bool computeChanges)
     {
-        _selectedFrame = frame;
+        SetSelectedFrame(frame);
         SelectedFrameId = frame.Id;
 
         var (offset, length) = FramePosition(frame);
@@ -1447,7 +1500,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         // (values + IsChanged), THEN the marker — SetCurrentMarker recomputes the inline values (D15.5) from
         // the just-refreshed roster before it fires the repaint, so the marker's offset is in THIS frame's
         // freshly-set source AND the inline annotations reflect this pause.
-        SourceText = frame.Source ?? _source ?? string.Empty;
+        SourceText = SourceForFrame(frame);
         ShowFrameVariables(frame, computeChanges);
         SetCurrentMarker(offset, length);
 
@@ -1784,7 +1837,7 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         _previousValues = null;
         _previousFrameId = null;
         _rosterFrameId = null;
-        _selectedFrame = null;
+        SetSelectedFrame(null);
         SelectedFrameId = -1;
         CallStack.Clear();
         Breadcrumbs.Clear();

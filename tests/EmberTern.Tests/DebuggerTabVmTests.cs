@@ -1511,6 +1511,62 @@ public class DebuggerTabVmTests
         Assert.Same(vm.CallStack[0], vm.SelectedFrameRow);
     }
 
+    // ── Seam 5a — the source editor is a normal editor, at every phase ──────────────────────────────
+
+    [Fact]
+    public async Task SourceEdit_SurvivesStepping_AndMarksTheTabDirty()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        Assert.False(vm.IsSourceDirty);       // freshly loaded == what the database holds
+        Assert.True(vm.IsSourceEditable);     // editable before a session exists
+
+        await vm.LaunchCommand.ExecuteAsync(null);
+        Assert.True(vm.IsSourceEditable);     // ... and while a session is live/paused (ratified: no edit-lock)
+
+        var edited = Sql + "\n-- touched";
+        vm.ApplySourceEdit(edited);
+        Assert.True(vm.IsSourceDirty);
+        Assert.Equal(edited, vm.SourceText);
+
+        // Stepping rewrites the DISPLAY on every frame change; it must never clobber the edit buffer.
+        await vm.StepOverCommand.ExecuteAsync(null);
+        Assert.Equal(edited, vm.SourceText);
+        Assert.True(vm.IsSourceDirty);
+
+        // Editing back to the original text is not "dirty" — dirty is a diff, not a flag.
+        vm.ApplySourceEdit(Sql);
+        Assert.False(vm.IsSourceDirty);
+    }
+
+    [Fact]
+    public async Task SourceEdit_RejectedWhileViewingACalleeFrame_AndRestoredOnReturn()
+    {
+        var vm = await LaunchedNestedAsync(); // paused inside the callee SP_LEAF
+
+        // The editor is showing ANOTHER routine's source — this tab cannot save it, so it is read-only and
+        // a stray edit can never land in the root buffer.
+        Assert.False(vm.IsSourceEditable);
+        vm.ApplySourceEdit("nonsense");
+        Assert.Equal(LeafSql, vm.SourceText);
+        Assert.False(vm.IsSourceDirty);
+
+        // Back on the root frame: editable again, and the edit buffer is what the editor shows.
+        vm.SelectedFrameRow = vm.CallStack[1];
+        Assert.True(vm.IsSourceEditable);
+
+        var edited = RootSql + "\n-- touched";
+        vm.ApplySourceEdit(edited);
+        Assert.Equal(edited, vm.SourceText);
+
+        // Walk to the callee and back — the unsaved edit is still there.
+        vm.SelectedFrameRow = vm.CallStack[0];
+        Assert.Equal(LeafSql, vm.SourceText);
+        vm.SelectedFrameRow = vm.CallStack[1];
+        Assert.Equal(edited, vm.SourceText);
+        Assert.True(vm.IsSourceDirty);
+    }
+
     [Fact]
     public async Task Breakpoints_AreRootScoped_HiddenWhileViewingACallee()
     {
