@@ -291,6 +291,9 @@ internal static class UiStrings
     public const string CloseTabUnsavedConfirmTitle = "Unsaved changes";
     public const string CloseTabUnsavedConfirmFormat = "{0}\n\nClosing this tab discards these changes.";
     public const string CloseTabUnsavedConfirmYes = "Discard and close";
+    // Seam 5c — per-tab close is Save / Discard / Cancel whenever the tab has somewhere to save,
+    // matching the disconnect and app-close guards instead of forcing "discard or stay".
+    public const string CloseTabUnsavedSave = "Save and close";
 
     // Disconnect with an active transaction (3-way choice; default Roll back).
     public const string DisconnectChoiceTitle = "Active transaction";
@@ -1817,6 +1820,7 @@ internal static class UiStrings
     public const string DebuggerSaveEndsSessionConfirm = "Stop session and save";
     public const string DebuggerSaveCompileFailedFormat = "Compile failed: {0}";
     public const string DebuggerStatusSaved = "Saved and compiled.";
+    public const string DebuggerUnsavedSourceFormat = "{0} — modified source (not compiled)";
     // Variables panel.
     public const string DebuggerVariablesHeader = "Variables";
     public const string DebuggerVariablesEmpty = "No variables in the current frame.";

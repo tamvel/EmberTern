@@ -62,7 +62,8 @@ public enum DebuggerPhase
 /// server = step-over, 100% faithful §5.3); triggers/packages/local routines/cursors and the Watches/Immediate
 /// surfaces are later milestones.</para>
 /// </summary>
-public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposable, ISavableObjectEditor
+public sealed partial class DebuggerTabViewModel
+    : ViewModelBase, IAsyncDisposable, ISavableObjectEditor, IUnsavedWorkSource
 {
     private readonly Func<CancellationToken, Task<string?>> _sourceProvider;
     private readonly IDebugSessionLauncher _launcher;
@@ -2010,11 +2011,26 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
     /// job. The refusal lives here, not only in the wiring, so no future caller can hand this tab an executor
     /// and silently get the wrong DDL.
     /// </para></summary>
-    public bool CanSaveSource
-        => DdlExecutor is not null && _packageName is null && IsSourceDirty && _body is not null;
+    public bool CanSaveSource => IsSavable && IsSourceDirty;
+
+    /// <summary>Whether this tab has anywhere to save at all, regardless of whether it is dirty. The close
+    /// guard reads this to decide whether to OFFER Save — a package-member tab gets Discard/Cancel only,
+    /// because offering a Save that is guaranteed to fail is worse than not offering it.</summary>
+    internal bool IsSavable => DdlExecutor is not null && _packageName is null && _body is not null;
 
     [RelayCommand(CanExecute = nameof(CanSaveSource))]
     private Task SaveSource() => SaveAsync();
+
+    /// <summary><see cref="IUnsavedWorkSource"/> — the close/disconnect/exit WorkGuard asks every tab what
+    /// it would lose. An edited routine here is exactly the "modified source" the object editors report, so
+    /// closing this tab now prompts like closing a Procedure editor does. Reported whether or not the tab
+    /// can save (a package member can't) — unsaved work is unsaved work; only the OFFER of Save differs.</summary>
+    public UnsavedWorkItem? GetUnsavedWork()
+        => IsSourceDirty
+            ? new UnsavedWorkItem(
+                UnsavedWorkKind.ModifiedSource,
+                string.Format(CultureInfo.CurrentCulture, UiStrings.DebuggerUnsavedSourceFormat, RoutineName))
+            : null;
 
     /// <summary>
     /// <see cref="ISavableObjectEditor"/> — compiles the edit buffer, ending a live session first (with

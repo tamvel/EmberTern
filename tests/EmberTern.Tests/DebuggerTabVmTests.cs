@@ -1665,6 +1665,44 @@ public class DebuggerTabVmTests
         Assert.True(vm.IsSourceDirty);
     }
 
+    // ── Seam 5c — the debugger tab participates in the close/disconnect WorkGuard ───────────────────
+
+    [Fact]
+    public async Task UnsavedWork_IsReportedOnlyWhileTheSourceIsDirty()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        Assert.Null(vm.GetUnsavedWork()); // clean tab closes silently, as before
+
+        vm.ApplySourceEdit(Sql + "\n-- touched");
+        var work = vm.GetUnsavedWork();
+        Assert.NotNull(work);
+        Assert.Equal(UnsavedWorkKind.ModifiedSource, work!.Kind);
+        Assert.Contains("SP_TEST", work.Label);
+
+        vm.ApplySourceEdit(Sql); // edited back → nothing to lose
+        Assert.Null(vm.GetUnsavedWork());
+    }
+
+    [Fact]
+    public async Task PackageMemberTab_ReportsUnsavedWork_ButIsNeverOfferedSave()
+    {
+        // The work is real (so Discard/Cancel still guards it) but Save must not be offered — that DDL
+        // would create a standalone routine instead of altering the package.
+        using var service = new FirebirdConnectionService();
+        var launcher = new FakeLauncher(new FakeExecutor());
+        var vm = new DebuggerTabViewModel(
+            "PUB_RUN", _ => Task.FromResult<string?>(Sql), launcher, packageName: "PKG_DBG")
+        {
+            DdlExecutor = new FirebirdDdlExecutor(service),
+        };
+        await vm.PrepareAsync();
+        vm.ApplySourceEdit(Sql + "\n-- touched");
+
+        Assert.NotNull(vm.GetUnsavedWork());
+        Assert.False(vm.IsSavable);
+    }
+
     [Fact]
     public async Task Breakpoints_AreRootScoped_HiddenWhileViewingACallee()
     {

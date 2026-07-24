@@ -410,6 +410,9 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.PackageDetail => PackageDetail?.GetUnsavedWork(),
         WorkspaceTabKind.ExceptionDetail => ExceptionDetail?.GetUnsavedWork(),
         WorkspaceTabKind.IndexDetail => IndexDetail?.GetUnsavedWork(),
+        // Seam 5c — the debugger's source editor is a real editor now, so an edited routine here is
+        // unsaved work like any other tab's.
+        WorkspaceTabKind.Debugger => Debugger?.GetUnsavedWork(),
         _ => null,
     };
 
@@ -431,6 +434,10 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.PackageDetail => PackageDetail,
         WorkspaceTabKind.ExceptionDetail => ExceptionDetail,
         WorkspaceTabKind.IndexDetail => IndexDetail,
+        // A debugger tab is savable only when it actually has somewhere to save: a PACKAGE member tab's
+        // source is a reconstruction, so it reports its unsaved work but must never be offered "Save"
+        // (that DDL would create a standalone routine — see DebuggerTabViewModel.IsSavable).
+        WorkspaceTabKind.Debugger => Debugger is { IsSavable: true } debugger ? debugger : null,
         _ => null,
     };
 

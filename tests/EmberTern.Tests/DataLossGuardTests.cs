@@ -178,34 +178,53 @@ public class DataLossGuardTests
         Assert.DoesNotContain(tab, h.Main.WorkspaceTabs);
     }
 
+    // Seam 5c — a tab that CAN save gets the three-way Save / Discard / Cancel prompt (the same shape as
+    // disconnect and app close), not the old "discard or stay" pair.
     [Fact]
     public async Task RequestCloseTab_DirtyView_Cancelled_KeepsTab()
     {
         using var h = new Harness();
         var tab = ViewTab(h, "V_DIRTY", dirty: true);
         h.Main.WorkspaceTabs.Add(tab);
-        ConfirmRequest? seen = null;
-        h.Main.ConfirmationRequested += req => { seen = req; return Task.FromResult(false); };
+        ChoiceRequest? seen = null;
+        h.Main.ChoiceRequested += req => { seen = req; return Task.FromResult<string?>("cancel"); };
 
         await h.Main.RequestCloseTabAsync(tab);
 
         Assert.NotNull(seen);
-        Assert.True(seen!.IsDestructive);
-        Assert.Contains("V_DIRTY", seen.Message);
+        Assert.Contains("V_DIRTY", seen!.Message);
+        Assert.Equal(new[] { "save", "discard", "cancel" }, seen.Options.Select(o => o.Id));
         Assert.Contains(tab, h.Main.WorkspaceTabs);
     }
 
     [Fact]
-    public async Task RequestCloseTab_DirtyView_Confirmed_ClosesTab()
+    public async Task RequestCloseTab_DirtyView_Discarded_ClosesTab()
     {
         using var h = new Harness();
         var tab = ViewTab(h, "V_DIRTY", dirty: true);
         h.Main.WorkspaceTabs.Add(tab);
-        h.Main.ConfirmationRequested += _ => Task.FromResult(true);
+        h.Main.ChoiceRequested += _ => Task.FromResult<string?>("discard");
 
         await h.Main.RequestCloseTabAsync(tab);
 
         Assert.DoesNotContain(tab, h.Main.WorkspaceTabs);
+    }
+
+    [Fact]
+    public async Task RequestCloseTab_DirtyView_SaveDidNotClearTheWork_KeepsTabOpen()
+    {
+        // "Save and close" routes through the editor's own SaveAsync — but the close proceeds only if the
+        // unsaved work is genuinely GONE, not merely if the save claimed success. Here there is no DDL
+        // executor, so nothing is compiled and the tab is still dirty; discarding it would destroy the
+        // user's code on the strength of a wrong "success".
+        using var h = new Harness();
+        var tab = ViewTab(h, "V_DIRTY", dirty: true);
+        h.Main.WorkspaceTabs.Add(tab);
+        h.Main.ChoiceRequested += _ => Task.FromResult<string?>("save");
+
+        await h.Main.RequestCloseTabAsync(tab);
+
+        Assert.Contains(tab, h.Main.WorkspaceTabs);
     }
 
     // ─── App-close guard ──────────────────────────────────────────────────

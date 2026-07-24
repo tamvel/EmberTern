@@ -5936,26 +5936,72 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// User-initiated tab close. Confirms (Discard / Cancel) before discarding ANY
-    /// tab that reports unsaved work — a New Table form, an uncompiled new view /
-    /// procedure, a modified-but-not-compiled source, or a table designer with
-    /// queued structural changes. Clean tabs (and DDL / read-only tabs, reopenable
-    /// from the tree) close silently. Programmatic closes (post-compile,
+    /// User-initiated tab close. Prompts before discarding ANY tab that reports unsaved work — a New Table
+    /// form, an uncompiled new view / procedure, a modified-but-not-compiled source, a table designer with
+    /// queued structural changes, or (since Seam 5c) an edited routine in a debugger tab. Clean tabs (and
+    /// DDL / read-only tabs, reopenable from the tree) close silently. Programmatic closes (post-compile,
     /// delete-table cleanup) call <see cref="CloseTab"/> directly and never prompt.
+    /// <para>
+    /// The prompt is three-way — <b>Save / Discard / Cancel</b> — whenever the tab has somewhere to save,
+    /// matching disconnect and app-close instead of forcing "discard or stay". Save routes through the
+    /// editor's own <see cref="ISavableObjectEditor.SaveAsync"/> (the one save path); a failed save keeps
+    /// the tab open and selected, with the error already on its own surface. A tab that reports unsaved
+    /// work but cannot save it still gets the honest Discard / Cancel pair.
+    /// </para>
     /// </summary>
     public async Task RequestCloseTabAsync(WorkspaceTabViewModel tab)
     {
         if (tab.UnsavedWork is { } work)
         {
-            var confirmed = await RequestConfirmAsync(new ConfirmRequest
+            var message = string.Format(
+                CultureInfo.CurrentCulture, UiStrings.CloseTabUnsavedConfirmFormat, work.Label);
+
+            if (tab.SavableEditor is { } editor)
             {
-                Title = UiStrings.CloseTabUnsavedConfirmTitle,
-                Message = string.Format(CultureInfo.CurrentCulture, UiStrings.CloseTabUnsavedConfirmFormat, work.Label),
-                ConfirmLabel = UiStrings.CloseTabUnsavedConfirmYes,
-                CancelLabel = UiStrings.DialogCancel,
-                IsDestructive = true,
-            }).ConfigureAwait(true);
-            if (!confirmed) return;
+                var id = await RequestChoiceAsync(new ChoiceRequest
+                {
+                    Title = UiStrings.CloseTabUnsavedConfirmTitle,
+                    Message = message,
+                    Options = new[]
+                    {
+                        new ChoiceOption { Id = "save", Label = UiStrings.CloseTabUnsavedSave, IsDefault = true },
+                        new ChoiceOption
+                        {
+                            Id = "discard", Label = UiStrings.CloseTabUnsavedConfirmYes, IsDestructive = true,
+                        },
+                        new ChoiceOption { Id = "cancel", Label = UiStrings.DialogCancel, IsCancel = true },
+                    },
+                }).ConfigureAwait(true);
+
+                if (id is null or "cancel") return;
+                if (id == "save")
+                {
+                    var result = await editor.SaveAsync().ConfigureAwait(true);
+
+                    // Proceed only if the work is genuinely GONE, not merely if the save reported success.
+                    // This is the one place where trusting a wrong "success" would silently destroy the
+                    // user's code, so it is verified against the same UnsavedWork the prompt was built from
+                    // rather than taken on faith from eleven separate editor adapters.
+                    if (!result.Success || tab.UnsavedWork is not null)
+                    {
+                        // Stay open on the offending tab — the editor has already surfaced the reason.
+                        SelectTab(tab);
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                var confirmed = await RequestConfirmAsync(new ConfirmRequest
+                {
+                    Title = UiStrings.CloseTabUnsavedConfirmTitle,
+                    Message = message,
+                    ConfirmLabel = UiStrings.CloseTabUnsavedConfirmYes,
+                    CancelLabel = UiStrings.DialogCancel,
+                    IsDestructive = true,
+                }).ConfigureAwait(true);
+                if (!confirmed) return;
+            }
         }
         CloseTab(tab);
     }
