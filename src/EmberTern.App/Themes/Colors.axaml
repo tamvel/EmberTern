@@ -52,7 +52,7 @@
            plus a crisp accent bar at the line's left edge (DebugCurrentLineBarBrush). Alpha-first ARGB.
            The breakpoint glyph is a solid red dot in the gutter — its own token (not ErrorColor: a
            breakpoint is a deliberate stop, never an error). -->
-      <Color x:Key="DebugCurrentLineColor">#285A8AC8</Color>
+      <Color x:Key="DebugCurrentLineColor">#4A5A8AC8</Color>
       <Color x:Key="DebugCurrentLineBarColor">#E65A8AC8</Color>
       <Color x:Key="DebugBreakpointColor">#E51400</Color>
       <SolidColorBrush x:Key="DebugCurrentLineBrush" Color="{StaticResource DebugCurrentLineColor}" />
@@ -286,7 +286,7 @@
            D15.1 Seam B light-theme values: a calm blue full-line wash (~11% over the near-white editor)
            + a crisp navy accent bar at the line's left edge; a deeper red for the breakpoint. See the dark
            dictionary for the rationale. -->
-      <Color x:Key="DebugCurrentLineColor">#1C0033B3</Color>
+      <Color x:Key="DebugCurrentLineColor">#380033B3</Color>
       <Color x:Key="DebugCurrentLineBarColor">#CC0033B3</Color>
       <Color x:Key="DebugBreakpointColor">#C42B1C</Color>
       <SolidColorBrush x:Key="DebugCurrentLineBrush" Color="{StaticResource DebugCurrentLineColor}" />
