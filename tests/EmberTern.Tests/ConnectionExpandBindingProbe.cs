@@ -1254,8 +1254,9 @@ public sealed class ConnectionExpandBindingProbe
     }
 
     // UX Polish Seam 4 (QA) — the SQL Editor's Messages panel stays a log, but a problem entry speaks the
-    // one message language: its stripe/icon/colour come from the SAME MessageBanner mapping. An Info line
-    // keeps the normal reading colour and earns no marker.
+    // one message language: its stripe + colour come from the SAME MessageBanner mapping (no icon — that
+    // would widen only the marked rows and break the timestamp alignment). An Info line keeps the normal
+    // reading colour and earns no marker.
     [Fact]
     public void QueryMessage_SeverityPresentation_MatchesTheBanner()
     {
@@ -1266,9 +1267,6 @@ public sealed class ConnectionExpandBindingProbe
         Assert.Equal(
             EmberTern.App.Controls.MessageBanner.BrushKeyFor(EmberTern.App.Controls.MessageSeverity.Error),
             error.SeverityBrushKey);
-        Assert.Equal(
-            EmberTern.App.Controls.MessageBanner.GeometryKeyFor(EmberTern.App.Controls.MessageSeverity.Error),
-            error.SeverityGeometryKey);
 
         Assert.True(error.ShowSeverityMarker);
         Assert.True(warning.ShowSeverityMarker);

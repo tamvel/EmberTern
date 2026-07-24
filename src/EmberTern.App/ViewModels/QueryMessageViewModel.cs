@@ -37,11 +37,9 @@ public sealed class QueryMessageViewModel
     /// same message can never drift apart.</summary>
     public string SeverityBrushKey => MessageBanner.BrushKeyFor(Severity);
 
-    /// <summary>Icon geometry key for this message's severity (same mapping as the banner).</summary>
-    public string SeverityGeometryKey => MessageBanner.GeometryKeyFor(Severity);
-
-    /// <summary>Only a problem row earns the severity stripe + icon; an ordinary Info line stays a plain,
-    /// quiet log entry — the log must not become a wall of markers.</summary>
+    /// <summary>Only a problem row earns the severity stripe; an ordinary Info line stays a plain, quiet log
+    /// entry — the log must not become a wall of markers. (No severity icon in the log: an icon column
+    /// widens only the rows that have one, breaking the timestamp alignment a log is read by.)</summary>
     public bool ShowSeverityMarker => Severity is MessageSeverity.Warning or MessageSeverity.Error;
 
     /// <summary>Brush key for the message TEXT: a problem carries its severity colour in full (matching the
