@@ -59,14 +59,12 @@
                    TextAlignment="Center"
                    TextWrapping="Wrap"
                    FontSize="14"
-                   Foreground="{DynamicResource ForegroundBrush}"
-                   Classes.error="{Binding PreparationFailed}">
-          <TextBlock.Styles>
-            <Style Selector="TextBlock.error">
-              <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
-            </Style>
-          </TextBlock.Styles>
-        </TextBlock>
+                   Classes.error="{Binding PreparationFailed}" />
+        <!-- UX Polish Seam 4 — the local DangerIconBrush override is gone: an error message reads in
+             ErrorBrush everywhere in the IDE (DangerIconBrush is for destructive-action ICONS), and the
+             shared ":is(TextBlock).error" style now supplies it. The local Foreground had to go with it:
+             a local value outranks any style setter, so the "failed" tint could never have applied while
+             it was set — the dialog inherits the same ForegroundBrush anyway. -->
         <ProgressBar Width="320"
                      IsVisible="{Binding !PreparationFailed}"
                      IsIndeterminate="{Binding PreparationIsIndeterminate}"

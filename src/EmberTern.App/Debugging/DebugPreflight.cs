@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EmberTern.App.Controls;
 using EmberTern.Core.Sql.Language;
 using EmberTern.Core.Sql.Language.Semantics;
 
@@ -16,7 +17,13 @@ public enum DebugPreflightSeverity
 /// <summary>One line of the launch panel's pre-flight report (spec §9.2). <see cref="IsBlocking"/> items
 /// prevent the session from starting (there is nothing to debug); warnings are surfaced but the user may
 /// proceed.</summary>
-public sealed record DebugPreflightItem(DebugPreflightSeverity Severity, string Message, bool IsBlocking = false);
+public sealed record DebugPreflightItem(DebugPreflightSeverity Severity, string Message, bool IsBlocking = false)
+{
+    /// <summary>How the shared <see cref="Controls.MessageBanner"/> renders this row: a blocking item is an
+    /// error, anything else a warning the user may proceed past. Kept as the item's own decision so the view
+    /// carries no severity logic (and no brush ever leaks into the data).</summary>
+    public MessageSeverity BannerSeverity => IsBlocking ? MessageSeverity.Error : MessageSeverity.Warning;
+}
 
 /// <summary>
 /// The launch panel's pre-flight scan (Stage X / D4, spec §9.2 + §4.6). Tells the user what a run cannot

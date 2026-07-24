@@ -858,11 +858,11 @@ public class DebuggerTabVmTests
         Assert.True(vm.ShowErrorBar);
         Assert.True(vm.IsErrorExpanded); // full message shown by default
 
-        // Collapse is the opt-in one-line "safety valve"; the toggle never changes the message text.
-        vm.ToggleErrorExpandedCommand.Execute(null);
-        Assert.False(vm.IsErrorExpanded);
+        // Collapse is the opt-in one-line "safety valve" (the shared MessageBanner's own chevron toggles this
+        // two-way-bound state); collapsing never changes the message text.
+        vm.IsErrorExpanded = false;
         Assert.Equal("boom", vm.ErrorDetail);
-        vm.ToggleErrorExpandedCommand.Execute(null);
+        vm.IsErrorExpanded = true;
         Assert.True(vm.IsErrorExpanded);
 
         // Dismiss hides the bar but keeps the faulted state (marker/variables untouched).

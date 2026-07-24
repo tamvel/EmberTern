@@ -137,11 +137,9 @@
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                      Margin="12,0,0,0"
                      Classes.error="{Binding HasError}">
-            <TextBlock.Styles>
-              <Style Selector="TextBlock.error">
-                <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
-              </Style>
-            </TextBlock.Styles>
+            <!-- UX Polish Seam 4 — the local DangerIconBrush override is gone: an error message reads in
+                 ErrorBrush everywhere in the IDE (DangerIconBrush is for destructive-action ICONS). The
+                 shared ":is(TextBlock).error" style in ControlStyles.axaml now supplies it. -->
           </TextBlock>
         </Grid>
       </Border>

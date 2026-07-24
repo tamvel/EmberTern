@@ -1174,36 +1174,64 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
     }
 
-    // D15.3 launch-panel polish — the pre-flight rows adopt the Error Bar visual language: a warning row
-    // uses the new semantic Icon.AlertTriangle + WarningBrush, a blocking row the Icon.BreakException octagon
-    // + ErrorBrush. The build validates the compiled StaticResource geometry usages; this pins the NEW
-    // geometry resolves and both severity brushes resolve in BOTH themes (DynamicResource, runtime-only).
+    // UX Polish Seam 4 — MessageBanner is the IDE's ONE message surface (debugger Error Bar + pre-flight rows
+    // + every object editor + Execute Procedure + Security Manager). Its severity mapping is resolved at
+    // RUNTIME (DynamicResource brush key + geometry key), so the build cannot validate it: pin that every
+    // severity's brush resolves in BOTH themes and its geometry resolves, and that the control constructs
+    // (its XAML, incl. the element bindings onto its own properties, actually loads).
     [Fact]
-    public async System.Threading.Tasks.Task DebuggerPreflightSeverity_GeometryAndBrushes_Resolve()
+    public async System.Threading.Tasks.Task MessageBannerSeverities_GeometriesAndBrushes_Resolve()
     {
         var session = SharedSession;
 
         await session.Dispatch(() =>
         {
             var app = Avalonia.Application.Current!;
-
-            foreach (var key in new[] { "Icon.AlertTriangle", "Icon.BreakException" })
+            var severities = new[]
             {
+                EmberTern.App.Controls.MessageSeverity.Info,
+                EmberTern.App.Controls.MessageSeverity.Success,
+                EmberTern.App.Controls.MessageSeverity.Warning,
+                EmberTern.App.Controls.MessageSeverity.Error,
+            };
+
+            foreach (var severity in severities)
+            {
+                var geometryKey = EmberTern.App.Controls.MessageBanner.GeometryKeyFor(severity);
                 Assert.True(
-                    app.Resources.TryGetResource(key, null, out var g) && g is Avalonia.Media.Geometry,
-                    $"pre-flight severity geometry '{key}' does not resolve");
-            }
+                    app.Resources.TryGetResource(geometryKey, null, out var g) && g is Avalonia.Media.Geometry,
+                    $"MessageBanner geometry '{geometryKey}' ({severity}) does not resolve");
 
-            foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
-            {
-                foreach (var token in new[] { "WarningBrush", "ErrorBrush" })
+                var brushKey = EmberTern.App.Controls.MessageBanner.BrushKeyFor(severity);
+                foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
                 {
                     Assert.True(
-                        app.Resources.TryGetResource(token, theme, out var b) && b is Avalonia.Media.IBrush,
-                        $"pre-flight severity brush '{token}' does not resolve in {theme}");
+                        app.Resources.TryGetResource(brushKey, theme, out var b) && b is Avalonia.Media.IBrush,
+                        $"MessageBanner brush '{brushKey}' ({severity}) does not resolve in {theme}");
                 }
             }
+
+            // The control loads, and changing Severity re-derives BOTH keys (the bindings paint from these).
+            var banner = new EmberTern.App.Controls.MessageBanner { Message = "boom" };
+            Assert.Equal("ErrorBrush", banner.SeverityBrushKey); // default severity is Error
+            banner.Severity = EmberTern.App.Controls.MessageSeverity.Warning;
+            Assert.Equal("WarningBrush", banner.SeverityBrushKey);
+            Assert.Equal("Icon.AlertTriangle", banner.SeverityGeometryKey);
         }, CancellationToken.None);
+    }
+
+    // UX Polish Seam 4 — a blocking pre-flight item is an Error row, everything else a Warning row. The
+    // severity split is the ITEM's own decision (no brush in the data, no severity logic in the view).
+    [Fact]
+    public void DebugPreflightItem_BannerSeverity_FollowsIsBlocking()
+    {
+        var blocking = new EmberTern.App.Debugging.DebugPreflightItem(
+            EmberTern.App.Debugging.DebugPreflightSeverity.Error, "no step points", IsBlocking: true);
+        var advisory = new EmberTern.App.Debugging.DebugPreflightItem(
+            EmberTern.App.Debugging.DebugPreflightSeverity.Warning, "autonomous transaction");
+
+        Assert.Equal(EmberTern.App.Controls.MessageSeverity.Error, blocking.BannerSeverity);
+        Assert.Equal(EmberTern.App.Controls.MessageSeverity.Warning, advisory.BannerSeverity);
     }
 
     // (D15.3 F5 routing is now a window-level Go router — MainWindowViewModel.GoCommand → DebuggerTabViewModel

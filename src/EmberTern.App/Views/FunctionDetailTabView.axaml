@@ -400,8 +400,12 @@
 
           <TextBlock Grid.Row="3" Text="{x:Static app:UiStrings.ProcedureExecEmptyHint}" Classes="subtle"
                      FontSize="11" Margin="8,4" IsVisible="{Binding !HasExecInfo}" />
-          <TextBlock Grid.Row="3" Text="{Binding ExecError}" Classes="subtle error" FontSize="11"
-                     Margin="8,4" TextWrapping="Wrap" IsVisible="{Binding ShowExecError}" />
+          <!-- Execute Function failure — the IDE's ONE message surface (UX Polish Seam 4). Top-aligned so
+               it stays a bar over the (hidden) result grid rather than filling the whole results area. -->
+          <controls:MessageBanner Grid.Row="3" Severity="Error" Message="{Binding ExecError}"
+                                  ShowCopy="True" BorderThickness="1" Margin="8,4"
+                                  VerticalAlignment="Top"
+                                  IsVisible="{Binding ShowExecError}" />
           <DataGrid Grid.Row="3" x:Name="FuncExecResultGrid"
                     behaviors:GridLayoutBehavior.GridId="FunctionDetail.ExecResult"
                     SelectionChanged="OnFuncExecResultSelectionChanged"
@@ -539,8 +543,13 @@
       </Border>
       <TextBlock Text="{x:Static app:UiStrings.FunctionDetailLoadingHint}" Classes="subtle"
                  Margin="10,4" FontSize="11" IsVisible="{Binding IsLoading}" />
-      <SelectableTextBlock Text="{Binding ErrorMessage}" Classes="subtle error" Margin="10,4" FontSize="11"
-                 TextWrapping="Wrap" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <!-- Compile / load errors go through the IDE's ONE message surface (UX Polish Seam 4) —
+           same severity stripe, icon, wrapping and Copy affordance on every editor. -->
+      <controls:MessageBanner Severity="Error"
+                              Message="{Binding ErrorMessage}"
+                              ShowCopy="True"
+                              BorderThickness="0,1,0,0"
+                              IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     </StackPanel>
   </Grid>
 

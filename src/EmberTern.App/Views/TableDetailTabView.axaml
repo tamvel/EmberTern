@@ -1097,12 +1097,13 @@
       <!-- Surface load errors in the view directly — the Messages tab is
            hidden on TableDetail tabs (per the SQL-Editor-only bottom panel),
            so without this the user would see no feedback at all. -->
-      <SelectableTextBlock Text="{Binding ErrorMessage}"
-                 Classes="subtle error"
-                 Margin="10,4"
-                 FontSize="11"
-                 TextWrapping="Wrap"
-                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <!-- Compile / load errors go through the IDE's ONE message surface (UX Polish Seam 4) —
+           same severity stripe, icon, wrapping and Copy affordance on every editor. -->
+      <controls:MessageBanner Severity="Error"
+                              Message="{Binding ErrorMessage}"
+                              ShowCopy="True"
+                              BorderThickness="0,1,0,0"
+                              IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
       <!-- Non-error completion info (e.g. "Recomputed statistics for N of M indexes"). -->
       <TextBlock Text="{Binding StatusMessage}"
                  Classes="subtle"

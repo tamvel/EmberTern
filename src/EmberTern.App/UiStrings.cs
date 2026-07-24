@@ -5,6 +5,14 @@ internal static class UiStrings
     public const string AppTitle = "EmberTern";
     public const string AppSubtitle = "Firebird Developer Workbench";
 
+    // Shared MessageBanner (UX Polish Sprint / Seam 4) — the IDE's one message surface, so its
+    // affordances are named once and read identically on every host (debugger, object editors,
+    // Execute Procedure, Security Manager, …).
+    public const string MessageBannerCopyTooltip = "Copy message";
+    public const string MessageBannerExpandTooltip = "Show full message";
+    public const string MessageBannerCollapseTooltip = "Collapse message";
+    public const string MessageBannerDismissTooltip = "Dismiss";
+
     public const string SidebarMetadataHeader = "Metadata";
     public const string SidebarConnectionsHeader = "Connections";
     public const string SidebarPlaceholderEmpty = "No connection yet";
@@ -1795,10 +1803,6 @@ internal static class UiStrings
     public const string DebuggerFriendlySqlError =
         "SQL error — check the expression's syntax and that all names exist.";
     public const string DebuggerFriendlyRawTooltip = "Full Firebird message";
-    public const string DebuggerErrorCopyTooltip = "Copy error message";
-    public const string DebuggerErrorExpandTooltip = "Show full message";
-    public const string DebuggerErrorCollapseTooltip = "Collapse message";
-    public const string DebuggerErrorDismissTooltip = "Dismiss";
     // Variables panel.
     public const string DebuggerVariablesHeader = "Variables";
     public const string DebuggerVariablesEmpty = "No variables in the current frame.";

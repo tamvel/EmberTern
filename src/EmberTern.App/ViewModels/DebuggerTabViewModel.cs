@@ -515,8 +515,8 @@ public sealed partial class DebuggerTabViewModel : ViewModelBase, IAsyncDisposab
         ErrorDetail = string.Empty; // raises ErrorDetail + ShowErrorBar
     }
 
-    [RelayCommand]
-    private void ToggleErrorExpanded() => IsErrorExpanded = !IsErrorExpanded;
+    // Expand/collapse is the shared MessageBanner's own gesture (two-way bound to IsErrorExpanded), so the VM
+    // no longer carries a toggle command — it only owns the state, because a fresh fault must re-expand.
 
     [RelayCommand]
     private void DismissError()
