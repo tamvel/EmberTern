@@ -171,10 +171,15 @@ noted.
   (2026-07-17)**, including the follow-up fix for environments that hand every cell back as a `string`
   (the writer parses each kind strictly under InvariantCulture/ISO, refusing anything ambiguous — §0).
 - **Shared `MessageBanner`** (`App/Controls/MessageBanner.axaml`) — the IDE's ONE message surface: a calm
-  severity-striped bar (Info/Success/Warning/Error) with the full message wrapped + selectable and optional
-  Copy / Expand / Dismiss. Live on the debugger Error Bar + launch pre-flight, all 10 object editors, Execute
-  Procedure/Function, the Execute Procedure dialog and the Security Manager. **Use it for any new error /
-  warning / info message on a work surface — never a locally-styled coloured `TextBlock`.** *(UX Polish Seam 4)*
+  severity-striped bar (Info/Success/Warning/Error) whose stripe, icon **and message text** all carry the
+  severity colour, message wrapped + selectable, with Copy (default on) / Expand / Dismiss. Chrome comes from
+  **exactly two variants** in `ControlStyles.axaml` — standalone (default) and `Classes="docked"`. Live on 23
+  surfaces: debugger Error Bar + pre-flight, all 10 object editors, Execute Procedure/Function (+ its dialog),
+  Table/View data errors, Performance panel, Export dialog, Security Manager. The SQL Editor **Messages log**
+  stays a log but paints its problem rows through the **same** `BrushKeyFor`/`GeometryKeyFor` mapping.
+  **Use it for any new error / warning / info message on a work surface — never a locally-styled coloured
+  `TextBlock`, and never a local `Background`/`BorderBrush`/`BorderThickness` on the banner itself** (a local
+  value outranks the shared style and re-opens per-host divergence). *(UX Polish Seam 4 + its QA round)*
 - **Global Search** — search metadata by name and by source/field/message content
   (server-side `CONTAINING`), 2-panel results with a live DDL preview. *(history: 12)*
 - **Script Executor, Recompile Dependents, Smart SQL Parameters** — run a multi-statement `.sql`
@@ -291,10 +296,42 @@ noted.
     in **both** themes + its geometry resolves + the control constructs and re-derives both keys on a severity
     change; `BannerSeverity` follows `IsBlocking`); −1 (the superseded preflight-token pin). Build 0/0;
     **5157 green**; smoke clean.
+  - **Seam 4 QA round → DONE (commit `4bd1a6a`).** The user's visual QA found the banner was not yet *one*
+    component to the eye; all fixes ratified before implementing. **(1) Full banner unification:** the message
+    **text now carries the severity brush** (like the stripe + icon) — an Error message reads as an error in
+    full, which was the whole complaint (every non-migrated surface painted its error text red, the banner
+    didn't). **Chrome moved out of the control's own XAML into exactly TWO shared variants** in
+    `ControlStyles.axaml` — `controls|MessageBanner` (standalone, full border, the default) and
+    `.docked` (`0,1,0,1`, a strip attached to a panel edge). **This is load-bearing:** a local value on the
+    control **outranks a style setter**, which is exactly how six per-host variations crept in during Seam 4 —
+    with chrome in the styles there is nowhere to put a seventh. `ShowCopy` now defaults **true** (not a
+    per-host decision). Pinned by a headless test that hosts both variants in a real window and asserts the
+    **applied** chrome. **(2) Group A** — 7 stragglers migrated: Procedure/Function `ExecInfo` error, Table
+    `DataError` + `EditStatusMessage`, View `DataError`, Performance panel error, Export dialog error.
+    **(3) Group B** — `DangerIconBrush` no longer paints **message text**: Trace Monitor error row + error
+    detail, Script Executor + Batch Results `result-failed` → `ErrorBrush`. `DangerIconBrush` keeps its real
+    job: **destructive-action icons** (trash / stop / rollback). **(4) SQL Editor Messages stays a LOG**
+    (timestamp column + scrolling rows, **not** a stack of banners), but a **problem** entry speaks the same
+    language — severity stripe + icon + colour — and the mapping is **not re-derived**: `QueryMessageViewModel`
+    reads `MessageBanner.BrushKeyFor`/`GeometryKeyFor`, so log and banner cannot drift. Info rows keep the
+    normal reading colour and earn no marker (a log is mostly Info; greying it all costs legibility for no
+    signal) — that is what `MessageBrushKey` vs `SeverityBrushKey` encodes. **This also collapsed a genuine
+    duplicate: two `MessageSeverity` enums (`Controls` + `ViewModels`) became one** (`Controls`, now with
+    `Success`). **(5) Variables changed-value** left amber for the debugger's **current-line hue** (dark
+    `#3D5A8AC8`, light `#330033B3` — same base as `DebugCurrentLineColor`): "this changed" is part of the
+    debugger's visual language, not a separate accent; the two never share a control, and alpha sits just under
+    the editor wash because `PanelBrush` makes the same value read stronger. **(6) `DebuggerIcon`** breakpoint
+    dot 6 → **4.5** at the same centre (16, 15.5) and the same tip overlap — an accent on the pointer, not a
+    second subject; canonical `Assets/Icons/Debugger/debugger.svg` updated with it. **Left out by decision:**
+    dialog **field-level** validation hints (`AddFieldDialog` et al. — a hint beside a field, not a module
+    message). Build 0/0; **5159 green** (+2). **⚠ Rule going forward: a `MessageBanner` host sets only
+    `Severity`, `Message`, `IsVisible`, optional `Classes="docked"` and layout `Margin`/`Grid.*` — never
+    `Background`/`BorderBrush`/`BorderThickness`/`ShowCopy`.**
   - **Build/Test/Smoke:** build 0/0 and full suite green after every seam (**5156** through Seam 3, **5157**
-    after Seam 4). Smoke: the app launches clean. The visual results of Seams 0–4 (bare-var squiggles, shortcut
-    chips, current-line wash, Variables spacing/amber, and every migrated message banner in **both** themes)
-    **await the user's visual QA**.
+    after Seam 4, **5159** after the Seam 4 QA round). Smoke: the app launches clean. The visual results of
+    Seams 0–4 (bare-var squiggles, shortcut chips, current-line wash, Variables spacing + the new blue
+    changed-value wash, every message banner, the Messages-log problem rows, and the smaller debugger-icon dot,
+    in **both** themes) **await the user's visual QA**.
   - **NEXT SESSION STARTS AT Seam 5 (edit during debugging)** — largest/riskiest, touches the close guard + a
     live session; checkpoint before starting it. Then **Seam 6** (Quick Fix design doc only). Grounding facts
     for Seam 5 in the plan file: source editor is `IsReadOnly="True"`
