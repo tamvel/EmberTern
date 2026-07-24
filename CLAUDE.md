@@ -197,6 +197,83 @@ noted.
 
 ## Current state
 
+- **⭐ CURRENT WORK — UX Polish Sprint (Debugger & SQL Editor). IN PROGRESS. Seams 0–3 DONE + committed;
+  next session STARTS AT Seam 4.** Goal: **quality, not features** — unify the IDE's look, improve
+  readability, fix regressions. No UI rebuild; presentation-first; keep the debugger's D1–D4 responsibility
+  split (view/theme changes, never logic pushed into VMs). Each seam ends build 0/0 + tests green +
+  committable; **visual changes await the user's QA** (done in parallel, not blocking). **Full plan:**
+  `C:\Users\grzegorz.gronski\.claude\plans\indexed-launching-sphinx.md` (the approved seam breakdown).
+  Commit convention this sprint: **one commit per seam.**
+  - **Ratified decisions (do not re-litigate):**
+    - **Diagnostics (Item 6)** = a **minimal binder fix**, NOT an ET0003 redesign (see Seam 0 below).
+    - **Shared error component = `MessageBanner`** (name chosen over `AlertBanner` — it will also carry
+      Info/Warning/Success, not only errors). **Reach (Seam 4):** it becomes the standard on **every main
+      work surface where the user executes or compiles code** — object editors (~11) + Execute Procedure —
+      with Script Executor + Batch Results + Security Manager as natural follow-ons. **Migration must be
+      MECHANICAL** — replace the existing error presentation only; **never change a module's business
+      behavior/workflow.** The SQL Editor **Messages log stays a scrolling row-list** (out of scope).
+    - **Edit during debugging (Item 5, Seam 5)** = editor is editable **at all times, incl. a live/paused
+      session** (no edit-lock at breakpoints). Save = a deliberate new work cycle: on save during an active
+      session, **warn clearly that it ends the session**, then stop the session + close its transaction →
+      standard object save → compile → on success stay in the editor with the new code, on failure standard
+      compile-error handling. **Seam 5 sub-order (reversed per user): 5a editor + change-tracking → 5b
+      save+compile pipeline (ISavableObjectEditor, warn+teardown on live save) → 5c tab-close
+      Save/Discard/Cancel + `Debugger` cases in `WorkspaceTabViewModel.UnsavedWork`/`SavableEditor`.**
+    - **Quick Fix / Light Bulb (Item 7, Seam 6)** = **design doc ONLY**, no implementation. D3 already
+      satisfies the wiring-consolidation prerequisite; `Diagnostic.QuickFixes` is additive; plug into the
+      hover card (primary) + panel + a `NavigationController` light-bulb adorner wired only in
+      `SqlEditorBehavior.Attach`.
+  - **Seam 0 — Diagnostics regression → DONE (commit `140547b`).** Root cause: **not a revertible
+    regression** — a long-standing gap. `DiagnosticsEngine` (ET0003) never changed; the `:name` path always
+    flagged; an unresolved **bare** identifier was never recorded (`SemanticBinder.Psql.BindBareLocal`'s
+    `switch (sym)` had no default), a deliberate guard against false-flagging unqualified columns, present
+    since the SemanticModel was born (`632bd86`). Minimal fix (exact agreed scope): an unresolved **bare**
+    identifier is now recorded as an unknown variable (ET0003) **only in unambiguous PSQL value positions** —
+    `BindLeaf` flags `Assignment`/`Return` leaves, `BindControlHeader` flags `IF`/`WHILE`; `BindForSelect`/
+    `BindBodyStatement` stay unflagged. Excluded so **no false positives**: query/DML ranges (columns),
+    context variables (`ROW_COUNT`/`SQLCODE`/`GDSCODE`/`SQLSTATE`/`INSERTING`/`UPDATING`/`DELETING`/
+    `RESETTING`/`USER` — a static `BareContextVariables` set), `NEXT VALUE FOR <seq>` (the `FOR`-preceded
+    identifier), `EXCEPTION <name>` names and `LEAVE <label>` labels (those leaf kinds never flag). +11
+    `DiagnosticsEngineTests` (both true-positive and each no-false-positive); 3 neighbouring fixtures
+    (Diagnostics/Hover/Panel) tightened so their scaffolding vars resolve. **⚠ Side-effect to watch:** the
+    binder now emits an extra unresolved-Variable `SymbolReference` for a bare bad name — any future test that
+    counts references over PSQL with an undeclared bare identifier may see one more. Build 0/0; 5156 green.
+  - **Seam 1 — Shortcut presentation → DONE (commit `d119057`).** New shared `TextBlock.shortcut-chip`
+    (ControlStyles.axaml, on-accent). Execute button + debugger launch button both render label +
+    shortcut-chip (launch button changed from a `Content` string to a label+chip StackPanel).
+    `DebuggerLaunchButton` → `"Start debugging"` + new `DebuggerLaunchShortcut = "F5"`; every "Action (Key)"
+    command tooltip normalized to paren-free "Action · Key" (Continue · F5, Step Into · F11, Format SQL ·
+    Alt+F, Global Search · Ctrl+Shift+F, Edit selected field · F2, Evaluate … · Shift+F9, Run … · F5).
+    Prose/instructional strings left as-is. Pure Presentation; build 0/0; 5156 green.
+  - **Seam 2 — Current-line legibility → DONE (commit `6c299e3`).** Token-only: `DebugCurrentLineColor` wash
+    alpha raised for VS/Rider-clear legibility, calm blue hue + strong accent bar kept — Dark `#285A8AC8` →
+    `#4A5A8AC8` (α ≈16%→≈29%), Light `#1C0033B3` → `#380033B3` (α ≈11%→≈22%). (Note: **Dark** wash is line 55,
+    **Light** is line 289 in `Colors.axaml` — verified, agents had them swapped.) Build 0/0; 5156 green.
+  - **Seam 3 — Variables panel polish → DONE (commit `475a5c1`).** Ergonomics only (no panel-architecture
+    change): value rows got a real right gutter (row padding `4,1` → `8,3,12,3`, inner grid margin dropped,
+    group header `6,3` → `8,4`) so values no longer touch the edge/scrollbar. The panel has **no
+    row-selection**; the only highlight is the semantic amber **changed-value** wash (D7 — "this value changed
+    since the last step"), which the user chose to **keep** (deliberately distinct from selection/current-line)
+    — only de-olived to a cleaner warm amber-gold, same low alpha: dark `#C8A000` → `#E0A830`, light `#E0B000`
+    → `#D69E24`. Build 0/0; 5156 green.
+  - **Build/Test/Smoke:** build 0/0 and full suite **5156 green** after every seam. **Smoke: the app was NOT
+    launched this session** — all Seam 0–3 changes are Core-tested + presentation; the visual results (bare-var
+    squiggles, shortcut chips, current-line wash, Variables spacing/amber) **await the user's visual QA**.
+  - **NEXT SESSION STARTS AT Seam 4 (MessageBanner).** Sub-seams: **4a** build the `MessageBanner` control
+    (generalize the debugger Error Bar `DebuggerTabView.axaml:217-272`: severity enum reusing the
+    `DiagnosticRowViewModel.cs:52` severity→brush-key convention, header, selectable wrapping body, optional
+    Copy/Dismiss/Expand, `PanelBrush`+`BorderBrush` + severity stripe/icon). **4b** migrate the debugger Error
+    Bar + Preflight rows onto it (zero visual change — proves the abstraction). **4c** mechanical adoption
+    across object editors + Execute Procedure (+ Script Executor/Batch Results normalizing their local
+    `DangerIconBrush`→`ErrorBrush`, + Security Manager). Then **Seam 5** (edit-during-debug, checkpoint before
+    starting it — largest/riskiest, touches the close guard + live session), then **Seam 6** (Quick Fix design
+    doc). Grounding facts for Seam 5 in the plan file: source editor is `IsReadOnly="True"`
+    (`DebuggerTabView.axaml:441`) and `SourceText` is overwritten during stepping (`:1256/1307/1450` — needs an
+    editable buffer separate from the frame-source display); `ISavableObjectEditor.SaveAsync` pattern in
+    `SourceObjectDetailTabViewModel.cs:489-544`; per-tab close is Discard/Cancel-only
+    (`MainWindowViewModel.RequestCloseTabAsync:5936-5951`); `WorkspaceTabViewModel.UnsavedWork`/`SavableEditor`
+    return null for `Debugger`. **⚠ kill any lingering `EmberTern.exe` before rebuilding** (locks output DLLs →
+    MSB3021).
 - **Stage X — Firebird Debugger: implementation STARTED; P1 + P2 + D1–D9 DONE. D9 (local procedures & functions — THE FLAGSHIP) COMPLETE + live-fidelity-verified (core 2026-07-18, seam c 2026-07-19): local routines are real, steppable debugger frames with real closure variables (the capability IBExpert cannot deliver); both local procedures and local functions are faithful step-into AND step-over. §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) = local-routine step-into (AST + parser + binder + extractor R5; runtime ResolveRoutine + AST-header param types); seam (b) = closures — Part 1 closure capture for step-INTO (read+write an OUTER var, the write reaching the parent frame), Part 2 the transitive read/write-set fixpoint over the sub-routine call graph for step-OVER (a local call whose callee captures an outer var not named at the call site). All proven sim==real on the lab. D9 seam (c) — local-FUNCTION step-into (§6.4) — COMPLETE 2026-07-19 (c1 AST → c2 Core interpreter → c3 Firebird executor + live fidelity): a local function is a real steppable frame in all four value-consuming positions (v=f()/RETURN f()/IF f()/WHILE f()) via a Function Return Continuation, no new server path; live-proven sim==real for the four positions, six return types (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing (local shadows a same-named stored function), nesting, and closures (spec §15.11). 🏁 D9 FULLY COMPLETE — local procedures AND functions step faithfully, into and over. 🏁 D10 (Triggers) COMPLETE + user-confirmed 2026-07-19 (seam A pure-Core / seam B live-fidelity / seam C UI; NEW/OLD context, multi-action, embedded-subquery colon fix #248) — PLUS terminal debug states (Completed keeps state + END marker, Faulted stops on the raising line + red status). D10.5 (UX polish) DONE 2026-07-19: the debugger's internal harness-audit tab (formerly "Executed SQL" — a misleading name; it was never the user's SQL history) is renamed "Harness Log" and made a DEBUG-only diagnostic surface — it is built in code-behind under `#if DEBUG` (`DebuggerTabView.axaml.cs` → `BuildHarnessLogTab`, no longer in the XAML), so in RELEASE builds the tab does not exist at all (not hidden / not disabled — genuinely not compiled). No new setting/toggle (user rejected reusing the per-connection DDL Developer Mode — different domain). The audit log itself (`DebuggerTabViewModel.ExecutedSql`) is unchanged and still collected in every build — it also feeds the Immediate tab — so Immediate / Evaluate(Shift+F9) / Watches are untouched. A purpose description + empty-state explain the tab is a debugger-internals diagnostic, not user-SQL history. Build 0/0 in BOTH Debug and Release; 4929 tests green. 🏁 D11 (Packages) COMPLETE + user-confirmed 2026-07-20 (Seam 0 / A / B / C) — packaged procedures (public AND private) are real steppable debugger frames, reached both by stepping into them from a caller and by launching a member directly as the ROOT; one execution path, no parallel package executor, live-fidelity-proven. **Seam 0 (lab + blocking probes, commit f229b94):** extended the lab with `PKG_DBG` (public `PUB_RUN`/`PUB_ADD` + a PRIVATE `PRIV_DOUBLE`; a private and a public sibling call inside `PUB_RUN`) + standalone selectable `SP_DBG_PKG`; §8.2 probes measured live (§15.12) — a PRIVATE package routine is NOT callable from `EXECUTE BLOCK` (SQLSTATE 42000 "is private to package") ⇒ interpret it; a PUBLIC one IS (⇒ real step-over / source-fetch step-into); the whole body is verbatim-extractable from `RDB$PACKAGE_BODY_SOURCE` (parse the blob). **Seam A (pure Core, commit ead3a41):** `ExecuteProcedureStatement.PackageName` + parser reading a qualified `PKG.PROC` (binder still references the package at the first name token; `SqlParameterScanner` returns the qualified name); new `SqlParser.ParsePackageBodyMembers` turns a body blob (`BEGIN <members> END` of bare `PROCEDURE/FUNCTION` routines = the D9 sub-routine shape WITHOUT `DECLARE`) into member `SubroutineDeclaration`s (`ParseSubroutineDeclaration` generalized to both leading forms; `ParseScopedBlockBody` reused — no hand-rolled scanner); private-ness stays a metadata fact. **Seam B (Firebird + live fidelity, commit e07ad40):** `ResolveRoutine` resolves a package call (qualified `PKG.PROC`, or an unqualified SIBLING from within a package frame) through ONE path — the member is reconstructed as a standalone `CREATE PROCEDURE` (`"CREATE "` + its `RDB$PACKAGE_BODY_SOURCE` slice) so the **D8** path (scope-bound model+body, catalog params keyed by `RDB$PACKAGE_NAME` via a generalized `BuildFrameVariablesAsync`, arg seeding) applies to a PUBLIC member, while every package routine is declared as a harness sub-routine (**D9 R5**) so a PRIVATE sibling — not DSQL-callable (§15.12) — runs inside the harness like a local routine; a package member is a closed scope (`LexicalParent` null, no capture ⇒ the read/write fixpoint is a no-op) so `ExecuteStatement`/`EvaluateCondition`/`BindValues` are untouched. Public members maximally reuse D8, private maximally reuse D9 — **NO parallel package executor** (user directive). Live fidelity PROVEN sim==real (§15.13, `DebuggerFidelityProbe` +2): case 18 step-**Into** `SP_DBG_PKG → PUB_RUN → PRIV_DOUBLE (private, interpreted) + PUB_ADD`, depth 3, sim 16==real 16; case 19 step-**Into** `PUB_RUN` then step-**Over** its siblings — the private `PRIV_DOUBLE` runs via the R5 harness (depth 2, never a frame), sim 16==real 16; all 17 prior cases still pass. **Seam C (launch a member as the debug ROOT — C1 engine `fd50411`, C2 UI `0b6259d`):** the "Debug procedure…" entry point on a package member, launched as the root. **C1** — `SqlParser.ReconstructPackageMemberSource` is now the ONE owner of the `"CREATE "` + member-slice reconstruction (the seam-B step-into path was refactored to route through it); `FirebirdDdlReader.FetchPackageMemberSourceAsync` reads the raw `RDB$PACKAGE_BODY_SOURCE` blob and reconstructs the member's standalone source (the App/probe root source provider); `FirebirdDebugExecutor.CreateAsync` gained an optional `packageName` that builds a package ROOT frame exactly as seam B builds a stepped-into member (package-keyed catalog params + every package routine as a harness sub-routine R5 so a sibling resolves + package/members on the frame context; closed scope ⇒ Execute/EvaluateCondition/BindValues untouched); `DebugLaunchSpec.PackageName` (additive) threaded through the launcher; `DebuggerTabViewModel` gained a `packageName` arg; `MainWindowViewModel.OpenDebuggerForPackageMember` reuses the `OpenDebuggerForObject` launch shape (same §9.3 parameter panel + launcher). **Live fidelity PROVEN** (`DebuggerFidelityProbe` case 20): `PKG_DBG.PUB_RUN(5)` launched as ROOT steps into private `PRIV_DOUBLE` + public `PUB_ADD`, chain `PUB_RUN → PRIV_DOUBLE → PUB_ADD`, sim R 16==real 16; all 19 prior cases pass. **C2** — the Package editor → Members tab "Debug procedure…" context menu (visible only for PROCEDURE members via `PackageMemberItemNode.IsProcedure`; a function-as-root is out of scope, §F), reusing the sidebar's `MetadataContextDebugProcedure` label + mirroring the tab's double-click code-behind; `PackageDetailTabViewModel.DebugMemberRequested` → the C1 launch path. No sidebar member leaf (packages don't expand) and no toolbar button (which member? = a new workflow) — the Members tab is the unambiguous entry point. Build 0/0; package/debug tests green; smoke clean; user QA confirmed 2026-07-20. **§F boundary:** a package FUNCTION call as a step-into is not modelled on the call side (`CallExpression` carries no package qualifier) — step-over, faithful — add only when a real lab case needs it (gotcha #233).
   **D12 (Advanced breakpoints) — COMPLETE + user-confirmed (2026-07-20). 🏁 Break on exception, conditional
   breakpoints + hit counts, data breakpoints, and run-to-next-`SUSPEND` (+ result grid) all ship end-to-end,
