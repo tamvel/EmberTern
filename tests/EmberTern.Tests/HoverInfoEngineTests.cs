@@ -136,7 +136,7 @@ public class HoverInfoEngineTests
     [Fact]
     public void UnresolvedVariable_HoverExplainsTheSquiggle()
     {
-        const string sql = "execute block as begin a = :undeclared_one; end";
+        const string sql = "create procedure loc returns (a integer) as begin a = :undeclared_one; end";
         int offset = sql.IndexOf("undeclared_one", StringComparison.Ordinal) + 1;
 
         var hover = Hover(sql, offset);
@@ -226,7 +226,7 @@ public class HoverInfoEngineTests
     [Fact]
     public void DiagnosticHitTest_IsInclusiveAtSpanEnd()
     {
-        const string sql = "execute block as begin a = :undeclared_one; end";
+        const string sql = "create procedure loc returns (a integer) as begin a = :undeclared_one; end";
         var model = SemanticModel.Build(sql);
         var diagnostics = DiagnosticsEngine.Analyze(model);
         var d = Assert.Single(diagnostics);

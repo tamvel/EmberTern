@@ -321,7 +321,7 @@ public class DiagnosticsPanelVmTests
     public void Panel_ShowsExactlyWhatTheEngineProduced()
     {
         // Two undeclared locals in a routine body — local scope, so no metadata/connection needed.
-        const string sql = "execute block as begin a = :undeclared_one; b = :undeclared_two; end";
+        const string sql = "create procedure loc returns (a integer, b integer) as begin a = :undeclared_one; b = :undeclared_two; end";
         var diagnostics = DiagnosticsEngine.Analyze(SemanticModel.Build(sql));
         Assert.Equal(2, diagnostics.Count); // guards the fixture, not the panel
 
@@ -342,7 +342,7 @@ public class DiagnosticsPanelVmTests
     [Fact]
     public void EngineOrder_IsAscendingByStart_TheContractNavigationRelies_On()
     {
-        const string sql = "execute block as begin a = :undeclared_one; b = :undeclared_two; end";
+        const string sql = "create procedure loc returns (a integer, b integer) as begin a = :undeclared_one; b = :undeclared_two; end";
 
         var diagnostics = DiagnosticsEngine.Analyze(SemanticModel.Build(sql));
 
@@ -360,7 +360,7 @@ public class DiagnosticsPanelVmTests
     [Fact]
     public void Navigation_OverRealEngineOutput_WalksTheDocumentInOrder()
     {
-        const string sql = "execute block as begin a = :undeclared_one; b = :undeclared_two; end";
+        const string sql = "create procedure loc returns (a integer, b integer) as begin a = :undeclared_one; b = :undeclared_two; end";
         var diagnostics = DiagnosticsEngine.Analyze(SemanticModel.Build(sql));
         var vm = new DiagnosticsPanelViewModel();
         vm.Update(diagnostics.Select(d => new DiagnosticRowViewModel(d, line: 1, column: d.Start + 1)).ToList());

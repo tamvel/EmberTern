@@ -136,7 +136,7 @@ public class DiagnosticsEngineTests
     [Fact]
     public void UnresolvedVariable_UndeclaredLocalInRoutineBody_IsFlagged()
     {
-        const string sql = "execute block as begin v = :undeclared; end";
+        const string sql = "create procedure loc returns (v integer) as begin v = :undeclared; end";
 
         var d = Assert.Single(Analyze(sql)); // no metadata needed
         Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
@@ -177,6 +177,110 @@ public class DiagnosticsEngineTests
             x.Category is DiagnosticCategory.UnresolvedVariable or DiagnosticCategory.UnresolvedParameter);
     }
 
+    // ══ Unresolved BARE variable (Seam 0-fix) ═════════════════════════════════════════════════
+    //
+    // A bare (colon-less) reference to an undeclared variable is flagged ET0003 — but ONLY in an
+    // unambiguous PSQL value position (assignment / RETURN operand, IF/WHILE condition), never where a
+    // bare identifier could legitimately be a column, context variable, sequence, exception name or loop
+    // label. These tests pin BOTH the true-positive and the absence of the false-positive the earlier
+    // design deliberately avoided.
+
+    private static bool HasUnresolvedVar(IReadOnlyList<Diagnostic> diags) =>
+        diags.Any(d => d.Category == DiagnosticCategory.UnresolvedVariable);
+
+    private const string DeclVSum =
+        "create procedure p returns (r integer) as\n" +
+        "declare variable v_sum integer;\n" +
+        "begin\n";
+
+    [Fact]
+    public void BareVariable_UndeclaredOnAssignmentRhs_IsFlagged()
+    {
+        const string sql = DeclVSum + "  v_sum = 1;\n  r = v_summ;\nend";
+        var d = Assert.Single(Analyze(sql));
+        Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
+        Assert.Equal("ET0003", d.Code);
+        Assert.Equal(sql.LastIndexOf("v_summ", StringComparison.Ordinal), d.Start);
+    }
+
+    [Fact]
+    public void BareVariable_UndeclaredOnAssignmentLhs_IsFlagged()
+    {
+        const string sql = DeclVSum + "  v_summ = 1;\nend";
+        var d = Assert.Single(Analyze(sql));
+        Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
+        Assert.Equal(sql.IndexOf("v_summ", StringComparison.Ordinal), d.Start);
+    }
+
+    [Fact]
+    public void BareVariable_UndeclaredInIfCondition_IsFlagged()
+    {
+        const string sql = DeclVSum + "  if (v_summ > 0) then v_sum = 1;\nend";
+        Assert.Contains(Analyze(sql), d => d.Category == DiagnosticCategory.UnresolvedVariable && d.Code == "ET0003");
+    }
+
+    [Fact]
+    public void BareVariable_UndeclaredInWhileCondition_IsFlagged()
+    {
+        const string sql = DeclVSum + "  while (v_summ < 3) do v_sum = 1;\nend";
+        Assert.Contains(Analyze(sql), d => d.Category == DiagnosticCategory.UnresolvedVariable && d.Code == "ET0003");
+    }
+
+    [Fact]
+    public void BareVariable_Correct_IsSilent()
+    {
+        const string sql = DeclVSum + "  v_sum = 1;\n  r = v_sum;\nend";
+        Assert.False(HasUnresolvedVar(Analyze(sql)));
+    }
+
+    [Theory]
+    [InlineData("row_count")]
+    [InlineData("sqlcode")]
+    [InlineData("gdscode")]
+    [InlineData("sqlstate")]
+    [InlineData("user")]
+    public void BareContextVariable_IsNotFlagged(string ctx)
+    {
+        var sql = "create procedure p returns (r integer) as\nbegin\n  r = " + ctx + ";\nend";
+        Assert.False(HasUnresolvedVar(Analyze(sql)));
+    }
+
+    [Fact]
+    public void NextValueForSequence_IsNotFlaggedAsVariable()
+    {
+        const string sql =
+            "create procedure p returns (r integer) as\nbegin\n  r = next value for my_seq;\nend";
+        Assert.False(HasUnresolvedVar(Analyze(sql)));
+    }
+
+    [Fact]
+    public void BareColumnInEmbeddedSubquery_IsNotFlaggedAsVariable()
+    {
+        // The scalar subquery is bound in its own scope and stepped over — `col` is a column, not a
+        // variable, and must not surface as ET0003 (it stays metadata-gated).
+        const string sql =
+            "create procedure p returns (r integer) as\nbegin\n  r = (select col from t);\nend";
+        Assert.False(HasUnresolvedVar(Analyze(sql)));
+    }
+
+    [Fact]
+    public void DmlTargetColumnInBody_IsNotFlaggedAsVariable()
+    {
+        // An INSERT target column list is a DSQL statement token range (not a PSQL value position) — its
+        // bare column identifiers must never be flagged as unknown variables.
+        const string sql =
+            "create procedure p as\nbegin\n  insert into t (col1, col2) values (1, 2);\nend";
+        Assert.False(HasUnresolvedVar(Analyze(sql)));
+    }
+
+    [Fact]
+    public void ExceptionName_IsNotFlaggedAsVariable()
+    {
+        // EXCEPTION <name> is not a value position — the exception name must not be flagged as a variable.
+        const string sql = "create procedure p as\nbegin\n  exception my_exc;\nend";
+        Assert.False(HasUnresolvedVar(Analyze(sql)));
+    }
+
     // ══ EmptyMetadataProvider — silence for connection-gated categories ═══════════════════════
 
     // With no metadata every schema object and column is unresolved by construction; the engine must
@@ -197,7 +301,7 @@ public class DiagnosticsEngineTests
     public void EmptyMetadataProvider_StillEmitsLocalScopeDiagnostics()
     {
         var d = Assert.Single(DiagnosticsEngine.Analyze(
-            SemanticModel.Build("execute block as begin v = :undeclared; end")));
+            SemanticModel.Build("create procedure loc returns (v integer) as begin v = :undeclared; end")));
         Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
     }
 
@@ -210,7 +314,7 @@ public class DiagnosticsEngineTests
         const string sql =
             "select k.qty from kontrahent k;\n" +      // UnknownColumn (qty)
             "execute procedure sp_missing(:z);\n" +    // UnknownObject (sp_missing)
-            "execute block as begin v = :undeclared; end"; // UnresolvedVariable (:undeclared)
+            "create procedure loc returns (v integer) as begin v = :undeclared; end"; // UnresolvedVariable (:undeclared)
 
         var diags = Analyze(sql, meta);
 
@@ -229,7 +333,7 @@ public class DiagnosticsEngineTests
         const string sql =
             "select k.qty from kontrahent k;\n" +
             "execute procedure sp_missing(:z);\n" +
-            "execute block as begin v = :undeclared; end";
+            "create procedure loc returns (v integer) as begin v = :undeclared; end";
 
         var diags = Analyze(sql, meta);
 
@@ -246,7 +350,7 @@ public class DiagnosticsEngineTests
         const string sql =
             "select k.qty from kontrahent k;\n" +
             "execute procedure sp_missing(:z);\n" +
-            "execute block as begin v = :undeclared; end";
+            "create procedure loc returns (v integer) as begin v = :undeclared; end";
 
         var model = SemanticModel.Build(sql, meta);
         var first = DiagnosticsEngine.Analyze(model);
@@ -262,7 +366,7 @@ public class DiagnosticsEngineTests
         const string sql =
             "select k.qty from kontrahent k;\n" +
             "execute procedure sp_missing(:z);\n" +
-            "execute block as begin v = :undeclared; end";
+            "create procedure loc returns (v integer) as begin v = :undeclared; end";
 
         var diags = Analyze(sql, meta);
 

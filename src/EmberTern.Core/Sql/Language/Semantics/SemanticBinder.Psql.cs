@@ -408,7 +408,7 @@ internal sealed partial class SemanticBinder
                 break;
 
             case PsqlLeafStatement leaf:
-                BindLeaf(leaf.Tokens, leaf.Children, scope, stmt);
+                BindLeaf(leaf.Tokens, leaf.Children, leaf.Kind, scope, stmt);
                 break;
 
             // An embedded DSQL statement reused node (B5) — a SELECT / INSERT / UPDATE / DELETE / MERGE /
@@ -427,7 +427,9 @@ internal sealed partial class SemanticBinder
     {
         var skip = new List<SqlNode>();
         BindEmbedded(conditionExprs, scope, stmt, skip);
-        BindPsqlExpression(toks, 0, HeaderEnd(toks, firstChild), scope, stmt, skip);
+        // An IF/WHILE condition is a pure value expression over locals — an unresolved bare identifier
+        // there is an unknown variable (flag it), never a column (no FROM).
+        BindPsqlExpression(toks, 0, HeaderEnd(toks, firstChild), scope, stmt, skip, flagUnresolvedLocals: true);
     }
 
     // FOR <cursor query> [INTO <vars>] DO — the cursor query is its own child scope; the header's INTO
@@ -441,7 +443,7 @@ internal sealed partial class SemanticBinder
 
     // A PSQL-only leaf (assignment / RETURN / EXCEPTION / SUSPEND / cursor op / …): its embedded
     // subqueries/CASE become their own scopes; the interior binds column/local/param references.
-    private void BindLeaf(IReadOnlyList<SqlToken> toks, IReadOnlyList<SqlNode> embedded, Scope scope, SqlStatement stmt)
+    private void BindLeaf(IReadOnlyList<SqlToken> toks, IReadOnlyList<SqlNode> embedded, PsqlLeafKind kind, Scope scope, SqlStatement stmt)
     {
         var skip = new List<SqlNode>();
         BindEmbedded(embedded, scope, stmt, skip);
@@ -455,7 +457,12 @@ internal sealed partial class SemanticBinder
         int cursorOperand = CursorOperandIndex(toks);
         if (cursorOperand >= 0) BindCursorReference(toks[cursorOperand], scope);
 
-        BindPsqlExpression(toks, 0, toks.Count, scope, stmt, skip, excludeToken: cursorOperand);
+        // Only an assignment's or RETURN's operands are a pure variable expression where an unresolved
+        // bare identifier is unambiguously an unknown variable. EXCEPTION names, LEAVE labels, POST_EVENT
+        // operands, cursor ops and the §0 "Other" valve are NOT — so they never flag (ET0003 stays quiet),
+        // exactly as before this seam.
+        bool flagLocals = kind is PsqlLeafKind.Assignment or PsqlLeafKind.Return;
+        BindPsqlExpression(toks, 0, toks.Count, scope, stmt, skip, excludeToken: cursorOperand, flagUnresolvedLocals: flagLocals);
     }
 
     // The token index of the cursor named by an OPEN / CLOSE / FETCH statement, or -1 when the leaf is
@@ -632,7 +639,7 @@ internal sealed partial class SemanticBinder
     // boundary: an expression walker, not a query walker.
     private void BindPsqlExpression(
         IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement stmt, IReadOnlyList<SqlNode> skip,
-        int excludeToken = -1)
+        int excludeToken = -1, bool flagUnresolvedLocals = false)
     {
         int k = lo;
         while (k < hi)
@@ -668,7 +675,10 @@ internal sealed partial class SemanticBinder
 
             if (IsNameToken(tok) && At(t, k + 1).Kind != TokenKind.LParen)
             {
-                BindBareLocal(tok, scope);
+                // NEXT VALUE FOR <seq>: the identifier after the keyword FOR is a sequence, not a variable —
+                // never flag it. (In an assignment / RETURN / IF / WHILE, keyword FOR appears only there.)
+                bool flag = flagUnresolvedLocals && !(k > lo && IsWordText(t[k - 1], "FOR"));
+                BindBareLocal(tok, scope, flag);
                 k++;
                 continue;
             }
@@ -691,11 +701,27 @@ internal sealed partial class SemanticBinder
         AddReference(tok, sym, role);
     }
 
-    // Records a reference only when the bare identifier resolves to a local (variable / parameter /
-    // cursor / record alias). Bare identifiers that don't (columns without a qualifier, keywords,
-    // functions) are left alone in a routine body — column resolution happens inside the body's
-    // Query scopes.
-    private void BindBareLocal(SqlToken tok, Scope scope)
+    // Firebird's bare (non-keyword, non-parenthesised) context variables — legal identifiers in a PSQL
+    // value expression that are NOT user variables, so an unresolved one must never be flagged as an
+    // unknown variable. The CURRENT_* family are lexer keywords (excluded by IsNameToken already); these
+    // are the ones the keyword catalog does not carry. INSERTING/UPDATING/DELETING/RESETTING also resolve
+    // to a TriggerPredicateSymbol inside a trigger — listed here so a stray use elsewhere still stays quiet.
+    private static readonly HashSet<string> BareContextVariables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ROW_COUNT", "SQLCODE", "GDSCODE", "SQLSTATE",
+        "INSERTING", "UPDATING", "DELETING", "RESETTING",
+        "USER",
+    };
+
+    // Records a reference for a bare identifier that resolves to a local (variable / parameter / cursor /
+    // record alias / trigger predicate). When <paramref name="flagUnresolved"/> is set — only in an
+    // unambiguous PSQL value position (an assignment / RETURN operand or an IF/WHILE condition, never a
+    // query/DML range) — an identifier that resolves to nothing and is not a bare context variable is
+    // recorded as an UNRESOLVED variable reference, so DiagnosticsEngine flags it (ET0003) exactly as it
+    // already flags an undeclared :name. Otherwise an unresolved bare name is left alone (it may be an
+    // unqualified column, an exception name, a loop label, a sequence, …): column resolution happens
+    // inside the body's Query scopes.
+    private void BindBareLocal(SqlToken tok, Scope scope, bool flagUnresolved = false)
     {
         var name = FoldedName(tok);
         var sym = scope.Resolve(name);
@@ -715,6 +741,9 @@ internal sealed partial class SemanticBinder
                 break;
             case TriggerPredicateSymbol:
                 AddReference(tok, sym, ReferenceRole.ContextVariable);
+                break;
+            case null when flagUnresolved && name is not null && !BareContextVariables.Contains(name):
+                AddReference(tok, null, ReferenceRole.Variable);
                 break;
         }
     }
