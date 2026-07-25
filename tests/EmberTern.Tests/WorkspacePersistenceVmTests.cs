@@ -287,7 +287,8 @@ public class WorkspacePersistenceVmTests
             "SP_X",
             _ => Task.FromResult<string?>("create procedure sp_x as begin end"),
             new NoopLauncher());
-        harness.Main.WorkspaceTabs.Add(WorkspaceTabViewModel.CreateDebugger(harness.Main, dbg, "SP_X", "A"));
+        harness.Main.WorkspaceTabs.Add(WorkspaceTabViewModel.CreateDebugger(
+            harness.Main, dbg, "SP_X", "A", MetadataObjectKind.Procedure));
 
         var state = harness.Main.CaptureWorkspace();
 

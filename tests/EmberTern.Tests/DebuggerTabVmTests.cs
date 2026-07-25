@@ -387,7 +387,7 @@ public class DebuggerTabVmTests
         await debugger.PrepareAsync();
         Assert.Equal(DebuggerPhase.ReadyToLaunch, debugger.Phase);
 
-        var tab = WorkspaceTabViewModel.CreateDebugger(main, debugger, "SP_TEST", null);
+        var tab = WorkspaceTabViewModel.CreateDebugger(main, debugger, "SP_TEST", null, MetadataObjectKind.Procedure);
         main.WorkspaceTabs.Add(tab);
         main.SelectTab(tab);
         Assert.True(main.IsDebuggerTabActive);

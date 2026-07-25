@@ -224,6 +224,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // Workspace tabs start empty — no Query tab until a connection becomes active.
         // Each ConnectionProfile owns its own Query+DDL tab list via _workspacesByConnection.
         WorkspaceTabs = new ObservableCollection<WorkspaceTabViewModel>();
+        // Seam 6d — one wiring point for "an editor in this workspace compiled its object", rather than the
+        // several dozen places that add a tab. A tab kind added later is covered without anyone remembering to.
+        WorkspaceTabs.CollectionChanged += OnWorkspaceTabsChanged;
         SavedQueries = new ObservableCollection<SavedQueryViewModel>();
         SavedQueries.CollectionChanged += (_, _) =>
         {
@@ -4855,7 +4858,7 @@ public partial class MainWindowViewModel : ViewModelBase
         debugger.DdlExecutor = _ddlExecutor;
         debugger.ConfirmationRequested += RequestConfirmAsync;
 
-        var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, name, _service.ActiveProfile?.Id);
+        var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, name, _service.ActiveProfile?.Id, kind);
         WorkspaceTabs.Add(tab);
         SelectTab(tab);
         _ = debugger.PrepareAsync();
@@ -4893,7 +4896,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // a standalone routine instead of altering the package. Editing a package member stays the Package
         // editor's job; the VM refuses to save a package tab regardless, this just never offers it.
         var title = string.Format(CultureInfo.CurrentCulture, "{0}.{1}", packageName, memberName);
-        var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, title, _service.ActiveProfile?.Id);
+        var tab = WorkspaceTabViewModel.CreateDebugger(
+            this, debugger, title, _service.ActiveProfile?.Id,
+            isFunction ? MetadataObjectKind.Function : MetadataObjectKind.Procedure);
         WorkspaceTabs.Add(tab);
         SelectTab(tab);
         _ = debugger.PrepareAsync();
@@ -5381,6 +5386,96 @@ public partial class MainWindowViewModel : ViewModelBase
     /// (This handles ONLY deletions performed inside EmberTern; external/other-session
     /// deletes are deliberately out of scope for this sprint.)
     /// </summary>
+    // ─── Keeping sibling tabs current after a compile (Seam 6d) ────────────
+    //
+    // Compiling an object updates the database, but nothing used to tell the OTHER tabs showing that object,
+    // so a routine saved from the debugger (or from any editor) left a second tab sitting on the old text
+    // until the next reconnect. There is no stale cache behind this — the readers read live — it was simply a
+    // missing notification, which is what these two members supply.
+
+    // Subscribes each newly-added tab's "I compiled my object" notification. The editors already raise it
+    // (CompiledExistingObject); this is the subscriber they never had. Nothing unsubscribes on close because
+    // nothing needs to: the delegate lives on the tab's own editor, so tab and handler are collected together.
+    private void OnWorkspaceTabsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is null) return;
+        foreach (var item in e.NewItems)
+        {
+            if (item is WorkspaceTabViewModel tab) WireObjectCompiled(tab);
+        }
+    }
+
+    // The per-kind reach into the editor that raises the notification — the same shape as
+    // WorkspaceTabViewModel.SavableEditor / UnsavedWork, so the three switches stay recognisably one idea.
+    // Only the editors that actually raise it appear here; the rest are refresh TARGETS only.
+    private void WireObjectCompiled(WorkspaceTabViewModel tab)
+    {
+        switch (tab.Kind)
+        {
+            case WorkspaceTabKind.ViewDetail when tab.ViewDetail is { } view:
+                view.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+            case WorkspaceTabKind.PackageDetail when tab.PackageDetail is { } package:
+                package.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+            case WorkspaceTabKind.ProcedureDetail when tab.ProcedureDetail is { } proc:
+                proc.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+            case WorkspaceTabKind.TriggerDetail when tab.TriggerDetail is { } trigger:
+                trigger.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+            case WorkspaceTabKind.FunctionDetail when tab.FunctionDetail is { } func:
+                func.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+            case WorkspaceTabKind.Debugger when tab.Debugger is { } debugger:
+                // The debugger saves through the same Ddl lane as every editor and reports it the same way —
+                // it is not a special case here, just another tab that can compile its object.
+                debugger.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+        }
+    }
+
+    /// <summary>Reloads every OTHER tab showing the same object as <paramref name="source"/>, after that tab
+    /// compiled it. Keyed on (kind, name) exactly as <see cref="CloseTabsForObject"/> and the open/focus dedup
+    /// in <see cref="OnOpenDdlRequested"/> are, so "the tabs for this object" means one thing everywhere.
+    /// <para><b>A tab with unsaved work is left alone.</b> Refreshing reloads from the database and resets the
+    /// dirty state, so refreshing a dirty sibling would silently destroy edits the user has not saved — stale
+    /// text is a nuisance, discarded work is rule #11. That tab keeps its own edits and its own Save.</para>
+    /// <para>A debugger tab is never a refresh target: reloading it would reset the source its session was
+    /// built from (and tear down a live session), which is the Draft model's business, not this seam's.</para></summary>
+    internal void RefreshOtherTabsForObject(WorkspaceTabViewModel source)
+    {
+        foreach (var tab in TabsNeedingRefreshAfterCompile(source)) _ = tab.RefreshAsync();
+    }
+
+    /// <summary>Which tabs <see cref="RefreshOtherTabsForObject"/> reloads — the decision, separated from the
+    /// doing so it can be asserted without a database (a reload against no connection changes nothing
+    /// observable, so testing the action alone would prove nothing). See that method for why each exclusion
+    /// exists.</summary>
+    internal IReadOnlyList<WorkspaceTabViewModel> TabsNeedingRefreshAfterCompile(WorkspaceTabViewModel source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (source.ObjectKind is not { } kind || string.IsNullOrEmpty(source.ObjectName))
+        {
+            return Array.Empty<WorkspaceTabViewModel>();
+        }
+
+        var result = new List<WorkspaceTabViewModel>();
+        foreach (var tab in WorkspaceTabs)
+        {
+            if (ReferenceEquals(tab, source)) continue;
+            if (tab.Kind == WorkspaceTabKind.Debugger) continue;
+            if (tab.ObjectKind != kind || !string.Equals(tab.ObjectName, source.ObjectName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+            if (tab.UnsavedWork is not null) continue; // never overwrite work the user has not saved (#11)
+
+            result.Add(tab);
+        }
+        return result;
+    }
+
     internal void CloseTabsForObject(MetadataObjectKind kind, string name)
     {
         // Snapshot — CloseTab mutates WorkspaceTabs.

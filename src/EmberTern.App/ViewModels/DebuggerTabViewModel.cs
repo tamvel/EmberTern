@@ -2412,6 +2412,12 @@ public sealed partial class DebuggerTabViewModel
         // does not change here — it was already this text — so the re-parse is a no-op the buffer has paid for.
         AdoptBaseline(sql);
 
+        // Seam 6d — the same notification every object editor raises after compiling an existing object, under
+        // the same name, so the owner refreshes the other tabs showing this routine through the one path
+        // instead of a debugger-specific one. Raised after the baseline is adopted: by the time anyone reacts,
+        // this tab already agrees with the database.
+        CompiledExistingObject?.Invoke();
+
         // Save → compile → straight back into a session on the new code. The user was debugging; sending them
         // through the parameter form to re-enter what they just used would be busywork. Not a second launch
         // path: it is the very tail the Restart command uses, only with a compile in front of it.
@@ -2424,6 +2430,12 @@ public sealed partial class DebuggerTabViewModel
         StatusText = UiStrings.DebuggerStatusSaved;
         return new EditorSaveResult(true, null);
     }
+
+    /// <summary>Raised after a successful Save of the routine this tab is debugging — the same event, with the
+    /// same meaning, that the object editors raise after compiling an existing object (Seam 6d). The debugger
+    /// compiles through the same Ddl lane as they do, so it reports it the same way rather than through a
+    /// path of its own.</summary>
+    public event Action? CompiledExistingObject;
 
     // True while a save is interrupting a debugging cycle that should resume on the compiled code.
     private bool _resumeAfterSave;
