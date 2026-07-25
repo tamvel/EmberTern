@@ -2459,8 +2459,14 @@ public sealed partial class DebuggerTabViewModel
         return string.Create(CultureInfo.InvariantCulture, $"{ddl.ObjectKind}|{string.Join(",", inputs)}");
     }
 
-    // Rebuilds the launch inputs for a signature that changed under a save — the same branch PrepareAsync
-    // takes, so a routine that became a trigger (or stopped being one) is handled by the one code path.
+    // Rebuilds the launch inputs for a signature that changed under a save or a restart — the same branch
+    // PrepareAsync takes, so a routine that became a trigger (or stopped being one) is handled by the one code
+    // path.
+    //
+    // The panel is rebuilt from the new signature, and then everything that can be PROVEN still correct is
+    // carried into it: a parameter keeps its value when it is still the same parameter, and only the rename
+    // case is inferred (LaunchValueCarryOver). What cannot be proven is left for the user to enter, because a
+    // rebuilt panel holding a value nobody can justify is worse than an empty field.
     private async Task RebuildLaunchInputsAsync(CancellationToken cancellationToken)
     {
         var ddl = RootDdl;
@@ -2470,9 +2476,20 @@ public sealed partial class DebuggerTabViewModel
             return;
         }
 
+        // Snapshot BEFORE the rebuild — these rows are what the user is looking at, which is newer than
+        // anything the history holds (a value typed but not yet launched has never been recorded).
+        var previous = Parameters?.Params.ToList();
+
         IsTriggerMode = false;
         TriggerEditor = null;
         BuildParameters();
+
+        if (previous is { Count: > 0 } && Parameters is not null)
+        {
+            // A routine's parameters have positional identity, so both passes apply.
+            var matches = LaunchValueCarryOver.ByName(previous, Parameters.Params);
+            LaunchValueCarryOver.SoleRemainingPair(previous, Parameters.Params, matches);
+        }
     }
 
     /// <summary>A session exists that saving would invalidate — running or paused, or a terminal state whose

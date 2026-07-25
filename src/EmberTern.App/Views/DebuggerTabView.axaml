@@ -45,6 +45,13 @@
                      TextTrimming="CharacterEllipsis" />
           <TextBlock Text="{Binding TypeText}" FontSize="10" VerticalAlignment="Center"
                      Foreground="{DynamicResource SubtleForegroundBrush}" TextTrimming="CharacterEllipsis" />
+          <!-- The one auto-fill marker: this value was supplied by the app, not typed here. Every automatic
+               mechanism (history, carry-over across a rebuilt panel) reports through the same Origin, so there
+               is one convention to learn; the tooltip says which mechanism, and it clears on the first edit. -->
+          <TextBlock Text="{x:Static app:UiStrings.LaunchValueAutoFilledMarker}"
+                     IsVisible="{Binding IsAutoFilled}" ToolTip.Tip="{Binding OriginTooltip}"
+                     FontSize="9" VerticalAlignment="Center" FontStyle="Italic"
+                     Foreground="{DynamicResource SubtleForegroundBrush}" />
         </StackPanel>
         <Grid Grid.Column="1" ColumnDefinitions="*,Auto" VerticalAlignment="Center">
           <Panel Grid.Column="0" VerticalAlignment="Center">

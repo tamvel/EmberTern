@@ -24,6 +24,24 @@ public enum ExecuteParamKind
     BlobBinary,  // BLOB SUB_TYPE 0 (binary) → text input (binary file input out of scope)
 }
 
+/// <summary>Where a parameter row's current value came from. The app has ONE convention for saying "you did
+/// not type this here": every mechanism that supplies a value automatically reports itself through this, so a
+/// future one adds a case rather than a second kind of marker.</summary>
+public enum ValueOrigin
+{
+    /// <summary>The user's own value — typed now, or simply the untouched default. Never marked.</summary>
+    Entered,
+
+    /// <summary>Filled from a stored value that was <b>proven</b> to still fit: the previous run's history, or
+    /// the same parameter carried across a rebuilt launch panel. No inference was made.</summary>
+    Restored,
+
+    /// <summary>Filled by the only inference the panel makes: after matching by name, one parameter remained on
+    /// each side with the same input kind, so the value was carried into it. The pair is unprovable — a renamed
+    /// parameter and a replaced one look identical in the text — so the row says so.</summary>
+    Assumed,
+}
+
 /// <summary>One input parameter row in the Execute Procedure dialog. The control
 /// shown matches <see cref="Kind"/>; <see cref="Resolve"/> returns the bound CLR
 /// value (or null for NULL) so it binds correctly — never as a SQL literal.</summary>
@@ -90,6 +108,36 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
     // CommitTime parses + normalizes to HH:mm:ss (called on focus-loss and before OK).
     // TimeValue stays the canonical value used by Resolve.
     [ObservableProperty] private string _timeText = string.Empty;
+
+    // ─── Where this row's value came from (the one auto-fill convention) ─────
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAutoFilled))]
+    [NotifyPropertyChangedFor(nameof(OriginTooltip))]
+    private ValueOrigin _origin;
+
+    /// <summary>True while the value on screen was supplied by the app rather than typed here — the one thing
+    /// the marker in the launch panel says. <see cref="OriginTooltip"/> says by which mechanism.</summary>
+    public bool IsAutoFilled => Origin != ValueOrigin.Entered;
+
+    /// <summary>Why this row is marked, in the user's words.</summary>
+    public string OriginTooltip => Origin switch
+    {
+        ValueOrigin.Restored => UiStrings.LaunchValueRestoredTooltip,
+        ValueOrigin.Assumed => UiStrings.LaunchValueAssumedTooltip,
+        _ => string.Empty,
+    };
+
+    // Any edit makes the value the user's own, so the marker goes. Without this a row would keep claiming it
+    // was filled in automatically after the user had replaced the value — the same small untruth this whole
+    // convention exists to remove. The value setters below run BEFORE an origin is assigned by the mechanisms
+    // that fill a row, so those assign their origin last (see ApplyHistoryValue).
+    partial void OnTextValueChanged(string value) => Origin = ValueOrigin.Entered;
+    partial void OnNumericValueChanged(decimal? value) => Origin = ValueOrigin.Entered;
+    partial void OnDateValueChanged(DateTime? value) => Origin = ValueOrigin.Entered;
+    partial void OnTimeValueChanged(TimeSpan? value) => Origin = ValueOrigin.Entered;
+    partial void OnBoolValueChanged(bool value) => Origin = ValueOrigin.Entered;
+    partial void OnIsNullChanged(bool value) => Origin = ValueOrigin.Entered;
 
     // True when the current TimeText can't be parsed — drives the red border and blocks OK.
     [ObservableProperty] private bool _hasTimeError;
@@ -176,14 +224,20 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
     /// <para>The row is mutated only once the value has actually materialised: a text that matches the kind but
     /// does not parse (corrupt history) leaves the row untouched, rather than un-checking NULL over a
     /// constructor default — which would show a value nobody entered.</para>
-    /// <returns>Whether the value was applied.</returns></summary>
-    internal bool ApplyHistoryValue(ParameterValue value)
+    /// <returns>Whether the value was applied.</returns>
+    /// <param name="value">The stored value.</param>
+    /// <param name="origin">What the row should report about where its value came from — the caller is the
+    /// mechanism, so it is the one that knows (history and same-name carry-over are both
+    /// <see cref="ValueOrigin.Restored"/>; the sole-remaining-pair rule is <see cref="ValueOrigin.Assumed"/>).
+    /// Assigned last, because writing the value itself marks the row as the user's own.</param></summary>
+    internal bool ApplyHistoryValue(ParameterValue value, ValueOrigin origin = ValueOrigin.Restored)
     {
         if (!IsProvablyCompatible(value)) return false;
 
         if (value.IsNull)
         {
             IsNull = true;
+            Origin = origin;
             return true;
         }
 
@@ -220,6 +274,7 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
                 break;
         }
         IsNull = false; // only now — the value exists
+        Origin = origin; // last: every value setter above resets it to Entered
         return true;
     }
 

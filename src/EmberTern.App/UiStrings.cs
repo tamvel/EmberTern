@@ -1753,6 +1753,16 @@ internal static class UiStrings
     // Compact launch form (D15.3 Seam A) — the inline NULL toggle beside each value field.
     public const string DebuggerParamNullLabel = "null";
     public const string DebuggerParamNullTooltip = "Set this parameter to NULL";
+    // The ONE marker for a value the app supplied rather than the user typing it here — used by every
+    // automatic mechanism (parameter history, carry-over across a rebuilt panel, and whatever comes next), so
+    // the user learns one convention instead of one per feature. The label says THAT it was filled in; the
+    // tooltip says by which mechanism. It disappears the moment the value is edited.
+    public const string LaunchValueAutoFilledMarker = "auto";
+    public const string LaunchValueRestoredTooltip =
+        "Filled in automatically — this value was kept because it provably still fits this parameter.";
+    public const string LaunchValueAssumedTooltip =
+        "Filled in automatically, on an assumption: after matching by name this was the only parameter left on "
+        + "each side with a matching type, so the value was carried over. Check it before running.";
     // Advanced section (D15.3 Seam B) — collapsed by default; transaction isolation lives here, out of the
     // main Launch flow (most users never change it). The note leads with WHAT the option changes, then names
     // the levels; the selector below shows the current level.
