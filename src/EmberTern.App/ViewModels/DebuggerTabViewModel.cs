@@ -915,14 +915,13 @@ public sealed partial class DebuggerTabViewModel
     // scope). All availability/predicate rules stay in Core (TriggerContext); this only wires the UI to them.
     private async Task<bool> TryPrepareTriggerAsync(DdlStatement ddl, CancellationToken cancellationToken)
     {
-        var header = TriggerHeaderReader.Read(ddl);
-        if (header is null || ddl.Body is null)
+        if (ReadTriggerFacts(ddl) is not { } facts)
         {
             FailPreparation(UiStrings.DebuggerTriggerOutOfScope);
             return false;
         }
 
-        var columns = ContextSubstitution.BuildColumns(_model!, new TextSpan(ddl.Body.Start, ddl.Body.Length));
+        var (header, columns) = facts;
         var columnTypes = await LoadTriggerColumnTypesAsync(header.TargetTable, cancellationToken).ConfigureAwait(true);
         _triggerColumns = columns;
         _triggerColumnTypes = columnTypes;
@@ -951,19 +950,44 @@ public sealed partial class DebuggerTabViewModel
 
     private void BuildParameters()
     {
-        // Input parameters, in declaration order, from the semantic model (never re-parsed). Typed rows +
-        // history come from the reused Smart-Parameters VM.
-        var inputs = _model!.AllSymbols
-            .OfType<ParameterSymbol>()
-            .Where(p => p.Direction == ParameterDirection.Input)
-            .OrderBy(p => p.DeclarationSpan?.Start ?? int.MaxValue)
-            .Select(p => (p.Name, TypeText: p.DataType ?? "VARCHAR"))
-            .ToList();
-
+        // Typed rows + history come from the reused Smart-Parameters VM; the inputs themselves come from the
+        // ONE derivation (ReadInputParameters), which is also what the launch signature keys on.
         Parameters = new ExecuteProcedureDialogViewModel(
-            inputs, RoutineName, _connectionId,
+            ReadInputParameters(), RoutineName, _connectionId,
             objectKind: _isFunction ? "Function" : "Procedure", historyStore: _historyStore);
         _panelSignature = BuildLaunchSignature(); // this panel describes THIS routine
+    }
+
+    // ── The launch panel's inputs — read from the parsed model in exactly ONE place ────────────────
+    //
+    // The panel and the launch signature must describe the same routine: the signature's whole job is to answer
+    // "is the panel on screen still the right panel for this text?", so if the two derived their facts
+    // separately, a change to one would silently make the signature describe something the user is not looking
+    // at. They are therefore two consumers of one derivation, not two derivations kept in step by hand.
+
+    /// <summary>The routine's input parameters in declaration order (name + declared type), from the semantic
+    /// model — never re-parsed (Contract #1). The one source for both the panel rows and the signature.</summary>
+    private IReadOnlyList<(string Name, string TypeText)> ReadInputParameters()
+        => _model is null
+            ? Array.Empty<(string Name, string TypeText)>()
+            : _model.AllSymbols
+                .OfType<ParameterSymbol>()
+                .Where(p => p.Direction == ParameterDirection.Input)
+                .OrderBy(p => p.DeclarationSpan?.Start ?? int.MaxValue)
+                .Select(p => (p.Name, TypeText: p.DataType ?? "VARCHAR"))
+                .ToList();
+
+    /// <summary>The trigger facts the launch panel is built from: the header (target table / timing / declared
+    /// events) and the <c>NEW</c>/<c>OLD</c> columns the body references (reference-driven, never a text scan).
+    /// Null when the text is not a relation trigger this tab can debug — a DB-level / DDL trigger has no target
+    /// table or DML event (§8.1), and neither has a routine with no body. The one source for both the trigger
+    /// editor and the signature.</summary>
+    private (TriggerHeader Header, IReadOnlyList<ContextColumn> Columns)? ReadTriggerFacts(DdlStatement ddl)
+    {
+        if (_model is null || ddl.Body is null) return null;
+        var header = TriggerHeaderReader.Read(ddl);
+        if (header is null) return null;
+        return (header, ContextSubstitution.BuildColumns(_model, new TextSpan(ddl.Body.Start, ddl.Body.Length)));
     }
 
     private void BuildPreflight(bool hasStepPoints)
@@ -2411,10 +2435,11 @@ public sealed partial class DebuggerTabViewModel
 
     /// <summary>Everything the launch panel asks the user to decide, as one comparable string: the object kind
     /// plus the ordered input parameters for a procedure/function, or the header facts plus the referenced
-    /// NEW/OLD columns for a trigger. Read from the parsed model — the same source
-    /// <see cref="BuildParameters"/> and <see cref="TryPrepareTriggerAsync"/> build the panel from — so it
-    /// cannot drift from what the panel shows. Empty when the text does not parse to a debuggable routine,
-    /// which never compares equal, so an unparseable state always falls back to the panel.</summary>
+    /// NEW/OLD columns for a trigger. Built from <see cref="ReadInputParameters"/> / <see cref="ReadTriggerFacts"/>
+    /// — the very derivations <see cref="BuildParameters"/> and <see cref="TryPrepareTriggerAsync"/> build the
+    /// panel from — so it cannot describe a routine other than the one on screen. Empty when the text does not
+    /// parse to a debuggable routine, which never compares equal, so an unparseable state always falls back to
+    /// the panel.</summary>
     internal string BuildLaunchSignature()
     {
         if (_model is null) return string.Empty;
@@ -2423,20 +2448,14 @@ public sealed partial class DebuggerTabViewModel
 
         if (ddl.ObjectKind == DdlObjectKind.Trigger)
         {
-            var header = TriggerHeaderReader.Read(ddl);
-            if (header is null) return string.Empty;
-            var columns = ContextSubstitution
-                .BuildColumns(_model, new TextSpan(ddl.Body.Start, ddl.Body.Length))
-                .Select(c => c.Record + "." + c.Column);
+            if (ReadTriggerFacts(ddl) is not { } facts) return string.Empty;
+            var (header, columns) = facts;
+            var referenced = columns.Select(c => c.Record + "." + c.Column);
             return string.Create(CultureInfo.InvariantCulture,
-                $"Trigger|{header.TargetTable}|{header.Timing}|{string.Join(",", header.Events)}|{string.Join(",", columns)}");
+                $"Trigger|{header.TargetTable}|{header.Timing}|{string.Join(",", header.Events)}|{string.Join(",", referenced)}");
         }
 
-        var inputs = _model.AllSymbols
-            .OfType<ParameterSymbol>()
-            .Where(p => p.Direction == ParameterDirection.Input)
-            .OrderBy(p => p.DeclarationSpan?.Start ?? int.MaxValue)
-            .Select(p => p.Name + ":" + (p.DataType ?? "VARCHAR"));
+        var inputs = ReadInputParameters().Select(p => p.Name + ":" + p.TypeText);
         return string.Create(CultureInfo.InvariantCulture, $"{ddl.ObjectKind}|{string.Join(",", inputs)}");
     }
 
