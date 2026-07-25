@@ -208,7 +208,49 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT STATE (2026-07-25) — nothing is in flight; the next stage is the user's call.** Two arcs closed
+- **⭐ CURRENT STATE (2026-07-25) — IN FLIGHT: "a session runs the code it was started from" (Seam A DONE, B+C
+  next).** After several days of real use the user reported the coherence gap: editing during a session was
+  allowed, but the next step still executed the launched version — *I see code A, the debugger executes code B*.
+  Rule adopted (IBExpert's): **the first change to the text ends the session** — no save, no step, no restart
+  needed. **Ratified split, do not re-litigate: `Save` is the ONLY operation that writes to the database;
+  `Restart` starts a session from the CURRENT editor text without saving** (an earlier proposal to route a
+  dirty Restart through Save→Compile→Launch was rejected by the user, correctly — the debugger never asks the
+  server to run the compiled routine, so compiling to restart writes to the DB for no technical reason and
+  kills experimenting on a routine without modifying it). **Seam boundaries (the user's own framing):** A =
+  *no step can ever run stale code again* (it does NOT start a session on the new text); **B+C** = start the
+  session **from the draft** — i.e. the backlogged Seam 6c is BACK, scoped to Restart only.
+  **⭐ Seam A — DONE (build 0/0; 5230 green; smoke clean; awaits live QA).** One rule in one place:
+  `ApplySourceEdit` → `OnSourceChanged` → live session ⇒ `EndSessionForEditAsync` (teardown §4.4 + clear
+  surfaces + `Phase = Editing`), `Busy` ⇒ condemn-and-end-in-the-operation's-tail, terminal (Completed/Faulted)
+  ⇒ keep the retained frame inspectable (values at the fault while fixing it) but drop the position marker.
+  Every stepping/eval command was already gated on `Phase == Paused && Session is not null`, so the whole
+  toolbar disabled itself with **no per-button work**. **`DebuggerPhase.SaveFailed` → renamed `Editing`**
+  (Contract #16): ONE state, two entry reasons (an edit ended the session / a save was refused), one meaning —
+  *no session, and the tab keeps showing the source because the code is what matters*. `StopAsync` + the new
+  path share `ClearSessionSurfaces()`. **Save is unchanged** (the edit-end arms `_resumeAfterSave` exactly as
+  the save-triggered stop does, so Save from `Editing` still compiles → resumes); its *"saving ends the running
+  session"* confirm is now near-unreachable but **kept** for the one remaining window (Ctrl+S while a step is on
+  the wire) rather than deleted on a reachability argument. **⚠ INTERIM, remove it in Seam B (don't relax it):**
+  `CanLaunch` + the new `CanRestart` require a **clean buffer** — Restart runs `_source` (the last *compiled*
+  text), so offering it behind an edited editor is the same "I see A / it executes B" via a button instead of a
+  step; while dirty, Save is the way into a session. **⚠ gotcha #253** came out of this and generalises: ending
+  an async resource under an in-flight background op doesn't just race — the op throws on return and a generic
+  `catch` reports it as a **fabricated** failure of the work (here: a red Firebird "fault" for something the
+  user did on purpose); the fix is to let the op's own tail end it, with every `catch` asking "was this
+  requested?" first.
+  **Seam B (VM — one "current program": `_baseline` vs the buffer's parse on a debounce; marker/breakpoint
+  snapping/pre-flight/panel all read the draft; Restart ≡ Save-without-compile through the shared tail) and
+  Seam C (Core+Firebird — `ExtractSignature` generalised to a top-level header, root frame layout from the AST
+  when the source is a draft, pre-flight surfaces the new §F boundaries, **mandatory `DebuggerFidelityProbe`
+  case: same routine from the catalog vs as an identical draft ⇒ identical stops+values**) are NOT started.**
+  **§F boundaries already identified for B+C (verified in code, all statically detectable from the draft's AST):**
+  **recursion** (a self-call falls through `ResolveRoutine`'s local+package branches to `ResolveRoutineAsync`,
+  which fetches the **compiled** source ⇒ step-into would silently descend into old code), a **selectable
+  procedure used in its own body**, a **draft that would not compile** (runs partially — PSQL compile-time
+  validation never happened); plus one accepted regression: a parameter typed **`TYPE OF …`** resolves from the
+  catalog today but throws an explained stop from the AST. Narrative + the full re-verification of the Draft
+  model against the code: [docs/history/19-...](docs/history/19-firebird-debugger.md) (last section).
+- **Before that (2026-07-25) — two arcs closed; the debugger was idle.** Two arcs closed
   back to back: the **UX Polish Sprint** through **Seam 6b** (6a debugger status → app status bar; 6b
   `SaveAsync` false success), then the debugger's **Save workflow** was reworked after live QA — Save now
   compiles the draft and **resumes the session on the new code** with the settings already made, gated on the

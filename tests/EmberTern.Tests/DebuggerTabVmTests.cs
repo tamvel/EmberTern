@@ -60,8 +60,27 @@ public class DebuggerTabVmTests
             return this;
         }
 
+        // A statement that BLOCKS until the test releases it — the only way to hold the VM in Phase == Busy
+        // (a wire operation genuinely in flight) and act while the engine is running, which is what the
+        // edit-during-a-step rule has to survive. Entered is volatile: it is set on the engine's background
+        // thread and read from the test thread.
+        private int? _blockAt;
+        private ManualResetEventSlim? _blockGate;
+        private volatile bool _entered;
+        public bool Entered => _entered;
+        public ManualResetEventSlim BlockAt(int start)
+        {
+            _blockAt = start;
+            return _blockGate = new ManualResetEventSlim(false);
+        }
+
         public StatementOutcome ExecuteStatement(IExecutableStatement s, Frame frame)
         {
+            if (_blockAt == s.Start && _blockGate is { } gate)
+            {
+                _entered = true;
+                gate.Wait(TimeSpan.FromSeconds(10)); // bounded: a hung test fails rather than hangs the suite
+            }
             if (_raises.Contains(s.Start)) return StatementOutcome.Raised(new DebugError(ExceptionName: "E_TEST", Message: "boom"));
             if (_suspends.TryGetValue(s.Start, out var sq) && sq.Count > 0) return sq.Dequeue();
             return _writes.TryGetValue(s.Start, out var w) ? StatementOutcome.Normal(w) : StatementOutcome.Normal();
@@ -1524,15 +1543,17 @@ public class DebuggerTabVmTests
         await vm.LaunchCommand.ExecuteAsync(null);
         Assert.True(vm.IsSourceEditable);     // ... and while a session is live/paused (ratified: no edit-lock)
 
+        // Stepping rewrites the DISPLAY on every frame change; it must never clobber the edit buffer. Proven
+        // here BEFORE any edit, because an edit now ends the session (see the rule tests below) — so this is
+        // the display/buffer separation on its own, with no stepping left to do afterwards.
+        await vm.StepOverCommand.ExecuteAsync(null);
+        Assert.Equal(Sql, vm.SourceText);
+        Assert.False(vm.IsSourceDirty);
+
         var edited = Sql + "\n-- touched";
         vm.ApplySourceEdit(edited);
         Assert.True(vm.IsSourceDirty);
         Assert.Equal(edited, vm.SourceText);
-
-        // Stepping rewrites the DISPLAY on every frame change; it must never clobber the edit buffer.
-        await vm.StepOverCommand.ExecuteAsync(null);
-        Assert.Equal(edited, vm.SourceText);
-        Assert.True(vm.IsSourceDirty);
 
         // Editing back to the original text is not "dirty" — dirty is a diff, not a flag.
         vm.ApplySourceEdit(Sql);
@@ -1551,20 +1572,158 @@ public class DebuggerTabVmTests
         Assert.Equal(LeafSql, vm.SourceText);
         Assert.False(vm.IsSourceDirty);
 
-        // Back on the root frame: editable again, and the edit buffer is what the editor shows.
+        // The session is untouched by the rejected edit — a read-only frame view cannot end a session.
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+        Assert.Equal(2, vm.CallStack.Count);
+
+        // Back on the root frame: editable again, and NOW an edit ends the session (the rule below).
         vm.SelectedFrameRow = vm.CallStack[1];
         Assert.True(vm.IsSourceEditable);
 
         var edited = RootSql + "\n-- touched";
         vm.ApplySourceEdit(edited);
         Assert.Equal(edited, vm.SourceText);
-
-        // Walk to the callee and back — the unsaved edit is still there.
-        vm.SelectedFrameRow = vm.CallStack[0];
-        Assert.Equal(LeafSql, vm.SourceText);
-        vm.SelectedFrameRow = vm.CallStack[1];
-        Assert.Equal(edited, vm.SourceText);
         Assert.True(vm.IsSourceDirty);
+        Assert.Equal(DebuggerPhase.Editing, vm.Phase);
+    }
+
+    // ── The rule: a session runs the code it was started from ───────────────────────────────────────
+    //
+    // Reported after several days of real use: editing during a session left the debugger stepping through the
+    // text it launched with, while the editor showed something else. The rule adopted (IBExpert's): the first
+    // change to the text ends the session there and then. This does not yet START a session on the new text —
+    // that is the next seam; what these pin is that no step can ever run stale code again.
+
+    [Fact]
+    public async Task SourceEdit_DuringALiveSession_EndsIt_AndKeepsTheUserOnTheCode()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out var launcher);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);
+
+        vm.ApplySourceEdit(Sql + "\n-- typed");
+
+        Assert.Equal(DebuggerPhase.Editing, vm.Phase);
+        Assert.True(launcher.Disposed);          // rolled back + the attachment closed (§4.4)
+        Assert.False(vm.IsLaunchPanelVisible);   // the user stays on the CODE, not sent to the parameter form
+        Assert.True(vm.IsDebugViewVisible);
+        Assert.True(vm.IsSourceEditable);        // …and can keep typing
+        Assert.Null(vm.CurrentStart);            // no marker: nothing is executing
+        Assert.False(vm.HasVariables);
+        Assert.False(vm.HasCallStack);
+    }
+
+    [Fact]
+    public async Task SourceEdit_ThatEndedTheSession_DisablesEveryDebuggingCommand()
+    {
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        vm.ImmediateInput = "v";                 // an evaluation is armed while paused…
+        Assert.True(vm.EvaluateImmediateCommand.CanExecute(null));
+
+        vm.ApplySourceEdit(Sql + "\n-- typed");
+
+        // …and every one of them needs a session, so they all go with it — no per-button work.
+        Assert.False(vm.ContinueCommand.CanExecute(null));
+        Assert.False(vm.StepIntoCommand.CanExecute(null));
+        Assert.False(vm.StepOverCommand.CanExecute(null));
+        Assert.False(vm.StepOutCommand.CanExecute(null));
+        Assert.False(vm.RunToSuspendCommand.CanExecute(null));
+        Assert.False(vm.EvaluateImmediateCommand.CanExecute(null));
+
+        // Stop stays available (the way back to the launch panel). Restart does NOT: it would run the last
+        // COMPILED text behind an edited editor — the very thing this rule removes, only by button instead of
+        // by step. Interim: it comes back when Restart can start a session from the edited text itself.
+        Assert.True(vm.StopCommand.CanExecute(null));
+        Assert.False(vm.RestartCommand.CanExecute(null));
+        Assert.False(vm.LaunchCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task SourceEdit_UndoneBackToTheCompiledText_ReArmsRestart()
+    {
+        // Dirty is a diff, not a flag — so undoing the edit makes Restart correct again (it now runs exactly
+        // what the editor shows). The session stays gone: it ended at the first keystroke, as IBExpert does.
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        vm.ApplySourceEdit(Sql + "\n-- typed");
+        Assert.False(vm.RestartCommand.CanExecute(null));
+
+        vm.ApplySourceEdit(Sql);
+        Assert.False(vm.IsSourceDirty);
+        Assert.True(vm.RestartCommand.CanExecute(null));
+        Assert.Equal(DebuggerPhase.Editing, vm.Phase); // still no session — Restart is how you get one back
+    }
+
+    [Fact]
+    public async Task SourceEdit_WhileAStepIsInFlight_EndsTheSessionOnReturn_WithoutFaulting()
+    {
+        // The engine is not thread-safe: tearing the attachment down under a running step makes that step
+        // throw on return, which the step path would otherwise report as a FAULT — a fabricated error on top
+        // of something the user did on purpose. The teardown therefore waits for the wire operation's tail.
+        var executor = new FakeExecutor();
+        using var gate = executor.BlockAt(Off("v = a + b"));
+        var vm = Vm(Sql, executor, out var launcher);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        var step = vm.StepOverCommand.ExecuteAsync(null); // deliberately NOT awaited — it blocks in the engine
+        Assert.True(SpinWait.SpinUntil(() => executor.Entered, TimeSpan.FromSeconds(5)));
+        Assert.Equal(DebuggerPhase.Busy, vm.Phase);
+
+        vm.ApplySourceEdit(Sql + "\n-- typed mid-step");
+        Assert.Equal(DebuggerPhase.Busy, vm.Phase); // not torn down under the running engine
+        Assert.False(launcher.Disposed);
+
+        gate.Set();
+        await step;
+
+        Assert.Equal(DebuggerPhase.Editing, vm.Phase); // ended by the step's own tail
+        Assert.True(launcher.Disposed);
+        Assert.False(vm.IsFaulted);
+        Assert.False(vm.ShowErrorBar); // no fabricated error
+    }
+
+    [Fact]
+    public async Task SourceEdit_AfterTheSessionCompleted_KeepsTheInspectionState_ButDropsTheMarker()
+    {
+        // A terminal session executes nothing, so there is no stale code to run and the retained frame stays
+        // inspectable — you want the final/fault values WHILE fixing the code. Only the position marker goes:
+        // it points into text that has just moved.
+        var vm = Vm(Sql, new FakeExecutor(), out var launcher);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+        await vm.ContinueCommand.ExecuteAsync(null);
+        Assert.Equal(DebuggerPhase.Completed, vm.Phase);
+        Assert.NotNull(vm.CurrentStart); // the END marker
+        Assert.True(vm.HasVariables);
+
+        vm.ApplySourceEdit(Sql + "\n-- typed");
+
+        Assert.Equal(DebuggerPhase.Completed, vm.Phase); // NOT re-ended: there was nothing left to end
+        Assert.False(launcher.Disposed);                 // the retained frame is still there to read
+        Assert.True(vm.HasVariables);
+        Assert.Null(vm.CurrentStart);                    // …but the marker no longer describes this text
+    }
+
+    [Fact]
+    public async Task Launch_IsBlockedWhileTheBufferIsDirty()
+    {
+        // Same rule at the launch panel: starting would run _source (the compiled text) behind an editor that
+        // shows something else. Interim, exactly as for Restart.
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        Assert.True(vm.LaunchCommand.CanExecute(null));
+
+        vm.ApplySourceEdit(Sql + "\n-- typed");
+        Assert.False(vm.LaunchCommand.CanExecute(null));
+
+        vm.ApplySourceEdit(Sql);
+        Assert.True(vm.LaunchCommand.CanExecute(null));
     }
 
     // ── Seam 5b — save + compile from the debugger tab ──────────────────────────────────────────────
@@ -1623,28 +1782,11 @@ public class DebuggerTabVmTests
     }
 
     [Fact]
-    public async Task Save_DuringALiveSession_Cancelled_KeepsTheSessionAndTheEdit()
+    public async Task Save_AfterAnEditEndedTheSession_NeedsNoWarning_AndKeepsTheResumeIntent()
     {
-        using var service = new FirebirdConnectionService();
-        var vm = Vm(Sql, new FakeExecutor(), out _);
-        vm.DdlExecutor = new FirebirdDdlExecutor(service);
-        vm.ConfirmationRequested += _ => Task.FromResult(false); // the user backs out of the warning
-        await vm.PrepareAsync();
-        await vm.LaunchCommand.ExecuteAsync(null);
-
-        var edited = Sql + "\n-- touched";
-        vm.ApplySourceEdit(edited);
-        var result = await vm.SaveAsync();
-
-        Assert.False(result.Success);              // Cancel is a real cancel, not a silent success
-        Assert.Equal(DebuggerPhase.Paused, vm.Phase); // the session is still live
-        Assert.True(vm.IsSourceDirty);
-        Assert.Equal(edited, vm.SourceText);
-    }
-
-    [Fact]
-    public async Task Save_DuringALiveSession_Confirmed_EndsTheSessionBeforeCompiling()
-    {
+        // The "saving ends the running session" warning is now all but unreachable by design: saving requires
+        // a dirty buffer, and the edit that made it dirty already ended the session. (The one remaining window
+        // is a Ctrl+S landing while a step is still on the wire — the guard is kept for it, not deleted.)
         using var service = new FirebirdConnectionService();
         var vm = Vm(Sql, new FakeExecutor(), out _);
         vm.DdlExecutor = new FirebirdDdlExecutor(service); // offline ⇒ the compile itself fails
@@ -1654,11 +1796,13 @@ public class DebuggerTabVmTests
         await vm.LaunchCommand.ExecuteAsync(null);
 
         var edited = Sql + "\n-- touched";
-        vm.ApplySourceEdit(edited);
+        vm.ApplySourceEdit(edited);                  // ← the session ends HERE
+        Assert.Equal(DebuggerPhase.Editing, vm.Phase);
+
         var result = await vm.SaveAsync();
 
-        Assert.True(warned);                         // the user was told, before anything happened
-        Assert.False(result.Success);                // session stopped FIRST, then the compile failed
+        Assert.False(warned);                        // nothing left to warn about
+        Assert.False(result.Success);                // the (offline) compile failed
         Assert.True(vm.ShowErrorBar);                // and the failure is in the shared Error Bar
         Assert.Equal(edited, vm.SourceText);         // the user's text is never discarded on failure
         Assert.True(vm.IsSourceDirty);
@@ -1666,7 +1810,7 @@ public class DebuggerTabVmTests
         // QA 2026-07-25 — this used to land in Idle, which shows the LAUNCH PANEL: the editor vanished and
         // the user could not fix the code the server had just rejected. A refused save now keeps the source
         // on screen, editable, with the work still reported so the close guard keeps refusing to close.
-        Assert.Equal(DebuggerPhase.SaveFailed, vm.Phase);
+        Assert.Equal(DebuggerPhase.Editing, vm.Phase);
         Assert.False(vm.IsLaunchPanelVisible);
         Assert.True(vm.IsDebugViewVisible);
         Assert.True(vm.IsSourceEditable);
@@ -1675,9 +1819,9 @@ public class DebuggerTabVmTests
     }
 
     [Fact]
-    public async Task SaveFailed_IsNotADeadEnd_StopAndRestartStayAvailable()
+    public async Task Editing_AfterARefusedSave_IsNotADeadEnd()
     {
-        // QA 2026-07-25 — SaveFailed used to disable Stop AND Restart (no session, phase not listed in
+        // QA 2026-07-25 — this phase used to disable Stop AND Restart (no session, phase not listed in
         // CanStopOrRestart), so the only way out was a successful save. It must behave like the editor after
         // a finished session: a way back to the launch panel, and a way to run the last compiled version.
         using var service = new FirebirdConnectionService();
@@ -1686,13 +1830,18 @@ public class DebuggerTabVmTests
         await vm.PrepareAsync();
         vm.ApplySourceEdit(Sql + "\n-- touched");
         await vm.SaveAsync();
-        Assert.Equal(DebuggerPhase.SaveFailed, vm.Phase);
+        Assert.Equal(DebuggerPhase.Editing, vm.Phase);
 
-        Assert.True(vm.StopCommand.CanExecute(null));
-        Assert.True(vm.RestartCommand.CanExecute(null));
+        Assert.True(vm.StopCommand.CanExecute(null));   // back to the launch panel
         Assert.True(vm.CanSaveSource);                  // …and saving the corrected text is still offered
         Assert.False(vm.ContinueCommand.CanExecute(null)); // stepping needs a session — still disabled
         Assert.False(vm.StepIntoCommand.CanExecute(null));
+
+        // Restart is blocked only because the buffer is dirty (it would run the compiled text). Discarding the
+        // edit re-arms it — the same one rule, not a phase-specific exception.
+        Assert.False(vm.RestartCommand.CanExecute(null));
+        vm.ApplySourceEdit(Sql);
+        Assert.True(vm.RestartCommand.CanExecute(null));
     }
 
     // ── Save → compile → resume: is the launch configuration the user made still the right one? ──────
@@ -1763,7 +1912,7 @@ public class DebuggerTabVmTests
     public async Task Save_ThatFails_WithNoLiveSession_StillKeepsTheSourceOnScreen()
     {
         // Same rule from the launch-panel side: a refused save must not leave the tab on the parameter
-        // form. Nothing to stop here, so the phase moves ReadyToLaunch → SaveFailed purely to keep the
+        // form. Nothing to stop here, so the phase moves ReadyToLaunch → Editing purely to keep the
         // code visible.
         using var service = new FirebirdConnectionService();
         var vm = Vm(Sql, new FakeExecutor(), out _);
@@ -1775,7 +1924,7 @@ public class DebuggerTabVmTests
         var result = await vm.SaveAsync();
 
         Assert.False(result.Success);
-        Assert.Equal(DebuggerPhase.SaveFailed, vm.Phase);
+        Assert.Equal(DebuggerPhase.Editing, vm.Phase);
         Assert.False(vm.IsLaunchPanelVisible);
         Assert.True(vm.IsSourceEditable);
     }

@@ -1839,6 +1839,12 @@ internal static class UiStrings
     // The compile was refused: the tab stays on the source so the code can be fixed and saved again.
     // The server's own message is in the Error Bar — this is only the short status-line headline.
     public const string DebuggerStatusSaveFailed = "Save failed — fix the code and save again.";
+    // The first edit during a live session ends it: the session was built from the text that just changed, so
+    // stepping on would run code the user can no longer see. Says what happened AND what to do next — the
+    // toolbar going grey is the visual cue, this is the reason. (Until Restart can run the edited text without
+    // saving, Save is the way back into a session — hence naming it here.)
+    public const string DebuggerStatusEndedByEdit =
+        "Session ended — the code changed. Save (Ctrl+S) to compile and debug the current code.";
     public const string DebuggerUnsavedSourceFormat = "{0} — modified source (not compiled)";
     // Variables panel.
     public const string DebuggerVariablesHeader = "Variables";

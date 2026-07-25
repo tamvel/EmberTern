@@ -43,12 +43,19 @@ public enum DebuggerPhase
     /// <summary>The user stopped the session, or preparation/launch failed — the launch panel is shown again.</summary>
     Idle,
 
-    /// <summary>A Save compiled the edit buffer and the server REFUSED it. There is no session (saving ended
-    /// it first), but the tab must keep showing the SOURCE rather than the launch panel: the user's uncompiled
-    /// code is the only thing on screen worth acting on, and the whole point is to fix it and save again.
-    /// Landing in <see cref="Idle"/> here would swap the editor for the parameter form and leave the user with
-    /// no way to correct the code that just failed (QA, 2026-07-25). Left only by a successful save.</summary>
-    SaveFailed,
+    /// <summary>There is no session, and the tab keeps showing the <b>source</b> rather than the launch panel:
+    /// the code on screen is the only thing worth acting on. Two ways in, one state — the phase describes what
+    /// is true (no session, the code is what matters), not which of them happened:
+    /// <list type="bullet">
+    /// <item>an <b>edit ended a live session</b> — the running session was built from text the user has just
+    /// changed, so it stopped rather than keep stepping through code nobody can see any more;</item>
+    /// <item>a <b>Save was refused</b> by the server — saving ended the session first, and landing in
+    /// <see cref="Idle"/> would swap the editor for the parameter form, leaving no way to correct the code that
+    /// just failed (QA, 2026-07-25).</item>
+    /// </list>
+    /// Only Save / Stop / Restart apply here (stepping needs <see cref="Paused"/>). Left by a successful save,
+    /// a relaunch, or Stop.</summary>
+    Editing,
 }
 
 /// <summary>
@@ -487,7 +494,8 @@ public sealed partial class DebuggerTabViewModel
 
     /// <summary>Called by the view when the user types in the source editor. Updates the buffer <em>and</em>
     /// <see cref="SourceText"/> together, so the VM and the editor never disagree — otherwise the next step
-    /// would push a stale <see cref="SourceText"/> back over the user's edit.</summary>
+    /// would push a stale <see cref="SourceText"/> back over the user's edit. A change that actually alters the
+    /// text also <b>ends a live session</b> (<see cref="OnSourceChanged"/>) — the one rule below.</summary>
     public void ApplySourceEdit(string text)
     {
         if (!IsSourceEditable) return; // a callee frame's source is not ours to edit
@@ -495,8 +503,93 @@ public sealed partial class DebuggerTabViewModel
         if (string.Equals(_editBuffer, text, StringComparison.Ordinal)) return;
         _editBuffer = text;
         SourceText = text;
+        NotifySourceDirtyChanged();
+        OnSourceChanged();
+    }
+
+    // Everything gated on "is there unsaved work" — the command gates are computed, so each mutation path must
+    // say so explicitly (#179/#187). Raised by an edit and by adopting a compiled source.
+    private void NotifySourceDirtyChanged()
+    {
         OnPropertyChanged(nameof(IsSourceDirty));
         SaveSourceCommand.NotifyCanExecuteChanged();
+        LaunchCommand.NotifyCanExecuteChanged();
+        RestartCommand.NotifyCanExecuteChanged();
+    }
+
+    // ── The one rule: a session runs the code it was started from ─────────────────────────────────
+    //
+    // An active session was built from the text as it stood at launch. The moment that text changes, the two
+    // stop describing each other — so the session ends there and then, rather than letting the next step run
+    // code the user can no longer see (the "I see A, it executes B" report that motivated this rule).
+    // Everything else follows for free: every stepping / evaluation command is gated on
+    // `Phase == Paused && Session is not null`, so tearing the session down disables the whole toolbar with no
+    // per-button work.
+
+    // Set when an edit lands while a wire operation is in flight (Phase == Busy). The session is NOT torn down
+    // here: DebugSession is not thread-safe and disposing the attachment under a running step would make that
+    // step throw on return, which RunStepAsync would report as a FAULT — a fabricated error on top of a state
+    // the user created deliberately. Instead the in-flight operation's tail consumes this flag and ends the
+    // session itself, so the teardown never races the engine.
+    private bool _condemnedByEdit;
+
+    private void OnSourceChanged()
+    {
+        if (Phase == DebuggerPhase.Busy)
+        {
+            // A step, an evaluation, or the launch itself is on the wire. Ended by its tail (see above) — this
+            // also covers typing DURING a launch, where the session does not exist yet but is about to.
+            _condemnedByEdit = true;
+            return;
+        }
+
+        if (_run is null) return; // nothing to invalidate (never launched, stopped, or already ended)
+
+        if (Phase is DebuggerPhase.Completed or DebuggerPhase.Faulted)
+        {
+            // A terminal session executes nothing, so there is no stale code to run and the retained frame
+            // stays inspectable — you want the values at the fault WHILE fixing the code that caused it. Only
+            // the position marker goes: it points into text that has just moved.
+            DropPositionMarker();
+            return;
+        }
+
+        _ = EndSessionForEditAsync();
+    }
+
+    // Ends the session because the code changed (§4.4 teardown: rollback + close the attachment), leaving the
+    // user on the SOURCE with Save / Stop available. Deliberately does NOT clear the Error Bar: after a fault
+    // the message is what the user is editing against, and it has its own Dismiss.
+    private async Task EndSessionForEditAsync()
+    {
+        _condemnedByEdit = false;
+        await TeardownRunAsync().ConfigureAwait(true);
+        ClearSessionSurfaces();
+        // The user was mid-cycle and did not ask to leave it: a Save from here compiles and resumes, exactly as
+        // a Save during a live session does (SaveAsync reads this). An explicit Stop clears it.
+        _resumeAfterSave = true;
+        Phase = DebuggerPhase.Editing;
+        StatusText = UiStrings.DebuggerStatusEndedByEdit;
+    }
+
+    // Drops the current-statement marker (and, through SetCurrentMarker, the inline values) + repaints. Guarded
+    // so typing in a terminal state repaints once, not on every keystroke.
+    private void DropPositionMarker()
+    {
+        if (CurrentStart is null) return;
+        SetCurrentMarker(null, null);
+    }
+
+    // Everything on screen that describes a live session. Shared by Stop and the edit-triggered end so the two
+    // cannot drift; what differs between them (the Error Bar, the resume intent, the phase) stays at the call
+    // site, where it is a decision rather than a parameter.
+    private void ClearSessionSurfaces()
+    {
+        SetCurrentMarker(null, null);
+        ClearVariables();
+        ClearExecutedSql();
+        ClearSuspendRows();
+        ResetWatches(); // keep the (persisted) watch rows, clear their live values
     }
 
     // The text to display for a frame: the root routine's frame shows the live EDIT BUFFER (so an unsaved
@@ -519,9 +612,9 @@ public sealed partial class DebuggerTabViewModel
     /// repaint the renderers (via <c>TextView.Redraw()</c>, never <c>InvalidateVisual()</c> — gotcha #223).</summary>
     public event EventHandler? DebugMarkersChanged;
 
-    // SaveFailed is deliberately NOT here: it is the one session-less phase that must still show the source
-    // editor, so the user can fix the code the compile just rejected (the panels inside the debug layout are
-    // empty by their own empty-states — there is no session to describe).
+    // Editing is deliberately NOT here: it is the one session-less phase that must still show the source
+    // editor, so the user can act on the code that ended (or was refused by) the session (the panels inside the
+    // debug layout are empty by their own empty-states — there is no session to describe).
     public bool IsLaunchPanelVisible => Phase is DebuggerPhase.Preparing or DebuggerPhase.ReadyToLaunch or DebuggerPhase.Idle;
     public bool IsDebugViewVisible => !IsLaunchPanelVisible;
     public bool IsPaused => Phase == DebuggerPhase.Paused;
@@ -788,8 +881,11 @@ public sealed partial class DebuggerTabViewModel
         return Task.CompletedTask;
     }
 
+    // A launch runs _source / _body / _model — the last COMPILED text. While the buffer is dirty that is not
+    // what the editor shows, so starting would execute code the user cannot see (see CanRestart: same rule,
+    // same interim, and it disappears the same way once a session can be started from the edited text).
     private bool CanLaunch => Phase is DebuggerPhase.ReadyToLaunch or DebuggerPhase.Idle
-                              && !LaunchBlocked && _body is not null
+                              && !LaunchBlocked && _body is not null && !IsSourceDirty
                               && (Parameters is not null || (IsTriggerMode && TriggerEditor is not null));
 
     [RelayCommand(CanExecute = nameof(CanLaunch))]
@@ -813,6 +909,7 @@ public sealed partial class DebuggerTabViewModel
 
         ClearExecutedSql();  // a fresh session starts a fresh audit log
         ClearSuspendRows();  // …and a fresh (empty) result set
+        _condemnedByEdit = false; // this session matches the text it is being built from
         Phase = DebuggerPhase.Busy;
         StatusText = UiStrings.DebuggerStatusRunning;
         try
@@ -822,10 +919,14 @@ public sealed partial class DebuggerTabViewModel
         catch (Exception ex)
         {
             _run = null;
+            _condemnedByEdit = false;
             Phase = DebuggerPhase.Idle;
             StatusText = string.Format(CultureInfo.CurrentCulture, UiStrings.DebuggerStatusLaunchFailedFormat, ex.Message);
             return;
         }
+
+        // Typed while the launch was on the wire: the session that just opened already describes older text.
+        if (_condemnedByEdit) { await EndSessionForEditAsync().ConfigureAwait(true); return; }
 
         RebuildBreakpointPanel(); // the panel reflects the (persisted) breakpoints now that a run exists
         await EvaluateWatchesAsync().ConfigureAwait(true); // show watch values immediately at entry
@@ -925,6 +1026,10 @@ public sealed partial class DebuggerTabViewModel
         }
         catch (Exception ex)
         {
+            // A step that was condemned mid-flight throws because ITS OWN session was ended by the edit — that
+            // is the teardown, not a fault. Reporting it as one would fabricate an error for something the user
+            // did on purpose.
+            if (_condemnedByEdit) { await EndSessionForEditAsync().ConfigureAwait(true); return; }
             Phase = DebuggerPhase.Faulted;
             SetError(ex.Message);
             StatusText = UiStrings.DebuggerStatusFaulted;
@@ -932,6 +1037,8 @@ public sealed partial class DebuggerTabViewModel
             ResetWatches();
             return;
         }
+        // Typed while the step was on the wire: end it here, where nothing is running on the engine any more.
+        if (_condemnedByEdit) { await EndSessionForEditAsync().ConfigureAwait(true); return; }
         await EvaluateWatchesAsync().ConfigureAwait(true); // auto re-evaluate every watch at the new pause (§9.5)
         RefreshFromSession();
     }
@@ -985,6 +1092,10 @@ public sealed partial class DebuggerTabViewModel
         {
             failure = ex.Message;
         }
+
+        // Typed while the evaluation was on the wire (see RunStepAsync): the session goes now. The audit row is
+        // dropped with it — ClearSessionSurfaces empties the log a dead session can no longer be read against.
+        if (_condemnedByEdit) { await EndSessionForEditAsync().ConfigureAwait(true); return; }
 
         AddExecutedSql(failure is not null
             ? DebugExecutedSqlRowViewModel.ForException(fragment, failure)
@@ -1106,22 +1217,28 @@ public sealed partial class DebuggerTabViewModel
 
     // ── Stop / Restart ──────────────────────────────────────────────────────────────────────────
 
-    // SaveFailed has no session either, but it must not be a dead end: without Stop the user would be locked
+    // Editing has no session either, but it must not be a dead end: without Stop the user would be locked
     // in the editor with no way back to the launch panel, and without Restart no way to run the last COMPILED
     // version. Stepping stays disabled everywhere here — those need Paused.
     private bool CanStopOrRestart => _run is not null
-        || Phase is DebuggerPhase.Completed or DebuggerPhase.Faulted or DebuggerPhase.SaveFailed;
+        || Phase is DebuggerPhase.Completed or DebuggerPhase.Faulted or DebuggerPhase.Editing;
+
+    /// <summary>Restart re-runs the last COMPILED text (<see cref="_source"/>), so while the buffer is dirty it
+    /// has nothing correct to run: launching the compiled version behind an edited editor is the very
+    /// "I see A, it executes B" this milestone removes — only through a button instead of a step. Blocked with
+    /// the status line naming Save as the way into a session.
+    /// <para><b>Interim.</b> This restriction exists only until Restart can start a session from the edited
+    /// text itself (no compile, no write to the database) — at which point a dirty buffer becomes Restart's
+    /// normal input and this gate goes away rather than being relaxed.</para></summary>
+    private bool CanRestart => CanStopOrRestart && !IsSourceDirty;
 
     [RelayCommand(CanExecute = nameof(CanStopOrRestart))]
     private async Task StopAsync()
     {
+        _condemnedByEdit = false;
         await TeardownRunAsync().ConfigureAwait(true);
-        SetCurrentMarker(null, null);
-        ClearVariables();
-        ClearExecutedSql();
-        ClearSuspendRows();
+        ClearSessionSurfaces();
         ClearError();
-        ResetWatches(); // keep the (persisted) watch rows, clear their live values
         // Stopping is the user leaving the debugging cycle, so a later Save must NOT silently resume it.
         // SaveAsync re-arms this immediately after the stop it performs itself.
         _resumeAfterSave = false;
@@ -1129,7 +1246,7 @@ public sealed partial class DebuggerTabViewModel
         StatusText = UiStrings.DebuggerStatusStopped;
     }
 
-    [RelayCommand(CanExecute = nameof(CanStopOrRestart))]
+    [RelayCommand(CanExecute = nameof(CanRestart))]
     private async Task RestartAsync()
     {
         await TeardownRunAsync().ConfigureAwait(true);
@@ -2099,10 +2216,10 @@ public sealed partial class DebuggerTabViewModel
             SetError(message);
             // Keep the SOURCE on screen. Ending the session above already moved us to Idle, which shows the
             // launch panel instead of the editor — leaving the user staring at a parameter form with no way
-            // to fix the code the server just rejected. SaveFailed keeps the editor (and this Save button)
+            // to fix the code the server just rejected. Editing keeps the editor (and this Save button)
             // in front of them; the buffer is untouched, so they edit and save again. The tab also still
             // reports unsaved work, so the close guard keeps refusing to close it.
-            Phase = DebuggerPhase.SaveFailed;
+            Phase = DebuggerPhase.Editing;
             StatusText = UiStrings.DebuggerStatusSaveFailed;
             return new EditorSaveResult(false, message);
         }
@@ -2212,8 +2329,7 @@ public sealed partial class DebuggerTabViewModel
         _source = sql;
         _editBuffer = sql;
         SourceText = sql;
-        OnPropertyChanged(nameof(IsSourceDirty));
-        SaveSourceCommand.NotifyCanExecuteChanged();
+        NotifySourceDirtyChanged(); // clean again ⇒ Launch / Restart are runnable once more
 
         _model = SemanticModel.Build(SqlParser.Parse(sql).Root);
         var ddl = _model.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);

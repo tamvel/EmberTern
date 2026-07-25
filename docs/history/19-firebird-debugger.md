@@ -2941,3 +2941,121 @@ a future session starts any milestone from there **without re-analysing**. Summa
   and the rewrite proper starts only after its results are recorded.
 
 **Nothing in D15 or the Script Executor Rewrite is implemented — this is the end of the planning phase.**
+
+---
+
+## "An edit ends the session" — Seam A of the code/session-coherence rule (2026-07-25)
+
+### The report
+
+After several days of real use the user filed one problem, precisely: *editing during an active session is
+allowed, but a Step Into / Step Over / Continue afterwards still executes the version the session launched
+with.* Technically correct — Seam 5a deliberately separated `_source` (what the database holds, and what the
+running session was compiled from) from `_editBuffer` (the editable text), so stepping could rewrite the
+display on every frame change without clobbering an unsaved edit. From the user's chair it reads as: **I see
+code A, the debugger executes code B.** The adopted rule is IBExpert's: the **first change to the text ends
+the session** — no save, no step, no restart required.
+
+### The seam boundary (the user's own correction, worth keeping)
+
+An early draft of the plan claimed Seam A already delivers "I see A / I execute A". It does not, and the
+distinction is exactly where responsibility divides:
+
+- **Seam A** — while the text is unchanged, the session runs what was launched; the first edit ends it
+  immediately; **from then on no step can run stale code.** It removes the possibility of executing the old
+  version. It does **not** start a session on the new text.
+- **Seams B + C** — start a session **from the edited text**, with no compile and no write to the database
+  (the Draft model, below).
+
+### The rejected detour: Restart → Save → Compile → Launch
+
+The first proposal routed a dirty Restart through `SaveAsync` (compile, then the existing auto-relaunch). It
+was cheap and reused a pipeline that already existed — and the user rejected it on architectural grounds that
+were right: *Save and Restart must not be the same operation.* The debugger never asks the server to run the
+compiled routine — it interprets the AST and executes every statement through an anonymous `EXECUTE BLOCK`
+harness **that never names the routine** — so making Restart compile would write to the database for no
+technical reason and destroy the ability to experiment on a routine without modifying it. Ratified split:
+**Save is the only operation that writes to the database; Restart runs the current text without saving.**
+
+Re-verified against the code before accepting (rather than repeating the earlier Draft-model note):
+
+- The **only** catalog read keyed by the debugged object's own name is its parameter list —
+  `ReadProcedureParametersAsync` (`RDB$PROCEDURE_PARAMETERS`) or `ReadFunctionParametersAsync`
+  (`RDB$FUNCTION_ARGUMENTS`). A **trigger** root reads none (its NEW/OLD types come from the target
+  **table**).
+- **Half the root layout is already draft-sourced**: `BuildFrameVariablesAsync` takes the body's locals from
+  `PsqlDeclarationExtractor.Extract(body, source)` — the AST the VM hands it, not the catalog.
+- The replacement path is **already proven live**: D9's `BuildLocalRoutineFrameVariablesAsync` builds a
+  complete frame for a local `DECLARE PROCEDURE` — an object with *no catalog row at all* — from the AST
+  header via `ExtractSignature`, whose own docstring says *"Same shape as a top-level routine header"*.
+  `TypeSpecBetween` already stops at `NOT NULL` / `DEFAULT` / `CHECK` / `COLLATE` / `=`, so a
+  `CREATE PROCEDURE` header parses cleanly with no new scanning.
+
+So the Fidelity Law holds for a draft-sourced session: Firebird still computes every statement, and the one
+catalog artefact is replaced by a mechanism that is already live-fidelity-proven one level down. Three §F
+boundaries were identified for B/C, all statically detectable from the draft's own AST — **recursion**
+(verified: a self-call falls through `ResolveRoutine`'s local and package branches to `ResolveRoutineAsync`,
+which fetches the **compiled** source, so stepping into it would silently descend into old code), a
+**selectable procedure used in its own body**, and a **draft that would not compile** (it runs partially,
+because PSQL compile-time validation never happened). One functional regression to disclose: a parameter
+typed `TYPE OF …` resolves from the catalog today but throws an explained `NotSupportedException` from the
+AST — accepted, because an explained stop beats a guess (§F), and body locals already behave that way.
+
+### Seam A as built
+
+The rule lives in one place. `ApplySourceEdit` — already the single VM entry point for typing, already
+early-returning when the text is unchanged or a callee frame is being viewed — now calls `OnSourceChanged`,
+which decides by phase:
+
+- **Paused (or otherwise live)** → `EndSessionForEditAsync`: teardown (rollback + close the attachment, §4.4),
+  clear the session surfaces, `Phase = Editing`. The Error Bar is deliberately **kept**: after a fault, that
+  message is what the user is editing against.
+- **Busy** → set `_condemnedByEdit` and return. See the gotcha below.
+- **Completed / Faulted** → the retained frame stays inspectable (you want the values at the fault *while*
+  fixing the code); only the position marker is dropped, because it points into text that has just moved.
+
+Everything else fell out for free: every stepping and evaluation command is already gated on
+`Phase == Paused && Session is not null`, so ending the session disabled Continue / Step Into / Over / Out /
+Run-to-SUSPEND / fast-forward / Evaluate with **no per-button work**.
+
+`DebuggerPhase.SaveFailed` was **renamed to `Editing`** (Contract #16 — a name states responsibility, not
+history): the state now has two entry reasons — an edit ended the session, or a save was refused — and one
+meaning: *there is no session, and the tab keeps showing the source because the code is what matters.*
+`StopAsync` and the new path share `ClearSessionSurfaces()`; what differs between them (the Error Bar, the
+resume intent, the phase) stays at the call site, where it is a decision rather than a parameter.
+
+**Interim restriction, deliberately introduced:** `CanLaunch` and the new `CanRestart` both require a clean
+buffer. Restart runs `_source` — the last *compiled* text — so offering it behind an edited editor would be
+the very "I see A, it executes B" this rule removes, only by button instead of by step. Save (compile →
+resume, unchanged) is the way into a session while the buffer is dirty. The gate disappears in Seam B, when
+Restart gains the draft — it is removed, not relaxed.
+
+`SaveAsync` needed no change: the edit-triggered end arms `_resumeAfterSave` exactly as the save-triggered
+stop does, so a Save from `Editing` still compiles and resumes on the new code. One consequence worth
+recording: the *"saving ends the running session"* confirmation is now all but unreachable — saving requires a
+dirty buffer, and the edit that made it dirty already ended the session. The guard is **kept** for the one
+remaining window (a `Ctrl+S` landing while a step is still on the wire) rather than deleted on the strength of
+a reachability argument.
+
+### The trap: a teardown that fabricates an error (gotcha #253)
+
+Ending the session directly from the edit handler while `Phase == Busy` would have disposed the attachment
+underneath a step running on `Task.Run`. That step then throws on return — and `RunStepAsync`'s `catch` maps
+any exception to `Phase = Faulted` plus a red Error Bar. The user would have been shown a **fabricated
+Firebird fault** for something they did on purpose. The fix is not a lock and not a cancellation token: the
+in-flight operation's own tail ends the session, at the three places a wire operation returns (`LaunchAsync`,
+`RunStepAsync`, `EvaluateFragmentAsync`) — and the `catch` checks the flag **first**, so a condemned
+operation's exception is read as the teardown it is.
+
+### Verification
+
+Build 0/0. Full suite **5230 green**. Seven new `DebuggerTabVmTests` pin the rule: an edit ends a live session
+(teardown asserted through `FakeLauncher.Disposed`) and keeps the user on the code; every debugging command
+goes with it while Stop stays and Restart does not; undoing the edit re-arms Restart; an edit **during** a
+step ends the session on return **without faulting** (driven by a new `FakeExecutor.BlockAt` gate that holds
+the engine mid-step — one test double, no parallel implementation); a terminal session keeps its inspection
+state but drops the marker; and Launch is blocked while dirty. Four existing tests were rewritten rather than
+patched, because their premise ("edit while paused, then keep stepping / then save with a warning") is exactly
+what the rule removes. Smoke: the app launches clean. **Live QA on the lab is still owed** (the visual side:
+the toolbar greying out at the first keystroke, the status line, and the Error Bar surviving an edit after a
+fault).
