@@ -55,6 +55,33 @@ internal static class NameSuggestion
         return tied ? null : best;
     }
 
+    /// <summary>
+    /// Re-casts <paramref name="suggestion"/> in the style the user was writing in, rather than the
+    /// style the catalog happens to store.
+    /// <para>
+    /// A quick fix should repair the mistake and change nothing else. Firebird folds unquoted
+    /// identifiers, so <c>v_zmienna</c> and <c>V_ZMIENNA</c> are the SAME name — which means taking the
+    /// catalog's spelling would be a gratuitous restyling of the user's code, not part of the repair.
+    /// Case is applied per character, so a mixed style is preserved too (<c>V_ZmiennaX</c> →
+    /// <c>V_Zmienna</c>); past the end of what they typed, the case of their last letter continues.
+    /// </para>
+    /// </summary>
+    public static string MatchCase(string typed, string suggestion)
+    {
+        if (string.IsNullOrEmpty(typed) || string.IsNullOrEmpty(suggestion)) return suggestion;
+
+        var result = new char[suggestion.Length];
+        bool upper = char.IsUpper(typed[0]);
+        for (int i = 0; i < suggestion.Length; i++)
+        {
+            // Only letters carry a case; an underscore or digit inherits whatever style was in force,
+            // so `V_Zmienna` keeps its capital Z rather than being reset by the separator.
+            if (i < typed.Length && char.IsLetter(typed[i])) upper = char.IsUpper(typed[i]);
+            result[i] = upper ? char.ToUpperInvariant(suggestion[i]) : char.ToLowerInvariant(suggestion[i]);
+        }
+        return new string(result);
+    }
+
     // How far wrong a name may be and still be recognisable. Short names get one edit: at three or four
     // characters, two edits can reach an unrelated identifier, and a confident wrong suggestion is worse
     // than none. Nothing below three characters is guessed at at all.

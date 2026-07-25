@@ -230,9 +230,10 @@ public class QuickFixEngineTests
             DiagnosticCategory.UnknownObject);
 
         var action = Assert.Single(actions);
-        Assert.Equal("Did you mean 'SP_KONTRAHENT'?", action.Title);
+        // The catalog holds SP_KONTRAHENT; the user is writing in lower case, so the fix does too.
+        Assert.Equal("Did you mean 'sp_kontrahent'?", action.Title);
         var edit = Assert.Single(action.Edits);
-        Assert.Equal("SP_KONTRAHENT", edit.NewText);
+        Assert.Equal("sp_kontrahent", edit.NewText);
         Assert.Equal("sp_kontrahen", edit.ExpectedOldText);
     }
 
@@ -248,8 +249,8 @@ public class QuickFixEngineTests
         var (_, actions) = FixesFor("select k.nazwaa from kontrahent k", meta, DiagnosticCategory.UnknownColumn);
 
         var action = Assert.Single(actions);
-        Assert.Equal("Did you mean 'NAZWA'?", action.Title);
-        Assert.DoesNotContain(actions, a => a.Title.Contains("OPIS", StringComparison.Ordinal));
+        Assert.Equal("Did you mean 'nazwa'?", action.Title);   // the user's case, not the catalog's
+        Assert.DoesNotContain(actions, a => a.Title.Contains("opis", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -260,13 +261,32 @@ public class QuickFixEngineTests
         var (_, actions) = FixesFor(Sql, null, DiagnosticCategory.UnresolvedVariable);
 
         var action = Assert.Single(actions);
-        Assert.Equal("Did you mean 'V_TOTAL'?", action.Title);
+        Assert.Equal("Did you mean 'v_total'?", action.Title);   // the user's case, not the catalog's
         var edit = Assert.Single(action.Edits);
         // The reference span INCLUDES the ':' sigil, and the replacement must keep it: inside an
         // embedded DSQL statement ':v' is a variable while 'v' is a COLUMN, so dropping it would
         // silently change what the code means.
         Assert.Equal(":v_totl", edit.ExpectedOldText);
-        Assert.Equal(":V_TOTAL", edit.NewText);
+        Assert.Equal(":v_total", edit.NewText);
+    }
+
+    [Theory]
+    // A fix repairs the mistake and changes nothing else. Firebird folds unquoted identifiers, so the
+    // catalog's spelling and the user's are the SAME name — importing the catalog's would be a
+    // gratuitous restyling of their code, not part of the repair.
+    [InlineData("v_zmiennax", ":v_zmienna")]
+    [InlineData("V_ZMIENNAX", ":V_ZMIENNA")]
+    [InlineData("V_ZmiennaX", ":V_Zmienna")]
+    public void UnresolvedVariable_KeepsTheUsersCapitalisation(string typed, string expectedReplacement)
+    {
+        // The declaration is stored folded (V_ZMIENNA) — the suggestion must not import that spelling.
+        var sql = "create procedure p returns (r integer) as declare variable v_zmienna integer; begin r = :"
+                  + typed + "; end";
+
+        var (_, actions) = FixesFor(sql, null, DiagnosticCategory.UnresolvedVariable);
+
+        var edit = Assert.Single(Assert.Single(actions).Edits);
+        Assert.Equal(expectedReplacement, edit.NewText);
     }
 
     // ── Silence: the half that protects the user's code ──────────────────────────────────────
@@ -311,9 +331,9 @@ public class QuickFixEngineTests
     [Theory]
     // The three single-edit shapes a typo actually takes, each driven through the real engine rather
     // than a helper: NameSuggestion is internal to Core on purpose, and its behaviour only matters here.
-    [InlineData("sp_kontrahen", "SP_KONTRAHENT")]     // deletion
-    [InlineData("sp_kontrahentt", "SP_KONTRAHENT")]   // insertion
-    [InlineData("sp_kontrahenx", "SP_KONTRAHENT")]    // substitution
+    [InlineData("sp_kontrahen", "sp_kontrahent")]     // deletion
+    [InlineData("sp_kontrahentt", "sp_kontrahent")]   // insertion
+    [InlineData("sp_kontrahenx", "sp_kontrahent")]    // substitution
     public void UnknownObject_RecognisesTheSingleEditTypoShapes(string typed, string expected)
     {
         var (_, actions) = FixesFor(

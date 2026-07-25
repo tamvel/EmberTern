@@ -157,6 +157,18 @@ internal sealed class DiagnosticsPanelHost
         JumpTo(editor, row.Diagnostic);
     }
 
+    /// <summary>Q5 — the panel as a THIRD trigger for the code-action menu: jump to the row (exactly as
+    /// activating it does), then ask the editor to open the menu at the caret that jump just set. It adds
+    /// no way to obtain or perform an action; it reuses the one published by
+    /// <see cref="SqlEditorBehavior"/>, so all three surfaces run the same flow.</summary>
+    public void ShowCodeActionsForRow(DiagnosticRowViewModel? row)
+    {
+        var editor = ActiveDocument;
+        if (editor is null || row is null) return;
+        JumpTo(editor, row.Diagnostic);
+        SqlEditorBehavior.GetCodeActions(editor)?.Invoke();
+    }
+
     /// <summary>Reveals the target, places the caret on the diagnostic's span and focuses the editor —
     /// the same gesture go-to-definition uses (<see cref="NavigationController"/>), so a jump reads the
     /// same wherever it came from.</summary>

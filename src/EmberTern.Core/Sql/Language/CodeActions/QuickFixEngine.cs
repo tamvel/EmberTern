@@ -79,9 +79,13 @@ public static class QuickFixEngine
         var bare = sigil == '\0' ? typed : typed.Substring(1);
         if (bare.Length == 0) return Array.Empty<CodeAction>();
 
-        var suggestion = NameSuggestion.Best(bare, candidates);
-        if (suggestion is null) return Array.Empty<CodeAction>();
+        var match = NameSuggestion.Best(bare, candidates);
+        if (match is null) return Array.Empty<CodeAction>();
 
+        // Repair the mistake and change nothing else: the fix keeps the user's own capitalisation rather
+        // than importing the catalog's (Firebird folds unquoted identifiers, so the two spell the same
+        // name and restyling their code is not part of the repair).
+        var suggestion = NameSuggestion.MatchCase(bare, match);
         var replacement = sigil == '\0' ? suggestion : sigil + suggestion;
         return new[]
         {

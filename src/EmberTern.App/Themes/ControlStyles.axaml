@@ -38,6 +38,22 @@
     <Setter Property="BorderThickness" Value="1" />
   </Style>
 
+  <!-- Code-action menu (Stage Q). Deliberately the SAME visual language as the completion list above:
+       it is another editor popup, not a component from a different application. Elevated surface, a
+       1px border, 12px rows — the completion row's own RowFontSize — and tight item padding, because
+       Fluent's default ListBoxItem padding is what made this read as a separate window. Chrome lives
+       here rather than on the control so no future caller can invent a second look. -->
+  <Style Selector="ListBox.code-action-menu">
+    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.code-action-menu ListBoxItem">
+    <Setter Property="Padding" Value="9,3" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+
   <Style Selector="Window">
     <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />

@@ -517,6 +517,8 @@ internal static class UiStrings
     // Shown at the foot of the diagnostic hover when fixes exist there. Information only — the hover
     // never offers an action (§15.1.1); this just makes the shortcut discoverable.
     public const string CodeActionsHoverHint = "Quick Fix available · Ctrl+.";
+    // Diagnostics-panel row → the same menu (Stage Q / Q5).
+    public const string CodeActionsMenuItem = "Quick Fix…";
     public const string QueryCancelledMessage = "Query cancelled.";
     public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
     // Truncated-Preview notice bar — loud + actionable (A.6). {0} = rows loaded so far

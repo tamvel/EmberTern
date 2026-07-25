@@ -553,6 +553,11 @@ internal sealed class NavigationController
     // The light bulb (Q3) is a second TRIGGER for this same method, never a second implementation: both
     // build their list from one GetActionsAtCaret call and apply through one InvokeCodeAction.
 
+    /// <summary>Opens the code-action menu at the caret, if anything is offered there. The public entry
+    /// point for a THIRD trigger (the Diagnostics panel, Q5) — it goes through the same ShowCodeActions
+    /// as Ctrl+. and the bulb, so a fix can never be reached by a path of its own.</summary>
+    public bool TryShowCodeActions() => ShowCodeActions();
+
     /// <summary>Test seam: the actions offered at <paramref name="offset"/>, without the menu UI.</summary>
     internal IReadOnlyList<CodeAction> CodeActionsForTest(int offset) => GetActionsAtCaret(offset);
 
@@ -620,21 +625,23 @@ internal sealed class NavigationController
 
         // OverlayLayer, like the hover card — a bare Popup renders invisibly on the desktop despite
         // IsOpen/Visible/Opacity all being true (gotcha #209).
+        // Styled as another editor popup, not a window of its own: the chrome below mirrors the
+        // completion list's (elevated surface, 1px border) and the row metrics live in the shared
+        // `code-action-menu` style so the two cannot drift apart.
         var list = new ListBox
         {
             ItemsSource = actions,
             DisplayMemberBinding = new Avalonia.Data.Binding(nameof(CodeAction.Title)),
             SelectedIndex = 0,
-            MinWidth = 220,
-            MaxHeight = 220,
+            MinWidth = 180,
+            MaxHeight = 180,
         };
+        list.Classes.Add("code-action-menu");
         var card = new Border
         {
-            Background = ThemeBrush("PanelBrush"),
+            Background = ThemeBrush("ElevatedPanelBrush"),
             BorderBrush = ThemeBrush("BorderBrush"),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(3),
-            Padding = new Thickness(1),
             Child = list,
         };
 

@@ -29,6 +29,19 @@ namespace EmberTern.App.Completion;
 /// </summary>
 internal static class SqlEditorBehavior
 {
+    /// <summary>"Show the code actions at this editor's caret", published by <see cref="Attach"/> so any
+    /// surface holding the editor can reach the one code-action flow. Null on an editor that was never
+    /// attached (a read-only DDL preview), which is also exactly where actions must not be offered.</summary>
+    public static readonly Avalonia.AttachedProperty<Func<bool>?> CodeActionsProperty =
+        Avalonia.AvaloniaProperty.RegisterAttached<TextEditor, Func<bool>?>(
+            "CodeActions", typeof(SqlEditorBehavior));
+
+    public static void SetCodeActions(TextEditor editor, Func<bool>? value)
+        => editor.SetValue(CodeActionsProperty, value);
+
+    public static Func<bool>? GetCodeActions(TextEditor editor)
+        => editor.GetValue(CodeActionsProperty);
+
     /// <param name="contextTableProvider">For a trigger body editor: returns the
     /// trigger's table so <c>NEW.</c> / <c>OLD.</c> complete that table's columns.
     /// Null for ordinary editors (NEW/OLD have no meaning there).</param>
@@ -93,6 +106,11 @@ internal static class SqlEditorBehavior
             // Debugger data tips (spec §9.4): the paused frame's value for the variable under the pointer.
             // Null on every non-debugger surface, so the SQL/object editors are unaffected.
             debugValueLookup: debugValueLookup);
+
+        // Stage Q / Q5: publish "show code actions here" ON the editor. The Diagnostics panel is hosted
+        // by eleven different views, none of which build the NavigationController — an attached property
+        // lets the panel reach the ONE flow without threading a delegate through every one of them.
+        SetCodeActions(editor, navigation.TryShowCodeActions);
 
         // Stage Q / Q3: the code-action bulb re-evaluates the moment the diagnostics are recomputed —
         // which is exactly when a just-applied fix must stop being offered. Waiting for its own dwell
