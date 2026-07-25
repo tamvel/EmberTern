@@ -1181,8 +1181,8 @@ public sealed class ConnectionExpandBindingProbe
             foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
             {
                 Assert.True(
-                    app.Resources.TryGetResource("SubtleForegroundBrush", theme, out var rest) && rest is Avalonia.Media.IBrush,
-                    $"SubtleForegroundBrush (bulb at rest) does not resolve in {theme}");
+                    app.Resources.TryGetResource("CodeActionBrush", theme, out var rest) && rest is Avalonia.Media.IBrush,
+                    $"CodeActionBrush (bulb at rest) does not resolve in {theme}");
                 Assert.True(
                     app.Resources.TryGetResource("AccentIconBrush", theme, out var hot) && hot is Avalonia.Media.IBrush,
                     $"AccentIconBrush (bulb hovered) does not resolve in {theme}");

@@ -111,6 +111,11 @@
       <Color x:Key="WarningIconColor">#DBA13C</Color>
       <Color x:Key="InfoIconColor">#5BA7D0</Color>
       <Color x:Key="NeutralIconColor">#C8CCD2</Color>
+      <!-- Stage Q / Q3: the code-action light bulb. Its OWN token, not WarningIconBrush — "a fix is
+           available here" is an offer, not a problem, and the two must not drift if either is retuned.
+           Amber-gold reads as the universal light-bulb cue at a glance; hover switches to the accent so
+           the bulb also says "interactive". -->
+      <Color x:Key="CodeActionColor">#F0C05A</Color>
       <!-- D15.2 Seam A: shared subtle accent for the "loop operations" category (Next Iteration /
            Loop Exit). Teal — deliberately NOT the PSQL-keyword violet from D15.1 (that would cross
            the syntax domain into the toolbar). Colour marks the category, not each icon. -->
@@ -158,6 +163,7 @@
       <SolidColorBrush x:Key="WarningIconBrush" Color="{StaticResource WarningIconColor}" />
       <SolidColorBrush x:Key="InfoIconBrush" Color="{StaticResource InfoIconColor}" />
       <SolidColorBrush x:Key="NeutralIconBrush" Color="{StaticResource NeutralIconColor}" />
+      <SolidColorBrush x:Key="CodeActionBrush" Color="{StaticResource CodeActionColor}" />
       <SolidColorBrush x:Key="IconHoverBrush" Color="{StaticResource IconHoverColor}" />
 
       <!-- Override FluentTheme's TreeViewItem state brushes. Without these the dark
@@ -341,6 +347,11 @@
       <Color x:Key="WarningIconColor">#B5790E</Color>
       <Color x:Key="InfoIconColor">#2A7AA8</Color>
       <Color x:Key="NeutralIconColor">#3C3C3C</Color>
+      <!-- Stage Q / Q3: the code-action light bulb. Its OWN token, not WarningIconBrush — "a fix is
+           available here" is an offer, not a problem, and the two must not drift if either is retuned.
+           Amber-gold reads as the universal light-bulb cue at a glance; hover switches to the accent so
+           the bulb also says "interactive". -->
+      <Color x:Key="CodeActionColor">#B07B0A</Color>
       <!-- D15.2 Seam A: shared subtle accent for the "loop operations" category (Next Iteration /
            Loop Exit). Teal — deliberately NOT the PSQL-keyword violet from D15.1. -->
       <Color x:Key="DebugLoopIconColor">#0E8074</Color>
@@ -386,6 +397,7 @@
       <SolidColorBrush x:Key="WarningIconBrush" Color="{StaticResource WarningIconColor}" />
       <SolidColorBrush x:Key="InfoIconBrush" Color="{StaticResource InfoIconColor}" />
       <SolidColorBrush x:Key="NeutralIconBrush" Color="{StaticResource NeutralIconColor}" />
+      <SolidColorBrush x:Key="CodeActionBrush" Color="{StaticResource CodeActionColor}" />
       <SolidColorBrush x:Key="IconHoverBrush" Color="{StaticResource IconHoverColor}" />
 
       <!-- Same TreeViewItem state-brush overrides for Light. See Dark dictionary above. -->

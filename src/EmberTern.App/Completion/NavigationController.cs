@@ -75,10 +75,11 @@ internal sealed class NavigationController
     // Gap between the pointer and the card, so the card never sits under the cursor itself.
     private const double HoverGap = 16;
 
-    // Gap between the end of the line's text and the bulb, and the bulb's own footprint (13px icon +
-    // 2px padding each side) — needed to keep it inside the view when a line runs to the right edge.
-    private const double BulbGap = 10;
-    private const double BulbSize = 17;
+    // Nudge past the flagged symbol, and the bulb's own footprint (icon + 2px padding each side) —
+    // needed to keep it inside the view when the symbol sits near the right edge.
+    private const double BulbGap = 3;
+    private const double BulbIconSize = 14;
+    private const double BulbSize = BulbIconSize + 4;
 
     private readonly TextEditor _editor;
     private readonly Func<SemanticModel?> _model;
@@ -119,7 +120,7 @@ internal sealed class NavigationController
     // calling the same GetActionsAtCaret the menu does, and clicking it runs the same ShowCodeActions;
     // it owns no way to obtain or perform an action.
     private Control? _bulb;
-    private int _bulbLine = -1;               // the document line it is currently shown for
+    private int _bulbAnchor = -1;             // the document offset it is currently pinned to
     private bool _bulbUpdating;               // re-entrancy guard — see UpdateBulb
 
     // Inline rename popup (M5), created lazily on first F2.
@@ -565,8 +566,15 @@ internal sealed class NavigationController
 
     // Every fix offered for every diagnostic covering the caret. The diagnostics are the language
     // service's CACHED list — this performs no analysis, exactly as the hover does not (§4).
-    private IReadOnlyList<CodeAction> GetActionsAtCaret(int offset)
+    private IReadOnlyList<CodeAction> GetActionsAtCaret(int offset) => GetActionsAtCaret(offset, out _);
+
+    /// <param name="anchorOffset">Where the FIRST offering diagnostic ends — i.e. the end of the flagged
+    /// symbol itself. The bulb is placed there rather than at the end of the line: the user is looking at
+    /// the problem, not at the right margin. Computed here, in the same pass that finds the actions, so
+    /// the indicator and the menu can never describe different spans.</param>
+    private IReadOnlyList<CodeAction> GetActionsAtCaret(int offset, out int anchorOffset)
     {
+        anchorOffset = -1;
         var model = _model();
         if (model is null) return Array.Empty<CodeAction>();
 
@@ -577,6 +585,7 @@ internal sealed class NavigationController
             foreach (var action in QuickFixEngine.GetFixes(model, d))
             {
                 (actions ??= new List<CodeAction>()).Add(action);
+                if (anchorOffset < 0) anchorOffset = d.End;
             }
         }
         return (IReadOnlyList<CodeAction>?)actions ?? Array.Empty<CodeAction>();
@@ -690,7 +699,7 @@ internal sealed class NavigationController
     // without re-evaluating.
     private void OnScrollForBulb(object? sender, EventArgs e)
     {
-        if (_bulb is not null) PositionBulb(_bulbLine);
+        if (_bulb is not null) PositionBulb(_bulbAnchor);
     }
 
     // The view's geometry just became valid/changed: place a bulb that could not be placed before, and
@@ -698,7 +707,7 @@ internal sealed class NavigationController
     private void OnVisualLinesChangedForBulb(object? sender, EventArgs e)
     {
         if (_detached) return;
-        if (_bulb is not null) { PositionBulb(_bulbLine); return; }
+        if (_bulb is not null) { PositionBulb(_bulbAnchor); return; }
         UpdateBulb(); // a placement that failed earlier gets its retry here
     }
 
@@ -725,32 +734,29 @@ internal sealed class NavigationController
     {
         if (_detached || _editor.IsReadOnly)
         {
-            Diagnostics.BulbTrace.Log($"UpdateBulb SKIP detached={_detached} readOnly={_editor.IsReadOnly}");
             HideBulb();
             return;
         }
 
         var doc = _editor.Document;
-        int actionCount = doc is null ? -1 : GetActionsAtCaret(_editor.CaretOffset).Count;
-        Diagnostics.BulbTrace.Log(
-            $"UpdateBulb caret={_editor.CaretOffset} actions={actionCount} bulb={(_bulb is null ? "none" : "shown")} bulbLine={_bulbLine}");
-        if (doc is null || actionCount == 0)
+        int anchor = -1;
+        int actionCount = doc is null ? -1 : GetActionsAtCaret(_editor.CaretOffset, out anchor).Count;
+        if (doc is null || actionCount == 0 || anchor < 0)
         {
             HideBulb();
             return;
         }
 
-        // Anchored to the LINE, not the caret column: while the caret moves along a line that still has
-        // actions, the bulb must sit perfectly still. Re-showing it in place would read as a flicker.
-        int line = doc.GetLineByOffset(_editor.CaretOffset).LineNumber;
-        if (_bulb is not null && line == _bulbLine)
+        // Pinned to the flagged SYMBOL. While the caret moves within the same flagged span the anchor is
+        // unchanged, so the bulb sits perfectly still — re-showing it in place would read as a flicker.
+        if (_bulb is not null && anchor == _bulbAnchor)
         {
-            PositionBulb(line);
+            PositionBulb(anchor);
             return;
         }
 
         HideBulb();
-        ShowBulb(line);
+        ShowBulb(anchor);
     }
 
     // Theme-scoped resources MUST be looked up with the theme variant. Control.FindResource(key) does
@@ -763,20 +769,18 @@ internal sealed class NavigationController
         => Application.Current?.Resources.TryGetResource(key, _editor.ActualThemeVariant, out var v) == true
            && v is IBrush b ? b : null;
 
-    private void ShowBulb(int line)
+    private void ShowBulb(int anchorOffset)
     {
         var overlay = OverlayLayer.GetOverlayLayer(_editor);
-        Diagnostics.BulbTrace.Log(
-            $"ShowBulb line={line} overlay={(overlay is null ? "NULL" : $"{overlay.Bounds.Width}x{overlay.Bounds.Height} children={overlay.Children.Count}")}");
         if (overlay is null) return;
 
         var icon = new Controls.SvgIcon
         {
             Data = Application.Current?.Resources.TryGetResource("Icon.Lightbulb", null, out var g) == true
                 ? g as Geometry : null,
-            Width = 13,
-            Height = 13,
-            Foreground = ThemeBrush("SubtleForegroundBrush"),
+            Width = BulbIconSize,
+            Height = BulbIconSize,
+            Foreground = ThemeBrush("CodeActionBrush"),
         };
         var button = new Border
         {
@@ -788,10 +792,10 @@ internal sealed class NavigationController
             Opacity = 1.0,
             [ToolTip.TipProperty] = UiStrings.CodeActionsTooltip,
         };
-        // Discreet at rest (the subtle foreground is the token for "present, not shouting"), accented on
-        // hover so it reads as interactive.
+        // Amber-gold at rest so it reads as "a fix is available" at a glance (its own CodeActionBrush —
+        // an offer, not a warning); the accent on hover says "and you can click me".
         button.PointerEntered += (_, _) => icon.Foreground = ThemeBrush("AccentIconBrush");
-        button.PointerExited += (_, _) => icon.Foreground = ThemeBrush("SubtleForegroundBrush");
+        button.PointerExited += (_, _) => icon.Foreground = ThemeBrush("CodeActionBrush");
         // The ONE flow: no separate retrieval, no separate invocation.
         button.PointerPressed += (_, e) =>
         {
@@ -801,53 +805,27 @@ internal sealed class NavigationController
 
         // Position BEFORE committing: if the geometry is not available yet, nothing has been added to
         // the overlay and no state has been touched, so the next VisualLinesChanged simply tries again.
-        if (!TryGetLineEndAnchor(line, overlay, out var anchor))
-        {
-            Diagnostics.BulbTrace.Log($"ShowBulb ABORT no anchor (line={line})");
-            return;
-        }
+        if (!TryGetSymbolAnchor(anchorOffset, overlay, out var anchor)) return;
 
         Canvas.SetLeft(button, anchor.X);
         Canvas.SetTop(button, anchor.Y);
         overlay.Children.Add(button);
         _bulb = button;
-        _bulbLine = line;
-
-        var themed = Application.Current?.Resources.TryGetResource("SubtleForegroundBrush", _editor.ActualThemeVariant, out var tb) == true && tb is IBrush;
-        Diagnostics.BulbTrace.Log(
-            $"BRUSH findResource={(icon.Foreground is null ? "NULL" : icon.Foreground.ToString())} themeAware={themed} theme={_editor.ActualThemeVariant}");
-        Diagnostics.BulbTrace.Log(
-            $"ShowBulb ADDED left={anchor.X:0.0} top={anchor.Y:0.0} dataNull={(icon.Data is null)} " +
-            $"inOverlay={overlay.Children.Contains(button)} parent={button.Parent?.GetType().Name ?? "null"} " +
-            $"visible={button.IsVisible} opacity={button.Opacity} zIndex={button.ZIndex}");
-
-        // The settled truth, after layout has run: desired/actual size and whether it is EFFECTIVELY
-        // visible (i.e. the whole ancestor chain is visible and it was arranged with a real size).
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (!ReferenceEquals(_bulb, button)) { Diagnostics.BulbTrace.Log("post-layout: bulb replaced/removed"); return; }
-            Diagnostics.BulbTrace.Log(
-                $"post-layout desired={button.DesiredSize.Width:0.0}x{button.DesiredSize.Height:0.0} " +
-                $"bounds={button.Bounds.Width:0.0}x{button.Bounds.Height:0.0} " +
-                $"left={Canvas.GetLeft(button):0.0} top={Canvas.GetTop(button):0.0} " +
-                $"overlay={overlay.Bounds.Width:0.0}x{overlay.Bounds.Height:0.0} " +
-                $"effectivelyVisible={button.IsEffectivelyVisible} opacity={button.Opacity} " +
-                $"iconBounds={(button.Child?.Bounds.Width ?? -1):0.0}x{(button.Child?.Bounds.Height ?? -1):0.0}");
-        }, DispatcherPriority.Background);
+        _bulbAnchor = anchorOffset;
     }
 
-    private void PositionBulb(int line)
+    private void PositionBulb(int anchorOffset)
     {
         if (_bulb is not { } bulb) return;
         var overlay = OverlayLayer.GetOverlayLayer(_editor);
         if (overlay is null) { HideBulb(); return; }
 
-        // Geometry not ready is NOT the same as "the line is gone": keep the bulb and let
+        // Geometry not ready is NOT the same as "the symbol is gone": keep the bulb and let
         // VisualLinesChanged reposition it once the view settles.
         if (!TryEnsureVisualLines()) return;
-        if (!TryGetLineEndAnchor(line, overlay, out var anchor))
+        if (!TryGetSymbolAnchor(anchorOffset, overlay, out var anchor))
         {
-            HideBulb(); // lines are valid and this one has no geometry ⇒ it scrolled out of view
+            HideBulb(); // lines are valid and this offset has no geometry ⇒ it scrolled out of view
             return;
         }
 
@@ -868,52 +846,56 @@ internal sealed class NavigationController
         try { tv.EnsureVisualLines(); }
         catch (InvalidOperationException)
         {
-            Diagnostics.BulbTrace.Log("TryEnsureVisualLines FALSE (EnsureVisualLines threw — build mid-Measure)");
             return false; // a build is already running mid-Measure
         }
-        Diagnostics.BulbTrace.Log($"TryEnsureVisualLines rebuilt -> valid={tv.VisualLinesValid}");
         return tv.VisualLinesValid;
     }
 
     // The anchor just past the end of the line's text — placement chosen because it provably never covers
     // code and never shifts the document (the left gutter is unavailable: every SQL surface shows line
     // numbers). False ⇒ the line has no geometry, i.e. it is not currently visible.
-    private bool TryGetLineEndAnchor(int line, OverlayLayer overlay, out Point anchor)
+    // The anchor sits immediately after the flagged symbol — where the user is already looking, rather
+    // than out at the right margin (the line-end placement was measurably correct and practically
+    // useless: nobody looks there). Overlapping whatever follows the symbol is accepted: the bulb is
+    // present only while the caret rests on the problem and goes the moment it moves.
+    // False ⇒ this offset has no geometry right now, i.e. it is not visible.
+    private bool TryGetSymbolAnchor(int offset, OverlayLayer overlay, out Point anchor)
     {
         anchor = default;
         var doc = _editor.Document;
-        if (doc is null || line < 1 || line > doc.LineCount) return false;
+        if (doc is null || offset < 0 || offset > doc.TextLength) return false;
         if (!TryEnsureVisualLines()) return false;
 
         var textView = _editor.TextArea.TextView;
-        var documentLine = doc.GetLineByNumber(line);
-        Rect? last = null;
-        var segment = new TextSegment { StartOffset = documentLine.Offset, Length = documentLine.Length };
-        foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, segment)) last = rect;
-        if (last is not { } r)
+        Point top, bottom;
+        try
         {
-            Diagnostics.BulbTrace.Log($"anchor NO RECTS for line={line} (not visible?)");
+            // Same idiom as EditorPopups.TryGetCaretRect: ask the view where a document position is, then
+            // take out the scroll offset to get viewport coordinates.
+            var position = new TextViewPosition(doc.GetLocation(offset));
+            top = textView.GetVisualPosition(position, VisualYPosition.LineTop) - textView.ScrollOffset;
+            bottom = textView.GetVisualPosition(position, VisualYPosition.LineBottom) - textView.ScrollOffset;
+        }
+        catch (InvalidOperationException)
+        {
             return false;
         }
 
-        // Clamp into the view: a line whose text runs to the right edge would otherwise put the bulb
-        // PAST it, where the overlay clips it away — present in every state we track, yet invisible to
-        // the user. Measured: a 60-character line reported Right=896 in a 900-wide view, so this is not
-        // a rare case. Sitting flush against the edge is the honest fallback.
-        double x = Math.Min(r.Right + BulbGap, Math.Max(0, textView.Bounds.Width - BulbSize));
-        var point = textView.TranslatePoint(new Point(x, r.Top), overlay);
-        Diagnostics.BulbTrace.Log(
-            $"anchor rectRight={r.Right:0.0} rectTop={r.Top:0.0} tvWidth={textView.Bounds.Width:0.0} " +
-            $"x={x:0.0} translated={(point is null ? "NULL" : $"{point.Value.X:0.0},{point.Value.Y:0.0}")}");
+        // Vertically centred on the line so it reads as sitting beside the word, not on top of it; and
+        // kept inside the view, so a symbol near the right edge still shows its bulb.
+        double x = Math.Min(top.X + BulbGap, Math.Max(0, textView.Bounds.Width - BulbSize));
+        double y = top.Y + Math.Max(0, (bottom.Y - top.Y - BulbSize) / 2);
+        if (y < -BulbSize || y > textView.Bounds.Height) return false; // scrolled out of view
+
+        var point = textView.TranslatePoint(new Point(x, y), overlay);
         if (point is null) return false;
         anchor = point.Value;
         return true;
     }
 
-    private void HideBulb([System.Runtime.CompilerServices.CallerMemberName] string caller = "")
+    private void HideBulb()
     {
-        if (_bulb is not null) Diagnostics.BulbTrace.Log($"HideBulb (called by {caller})");
-        if (_bulb is { } bulb)
+        if (_bulb is not null)        if (_bulb is { } bulb)
         {
             // Remove from the panel that ACTUALLY holds it, not from whatever GetOverlayLayer resolves
             // to now: clearing the field while the control stayed parented is how one gets stranded in
@@ -921,7 +903,7 @@ internal sealed class NavigationController
             (bulb.Parent as Panel)?.Children.Remove(bulb);
             _bulb = null;
         }
-        _bulbLine = -1;
+        _bulbAnchor = -1;
     }
 
     private void OnCodeActionMenuKey(object? sender, KeyEventArgs e)
