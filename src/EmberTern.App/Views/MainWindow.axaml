@@ -1615,9 +1615,25 @@
                      FontSize="11"
                      VerticalAlignment="Center" />
         </StackPanel>
+        <!-- Column 1 belongs to the ACTIVE TAB: the SQL Editor puts its query stats here, the debugger its
+             session status (UX Polish Seam 6a — moved out of the debugger toolbar, which needed the room for
+             Break on exception + Save). Every other tab kind leaves it empty. The two are mutually exclusive
+             by their IsVisible gates, so the Auto column only ever measures the one that is showing.
+             The debugger VM is untouched: MainWindowViewModel already exposes ActiveDebugger, and Avalonia
+             subscribes to the nested VM's PropertyChanged along the binding path. Column 0 keeps its own
+             owner (connection state); debugger status must never be written into MainWindowViewModel.StatusText. -->
         <TextBlock Grid.Column="1"
                    Text="{Binding QueryStatsText}"
+                   IsVisible="{Binding IsQueryTabActive}"
                    Classes="subtle"
+                   FontSize="11"
+                   Margin="20,0,0,0"
+                   VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding ActiveDebugger.StatusText}"
+                   IsVisible="{Binding IsDebuggerTabActive}"
+                   Classes="subtle"
+                   Classes.error="{Binding ActiveDebugger.IsFaulted}"
                    FontSize="11"
                    Margin="20,0,0,0"
                    VerticalAlignment="Center" />

@@ -28,15 +28,6 @@
       <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
       <Setter Property="FontStyle" Value="Italic" />
     </Style>
-    <!-- Status line: subtle normally, but the error colour + bold when the session Faulted, so an unhandled
-         exception is immediately noticeable. -->
-    <Style Selector="TextBlock.debug-status">
-      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-    </Style>
-    <Style Selector="TextBlock.debug-status.fault">
-      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
   </UserControl.Styles>
 
   <UserControl.Resources>
@@ -88,15 +79,18 @@
 
   <Grid RowDefinitions="Auto,Auto,*">
 
-    <!-- Toolbar + status. Stepping commands show only while a session is live (debug view). -->
+    <!-- Toolbar. Shown only while a session is live (debug view) — the gate is on the whole Border, so the
+         launch/parameter screen gets no empty command strip. The session status line moved to the app status
+         bar (UX Polish Seam 6a); the room it freed here is deliberately left empty for the Draft-model
+         actions to come. -->
     <Border Grid.Row="0"
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
-            Padding="8,5">
+            Padding="8,5"
+            IsVisible="{Binding IsDebugViewVisible}">
       <DockPanel LastChildFill="True">
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4"
-                    IsVisible="{Binding IsDebugViewVisible}">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4">
           <!-- D15.2 Seam A — the toolbar on the EmberTern icon system (SvgIcon), colour as HIERARCHY, not
                decoration: Continue = the single accent (primary); Into/Over/Out + Run-to = neutral (inherit
                NeutralIconBrush, no Foreground); Next Iteration / Loop Exit share the teal "loop operations"
@@ -218,10 +212,6 @@
             </StackPanel>
           </CheckBox>
         </StackPanel>
-        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                   Margin="10,0,0,0" FontSize="11"
-                   TextTrimming="CharacterEllipsis"
-                   Classes="debug-status" Classes.fault="{Binding IsFaulted}" />
       </DockPanel>
     </Border>
 
