@@ -3103,7 +3103,15 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
     [RelayCommand(CanExecute = nameof(CanCompile))]
     private async Task CompileAsync()
     {
-        if (_ddlExecutor is null) return;
+        // Reports instead of exiting silently (Seam 6b) — see the contract on ISavableObjectEditor.
+        if (_ddlExecutor is null)
+        {
+            ErrorMessage = UiStrings.NoConnectionMessage;
+            return;
+        }
+        // Diff-based editor: an empty queue means there is genuinely nothing to write (and it is exactly
+        // !HasPendingChanges, i.e. not dirty, so the WorkGuard never even asks), so this stays an ordinary
+        // no-op rather than a reported failure (Seam 6b — the documented exception).
         if (PendingChanges.Count == 0) return;
 
         ErrorMessage = null;

@@ -493,7 +493,15 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
 
     public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {
-        if (DdlExecutor is null) return;
+        // Both pre-condition refusals REPORT (Seam 6b): a compile that never ran must not leave
+        // ErrorMessage null, or SaveAsync claims success having written nothing — see the contract
+        // on ISavableObjectEditor. Here an empty buffer means the user emptied the source, which is
+        // exactly the case where a wrong "success" would let the WorkGuard discard real code.
+        if (DdlExecutor is null)
+        {
+            ErrorMessage = UiStrings.NoConnectionMessage;
+            return;
+        }
 
         // Object-specific pre-flight validation (e.g. a trigger needs a table + an
         // event in Easy mode) — a clear message instead of a server error.
@@ -504,7 +512,11 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
         }
 
         var sql = BuildCompileSql();
-        if (string.IsNullOrWhiteSpace(sql)) return;
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            ErrorMessage = UiStrings.EditorNothingToCompile;
+            return;
+        }
 
         ErrorMessage = null;
         try

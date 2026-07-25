@@ -215,7 +215,12 @@ public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
 
     public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {
-        if (_ddlExecutor is null) return;
+        // Reports instead of exiting silently (Seam 6b) — see the contract on ISavableObjectEditor.
+        if (_ddlExecutor is null)
+        {
+            ErrorMessage = UiStrings.NoConnectionMessage;
+            return;
+        }
         ErrorMessage = null;
 
         string sql;
@@ -228,6 +233,8 @@ public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSo
             ErrorMessage = ex.Message;
             return;
         }
+        // Diff-based editor: an empty diff means there is genuinely nothing to write, so this stays an
+        // ordinary no-op rather than a reported failure (Seam 6b — the documented exception).
         if (string.IsNullOrWhiteSpace(sql)) return; // nothing changed
 
         try

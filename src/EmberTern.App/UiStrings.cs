@@ -506,6 +506,12 @@ internal static class UiStrings
     // One cohesive label — {0} = mm:ss.f elapsed.
     public const string ExecutionElapsedFormat = "Elapsed: {0}";
     public const string NoConnectionMessage = "Connect to a database first.";
+    // Compile pre-condition refusals, shared by EVERY object editor's compile and the debugger's Save
+    // (UX Polish Seam 6b). An ISavableObjectEditor adapter reads success as "no error after the attempt",
+    // so a compile that cannot run must SAY so — otherwise the save-and-close WorkGuard is told the work
+    // was written when nothing was, and discards it. NoConnectionMessage above covers the no-DDL-executor
+    // case; this one covers "the buffer holds nothing to compile".
+    public const string EditorNothingToCompile = "There is nothing to compile.";
     public const string QueryCancelledMessage = "Query cancelled.";
     public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
     // Truncated-Preview notice bar — loud + actionable (A.6). {0} = rows loaded so far
@@ -1811,7 +1817,7 @@ internal static class UiStrings
     public const string DebuggerSave = "Save";
     public const string DebuggerSaveTooltip = "Save and compile the routine · Ctrl+S";
     public const string DebuggerSaveUnavailable = "This debugger tab cannot save (no connection).";
-    public const string DebuggerSaveEmpty = "There is nothing to compile.";
+    // (the empty-buffer refusal is the shared EditorNothingToCompile — one wording for every editor)
     public const string DebuggerSaveEndsSessionTitle = "Save ends the debug session";
     public const string DebuggerSaveEndsSessionMessage =
         "Saving recompiles {0}, so the running debug session no longer matches the code.\n\n"

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using EmberTern.App;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
@@ -490,12 +491,14 @@ public class PackageDetailTests
     }
 
     [Fact]
-    public async Task Compile_EmptyHeader_NoOp()
+    public async Task Compile_NoExecutorAndEmptyHeader_ReportsNoConnection()
     {
-        // No executor + empty header → ExecuteCompileAsync returns early, no throw.
+        // Seam 6b — was "Compile_EmptyHeader_NoOp" (ErrorMessage null). ExecuteCompileAsync still returns
+        // early without throwing, but it now SAYS why, so SaveAsync cannot read "no error" as success.
+        // The executor guard is checked first, so this VM (no executor AND no header) reports that reason.
         var vm = new PackageDetailTabViewModel("PKG_X");
         await vm.ExecuteCompileAsync();
-        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(UiStrings.NoConnectionMessage, vm.ErrorMessage);
     }
 
     // ─── Reader SQL shape pins (no live DB) ────────────────────────────────

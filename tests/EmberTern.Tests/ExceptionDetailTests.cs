@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using EmberTern.App;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
@@ -257,11 +258,13 @@ public class ExceptionDetailTests
     }
 
     [Fact]
-    public async Task ExecuteCompile_NoExecutor_IsNoOp()
+    public async Task ExecuteCompile_NoExecutor_ReportsNoConnection()
     {
+        // Seam 6b — was "…_IsNoOp" (ErrorMessage null). A missing executor is an INABILITY, not a no-op:
+        // SaveAsync reads "no error" as success. (An empty DIFF stays a no-op — the documented exception.)
         var vm = new ExceptionDetailTabViewModel("E_X") { Message = "m" };
         await vm.ExecuteCompileAsync();
-        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(UiStrings.NoConnectionMessage, vm.ErrorMessage);
     }
 
     [Fact]

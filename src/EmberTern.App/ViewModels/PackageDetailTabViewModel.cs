@@ -414,10 +414,22 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
     /// </summary>
     public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {
-        if (_ddlExecutor is null) return;
+        // Both pre-condition refusals REPORT (Seam 6b) — see the contract on ISavableObjectEditor:
+        // a compile that never ran must not leave ErrorMessage null, or SaveAsync claims success
+        // having written nothing. An empty header means there is no package to compile at all (the
+        // body alone cannot be applied), so it is the same "nothing to compile" refusal.
+        if (_ddlExecutor is null)
+        {
+            ErrorMessage = UiStrings.NoConnectionMessage;
+            return;
+        }
 
         var header = HeaderSource;
-        if (string.IsNullOrWhiteSpace(header)) return;
+        if (string.IsNullOrWhiteSpace(header))
+        {
+            ErrorMessage = UiStrings.EditorNothingToCompile;
+            return;
+        }
 
         ErrorMessage = null;
         try

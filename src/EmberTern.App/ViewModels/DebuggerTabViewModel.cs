@@ -2045,7 +2045,7 @@ public sealed partial class DebuggerTabViewModel
         }
         if (!IsSourceDirty) return new EditorSaveResult(true, null); // nothing to do
         var sql = _editBuffer;
-        if (string.IsNullOrWhiteSpace(sql)) return new EditorSaveResult(false, UiStrings.DebuggerSaveEmpty);
+        if (string.IsNullOrWhiteSpace(sql)) return new EditorSaveResult(false, UiStrings.EditorNothingToCompile);
 
         // A live session was compiled from the OLD code — saving invalidates it, so say so before doing it.
         if (IsSessionLive)

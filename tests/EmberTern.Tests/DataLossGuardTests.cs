@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using EmberTern.App;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Metadata;
 using EmberTern.Firebird;
@@ -260,15 +261,18 @@ public class DataLossGuardTests
     }
 
     [Fact]
-    public async Task TryCloseApplication_Unsaved_Save_AllSucceed_ReturnsTrue()
+    public async Task TryCloseApplication_Unsaved_Save_NothingCompiled_KeepsAppOpen()
     {
+        // Seam 6b — this test used to be "…_Save_AllSucceed_ReturnsTrue" and asserted the app CLOSED.
+        // It only ever passed because of the defect: with no DDL executor nothing can be written, and
+        // the save-all batch was told it had succeeded. A save that compiled nothing must abort the
+        // exit and keep the code (a genuinely-succeeding save cannot be built headlessly —
+        // FirebirdDdlExecutor is sealed and needs a server — so that path is covered live, not here).
         using var h = new Harness();
-        // A dirty View with no DDL executor: SaveAsync compiles a no-op and reports success,
-        // so the save-all batch completes cleanly and the app may close.
         h.Main.WorkspaceTabs.Add(ViewTab(h, "V_DIRTY", dirty: true));
         h.Main.ChoiceRequested += _ => Task.FromResult<string?>("save");
 
-        Assert.True(await h.Main.TryCloseApplicationAsync());
+        Assert.False(await h.Main.TryCloseApplicationAsync());
     }
 
     [Fact]
@@ -327,18 +331,22 @@ public class DataLossGuardTests
     }
 
     [Fact]
-    public async Task Disconnect_UnsavedNoTx_Save_AllSucceed_NoError()
+    public async Task Disconnect_UnsavedNoTx_Save_NothingCompiled_AbortsAfterOnePrompt()
     {
+        // Seam 6b — was "…_Save_AllSucceed_NoError". Dirty View with no executor: the save now honestly
+        // fails, so the disconnect ABORTS instead of proceeding. Either way the user is asked exactly
+        // once (the phase-1 metadata dialog; the transaction phase is never reached), and the dirty tab
+        // survives — which is the property that actually matters here.
         using var h = new Harness();
-        // Dirty View with no executor → SaveAsync is a successful no-op → disconnect proceeds
-        // (with no active connection, DisconnectAsync is a harmless no-op) without prompting twice.
-        h.Main.WorkspaceTabs.Add(ViewTab(h, "V_DIRTY", dirty: true));
+        var tab = ViewTab(h, "V_DIRTY", dirty: true);
+        h.Main.WorkspaceTabs.Add(tab);
         int prompts = 0;
         h.Main.ChoiceRequested += _ => { prompts++; return Task.FromResult<string?>("save"); };
 
         await h.Main.DisconnectAsync();
 
-        Assert.Equal(1, prompts); // only the phase-1 metadata dialog; no transaction phase
+        Assert.Equal(1, prompts);
+        Assert.Contains(tab, h.Main.WorkspaceTabs);
     }
 
     // ─── ISavableObjectEditor adapter + tab exposure ──────────────────────
@@ -355,13 +363,28 @@ public class DataLossGuardTests
     }
 
     [Fact]
-    public async Task ViewEditor_SaveAsync_NoExecutor_ReportsSuccess()
+    public async Task ViewEditor_SaveAsync_NoExecutor_ReportsFailure()
     {
-        // No DDL executor wired → the compile is a no-op that raises no error, so the
-        // adapter reports success (nothing to fail on).
+        // Seam 6b — this test used to assert the OPPOSITE (ReportsSuccess) and so pinned the defect:
+        // with no DDL executor the compile exited silently, ErrorMessage stayed null, and the adapter
+        // reported success having written nothing. A save must never claim to have saved.
         var vm = new ViewDetailTabViewModel("V") { SourceText = "SELECT 1 FROM RDB$DATABASE" };
         var result = await vm.SaveAsync();
-        Assert.True(result.Success);
+        Assert.False(result.Success);
+        Assert.Equal(UiStrings.NoConnectionMessage, result.Error);
+    }
+
+    // (the OTHER silent exit — an emptied source buffer with an executor wired — is pinned where a
+    //  harness already supplies one: ViewDetailTests / ProcedureDetailTests ExecuteCompile_EmptySource_*)
+
+    [Fact]
+    public async Task IndexEditor_SaveAsync_NoExecutor_ReportsFailure()
+    {
+        // The contract holds for a diff-based editor too — a missing executor is an inability, not a no-op.
+        var vm = new IndexDetailTabViewModel("IDX_X");
+        var result = await vm.SaveAsync();
+        Assert.False(result.Success);
+        Assert.Equal(UiStrings.NoConnectionMessage, result.Error);
     }
 
     [Fact]
