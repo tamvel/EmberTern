@@ -514,6 +514,9 @@ internal static class UiStrings
     public const string EditorNothingToCompile = "There is nothing to compile.";
     // The code-action light bulb (Stage Q / Q3) — a discreet affordance for the same menu Ctrl+. opens.
     public const string CodeActionsTooltip = "Show code actions · Ctrl+.";
+    // Shown at the foot of the diagnostic hover when fixes exist there. Information only — the hover
+    // never offers an action (§15.1.1); this just makes the shortcut discoverable.
+    public const string CodeActionsHoverHint = "Quick Fix available · Ctrl+.";
     public const string QueryCancelledMessage = "Query cancelled.";
     public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
     // Truncated-Preview notice bar — loud + actionable (A.6). {0} = rows loaded so far

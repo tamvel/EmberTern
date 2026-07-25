@@ -1194,10 +1194,10 @@ public sealed class ConnectionExpandBindingProbe
     // engine's actions, Ctrl+. opens the menu, and the menu is dismissed / invalidated the way a context
     // menu must be. Lives here because real key events need the ONE shared headless session (#94/#226).
     //
-    // NOT covered, deliberately: the bulb's DWELL path. Headless runs no DispatcherTimer at all (measured
-    // during the Q3 QA trace: a plain 450ms control timer ticked 0 times), so a dwell assertion here
-    // would pass or fail for reasons unrelated to the code. The bulb is therefore driven through its
-    // explicit refresh, which is the same UpdateBulb the timer reaches.
+    // The bulb's own path is covered by CodeActionBulb_* below. It is testable at all only because the
+    // dwell timer was removed: headless runs no DispatcherTimer whatsoever (measured during the Q3 QA
+    // trace — a plain 450ms control timer ticked 0 times), so while the bulb depended on one, the path
+    // that actually failed for the user was the one path no test could reach.
     [Fact]
     public async System.Threading.Tasks.Task CodeActionMenu_OpensOnCtrlPeriod_AndDismissesLikeAContextMenu()
     {
@@ -1238,10 +1238,6 @@ public sealed class ConnectionExpandBindingProbe
             log.AppendLine($"[3] GetActionsAtCaret = {actions.Count}");
             Assert.Equal(2, actions.Count);
 
-            var overlay = OverlayLayer.GetOverlayLayer(editor);
-            Assert.NotNull(overlay);
-            int baseline = overlay!.Children.Count;
-
             void CtrlPeriod()
             {
                 editor.TextArea.RaiseEvent(new KeyEventArgs
@@ -1255,7 +1251,7 @@ public sealed class ConnectionExpandBindingProbe
 
             // Opens.
             CtrlPeriod();
-            Assert.Equal(baseline + 1, overlay.Children.Count);
+            Assert.True(nav.IsCodeActionMenuOpen);
 
             // Escape dismisses without applying, and hands the keyboard back so typing can continue.
             editor.TextArea.RaiseEvent(new KeyEventArgs
@@ -1265,34 +1261,82 @@ public sealed class ConnectionExpandBindingProbe
                 KeyModifiers = KeyModifiers.None,
             });
             Dispatcher.UIThread.RunJobs();
-            log.AppendLine($"[4] after Escape: children = {overlay.Children.Count}, text unchanged = {editor.Document.Text == Sql}");
-            Assert.Equal(baseline, overlay.Children.Count);
+            log.AppendLine($"[4] after Escape: open = {nav.IsCodeActionMenuOpen}, text unchanged = {editor.Document.Text == Sql}");
+            Assert.False(nav.IsCodeActionMenuOpen);
             Assert.Equal(Sql, editor.Document.Text);   // Escape performed NO action
 
             // Moving the caret invalidates an open menu: its actions describe the position it was built
             // for, and offering them somewhere else is the wrong behaviour.
             CtrlPeriod();
-            Assert.Equal(baseline + 1, overlay.Children.Count);
+            Assert.True(nav.IsCodeActionMenuOpen);
             editor.CaretOffset = editor.Document.TextLength;
             Dispatcher.UIThread.RunJobs();
-            log.AppendLine($"[5] after caret move: children = {overlay.Children.Count}");
-            Assert.Equal(baseline, overlay.Children.Count);
+            log.AppendLine($"[5] after caret move: open = {nav.IsCodeActionMenuOpen}");
+            Assert.False(nav.IsCodeActionMenuOpen);
 
             // A text change under an open menu invalidates it too.
             editor.CaretOffset = columnOffset + 3;
             Dispatcher.UIThread.RunJobs();
             CtrlPeriod();
-            Assert.Equal(baseline + 1, overlay.Children.Count);
+            Assert.True(nav.IsCodeActionMenuOpen);
             editor.Document.Insert(editor.Document.TextLength, " ");
             Dispatcher.UIThread.RunJobs();
-            log.AppendLine($"[6] after text change: children = {overlay.Children.Count}");
-            Assert.Equal(baseline, overlay.Children.Count);
+            log.AppendLine($"[6] after text change: open = {nav.IsCodeActionMenuOpen}");
+            Assert.False(nav.IsCodeActionMenuOpen);
 
             nav.Detach();
             window.Close();
         }, CancellationToken.None);
 
         _out.WriteLine(log.ToString());
+    }
+
+    // Stage Q / Q3 — THE path that failed in QA: the user simply moves the caret onto a line that has a
+    // code action, and the bulb must appear. Nothing else happens — no model rebuild, no scroll, no
+    // explicit refresh. This is now reachable by a test only because the bulb no longer waits on a
+    // DispatcherTimer, which headless cannot run.
+    [Fact]
+    public async System.Threading.Tasks.Task CodeActionBulb_AppearsWhenTheCaretMovesOntoAnActionableLine()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            // The actionable column is on line 1; line 2 has nothing to offer.
+            const string Sql = "select id_rozliczenie\nfrom rozliczenie r join pozycja p on 1 = 1";
+            var meta = new ProbeMetadata()
+                .Col("ROZLICZENIE", "ID_ROZLICZENIE")
+                .Col("POZYCJA", "ID_ROZLICZENIE");
+            var model = SemanticModel.Build(Sql, meta);
+            var diagnostics = EmberTern.Core.Sql.Language.DiagnosticsEngine.Analyze(model);
+            Assert.NotEmpty(diagnostics);
+
+            var editor = new TextEditor { Document = new AvaloniaEdit.Document.TextDocument(Sql) };
+            var window = new Window { Content = editor, Width = 900, Height = 400 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var nav = NavigationController.Attach(
+                editor, () => model, () => diagnostics, () => false, (_, _) => false, _ => false);
+
+            // Caret parked away from the ambiguity: nothing offered, nothing shown.
+            editor.CaretOffset = editor.Document.GetLineByNumber(2).Offset + 2;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(nav.IsCodeActionIndicatorVisible);
+
+            // The user clicks onto the ambiguous column. Caret movement alone must produce the bulb.
+            editor.CaretOffset = Sql.IndexOf("id_rozliczenie", StringComparison.Ordinal) + 3;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(nav.IsCodeActionIndicatorVisible, "the bulb did not appear on caret movement alone");
+
+            // …and leaving the line takes it away again.
+            editor.CaretOffset = editor.Document.GetLineByNumber(2).Offset + 2;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(nav.IsCodeActionIndicatorVisible);
+
+            nav.Detach();
+            window.Close();
+        }, CancellationToken.None);
     }
 
     // Stage Q / Q3 — the bulb's PLACEMENT must survive being asked while the view's line geometry is not
@@ -1320,6 +1364,9 @@ public sealed class ConnectionExpandBindingProbe
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
+            var overlay = OverlayLayer.GetOverlayLayer(editor);
+            int baseline = overlay!.Children.Count;   // BEFORE anything can add a bulb
+
             var nav = NavigationController.Attach(
                 editor, () => model, () => diagnostics, () => false, (_, _) => false, _ => false);
             editor.CaretOffset = Sql.IndexOf("id_rozliczenie", StringComparison.Ordinal) + 3;
@@ -1328,8 +1375,6 @@ public sealed class ConnectionExpandBindingProbe
             // a control stranded in the overlay at a position that was never computed.
             editor.TextArea.TextView.Redraw();
             editor.TextArea.TextView.InvalidateMeasure();
-            var overlay = OverlayLayer.GetOverlayLayer(editor);
-            int baseline = overlay!.Children.Count;
 
             nav.RefreshCodeActionIndicator();   // must not throw
 
@@ -1341,6 +1386,27 @@ public sealed class ConnectionExpandBindingProbe
             Dispatcher.UIThread.RunJobs();
             nav.RefreshCodeActionIndicator();
             Assert.True(nav.IsCodeActionIndicatorVisible);
+
+            // …and being "added" is not the same as being SEEN. The icon is a TemplatedControl, so it
+            // draws only through its ControlTheme; a missing theme, a zero measure, or a position off the
+            // visible area all leave the user with no bulb while every assertion about state still passes.
+            window.Width = 900;
+            window.Height = 400;
+            Dispatcher.UIThread.RunJobs();
+            var bulb = Assert.IsAssignableFrom<Control>(overlay.Children[overlay.Children.Count - 1]);
+            bulb.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            _out.WriteLine($"bulb desired = {bulb.DesiredSize}, left = {Canvas.GetLeft(bulb)}, top = {Canvas.GetTop(bulb)}");
+
+            // Being "added" is not the same as being SEEN — the state assertions above would all pass for
+            // a control measuring to nothing or sitting outside the view. THIS is the pair that would have
+            // caught the placement bug: the line here runs the full width of the editor, which put the
+            // anchor past the right edge (measured: Right=896 in a 900-wide view) where the overlay clips
+            // it away — present in every field we track, invisible to the user.
+            Assert.True(
+                bulb.DesiredSize.Width > 0 && bulb.DesiredSize.Height > 0,
+                "the bulb measures to nothing — it would be invisible");
+            Assert.InRange(Canvas.GetLeft(bulb), 0, editor.Bounds.Width - 1);
+            Assert.InRange(Canvas.GetTop(bulb), 0, Math.Max(1, editor.Bounds.Height) - 1);
 
             nav.Detach();
             // Nothing stranded: this is what caught the re-entrancy that added a second, orphaned bulb.

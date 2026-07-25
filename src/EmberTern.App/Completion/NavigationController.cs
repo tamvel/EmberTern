@@ -75,13 +75,10 @@ internal sealed class NavigationController
     // Gap between the pointer and the card, so the card never sits under the cursor itself.
     private const double HoverGap = 16;
 
-    // The bulb waits out caret movement. Without this it would blink on and off as the caret crosses a
-    // squiggle on its way somewhere, which is precisely the "look at me" behaviour a discoverability
-    // affordance must not have. Slightly longer than the hover dwell: hovering is a question the user
-    // asked, whereas the bulb appears uninvited and so should be the more patient of the two.
-    private static readonly TimeSpan BulbDwell = TimeSpan.FromMilliseconds(450);
-    // Gap between the end of the line's text and the bulb.
+    // Gap between the end of the line's text and the bulb, and the bulb's own footprint (13px icon +
+    // 2px padding each side) — needed to keep it inside the view when a line runs to the right edge.
     private const double BulbGap = 10;
+    private const double BulbSize = 17;
 
     private readonly TextEditor _editor;
     private readonly Func<SemanticModel?> _model;
@@ -124,7 +121,6 @@ internal sealed class NavigationController
     private Control? _bulb;
     private int _bulbLine = -1;               // the document line it is currently shown for
     private bool _bulbUpdating;               // re-entrancy guard — see UpdateBulb
-    private readonly DispatcherTimer _bulbDwell;
 
     // Inline rename popup (M5), created lazily on first F2.
     private Popup? _renamePopup;
@@ -170,9 +166,6 @@ internal sealed class NavigationController
 
         _hoverDwell = new DispatcherTimer { Interval = HoverDwell };
         _hoverDwell.Tick += OnHoverDwellElapsed;
-
-        _bulbDwell = new DispatcherTimer { Interval = BulbDwell };
-        _bulbDwell.Tick += OnBulbDwellElapsed;
     }
 
     /// <summary>Attaches hover + navigation to <paramref name="editor"/>.</summary>
@@ -229,8 +222,8 @@ internal sealed class NavigationController
         editor.DoubleTapped += c.OnDoubleTapped;
         // An edit invalidates the card: it describes an offset in a document that just changed.
         editor.TextChanged += c.OnTextChanged;
-        // The code-action bulb follows the caret's LINE (dwelled, so crossing a squiggle does not blink
-        // it) and must be repositioned when the view scrolls under it.
+        // The code-action bulb follows the caret's LINE and must be repositioned when the view scrolls
+        // under it.
         editor.TextArea.Caret.PositionChanged += c.OnCaretMovedForBulb;
         editor.TextArea.TextView.ScrollOffsetChanged += c.OnScrollForBulb;
         // The moment the line geometry becomes valid again — the same signal BreakpointMargin repaints
@@ -256,8 +249,6 @@ internal sealed class NavigationController
         _editor.TextArea.Caret.PositionChanged -= OnCaretMovedForBulb;
         _editor.TextArea.TextView.ScrollOffsetChanged -= OnScrollForBulb;
         _editor.TextArea.TextView.VisualLinesChanged -= OnVisualLinesChangedForBulb;
-        _bulbDwell.Stop();
-        _bulbDwell.Tick -= OnBulbDwellElapsed;
         HideBulb();
         _hoverDwell.Stop();
         _hoverDwell.Tick -= OnHoverDwellElapsed;
@@ -301,7 +292,6 @@ internal sealed class NavigationController
         // for a problem that may already be gone. Hide it NOW and let the recomputed diagnostics decide
         // whether it comes back (RefreshCodeActionIndicator, called on ModelUpdated).
         HideBulb();
-        ScheduleBulb();
     }
 
     /// <summary>Clears both cues — the pointer left, or a click/navigation happened.</summary>
@@ -390,7 +380,12 @@ internal sealed class NavigationController
         if (overlay is null) return;
 
         HideHover();
-        var card = HoverInfoView.Build(hover, _editor.ActualThemeVariant);
+        // Only claim a fix exists when one really does — the hint is computed from the SAME
+        // GetActionsAtCaret the menu and the bulb use, over the hovered span's own diagnostics, so the
+        // three surfaces can never disagree about whether there is anything to offer. Read-only: the
+        // card shows the shortcut, it does not become a way to run it (§15.1.1).
+        bool hasFixes = !_editor.IsReadOnly && GetActionsAtCaret(hover.Span.Start).Count > 0;
+        var card = HoverInfoView.Build(hover, _editor.ActualThemeVariant, hasFixes);
         // Never intercept the pointer: a hit-testable card under the cursor fires PointerExited on the
         // editor and flickers itself shut. It must also never take focus — hovering is not an action.
         card.IsHitTestVisible = false;
@@ -667,18 +662,20 @@ internal sealed class NavigationController
     // The bulb contributes nothing to that flow. It answers one question — "is there at least one
     // action here?" — with the same call the menu uses, and its click is literally ShowCodeActions.
 
-    /// <summary>Re-evaluates the bulb NOW, without waiting out the dwell. Called when the diagnostics
-    /// have been recomputed: that is the moment a just-applied fix must stop being offered, and a
-    /// timer would leave the stale bulb on screen for a visible instant.</summary>
+    /// <summary>Re-evaluates the bulb. Called when the diagnostics have been recomputed — the moment a
+    /// just-applied fix must stop being offered.</summary>
     public void RefreshCodeActionIndicator()
     {
         if (_detached) return;
-        _bulbDwell.Stop();
         UpdateBulb();
     }
 
     /// <summary>Test seam: whether the bulb is currently offered (headless probe).</summary>
     internal bool IsCodeActionIndicatorVisible => _bulb is not null;
+
+    /// <summary>Test seam: whether the code-action menu is open. Asserted directly rather than by
+    /// counting overlay children — the bulb shares that overlay and moves in and out on its own.</summary>
+    internal bool IsCodeActionMenuOpen => _codeActionMenu is not null;
 
 
     private void OnCaretMovedForBulb(object? sender, EventArgs e)
@@ -686,11 +683,11 @@ internal sealed class NavigationController
         // An open menu describes the caret it was built for. If the caret moved, that context is gone —
         // close rather than let the user pick a fix for a position they have left.
         InvalidateCodeActionMenuIfMoved();
-        ScheduleBulb();
+        UpdateBulb();
     }
 
     // Scrolling does not change WHETHER there are actions, only where the line is — so reposition
-    // without re-evaluating (and without the dwell, or the bulb would lag behind the text).
+    // without re-evaluating.
     private void OnScrollForBulb(object? sender, EventArgs e)
     {
         if (_bulb is not null) PositionBulb(_bulbLine);
@@ -703,19 +700,6 @@ internal sealed class NavigationController
         if (_detached) return;
         if (_bulb is not null) { PositionBulb(_bulbLine); return; }
         UpdateBulb(); // a placement that failed earlier gets its retry here
-    }
-
-    private void ScheduleBulb()
-    {
-        if (_detached) return;
-        _bulbDwell.Stop();
-        _bulbDwell.Start();
-    }
-
-    private void OnBulbDwellElapsed(object? sender, EventArgs e)
-    {
-        _bulbDwell.Stop();
-        UpdateBulb();
     }
 
     private void UpdateBulb()
@@ -866,7 +850,12 @@ internal sealed class NavigationController
         foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, segment)) last = rect;
         if (last is not { } r) return false;
 
-        var point = textView.TranslatePoint(new Point(r.Right + BulbGap, r.Top), overlay);
+        // Clamp into the view: a line whose text runs to the right edge would otherwise put the bulb
+        // PAST it, where the overlay clips it away — present in every state we track, yet invisible to
+        // the user. Measured: a 60-character line reported Right=896 in a 900-wide view, so this is not
+        // a rare case. Sitting flush against the edge is the honest fallback.
+        double x = Math.Min(r.Right + BulbGap, Math.Max(0, textView.Bounds.Width - BulbSize));
+        var point = textView.TranslatePoint(new Point(x, r.Top), overlay);
         if (point is null) return false;
         anchor = point.Value;
         return true;

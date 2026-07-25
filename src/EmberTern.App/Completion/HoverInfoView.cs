@@ -28,7 +28,11 @@ namespace EmberTern.App.Completion;
 internal static class HoverInfoView
 {
     /// <summary>Builds the hover card for <paramref name="hover"/>.</summary>
-    public static Control Build(HoverInfo hover, ThemeVariant theme)
+    /// <param name="showQuickFixHint">Whether to close with a one-line note that fixes exist here.
+    /// An <b>input</b>, decided by the caller — the card neither computes fixes nor offers them. Hover
+    /// stays INFORMATION (§15.1.1): the note names the shortcut, and the light bulb and Ctrl+. remain the
+    /// only ways to run a code action.</param>
+    public static Control Build(HoverInfo hover, ThemeVariant theme, bool showQuickFixHint = false)
     {
         var panel = new StackPanel { Spacing = 0 };
 
@@ -50,6 +54,21 @@ internal static class HoverInfoView
             // at all (an unknown object's reference is unresolved), and a lone section needs no rule.
             if (hover.HasDiagnostics || hover.DebugValue is not null) panel.Children.Add(Divider(theme));
             panel.Children.Add(QuickInfoView.BuildContent(info, theme));
+        }
+
+        // Discoverability, last and quiet: a user who never presses Ctrl+. would otherwise have no way to
+        // learn the shortcut exists. Subtle + italic so it reads as a footnote to the explanation above,
+        // not as another finding.
+        if (showQuickFixHint)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = UiStrings.CodeActionsHoverHint,
+                Margin = new Thickness(0, 6, 0, 0),
+                FontSize = 11,
+                FontStyle = FontStyle.Italic,
+                Foreground = Brush("SubtleForegroundBrush", theme),
+            });
         }
 
         return QuickInfoView.Card(panel, theme);
