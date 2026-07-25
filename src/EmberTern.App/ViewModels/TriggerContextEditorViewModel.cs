@@ -80,6 +80,26 @@ public sealed partial class TriggerContextEditorViewModel : ObservableObject
     public TriggerEvent SelectedEvent =>
         _header.Events[Math.Clamp(SelectedActionIndex, 0, _header.Events.Count - 1)];
 
+    /// <summary>The table this trigger fires on. Read by the launch rebuild: NEW/OLD values are only carried
+    /// into a rebuilt editor while the target table is the same one, because a column's identity is its name
+    /// <em>in that table</em> — the same name on a different table is a different column.</summary>
+    public string TargetTable => _header.TargetTable;
+
+    /// <summary>Re-selects a previously chosen action after a rebuild, if this trigger still declares it.
+    /// Matched by the event itself rather than by its index: the declared list may have gained or lost an
+    /// action, which makes the old index meaningless while the choice is still perfectly valid. Returns
+    /// whether the action survived.</summary>
+    internal bool TrySelectEvent(TriggerEvent action)
+    {
+        for (int i = 0; i < _header.Events.Count; i++)
+        {
+            if (_header.Events[i] != action) continue;
+            SelectedActionIndex = i;
+            return true;
+        }
+        return false;
+    }
+
     /// <summary>Builds the Core <see cref="TriggerContext"/> for the picked action — the value the launch mounts
     /// on the trigger root frame (§8.1). All availability + predicate semantics live on it, not here.</summary>
     public TriggerContext BuildTriggerContext()

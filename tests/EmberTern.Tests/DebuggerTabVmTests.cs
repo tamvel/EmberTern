@@ -1834,6 +1834,39 @@ public class DebuggerTabVmTests
         Assert.True(vm.IsLaunchPanelVisible);
     }
 
+    [Fact]
+    public async Task Restart_WhenTheDraftAsksSomethingNew_KeepsTheValuesItCanProve()
+    {
+        // The panel is rebuilt because the body now reads one more NEW column — but TOTAL is still the same
+        // column of the same table, so the value entered for it survives. Re-entering everything because one
+        // more field appeared is exactly the tax this rule exists to remove.
+        var vm = TriggerVm(TriggerSql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+
+        var total = vm.TriggerEditor!.NewParameters.Params.Single(
+            p => string.Equals(p.Name, "TOTAL", StringComparison.OrdinalIgnoreCase));
+        total.IsNull = false;
+        total.NumericValue = 42m;
+
+        vm.ApplySourceEdit(TriggerSql.Replace(
+            "new.total = old.total + 1;",
+            "new.total = old.total + 1;\n  new.status = 'X';",
+            StringComparison.Ordinal));
+        await vm.RestartCommand.ExecuteAsync(null);
+
+        var rebuilt = vm.TriggerEditor!.NewParameters.Params.Single(
+            p => string.Equals(p.Name, "TOTAL", StringComparison.OrdinalIgnoreCase));
+        Assert.NotSame(total, rebuilt);                          // the panel really was rebuilt
+        Assert.Equal(42m, rebuilt.NumericValue);                 // …and the proven value came with it
+        Assert.Equal(ValueOrigin.Restored, rebuilt.Origin);      // kept, never inferred — a column is its name
+
+        // The column the body only just started reading has never been asked for, so it is the user's to fill.
+        var status = vm.TriggerEditor!.NewParameters.Params.Single(
+            p => string.Equals(p.Name, "STATUS", StringComparison.OrdinalIgnoreCase));
+        Assert.True(status.IsNull);
+        Assert.Equal(ValueOrigin.Entered, status.Origin);
+    }
+
     // ── Seam 5b — save + compile from the debugger tab ──────────────────────────────────────────────
 
     // The tests below wire a DDL executor over a NOT-connected service: enough to make the tab savable,

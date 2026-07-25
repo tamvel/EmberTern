@@ -47,11 +47,31 @@
                      Foreground="{DynamicResource SubtleForegroundBrush}" TextTrimming="CharacterEllipsis" />
           <!-- The one auto-fill marker: this value was supplied by the app, not typed here. Every automatic
                mechanism (history, carry-over across a rebuilt panel) reports through the same Origin, so there
-               is one convention to learn; the tooltip says which mechanism, and it clears on the first edit. -->
-          <TextBlock Text="{x:Static app:UiStrings.LaunchValueAutoFilledMarker}"
+               is one convention to learn; it clears on the first edit. ONE marker, two weights: a Restored
+               value is the expected case and stays in the subtle reading colour, while an Assumed one — the
+               single inference the panel makes — takes the accent and loses the italic, so it is recognisable
+               without reading the tooltip. The brush arrives as a KEY through IconBrushConverter (with the
+               theme variant, gotcha #250), never as a brush on the VM. -->
+          <TextBlock Text="{Binding OriginLabel}"
                      IsVisible="{Binding IsAutoFilled}" ToolTip.Tip="{Binding OriginTooltip}"
-                     FontSize="9" VerticalAlignment="Center" FontStyle="Italic"
-                     Foreground="{DynamicResource SubtleForegroundBrush}" />
+                     FontSize="9" VerticalAlignment="Center"
+                     Classes.assumed-value="{Binding IsAssumed}">
+            <TextBlock.Styles>
+              <Style Selector="TextBlock">
+                <Setter Property="FontStyle" Value="Italic" />
+              </Style>
+              <Style Selector="TextBlock.assumed-value">
+                <Setter Property="FontStyle" Value="Normal" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+              </Style>
+            </TextBlock.Styles>
+            <TextBlock.Foreground>
+              <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                <Binding Path="OriginBrushKey" />
+                <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+              </MultiBinding>
+            </TextBlock.Foreground>
+          </TextBlock>
         </StackPanel>
         <Grid Grid.Column="1" ColumnDefinitions="*,Auto" VerticalAlignment="Center">
           <Panel Grid.Column="0" VerticalAlignment="Center">

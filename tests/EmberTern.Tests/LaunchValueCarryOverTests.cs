@@ -169,6 +169,32 @@ public class LaunchValueCarryOverTests
     // ─── The marker tells the truth about the value that is there NOW ─────────────────────────
 
     [Fact]
+    public void AnAssumedValueIsPresentedDifferentlyFromARestoredOne()
+    {
+        // One convention, two weights: the difference has to be visible without reading the tooltip, so the
+        // word and the brush key both change. (Brushes never reach a VM — the key does.)
+        var restored = Row("A", "INTEGER");
+        restored.ApplyHistoryValue(Row("A", "INTEGER", number: 1m).ToHistoryValue(), ValueOrigin.Restored);
+
+        var assumed = Row("A", "INTEGER");
+        assumed.ApplyHistoryValue(Row("A", "INTEGER", number: 1m).ToHistoryValue(), ValueOrigin.Assumed);
+
+        Assert.True(restored.IsAutoFilled);
+        Assert.True(assumed.IsAutoFilled);
+        Assert.False(restored.IsAssumed);
+        Assert.True(assumed.IsAssumed);
+        Assert.NotEqual(restored.OriginLabel, assumed.OriginLabel);
+        Assert.NotEqual(restored.OriginBrushKey, assumed.OriginBrushKey);
+        Assert.NotEqual(restored.OriginTooltip, assumed.OriginTooltip);
+
+        // A row nobody filled in says nothing at all.
+        var typed = Row("A", "INTEGER", number: 5m);
+        Assert.False(typed.IsAutoFilled);
+        Assert.Equal(string.Empty, typed.OriginLabel);
+        Assert.Equal(string.Empty, typed.OriginBrushKey);
+    }
+
+    [Fact]
     public void EditingACarriedValue_ClearsTheMarker()
     {
         var previous = Rows(Row("A", "INTEGER", number: 10m));

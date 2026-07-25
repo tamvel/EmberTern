@@ -113,12 +113,39 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAutoFilled))]
+    [NotifyPropertyChangedFor(nameof(IsAssumed))]
+    [NotifyPropertyChangedFor(nameof(OriginLabel))]
+    [NotifyPropertyChangedFor(nameof(OriginBrushKey))]
     [NotifyPropertyChangedFor(nameof(OriginTooltip))]
     private ValueOrigin _origin;
 
     /// <summary>True while the value on screen was supplied by the app rather than typed here — the one thing
     /// the marker in the launch panel says. <see cref="OriginTooltip"/> says by which mechanism.</summary>
     public bool IsAutoFilled => Origin != ValueOrigin.Entered;
+
+    /// <summary>The marker's word. <b>Restored</b> is the ordinary case and reads as a quiet note; <b>Assumed</b>
+    /// names the one inference the panel makes, so it is a different word rather than the same word with a
+    /// footnote — the difference has to survive being glanced at.</summary>
+    public string OriginLabel => Origin switch
+    {
+        ValueOrigin.Restored => UiStrings.LaunchValueRestoredMarker,
+        ValueOrigin.Assumed => UiStrings.LaunchValueAssumedMarker,
+        _ => string.Empty,
+    };
+
+    /// <summary>The theme token the marker is painted with — a KEY, never a brush (VMs hold no Avalonia types).
+    /// Restored stays in the subtle reading colour because it is the expected state; Assumed takes the accent,
+    /// which draws the eye without claiming anything is wrong — it is a "worth a look", not a warning.</summary>
+    public string OriginBrushKey => Origin switch
+    {
+        ValueOrigin.Restored => "SubtleForegroundBrush",
+        ValueOrigin.Assumed => "AccentBrush",
+        _ => string.Empty,
+    };
+
+    /// <summary>Whether the value rests on an assumption — the view's cue to give the marker its stronger
+    /// weight, so Restored and Assumed differ by colour AND emphasis rather than by tooltip alone.</summary>
+    public bool IsAssumed => Origin == ValueOrigin.Assumed;
 
     /// <summary>Why this row is marked, in the user's words.</summary>
     public string OriginTooltip => Origin switch

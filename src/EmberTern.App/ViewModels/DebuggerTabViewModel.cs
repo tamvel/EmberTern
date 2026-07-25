@@ -2472,7 +2472,9 @@ public sealed partial class DebuggerTabViewModel
         var ddl = RootDdl;
         if (ddl is not null && ddl.ObjectKind == DdlObjectKind.Trigger)
         {
-            await TryPrepareTriggerAsync(ddl, cancellationToken).ConfigureAwait(true);
+            var previousTrigger = TriggerEditor;
+            if (!await TryPrepareTriggerAsync(ddl, cancellationToken).ConfigureAwait(true)) return;
+            CarryTriggerContext(previousTrigger);
             return;
         }
 
@@ -2490,6 +2492,31 @@ public sealed partial class DebuggerTabViewModel
             var matches = LaunchValueCarryOver.ByName(previous, Parameters.Params);
             LaunchValueCarryOver.SoleRemainingPair(previous, Parameters.Params, matches);
         }
+    }
+
+    // Carries what the user had entered on the previous trigger editor into the rebuilt one.
+    //
+    // BY NAME ONLY — deliberately, and this is the one place the carry-over rules differ. A parameter has
+    // positional identity, so a renamed one can be recognised by the slot it occupies; a NEW/OLD row is a
+    // COLUMN, whose identity is its name in the target table and nothing else. Its position in the grid merely
+    // follows the order the body happens to mention it in, so "the only row left on each side" would be
+    // evidence of nothing: a body that stops reading NEW.STATUS and starts reading NEW.STATE is referring to two
+    // different columns, not renaming one.
+    //
+    // A different target table resets both grids: the same column name on another table is another column, so
+    // there is nothing to prove and the user decides. The chosen ACTION is carried separately — it is a
+    // decision, not a value — and by the event itself, since the declared list may have changed under it.
+    private void CarryTriggerContext(TriggerContextEditorViewModel? previous)
+    {
+        if (previous is null || TriggerEditor is null) return;
+        if (!string.Equals(previous.TargetTable, TriggerEditor.TargetTable, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        TriggerEditor.TrySelectEvent(previous.SelectedEvent);
+        LaunchValueCarryOver.ByName(previous.NewParameters.Params, TriggerEditor.NewParameters.Params);
+        LaunchValueCarryOver.ByName(previous.OldParameters.Params, TriggerEditor.OldParameters.Params);
     }
 
     /// <summary>A session exists that saving would invalidate — running or paused, or a terminal state whose

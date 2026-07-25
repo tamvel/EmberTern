@@ -1757,7 +1757,10 @@ internal static class UiStrings
     // automatic mechanism (parameter history, carry-over across a rebuilt panel, and whatever comes next), so
     // the user learns one convention instead of one per feature. The label says THAT it was filled in; the
     // tooltip says by which mechanism. It disappears the moment the value is edited.
-    public const string LaunchValueAutoFilledMarker = "auto";
+    // Two words, not one word in two colours: Restored is the ordinary case and stays quiet, while Assumed is
+    // the ONE inference the panel makes and has to be recognisable at a glance, without reading the tooltip.
+    public const string LaunchValueRestoredMarker = "auto";
+    public const string LaunchValueAssumedMarker = "assumed";
     public const string LaunchValueRestoredTooltip =
         "Filled in automatically — this value was kept because it provably still fits this parameter.";
     public const string LaunchValueAssumedTooltip =
