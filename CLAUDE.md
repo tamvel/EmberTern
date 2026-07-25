@@ -24,10 +24,10 @@ verbatim, in the archive below.
 | **`docs/design/editor-stage7-diagnostics.md`** | **Active design/vision** for **Stage 7 (Diagnostics)** — engine, model, categories, pipeline, squiggles/panel/nav, milestones, post-Stage-7 Quick Fixes. Consumes Etap 6.9. | When working on Stage 7. |
 | **`docs/design/editor-language-expansion.md`** | **FULLY DELIVERED design** for the code-writing experience that replaced Stage 8 M2 — both halves shipped + user-approved: **Language Completion** (construct completion by natural prefix, Tab + shown hint, grammar-armed, synchronous) + **Typing Ergonomics** (`begin…end` pairing on Enter, `()`/`[]`/`''` pairing, structural auto-indent; Enter stays normal), separate from IntelliSense. §3 documents the as-built ergonomics (incl. what is deliberately NOT done: paren alignment, `IndentLines`); §5 the arming gate; §9.1 the **one-responsibility-one-owner** rule (vocabulary *and* grammatical position). | When working on `Core.Sql.Language.Constructs`, `Core.Sql.Language.Ergonomics`, or the completion/ergonomics wiring. |
 | **`docs/design/editor-quick-fixes.md`** | **DESIGN + as-built — Stage Q COMPLETE (Q0–Q5, 2026-07-25), user-confirmed.** The self-contained guide for the **Quick Fix stage**: the on-demand `QuickFixEngine` over the unchanged read-only diagnostics pipeline, the shared `CodeAction`/`TextEdit` currency, the ONE `TextEditApplier` (rename migrates onto it), the light-bulb + `Ctrl+.` surfaces, the v1 action set with what is excluded and why, and seams Q0–Q5 with the recipe for adding a fix. **Supersedes `editor-stage7-diagnostics.md` §12 and CLAUDE.md's older holding note** on two points (no `QuickFixes` on `Diagnostic`; hover stays read-only). | When working on Quick Fixes / code actions. |
-| **`docs/design/firebird-debugger.md`** | **DESIGN v2 — decisions ratified 2026-07-17; the target implementation spec.** Nothing implemented. Feasibility (Firebird has **no** debug API — verified), the Fidelity Law §F, the client-interpreter + `EXECUTE BLOCK` harness, harness declaration rules, frame savepoints, exception control flow, per-session connection + transaction, nested frames/call stack, local routines (no temporary metadata), cursor bridge, UI/UX, panels, reuse map, prerequisites P1/P2 + milestones D1–D14, Fidelity Boundaries, and a live-engine verification log. | When working on the debugger. |
+| **`docs/design/firebird-debugger.md`** | **The debugger's behaviour authority (v2, decisions ratified 2026-07-17).** ⚠ *Its "nothing implemented" framing dated from the design phase and was corrected 2026-07-25 — the debugger is built (P1/P2, D1–D13, D15, functions-as-root, the Draft model); sections amended by delivery say so in place (§9.1, §9.3.1, §12.14).* Feasibility (Firebird has **no** debug API — verified), the Fidelity Law §F, the client-interpreter + `EXECUTE BLOCK` harness, harness declaration rules, frame savepoints, exception control flow, per-session connection + transaction, nested frames/call stack, local routines (no temporary metadata), cursor bridge, UI/UX, panels, reuse map, prerequisites P1/P2 + milestones D1–D14, Fidelity Boundaries, and a live-engine verification log. | When working on the debugger. |
 | **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. **D14 = ANALYZED + DEFERRED** (its STATUS block records the ratified snapshot+savepoint+undo-only architecture if ever revisited). | **Every debugger implementation session — read this + your milestone's brief first.** |
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (242 entries, #1–#255), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (244 entries, #1–#257), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -208,12 +208,13 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT STATE (2026-07-25) — "a session runs the code it was started from": Seams A + B are COMPLETE and
-  user-QA-confirmed on the live lab; Seam C is the ONLY remaining stage of the Draft model** (not started, and
-  its scope is to be RE-ANALYSED first — see the note at the end of this entry). **User's QA verdict on A+B:**
-  the first edit ends the session · the user stays in the editor (`Editing`) · Restart runs the current editor
-  code · the procedure in the database stays untouched · `Save` is still the only DDL write · stale code can no
-  longer be executed by accident after an edit.
+- **⭐ CURRENT STATE (2026-07-25) — the Draft model is DELIVERED and the launch config now survives a signature
+  change. Seams A + B + C3.1–C3.3b are COMPLETE and user-QA-confirmed on the live app; the ONE open item is
+  C3.4, deliberately deferred pending real usage** (see the C3 entry below). **QA verdict on A+B:** the first
+  edit ends the session · the user stays in the editor (`Editing`) · Restart runs the current editor code · the
+  procedure in the database stays untouched · `Save` is still the only DDL write · stale code can no longer be
+  executed by accident after an edit. **QA verdict on C3:** parameters, history, carry-over and triggers all
+  behave as specified, and `Restored` vs `Assumed` read clearly.
   **Background.** After several days of real use the user reported the coherence gap: editing during a session
   was allowed, but the next step still executed the launched version — *I see code A, the debugger executes B*.
   Rule adopted (IBExpert's): **the first change to the text ends the session** — no save, no step, no restart
@@ -259,28 +260,50 @@ noted.
   decision was made (`_panelSignature`), never re-derived at comparison time from state that now follows the
   user's input — the old `var configBefore = BuildLaunchSignature()` would, after a mid-flight re-parse, compare
   the new value **with itself** and pass a genuinely changed parameter list as "still valid".
-  **⚠ INTERIM shipped in B, and Seam C REMOVES it (don't relax it):** a draft runs only while its routine
+  **⚠ INTERIM shipped in B, and only C3.4 removes it (don't relax it):** a draft runs only while its routine
   **HEADER** is byte-identical to the compiled one (proven without a parse — the common prefix reaches the
   baseline's body start), because the root **parameter list still comes from the catalog**. Body edits — the
   debugging loop — always qualify; a header edit blocks with a status naming Save.
-  **⭐ Seam C — THE ONLY REMAINING STAGE of the Draft model. NOT started, and its scope is to be RE-ANALYSED
-  BEFORE any code (user directive, 2026-07-25): A+B absorbed more than the original plan assumed, so C's
-  responsibility has shrunk and the first task of that session is to check whether it can be narrowed further
-  (possibly to nothing beyond the header case).** Its remaining candidate scope, for that analysis to confirm or
-  cut: generalise `PsqlDeclarationExtractor.ExtractSignature` to a **top-level** routine header (its docstring
-  already says it is "the same shape"); build the root frame layout from the AST when the source is a draft
-  (the D9 `BuildLocalRoutineFrameVariablesAsync` path one level up) so the **header interim from Seam B
-  disappears**; surface the §F boundaries in the pre-flight; and — the part that cannot be cut, Contract #12 —
-  a **`DebuggerFidelityProbe` case proving the same routine run from the catalog and as an identical draft
-  produces identical stops + values** on the live lab.
-  **§F boundaries for a draft-sourced session — inputs to that analysis, already verified in code; do not
-  re-derive them (all statically detectable from the draft's AST):**
-  **recursion** (a self-call falls through `ResolveRoutine`'s local+package branches to `ResolveRoutineAsync`,
-  which fetches the **compiled** source ⇒ step-into would silently descend into old code), a **selectable
-  procedure used in its own body**, a **draft that would not compile** (runs partially — PSQL compile-time
-  validation never happened); plus one accepted regression: a parameter typed **`TYPE OF …`** resolves from the
-  catalog today but throws an explained stop from the AST. Narrative + the full re-verification of the Draft
-  model against the code: [docs/history/19-...](docs/history/19-firebird-debugger.md) (last section).
+  **⭐ Seam C was RE-ANALYSED against the code before any was written (2026-07-25) and the milestone's premise
+  REVERSED — do not restore the old scope.** The App layer was already draft-sourced (panel, signature,
+  pre-flight, step points, launch spec — all from the draft), a **trigger root reads nothing about itself from
+  the catalog** (`CreateAsync` passes `routineName: null`; NEW/OLD types come from the target TABLE), and four
+  of the original six 6c items had shipped in A+B. So the Draft model was **already delivered**; what was left
+  split into (a) the engine work that lifts the header gate and (b) rebuilding the **launch configuration**
+  after a signature change. The user redirected C3 to (b). Two corrections stand: the **`TYPE OF` regression is
+  CREATED by the AST layout, not fixed by it** (the catalog resolves it fine today ⇒ resolving `TYPE OF` belongs
+  *inside* C3.4, not "accepted" beside it), and **`RETURNS` does not belong in the launch signature** until a
+  changed header can run (it is no user decision — it has no field).
+  **⭐ C3 — the launch configuration survives a signature change. COMPLETE + user-QA-confirmed (C3.1 `46e5e67` ·
+  C3.2 `1b97b0f` · C3.3a `178f503` · C3.3b `8acbb6f`).** THE RULE (ratified, do not re-litigate): *the debugger
+  keeps everything it can PROVE is still correct, hands back everything it cannot, and never guesses* — the
+  inverse of IBExpert, which restarts after a signature change without policing the configuration.
+  **Proof = equality of `ExecuteParamKind`**; no narrowing analysis (whether a value *fits* is Firebird's job).
+  **Matching:** parameters = **`ByName` → `SoleRemainingPair`** (the pair rule fires only when exactly ONE row
+  is unmatched on each side; two or more ⇒ nothing carried); trigger NEW/OLD = **`ByName` only**, because a
+  column's identity is its name in the catalog and grid position is just the order the body mentions it in.
+  `ByName` **claims a pair even when the value fails the proof** (the rows ARE that parameter — leaving a
+  retyped one unclaimed would let the pair rule hand its value to a row we can already tell apart). Composition
+  lives at the **call site**, never a `bool` flag. **`LaunchValueCarryOver` does NOT implement the proof** — a
+  value travels through the history's own `ToHistoryValue`/`ApplyHistoryValue`, so "does this still fit" has ONE
+  answer in ONE place. **`ParameterValue.TypeText`** (additive; **schema version deliberately NOT bumped** — a
+  bump trips the downgrade protection and older builds would refuse the whole file) makes the history obey the
+  same proof; a legacy entry has no type ⇒ not auto-applied (self-heals after one run). **ONE marking
+  convention** (`ValueOrigin` Entered/Restored/Assumed) for *every* automatic source — history and same-name
+  carry-over → `Restored` (quiet italic, `SubtleForegroundBrush`), the pair rule → `Assumed` (upright,
+  semi-bold, `AccentBrush`, the word "assumed"); accent **not** warning — a "worth a look", not a fault. Any
+  edit resets the origin, so a marker never claims a value the user has since replaced. ⚠ **gotchas #256/#257**
+  came out of this. **C3.4 — the ONLY open item, DEFERRED by user decision:** root frame layout from the AST
+  header + `TYPE OF` resolved + `RETURNS` in the signature + §F boundaries in the pre-flight + the mandatory
+  `DebuggerFidelityProbe` catalog-vs-draft case (Contract #12); only then does the header gate come off. The
+  user will debug normally for a while first — practice decides whether running a changed signature without
+  Save is worth the complexity. **§F boundaries for a draft-sourced session — verified in code, do not
+  re-derive (all statically detectable from the draft's AST):** **recursion** (a self-call falls through
+  `ResolveRoutine`'s local+package branches to `ResolveRoutineAsync`, which fetches the **compiled** source ⇒
+  step-into descends into old code — and **step-over does not save you either**, the server runs the compiled
+  routine), a **selectable procedure used in its own body**, and a **draft that would not compile** (runs
+  partially — PSQL compile-time validation never happened). Narrative: [docs/history/19-...](docs/history/19-firebird-debugger.md)
+  (last three sections).
 - **Before that (2026-07-25) — two arcs closed; the debugger was idle.** Two arcs closed
   back to back: the **UX Polish Sprint** through **Seam 6b** (6a debugger status → app status bar; 6b
   `SaveAsync` false success), then the debugger's **Save workflow** was reworked after live QA — Save now
@@ -289,7 +312,8 @@ noted.
   columns) still describing the compiled routine; anything else means a new decision and lands on the launch
   panel. *(Seam 6c — the Draft-as-session-source model — was backlogged at that point; real usage asked for it
   days later, and it is **no longer backlog**: it came back as the A/B/C arc above, where A + B are DONE +
-  user-QA-confirmed and only **Seam C** is open.)* Then **🏁 Stage Q (Quick Fixes & Code Actions) — COMPLETE, Q0–Q5, user-confirmed**
+  user-QA-confirmed, C was re-analysed + re-scoped into the delivered C3, and only **C3.4** stays open by
+  decision.)* Then **🏁 Stage Q (Quick Fixes & Code Actions) — COMPLETE, Q0–Q5, user-confirmed**
   (see the Quick Fix entry below and [docs/history/20-...](docs/history/20-stage-q-quick-fixes.md)).
   Remaining editor backlog: **Folding**, **Breadcrumbs**, and a future **RefactoringEngine** (a sibling
   producer feeding the same code-action menu — nothing was built for it in advance).
@@ -540,9 +564,10 @@ noted.
       **6c — the big one: rebuild the debugger on the Draft model. ✅ SUPERSEDED — it came back days later as
       the A/B/C arc at the top of "Current state": Seam A (`aa7f801`) + Seam B (`7a410c7`) are DONE +
       user-QA-confirmed (first edit ends the session; Restart runs the draft with NO compile and NO DB write;
-      Save is the only DB write), leaving only **Seam C** (root frame layout from the AST header ⇒ the header
-      interim disappears, pre-flight surfaces the draft §F boundaries, and the mandatory
-      `DebuggerFidelityProbe` catalog-vs-draft case) — whose scope is to be RE-ANALYSED before any code.**
+      Save is the only DB write). Seam C was then re-analysed, re-scoped and delivered as **C3** (the launch
+      configuration survives a signature change), leaving only **C3.4** (root frame layout from the AST header
+      ⇒ the header interim disappears, `TYPE OF` resolved, pre-flight surfaces the draft §F boundaries, and the
+      mandatory `DebuggerFidelityProbe` catalog-vs-draft case) — deferred by decision.**
       Two details of the original 6c sketch were **changed by the implementation**, do not restore them: the
       re-parse is **lazy, not debounced** (a `DispatcherTimer` re-introduces an untestable path, #251), and
       Save was already delivered separately (it compiles the draft and resumes in the tab).
@@ -560,8 +585,8 @@ noted.
       **⚠ A debugger tab has no `MetadataObjectKind`** — 6c/6d may need it threaded through (additive).
       **⚠ kill any lingering `EmberTern.exe` before rebuilding** (locks output DLLs → MSB3021).
 - **Stage X — Firebird Debugger. ⭐ STATUS (2026-07-25): P1 + P2 + D1–D13 DONE, D14 deferred, D15 complete
-  (D15.6 dropped), functions-as-root complete; the debugger's ONE open item is the Draft model's **Seam C**
-  (A + B done + user-QA-confirmed — see the top of "Current state"). The block below is the accumulated
+  (D15.6 dropped), functions-as-root complete, the Draft model delivered (A + B + C3, all user-QA-confirmed);
+  the debugger's ONE open item is **C3.4**, deferred by decision — see the top of "Current state". The block below is the accumulated
   per-milestone record; read it for the "why", not for status.** Historical detail: **implementation STARTED; P1 + P2 + D1–D9 DONE. D9 (local procedures & functions — THE FLAGSHIP) COMPLETE + live-fidelity-verified (core 2026-07-18, seam c 2026-07-19): local routines are real, steppable debugger frames with real closure variables (the capability IBExpert cannot deliver); both local procedures and local functions are faithful step-into AND step-over. §6.3 closure version gate MEASURED (FB3 = closed scopes, FB5 = true closures; frame LexicalParent branches on version); seam (a) = local-routine step-into (AST + parser + binder + extractor R5; runtime ResolveRoutine + AST-header param types); seam (b) = closures — Part 1 closure capture for step-INTO (read+write an OUTER var, the write reaching the parent frame), Part 2 the transitive read/write-set fixpoint over the sub-routine call graph for step-OVER (a local call whose callee captures an outer var not named at the call site). All proven sim==real on the lab. D9 seam (c) — local-FUNCTION step-into (§6.4) — COMPLETE 2026-07-19 (c1 AST → c2 Core interpreter → c3 Firebird executor + live fidelity): a local function is a real steppable frame in all four value-consuming positions (v=f()/RETURN f()/IF f()/WHILE f()) via a Function Return Continuation, no new server path; live-proven sim==real for the four positions, six return types (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing (local shadows a same-named stored function), nesting, and closures (spec §15.11). 🏁 D9 FULLY COMPLETE — local procedures AND functions step faithfully, into and over. 🏁 D10 (Triggers) COMPLETE + user-confirmed 2026-07-19 (seam A pure-Core / seam B live-fidelity / seam C UI; NEW/OLD context, multi-action, embedded-subquery colon fix #248) — PLUS terminal debug states (Completed keeps state + END marker, Faulted stops on the raising line + red status). D10.5 (UX polish) DONE 2026-07-19: the debugger's internal harness-audit tab (formerly "Executed SQL" — a misleading name; it was never the user's SQL history) is renamed "Harness Log" and made a DEBUG-only diagnostic surface — it is built in code-behind under `#if DEBUG` (`DebuggerTabView.axaml.cs` → `BuildHarnessLogTab`, no longer in the XAML), so in RELEASE builds the tab does not exist at all (not hidden / not disabled — genuinely not compiled). No new setting/toggle (user rejected reusing the per-connection DDL Developer Mode — different domain). The audit log itself (`DebuggerTabViewModel.ExecutedSql`) is unchanged and still collected in every build — it also feeds the Immediate tab — so Immediate / Evaluate(Shift+F9) / Watches are untouched. A purpose description + empty-state explain the tab is a debugger-internals diagnostic, not user-SQL history. Build 0/0 in BOTH Debug and Release; 4929 tests green. 🏁 D11 (Packages) COMPLETE + user-confirmed 2026-07-20 (Seam 0 / A / B / C) — packaged procedures (public AND private) are real steppable debugger frames, reached both by stepping into them from a caller and by launching a member directly as the ROOT; one execution path, no parallel package executor, live-fidelity-proven. **Seam 0 (lab + blocking probes, commit f229b94):** extended the lab with `PKG_DBG` (public `PUB_RUN`/`PUB_ADD` + a PRIVATE `PRIV_DOUBLE`; a private and a public sibling call inside `PUB_RUN`) + standalone selectable `SP_DBG_PKG`; §8.2 probes measured live (§15.12) — a PRIVATE package routine is NOT callable from `EXECUTE BLOCK` (SQLSTATE 42000 "is private to package") ⇒ interpret it; a PUBLIC one IS (⇒ real step-over / source-fetch step-into); the whole body is verbatim-extractable from `RDB$PACKAGE_BODY_SOURCE` (parse the blob). **Seam A (pure Core, commit ead3a41):** `ExecuteProcedureStatement.PackageName` + parser reading a qualified `PKG.PROC` (binder still references the package at the first name token; `SqlParameterScanner` returns the qualified name); new `SqlParser.ParsePackageBodyMembers` turns a body blob (`BEGIN <members> END` of bare `PROCEDURE/FUNCTION` routines = the D9 sub-routine shape WITHOUT `DECLARE`) into member `SubroutineDeclaration`s (`ParseSubroutineDeclaration` generalized to both leading forms; `ParseScopedBlockBody` reused — no hand-rolled scanner); private-ness stays a metadata fact. **Seam B (Firebird + live fidelity, commit e07ad40):** `ResolveRoutine` resolves a package call (qualified `PKG.PROC`, or an unqualified SIBLING from within a package frame) through ONE path — the member is reconstructed as a standalone `CREATE PROCEDURE` (`"CREATE "` + its `RDB$PACKAGE_BODY_SOURCE` slice) so the **D8** path (scope-bound model+body, catalog params keyed by `RDB$PACKAGE_NAME` via a generalized `BuildFrameVariablesAsync`, arg seeding) applies to a PUBLIC member, while every package routine is declared as a harness sub-routine (**D9 R5**) so a PRIVATE sibling — not DSQL-callable (§15.12) — runs inside the harness like a local routine; a package member is a closed scope (`LexicalParent` null, no capture ⇒ the read/write fixpoint is a no-op) so `ExecuteStatement`/`EvaluateCondition`/`BindValues` are untouched. Public members maximally reuse D8, private maximally reuse D9 — **NO parallel package executor** (user directive). Live fidelity PROVEN sim==real (§15.13, `DebuggerFidelityProbe` +2): case 18 step-**Into** `SP_DBG_PKG → PUB_RUN → PRIV_DOUBLE (private, interpreted) + PUB_ADD`, depth 3, sim 16==real 16; case 19 step-**Into** `PUB_RUN` then step-**Over** its siblings — the private `PRIV_DOUBLE` runs via the R5 harness (depth 2, never a frame), sim 16==real 16; all 17 prior cases still pass. **Seam C (launch a member as the debug ROOT — C1 engine `fd50411`, C2 UI `0b6259d`):** the "Debug procedure…" entry point on a package member, launched as the root. **C1** — `SqlParser.ReconstructPackageMemberSource` is now the ONE owner of the `"CREATE "` + member-slice reconstruction (the seam-B step-into path was refactored to route through it); `FirebirdDdlReader.FetchPackageMemberSourceAsync` reads the raw `RDB$PACKAGE_BODY_SOURCE` blob and reconstructs the member's standalone source (the App/probe root source provider); `FirebirdDebugExecutor.CreateAsync` gained an optional `packageName` that builds a package ROOT frame exactly as seam B builds a stepped-into member (package-keyed catalog params + every package routine as a harness sub-routine R5 so a sibling resolves + package/members on the frame context; closed scope ⇒ Execute/EvaluateCondition/BindValues untouched); `DebugLaunchSpec.PackageName` (additive) threaded through the launcher; `DebuggerTabViewModel` gained a `packageName` arg; `MainWindowViewModel.OpenDebuggerForPackageMember` reuses the `OpenDebuggerForObject` launch shape (same §9.3 parameter panel + launcher). **Live fidelity PROVEN** (`DebuggerFidelityProbe` case 20): `PKG_DBG.PUB_RUN(5)` launched as ROOT steps into private `PRIV_DOUBLE` + public `PUB_ADD`, chain `PUB_RUN → PRIV_DOUBLE → PUB_ADD`, sim R 16==real 16; all 19 prior cases pass. **C2** — the Package editor → Members tab "Debug procedure…" context menu (visible only for PROCEDURE members via `PackageMemberItemNode.IsProcedure`; a function-as-root is out of scope, §F), reusing the sidebar's `MetadataContextDebugProcedure` label + mirroring the tab's double-click code-behind; `PackageDetailTabViewModel.DebugMemberRequested` → the C1 launch path. No sidebar member leaf (packages don't expand) and no toolbar button (which member? = a new workflow) — the Members tab is the unambiguous entry point. Build 0/0; package/debug tests green; smoke clean; user QA confirmed 2026-07-20. **§F boundary:** a package FUNCTION call as a step-into is not modelled on the call side (`CallExpression` carries no package qualifier) — step-over, faithful — add only when a real lab case needs it (gotcha #233).
   **D12 (Advanced breakpoints) — COMPLETE + user-confirmed (2026-07-20). 🏁 Break on exception, conditional
   breakpoints + hit counts, data breakpoints, and run-to-next-`SUSPEND` (+ result grid) all ship end-to-end,
@@ -2590,7 +2615,7 @@ Before considering any UI task done, verify:
 
 ## Live gotchas — load-bearing subset
 
-The **complete** catalog (242 entries, organized thematically) lives in
+The **complete** catalog (244 entries, organized thematically) lives in
 **[`docs/gotchas.md`](docs/gotchas.md)**. Below are the ~20 that are load-bearing across almost
 *any* future session — the rest are searchable there by keyword the moment a bug "feels
 familiar". Each line is a one-sentence summary; follow the `#N` reference into `docs/gotchas.md`
@@ -2789,7 +2814,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (242 entries, #1–#255), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (244 entries, #1–#257), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a

@@ -756,6 +756,32 @@ IBExpert's tax. It carries:
 - **Named parameter sets** — "last used" (auto) + saved presets per routine, in the existing history store.
   **Restart reuses the last values without re-prompting**, panel still editable.
 
+#### 9.3.1 When the signature changes under the panel *(delivered 2026-07-25 — C3)*
+
+Editing the routine can change what the panel must ask for, and the panel is then rebuilt. One rule governs
+what survives that rebuild, and it is the opposite of IBExpert's (which restarts happily and leaves stale values
+behind, sometimes in a state that cannot start at all):
+
+> **Keep everything that can be PROVEN still correct; hand back everything that cannot; never guess in between.**
+
+- **Proof of compatibility is equality of input kind** (the `ExecuteParamKind` family the typed editors already
+  classify a declared type into). Deliberately no narrowing analysis — whether a value *fits* is Firebird's
+  judgement, not the client's (§F / Contract #3). `INTEGER → BIGINT` keeps its value; `INTEGER → VARCHAR` does
+  not, because carrying it would mean converting it.
+- **Parameters** match **by name first, then by the sole remaining pair** — the second only when exactly one row
+  is left unmatched on each side, which is the rename case. Two or more left over on either side carries
+  nothing, because any pairing would then be a guess.
+- **A trigger's `NEW`/`OLD` rows match by name only.** A parameter has positional identity; a context row is a
+  **column**, whose identity is its name in the target table — its position in the grid merely follows the order
+  the body mentions it in. A changed **target table** resets both grids. The chosen **action** is carried
+  separately (it is a decision, not a value) and by the event itself rather than its index.
+- **The same proof governs the parameter history**, so an automatic restore can never be laxer than a
+  carry-over. A stored value records the declared type it was entered under; without one it cannot be proven and
+  is not applied.
+- **One marking convention for every automatic source** — the row reports where its value came from, the panel
+  renders that in one place, and a value resting on the pair rule's assumption is visibly distinct from one that
+  was merely kept. Any edit clears the marker, so it never describes a value the user has replaced.
+
 ### 9.4 The Variables window
 
 One unified tree, **grouped and visually distinguished**:
@@ -998,11 +1024,15 @@ Each is **named, detected where possible, and surfaced**. None is silently appro
     branches to `ResolveRoutineAsync`, which fetches the *compiled* source, so a step-into would silently
     descend into old code; (b) **a selectable procedure used inside its own body** — same mechanism, through
     the cursor path; (c) **a draft that would not compile** — it runs *partially*, because Firebird's PSQL
-    compile-time validation never happened. Surfacing these in the pre-flight is **Seam C's** job, together
-    with the root frame layout coming from the AST header (which also removes the interim gate that today lets
-    a draft run only while its *header* is byte-identical to the compiled one). One accepted regression comes
-    with that layout: a parameter typed **`TYPE OF …`** resolves from the catalog but throws an explained stop
-    from the AST — an explained stop beats a guess, and body locals already behave that way.
+    compile-time validation never happened. Note that step-**over** is no escape from (a) and (b): the server
+    runs the *compiled* routine, so a self-referencing draft has no coherent path at all. Surfacing these in the
+    pre-flight is **C3.4's** job, together with the root frame layout coming from the AST header (which also
+    removes the interim gate that today lets a draft run only while its *header* is byte-identical to the
+    compiled one). That layout must **resolve `TYPE OF` rather than regress on it**: the catalog resolves such a
+    parameter today, so routing it into the AST path without support would trade a working case for a rarer one
+    (an earlier note called this an "accepted regression" — it is not, and the correction is ratified). C3.4
+    also owns adding **`RETURNS`** to the launch signature, which is only load-bearing once a changed header can
+    run. **C3.4 is deferred by user decision (2026-07-25)** pending real usage.
 
 ### 12.1 Fast-forward (D13) — the optimisation and its price
 
@@ -1077,8 +1107,9 @@ next. Foundation-first; never big-bang.
   FB4+ support of D2.**
 - **§9.1 / §12.14 — draft vs catalog equivalence.** A `DebuggerFidelityProbe` case must prove that the same
   routine, run **from the catalog** and as an **identical draft**, produces identical stops and identical
-  values on the lab. **Blocks the Draft model's Seam C** (Contract #12) — it is the one part of that seam
-  that cannot be cut, whatever the scope re-analysis decides about the rest.
+  values on the lab. **Blocks C3.4** (Contract #12) — the one part of that work that cannot be cut. (The
+  re-analysis cut everything else that was cuttable: the rest of the original Seam C became **C3**, a launch-
+  configuration concern with no engine change, and shipped.)
 
 **Design questions still open for review:**
 1. **`F5` = Continue inside the debug tab** (§9.7), against the app-wide `F5` = Execute.

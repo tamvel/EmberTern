@@ -670,11 +670,15 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
 
 ### Draft model — "a session runs the code it was started from" *(Seams A / B / C, post-D15)*
 
-> **STATUS (2026-07-25): Seam A ✅ + Seam B ✅ — DONE and user-QA-confirmed on the live lab (commits `aa7f801`,
-> `7a410c7`). Seam C is the ONLY remaining stage, NOT started — and by user directive the session that picks
-> it up RE-ANALYSES its scope BEFORE writing any code.** A and B absorbed more than the original plan
-> assumed, so C's responsibility has shrunk; the first task is to check whether it can be narrowed further,
-> possibly to little beyond the header case.
+> **STATUS (2026-07-25): Seam A ✅ · Seam B ✅ · C3.1–C3.3b ✅ — all DONE and user-QA-confirmed (commits
+> `aa7f801`, `7a410c7`, `46e5e67`, `1b97b0f`, `178f503`, `8acbb6f`). The Draft model is DELIVERED. The ONE
+> open item is C3.4, DEFERRED by user decision pending real usage.**
+>
+> Seam C was re-analysed against the code before any was written, and **its premise was reversed — do not
+> restore the old scope.** The App layer was already draft-sourced, a trigger root reads nothing about itself
+> from the catalog, and four of the six original items had shipped in A + B. What remained split in two: the
+> engine work that lifts the header gate (**C3.4**), and rebuilding the **launch configuration** after a
+> signature change (**C3**, delivered). See the history file's *"Seam C re-analysed"*.
 
 - **Cel.** Close the coherence gap reported after several days of real use: editing during a session was
   allowed, but the next step still executed the launched version — *"I see code A, the debugger executes code
@@ -700,22 +704,43 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
   Breakpoints survive the loop by two **provable** filters (unchanged prefix; still a step-point start), never
   a guess (§0). **Gotcha #254** — capture a "before" value where the decision was made (`_panelSignature`),
   never re-derive it from state that now follows the user's input.
-- **Seam C — NOT started. Candidate scope, to confirm or cut in the re-analysis:** generalise
+- **C3 — DONE + user-QA-confirmed. The launch configuration survives a signature change.** THE RULE: *keep
+  everything that can be **proven** still correct, hand back everything that cannot, never guess in between* —
+  the inverse of IBExpert. **Proof = equality of `ExecuteParamKind`**; no narrowing analysis (whether a value
+  *fits* is Firebird's judgement — Contract #3). **Parameters** match `ByName` → `SoleRemainingPair` (the pair
+  rule fires only when exactly ONE row is unmatched on each side); **trigger NEW/OLD** match `ByName` **only**,
+  because a column's identity is its name in the target table and grid position merely follows the order the
+  body mentions it in. Composition lives at the **call site** — never a `bool` flag. `ByName` claims a pair even
+  when the value fails the proof (the rows *are* that parameter). **`LaunchValueCarryOver` does not implement
+  the proof**: values travel through the history's own `ToHistoryValue`/`ApplyHistoryValue`, so *"does this
+  still fit"* has ONE answer in ONE place. `ParameterValue.TypeText` (additive, **schema version NOT bumped** —
+  a bump trips the downgrade protection) puts the history under the same rule. **ONE marking convention**
+  (`ValueOrigin`) for every automatic source, with `Assumed` visibly distinct from `Restored`. Seams:
+  C3.1 `46e5e67` (one derivation for panel + signature) · C3.2 `1b97b0f` (proof rule for stored values) ·
+  C3.3a `178f503` (carry-over + the marker) · C3.3b `8acbb6f` (trigger context + the `Assumed` weight).
+  **Gotchas #256/#257.**
+- **C3.4 — the only open item. DEFERRED by user decision (2026-07-25); do not start it without one.** Generalise
   `PsqlDeclarationExtractor.ExtractSignature` to a **top-level** routine header (its docstring already says it
   is "the same shape"); build the **root frame layout from the AST** when the source is a draft — the D9
   `BuildLocalRoutineFrameVariablesAsync` path one level up — which **removes Seam B's interim** (a draft runs
   today only while its routine *header* is byte-identical to the compiled one, because the root parameter list
-  still comes from the catalog); and surface §12.14's boundaries in the pre-flight.
-- **DoD (the part that cannot be cut — Contract #12).** A `DebuggerFidelityProbe` case proving the **same
-  routine, run from the catalog and as an identical draft, produces identical stops + values** on the live
-  lab. Everything else in Seam C is negotiable; this is not.
+  still comes from the catalog); **resolve `TYPE OF` rather than regress on it** (the catalog handles it today,
+  so the AST path must too — the old "accepted regression" framing is withdrawn); add **`RETURNS`** to the
+  launch signature (only load-bearing once a changed header can run); and surface §12.14's boundaries in the
+  pre-flight. **Why deferred:** after A + B the debugger is usable enough that "how often does a signature
+  change mid-debugging?" is answerable by using it rather than arguing about it.
+- **DoD for C3.4 (the part that cannot be cut — Contract #12).** A `DebuggerFidelityProbe` case proving the
+  **same routine, run from the catalog and as an identical draft, produces identical stops + values** on the
+  live lab. Everything else in C3.4 is negotiable; this is not.
 - **Ryzyka / boundaries (already verified in code — do not re-derive).** All statically detectable from the
-  draft's AST: **recursion** (a self-call reaches `ResolveRoutineAsync`, which fetches the **compiled**
-  source), a **selectable procedure used in its own body**, and a **draft that would not compile** (runs
-  partially — PSQL compile-time validation never happened). Plus one accepted regression: a parameter typed
-  **`TYPE OF …`** resolves from the catalog but throws an explained stop from the AST.
-- **Weryfikacja.** VM tests for the rules; the lab probe above for fidelity. Narrative:
-  `docs/history/19-firebird-debugger.md` (last three sections).
+  draft's AST: **recursion** (a self-call reaches `ResolveRoutineAsync`, which fetches the **compiled** source —
+  and step-**over** is no escape, the server runs the compiled routine too), a **selectable procedure used in
+  its own body**, and a **draft that would not compile** (runs partially — PSQL compile-time validation never
+  happened). ⚠ **Do not "just remove the gate":** `HarnessBuilder` silently skips a read/write name with no
+  declared variable, so a draft-only parameter would go undeclared — visible as *"Column unknown"* in PSQL, but
+  in embedded DSQL a bare name is read as a **column** (#247), i.e. a silently wrong value.
+- **Weryfikacja.** VM + pure tests for the C3 rules (shipped); the lab probe above for C3.4's fidelity.
+  Narrative: `docs/history/19-firebird-debugger.md` (last three sections).
 
 ---
 

@@ -3193,7 +3193,12 @@ exactly as before. What a draft introduces is a new **class** of §F boundary, n
 wherever the *server* resolves the routine **by name**, it gets the **compiled** version while the client
 interprets the draft.
 
-### What remains — Seam C, and nothing else
+### What remained after A + B — Seam C, and the directive to re-scope it first
+
+> **Superseded by the re-analysis below.** This section records what Seam C looked like on the day A and B
+> closed; the session that picked it up was told to re-scope it before writing code, and did — see
+> *"Seam C re-analysed"* and the C3 sections that follow. Kept because the §F boundaries listed here were
+> verified in code and are still the reference.
 
 **Seam C is the only remaining stage of the Draft model.** It is **not started**, and by user directive
 (2026-07-25) the next session **re-analyses its scope before writing any code**: Seams A and B absorbed more
@@ -3226,3 +3231,188 @@ things to re-derive. All three are statically detectable from the draft's own AS
 Plus one accepted regression to disclose: a parameter typed **`TYPE OF …`** resolves from the catalog today but
 throws an explained stop from the AST — accepted, because an explained stop beats a guess (§F), and body locals
 already behave that way.
+
+---
+
+## Seam C re-analysed — the Draft model was already delivered (2026-07-25)
+
+The session that picked Seam C up was told, before writing any code, to verify its scope **against the code
+rather than against the earlier notes**. That re-analysis reversed the milestone's premise, and the reversal is
+the most useful thing in this section.
+
+### What the code said
+
+**The whole App layer was already draft-sourced.** `BuildParameters` reads `ParameterSymbol`s from the draft
+model; `BuildLaunchSignature` too; `TryPrepareTriggerAsync` reads the header from the AST and the NEW/OLD
+columns from the model; the pre-flight scans the edit buffer; the step points come from the draft parse; and
+`DebugLaunchSpec` carries the buffer, its body and its model. Of the six items in the original Seam-6c sketch,
+**four had already shipped in A and B**, and a fifth (Save compiling the draft in place) shipped before the arc
+even began.
+
+**A trigger root reads nothing about itself from the catalog.** `FirebirdDebugExecutor.CreateAsync` passes
+`routineName: null` for a trigger, so `BuildFrameVariablesAsync` skips the parameter query entirely; NEW/OLD
+types come from the **target table**, a different object with its own existence. So for triggers the Draft model
+was already complete, and Seam B's header gate was blocking them for no technical reason at all.
+
+**The one real catalog dependency is the root parameter list** — `ReadProcedureParametersAsync` for a procedure,
+`ReadFunctionParametersAsync` (inputs *and* the `RETURNS` base type) for a function.
+
+### What the gate is actually holding back — and why it is not cosmetic
+
+Worth writing down, because "just remove the gate" is the obvious idea and it is wrong. `BindValues` builds the
+harness variables from the routine context's templates (catalog parameters + AST locals), and
+`HarnessBuilder.Build` looks every read and write up in that index with `TryGetValue`, **silently skipping a
+name it does not find**. A parameter that exists only in the draft would therefore be neither declared, injected,
+nor written back. In pure PSQL that surfaces as an ugly but visible *"Column unknown"*; inside an embedded DSQL
+statement a bare name is read as a **column** (gotcha #247), so if a table in scope happens to have one of that
+name, the statement runs with a **silently wrong value**. That is precisely the class §F forbids, so the gate
+stays until the layout genuinely comes from the draft.
+
+### Two corrections to the earlier plan
+
+**The `TYPE OF` regression is created by Seam C, not fixed by it.** Today `ReadProcedureParametersAsync` resolves
+a `TYPE OF COLUMN X.Y` parameter perfectly well through `RDB$FIELD_SOURCE`; moving the layout to
+`ExtractSignature` would route it into `ResolveBaseTypeAsync`, which throws on any `TYPE …` spec. The earlier
+note called this "one accepted regression"; after A and B it is not acceptable as written — it trades a working
+case for a rarer one — so resolving `TYPE OF` belongs *inside* that work rather than beside it.
+
+**`RETURNS` does not belong in the launch signature yet.** It was flagged as a gap (a draft changing only
+`RETURNS INTEGER → BIGINT` keeps the same signature). But the signature answers *"does the user have a new
+decision to make?"*, and `RETURNS` has no field in the panel — it is not a decision. Under the header gate a
+`RETURNS` change forces a Save anyway, after which the catalog is correct. It becomes load-bearing only when a
+changed header can run, so it moved into C3.4's brief rather than being added prematurely.
+
+### The verdict
+
+The Draft model **is delivered.** What remained was not a foundation but two separable things: **disclosing §F
+boundaries that exist today** (a self-call reaches the compiled source through `ResolveRoutineAsync` — and,
+notably, *step-over does not save you either*, since the server runs the compiled routine too), and **supporting
+a changed signature without a Save**. The user then redirected the milestone: rather than "run a changed
+signature", C3 became **rebuilding the launch configuration after a signature change**, under one rule.
+
+---
+
+## C3 — the launch configuration survives a signature change (2026-07-25, COMPLETE)
+
+### The rule (the user's, and the opposite of IBExpert's)
+
+> The debugger keeps everything it can **prove** is still correct. Everything it cannot prove, it hands back to
+> the user as a decision. It never guesses.
+
+IBExpert lets you restart after a signature change but does not police the configuration, so a parameter that
+went `INTEGER → VARCHAR` keeps a value that no longer means anything and the session can end up unstartable.
+EmberTern does the inverse.
+
+Ratified before any code:
+
+- **Proof of compatibility = equality of `ExecuteParamKind`** (the input-kind family the panel already
+  classifies types into). No narrowing analysis — whether a value *fits* is Firebird's job, not ours.
+- **Matching is two passes for parameters**: by **name** first, then the **sole remaining pair** — the second
+  firing only when exactly one row is left unmatched on each side. Two or more left over on either side carries
+  nothing, because then any pairing is a guess.
+- **Trigger NEW/OLD columns get the name pass only** (below).
+- **A value carried by the pair rule is marked**, because it rests on an assumption.
+- **The proof rule holds everywhere**, including the automatic restore from parameter history.
+
+### C3.1 — one derivation for the panel and its detector (`46e5e67`)
+
+Originally "make the signature a structured record so the diff has data". That scope was **dropped**: once
+carry-over was settled as a function over parameter *rows*, the diff snapshots the panel itself and the signature
+went back to being purely a detector — for which the existing string is adequate. Building the record would have
+been a component with no consumer (#233, Contract #14).
+
+What was underneath it was real. `BuildLaunchSignature` and `BuildParameters` each derived the input list from
+the model separately, and `BuildLaunchSignature` and `TryPrepareTriggerAsync` each derived the trigger facts
+separately — kept in step by hand, with the docstring *claiming* they could not drift. They are now two consumers
+of one derivation (`ReadInputParameters`, `ReadTriggerFacts`), and the key string is byte-identical.
+
+### C3.2 — a stored value is restored only when it provably still fits (`1b97b0f`)
+
+`ParameterValue` gained the **declared type the value was entered under**. That is what turns a restore into a
+proof: a value re-applies only when its recorded type classifies to the target row's kind. The **raw type text**
+is stored rather than a classification, so the proof always follows the current classifier instead of a snapshot
+of it. The field is additive and the settings schema version is deliberately **not** bumped — a bump would trip
+the downgrade protection in `Load` and make older builds refuse the whole file, whereas an unknown member is
+simply ignored.
+
+Three things came out of following the value's whole life-cycle rather than just adding the field:
+
+1. **`ParameterHistoryStore.Record` rebuilds each `ParameterValue` by hand** — it would have dropped the new fact
+   silently, leaving the feature dead behind green row-level tests.
+2. **`ValuesEqual` decides whether a run is a repeat.** Without the type in that comparison, re-running the same
+   text under a changed type would refresh the old entry and keep its **stale** type, so the value the user had
+   just used could never be proven again.
+3. **`ApplyHistoryValue` mutated the row before the value existed** — it un-checked NULL and *then* parsed, so a
+   text that matched the kind but failed to parse left the constructor's default on screen as though someone had
+   entered it. It now parses first and touches the row only on success (gotcha #256).
+
+Accepted consequence, stated rather than hidden: entries written before this carry no type, so the first Quick
+Relaunch after upgrading does not auto-fill. It self-heals on the next run, and only *entered* values are
+affected — a stored NULL would restore the state the row already starts in.
+
+### C3.3a — carry-over, and one marking convention (`178f503`)
+
+`LaunchValueCarryOver` is a pure function over rows and knows nothing about procedures, functions, package members
+or triggers — deliberately, since a rule that had to be told what it was looking at would be a rule with places
+to diverge. It also **does not implement the proof**: a value travels through the same stored form the history
+uses (`ToHistoryValue` → `ApplyHistoryValue`), so there is exactly one answer to *"does this still fit"*, in one
+place.
+
+Two primitives, composed by the caller rather than selected by a flag:
+
+```
+parameters:        ByName → SoleRemainingPair
+trigger NEW/OLD:   ByName
+```
+
+**`ByName` claims the pair whether or not the value survives the proof.** The two rows *are* that parameter; the
+proof only decides whether its value still means anything. Leaving a retyped one unclaimed would let the pair rule
+offer its value to some other row we can already tell apart by name — moving a guess rather than removing it.
+Pinned by a test whose outcome differs without the rule.
+
+The marker is **one convention, not one per mechanism** (the user's directive after C3.2): every automatic source
+reports through the row's `ValueOrigin` — history and same-name carry-over as `Restored`, the pair rule as
+`Assumed` — rendered in one place. It also tells the truth about the value that is there *now*: any edit resets
+the origin, so a row the user has replaced stops claiming it was filled in.
+
+### C3.3b — trigger context, and an assumption that looks like one (`8acbb6f`)
+
+Trigger NEW/OLD rows carry **by name only**, and this is the one place the rules genuinely differ. A parameter has
+positional identity, so a rename can be recognised by the slot it occupies. A NEW/OLD row is a **column**, whose
+identity is its name in the target table and nothing else — its position in the grid merely follows the order the
+body happens to mention it in. "The only row left on each side" would be evidence of nothing: a body that stops
+reading `NEW.STATUS` and starts reading `NEW.STATE` refers to two different columns rather than renaming one.
+
+A changed **target table** resets both grids (the same name on another table is another column). The chosen
+**action** is carried separately — it is a decision, not a value — and **by the event itself rather than its
+index**, since the declared list may have gained or lost an action, which makes the index meaningless while the
+choice is still valid.
+
+The marker gained its second weight in the same seam, at the user's request: `Restored` keeps the quiet italic in
+the subtle reading colour; `Assumed` loses the italic, gains weight, takes the **accent** and says *"assumed"*.
+Accent rather than the warning colour on purpose — it is a "worth a look", not a claim that something is wrong.
+Still the same `ValueOrigin`; the brush arrives as a **key** through `IconBrushConverter` with the theme variant
+(gotcha #250), never as a brush on a VM.
+
+### Verification
+
+Build 0/0 after every seam; the suite grew from 5235 to 5254 across C3.1–C3.3a (+19), plus two more in C3.3b.
+Smoke clean throughout. **User QA on the live app passed for the whole of C3** — parameters, history, carry-over,
+triggers, and the legibility of `Restored` vs `Assumed`.
+
+One coverage note worth keeping honest: the **parameter** rebuild is reachable only through a compile that
+succeeds, i.e. a live server, so its call site is manual QA — the same boundary the launch-signature tests already
+document. The **trigger** rebuild needs no server (a body edit does not touch the header gate), so that one *is*
+pinned at the surface: the panel really is rebuilt, the proven value comes with it, and the newly-read column is
+left for the user.
+
+### What remains — C3.4 only, and deliberately deferred
+
+**C3.4** is the original engine work: the root frame layout from the AST header, `TYPE OF` resolved properly,
+`RETURNS` added to the signature, the §F boundaries surfaced in the pre-flight, and the mandatory
+`DebuggerFidelityProbe` case proving that a routine run from the catalog and as an identical draft produces
+identical stops and values. Only then does the header gate come off.
+
+It is **deferred by user decision** (2026-07-25), and the reason is a good one: after A and B the debugger is
+usable enough that the real question — how often a signature actually changes mid-debugging — is answerable by
+using it rather than by arguing about it. If practice says it hurts, C3.4 returns as its own independent stage.
