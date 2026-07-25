@@ -75,6 +75,14 @@ internal sealed class NavigationController
     // Gap between the pointer and the card, so the card never sits under the cursor itself.
     private const double HoverGap = 16;
 
+    // The bulb waits out caret movement. Without this it would blink on and off as the caret crosses a
+    // squiggle on its way somewhere, which is precisely the "look at me" behaviour a discoverability
+    // affordance must not have. Slightly longer than the hover dwell: hovering is a question the user
+    // asked, whereas the bulb appears uninvited and so should be the more patient of the two.
+    private static readonly TimeSpan BulbDwell = TimeSpan.FromMilliseconds(450);
+    // Gap between the end of the line's text and the bulb.
+    private const double BulbGap = 10;
+
     private readonly TextEditor _editor;
     private readonly Func<SemanticModel?> _model;
     // The language service's CACHED, version-matched diagnostics — an input, never recomputed here (the
@@ -106,6 +114,13 @@ internal sealed class NavigationController
     // The code-action menu (Ctrl+., Stage Q). OverlayLayer-hosted for the same reason as the hover card.
     private Control? _codeActionMenu;
     private ListBox? _codeActionList;
+
+    // The code-action light bulb (Q3) — a DISCOVERABILITY surface only. It decides whether to appear by
+    // calling the same GetActionsAtCaret the menu does, and clicking it runs the same ShowCodeActions;
+    // it owns no way to obtain or perform an action.
+    private Control? _bulb;
+    private int _bulbLine = -1;               // the document line it is currently shown for
+    private readonly DispatcherTimer _bulbDwell;
 
     // Inline rename popup (M5), created lazily on first F2.
     private Popup? _renamePopup;
@@ -151,6 +166,9 @@ internal sealed class NavigationController
 
         _hoverDwell = new DispatcherTimer { Interval = HoverDwell };
         _hoverDwell.Tick += OnHoverDwellElapsed;
+
+        _bulbDwell = new DispatcherTimer { Interval = BulbDwell };
+        _bulbDwell.Tick += OnBulbDwellElapsed;
     }
 
     /// <summary>Attaches hover + navigation to <paramref name="editor"/>.</summary>
@@ -205,6 +223,10 @@ internal sealed class NavigationController
         editor.DoubleTapped += c.OnDoubleTapped;
         // An edit invalidates the card: it describes an offset in a document that just changed.
         editor.TextChanged += c.OnTextChanged;
+        // The code-action bulb follows the caret's LINE (dwelled, so crossing a squiggle does not blink
+        // it) and must be repositioned when the view scrolls under it.
+        editor.TextArea.Caret.PositionChanged += c.OnCaretMovedForBulb;
+        editor.TextArea.TextView.ScrollOffsetChanged += c.OnScrollForBulb;
         return c;
     }
 
@@ -221,6 +243,11 @@ internal sealed class NavigationController
         _editor.KeyDown -= OnCommandKey;
         _editor.DoubleTapped -= OnDoubleTapped;
         _editor.TextChanged -= OnTextChanged;
+        _editor.TextArea.Caret.PositionChanged -= OnCaretMovedForBulb;
+        _editor.TextArea.TextView.ScrollOffsetChanged -= OnScrollForBulb;
+        _bulbDwell.Stop();
+        _bulbDwell.Tick -= OnBulbDwellElapsed;
+        HideBulb();
         _hoverDwell.Stop();
         _hoverDwell.Tick -= OnHoverDwellElapsed;
         HideHover();
@@ -253,7 +280,15 @@ internal sealed class NavigationController
         if (_pointerInside) UpdateNavigationAffordance(e.KeyModifiers);
     }
 
-    private void OnTextChanged(object? sender, EventArgs e) => HideHover();
+    private void OnTextChanged(object? sender, EventArgs e)
+    {
+        HideHover();
+        // The diagnostics now describe text that no longer exists, so the bulb would be offering a fix
+        // for a problem that may already be gone. Hide it NOW and let the recomputed diagnostics decide
+        // whether it comes back (RefreshCodeActionIndicator, called on ModelUpdated).
+        HideBulb();
+        ScheduleBulb();
+    }
 
     /// <summary>Clears both cues — the pointer left, or a click/navigation happened.</summary>
     private void Clear()
@@ -589,6 +624,163 @@ internal sealed class NavigationController
 
         list.Focus();
         return true;
+    }
+
+    // ── The light bulb (Q3) — discoverability ONLY ───────────────────────────────────────────────
+    //
+    // Ctrl+. ─┐
+    //          ├── GetActionsAtCaret() ──► menu ──► InvokeCodeAction()
+    // bulb   ─┘
+    //
+    // The bulb contributes nothing to that flow. It answers one question — "is there at least one
+    // action here?" — with the same call the menu uses, and its click is literally ShowCodeActions.
+
+    /// <summary>Re-evaluates the bulb NOW, without waiting out the dwell. Called when the diagnostics
+    /// have been recomputed: that is the moment a just-applied fix must stop being offered, and a
+    /// timer would leave the stale bulb on screen for a visible instant.</summary>
+    public void RefreshCodeActionIndicator()
+    {
+        if (_detached) return;
+        _bulbDwell.Stop();
+        UpdateBulb();
+    }
+
+    /// <summary>Test seam: whether the bulb is currently offered (headless probe).</summary>
+    internal bool IsCodeActionIndicatorVisible => _bulb is not null;
+
+    private void OnCaretMovedForBulb(object? sender, EventArgs e) => ScheduleBulb();
+
+    // Scrolling does not change WHETHER there are actions, only where the line is — so reposition
+    // without re-evaluating (and without the dwell, or the bulb would lag behind the text).
+    private void OnScrollForBulb(object? sender, EventArgs e)
+    {
+        if (_bulb is not null) PositionBulb(_bulbLine);
+    }
+
+    private void ScheduleBulb()
+    {
+        if (_detached) return;
+        _bulbDwell.Stop();
+        _bulbDwell.Start();
+    }
+
+    private void OnBulbDwellElapsed(object? sender, EventArgs e)
+    {
+        _bulbDwell.Stop();
+        UpdateBulb();
+    }
+
+    private void UpdateBulb()
+    {
+        if (_detached || _editor.IsReadOnly)
+        {
+            HideBulb();
+            return;
+        }
+
+        var doc = _editor.Document;
+        if (doc is null || GetActionsAtCaret(_editor.CaretOffset).Count == 0)
+        {
+            HideBulb();
+            return;
+        }
+
+        // Anchored to the LINE, not the caret column: while the caret moves along a line that still has
+        // actions, the bulb must sit perfectly still. Re-showing it in place would read as a flicker.
+        int line = doc.GetLineByOffset(_editor.CaretOffset).LineNumber;
+        if (_bulb is not null && line == _bulbLine)
+        {
+            PositionBulb(line);
+            return;
+        }
+
+        HideBulb();
+        ShowBulb(line);
+    }
+
+    private void ShowBulb(int line)
+    {
+        var overlay = OverlayLayer.GetOverlayLayer(_editor);
+        if (overlay is null) return;
+
+        var icon = new Controls.SvgIcon
+        {
+            Data = _editor.FindResource("Icon.Lightbulb") as Geometry,
+            Width = 13,
+            Height = 13,
+            Foreground = _editor.FindResource("SubtleForegroundBrush") as IBrush,
+        };
+        var button = new Border
+        {
+            Child = icon,
+            Background = Brushes.Transparent, // a hit target, not a painted chip
+            Padding = new Thickness(2),
+            CornerRadius = new CornerRadius(3),
+            Cursor = HandCursor,
+            Opacity = 0.5,                    // present but easy to ignore — it appeared uninvited
+            [ToolTip.TipProperty] = UiStrings.CodeActionsTooltip,
+        };
+        button.PointerEntered += (_, _) =>
+        {
+            button.Opacity = 1.0;
+            icon.Foreground = _editor.FindResource("AccentIconBrush") as IBrush;
+        };
+        button.PointerExited += (_, _) =>
+        {
+            button.Opacity = 0.5;
+            icon.Foreground = _editor.FindResource("SubtleForegroundBrush") as IBrush;
+        };
+        // The ONE flow: no separate retrieval, no separate invocation.
+        button.PointerPressed += (_, e) =>
+        {
+            e.Handled = true;
+            ShowCodeActions();
+        };
+
+        overlay.Children.Add(button);
+        _bulb = button;
+        _bulbLine = line;
+        PositionBulb(line);
+    }
+
+    // Past the end of the line's text — the same placement idiom as the debugger's inline values, chosen
+    // because it provably never covers code and never shifts the document. The left gutter is not
+    // available: every SQL surface shows line numbers there.
+    private void PositionBulb(int line)
+    {
+        if (_bulb is not { } bulb) return;
+        var overlay = OverlayLayer.GetOverlayLayer(_editor);
+        var doc = _editor.Document;
+        if (overlay is null || doc is null || line < 1 || line > doc.LineCount)
+        {
+            HideBulb();
+            return;
+        }
+
+        var textView = _editor.TextArea.TextView;
+        var documentLine = doc.GetLineByNumber(line);
+        Rect? last = null;
+        var segment = new TextSegment { StartOffset = documentLine.Offset, Length = documentLine.Length };
+        foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, segment)) last = rect;
+        if (last is not { } r)
+        {
+            HideBulb(); // the line is scrolled out of view — nothing to point at
+            return;
+        }
+
+        var anchor = textView.TranslatePoint(new Point(r.Right + BulbGap, r.Top), overlay);
+        Canvas.SetLeft(bulb, anchor?.X ?? 0);
+        Canvas.SetTop(bulb, anchor?.Y ?? 0);
+    }
+
+    private void HideBulb()
+    {
+        if (_bulb is { } bulb)
+        {
+            OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(bulb);
+            _bulb = null;
+        }
+        _bulbLine = -1;
     }
 
     private void OnCodeActionMenuKey(object? sender, KeyEventArgs e)

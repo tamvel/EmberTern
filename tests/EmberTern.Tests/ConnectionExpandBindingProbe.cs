@@ -1171,6 +1171,22 @@ public sealed class ConnectionExpandBindingProbe
             // keyed geometry, so the StaticResource build-validation above does not cover it).
             var dbgIcon = new EmberTern.App.Controls.DebuggerIcon();
             Assert.NotNull(dbgIcon);
+
+            // Stage Q / Q3 — the code-action bulb is built in CODE (an overlay control, not XAML), so
+            // its geometry and both of its brush states are resolved at runtime and nothing else would
+            // catch a typo in a key.
+            Assert.True(
+                app.Resources.TryGetResource("Icon.Lightbulb", null, out var bulb) && bulb is Avalonia.Media.Geometry,
+                "code-action bulb geometry 'Icon.Lightbulb' does not resolve");
+            foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
+            {
+                Assert.True(
+                    app.Resources.TryGetResource("SubtleForegroundBrush", theme, out var rest) && rest is Avalonia.Media.IBrush,
+                    $"SubtleForegroundBrush (bulb at rest) does not resolve in {theme}");
+                Assert.True(
+                    app.Resources.TryGetResource("AccentIconBrush", theme, out var hot) && hot is Avalonia.Media.IBrush,
+                    $"AccentIconBrush (bulb hovered) does not resolve in {theme}");
+            }
         }, CancellationToken.None);
     }
 

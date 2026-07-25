@@ -67,6 +67,8 @@
        "m…" sub-paths are re-anchored to absolute M + explicit l so figure
        concatenation doesn't carry the previous endpoint. -->
   <StreamGeometry x:Key="Icon.Hammer">M15 12 l-9.373 9.373a1 1 0 0 1-3.001-3L12 9 M18 15 l4-4 M21.5 11.5 l-1.914-1.914A2 2 0 0 1 19 8.172v-.344a2 2 0 0 0-.586-1.414l-1.657-1.657A6 6 0 0 0 12.516 3H9l1.243 1.243A6 6 0 0 1 12 8.485V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5</StreamGeometry>
+  <!-- Lightbulb (Lucide lightbulb): the code-action affordance (Stage Q / Q3). Verbatim. -->
+  <StreamGeometry x:Key="Icon.Lightbulb">M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5 M9 18h6 M10 22h4</StreamGeometry>
   <!-- Folder-plus (Lucide folder-plus): all sub-paths start absolute M — verbatim. -->
   <StreamGeometry x:Key="Icon.FolderPlus">M12 10v6 M9 13h6 M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z</StreamGeometry>
   <!-- New Table — composed from Lucide primitives (no `table-plus` in Lucide core):

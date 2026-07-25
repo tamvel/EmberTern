@@ -78,7 +78,7 @@ internal static class SqlEditorBehavior
         // model + cached diagnostics. Owns the Ctrl+Click gesture; a name-based open is the fallback for
         // editors the model can't fully resolve (e.g. a body-only Easy-mode trigger editor whose CREATE
         // header isn't in the text).
-        NavigationController.Attach(
+        var navigation = NavigationController.Attach(
             editor,
             () => completion.Model,
             // The cached, version-matched diagnostics — the same list the squiggles paint from, so the
@@ -93,6 +93,11 @@ internal static class SqlEditorBehavior
             // Debugger data tips (spec §9.4): the paused frame's value for the variable under the pointer.
             // Null on every non-debugger surface, so the SQL/object editors are unaffected.
             debugValueLookup: debugValueLookup);
+
+        // Stage Q / Q3: the code-action bulb re-evaluates the moment the diagnostics are recomputed —
+        // which is exactly when a just-applied fix must stop being offered. Waiting for its own dwell
+        // would leave a stale bulb proposing a repair for a problem that no longer exists.
+        completion.ModelUpdated += (_, _) => navigation.RefreshCodeActionIndicator();
 
         // Stage 7 / S3: diagnostic squiggles — a wavy underline under each Diagnostic the pure-Core
         // DiagnosticsEngine produced, computed on the same background pass the completion controller

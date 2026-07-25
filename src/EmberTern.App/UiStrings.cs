@@ -512,6 +512,8 @@ internal static class UiStrings
     // was written when nothing was, and discards it. NoConnectionMessage above covers the no-DDL-executor
     // case; this one covers "the buffer holds nothing to compile".
     public const string EditorNothingToCompile = "There is nothing to compile.";
+    // The code-action light bulb (Stage Q / Q3) — a discreet affordance for the same menu Ctrl+. opens.
+    public const string CodeActionsTooltip = "Show code actions · Ctrl+.";
     public const string QueryCancelledMessage = "Query cancelled.";
     public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
     // Truncated-Preview notice bar — loud + actionable (A.6). {0} = rows loaded so far
