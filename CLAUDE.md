@@ -208,8 +208,8 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT STATE (2026-07-25) — IN FLIGHT: "a session runs the code it was started from" (Seam A DONE, B+C
-  next).** After several days of real use the user reported the coherence gap: editing during a session was
+- **⭐ CURRENT STATE (2026-07-25) — IN FLIGHT: "a session runs the code it was started from" (Seams A + B DONE,
+  C next).** After several days of real use the user reported the coherence gap: editing during a session was
   allowed, but the next step still executed the launched version — *I see code A, the debugger executes code B*.
   Rule adopted (IBExpert's): **the first change to the text ends the session** — no save, no step, no restart
   needed. **Ratified split, do not re-litigate: `Save` is the ONLY operation that writes to the database;
@@ -230,19 +230,38 @@ noted.
   path share `ClearSessionSurfaces()`. **Save is unchanged** (the edit-end arms `_resumeAfterSave` exactly as
   the save-triggered stop does, so Save from `Editing` still compiles → resumes); its *"saving ends the running
   session"* confirm is now near-unreachable but **kept** for the one remaining window (Ctrl+S while a step is on
-  the wire) rather than deleted on a reachability argument. **⚠ INTERIM, remove it in Seam B (don't relax it):**
-  `CanLaunch` + the new `CanRestart` require a **clean buffer** — Restart runs `_source` (the last *compiled*
-  text), so offering it behind an edited editor is the same "I see A / it executes B" via a button instead of a
-  step; while dirty, Save is the way into a session. **⚠ gotcha #253** came out of this and generalises: ending
+  the wire) rather than deleted on a reachability argument. **⭐ RATIFIED on acceptance: ending the session is
+  PERMANENT** — undoing the edit back to byte-identical text must never resurrect it; Restart may re-enable, but
+  only as a deliberate new start (pinned by a test). **⚠ gotcha #253** came out of this and generalises: ending
   an async resource under an in-flight background op doesn't just race — the op throws on return and a generic
   `catch` reports it as a **fabricated** failure of the work (here: a red Firebird "fault" for something the
   user did on purpose); the fix is to let the op's own tail end it, with every `catch` asking "was this
   requested?" first.
-  **Seam B (VM — one "current program": `_baseline` vs the buffer's parse on a debounce; marker/breakpoint
-  snapping/pre-flight/panel all read the draft; Restart ≡ Save-without-compile through the shared tail) and
-  Seam C (Core+Firebird — `ExtractSignature` generalised to a top-level header, root frame layout from the AST
-  when the source is a draft, pre-flight surfaces the new §F boundaries, **mandatory `DebuggerFidelityProbe`
-  case: same routine from the catalog vs as an identical draft ⇒ identical stops+values**) are NOT started.**
+  **⭐ Seam B — DONE (build 0/0; 5235 green; smoke clean; awaits live QA).** The VM's duality is gone:
+  **`_baseline`** = what the DB holds (only `IsSourceDirty` + Save read it), **`_editBuffer` + its parse = THE
+  PROGRAM** — markers, breakpoint snapping, pre-flight, launch panel and `DebugLaunchSpec` all read it, so
+  **Restart starts a session on the edited text with NO compile and NO write to the database.** Re-parse is
+  **lazy, NOT debounced** (a `DispatcherTimer` re-introduces a path no headless test can reach, #251): an edit
+  marks the program stale, and the few places that need a current parse ask (`EnsureProgramCurrent` — gutter
+  click, launch, save); command gates never do. The two duplicated parse blocks collapsed into one
+  `ReparseProgram` (+ `AdoptBaseline` as the only place the two texts are declared equal). **Restart ≡ Save
+  without the compile:** `SaveAsync`'s tail became the shared `ResumeOnCurrentProgramAsync` (ensure current →
+  is the panel still describing this routine? → rebuild inputs if not → re-run pre-flight → relaunch), used by
+  both. **Breakpoints survive the loop** via two *provable* filters (never a guess, §0): an offset in the edit's
+  **unchanged prefix** still starts the very statement it was set on (kept); one below it may have shifted
+  (dropped); and after a re-parse an offset that no longer **starts** a step point is dropped. `AdoptSavedSource`'s
+  blanket clear was deleted (Contract #20). **⚠ gotcha #254:** a "before" value must be REMEMBERED where the
+  decision was made (`_panelSignature`), never re-derived at comparison time from state that now follows the
+  user's input — the old `var configBefore = BuildLaunchSignature()` would, after a mid-flight re-parse, compare
+  the new value **with itself** and pass a genuinely changed parameter list as "still valid".
+  **⚠ INTERIM shipped in B, and Seam C REMOVES it (don't relax it):** a draft runs only while its routine
+  **HEADER** is byte-identical to the compiled one (proven without a parse — the common prefix reaches the
+  baseline's body start), because the root **parameter list still comes from the catalog**. Body edits — the
+  debugging loop — always qualify; a header edit blocks with a status naming Save.
+  **Seam C (Core+Firebird) is NOT started — `ExtractSignature` generalised to a top-level header, root frame
+  layout from the AST when the source is a draft (⇒ the header interim disappears), pre-flight surfaces the new
+  §F boundaries, **mandatory `DebuggerFidelityProbe` case: same routine from the catalog vs as an identical
+  draft ⇒ identical stops+values**.**
   **§F boundaries already identified for B+C (verified in code, all statically detectable from the draft's AST):**
   **recursion** (a self-call falls through `ResolveRoutine`'s local+package branches to `ResolveRoutineAsync`,
   which fetches the **compiled** source ⇒ step-into would silently descend into old code), a **selectable

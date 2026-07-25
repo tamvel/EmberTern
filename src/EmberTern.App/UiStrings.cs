@@ -1844,7 +1844,11 @@ internal static class UiStrings
     // toolbar going grey is the visual cue, this is the reason. (Until Restart can run the edited text without
     // saving, Save is the way back into a session — hence naming it here.)
     public const string DebuggerStatusEndedByEdit =
-        "Session ended — the code changed. Save (Ctrl+S) to compile and debug the current code.";
+        "Session ended — the code changed. Restart (Ctrl+Shift+F5) runs the current code without saving.";
+    // The routine's HEADER changed, so the parameter list the engine reads from the catalog no longer describes
+    // this text and a draft-sourced session cannot be started from it yet. Names the one way forward.
+    public const string DebuggerStatusEndedByHeaderEdit =
+        "Session ended — the routine header changed. Save (Ctrl+S) to compile and debug the new signature.";
     public const string DebuggerUnsavedSourceFormat = "{0} — modified source (not compiled)";
     // Variables panel.
     public const string DebuggerVariablesHeader = "Variables";

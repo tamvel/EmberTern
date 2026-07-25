@@ -86,7 +86,15 @@ public sealed partial class DebuggerTabViewModel
     private readonly Func<string, CancellationToken, Task<IReadOnlyList<ColumnSpec>>>? _columnsProvider;
 
     // Parsed once during preparation (the strict whole-routine parse — gotcha #238), then reused at launch.
-    private string? _source;
+    // What the DATABASE holds — the last text loaded or compiled. Its ONLY jobs are deciding whether the tab
+    // is dirty and being the text Save compares against; it is deliberately NOT what the debugger runs. The
+    // program the session is built from is the edit buffer's parse (see EnsureProgramCurrent).
+    private string? _baseline;
+
+    // Where the baseline's routine BODY begins. An edit whose first divergence from the baseline lies at or
+    // beyond this offset leaves the routine HEADER byte-identical — which is what lets a draft-sourced session
+    // still take its parameter list from the catalog (see CanRunCurrentProgram).
+    private int _baselineBodyStart;
     private BlockStatement? _body;
     private SemanticModel? _model;
     private IReadOnlyList<IExecutableStatement> _stepPoints = Array.Empty<IExecutableStatement>();
@@ -165,8 +173,8 @@ public sealed partial class DebuggerTabViewModel
     [ObservableProperty]
     private string _sourceText = string.Empty;
 
-    // The root routine's editable text. Separate from _source (the last text loaded/saved, i.e. what the
-    // database currently holds and what the running session was compiled from), so stepping — which
+    // The root routine's editable text — and, since Seam B, THE PROGRAM: the parse below is derived from this,
+    // and a session is built from it. Separate from _baseline (what the database holds) so stepping — which
     // overwrites the DISPLAY on every frame change — can never clobber an unsaved edit.
     private string _editBuffer = string.Empty;
 
@@ -487,10 +495,6 @@ public sealed partial class DebuggerTabViewModel
     /// cannot save, so it is read-only until the root frame is selected again.</summary>
     public bool IsSourceEditable => _body is not null && IsViewingRootSource;
 
-    /// <summary>True while the edit buffer differs from the text the database holds — i.e. there is unsaved
-    /// work in this tab. A live session does not affect this: the session runs the COMPILED routine, the
-    /// buffer is the next work cycle.</summary>
-    public bool IsSourceDirty => !string.Equals(_editBuffer, _source ?? string.Empty, StringComparison.Ordinal);
 
     /// <summary>Called by the view when the user types in the source editor. Updates the buffer <em>and</em>
     /// <see cref="SourceText"/> together, so the VM and the editor never disagree — otherwise the next step
@@ -501,8 +505,11 @@ public sealed partial class DebuggerTabViewModel
         if (!IsSourceEditable) return; // a callee frame's source is not ours to edit
         text ??= string.Empty;
         if (string.Equals(_editBuffer, text, StringComparison.Ordinal)) return;
+        int unchangedPrefix = CommonPrefixLength(_editBuffer, text);
         _editBuffer = text;
         SourceText = text;
+        _programStale = true; // the parse now describes older text — refreshed on demand (EnsureProgramCurrent)
+        PruneBreakpointsFrom(unchangedPrefix);
         NotifySourceDirtyChanged();
         OnSourceChanged();
     }
@@ -516,6 +523,10 @@ public sealed partial class DebuggerTabViewModel
         LaunchCommand.NotifyCanExecuteChanged();
         RestartCommand.NotifyCanExecuteChanged();
     }
+
+    /// <summary>True while the edit buffer differs from the text the database holds — i.e. there is unsaved
+    /// work in this tab.</summary>
+    public bool IsSourceDirty => !string.Equals(_editBuffer, _baseline ?? string.Empty, StringComparison.Ordinal);
 
     // ── The one rule: a session runs the code it was started from ─────────────────────────────────
     //
@@ -569,7 +580,9 @@ public sealed partial class DebuggerTabViewModel
         // a Save during a live session does (SaveAsync reads this). An explicit Stop clears it.
         _resumeAfterSave = true;
         Phase = DebuggerPhase.Editing;
-        StatusText = UiStrings.DebuggerStatusEndedByEdit;
+        StatusText = CanRunCurrentProgram
+            ? UiStrings.DebuggerStatusEndedByEdit
+            : UiStrings.DebuggerStatusEndedByHeaderEdit;
     }
 
     // Drops the current-statement marker (and, through SetCurrentMarker, the inline values) + repaints. Guarded
@@ -709,6 +722,129 @@ public sealed partial class DebuggerTabViewModel
     [RelayCommand]
     private void ToggleAdvanced() => IsAdvancedExpanded = !IsAdvancedExpanded;
 
+    // ── The current program ───────────────────────────────────────────────────────────────────────
+    //
+    // ONE program, and it is the edit buffer's parse — markers, breakpoint snapping, the pre-flight, the launch
+    // panel and the session spec all read it. Before Seam B these read the parse of the DATABASE text while the
+    // editor could show something else, which is the same incoherence this milestone removes, one level down:
+    // a breakpoint would snap against text nobody was looking at.
+    //
+    // Re-parsing is LAZY, not debounced: a timer would re-introduce a code path no headless test can reach
+    // (gotcha #251), and there is nothing to repaint from the model between keystrokes anyway. Instead the edit
+    // marks the program stale and the handful of places that genuinely need a current parse ask for one — a
+    // gutter click, a launch, a save. Command gates never do (they must stay cheap and side-effect free).
+
+    private bool _programStale;
+
+    /// <summary>The parsed routine of the current program — the one <see cref="DdlStatement"/> with a body.</summary>
+    private DdlStatement? RootDdl
+        => _model?.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);
+
+    // The database now holds this text: it becomes the baseline AND the buffer, and the program is re-parsed
+    // from it. Called on load and after a successful compile — the two moments the two texts are the same.
+    private void AdoptBaseline(string sql)
+    {
+        _baseline = sql;
+        _editBuffer = sql;
+        SourceText = sql;
+        ReparseProgram();
+        _baselineBodyStart = _body?.Start ?? sql.Length; // no body ⇒ treat the whole text as header (never runs)
+        NotifySourceDirtyChanged();
+    }
+
+    // Brings the parse up to date with the buffer, if an edit has moved it. Cheap when nothing changed.
+    private void EnsureProgramCurrent()
+    {
+        if (!_programStale) return;
+        ReparseProgram();
+    }
+
+    // The ONE parse. The strict whole-routine parse: CREATE PROCEDURE stays ONE DdlStatement whose Body is bound
+    // with its declares in scope, so body identifiers resolve to Variable/Parameter symbols (gotcha #238). Built
+    // without metadata — DiagnosticsEngine's object/column categories stay silent (conservative), which is right
+    // for a routine whose objects this view cannot resolve anyway.
+    private void ReparseProgram()
+    {
+        _programStale = false;
+        _model = SemanticModel.Build(SqlParser.Parse(_editBuffer).Root);
+        var ddl = RootDdl;
+        _body = ddl?.Body;
+        // D-function: a function launched as the debug root — STANDALONE or a PACKAGE member (Seam D). The
+        // launcher (via DebugLaunchSpec.IsFunction) builds a function root frame; when a package context is also
+        // present the executor keys it by package (D1's combined path). Detected purely from the parsed source
+        // (a packaged function member's source is reconstructed as CREATE FUNCTION), so packageName is NOT part
+        // of the condition — the ONLY difference standalone↔packaged stays the presence of _packageName.
+        _isFunction = ddl?.ObjectKind == DdlObjectKind.Function;
+        _stepPoints = _body is null
+            ? Array.Empty<IExecutableStatement>()
+            : _body.DescendantNodesAndSelf().OfType<IExecutableStatement>().ToList();
+        OnPropertyChanged(nameof(IsSourceEditable)); // a parsed body is what makes the source ours to edit
+        DropBreakpointsThatNoLongerStartAStatement();
+    }
+
+    // A breakpoint is an offset that snapped to a step point. After a re-parse an offset that no longer STARTS
+    // one describes nothing, so it goes — verified against the new parse rather than assumed either way (§0:
+    // never pretend to know where it moved). Offsets inside the edit's unchanged prefix survive this by
+    // construction, which is what keeps breakpoints across an ordinary body edit (see OnSourceChanged).
+    private void DropBreakpointsThatNoLongerStartAStatement()
+    {
+        if (_breakpoints.Offsets.Count == 0) return;
+        var starts = new HashSet<int>();
+        foreach (var sp in _stepPoints) starts.Add(sp.Start);
+        bool removed = false;
+        foreach (var offset in _breakpoints.Offsets.ToList())
+        {
+            if (starts.Contains(offset)) continue;
+            _breakpoints.Remove(offset);
+            removed = true;
+        }
+        if (!removed) return;
+        RebuildBreakpointPanel();
+        OnPropertyChanged(nameof(BreakpointOffsets));
+        DebugMarkersChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // Breakpoints whose offset lies in the part of the text the edit did NOT touch still point at exactly the
+    // statement they were set on — the bytes before the first divergence are identical, so this is a proof, not
+    // a guess. Everything at or after it is dropped (§0). This is what lets the Edit → Restart → Test loop keep
+    // its breakpoints when you edit further down the routine.
+    private void PruneBreakpointsFrom(int unchangedPrefix)
+    {
+        if (_breakpoints.Offsets.Count == 0) return;
+        bool removed = false;
+        foreach (var offset in _breakpoints.Offsets.ToList())
+        {
+            if (offset < unchangedPrefix) continue;
+            _breakpoints.Remove(offset);
+            removed = true;
+        }
+        if (!removed) return;
+        RebuildBreakpointPanel();
+        OnPropertyChanged(nameof(BreakpointOffsets));
+        DebugMarkersChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static int CommonPrefixLength(string a, string b)
+    {
+        int max = Math.Min(a.Length, b.Length), i = 0;
+        while (i < max && a[i] == b[i]) i++;
+        return i;
+    }
+
+    /// <summary>Whether a session may be started from the program as it stands.
+    /// <para>A clean buffer always may. A DRAFT may too — the debugger never asks the server to run the compiled
+    /// routine, it interprets the AST and runs each statement through a harness that never names it — with one
+    /// remaining dependency: the root frame's parameter list still comes from the catalog, which describes the
+    /// COMPILED header. So a draft runs while its routine HEADER is byte-identical to the compiled one, which is
+    /// exactly what an unchanged prefix reaching the body proves. Body edits — the debugging loop — always
+    /// qualify.</para>
+    /// <para><b>Seam C removes this condition</b> by taking the root layout from the AST header (the path D9
+    /// already uses for a local <c>DECLARE PROCEDURE</c>, which has no catalog row at all); it is a temporary
+    /// dependency on the catalog, not a rule about drafts.</para></summary>
+    private bool CanRunCurrentProgram
+        => !IsSourceDirty
+           || CommonPrefixLength(_baseline ?? string.Empty, _editBuffer) >= _baselineBodyStart;
+
     // ── Preparation ───────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Fetches + parses the routine, derives the launch panel (parameters + pre-flight). Kicked once
@@ -735,31 +871,9 @@ public sealed partial class DebuggerTabViewModel
             return;
         }
 
-        // _source = what the database holds (the saved baseline the running session is compiled from);
-        // _editBuffer = the editable working copy. They start equal, so the tab opens clean.
-        _source = source;
-        _editBuffer = source;
-        SourceText = source;
-        OnPropertyChanged(nameof(IsSourceDirty));
+        AdoptBaseline(source); // what the database holds == the buffer == the program; the tab opens clean
 
-        // The strict whole-routine parse: CREATE PROCEDURE stays ONE DdlStatement whose Body is bound with its
-        // declares in scope, so body identifiers resolve to Variable/Parameter symbols (gotcha #238). Built
-        // without metadata — DiagnosticsEngine's object/column categories stay silent (conservative), which is
-        // exactly right for a routine that already compiled.
-        _model = SemanticModel.Build(SqlParser.Parse(source).Root);
-        var ddl = _model.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);
-        _body = ddl?.Body;
-        OnPropertyChanged(nameof(IsSourceEditable)); // a parsed body is what makes the source ours to edit
-        // D-function: a function launched as the debug root — STANDALONE or a PACKAGE member (Seam D). The
-        // launcher (via DebugLaunchSpec.IsFunction) builds a function root frame; when a package context is also
-        // present the executor keys it by package (D1's combined path). Detected purely from the parsed source
-        // (a packaged function member's source is reconstructed as CREATE FUNCTION), so packageName is NOT part
-        // of the condition — the ONLY difference standalone↔packaged stays the presence of _packageName.
-        _isFunction = ddl?.ObjectKind == DdlObjectKind.Function;
-        _stepPoints = _body is null
-            ? Array.Empty<IExecutableStatement>()
-            : _body.DescendantNodesAndSelf().OfType<IExecutableStatement>().ToList();
-
+        var ddl = RootDdl;
         // A relation trigger launches with NEW/OLD context editors instead of parameters (§8.1); a procedure/
         // function keeps the plain parameter panel. TriggerHeaderReader refuses a DB-level / DDL trigger.
         if (ddl is not null && ddl.ObjectKind == DdlObjectKind.Trigger)
@@ -814,6 +928,7 @@ public sealed partial class DebuggerTabViewModel
         _triggerColumnTypes = columnTypes;
         TriggerEditor = new TriggerContextEditorViewModel(header, columns, columnTypes, _connectionId, _historyStore);
         IsTriggerMode = true;
+        _panelSignature = BuildLaunchSignature(); // this editor describes THIS trigger + these NEW/OLD columns
         return true;
     }
 
@@ -848,12 +963,13 @@ public sealed partial class DebuggerTabViewModel
         Parameters = new ExecuteProcedureDialogViewModel(
             inputs, RoutineName, _connectionId,
             objectKind: _isFunction ? "Function" : "Procedure", historyStore: _historyStore);
+        _panelSignature = BuildLaunchSignature(); // this panel describes THIS routine
     }
 
     private void BuildPreflight(bool hasStepPoints)
     {
         Preflight.Clear();
-        foreach (var item in DebugPreflight.Scan(_model!, _source!, hasStepPoints))
+        foreach (var item in DebugPreflight.Scan(_model!, _editBuffer, hasStepPoints))
         {
             Preflight.Add(item);
         }
@@ -881,17 +997,17 @@ public sealed partial class DebuggerTabViewModel
         return Task.CompletedTask;
     }
 
-    // A launch runs _source / _body / _model — the last COMPILED text. While the buffer is dirty that is not
-    // what the editor shows, so starting would execute code the user cannot see (see CanRestart: same rule,
-    // same interim, and it disappears the same way once a session can be started from the edited text).
+    // A launch runs the CURRENT program — the buffer and its parse — so a draft is a normal input, not a
+    // special case. The one condition is CanRunCurrentProgram (an unchanged routine header, until Seam C).
     private bool CanLaunch => Phase is DebuggerPhase.ReadyToLaunch or DebuggerPhase.Idle
-                              && !LaunchBlocked && _body is not null && !IsSourceDirty
+                              && !LaunchBlocked && _body is not null && CanRunCurrentProgram
                               && (Parameters is not null || (IsTriggerMode && TriggerEditor is not null));
 
     [RelayCommand(CanExecute = nameof(CanLaunch))]
     private async Task LaunchAsync()
     {
-        if (_body is null || _model is null || _source is null) return;
+        EnsureProgramCurrent(); // the session is built from what the editor shows, so parse it first
+        if (_body is null || _model is null) return;
 
         // Collect the root-frame seed + (for a trigger) its context. A trigger uses the NEW/OLD editors; a
         // procedure/function uses the plain parameter grid. Either path returns null on a validation error, so
@@ -904,7 +1020,7 @@ public sealed partial class DebuggerTabViewModel
         // statement is active from Start (honored by the same stop-decision as every statement), and the panel
         // edits the very objects the engine consults (no mirroring). BreakOnException seeds the session toggle.
         var spec = new DebugLaunchSpec(
-            _source, _body, _model, RoutineName, rootValues, Isolation, trigger, _packageName,
+            _editBuffer, _body, _model, RoutineName, rootValues, Isolation, trigger, _packageName,
             _breakpoints, _dataBreakpoints, BreakOnException, IsFunction: _isFunction);
 
         ClearExecutedSql();  // a fresh session starts a fresh audit log
@@ -1223,14 +1339,11 @@ public sealed partial class DebuggerTabViewModel
     private bool CanStopOrRestart => _run is not null
         || Phase is DebuggerPhase.Completed or DebuggerPhase.Faulted or DebuggerPhase.Editing;
 
-    /// <summary>Restart re-runs the last COMPILED text (<see cref="_source"/>), so while the buffer is dirty it
-    /// has nothing correct to run: launching the compiled version behind an edited editor is the very
-    /// "I see A, it executes B" this milestone removes — only through a button instead of a step. Blocked with
-    /// the status line naming Save as the way into a session.
-    /// <para><b>Interim.</b> This restriction exists only until Restart can start a session from the edited
-    /// text itself (no compile, no write to the database) — at which point a dirty buffer becomes Restart's
-    /// normal input and this gate goes away rather than being relaxed.</para></summary>
-    private bool CanRestart => CanStopOrRestart && !IsSourceDirty;
+    /// <summary>Restart starts a NEW session from the text the editor currently shows — <b>without writing
+    /// anything to the database</b> (Save remains the only operation that does). A session ended by an edit
+    /// never comes back to life; Restart is a deliberate new start, which is why it is a command and not
+    /// something the undo of an edit could trigger.</summary>
+    private bool CanRestart => CanStopOrRestart && CanRunCurrentProgram;
 
     [RelayCommand(CanExecute = nameof(CanStopOrRestart))]
     private async Task StopAsync()
@@ -1249,12 +1362,57 @@ public sealed partial class DebuggerTabViewModel
     [RelayCommand(CanExecute = nameof(CanRestart))]
     private async Task RestartAsync()
     {
+        _condemnedByEdit = false;
         await TeardownRunAsync().ConfigureAwait(true);
         SetCurrentMarker(null, null);
         ClearVariables();
         ClearError();
-        // Reuse the last parameter values (§9.3 — Restart re-runs without re-prompting).
+        // Reuse the last parameter values (§9.3 — Restart re-runs without re-prompting) — unless the edited
+        // text asks something different, which the shared tail decides. Restart is Save's tail WITHOUT the
+        // compile: same check, same rebuild, same launch, one path.
+        _resumeAfterSave = false; // this IS the restart; nothing is left owing to a later save
+        if (await ResumeOnCurrentProgramAsync(true, null, CancellationToken.None).ConfigureAwait(true)) return;
+        if (Phase == DebuggerPhase.Idle) return; // refused with its own explanation (a trigger out of scope)
+        Phase = DebuggerPhase.ReadyToLaunch;     // the routine asks something different now — the panel asks it
+        StatusText = UiStrings.DebuggerStatusReady;
+    }
+
+    /// <summary>The one way back into a session on the program as it now stands, shared by Restart (no compile)
+    /// and Save (compile first). It asks the one question that decides whether the user has something new to
+    /// decide — is the launch panel still describing this routine? — rebuilds the panel if not, re-runs the
+    /// pre-flight against the current text, and relaunches when asked and still valid. Returns whether a
+    /// session was started.</summary>
+    private async Task<bool> ResumeOnCurrentProgramAsync(
+        bool relaunch, string? relaunchStatus, CancellationToken cancellationToken)
+    {
+        EnsureProgramCurrent();
+
+        // Is the launch configuration the user already made still the RIGHT configuration for this text? Not
+        // "do the parameters happen to hold values" — the question is whether the routine asks the same things.
+        // Compared against the signature the CURRENT PANEL was built from (not a reading taken moments ago), so
+        // an intervening re-parse can never make this compare the new model with itself.
+        var configStillValid = _body is not null
+            && _panelSignature.Length > 0
+            && string.Equals(_panelSignature, BuildLaunchSignature(), StringComparison.Ordinal);
+
+        if (!configStillValid)
+        {
+            // A parameter added, renamed or retyped, a trigger's table/timing/events or referenced NEW/OLD
+            // columns changed, even the object kind changed — that is a new decision, so the inputs are rebuilt
+            // and the user makes it on the launch panel.
+            await RebuildLaunchInputsAsync(cancellationToken).ConfigureAwait(true);
+            // A trigger that no longer qualifies (DB-level/DDL, §8.1) already failed preparation and said why.
+            if (Phase == DebuggerPhase.Idle) return false;
+        }
+
+        // Re-run against the CURRENT text: an edit can introduce a fresh §4.6 warning, and the old report
+        // described the old text.
+        BuildPreflight(hasStepPoints: _stepPoints.Count > 0 && _body is not null);
+
+        if (!relaunch || !configStillValid || LaunchBlocked) return false;
+        if (relaunchStatus is not null) StatusText = relaunchStatus;
         await LaunchAsync().ConfigureAwait(true);
+        return true;
     }
 
     // ── Breakpoints ───────────────────────────────────────────────────────────────────────────────
@@ -1265,6 +1423,7 @@ public sealed partial class DebuggerTabViewModel
     public void ToggleBreakpointAt(int caretOffset)
     {
         if (!IsViewingRootSource) return; // breakpoints are the root routine's; a callee/caller view is D12
+        EnsureProgramCurrent(); // snap against the text the user is looking at, not the last parsed one
         var target = StepPointAtOrAfter(caretOffset);
         if (target is null) return;
 
@@ -1380,7 +1539,7 @@ public sealed partial class DebuggerTabViewModel
                 SetSelectedFrame(session.CurrentFrame);
                 Phase = DebuggerPhase.Paused;
                 var step = session.CurrentStatement;
-                int line = step is null ? 0 : LineOf(session.CurrentFrame?.Source ?? _source, step.Start);
+                int line = step is null ? 0 : LineOf(session.CurrentFrame?.Source ?? _editBuffer, step.Start);
                 StatusText = string.Format(
                     CultureInfo.CurrentCulture, UiStrings.DebuggerStatusPausedFormat,
                     line, PausedReasonText(session));
@@ -1696,7 +1855,7 @@ public sealed partial class DebuggerTabViewModel
         if (session is null || session.State != DebugState.Paused) return null;
         var frame = FindFrame(session, frameId);
         if (frame is null) return null;
-        string source = frame.Source ?? _source ?? string.Empty;
+        string source = frame.Source ?? _editBuffer;
         var (offset, _) = FramePosition(frame);
         int line = offset is { } o ? LineOf(source, o) : 0;
         return new DebugFramePeek(frame.RoutineName, source, line);
@@ -2062,7 +2221,9 @@ public sealed partial class DebuggerTabViewModel
         return used;
     }
 
-    private int LineOf(int offset) => LineOf(_source, offset);
+    // Lines are read against the CURRENT program — the root frame's source is the text the session was launched
+    // from, which is this buffer (an edit ends the session, so the two never disagree while one is running).
+    private int LineOf(int offset) => LineOf(_editBuffer, offset);
 
     private static int LineOf(string? src, int offset)
     {
@@ -2180,11 +2341,10 @@ public sealed partial class DebuggerTabViewModel
         var sql = _editBuffer;
         if (string.IsNullOrWhiteSpace(sql)) return new EditorSaveResult(false, UiStrings.EditorNothingToCompile);
 
-        // Everything the launch panel asked the user to decide, as it stands BEFORE the save. Compared with
-        // the same reading of the compiled text to decide whether the session can simply be resumed.
-        var configBefore = BuildLaunchSignature();
-
         // A live session was compiled from the OLD code — saving invalidates it, so say so before doing it.
+        // (Near-unreachable since an edit ends the session by itself: saving needs a dirty buffer, and the edit
+        // that made it dirty already ended it. Kept for the one window that remains — a Ctrl+S landing while a
+        // step is still on the wire — rather than deleted on the strength of a reachability argument.)
         if (IsSessionLive)
         {
             var confirmed = await RequestConfirmAsync(new ConfirmRequest
@@ -2224,43 +2384,18 @@ public sealed partial class DebuggerTabViewModel
             return new EditorSaveResult(false, message);
         }
 
-        AdoptSavedSource(sql);
-
-        // Is the launch configuration the user already made still the RIGHT configuration for the compiled
-        // code? Not "do the parameters happen to hold values" — the question is whether the new signature
-        // asks the same things. Identical ⇒ the existing panel/editor instance is kept untouched, so the
-        // exact values (and the trigger's NEW/OLD entries) carry over. Anything else — a parameter added,
-        // renamed or retyped, a trigger's table/timing/events or referenced NEW/OLD columns changed, even
-        // the object kind changed — means there is a NEW decision to make, so the inputs are rebuilt and
-        // the user goes to the launch panel to make it.
-        var configStillValid = _body is not null
-            && configBefore.Length > 0
-            && string.Equals(configBefore, BuildLaunchSignature(), StringComparison.Ordinal);
-
-        if (!configStillValid)
-        {
-            await RebuildLaunchInputsAsync(cancellationToken).ConfigureAwait(true);
-            // A trigger that no longer qualifies (DB-level/DDL, §8.1) already failed preparation and said why.
-            if (Phase == DebuggerPhase.Idle) return new EditorSaveResult(true, null);
-        }
-
-        // Re-run against the NEW code: a fresh edit can introduce a fresh §4.6 warning, and the old report
-        // described the old text.
-        BuildPreflight(hasStepPoints: _stepPoints.Count > 0 && _body is not null);
+        // The compile succeeded, so the database now holds the buffer: it becomes the new baseline. The program
+        // does not change here — it was already this text — so the re-parse is a no-op the buffer has paid for.
+        AdoptBaseline(sql);
 
         // Save → compile → straight back into a session on the new code. The user was debugging; sending them
-        // through the parameter form to re-enter what they just used would be busywork. This is NOT a second
-        // launch path — it is the very LaunchAsync the Restart command uses, so the session is built exactly
-        // as any other. Breakpoints are gone by design (AdoptSavedSource: old offsets describe old text).
-        if (_resumeAfterSave && configStillValid && !LaunchBlocked)
-        {
-            _resumeAfterSave = false;
-            StatusText = UiStrings.DebuggerStatusSavedRestarting;
-            await LaunchAsync().ConfigureAwait(true);
-            return new EditorSaveResult(true, null);
-        }
-
+        // through the parameter form to re-enter what they just used would be busywork. Not a second launch
+        // path: it is the very tail the Restart command uses, only with a compile in front of it.
+        bool relaunched = await ResumeOnCurrentProgramAsync(
+            _resumeAfterSave, UiStrings.DebuggerStatusSavedRestarting, cancellationToken).ConfigureAwait(true);
         _resumeAfterSave = false;
+        if (relaunched || Phase == DebuggerPhase.Idle) return new EditorSaveResult(true, null);
+
         Phase = DebuggerPhase.ReadyToLaunch;
         StatusText = UiStrings.DebuggerStatusSaved;
         return new EditorSaveResult(true, null);
@@ -2268,6 +2403,11 @@ public sealed partial class DebuggerTabViewModel
 
     // True while a save is interrupting a debugging cycle that should resume on the compiled code.
     private bool _resumeAfterSave;
+
+    // What the launch panel currently on screen was built from — the answer to "does the user have a new
+    // decision to make?". Recorded when the panel is built, never re-derived from the model at comparison time:
+    // the model follows the buffer now, so a reading taken later would compare the new text with itself.
+    private string _panelSignature = string.Empty;
 
     /// <summary>Everything the launch panel asks the user to decide, as one comparable string: the object kind
     /// plus the ordered input parameters for a procedure/function, or the header facts plus the referenced
@@ -2278,7 +2418,7 @@ public sealed partial class DebuggerTabViewModel
     internal string BuildLaunchSignature()
     {
         if (_model is null) return string.Empty;
-        var ddl = _model.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);
+        var ddl = RootDdl;
         if (ddl?.Body is null) return string.Empty;
 
         if (ddl.ObjectKind == DdlObjectKind.Trigger)
@@ -2304,7 +2444,7 @@ public sealed partial class DebuggerTabViewModel
     // takes, so a routine that became a trigger (or stopped being one) is handled by the one code path.
     private async Task RebuildLaunchInputsAsync(CancellationToken cancellationToken)
     {
-        var ddl = _model?.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);
+        var ddl = RootDdl;
         if (ddl is not null && ddl.ObjectKind == DdlObjectKind.Trigger)
         {
             await TryPrepareTriggerAsync(ddl, cancellationToken).ConfigureAwait(true);
@@ -2319,34 +2459,6 @@ public sealed partial class DebuggerTabViewModel
     /// <summary>A session exists that saving would invalidate — running or paused, or a terminal state whose
     /// frame/attachment is still held for inspection.</summary>
     private bool IsSessionLive => _run is not null;
-
-    // The compile succeeded, so the database now holds the buffer: it becomes the new saved baseline and the
-    // parse is redone from it, so step points, breakpoint snapping and the launch panel all describe the code
-    // that is actually deployed. Re-parsing here (rather than reloading from the server) keeps the exact text
-    // the user compiled — no round-trip, no risk of a reformatted round-trip differing from what they see.
-    private void AdoptSavedSource(string sql)
-    {
-        _source = sql;
-        _editBuffer = sql;
-        SourceText = sql;
-        NotifySourceDirtyChanged(); // clean again ⇒ Launch / Restart are runnable once more
-
-        _model = SemanticModel.Build(SqlParser.Parse(sql).Root);
-        var ddl = _model.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);
-        _body = ddl?.Body;
-        _isFunction = ddl?.ObjectKind == DdlObjectKind.Function;
-        _stepPoints = _body is null
-            ? Array.Empty<IExecutableStatement>()
-            : _body.DescendantNodesAndSelf().OfType<IExecutableStatement>().ToList();
-        OnPropertyChanged(nameof(IsSourceEditable));
-
-        // Offsets from the old text mean nothing in the new one — a breakpoint kept by number would land on
-        // an unrelated statement. Clearing is the honest option (§0: never pretend to know where it moved).
-        foreach (var offset in _breakpoints.Offsets.ToList()) _breakpoints.Remove(offset);
-        RebuildBreakpointPanel();
-        OnPropertyChanged(nameof(BreakpointOffsets));
-        DebugMarkersChanged?.Invoke(this, EventArgs.Empty);
-    }
 }
 
 /// <summary>The content of a Peek Frame preview (Stage X / D8, spec §5): a frame's routine name, its full

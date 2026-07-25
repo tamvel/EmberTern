@@ -1633,30 +1633,29 @@ public class DebuggerTabVmTests
         Assert.False(vm.RunToSuspendCommand.CanExecute(null));
         Assert.False(vm.EvaluateImmediateCommand.CanExecute(null));
 
-        // Stop stays available (the way back to the launch panel). Restart does NOT: it would run the last
-        // COMPILED text behind an edited editor — the very thing this rule removes, only by button instead of
-        // by step. Interim: it comes back when Restart can start a session from the edited text itself.
+        // Stop stays available (the way back to the launch panel), and Restart is how you get a session on the
+        // edited text — deliberately a command, never something that happens by itself.
         Assert.True(vm.StopCommand.CanExecute(null));
-        Assert.False(vm.RestartCommand.CanExecute(null));
-        Assert.False(vm.LaunchCommand.CanExecute(null));
+        Assert.True(vm.RestartCommand.CanExecute(null));
     }
 
     [Fact]
-    public async Task SourceEdit_UndoneBackToTheCompiledText_ReArmsRestart()
+    public async Task SourceEdit_EndsTheSessionPermanently_EvenIfTheTextIsUndone()
     {
-        // Dirty is a diff, not a flag — so undoing the edit makes Restart correct again (it now runs exactly
-        // what the editor shows). The session stays gone: it ended at the first keystroke, as IBExpert does.
+        // Ratified: ending the session is a PERMANENT state. Undoing the edit back to identical text must not
+        // resurrect it — Restart may become available again, but only as a deliberate new start.
         var vm = Vm(Sql, new FakeExecutor(), out _);
         await vm.PrepareAsync();
         await vm.LaunchCommand.ExecuteAsync(null);
 
         vm.ApplySourceEdit(Sql + "\n-- typed");
-        Assert.False(vm.RestartCommand.CanExecute(null));
+        Assert.Equal(DebuggerPhase.Editing, vm.Phase);
 
-        vm.ApplySourceEdit(Sql);
-        Assert.False(vm.IsSourceDirty);
-        Assert.True(vm.RestartCommand.CanExecute(null));
-        Assert.Equal(DebuggerPhase.Editing, vm.Phase); // still no session — Restart is how you get one back
+        vm.ApplySourceEdit(Sql);              // Ctrl+Z all the way back
+        Assert.False(vm.IsSourceDirty);       // dirty is a diff, not a flag…
+        Assert.Equal(DebuggerPhase.Editing, vm.Phase); // …but the session does NOT come back
+        Assert.False(vm.ContinueCommand.CanExecute(null));
+        Assert.True(vm.RestartCommand.CanExecute(null)); // only the deliberate way back
     }
 
     [Fact]
@@ -1710,20 +1709,129 @@ public class DebuggerTabVmTests
         Assert.Null(vm.CurrentStart);                    // …but the marker no longer describes this text
     }
 
+    // ── Restart runs the DRAFT — no compile, no write to the database ───────────────────────────────
+    //
+    // The debugger never asks the server to run the compiled routine: it interprets the AST and runs each
+    // statement through a harness that never names it. So a session can be built from the edited text, and
+    // Restart is how you get one — while Save stays the only operation that touches the database.
+
     [Fact]
-    public async Task Launch_IsBlockedWhileTheBufferIsDirty()
+    public async Task Restart_RunsTheEditedText_WithoutCompilingIt()
     {
-        // Same rule at the launch panel: starting would run _source (the compiled text) behind an editor that
-        // shows something else. Interim, exactly as for Restart.
+        var vm = Vm(Sql, new FakeExecutor(), out var launcher);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        var edited = Sql.Replace("v = a + b;", "v = a + b + 1;", StringComparison.Ordinal);
+        vm.ApplySourceEdit(edited);            // the session ends here
+        await vm.RestartCommand.ExecuteAsync(null);
+
+        Assert.Equal(DebuggerPhase.Paused, vm.Phase);        // a NEW session, paused at entry
+        Assert.Equal(edited, launcher.LastSpec!.Source);     // …built from the DRAFT, not the compiled text
+        Assert.Null(vm.DdlExecutor);                         // and nothing was compiled: no DDL path involved
+        Assert.True(vm.IsSourceDirty);                       // the database still holds the original
+    }
+
+    [Fact]
+    public async Task Restart_StepPointsAndBreakpointsDescribeTheDraft()
+    {
+        // The parse follows the buffer, so a statement that exists only in the draft is a real step point and
+        // can carry a breakpoint. Before Seam B the snapping read the database text.
+        var vm = Vm(Sql, new FakeExecutor(), out var launcher);
+        await vm.PrepareAsync();
+
+        var edited = Sql.Replace("  r = v;", "  v = v * 2;\n  r = v;", StringComparison.Ordinal);
+        vm.ApplySourceEdit(edited);
+
+        int added = edited.IndexOf("v = v * 2;", StringComparison.Ordinal);
+        vm.ToggleBreakpointAt(added);
+        Assert.Contains(added, vm.BreakpointOffsets); // snapped to a statement that only the draft has
+
+        await vm.RestartCommand.ExecuteAsync(null);
+        Assert.Equal(edited, launcher.LastSpec!.Source);
+        Assert.Contains(added, launcher.LastSpec!.Breakpoints!.Offsets); // and the session shares it
+    }
+
+    [Fact]
+    public async Task SourceEdit_KeepsBreakpointsAboveIt_AndDropsThoseBelow()
+    {
+        // The bytes before the first divergence are identical, so a breakpoint there still points at exactly
+        // the statement it was set on — a proof, not a guess (§0). Below the edit an offset may have shifted,
+        // and we do not pretend to know where to, so it goes. This is what keeps breakpoints usable across the
+        // Edit → Restart → Test loop instead of clearing them on every keystroke.
         var vm = Vm(Sql, new FakeExecutor(), out _);
         await vm.PrepareAsync();
-        Assert.True(vm.LaunchCommand.CanExecute(null));
+        int first = Off("v = a + b");
+        int second = Off("r = v");
+        vm.ToggleBreakpointAt(first);
+        vm.ToggleBreakpointAt(second);
+        Assert.Equal(2, vm.BreakpointOffsets.Count);
 
-        vm.ApplySourceEdit(Sql + "\n-- typed");
+        // Lengthen the FIRST statement: everything below it shifts.
+        vm.ApplySourceEdit(Sql.Replace("v = a + b;", "v = a + b + 1;", StringComparison.Ordinal));
+
+        // The first breakpoint's statement still STARTS where it did (the edit is inside it, past its start),
+        // so it is still the statement the user marked — kept.
+        Assert.Contains(first, vm.BreakpointOffsets);
+        // The second moved by an amount we refuse to guess — dropped rather than left pointing at the gap.
+        Assert.DoesNotContain(second, vm.BreakpointOffsets);
+    }
+
+    [Fact]
+    public async Task Launch_AndRestart_AreBlockedWhenTheROUTINE_HEADER_Changed()
+    {
+        // The one thing a draft-sourced session still takes from the catalog is the root parameter list, which
+        // describes the COMPILED header. So an edit that reaches the header blocks until it is saved — the
+        // interim Seam C removes by reading the layout from the AST header instead.
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+
+        vm.ApplySourceEdit(Sql.Replace("(a integer, b integer)", "(a integer, b integer, c integer)", StringComparison.Ordinal));
+
         Assert.False(vm.LaunchCommand.CanExecute(null));
+        Assert.False(vm.RestartCommand.CanExecute(null));
 
-        vm.ApplySourceEdit(Sql);
+        // A BODY edit of the same size does not — that is the debugging loop and it must stay open.
+        vm.ApplySourceEdit(Sql.Replace("v = a + b;", "v = a + b + 1;", StringComparison.Ordinal));
         Assert.True(vm.LaunchCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Preflight_IsReRunAgainstTheDraft()
+    {
+        // The pre-flight described the database text before Seam B; a §4.6 boundary introduced by the edit
+        // (here: an autonomous transaction, which survives the debug rollback) has to be reported before the
+        // session the user is about to start.
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        Assert.Empty(vm.Preflight);
+
+        vm.ApplySourceEdit(Sql.Replace(
+            "  r = v;",
+            "  in autonomous transaction do r = v;",
+            StringComparison.Ordinal));
+        await vm.RestartCommand.ExecuteAsync(null);
+
+        Assert.NotEmpty(vm.Preflight);
+    }
+
+    [Fact]
+    public async Task Restart_WhenTheDraftAsksSomethingNew_SendsTheUserBackToTheLaunchPanel()
+    {
+        // A trigger's launch panel is built from the NEW/OLD columns its BODY references, so a body edit CAN
+        // change what the user has to decide. Then Restart must not silently reuse the old form.
+        var vm = TriggerVm(TriggerSql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        vm.ApplySourceEdit(TriggerSql.Replace(
+            "new.total = old.total + 1;",
+            "new.total = old.total + 1;\n  new.status = 'X';",
+            StringComparison.Ordinal));
+        await vm.RestartCommand.ExecuteAsync(null);
+
+        Assert.Equal(DebuggerPhase.ReadyToLaunch, vm.Phase); // a new decision — the panel asks it
+        Assert.True(vm.IsLaunchPanelVisible);
     }
 
     // ── Seam 5b — save + compile from the debugger tab ──────────────────────────────────────────────
@@ -1837,10 +1945,8 @@ public class DebuggerTabVmTests
         Assert.False(vm.ContinueCommand.CanExecute(null)); // stepping needs a session — still disabled
         Assert.False(vm.StepIntoCommand.CanExecute(null));
 
-        // Restart is blocked only because the buffer is dirty (it would run the compiled text). Discarding the
-        // edit re-arms it — the same one rule, not a phase-specific exception.
-        Assert.False(vm.RestartCommand.CanExecute(null));
-        vm.ApplySourceEdit(Sql);
+        // …and Restart can start a session on the text as it stands, refused compile or not: it does not need
+        // the database to agree with the editor.
         Assert.True(vm.RestartCommand.CanExecute(null));
     }
 

@@ -3059,3 +3059,81 @@ patched, because their premise ("edit while paused, then keep stepping / then sa
 what the rule removes. Smoke: the app launches clean. **Live QA on the lab is still owed** (the visual side:
 the toolbar greying out at the first keystroke, the status line, and the Error Bar surviving an edit after a
 fault).
+
+### Ratified afterwards (user, on accepting Seam A)
+
+**Ending the session is a PERMANENT state.** Undoing the edit back to byte-identical text must not resurrect
+it; Restart may become available again, but only as a deliberate new start. Pinned by
+`SourceEdit_EndsTheSessionPermanently_EvenIfTheTextIsUndone`.
+
+---
+
+## Seam B — one current program, and Restart runs the draft (2026-07-25)
+
+### What changed
+
+Before this seam the VM held a duality: `_source` meant both *"what the database holds"* and *"what the parse
+describes"*. Every position-bearing feature read the second meaning — markers, breakpoint snapping, the
+pre-flight, the launch panel, the launch spec — so with an edited buffer they all described text nobody was
+looking at. Seam B splits the two:
+
+- **`_baseline`** — what the database holds. Its only jobs are `IsSourceDirty` and being what Save compares
+  against. It is deliberately *not* what the debugger runs.
+- **`_editBuffer` + its parse** — **the program.** `DebugLaunchSpec` is built from it, so **Restart starts a
+  session on the text the editor shows, with no compile and no write to the database.**
+
+Re-parsing is **lazy, not debounced**: a `DispatcherTimer` would re-introduce a path no headless test can
+reach (gotcha #251) and there is nothing to repaint from the model between keystrokes. An edit marks the
+program stale; the few places that genuinely need a current parse ask for one — a gutter click, a launch, a
+save. Command gates never do, so they stay cheap and side-effect-free. The two duplicated parse blocks
+(`PrepareAsync` and `AdoptSavedSource`) collapsed into one `ReparseProgram`, with `AdoptBaseline` as the only
+place the two texts are declared equal.
+
+### Restart ≡ Save without the compile
+
+`SaveAsync`'s tail became `ResumeOnCurrentProgramAsync(relaunch, relaunchStatus, ct)` and both commands now go
+through it: ensure the parse is current → is the launch panel still describing this routine? → rebuild the
+inputs if not → re-run the pre-flight against **this** text → relaunch. Save simply puts a compile in front of
+it. One path, one definition of "what the user still has to decide".
+
+That comparison hid a trap, which is now **gotcha #254**: it used to read the signature into a local at the
+top of the save and compare after. That was correct only while the model described the database text — once
+the model follows the buffer, any re-parse between the two readings (a gutter click suffices) makes it compare
+the new value **with itself**, and a genuinely changed parameter list would pass as "still valid". The
+signature is now recorded where the decision was made (`_panelSignature`, set when the panel is built).
+
+### Breakpoints survive the loop
+
+Clearing every breakpoint on each edit (what Save used to do) would have gutted the `Edit → Restart → Test`
+loop this milestone exists to enable. Instead two **provable** filters run, neither of which guesses:
+
+- **unchanged prefix** — the bytes before an edit's first divergence are identical, so a breakpoint there still
+  points at exactly the statement it was set on. Below it, an offset may have shifted by an amount we refuse to
+  invent (§0), so it goes.
+- **still a statement start** — after a re-parse, an offset that no longer *starts* a step point describes
+  nothing and is dropped, verified against the new parse.
+
+A pleasant consequence: editing *inside* a statement keeps its own breakpoint, because the statement still
+starts where it did. The blanket clear in `AdoptSavedSource` was deleted (Contract #20) — by the time a save
+compiles, the breakpoints have already been pruned against that exact text.
+
+### The one remaining catalog dependency (and the interim it forces)
+
+A draft-sourced session still reads its **root parameter list** from the catalog, which describes the
+**compiled** header. So Seam B ships an honest gate: a draft runs while its routine **header** is byte-identical
+to the compiled one — proven, without a parse, by the same common-prefix length reaching the baseline's body
+start. Body edits (the debugging loop) always qualify; a header edit blocks with a status naming Save. **Seam C
+removes this by taking the root layout from the AST header** — the path D9 already uses for a local
+`DECLARE PROCEDURE`, which has no catalog row at all.
+
+### Verification
+
+Build 0/0. Full suite **5235 green**. Six new tests: Restart runs the draft (asserting `LastSpec.Source` is the
+edited text and that no DDL executor is involved), step points and breakpoints describe the draft, breakpoints
+above an edit survive while those below are dropped, a **header** edit blocks Launch and Restart while a body
+edit of the same size does not, the pre-flight is re-run against the draft (an `IN AUTONOMOUS TRANSACTION`
+introduced by the edit is reported), and a trigger whose body starts referencing another NEW/OLD column is sent
+back to the launch panel rather than silently reusing the old form. Four Seam-A tests were updated where they
+pinned the interim block Seam B removes. Smoke: the app launches clean. **Live QA on the lab is owed**, and it
+is the interesting one: edit a body, Restart, and confirm the new behaviour runs while the stored procedure is
+unchanged in the database.
