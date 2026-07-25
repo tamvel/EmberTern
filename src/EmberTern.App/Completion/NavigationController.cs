@@ -18,6 +18,7 @@ using AvaloniaEdit.Rendering;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Language;
+using EmberTern.Core.Sql.Language.CodeActions;
 using EmberTern.Core.Sql.Language.Hover;
 using EmberTern.Core.Sql.Language.Matching;
 using EmberTern.Core.Sql.Language.Navigation;
@@ -101,6 +102,10 @@ internal sealed class NavigationController
     // and plain hover makes this the primary discovery surface, so it is not a bet worth taking).
     private Control? _hoverCard;
     private TextSpan? _hoverSpan;
+
+    // The code-action menu (Ctrl+., Stage Q). OverlayLayer-hosted for the same reason as the hover card.
+    private Control? _codeActionMenu;
+    private ListBox? _codeActionList;
 
     // Inline rename popup (M5), created lazily on first F2.
     private Popup? _renamePopup;
@@ -219,6 +224,7 @@ internal sealed class NavigationController
         _hoverDwell.Stop();
         _hoverDwell.Tick -= OnHoverDwellElapsed;
         HideHover();
+        CloseCodeActionMenu(); // overlay-hosted, so it would otherwise outlive the controller
         _peekGeneration++;
         if (_renamePopup is not null) _renamePopup.IsOpen = false;
         if (_peekPopup is not null) _peekPopup.IsOpen = false;
@@ -474,6 +480,147 @@ internal sealed class NavigationController
         {
             if (BeginPeek()) e.Handled = true;
         }
+        else if (e.Key == Key.OemPeriod && (e.KeyModifiers & KeyModifiers.Control) == KeyModifiers.Control)
+        {
+            if (ShowCodeActions()) e.Handled = true;
+        }
+    }
+
+    // ── Code actions — Ctrl+. (Stage Q / Q2) ─────────────────────────────────────────────────────
+    //
+    // The light bulb (Q3) is a second TRIGGER for this same method, never a second implementation: both
+    // build their list from one GetActionsAtCaret call and apply through one InvokeCodeAction.
+
+    /// <summary>Test seam: the actions offered at <paramref name="offset"/>, without the menu UI.</summary>
+    internal IReadOnlyList<CodeAction> CodeActionsForTest(int offset) => GetActionsAtCaret(offset);
+
+    /// <summary>Test seam: offers the actions at the caret and applies the one at
+    /// <paramref name="index"/>, exercising the same path the menu does.</summary>
+    internal bool InvokeCodeActionForTest(int offset, int index)
+    {
+        var actions = GetActionsAtCaret(offset);
+        return index >= 0 && index < actions.Count && InvokeCodeAction(actions[index]);
+    }
+
+    // Every fix offered for every diagnostic covering the caret. The diagnostics are the language
+    // service's CACHED list — this performs no analysis, exactly as the hover does not (§4).
+    private IReadOnlyList<CodeAction> GetActionsAtCaret(int offset)
+    {
+        var model = _model();
+        if (model is null) return Array.Empty<CodeAction>();
+
+        List<CodeAction>? actions = null;
+        foreach (var d in _diagnostics())
+        {
+            if (offset < d.Start || offset > d.End) continue;
+            foreach (var action in QuickFixEngine.GetFixes(model, d))
+            {
+                (actions ??= new List<CodeAction>()).Add(action);
+            }
+        }
+        return (IReadOnlyList<CodeAction>?)actions ?? Array.Empty<CodeAction>();
+    }
+
+    // THE single activation point (design §3 / CodeAction's own note): every surface that offers an
+    // action ends up here, so the day a non-edit action exists, exactly one method learns about it.
+    private bool InvokeCodeAction(CodeAction action)
+    {
+        if (_editor.IsReadOnly) return false; // never mutate a read-only surface (§0)
+        if (!TextEditApplier.TryApply(_editor.Document, action.Edits, _editor.CaretOffset, out int caret))
+        {
+            return false;
+        }
+        _editor.CaretOffset = caret;
+        _editor.TextArea.Focus();
+        return true;
+    }
+
+    // Returns false when there is nothing to offer, leaving Ctrl+. unhandled — a shortcut that silently
+    // does nothing is better than a menu that says "no actions here".
+    private bool ShowCodeActions()
+    {
+        if (_editor.IsReadOnly) return false;
+        var actions = GetActionsAtCaret(_editor.CaretOffset);
+        if (actions.Count == 0) return false;
+
+        var overlay = OverlayLayer.GetOverlayLayer(_editor);
+        if (overlay is null) return false;
+
+        CloseCodeActionMenu();
+
+        // OverlayLayer, like the hover card — a bare Popup renders invisibly on the desktop despite
+        // IsOpen/Visible/Opacity all being true (gotcha #209).
+        var list = new ListBox
+        {
+            ItemsSource = actions,
+            DisplayMemberBinding = new Avalonia.Data.Binding(nameof(CodeAction.Title)),
+            SelectedIndex = 0,
+            MinWidth = 220,
+            MaxHeight = 220,
+        };
+        var card = new Border
+        {
+            Background = _editor.FindResource("PanelBrush") as IBrush,
+            BorderBrush = _editor.FindResource("BorderBrush") as IBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(1),
+            Child = list,
+        };
+
+        list.KeyDown += OnCodeActionMenuKey;
+        list.DoubleTapped += (_, _) => ApplySelectedCodeAction();
+        list.LostFocus += (_, _) => CloseCodeActionMenu();
+
+        var anchor = EditorPopups.TryGetCaretRect(_editor, out var caretRect)
+            ? _editor.TranslatePoint(new Point(caretRect.X, caretRect.Bottom), overlay)
+            : new Point(0, 0);
+        Canvas.SetLeft(card, anchor?.X ?? 0);
+        Canvas.SetTop(card, anchor?.Y ?? 0);
+        overlay.Children.Add(card);
+
+        _codeActionMenu = card;
+        _codeActionList = list;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(_codeActionMenu, card)) return;
+            EditorPopups.ClampIntoOverlay(overlay, card, flipOffset: caretRect.Height);
+        }, DispatcherPriority.Background);
+
+        list.Focus();
+        return true;
+    }
+
+    private void OnCodeActionMenuKey(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            CloseCodeActionMenu();
+            _editor.TextArea.Focus();
+            e.Handled = true;
+        }
+        else if (e.Key is Key.Enter or Key.Tab)
+        {
+            ApplySelectedCodeAction();
+            e.Handled = true;
+        }
+    }
+
+    private void ApplySelectedCodeAction()
+    {
+        var action = _codeActionList?.SelectedItem as CodeAction;
+        CloseCodeActionMenu();          // close FIRST: applying moves focus back to the editor
+        if (action is not null) InvokeCodeAction(action);
+    }
+
+    private void CloseCodeActionMenu()
+    {
+        if (_codeActionMenu is { } card)
+        {
+            OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card);
+            _codeActionMenu = null;
+            _codeActionList = null;
+        }
     }
 
     // Opens the inline rename box iff the caret is on a safely-renameable local (the Navigation
@@ -493,7 +640,7 @@ internal sealed class NavigationController
         _renameActive = rename;
 
         // Prefill from the identifier text as written at the caret (preserves the user's casing).
-        var caretSpan = SpanAtCaret(rename, _editor.CaretOffset) ?? rename.Occurrences[0];
+        var caretSpan = SpanAtCaret(rename, _editor.CaretOffset) ?? rename.Occurrences[0].Span;
         _renameCurrent = SafeGetText(caretSpan);
         _renameBox!.Text = _renameCurrent;
         SetRenameError(false);
@@ -569,31 +716,23 @@ internal sealed class NavigationController
     // Replaces every occurrence with the new name in ONE undo group, last-to-first so offsets stay
     // valid. Verifies each span still reads as the original identifier first — if the document has
     // drifted from the model, it aborts without editing anything (§0). Returns whether it applied.
+    // Rename is a CodeAction like any other: a set of edits applied atomically. It owns the decision of
+    // WHAT to replace (the binder's exact occurrences of one local symbol) and hands it to the one
+    // applier, which owns bounds-checking, drift control, ordering and the undo unit. There is no
+    // second mutation path here — the previous hand-rolled verify/sort/BeginUpdate loop is gone
+    // (editor-quick-fixes.md §2.2). ExpectedOldText is the text the BINDER saw at each occurrence, not
+    // text re-read from the document, so the check compares against the model's belief rather than
+    // against itself — and it is per-occurrence, so mixed casing needs no folding rule here.
     private bool TryApplyRename(NavigationRename rename, string newName)
     {
-        var doc = _editor.Document;
-        if (doc is null) return false;
-
-        foreach (var s in rename.Occurrences)
+        var edits = new List<TextEdit>(rename.Occurrences.Count);
+        foreach (var o in rename.Occurrences)
         {
-            if (s.Start < 0 || s.End > doc.TextLength) return false;
-            if (!string.Equals(FoldIdentifier(doc.GetText(s.Start, s.Length)), rename.CurrentName, StringComparison.Ordinal))
-            {
-                return false; // drift → abort, never corrupt
-            }
+            edits.Add(new TextEdit(o.Span.Start, o.Span.Length, newName, o.Text));
         }
 
-        var spans = new List<TextSpan>(rename.Occurrences);
-        spans.Sort(static (a, b) => b.Start.CompareTo(a.Start));
-        doc.BeginUpdate();
-        try
-        {
-            foreach (var s in spans) doc.Replace(s.Start, s.Length, newName);
-        }
-        finally
-        {
-            doc.EndUpdate();
-        }
+        if (!TextEditApplier.TryApply(_editor.Document, edits, _editor.CaretOffset, out int caret)) return false;
+        _editor.CaretOffset = caret;
         return true;
     }
 
@@ -816,9 +955,9 @@ internal sealed class NavigationController
 
     private static TextSpan? SpanAtCaret(NavigationRename rename, int caret)
     {
-        foreach (var s in rename.Occurrences)
+        foreach (var o in rename.Occurrences)
         {
-            if (caret >= s.Start && caret <= s.End) return s;
+            if (caret >= o.Span.Start && caret <= o.Span.End) return o.Span;
         }
         return null;
     }
