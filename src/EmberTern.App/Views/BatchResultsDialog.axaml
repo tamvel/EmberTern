@@ -107,8 +107,22 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{x:Static app:UiStrings.BatchResultsColumnError}"
-                            Binding="{Binding Error}" SortMemberPath="Error" Width="*" />
+        <!-- The message reads in ErrorBrush like every other error in the IDE (UX Polish Seam 4's one visual
+             language). A template column because a DataGridTextColumn cannot carry the class; it reuses the
+             result-failed style already defined above rather than introducing a second error tint. -->
+        <DataGridTemplateColumn Header="{x:Static app:UiStrings.BatchResultsColumnError}"
+                                SortMemberPath="Error" Width="*">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:BatchResultRowViewModel">
+              <TextBlock Text="{Binding Error}"
+                         VerticalAlignment="Center"
+                         Margin="8,0"
+                         TextTrimming="CharacterEllipsis"
+                         ToolTip.Tip="{Binding Error}"
+                         Classes.result-failed="{Binding IsFailed}" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
       </DataGrid.Columns>
     </DataGrid>
 

@@ -1675,6 +1675,91 @@ public class DebuggerTabVmTests
     }
 
     [Fact]
+    public async Task SaveFailed_IsNotADeadEnd_StopAndRestartStayAvailable()
+    {
+        // QA 2026-07-25 — SaveFailed used to disable Stop AND Restart (no session, phase not listed in
+        // CanStopOrRestart), so the only way out was a successful save. It must behave like the editor after
+        // a finished session: a way back to the launch panel, and a way to run the last compiled version.
+        using var service = new FirebirdConnectionService();
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        vm.DdlExecutor = new FirebirdDdlExecutor(service); // offline ⇒ the compile fails
+        await vm.PrepareAsync();
+        vm.ApplySourceEdit(Sql + "\n-- touched");
+        await vm.SaveAsync();
+        Assert.Equal(DebuggerPhase.SaveFailed, vm.Phase);
+
+        Assert.True(vm.StopCommand.CanExecute(null));
+        Assert.True(vm.RestartCommand.CanExecute(null));
+        Assert.True(vm.CanSaveSource);                  // …and saving the corrected text is still offered
+        Assert.False(vm.ContinueCommand.CanExecute(null)); // stepping needs a session — still disabled
+        Assert.False(vm.StepIntoCommand.CanExecute(null));
+    }
+
+    // ── Save → compile → resume: is the launch configuration the user made still the right one? ──────
+    //
+    // The auto-relaunch itself needs a compile that SUCCEEDS, i.e. a live server (FirebirdDdlExecutor is
+    // sealed), so it is covered by manual QA on the lab. What is pinned here is the decision that gates it:
+    // the launch signature — the object kind + ordered input parameters, or a trigger's header + referenced
+    // NEW/OLD columns — read from the same parsed model the launch panel is built from.
+
+    // The signature is a pure reading of the parsed model, so it is exercised the way the save path reads it
+    // — over the text as it stands — without a test-only hook into the save.
+    private static async Task<string> SignatureOfAsync(string sql)
+    {
+        var vm = Vm(sql, new FakeExecutor(), out _);
+        await vm.PrepareAsync();
+        return vm.BuildLaunchSignature();
+    }
+
+    [Fact]
+    public async Task LaunchSignature_IsStableAcrossAnEditThatKeepsTheSignature()
+    {
+        // Body-only change: same kind, same parameters ⇒ the configuration the user already made still
+        // applies, so a save may rebuild the session without asking them anything again.
+        var before = await SignatureOfAsync(Sql);
+        var after = await SignatureOfAsync(Sql.Replace("v = a + b;", "v = a + b + 1;", StringComparison.Ordinal));
+
+        Assert.Equal(before, after);
+        Assert.NotEqual(string.Empty, before);
+    }
+
+    [Theory]
+    // a new parameter — a value the user has never been asked for
+    [InlineData("create procedure sp_test (a integer, b integer, c integer) returns (r integer) as")]
+    // a renamed parameter — the old values no longer describe the new signature
+    [InlineData("create procedure sp_test (a integer, bb integer) returns (r integer) as")]
+    // a retyped parameter — the entered value may not even be valid for the new type
+    [InlineData("create procedure sp_test (a integer, b varchar(10)) returns (r integer) as")]
+    // a dropped parameter
+    [InlineData("create procedure sp_test (a integer) returns (r integer) as")]
+    public async Task LaunchSignature_ChangesWheneverTheUserWouldHaveANewDecision(string newHeader)
+    {
+        var before = await SignatureOfAsync(Sql);
+        var after = await SignatureOfAsync(Sql.Replace(
+            "create procedure sp_test (a integer, b integer) returns (r integer) as",
+            newHeader,
+            StringComparison.Ordinal));
+
+        Assert.NotEqual(before, after);
+    }
+
+    [Fact]
+    public async Task LaunchSignature_IsEmpty_WhenTheTextIsNotADebuggableRoutine()
+    {
+        // Empty never compares equal, so an unreadable save always falls back to the launch panel rather
+        // than resuming a session against something we could not parse.
+        Assert.Equal(string.Empty, await SignatureOfAsync("select 1 from rdb$database"));
+    }
+
+    [Fact]
+    public async Task LaunchSignature_DistinguishesAProcedureFromAFunction()
+    {
+        // The object kind is part of the configuration: a routine edited into a function needs the panel
+        // rebuilt (and the Return group appears), so it must never compare equal.
+        Assert.NotEqual(await SignatureOfAsync(Sql), await SignatureOfAsync(FunctionSql));
+    }
+
+    [Fact]
     public async Task Save_ThatFails_WithNoLiveSession_StillKeepsTheSourceOnScreen()
     {
         // Same rule from the launch-panel side: a refused save must not leave the tab on the parameter

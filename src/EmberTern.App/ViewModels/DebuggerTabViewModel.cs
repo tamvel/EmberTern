@@ -1106,8 +1106,11 @@ public sealed partial class DebuggerTabViewModel
 
     // ── Stop / Restart ──────────────────────────────────────────────────────────────────────────
 
+    // SaveFailed has no session either, but it must not be a dead end: without Stop the user would be locked
+    // in the editor with no way back to the launch panel, and without Restart no way to run the last COMPILED
+    // version. Stepping stays disabled everywhere here — those need Paused.
     private bool CanStopOrRestart => _run is not null
-        || Phase is DebuggerPhase.Completed or DebuggerPhase.Faulted;
+        || Phase is DebuggerPhase.Completed or DebuggerPhase.Faulted or DebuggerPhase.SaveFailed;
 
     [RelayCommand(CanExecute = nameof(CanStopOrRestart))]
     private async Task StopAsync()
@@ -1119,6 +1122,9 @@ public sealed partial class DebuggerTabViewModel
         ClearSuspendRows();
         ClearError();
         ResetWatches(); // keep the (persisted) watch rows, clear their live values
+        // Stopping is the user leaving the debugging cycle, so a later Save must NOT silently resume it.
+        // SaveAsync re-arms this immediately after the stop it performs itself.
+        _resumeAfterSave = false;
         Phase = DebuggerPhase.Idle;
         StatusText = UiStrings.DebuggerStatusStopped;
     }
@@ -2057,6 +2063,10 @@ public sealed partial class DebuggerTabViewModel
         var sql = _editBuffer;
         if (string.IsNullOrWhiteSpace(sql)) return new EditorSaveResult(false, UiStrings.EditorNothingToCompile);
 
+        // Everything the launch panel asked the user to decide, as it stands BEFORE the save. Compared with
+        // the same reading of the compiled text to decide whether the session can simply be resumed.
+        var configBefore = BuildLaunchSignature();
+
         // A live session was compiled from the OLD code — saving invalidates it, so say so before doing it.
         if (IsSessionLive)
         {
@@ -2071,6 +2081,10 @@ public sealed partial class DebuggerTabViewModel
             if (!confirmed) return new EditorSaveResult(false, null); // cancelled: session + buffer untouched
 
             await StopAsync().ConfigureAwait(true); // rollback + close the debug attachment, back to Idle
+            // The user was mid-debugging: this save interrupts a cycle we intend to resume on the new code.
+            // Set AFTER the stop, which clears it — a stop the USER asked for really does end the cycle.
+            // It survives a failed compile, so fixing the error and saving again still resumes.
+            _resumeAfterSave = true;
         }
 
         ClearError();
@@ -2095,13 +2109,94 @@ public sealed partial class DebuggerTabViewModel
 
         AdoptSavedSource(sql);
 
-        // The compiled routine is now the one on screen, so the tab lands in the state that is one keystroke
-        // from debugging it: ready to launch, with the pre-flight re-run against the NEW code (a fresh edit
-        // can introduce a fresh §4.6 warning, and the old report described the old text).
+        // Is the launch configuration the user already made still the RIGHT configuration for the compiled
+        // code? Not "do the parameters happen to hold values" — the question is whether the new signature
+        // asks the same things. Identical ⇒ the existing panel/editor instance is kept untouched, so the
+        // exact values (and the trigger's NEW/OLD entries) carry over. Anything else — a parameter added,
+        // renamed or retyped, a trigger's table/timing/events or referenced NEW/OLD columns changed, even
+        // the object kind changed — means there is a NEW decision to make, so the inputs are rebuilt and
+        // the user goes to the launch panel to make it.
+        var configStillValid = _body is not null
+            && configBefore.Length > 0
+            && string.Equals(configBefore, BuildLaunchSignature(), StringComparison.Ordinal);
+
+        if (!configStillValid)
+        {
+            await RebuildLaunchInputsAsync(cancellationToken).ConfigureAwait(true);
+            // A trigger that no longer qualifies (DB-level/DDL, §8.1) already failed preparation and said why.
+            if (Phase == DebuggerPhase.Idle) return new EditorSaveResult(true, null);
+        }
+
+        // Re-run against the NEW code: a fresh edit can introduce a fresh §4.6 warning, and the old report
+        // described the old text.
         BuildPreflight(hasStepPoints: _stepPoints.Count > 0 && _body is not null);
+
+        // Save → compile → straight back into a session on the new code. The user was debugging; sending them
+        // through the parameter form to re-enter what they just used would be busywork. This is NOT a second
+        // launch path — it is the very LaunchAsync the Restart command uses, so the session is built exactly
+        // as any other. Breakpoints are gone by design (AdoptSavedSource: old offsets describe old text).
+        if (_resumeAfterSave && configStillValid && !LaunchBlocked)
+        {
+            _resumeAfterSave = false;
+            StatusText = UiStrings.DebuggerStatusSavedRestarting;
+            await LaunchAsync().ConfigureAwait(true);
+            return new EditorSaveResult(true, null);
+        }
+
+        _resumeAfterSave = false;
         Phase = DebuggerPhase.ReadyToLaunch;
         StatusText = UiStrings.DebuggerStatusSaved;
         return new EditorSaveResult(true, null);
+    }
+
+    // True while a save is interrupting a debugging cycle that should resume on the compiled code.
+    private bool _resumeAfterSave;
+
+    /// <summary>Everything the launch panel asks the user to decide, as one comparable string: the object kind
+    /// plus the ordered input parameters for a procedure/function, or the header facts plus the referenced
+    /// NEW/OLD columns for a trigger. Read from the parsed model — the same source
+    /// <see cref="BuildParameters"/> and <see cref="TryPrepareTriggerAsync"/> build the panel from — so it
+    /// cannot drift from what the panel shows. Empty when the text does not parse to a debuggable routine,
+    /// which never compares equal, so an unparseable state always falls back to the panel.</summary>
+    internal string BuildLaunchSignature()
+    {
+        if (_model is null) return string.Empty;
+        var ddl = _model.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);
+        if (ddl?.Body is null) return string.Empty;
+
+        if (ddl.ObjectKind == DdlObjectKind.Trigger)
+        {
+            var header = TriggerHeaderReader.Read(ddl);
+            if (header is null) return string.Empty;
+            var columns = ContextSubstitution
+                .BuildColumns(_model, new TextSpan(ddl.Body.Start, ddl.Body.Length))
+                .Select(c => c.Record + "." + c.Column);
+            return string.Create(CultureInfo.InvariantCulture,
+                $"Trigger|{header.TargetTable}|{header.Timing}|{string.Join(",", header.Events)}|{string.Join(",", columns)}");
+        }
+
+        var inputs = _model.AllSymbols
+            .OfType<ParameterSymbol>()
+            .Where(p => p.Direction == ParameterDirection.Input)
+            .OrderBy(p => p.DeclarationSpan?.Start ?? int.MaxValue)
+            .Select(p => p.Name + ":" + (p.DataType ?? "VARCHAR"));
+        return string.Create(CultureInfo.InvariantCulture, $"{ddl.ObjectKind}|{string.Join(",", inputs)}");
+    }
+
+    // Rebuilds the launch inputs for a signature that changed under a save — the same branch PrepareAsync
+    // takes, so a routine that became a trigger (or stopped being one) is handled by the one code path.
+    private async Task RebuildLaunchInputsAsync(CancellationToken cancellationToken)
+    {
+        var ddl = _model?.Syntax.Statements.OfType<DdlStatement>().FirstOrDefault(d => d.Body is not null);
+        if (ddl is not null && ddl.ObjectKind == DdlObjectKind.Trigger)
+        {
+            await TryPrepareTriggerAsync(ddl, cancellationToken).ConfigureAwait(true);
+            return;
+        }
+
+        IsTriggerMode = false;
+        TriggerEditor = null;
+        BuildParameters();
     }
 
     /// <summary>A session exists that saving would invalidate — running or paused, or a terminal state whose

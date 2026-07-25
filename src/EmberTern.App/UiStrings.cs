@@ -1826,6 +1826,9 @@ internal static class UiStrings
     public const string DebuggerSaveEndsSessionConfirm = "Stop session and save";
     public const string DebuggerSaveCompileFailedFormat = "Compile failed: {0}";
     public const string DebuggerStatusSaved = "Saved and compiled.";
+    // Save during a debugging cycle: the session is rebuilt on the compiled code with the settings the user
+    // already made, so they land back where they were instead of re-entering the launch form.
+    public const string DebuggerStatusSavedRestarting = "Saved — restarting the session…";
     // The compile was refused: the tab stays on the source so the code can be fixed and saved again.
     // The server's own message is in the Error Bar — this is only the short status-line headline.
     public const string DebuggerStatusSaveFailed = "Save failed — fix the code and save again.";
