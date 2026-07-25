@@ -1,27 +1,42 @@
 <?xml version="1.0"?>
 <!--
-  Light-theme variant of the Firebird SQL highlighter. Etap 1 lexical-palette pass
-  (editor-architecture.md §9.5): the previous Light+ palette ran three roles into the
-  same green/teal mid-tone (Comment, Number, DataType), which is why some elements were
-  hard to tell apart on the near-white background (BackgroundColor #F3F3F3). The three
-  "cool" roles are now spaced across a green → teal → blue gradient so they differ in
-  BOTH hue and lightness, and the harsh pure-blue DML keyword is softened. All foregrounds
-  stay dark enough to read (~WCAG AA-ish). Exact hex is tunable with visual verification.
+  Light-theme variant of the Firebird SQL highlighter — D15.1 readability palette (3-tier).
+  Mirrors FirebirdSql.xshd's hierarchy on the near-white background (BackgroundColor #F3F3F3):
+    * SQL keywords (query clauses + DML-action + DDL) share ONE restrained blue, bold.
+    * PSQL control-flow / routine-body keywords (BEGIN/END/IF/WHILE/FOR/DECLARE/SUSPEND/
+      EXECUTE/…) get a SECOND restrained accent (violet), bold — SQL vs PSQL as two groups.
+    * Data types keep a discreet muted-teal accent (they matter in declarations).
+    * Built-in functions get a readable dark-gold accent (VS Code light style), a clear fourth hue.
+    * Comments and literals (strings / numbers) stay legible but quiet.
+    * Operators a soft grey; ordinary identifiers are NEUTRAL (default foreground).
+  All foregrounds stay dark enough to read (~WCAG AA-ish). Exact hex is tunable with visual
+  verification in the running app.
 
-  Categories and rule ordering mirror FirebirdSql.xshd 1:1 — only colors differ (dark
-  theme is unchanged) — so toggling themes doesn't surface or hide categories. The
-  <Keywords> blocks are pinned against FirebirdSyntax by FirebirdSyntaxTests.
+  Categories and rule ordering mirror FirebirdSql.xshd 1:1 — only colors differ — so
+  toggling themes doesn't surface or hide categories. The <Keywords> blocks are pinned
+  against FirebirdSyntax by FirebirdSyntaxTests.
 -->
 <SyntaxDefinition name="Firebird SQL Light" extensions=".sql"
                   xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
 
-  <Color name="Comment"          foreground="#3F6B1F" />
+  <!-- Comments: an elegant modern-IDE green (SeaGreen) — clearly green and readable, not the old yellow
+       "olive" (#3F6B1F) and not a washed-out gray. -->
+  <Color name="Comment"          foreground="#2E8B57" />
   <Color name="String"           foreground="#A31515" />
   <Color name="Number"           foreground="#0B6A5C" />
+  <!-- SQL keywords (query + DML-action + DDL) share ONE restrained blue. -->
   <Color name="DmlKeyword"       foreground="#0033B3" fontWeight="bold" />
-  <Color name="StatementKeyword" foreground="#9018A8" fontWeight="bold" />
-  <Color name="DataType"         foreground="#1D6FA3" />
-  <Color name="Function"         foreground="#8C6600" />
+  <Color name="StatementKeyword" foreground="#0033B3" fontWeight="bold" />
+  <!-- PSQL control-flow / routine-body keywords: a distinct restrained violet (SQL vs PSQL),
+       a touch more saturated than the first cut so it reads clearly on the near-white background. -->
+  <Color name="PsqlKeyword"      foreground="#5D30A6" fontWeight="bold" />
+  <!-- Data types: a strong, elegant teal — immediately recognizable in declarations, clearly distinct
+       from the blue SQL keywords. -->
+  <Color name="DataType"         foreground="#0F766E" />
+  <!-- Built-in functions: a readable dark gold (VS Code light-theme style) — a clear accent, distinct
+       from the blue keywords / violet PSQL / teal types, readable on the near-white background. -->
+  <Color name="Function"         foreground="#795E26" />
+  <!-- Operators a soft grey. -->
   <Color name="Operator"         foreground="#4D4D4D" />
 
   <RuleSet ignoreCase="true">
@@ -75,7 +90,7 @@
       <Word>SUB_TYPE</Word><Word>SEGMENT</Word><Word>SIZE</Word>
     </Keywords>
 
-    <!-- DML-action + DDL share the same purple. -->
+    <!-- SQL statement keywords (DML-action + DDL + transaction + constraints) — blue, same as DmlKeyword. -->
     <Keywords color="StatementKeyword">
       <!-- DML action -->
       <Word>INSERT</Word><Word>UPDATE</Word><Word>DELETE</Word><Word>MERGE</Word>
@@ -86,18 +101,22 @@
       <Word>TABLE</Word><Word>VIEW</Word><Word>INDEX</Word><Word>SEQUENCE</Word><Word>GENERATOR</Word>
       <Word>PROCEDURE</Word><Word>FUNCTION</Word><Word>TRIGGER</Word>
       <Word>DOMAIN</Word><Word>EXCEPTION</Word><Word>ROLE</Word>
-      <Word>GRANT</Word><Word>REVOKE</Word><Word>EXECUTE</Word>
-      <Word>RETURNS</Word><Word>RETURN</Word>
-      <Word>BEGIN</Word><Word>END</Word>
-      <Word>FOR</Word><Word>WHILE</Word><Word>DO</Word>
-      <Word>IF</Word>
-      <Word>EXIT</Word><Word>SUSPEND</Word><Word>LEAVE</Word>
-      <Word>DECLARE</Word><Word>VARIABLE</Word><Word>CURSOR</Word><Word>BLOCK</Word>
-      <Word>STATEMENT</Word>
+      <Word>GRANT</Word><Word>REVOKE</Word>
+      <!-- transaction + constraints -->
       <Word>COMMIT</Word><Word>ROLLBACK</Word><Word>SAVEPOINT</Word><Word>TRANSACTION</Word>
       <Word>PRIMARY</Word><Word>FOREIGN</Word><Word>KEY</Word><Word>REFERENCES</Word>
       <Word>CONSTRAINT</Word><Word>UNIQUE</Word><Word>CHECK</Word><Word>DEFAULT</Word>
       <Word>NEXT</Word><Word>VALUE</Word>
+    </Keywords>
+
+    <!-- PSQL control-flow / routine-body keywords — the second (violet) structural accent. -->
+    <Keywords color="PsqlKeyword">
+      <Word>BEGIN</Word><Word>END</Word>
+      <Word>FOR</Word><Word>WHILE</Word><Word>DO</Word><Word>IF</Word>
+      <Word>EXIT</Word><Word>SUSPEND</Word><Word>LEAVE</Word>
+      <Word>DECLARE</Word><Word>VARIABLE</Word><Word>CURSOR</Word>
+      <Word>EXECUTE</Word><Word>BLOCK</Word><Word>STATEMENT</Word>
+      <Word>RETURNS</Word><Word>RETURN</Word>
     </Keywords>
 
     <Keywords color="DmlKeyword">

@@ -348,6 +348,56 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
+    // D12 Seam E1 QA — the breakpoint gutter click. Ground truth for the reported "clicking the gutter does
+    // nothing": builds a real TextEditor with the production BreakpointMargin, lays it out, and sends a REAL
+    // left-click over the margin — the same hit-test + OnPointerPressed path the app uses — asserting the toggle
+    // callback fires. If this passes, the margin click plumbing works; if it fails, the margin is not receiving
+    // the click (the bug), and the log shows visualLinesValid + the margin bounds to diagnose.
+    [Fact]
+    public async System.Threading.Tasks.Task BreakpointMargin_GutterClick_InvokesToggle()
+    {
+        var session = SharedSession;
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            int? toggled = null;
+            var bps = new System.Collections.Generic.HashSet<int>();
+            var editor = new TextEditor
+            {
+                Text = "aaaa\nbbbb\ncccc\ndddd\neeee",
+                ShowLineNumbers = true,
+                FontFamily = new FontFamily("Consolas,monospace"),
+                FontSize = 13,
+            };
+            var margin = new BreakpointMargin(() => bps, off => toggled = off);
+            editor.TextArea.LeftMargins.Insert(0, margin);
+
+            var window = new Window { Width = 500, Height = 400, Content = editor };
+            window.Show();
+            for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+
+            var tv = editor.TextArea.TextView;
+            log.AppendLine($"visualLinesValid={tv.VisualLinesValid} marginBounds={margin.Bounds}");
+
+            // A point over the margin, on the first text line's row.
+            var p = margin.TranslatePoint(new Point(9, 6), window);
+            log.AppendLine($"clickPoint={p}");
+            if (p is { } pt)
+            {
+                window.MouseDown(pt, MouseButton.Left);
+                window.MouseUp(pt, MouseButton.Left);
+                for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+            }
+            log.AppendLine($"toggled={toggled}");
+
+            window.Close();
+            Assert.True(toggled is not null, "gutter click must invoke the breakpoint toggle.\n" + log);
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
     // Etap 2: every MetadataObjectKind's geometry key must resolve to a real Geometry
     // through IconGeometryConverter (the live SVG-icon pipeline), plus the tree-chrome
     // keys (Query tab / Connection node / Folder). A missing/typo'd key renders a BLANK
@@ -998,6 +1048,589 @@ public sealed class ConnectionExpandBindingProbe
             window.Close();
         }, CancellationToken.None);
     }
+
+    // D15.1 Seam B — the current-line marker is the BACKDROP. CurrentLineRenderer.Attach inserts itself
+    // FIRST in BackgroundRenderers, so the squiggle / related-element renderers (added earlier by the shared
+    // editor wiring) draw ON TOP and stay legible over the calm full-line wash. This pins that ordering
+    // decision and exercises the real full-line Draw path over a paused span (must not throw). Visual
+    // appearance (colour, alpha, the left bar) is user QA.
+    [Fact]
+    public async System.Threading.Tasks.Task CurrentLineRenderer_Attach_IsBackdropBelowOtherRenderers()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 400, Height = 200 };
+            var window = new Window { Width = 500, Height = 320, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            editor.Text = "begin\n  a = 1;\n  b = 2;\nend";
+            Dispatcher.UIThread.RunJobs();
+
+            // A sibling background renderer added FIRST, exactly as the shared editor wiring does before the
+            // current-line one.
+            using var svc = new EditorLanguageService(editor);
+            var related = RelatedElementsRenderer.Attach(editor, () => svc.Model);
+
+            int start = editor.Text.IndexOf("b = 2", System.StringComparison.Ordinal);
+            var current = CurrentLineRenderer.Attach(editor, () => (start, "b = 2".Length));
+
+            // Inserted first ⇒ it is the backdrop; the related renderer sits above it.
+            var bg = editor.TextArea.TextView.BackgroundRenderers;
+            Assert.Same(current, bg[0]);
+            Assert.True(bg.IndexOf(related) > bg.IndexOf(current));
+
+            // A real paint with a live paused span must not throw (full-line geometry path).
+            editor.TextArea.TextView.Redraw();
+            Dispatcher.UIThread.RunJobs();
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // D15.5 Seam A — the inline-values renderer paints greyed name=value annotations at line ends. It is
+    // APPENDED after the current-line renderer (so it draws on top of the calm wash) and never shifts text
+    // (it paints past the line's text end). This pins the ordering + exercises the real annotation Draw path
+    // (must not throw); appearance/positioning is user QA.
+    [Fact]
+    public async System.Threading.Tasks.Task InlineValuesRenderer_Attach_AppendedAboveCurrentLine_DrawsWithoutThrow()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 400, Height = 200 };
+            var window = new Window { Width = 500, Height = 320, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            editor.Text = "begin\n  a = 1;\n  b = 2;\nend";
+            Dispatcher.UIThread.RunJobs();
+
+            int start = editor.Text.IndexOf("b = 2", System.StringComparison.Ordinal);
+            var current = CurrentLineRenderer.Attach(editor, () => (start, "b = 2".Length));
+            var inline = InlineValuesRenderer.Attach(editor,
+                () => new[] { new InlineValueAnnotation(start, "B = 2") });
+
+            // Appended after the current-line renderer ⇒ it paints on top of the wash.
+            var bg = editor.TextArea.TextView.BackgroundRenderers;
+            Assert.True(bg.IndexOf(inline) > bg.IndexOf(current));
+
+            // A real paint with a live annotation must not throw (FormattedText + line-end geometry path).
+            editor.TextArea.TextView.Redraw();
+            Dispatcher.UIThread.RunJobs();
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // D15.2 Seam A — the debugger toolbar's icon geometries and the new loop-category brush must resolve
+    // at runtime. The build already validates the compiled StaticResource Icon.* usages; this also covers
+    // the DynamicResource brush token (resolved at runtime, not compile) and pins it in BOTH themes.
+    [Fact]
+    public async System.Threading.Tasks.Task DebuggerToolbarIcons_GeometriesAndLoopBrush_Resolve()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var app = Avalonia.Application.Current!;
+
+            string[] geometries =
+            {
+                "Icon.Play", "Icon.Stop", "Icon.StepInto", "Icon.StepOver", "Icon.StepOut",
+                "Icon.RunToCursor", "Icon.RunToSuspend", "Icon.NextIteration", "Icon.LoopExit",
+                "Icon.Restart", "Icon.BreakException",
+            };
+            foreach (var key in geometries)
+            {
+                Assert.True(
+                    app.Resources.TryGetResource(key, null, out var g) && g is Avalonia.Media.Geometry,
+                    $"debugger icon geometry '{key}' does not resolve");
+            }
+
+            foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
+            {
+                Assert.True(
+                    app.Resources.TryGetResource("DebugLoopIconBrush", theme, out var b) && b is Avalonia.Media.IBrush,
+                    $"DebugLoopIconBrush does not resolve in {theme}");
+
+                // D15.2 Seam B — the debugger identity mark (DebuggerIcon, replaces Icon.Bug)
+                // is a two-colour composite: pin both of its REUSED brush tokens in both themes.
+                Assert.True(
+                    app.Resources.TryGetResource("AccentIconBrush", theme, out var a) && a is Avalonia.Media.IBrush,
+                    $"AccentIconBrush does not resolve in {theme}");
+                Assert.True(
+                    app.Resources.TryGetResource("DebugBreakpointBrush", theme, out var d) && d is Avalonia.Media.IBrush,
+                    $"DebugBreakpointBrush does not resolve in {theme}");
+            }
+
+            // The DebuggerIcon composite must construct + apply its ControlTheme (it is not a
+            // keyed geometry, so the StaticResource build-validation above does not cover it).
+            var dbgIcon = new EmberTern.App.Controls.DebuggerIcon();
+            Assert.NotNull(dbgIcon);
+
+            // Stage Q / Q3 — the code-action bulb is built in CODE (an overlay control, not XAML), so
+            // its geometry and both of its brush states are resolved at runtime and nothing else would
+            // catch a typo in a key.
+            Assert.True(
+                app.Resources.TryGetResource("Icon.LightbulbFilled", null, out var bulb) && bulb is Avalonia.Media.Geometry,
+                "code-action bulb geometry does not resolve");
+            foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
+            {
+                Assert.True(
+                    app.Resources.TryGetResource("CodeActionBrush", theme, out var rest) && rest is Avalonia.Media.IBrush,
+                    $"CodeActionBrush (bulb at rest) does not resolve in {theme}");
+                Assert.True(
+                    app.Resources.TryGetResource("AccentIconBrush", theme, out var hot) && hot is Avalonia.Media.IBrush,
+                    $"AccentIconBrush (bulb hovered) does not resolve in {theme}");
+            }
+        }, CancellationToken.None);
+    }
+
+    // Stage Q — the APP half of the code-action pipeline on a REAL editor: GetActionsAtCaret sees the
+    // engine's actions, Ctrl+. opens the menu, and the menu is dismissed / invalidated the way a context
+    // menu must be. Lives here because real key events need the ONE shared headless session (#94/#226).
+    //
+    // The bulb's own path is covered by CodeActionBulb_* below. It is testable at all only because the
+    // dwell timer was removed: headless runs no DispatcherTimer whatsoever (measured during the Q3 QA
+    // trace — a plain 450ms control timer ticked 0 times), so while the bulb depended on one, the path
+    // that actually failed for the user was the one path no test could reach.
+    [Fact]
+    public async System.Threading.Tasks.Task CodeActionMenu_OpensOnCtrlPeriod_AndDismissesLikeAContextMenu()
+    {
+        var session = SharedSession;
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            const string Sql = "select id_rozliczenie from rozliczenie r join pozycja p on 1 = 1";
+            var meta = new ProbeMetadata()
+                .Col("ROZLICZENIE", "ID_ROZLICZENIE")
+                .Col("POZYCJA", "ID_ROZLICZENIE");
+
+            var model = SemanticModel.Build(Sql, meta);
+            var diagnostics = EmberTern.Core.Sql.Language.DiagnosticsEngine.Analyze(model);
+            log.AppendLine($"[1] diagnostics = {diagnostics.Count}");
+            foreach (var d in diagnostics) log.AppendLine($"    {d.Code} {d.Category} [{d.Start}..{d.End})");
+
+            var editor = new TextEditor { Document = new AvaloniaEdit.Document.TextDocument(Sql) };
+            var window = new Window { Content = editor, Width = 900, Height = 400 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var nav = NavigationController.Attach(
+                editor,
+                () => model,
+                () => diagnostics,
+                () => false,
+                (_, _) => false,
+                _ => false);
+
+            int columnOffset = Sql.IndexOf("id_rozliczenie", StringComparison.Ordinal);
+            editor.CaretOffset = columnOffset + 3;   // inside the ambiguous column
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[2] caret = {editor.CaretOffset}, IsReadOnly = {editor.IsReadOnly}");
+
+            var actions = nav.CodeActionsForTest(editor.CaretOffset);
+            log.AppendLine($"[3] GetActionsAtCaret = {actions.Count}");
+            Assert.Equal(2, actions.Count);
+
+            void CtrlPeriod()
+            {
+                editor.TextArea.RaiseEvent(new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = Key.OemPeriod,
+                    KeyModifiers = KeyModifiers.Control,
+                });
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            // Opens.
+            CtrlPeriod();
+            Assert.True(nav.IsCodeActionMenuOpen);
+
+            // Escape dismisses without applying, and hands the keyboard back so typing can continue.
+            editor.TextArea.RaiseEvent(new KeyEventArgs
+            {
+                RoutedEvent = InputElement.KeyDownEvent,
+                Key = Key.Escape,
+                KeyModifiers = KeyModifiers.None,
+            });
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[4] after Escape: open = {nav.IsCodeActionMenuOpen}, text unchanged = {editor.Document.Text == Sql}");
+            Assert.False(nav.IsCodeActionMenuOpen);
+            Assert.Equal(Sql, editor.Document.Text);   // Escape performed NO action
+
+            // Moving the caret invalidates an open menu: its actions describe the position it was built
+            // for, and offering them somewhere else is the wrong behaviour.
+            CtrlPeriod();
+            Assert.True(nav.IsCodeActionMenuOpen);
+            editor.CaretOffset = editor.Document.TextLength;
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[5] after caret move: open = {nav.IsCodeActionMenuOpen}");
+            Assert.False(nav.IsCodeActionMenuOpen);
+
+            // A text change under an open menu invalidates it too.
+            editor.CaretOffset = columnOffset + 3;
+            Dispatcher.UIThread.RunJobs();
+            CtrlPeriod();
+            Assert.True(nav.IsCodeActionMenuOpen);
+            editor.Document.Insert(editor.Document.TextLength, " ");
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[6] after text change: open = {nav.IsCodeActionMenuOpen}");
+            Assert.False(nav.IsCodeActionMenuOpen);
+
+            nav.Detach();
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Stage Q — the menu must be fully drivable from the keyboard, like every other completion list:
+    // first item preselected, arrows move, Enter applies. Focus deliberately stays in the EDITOR (an
+    // overlay-hosted list does not reliably take it), so these keys are raised at the TextArea — which
+    // is also exactly how they arrive in the real app.
+    [Fact]
+    public async System.Threading.Tasks.Task CodeActionMenu_IsDrivableFromTheKeyboard()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            const string Sql = "select id_rozliczenie from rozliczenie r join pozycja p on 1 = 1";
+            var meta = new ProbeMetadata()
+                .Col("ROZLICZENIE", "ID_ROZLICZENIE")
+                .Col("POZYCJA", "ID_ROZLICZENIE");
+            var model = SemanticModel.Build(Sql, meta);
+            var diagnostics = EmberTern.Core.Sql.Language.DiagnosticsEngine.Analyze(model);
+
+            var editor = new TextEditor { Document = new AvaloniaEdit.Document.TextDocument(Sql) };
+            var window = new Window { Content = editor, Width = 900, Height = 400 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var nav = NavigationController.Attach(
+                editor, () => model, () => diagnostics, () => false, (_, _) => false, _ => false);
+            editor.CaretOffset = Sql.IndexOf("id_rozliczenie", StringComparison.Ordinal) + 3;
+            Dispatcher.UIThread.RunJobs();
+
+            void Press(Key key, KeyModifiers modifiers = KeyModifiers.None)
+            {
+                editor.TextArea.RaiseEvent(new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = key,
+                    KeyModifiers = modifiers,
+                });
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            Press(Key.OemPeriod, KeyModifiers.Control);
+            Assert.True(nav.IsCodeActionMenuOpen);
+            Assert.Equal(0, nav.CodeActionSelectionForTest);   // the first item is armed on open
+
+            Press(Key.Down);
+            Assert.Equal(1, nav.CodeActionSelectionForTest);
+            Press(Key.Up);
+            Assert.Equal(0, nav.CodeActionSelectionForTest);
+            Press(Key.Up);                                      // wraps rather than sticking at the end
+            Assert.Equal(1, nav.CodeActionSelectionForTest);
+
+            // Enter applies the SELECTED action — the second one, so this also proves the arrows really
+            // chose it rather than the menu always running its first entry.
+            var expected = nav.CodeActionsForTest(editor.CaretOffset)[1];
+            Press(Key.Enter);
+
+            Assert.False(nav.IsCodeActionMenuOpen);
+            Assert.NotEqual(Sql, editor.Document.Text);
+            Assert.Contains(expected.Edits[0].NewText, editor.Document.Text, StringComparison.Ordinal);
+
+            nav.Detach();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // Stage Q / Q3 — THE path that failed in QA: the user simply moves the caret onto a line that has a
+    // code action, and the bulb must appear. Nothing else happens — no model rebuild, no scroll, no
+    // explicit refresh. This is now reachable by a test only because the bulb no longer waits on a
+    // DispatcherTimer, which headless cannot run.
+    [Fact]
+    public async System.Threading.Tasks.Task CodeActionBulb_AppearsWhenTheCaretMovesOntoAnActionableLine()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            // The actionable column is on line 1; line 2 has nothing to offer.
+            const string Sql = "select id_rozliczenie\nfrom rozliczenie r join pozycja p on 1 = 1";
+            var meta = new ProbeMetadata()
+                .Col("ROZLICZENIE", "ID_ROZLICZENIE")
+                .Col("POZYCJA", "ID_ROZLICZENIE");
+            var model = SemanticModel.Build(Sql, meta);
+            var diagnostics = EmberTern.Core.Sql.Language.DiagnosticsEngine.Analyze(model);
+            Assert.NotEmpty(diagnostics);
+
+            var editor = new TextEditor { Document = new AvaloniaEdit.Document.TextDocument(Sql) };
+            var window = new Window { Content = editor, Width = 900, Height = 400 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var nav = NavigationController.Attach(
+                editor, () => model, () => diagnostics, () => false, (_, _) => false, _ => false);
+
+            // Caret parked away from the ambiguity: nothing offered, nothing shown.
+            editor.CaretOffset = editor.Document.GetLineByNumber(2).Offset + 2;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(nav.IsCodeActionIndicatorVisible);
+
+            // The user clicks onto the ambiguous column. Caret movement alone must produce the bulb.
+            editor.CaretOffset = Sql.IndexOf("id_rozliczenie", StringComparison.Ordinal) + 3;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(nav.IsCodeActionIndicatorVisible, "the bulb did not appear on caret movement alone");
+
+            // …and leaving the line takes it away again.
+            editor.CaretOffset = editor.Document.GetLineByNumber(2).Offset + 2;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(nav.IsCodeActionIndicatorVisible);
+
+            nav.Detach();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // Stage Q / Q3 — the bulb's PLACEMENT must survive being asked while the view's line geometry is not
+    // valid. It positions from a timer tick and from ModelUpdated, i.e. OUTSIDE the render pass, where
+    // TextView.VisualLines THROWS if a re-measure is pending (EditorPopups' rule; the double-click crash).
+    // The Q3 QA bug was exactly this: the placement idiom was lifted from a background RENDERER, whose
+    // Draw only ever runs when the lines are valid. A freshly-laid-out editor cannot reproduce it, so
+    // this drives the case directly: invalidate, then ask.
+    [Fact]
+    public async System.Threading.Tasks.Task CodeActionBulb_PlacementSurvivesInvalidVisualLines()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            const string Sql = "select id_rozliczenie from rozliczenie r join pozycja p on 1 = 1";
+            var meta = new ProbeMetadata()
+                .Col("ROZLICZENIE", "ID_ROZLICZENIE")
+                .Col("POZYCJA", "ID_ROZLICZENIE");
+            var model = SemanticModel.Build(Sql, meta);
+            var diagnostics = EmberTern.Core.Sql.Language.DiagnosticsEngine.Analyze(model);
+
+            var editor = new TextEditor { Document = new AvaloniaEdit.Document.TextDocument(Sql) };
+            var window = new Window { Content = editor, Width = 900, Height = 400 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var overlay = OverlayLayer.GetOverlayLayer(editor);
+            int baseline = overlay!.Children.Count;   // BEFORE anything can add a bulb
+
+            var nav = NavigationController.Attach(
+                editor, () => model, () => diagnostics, () => false, (_, _) => false, _ => false);
+            editor.CaretOffset = Sql.IndexOf("id_rozliczenie", StringComparison.Ordinal) + 3;
+
+            // Force a pending re-measure, then ask for the bulb: this must not throw, and must not leave
+            // a control stranded in the overlay at a position that was never computed.
+            editor.TextArea.TextView.Redraw();
+            editor.TextArea.TextView.InvalidateMeasure();
+
+            nav.RefreshCodeActionIndicator();   // must not throw
+
+            Assert.True(
+                nav.IsCodeActionIndicatorVisible || overlay.Children.Count == baseline,
+                "the bulb was left in the overlay without a computed position");
+
+            // Once the view settles, it must be placeable.
+            Dispatcher.UIThread.RunJobs();
+            nav.RefreshCodeActionIndicator();
+            Assert.True(nav.IsCodeActionIndicatorVisible);
+
+            // …and being "added" is not the same as being SEEN. The icon is a TemplatedControl, so it
+            // draws only through its ControlTheme; a missing theme, a zero measure, or a position off the
+            // visible area all leave the user with no bulb while every assertion about state still passes.
+            window.Width = 900;
+            window.Height = 400;
+            Dispatcher.UIThread.RunJobs();
+            var bulb = Assert.IsAssignableFrom<Control>(overlay.Children[overlay.Children.Count - 1]);
+            bulb.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            _out.WriteLine($"bulb desired = {bulb.DesiredSize}, left = {Canvas.GetLeft(bulb)}, top = {Canvas.GetTop(bulb)}");
+
+            // Being "added" is not the same as being SEEN — the state assertions above would all pass for
+            // a control measuring to nothing or sitting outside the view. THIS is the pair that would have
+            // caught the placement bug: the line here runs the full width of the editor, which put the
+            // anchor past the right edge (measured: Right=896 in a 900-wide view) where the overlay clips
+            // it away — present in every field we track, invisible to the user.
+            Assert.True(
+                bulb.DesiredSize.Width > 0 && bulb.DesiredSize.Height > 0,
+                "the bulb measures to nothing — it would be invisible");
+
+            // The assertion that was missing, and the one that would have caught the live bug: SvgIcon
+            // STROKES its geometry with Foreground, so a null brush paints nothing while every other
+            // property still looks healthy. Theme-scoped brushes need the theme variant on lookup —
+            // Control.FindResource(key) does not supply one and silently yields UNSET.
+            var bulbIcon = Assert.IsType<Avalonia.Controls.Shapes.Path>(((Border)bulb).Child);
+            Assert.NotNull(bulbIcon.Data);
+            Assert.NotNull(bulbIcon.Fill);
+            Assert.True(bulb.Opacity > 0, "the bulb is fully transparent");
+            Assert.InRange(Canvas.GetLeft(bulb), 0, editor.Bounds.Width - 1);
+            Assert.InRange(Canvas.GetTop(bulb), 0, Math.Max(1, editor.Bounds.Height) - 1);
+
+            nav.Detach();
+            // Nothing stranded: this is what caught the re-entrancy that added a second, orphaned bulb.
+            Assert.Equal(baseline, overlay.Children.Count);
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    private sealed class ProbeMetadata : ISqlMetadataProvider
+    {
+        private readonly System.Collections.Generic.Dictionary<string, ObjectMetadata> _objects =
+            new(StringComparer.OrdinalIgnoreCase);
+        private readonly System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<ColumnMetadata>> _cols =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        public ProbeMetadata Col(string table, string name)
+        {
+            if (!_objects.ContainsKey(table)) _objects[table] = new ObjectMetadata(table, SymbolKind.Table);
+            if (!_cols.TryGetValue(table, out var list)) _cols[table] = list = new();
+            list.Add(new ColumnMetadata(name, "INTEGER"));
+            return this;
+        }
+
+        public ObjectMetadata? FindObject(string name) => _objects.TryGetValue(name, out var o) ? o : null;
+        public System.Collections.Generic.IReadOnlyList<ColumnMetadata> GetColumns(string t)
+            => _cols.TryGetValue(t, out var c) ? c : Array.Empty<ColumnMetadata>();
+        public System.Collections.Generic.IReadOnlyList<RoutineParameterMetadata> GetRoutineParameters(string r)
+            => Array.Empty<RoutineParameterMetadata>();
+        public System.Collections.Generic.IReadOnlyList<ObjectMetadata> AllObjects() => _objects.Values.ToList();
+    }
+
+    // UX Polish Seam 4 — MessageBanner is the IDE's ONE message surface (debugger Error Bar + pre-flight rows
+    // + every object editor + Execute Procedure + Security Manager). Its severity mapping is resolved at
+    // RUNTIME (DynamicResource brush key + geometry key), so the build cannot validate it: pin that every
+    // severity's brush resolves in BOTH themes and its geometry resolves, and that the control constructs
+    // (its XAML, incl. the element bindings onto its own properties, actually loads).
+    [Fact]
+    public async System.Threading.Tasks.Task MessageBannerSeverities_GeometriesAndBrushes_Resolve()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var app = Avalonia.Application.Current!;
+            var severities = new[]
+            {
+                EmberTern.App.Controls.MessageSeverity.Info,
+                EmberTern.App.Controls.MessageSeverity.Success,
+                EmberTern.App.Controls.MessageSeverity.Warning,
+                EmberTern.App.Controls.MessageSeverity.Error,
+            };
+
+            foreach (var severity in severities)
+            {
+                var geometryKey = EmberTern.App.Controls.MessageBanner.GeometryKeyFor(severity);
+                Assert.True(
+                    app.Resources.TryGetResource(geometryKey, null, out var g) && g is Avalonia.Media.Geometry,
+                    $"MessageBanner geometry '{geometryKey}' ({severity}) does not resolve");
+
+                var brushKey = EmberTern.App.Controls.MessageBanner.BrushKeyFor(severity);
+                foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
+                {
+                    Assert.True(
+                        app.Resources.TryGetResource(brushKey, theme, out var b) && b is Avalonia.Media.IBrush,
+                        $"MessageBanner brush '{brushKey}' ({severity}) does not resolve in {theme}");
+                }
+            }
+
+            // The control loads, and changing Severity re-derives BOTH keys (the bindings paint from these).
+            var banner = new EmberTern.App.Controls.MessageBanner { Message = "boom" };
+            Assert.Equal("ErrorBrush", banner.SeverityBrushKey); // default severity is Error
+            Assert.True(banner.ShowCopy); // Copy is on by default — no per-host decision
+            banner.Severity = EmberTern.App.Controls.MessageSeverity.Warning;
+            Assert.Equal("WarningBrush", banner.SeverityBrushKey);
+            Assert.Equal("Icon.AlertTriangle", banner.SeverityGeometryKey);
+        }, CancellationToken.None);
+    }
+
+    // UX Polish Seam 4 (QA) — the banner's chrome comes from exactly TWO shared variants in
+    // ControlStyles.axaml, never from a per-host local value. Style setters only apply once the control is
+    // in a styled tree, so this hosts them in a real window and asserts the applied values: standalone =
+    // a full border, .docked = horizontal rules only, both on PanelBrush.
+    [Fact]
+    public async System.Threading.Tasks.Task MessageBannerChrome_HasExactlyTwoVariants()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var standalone = new EmberTern.App.Controls.MessageBanner { Message = "x" };
+            var docked = new EmberTern.App.Controls.MessageBanner { Message = "x" };
+            docked.Classes.Add("docked");
+
+            var window = new Avalonia.Controls.Window
+            {
+                Content = new Avalonia.Controls.StackPanel { Children = { standalone, docked } },
+            };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(new Avalonia.Thickness(1), standalone.BorderThickness);
+            Assert.Equal(new Avalonia.Thickness(0, 1, 0, 1), docked.BorderThickness);
+            Assert.NotNull(standalone.Background);
+            Assert.Equal(standalone.Background, docked.Background);
+            Assert.Equal(standalone.BorderBrush, docked.BorderBrush);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // UX Polish Seam 4 (QA) — the SQL Editor's Messages panel stays a log, but a problem entry speaks the
+    // one message language: its stripe + colour come from the SAME MessageBanner mapping (no icon — that
+    // would widen only the marked rows and break the timestamp alignment). An Info line keeps the normal
+    // reading colour and earns no marker.
+    [Fact]
+    public void QueryMessage_SeverityPresentation_MatchesTheBanner()
+    {
+        var error = new QueryMessageViewModel(EmberTern.App.Controls.MessageSeverity.Error, "boom");
+        var warning = new QueryMessageViewModel(EmberTern.App.Controls.MessageSeverity.Warning, "careful");
+        var info = new QueryMessageViewModel(EmberTern.App.Controls.MessageSeverity.Info, "done");
+
+        Assert.Equal(
+            EmberTern.App.Controls.MessageBanner.BrushKeyFor(EmberTern.App.Controls.MessageSeverity.Error),
+            error.SeverityBrushKey);
+
+        Assert.True(error.ShowSeverityMarker);
+        Assert.True(warning.ShowSeverityMarker);
+        Assert.False(info.ShowSeverityMarker);
+
+        Assert.Equal("ErrorBrush", error.MessageBrushKey);
+        Assert.Equal("WarningBrush", warning.MessageBrushKey);
+        Assert.Equal("ForegroundBrush", info.MessageBrushKey); // a log is mostly Info — keep it legible
+    }
+
+    // UX Polish Seam 4 — a blocking pre-flight item is an Error row, everything else a Warning row. The
+    // severity split is the ITEM's own decision (no brush in the data, no severity logic in the view).
+    [Fact]
+    public void DebugPreflightItem_BannerSeverity_FollowsIsBlocking()
+    {
+        var blocking = new EmberTern.App.Debugging.DebugPreflightItem(
+            EmberTern.App.Debugging.DebugPreflightSeverity.Error, "no step points", IsBlocking: true);
+        var advisory = new EmberTern.App.Debugging.DebugPreflightItem(
+            EmberTern.App.Debugging.DebugPreflightSeverity.Warning, "autonomous transaction");
+
+        Assert.Equal(EmberTern.App.Controls.MessageSeverity.Error, blocking.BannerSeverity);
+        Assert.Equal(EmberTern.App.Controls.MessageSeverity.Warning, advisory.BannerSeverity);
+    }
+
+    // (D15.3 F5 routing is now a window-level Go router — MainWindowViewModel.GoCommand → DebuggerTabViewModel
+    //  .RequestGoAsync — tested deterministically at the VM level in DebuggerTabVmTests, so the earlier headless
+    //  view test that raised F5 into a hosted DebuggerTabView is retired.)
 
     // Etap 6 UX-polish regression pin — the "FROM view / FROM proc(…) don't resolve" report. A view /
     // selectable procedure used in FROM only resolves once its metadata category has loaded, which (on

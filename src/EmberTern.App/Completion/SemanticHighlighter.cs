@@ -147,7 +147,13 @@ internal sealed class SemanticHighlighter : DocumentColorizingTransformer
                 priority = 0;
                 return null;
             case SemanticHighlightClass.SchemaObject:
-                key = EditorSemanticColors.ObjectBrushKey(h.ObjectKind);
+                // D15.1: a domain used as a data type reads like a SQL type (the shared teal), not the
+                // per-kind object colour — a domain IS a type in a declaration. Every other object keeps
+                // the tree-icon palette (coloured object == navigable). A dedicated domain accent is a
+                // deferred follow-up (§3.4); this maps the resolved domain reference to the type brush.
+                key = h.ObjectKind == SymbolKind.Domain
+                    ? "EditorDataTypeBrush"
+                    : EditorSemanticColors.ObjectBrushKey(h.ObjectKind);
                 priority = 2;
                 break;
             default:

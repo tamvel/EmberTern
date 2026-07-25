@@ -643,6 +643,20 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
 
     public bool CanExecuteProcedure => RunExecuteRequested is not null && !IsNew;
 
+    /// <summary>Raised when the user asks to debug this procedure (the editor-toolbar Debug button, Stage X /
+    /// D5). The host (<see cref="MainWindowViewModel"/>) opens a debugger tab for <see cref="ProcedureName"/>
+    /// — the debugger owns its own attachment + transaction, so the editor VM only signals intent (mirrors
+    /// <see cref="RunExecuteRequested"/>). Null until the host wires it. This is only an additional entry
+    /// point onto the existing debugger-launch path — no new debug logic lives here.</summary>
+    public Action? DebugRequested { get; set; }
+
+    /// <summary>A compiled (non-New) procedure can be debugged once the host has wired
+    /// <see cref="DebugRequested"/> (both are fixed at construction, so this needs no change notification).</summary>
+    public bool CanDebugProcedure => DebugRequested is not null && !IsNew;
+
+    [RelayCommand(CanExecute = nameof(CanDebugProcedure))]
+    private void DebugProcedure() => DebugRequested?.Invoke();
+
     [RelayCommand(CanExecute = nameof(CanExecuteProcedure))]
     private async Task ExecuteProcedure()
     {

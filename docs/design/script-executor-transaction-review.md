@@ -7,10 +7,46 @@
 > CLAUDE.md's "Current state" and `FirebirdScriptExecutor.UsesDeveloperModeWaitPolicy`. Both
 > conditions are load-bearing; the auto-commit one is now gotcha #230.
 >
-> §2.4 axis 2 (**transaction boundaries** — `Sequenced` mode, §5) is **NOT built and not scheduled**:
-> the user explicitly kept the existing transaction model. So **gotcha #213 stands** — a mixed DDL+DML
+> §2.4 axis 2 (**transaction boundaries** — `Sequenced` mode, §5) is **NOT built**: the user
+> explicitly kept the existing transaction model. So **gotcha #213 stands** — a mixed DDL+DML
 > migration still cannot run. §5 remains a proposal, retained as the analysis of what fixing that
-> would require. §6 Step 0's probe is still unrun and still gates §2.2(b).
+> would require.
+>
+> **Step 0 (§6) — RUN 2026-07-20 against the live FB5 lab. The design is now measurement-gated and
+> stands.** The one load-bearing unmeasured claim, the §2.2(b) self-block, was measured: it is **real
+> but selective** — table-scanning DDL (`CREATE INDEX`) self-blocks on the script's own uncommitted
+> DML (WAIT-exhausted lock timeout, SQLSTATE 40001), but the review's stated example (`ALTER TABLE …
+> ADD COLUMN`) does **not** (it is metadata-only on FB5). §2.2(b) is therefore **restated, not
+> withdrawn**; the lane-split rejection is unchanged (decisive on §2.2(a) alone). #213 re-confirmed
+> (PROBE 2); the Sequenced commit-boundary fix works (PROBE 3); independent DDL can share a segment
+> (PROBE 2a). Full report: see §6 "Results" and §7.
+>
+> **Step 1 (doc truth pass) — DONE 2026-07-21** (comment-only; §6). The stale comments that caused
+> the Data/Metadata-vs-Dev-Mode drift are fixed.
+>
+> **Step 3 (Sequenced Core) — DONE 2026-07-21** (§6). `ScriptTransactionMode.Sequenced` + the pure
+> `ScriptSegmentPlanner` (segments over the AST classifier, per-segment TPB intent) land Core-only;
+> Step 2 (Dev Mode text) was folded in and found already truthful.
+>
+> **Step 4 (Firebird layer) — DONE 2026-07-21** (§6, seams A + B). **Seam A** (per-segment TPB
+> resolution): pure `ResolveSegmentTransactionOptions`, unit-pinned. **Seam B** (Sequenced execution
+> loop): `RunSequencedAsync` runs the plan one committed segment at a time — **live-verified on FB5**
+> (`tools/probes/ScriptExecutorSequencedProbe`, ALL PASS: mixed migration runs / #213 contrast /
+> partial-commit). Core untouched; Manual/AutoCommit unchanged.
+>
+> **Step 5 (App layer) — STARTED 2026-07-21** (§6, split into seams A/B/C; App/UX only). **Seam A (the
+> third mode in the picker) — DONE**: `Sequenced` selectable, per-mode description on the picker, honest
+> summary. **Seam B (up-front rejection of a mixed script in Manual/AutoCommit) — DONE**: stopped before
+> the first statement with a message naming `Sequenced`; pure `ResolveMixedScriptBlock`, engine untouched.
+> **Seam C (results-grid segment presentation) — split C1/C2/C3; C1 (a "Step" column) DONE; C2 further
+> split C2a/C2b, C2a (pure per-step commit/rollback reconstruction, `BuildStepStatuses`) DONE; C2b further
+> split C2b-1/C2b-2, C2b-1 (colour the Step cell committed/rolled-back on executed rows) DONE, C2b-2
+> (surface "not run" statements as synthesized muted rows) DONE; C3 (a "N of M steps committed"
+> status-line headline) DONE — Step 5 seam C COMPLETE.** With Steps 0–5 done, Step 6 (live verification
+> against the lab with a real mixed migration) — **DONE 2026-07-21: Technical Review + Live Verification
+> (12 scenarios ALL PASS) + UX / Code / Performance Review + Final Verdict; the one finding (FINDING 1, a
+> stale `ScriptSegmentPlanner` docstring) was corrected in commit `8faf200`. → SCRIPT EXECUTOR REWRITE
+> (Steps 0–6) IS COMPLETE; nothing open.**
 
 Scope: (1) should the Script Executor keep one transaction, or reintroduce automatic
 metadata/data separation under Auto Commit; (2) are three connections still justified;
@@ -164,22 +200,30 @@ leaves half the migration in place is worse than one that cannot run the migrati
 first silently corrupts, the second visibly fails. This directly violates the paramount rule
 (#11, never lose/corrupt) more sharply than today's honest failure does.
 
-**(b) It self-blocks.** This is the decisive technical objection. Under the split, a script like:
+**(b) It self-blocks — for table-scanning DDL.** Under the split, a script like:
 
 ```sql
 INSERT INTO CUSTOMERS ...;      -- data → Data lane, transaction stays OPEN for the whole run
-ALTER TABLE CUSTOMERS ADD ...;  -- metadata → DDL lane, autonomous, WAIT-bounded
+CREATE INDEX IX_CUSTOMERS ...;  -- metadata → DDL lane, autonomous, WAIT-bounded
 ```
 
 has the DDL lane waiting on a lock held by **our own** still-open data transaction — which will not
 settle until the script finishes. The script blocks on itself, resolved only by the 3 s/10 s timeout,
-and then reports a lock error that names no other session. Note the irony: the split is proposed to
-*reduce* lock pain during deployment, but it introduces a lock conflict **with yourself** that does
-not exist today.
+and then reports a lock error that names no other session (SQLSTATE 40001, `isc_lock_timeout`). The
+irony: the split is proposed to *reduce* lock pain during deployment, but it introduces a lock
+conflict **with yourself**. "Populate a table, then index it" is a completely ordinary migration
+pattern, so this hazard is not exotic.
 
-> ⚠ **This claim is reasoned from Firebird semantics, not yet measured.** Given that #213, #214 and
-> #215 were *all* falsified inferences, it must be measured before the design is frozen. A probe is
-> written and ready — see §6.
+> ✅ **MEASURED (Step 0, 2026-07-20) — real but SELECTIVE; example corrected.** The self-block was
+> reasoned, not measured — and, given #213/#214/#215 were all falsified inferences, the probe (§6)
+> ran before freezing. Finding: **the mechanism is real for table-scanning DDL** — `CREATE INDEX`
+> against a table with our own uncommitted `INSERT` waits out the full 10 s WAIT and fails with
+> `isc_lock_timeout` (PROBE 1c). **But the review's original example was wrong**: `ALTER TABLE … ADD
+> COLUMN` (PROBE 1) and `DROP COLUMN` (PROBE 1d) are metadata-only on FB5 and do **not** block
+> (~7 ms). So (b) is **not** the decisive objection it was billed as — (a) is decisive on its own —
+> but it is a confirmed hazard for a real class of DDL, so it stays as a corrected objection rather
+> than being withdrawn. Note: the Sequenced design (§5) can never exhibit this, by construction — it
+> never holds two transactions open at once.
 
 **(c) It re-creates what was deliberately removed.** The brief says the editor's two-transaction
 model caused "locking and consistency problems" and that removing it was intentional. Every one of
@@ -447,45 +491,175 @@ In `Sequenced`:
 
 ## 6. Implementation plan
 
-**Nothing below is started. Step 0 gates the rest.**
+**All steps DONE — Step 0 (2026-07-20) through Step 6 (2026-07-21). SCRIPT EXECUTOR REWRITE (Steps 0–6) IS
+COMPLETE (live-verified, 12 scenarios ALL PASS). The per-step notes below are the historical implementation
+log.**
 
-**Step 0 — MEASURE (blocking; do this before freezing anything).**
-A probe is written and **builds clean**:
-`…/scratchpad/LaneProbe/` (standalone, not in `EmberTern.slnx`; managed driver, so the non-ASCII repo
-path is fine — gotcha #149). It reads the password from `ET_LAB_PWD` so no secret is written to disk
-or passed through this session. Run:
+**Step 0 — MEASURE — RUN 2026-07-20 (blocking gate; cleared).**
+The probe (`scratchpad/LaneProbe/`, standalone, not in `EmberTern.slnx`; managed driver, non-ASCII
+repo path fine — gotcha #149) reads the password from `ET_LAB_PWD` so no secret hits disk. It was run
+twice against `Lab/EmberTern_Lab.fdb` on the live FB5 (`WI-V5.0.3.1683`), identical outcomes; the lab
+`.fdb` was restored to pristine afterward.
 
 ```powershell
 $env:ET_LAB_PWD = "<local dev SYSDBA password>"
 dotnet run --project "<scratchpad>\LaneProbe"
 ```
 
-It measures, against `Lab/EmberTern_Lab.fdb`:
-1. **PROBE 1** — DDL on lane #3 vs our own uncommitted DML on lane #1, same table. *Settles §2.2(b).*
-2. **PROBE 1b** — same, but lane #1 holds only an open **read**. *Bounds the blast radius.*
-3. **PROBE 2** — re-confirms #213 on this engine.
-4. **PROBE 3** — proves the §5 commit-boundary design actually works.
+**Results:**
 
-**If PROBE 1 shows no self-block, §2.2(b) is withdrawn** and the lane split deserves a second look on
-(a)/(c)/(d) alone — which I still judge decisive, but the argument would be weaker and should be
-re-stated honestly.
+| Probe | Scenario | Result |
+|---|---|---|
+| **1**  | DDL `ADD COLUMN` on lane #3 vs our uncommitted `INSERT` on lane #1 (WAIT 10 s) | **SUCCEEDED ~7 ms — no self-block** |
+| **1a** | Same, WAIT 3 s | **SUCCEEDED ~6 ms — no self-block** |
+| **1c** | Table-scanning DDL `CREATE INDEX` vs our uncommitted `INSERT` (WAIT 10 s) | **FAILED ~10 011 ms — SELF-BLOCK** (SQLSTATE 40001, `isc_lock_timeout`) |
+| **1d** | Format-changing DDL `DROP COLUMN` vs our uncommitted `INSERT` (WAIT 10 s) | **SUCCEEDED ~7 ms — no self-block** |
+| **1b** | DDL vs an open **read-only** tx on lane #1 | SUCCEEDED ~6 ms — an open read never blocks DDL |
+| **2**  | `CREATE TABLE T; INSERT INTO T;` in ONE tx | INSERT **FAILED** (SQLSTATE 42000 / -204) — **#213 confirmed** |
+| **2a** | Two independent `CREATE TABLE`s in ONE tx | Both **committed** — independent DDL can share a segment |
+| **3**  | `CREATE` then `INSERT` split by a commit boundary, one lane | **Both succeeded** — the §5 fix works |
 
-**Step 1 — Documentation truth pass** *(independent of the outcome; safe to do now).*
-Fix the stale comments that caused this drift: `ConnectionProfile.cs:19` (NOWAIT claim),
-`ConnectionRole` docstring (metadata working transaction), `FirebirdScriptExecutor.cs:12` (still cites
-the superseded gotcha #122 co-location rationale).
+**Outcome — §2.2(b) is RESTATED, not withdrawn; the architecture is unchanged and now
+measurement-gated.** The self-block is **real but selective**: it occurs for table-scanning DDL
+(`CREATE INDEX` — PROBE 1c, a genuine WAIT-exhausted lock timeout) but **not** for the metadata-only
+op the review used as its example (`ADD COLUMN`/`DROP COLUMN` — PROBEs 1/1a/1d). So §2.2(b)'s example
+was falsified while its phenomenon was confirmed. Because §2.2(a) (Rollback lies) is decisive on its
+own, the lane-split rejection stands regardless, and the **Sequenced design (§5) — which by
+construction never holds two transactions open at once — cannot self-block at all.** PROBE 2/2a/3
+validate the three engine facts the Sequenced planner rests on. The gate is cleared: the design is
+safe to freeze. Full write-up in the Step 0 report kept with this session's scratchpad; §2.2(b) and
+§7 updated in place.
 
-**Step 2 — Dev Mode text** (§4.2). Small, self-contained, no behaviour change. Decide (a)/(b)/(c)
-first — if (c), the text lands with Step 4.
+**Step 1 — Documentation truth pass — DONE (2026-07-21).** *(Comment-only; no behaviour change.)*
+Fixed the stale comments that caused this drift. Two of the three originally-named targets had
+**already** been corrected by the time this ran — `ConnectionProfile.cs:19` (the NOWAIT claim; now
+correctly describes Dev Mode as a WAIT policy) and the `FirebirdScriptExecutor` header (no longer
+cites the superseded gotcha #122). The remaining two false statements were corrected in place:
+- **`ConnectionRole` docstring** (`FirebirdConnectionService.cs`) — claimed Metadata *"carries …
+  the metadata working transaction"*, contradicted by `MetadataLane` (which owns **no** transaction).
+  Now: Metadata carries read-only catalog browsing on an implicit per-command transaction, owns none.
+- **`MainWindowViewModel.cs:200`** — cited *"co-location, gotcha #122"* as the reason the Script
+  Executor runs on the Data lane. That rationale was superseded by #214; the real reason is that the
+  Script Executor **IS** the user working transaction (one tx per connection, #89). Corrected.
 
-**Step 3 — `Sequenced` mode, Core.** `ScriptTransactionMode.Sequenced`; segment planner over the
-classifier (pure, unit-testable, no live DB); per-segment TPB selection.
+The corrective comments that already describe #122/co-location as *superseded* (`FirebirdConnectionService`
+`ExecuteDdlAsync`, `FirebirdDdlExecutor`) are accurate and were left unchanged. Build 0/0; Script
+Executor + Developer Mode tests green (101).
 
-**Step 4 — Firebird layer.** `FirebirdScriptExecutor` runs segments; Dev Mode-aware WAIT TPB on DDL
-segments; per-segment commit; committed-segments reporting.
+**Step 2 — Dev Mode text (§4.2) — FOLDED INTO STEP 3, and already in place (2026-07-21).** On review
+the user's decision (c) was effectively already shipped: `UiStrings.DeveloperModeDescription` already
+states the scope (*"applies when you compile an object in its editor, and when the Script Executor
+runs a script that only creates or changes objects"*) **and** the SQL-Editor boundary, and
+`DeveloperModeBadgeTooltip` already ends *"Does not affect the SQL Editor."* The text is truthful for
+today's behaviour (the all-DDL auto-commit path already reuses the Dev Mode WAIT policy), so **no edit
+was needed.** When the `Sequenced` build lands (Step 4) and *every* schema segment becomes
+Dev-Mode-aware, the scope sentence can broaden from *"a script that only creates or changes objects"*
+to *"the schema statements of any deployment script"* — a one-line text change to make with Step 4, not
+now.
 
-**Step 5 — App layer.** Third mode in the picker with the atomicity trade-off stated in the UI;
-up-front rejection of mixed scripts in `Manual`; results grid shows segment boundaries.
+**Step 3 — `Sequenced` mode, Core — DONE (2026-07-21).** `ScriptTransactionMode.Sequenced` added; new
+pure `ScriptSegmentPlanner` (`EmberTern.Core.Scripting`) splits a parsed script into ordered
+`ScriptSegment`s over the AST-based `SqlStatementClassifier` (**not** the driver's statement enum — the
+single-classifier convergence the review asks for), each carrying a `SegmentTransactionPolicy` intent
+(`DataNoWait` / `SchemaWait`). Conservative v1 rule: **each schema statement is its own committed
+segment** (isql `SET AUTODDL ON`), data statements group into their own NOWAIT segments — every segment
+homogeneous, one transaction ever open, so the §2.2(b) self-block is impossible by construction and
+#213 is fixed by design. Grouping independent consecutive DDL (permitted by §5.1, proven safe by PROBE
+2a) is a **documented deferred optimization** — it needs object-dependency analysis to stay safe for
+dependent DDL, and committing after each DDL is always correct. Pure Core only — no Firebird execution
+path, no App, no UI (Steps 4/5). Build 0/0; +10 `ScriptSegmentPlannerTests`; Script + Dev Mode suite
+green (110). *(Historical note — Steps 4/5/6 have since all been completed; see the banner above and §7.)*
+
+**Step 4 — Firebird layer.** `FirebirdScriptExecutor` runs the prepared plan (the planner stays the
+sole planner; Firebird only executes). Split into two seams:
+- **Seam A — per-segment TPB resolution — DONE (2026-07-21).** Pure internal
+  `FirebirdScriptExecutor.ResolveSegmentTransactionOptions(SegmentTransactionPolicy, bool)` maps a
+  planner-assigned policy to a Firebird TPB: `SchemaWait` → the SAME Dev-Mode-aware WAIT policy
+  Compile uses (`FirebirdDdlExecutor.BuildDdlTransactionOptions`, one definition, no drift);
+  `DataNoWait` → null (the working transaction's NOWAIT ReadCommitted default). Unit-pinned in
+  `DeveloperModeTests` (+5); no execution path, no behaviour change to any existing mode. Build 0/0.
+- **Seam B — Sequenced execution loop — DONE + live-verified (2026-07-21).** `RunAsync` dispatches
+  `Sequenced` (after the shared up-front checks) to a new `RunSequencedAsync`: `ScriptSegmentPlanner.Plan`,
+  then per segment begin a transaction with seam A's TPB, run its statements via the existing
+  `RunOneAsync`, commit on success / roll back the OPEN segment on failure (`stopOnError` stops the whole
+  run; otherwise a data segment finishes then rolls back, exactly as AutoCommit does for a whole script).
+  Exactly one transaction is open at a time (the §2.2(b) self-block is impossible by construction);
+  committed segments stay applied (per-statement results record what succeeded — the App reconstructs
+  boundaries in Step 5). `TransactionLeftOpen` is always false for Sequenced. Manual/AutoCommit paths
+  byte-unchanged. **Core untouched** — no `ScriptRunOutcome` change; the planner stays the sole planner.
+  **Live-verified** on FB5 against a throwaway scratch DB (`tools/probes/ScriptExecutorSequencedProbe`,
+  ALL PASS): (A) a mixed CREATE+INSERT+INDEX migration runs end-to-end and persists (#213 fixed by
+  design); (B) the same migration under AutoCommit still fails at the INSERT and rolls back (the #213
+  contrast); (C) a mid-script failure keeps the earlier table/row/index committed while rolling back only
+  the failing duplicate INSERT. Build 0/0; Script/Dev Mode/Transaction suite 165 green (regression). **The
+  next actionable is Step 5 (App).**
+
+**Step 5 — App layer.** App/UX only (no Core/Firebird change). Split into seams:
+- **Seam A — the third mode in the picker — DONE (2026-07-21).** `Sequenced` ("deployment, commits in
+  steps") added to the mode ComboBox; the picker now carries a per-mode description (tooltip) so the
+  Sequenced non-atomic trade-off is stated where the mode is chosen (§5.3). Pure
+  `ScriptExecutorTabViewModel.ResolveMode` (index→mode) + `ResolveModeDescription`, and a mode-aware
+  `BuildOutcomeStatus` giving Sequenced its own honest summary + cancelled message (not a single
+  Committed/Rolled-back verdict). Unit-pinned (+11 `ScriptExecutorModeTests`); Manual/AutoCommit wording
+  unchanged. Build 0/0. *(Visual confirmation of the picker is the user's; the Sequenced execution it
+  drives is already live-verified in Step 4.)*
+- **Seam B — up-front rejection of a mixed script in the single-transaction modes — DONE (2026-07-21).**
+  A mixed DDL+DML script in `Manual`/`AutoCommitOnSuccess` is now stopped BEFORE the first statement with
+  a message that explains the single-transaction limitation and names `Sequenced` (§5.1/§5.3), instead of
+  failing on statement 2 with `Table unknown`. Pure `ScriptExecutorTabViewModel.ResolveMixedScriptBlock`
+  (mode + statements → message or null; `Sequenced` is never blocked) over a private `IsMixedMigration`
+  that classifies via the same AST-based `SqlStatementClassifier` the planner uses (so "mixed here" and
+  "segmented there" can never disagree), wired into the run pre-flight beside the existing gates. Engine
+  untouched. Unit-pinned (+11 `ScriptExecutorMixedScriptTests`). Build 0/0.
+- **Seam C — segment presentation in the results grid.** Assessed as larger than one small seam, so
+  split into C1/C2/C3 (App presentation only; the App reconstructs everything from `ScriptSegmentPlanner`
+  — Core/Firebird untouched):
+  - **C1 — per-statement segment membership — DONE (2026-07-21).** A "Step" column in the results grid
+    shows which committed step (Sequenced segment/transaction) each statement ran in — the commit
+    boundaries made visible. Pure `ScriptExecutorTabViewModel.BuildSegmentMap(statements, mode)`
+    (statement index → 1-based step, reconstructed from the same planner the engine ran; empty for a
+    single-transaction run, so the column is blank in Manual/Auto-commit); `ScriptResultRowViewModel`
+    gained `StepText`. Unit-pinned (+7 `ScriptExecutorSegmentPresentationTests`). Build 0/0.
+  - **C2 — per-segment commit/rollback status.** Assessed larger than one seam (reconstruction has real
+    nuance + presentation needs observable rows / rebuild + colouring), so split C2a/C2b:
+    - **C2a — the pure reconstruction — DONE (2026-07-21).** `ScriptStepStatus` (Committed / RolledBack /
+      NotRun) + pure `ScriptExecutorTabViewModel.BuildStepStatuses(segmentMap, results)` rebuilds each
+      step's outcome from the plan + per-statement results, mirroring `RunSequencedAsync` exactly (a step
+      commits only if all its planned statements ran and none failed; any failure — or a partial run with
+      no failure = cancelled mid-step — rolls it back; no results = never reached). Captures the key
+      nuance: a `Success` statement whose step still rolled back because a LATER statement in the same
+      transaction failed. App reconstruction only; engine untouched. Unit-pinned (+7
+      `ScriptExecutorStepStatusTests`). Build 0/0.
+    - **C2b — presentation.** Split C2b-1/C2b-2 (executed rows can only be Committed/RolledBack;
+      surfacing "not run" needs synthesized rows — a separate concern):
+      - **C2b-1 — per-row committed/rolled-back status — DONE (2026-07-21).** After the run,
+        `ScriptExecutorTabViewModel.ApplyStepStatuses(rows, segmentMap, results)` stamps each executed
+        row with its step's outcome (from `BuildStepStatuses`, unchanged); `ScriptResultRowViewModel`
+        became observable with `StepStatus` + derived `IsStepCommitted`/`IsStepRolledBack`/tooltip, and
+        the results grid's Step cell is coloured (committed = green, rolled back = amber, existing
+        tokens) with an explanatory tooltip — so a `Success` statement whose step rolled back is visibly
+        marked. Unit-pinned (+4 `ScriptExecutorStepStatusPresentationTests`). Build 0/0.
+      - **C2b-2 — surface "not run" statements — DONE (2026-07-21).** A Sequenced stop-on-error /
+        cancellation leaves later statements unexecuted, so they produce NO result row (rows arrive only
+        via the progress callback). Pure `ScriptExecutorTabViewModel.FindNotRunStatements(segmentMap,
+        results)` reconstructs their indices from the plan (segment map, one entry per statement) minus
+        the indices the results cover (empty for single-transaction modes → nothing synthesized there),
+        and `AppendNotRunRows` appends a synthesized `ScriptResultRowViewModel` per index (new
+        statement-based constructor: `IsNotRun`, Result = "Not run", `StepStatus = NotRun`, its would-be
+        step number shown, source range preserved so double-click still navigates). A not-run row is
+        neither success nor failure — the grid shows it muted/italic via a new `IsSucceeded`
+        (`= !IsFailed && !IsNotRun`, so "OK" stays green only for a real success) and a `result-notrun`
+        style, the "Success" filter excludes it, and `SuccessCount`/`FailedCount` are untouched. App
+        presentation only; engine untouched. Unit-pinned (+7 `ScriptExecutorNotRunTests`). Build 0/0.
+  - **C3 — a "which steps committed" summary — DONE (2026-07-21).** The Sequenced status line now leads
+    with a "N of M steps committed" headline — committed steps of all planned steps (committed +
+    rolled-back + not-run). Pure `ScriptExecutorTabViewModel.BuildStepSummary(segmentMap, results)` counts
+    COMMITTED steps by REUSING the unchanged `BuildStepStatuses` reconstruction (so the count matches
+    exactly what the grid shows — this only counts and formats), and `BuildOutcomeStatus` gained an
+    optional `segmentMap` arg that prepends the headline to both the deployment summary and the cancelled
+    message (empty/absent for single-transaction modes and the existing 2-arg callers → no headline, so
+    those stay byte-identical). App presentation only; Core + Firebird + the reconstruction untouched.
+    Unit-pinned (+7 `ScriptExecutorStepSummaryTests`). Build 0/0. **Step 5 seam C is COMPLETE.**
 
 **Step 6 — Verify.** Build 0/0 + full suite + **live verification against the lab DB** with a real
 mixed migration script. Per the QA rule: not "fixed" until visually confirmed in the running app.
@@ -525,6 +699,20 @@ distinction, not a diluted dial (§1.3).
 **Measured previously, recorded, trusted:** #213 (CREATE+INSERT in one tx → -204) · #214
 (cross-attachment "object in use" is transient; WAIT clears in ~10 ms).
 
-**Reasoned, NOT measured — gated on Step 0:** the §2.2(b) self-block. This is the one load-bearing
-claim in the review that rests on inference rather than measurement, and the project's own history
-(#213/#214/#215 were all falsified inferences) says not to trust it until the probe runs.
+**Measured in Step 0 (2026-07-20, live FB5 `WI-V5.0.3.1683`, two runs, deterministic):**
+- **§2.2(b) self-block is real but SELECTIVE.** Table-scanning DDL (`CREATE INDEX`) against a table
+  with our own uncommitted `INSERT` waits out the full 10 s WAIT and fails `isc_lock_timeout`
+  (SQLSTATE 40001) — PROBE 1c. **But `ALTER TABLE … ADD COLUMN` (PROBE 1) and `DROP COLUMN`
+  (PROBE 1d) do NOT block** (~7 ms, metadata-only on FB5) — so the review's original *example* was a
+  falsified inference, joining #213/#214/#215; the *phenomenon* stands for a real DDL class.
+- **#213 re-confirmed on FB5** (PROBE 2): `CREATE TABLE T; INSERT INTO T;` in one tx → INSERT fails
+  (SQLSTATE 42000 / -204).
+- **Sequenced commit-boundary fix works** (PROBE 3): `CREATE`, commit, then `INSERT` in a new tx on
+  one lane → succeeds.
+- **Independent DDL can share a segment** (PROBE 2a): two unrelated `CREATE TABLE`s commit in one tx
+  → the §5.1 planner need not commit between every DDL.
+- **An open read-only tx never blocks cross-lane DDL** (PROBE 1b).
+
+**Net:** the review's *conclusion* (Sequenced, not lane-split; three attachments) is unchanged and
+now measurement-backed; only §2.2(b)'s example and "decisive objection" framing were corrected. The
+decisive objection to the lane split is §2.2(a) (Rollback lies), which never rested on inference.

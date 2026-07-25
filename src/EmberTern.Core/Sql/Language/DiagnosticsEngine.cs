@@ -183,10 +183,15 @@ public static class DiagnosticsEngine
         return q.Role is ReferenceRole.Qualifier or ReferenceRole.RecordAlias;
     }
 
-    // The qualifier binds a KNOWN table (a table reference with a resolved target, or a NEW/OLD record
-    // alias bound to a known table) — so an absent column on it is a genuine unknown column.
+    // The qualifier binds a KNOWN table whose column set can be VERIFIED — so an absent column on it is a
+    // genuine unknown column. A catalog table/view (a resolved target) or a NEW/OLD record alias always
+    // qualifies. A CTE qualifies ONLY when its projection was enumerated completely: the binder resolves
+    // cte.col against the CTE's own output columns, so a CTE with a complete column set can flag a genuine
+    // typo, while an incomplete one (a *, t.*, or an unaliased projection expression) stays silent — we
+    // never verify against a projection we could not enumerate without guessing (§0).
     private static bool QualifierResolvesTable(SymbolReference qualifier) => qualifier.Symbol switch
     {
+        TableReferenceSymbol { Target: CteSymbol cte } => cte.ColumnsComplete,
         TableReferenceSymbol { Target: not null } => true,
         RecordAliasSymbol { TargetTable: not null } => true,
         _ => false,

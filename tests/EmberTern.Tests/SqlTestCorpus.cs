@@ -118,6 +118,24 @@ public static class SqlTestCorpus
         "SELECT CASE WHEN A THEN CASE WHEN B THEN 1 ELSE 2 END ELSE 3 END AS N FROM T",
         "UPDATE T SET S = CASE WHEN X IS NULL THEN 0 ELSE X END WHERE ID = 1",
         "begin v = case when a > 0 then 1 else 0 end; if (case when b then 1 else 0 end = 1) then suspend; end",
+        // PSQL exception handlers — Stage X / P1 (WHEN … DO; all forms, single + multi-condition, block
+        // body, nested handler section, malformed WHEN → the lossless Other valve).
+        "begin insert into t values (1); when any do exception e; end",
+        "begin x = 1; when exception my_exc do x = 2; when sqlcode -803 do x = 3; end",
+        "begin x = 1; when gdscode grant_obj_notfound, gdscode grant_fld_notfound do begin x = 2; exit; end end",
+        "begin insert into t values (1); when sqlstate '23000' do begin exception dup; end when any do exception other; end",
+        "create procedure p as begin for select id from t into :i do begin when any do exit; end end",
+        "begin x = 1; when do x = 2; end",
+        // Local sub-routines — Stage X / D9 (DECLARE PROCEDURE/FUNCTION with a body, own local variables,
+        // interleaved with variable declarations, a forward declaration, and a stray one mid-body).
+        "create procedure p (n integer) returns (r integer) as declare procedure sp (a integer) returns (o integer) as begin o = a * 2; end begin execute procedure sp(n) returning_values r; end",
+        "create procedure p as declare function f (a integer) returns integer as begin return a + 1; end begin r = f(1); end",
+        "create procedure p as declare variable v1 integer; declare procedure sp as declare variable t integer; begin t = 1; end declare variable v2 integer; begin end",
+        "create procedure p as declare procedure sp (a integer) returns (o integer); declare procedure sp (a integer) returns (o integer) as begin o = a; end begin end",
+        // Lone-call operands — Stage X / D9 seam c (§6.4): assignment RHS, RETURN operand, whole IF/WHILE
+        // condition (recognised), plus excluded shapes that must stay token fragments (round-trip unaffected).
+        "create procedure p as declare function f (a integer) returns integer as begin return f(a - 1); end begin r = f(1); if (f(r)) then suspend; while (f(r)) do r = f(r); end",
+        "begin r = f(g(x)); r = f(x) + 1; if (f(x) and g(x)) then r = 1; end",
     };
 
     /// <summary>Representative + structural-construct cases.</summary>

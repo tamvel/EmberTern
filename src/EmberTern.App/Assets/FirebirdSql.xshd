@@ -1,13 +1,21 @@
 <?xml version="1.0"?>
 <!--
-  Dark-theme Firebird SQL highlighter. Palette inspired by VS Code "Dark+":
-  DML keywords blue, DML-action + DDL keywords purple, data types teal,
-  built-in functions yellow.
+  Dark-theme Firebird SQL highlighter — D15.1 readability palette (3-tier).
+  Colour leads the eye; it is not the field:
+    * SQL keywords (query clauses + DML-action + DDL) share ONE restrained blue, bold.
+    * PSQL control-flow / routine-body keywords (BEGIN/END/IF/WHILE/FOR/DECLARE/SUSPEND/
+      EXECUTE/…) get a SECOND restrained accent (violet), bold — so SQL and PSQL read as
+      two distinct groups without returning to the "Christmas tree".
+    * Data types keep a discreet muted-teal accent (they matter in declarations).
+    * Built-in functions get a soft yellow accent (VS Code-style), a clear fourth hue.
+    * Comments and literals (strings / numbers) stay legible but quiet.
+    * Operators and ordinary identifiers are NEUTRAL (default foreground).
+  The semantic highlighter layers navigable-object / trigger-context accents on top
+  (Themes/Colors.axaml); ordinary variables/locals are neutral there too.
 
   The Functions Keywords block is declared BEFORE the DDL/DML blocks so
-  CASE/WHEN/THEN/ELSE/END win as functions (they're also valid PSQL
-  control-flow tokens but reading them as expression keywords is more useful
-  for typical query work).
+  CASE/WHEN/THEN/ELSE/END win as functions — a tokenisation-ordering concern,
+  independent of the now-neutral Function colour.
 -->
 <SyntaxDefinition name="Firebird SQL" extensions=".sql"
                   xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
@@ -15,10 +23,17 @@
   <Color name="Comment"          foreground="#7FB86B" />
   <Color name="String"           foreground="#CE9178" />
   <Color name="Number"           foreground="#B5CEA8" />
+  <!-- SQL keywords (query + DML-action + DDL) share ONE restrained blue. -->
   <Color name="DmlKeyword"       foreground="#5A8AC8" fontWeight="bold" />
-  <Color name="StatementKeyword" foreground="#C586C0" fontWeight="bold" />
+  <Color name="StatementKeyword" foreground="#5A8AC8" fontWeight="bold" />
+  <!-- PSQL control-flow / routine-body keywords: a distinct restrained violet (SQL vs PSQL). -->
+  <Color name="PsqlKeyword"      foreground="#A88FD4" fontWeight="bold" />
+  <!-- Data types: a vivid teal — they matter in declarations and should read as a clear accent. -->
   <Color name="DataType"         foreground="#4EC9B0" />
+  <!-- Built-in functions: a soft, elegant yellow (VS Code-style) — a clear accent distinct from the
+       blue keywords / violet PSQL / teal types, so ROUND/COALESCE/CAST/TRIM/… read as functions. -->
   <Color name="Function"         foreground="#DCDCAA" />
+  <!-- Operators stay neutral (default foreground). -->
   <Color name="Operator"         foreground="#D4D4D4" />
 
   <RuleSet ignoreCase="true">
@@ -72,7 +87,7 @@
       <Word>SUB_TYPE</Word><Word>SEGMENT</Word><Word>SIZE</Word>
     </Keywords>
 
-    <!-- DML-action + DDL share the same purple. -->
+    <!-- SQL statement keywords (DML-action + DDL + transaction + constraints) — blue, same as DmlKeyword. -->
     <Keywords color="StatementKeyword">
       <!-- DML action -->
       <Word>INSERT</Word><Word>UPDATE</Word><Word>DELETE</Word><Word>MERGE</Word>
@@ -83,18 +98,22 @@
       <Word>TABLE</Word><Word>VIEW</Word><Word>INDEX</Word><Word>SEQUENCE</Word><Word>GENERATOR</Word>
       <Word>PROCEDURE</Word><Word>FUNCTION</Word><Word>TRIGGER</Word>
       <Word>DOMAIN</Word><Word>EXCEPTION</Word><Word>ROLE</Word>
-      <Word>GRANT</Word><Word>REVOKE</Word><Word>EXECUTE</Word>
-      <Word>RETURNS</Word><Word>RETURN</Word>
-      <Word>BEGIN</Word><Word>END</Word>
-      <Word>FOR</Word><Word>WHILE</Word><Word>DO</Word>
-      <Word>IF</Word>
-      <Word>EXIT</Word><Word>SUSPEND</Word><Word>LEAVE</Word>
-      <Word>DECLARE</Word><Word>VARIABLE</Word><Word>CURSOR</Word><Word>BLOCK</Word>
-      <Word>STATEMENT</Word>
+      <Word>GRANT</Word><Word>REVOKE</Word>
+      <!-- transaction + constraints -->
       <Word>COMMIT</Word><Word>ROLLBACK</Word><Word>SAVEPOINT</Word><Word>TRANSACTION</Word>
       <Word>PRIMARY</Word><Word>FOREIGN</Word><Word>KEY</Word><Word>REFERENCES</Word>
       <Word>CONSTRAINT</Word><Word>UNIQUE</Word><Word>CHECK</Word><Word>DEFAULT</Word>
       <Word>NEXT</Word><Word>VALUE</Word>
+    </Keywords>
+
+    <!-- PSQL control-flow / routine-body keywords — the second (violet) structural accent. -->
+    <Keywords color="PsqlKeyword">
+      <Word>BEGIN</Word><Word>END</Word>
+      <Word>FOR</Word><Word>WHILE</Word><Word>DO</Word><Word>IF</Word>
+      <Word>EXIT</Word><Word>SUSPEND</Word><Word>LEAVE</Word>
+      <Word>DECLARE</Word><Word>VARIABLE</Word><Word>CURSOR</Word>
+      <Word>EXECUTE</Word><Word>BLOCK</Word><Word>STATEMENT</Word>
+      <Word>RETURNS</Word><Word>RETURN</Word>
     </Keywords>
 
     <Keywords color="DmlKeyword">

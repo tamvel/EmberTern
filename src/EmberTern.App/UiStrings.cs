@@ -5,6 +5,14 @@ internal static class UiStrings
     public const string AppTitle = "EmberTern";
     public const string AppSubtitle = "Firebird Developer Workbench";
 
+    // Shared MessageBanner (UX Polish Sprint / Seam 4) — the IDE's one message surface, so its
+    // affordances are named once and read identically on every host (debugger, object editors,
+    // Execute Procedure, Security Manager, …).
+    public const string MessageBannerCopyTooltip = "Copy message";
+    public const string MessageBannerExpandTooltip = "Show full message";
+    public const string MessageBannerCollapseTooltip = "Collapse message";
+    public const string MessageBannerDismissTooltip = "Dismiss";
+
     public const string SidebarMetadataHeader = "Metadata";
     public const string SidebarConnectionsHeader = "Connections";
     public const string SidebarPlaceholderEmpty = "No connection yet";
@@ -111,7 +119,7 @@ internal static class UiStrings
     public const string ScriptExecutorTabTitle = "Script Executor";
     public const string ToolbarScriptExecutorTooltip = "Script Executor (migrations & multi-object DDL)";
     public const string ScriptRun = "Run";
-    public const string ScriptRunTooltip = "Run the whole script in one transaction (F5)";
+    public const string ScriptRunTooltip = "Run the whole script in one transaction · F5";
     public const string ScriptStopTooltip = "Stop after the current statement";
     public const string ScriptCommit = "Commit";
     public const string ScriptCommitTooltip = "Commit the open script transaction";
@@ -120,6 +128,15 @@ internal static class UiStrings
     public const string ScriptTransactionLabel = "Transaction:";
     public const string ScriptModeManual = "Manual (review, then commit)";
     public const string ScriptModeAutoCommit = "Auto-commit on success";
+    public const string ScriptModeSequenced = "Sequenced (deployment, commits in steps)";
+    // Per-mode descriptions — surfaced where the user picks the mode (the picker's tooltip), so the
+    // Sequenced trade-off is stated at the point of choice (not buried). No transaction jargon.
+    public const string ScriptModeManualDescription =
+        "Runs the whole script as one transaction and leaves it open so you can review the results, then Commit or Roll back. All-or-nothing.";
+    public const string ScriptModeAutoCommitDescription =
+        "Runs the whole script as one transaction and commits it automatically if nothing failed, otherwise rolls the whole script back. All-or-nothing.";
+    public const string ScriptModeSequencedDescription =
+        "For deployments: runs the script in steps, committing after each schema change so a later statement can use an object an earlier one created. NOT all-or-nothing — steps that already committed stay applied if a later step fails.";
     public const string ScriptStopOnError = "Stop on error";
     public const string ScriptOpenTooltip = "Open a .sql script…";
     public const string ScriptSaveTooltip = "Save the script to a .sql file…";
@@ -146,9 +163,26 @@ internal static class UiStrings
     public const string ScriptTransactionOpenMarker = "● Transaction open — review, then Commit or Rollback";
     // Result grid column headers.
     public const string ScriptColumnLine = "#";
+    // Sequenced only: which committed step (segment/transaction) the statement ran in. Blank in the
+    // single-transaction modes, where the whole script is one transaction.
+    public const string ScriptColumnStep = "Step";
+    public const string ScriptColumnStepTooltip =
+        "In Sequenced mode, the committed step (transaction) this statement ran in. Each step commits before the next begins.";
+    // Per-step outcome, shown by colouring the Step cell (Sequenced only). A step's outcome is distinct
+    // from a statement's own result: a statement can have succeeded yet its step still rolled back.
+    public const string ScriptStepCommittedTooltip =
+        "This step committed — its changes are permanent.";
+    public const string ScriptStepRolledBackTooltip =
+        "This step rolled back — its changes were undone because a statement in this step failed (or the run was cancelled). Steps committed earlier stay applied.";
     public const string ScriptColumnStatement = "Statement";
     public const string ScriptColumnType = "Type";
     public const string ScriptColumnResult = "Result";
+    // Sequenced only: a statement a stop-on-error / cancellation left unexecuted. It never ran, so it
+    // is neither a success nor a failure — surfaced as a muted "Not run" row so the grid shows exactly
+    // what the deployment did NOT reach.
+    public const string ScriptResultNotRun = "Not run";
+    public const string ScriptResultNotRunTooltip =
+        "This statement was never reached — the run stopped (an earlier step failed) or was cancelled before it. It had no effect.";
     public const string ScriptColumnRows = "Rows";
     public const string ScriptColumnDuration = "Duration";
     public const string ScriptColumnError = "Error";
@@ -167,9 +201,23 @@ internal static class UiStrings
         "This script's previous run left a transaction open. Commit or Roll back (buttons above) before running again.";
     public const string ScriptBlockExternalTxOpen =
         "A transaction is already open (e.g. an uncommitted SQL Editor statement). Commit or roll back that transaction before running a script.";
+    // Pre-flight: a mixed DDL+DML script cannot run in a single-transaction mode (Manual / Auto-commit)
+    // because Firebird cannot use an object a statement created until it is committed (#213). Stop before
+    // the first statement and point the user at Sequenced, which is built for exactly this.
+    public const string ScriptStatusMixedNeedsSequenced =
+        "This script mixes schema changes (CREATE / ALTER / …) with data statements (INSERT / UPDATE / …). In Manual and Auto-commit the whole script runs as a single transaction, and Firebird cannot use an object a statement just created until that change is committed — so a later statement would fail. Choose the “Sequenced (deployment)” transaction mode: it commits each schema change before the statements that depend on it.";
     public const string ScriptStatusManualSummaryFormat =
         "{0} succeeded, {1} failed in {2}. Transaction open — Commit or Rollback.";
     public const string ScriptStatusAutoSummaryFormat = "{0} {1} succeeded, {2} failed in {3}.";
+    // Sequenced (deployment) — committed step-by-step, so the summary states the non-atomic reality
+    // rather than a single Committed/Rolled-back verdict.
+    public const string ScriptStatusSequencedSummaryFormat =
+        "Deployment: {0} succeeded, {1} failed in {2}. Committed steps stay applied — this mode is not all-or-nothing.";
+    // Sequenced headline: how many committed steps (transactions) of all the steps the run planned —
+    // committed + rolled-back + not-run. Prepended to the deployment / cancelled summary (seam C3).
+    public const string ScriptStatusSequencedStepsFormat = "{0} of {1} steps committed.";
+    public const string ScriptStatusSequencedCancelled =
+        "Deployment cancelled. Steps that already committed stay applied; the step in progress was rolled back.";
     public const string BatchResultsClose = "Close";
     // Preparation phase — the dialog opens here immediately so feedback is instant while
     // the object list + per-object SQL are still being built (Batch Operations UX sprint).
@@ -243,6 +291,9 @@ internal static class UiStrings
     public const string CloseTabUnsavedConfirmTitle = "Unsaved changes";
     public const string CloseTabUnsavedConfirmFormat = "{0}\n\nClosing this tab discards these changes.";
     public const string CloseTabUnsavedConfirmYes = "Discard and close";
+    // Seam 5c — per-tab close is Save / Discard / Cancel whenever the tab has somewhere to save,
+    // matching the disconnect and app-close guards instead of forcing "discard or stay".
+    public const string CloseTabUnsavedSave = "Save and close";
 
     // Disconnect with an active transaction (3-way choice; default Roll back).
     public const string DisconnectChoiceTitle = "Active transaction";
@@ -372,7 +423,7 @@ internal static class UiStrings
     public const string ToolbarToggleQueryPanelIcon = "▤";
     public const string ToolbarToggleQueryPanelTooltip = "Show / hide saved queries panel";
     public const string ToolbarFormatSqlIcon = "⎄";
-    public const string ToolbarFormatSqlTooltip = "Format SQL (Alt+F)";
+    public const string ToolbarFormatSqlTooltip = "Format SQL · Alt+F";
     public const string ToolbarRefreshDataIcon = "↺";
     public const string ToolbarRefreshDataTooltip = "Refresh data preview";
 
@@ -455,6 +506,19 @@ internal static class UiStrings
     // One cohesive label — {0} = mm:ss.f elapsed.
     public const string ExecutionElapsedFormat = "Elapsed: {0}";
     public const string NoConnectionMessage = "Connect to a database first.";
+    // Compile pre-condition refusals, shared by EVERY object editor's compile and the debugger's Save
+    // (UX Polish Seam 6b). An ISavableObjectEditor adapter reads success as "no error after the attempt",
+    // so a compile that cannot run must SAY so — otherwise the save-and-close WorkGuard is told the work
+    // was written when nothing was, and discards it. NoConnectionMessage above covers the no-DDL-executor
+    // case; this one covers "the buffer holds nothing to compile".
+    public const string EditorNothingToCompile = "There is nothing to compile.";
+    // The code-action light bulb (Stage Q / Q3) — a discreet affordance for the same menu Ctrl+. opens.
+    public const string CodeActionsTooltip = "Show code actions · Ctrl+.";
+    // Shown at the foot of the diagnostic hover when fixes exist there. Information only — the hover
+    // never offers an action (§15.1.1); this just makes the shortcut discoverable.
+    public const string CodeActionsHoverHint = "Quick Fix available · Ctrl+.";
+    // Diagnostics-panel row → the same menu (Stage Q / Q5).
+    public const string CodeActionsMenuItem = "Quick Fix…";
     public const string QueryCancelledMessage = "Query cancelled.";
     public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
     // Truncated-Preview notice bar — loud + actionable (A.6). {0} = rows loaded so far
@@ -740,6 +804,11 @@ internal static class UiStrings
     public const string PackageDetailTabDdl = "DDL";
     public const string PackageDetailDescriptionEmpty = "No description.";
     public const string PackageDetailMembersEmpty = "This package has no members.";
+    // Members Debug toolbar button (D15.3 Seam E) — an icon-only editor-toolbar action; the tooltip explains
+    // availability (the button carries no text label, so there is no button-caption string).
+    public const string PackageDebugMemberTooltipReady = "Debug the selected member";
+    public const string PackageDebugMemberTooltipNotDebuggable = "The selected member cannot be debugged.";
+    public const string PackageDebugMemberTooltipNoSelection = "Select a procedure or function in the list to debug it.";
     public const string PackageDetailLoadingHint = "Loading package…";
     public const string PackageDetailDependsOnHeader = "Depends on";
     public const string PackageDetailDependedOnByHeader = "Used by";
@@ -1068,7 +1137,7 @@ internal static class UiStrings
     public const string FieldsContextMenuDrop = "Delete field";
     public const string FieldsContextMenuCreateForeignKey = "Create foreign key…";
     public const string FieldEditEditIcon = "✎";
-    public const string FieldEditEditTooltip = "Edit selected field (F2)";
+    public const string FieldEditEditTooltip = "Edit selected field · F2";
     public const string FieldEditForeignKeyIcon = "⛓";
     public const string FieldEditForeignKeyTooltip = "Create foreign key…";
 
@@ -1596,7 +1665,7 @@ internal static class UiStrings
     public const string SessionManagerLastRefreshFormat = "Last refresh {0:HH:mm:ss}";
 
     // Global Search (Etap 3 — Search Results)
-    public const string ToolbarGlobalSearchTooltip = "Global Search (Ctrl+Shift+F)";
+    public const string ToolbarGlobalSearchTooltip = "Global Search · Ctrl+Shift+F";
 
     // Export DDL to .sql (portable object script — structure + comments, no grants).
     public const string ToolbarExportDdlTooltip = "Export DDL to .sql";
@@ -1671,4 +1740,257 @@ internal static class UiStrings
     public const string EditorMenuComment = "Comment";
     public const string EditorMenuUncomment = "Uncomment";
     public const string EditorMenuFormat = "Format SQL";
+
+    // ─── Debugger (Stage X / D4 — Debugger tab MVP) ───────────────────────────
+    public const string MetadataContextDebugProcedure = "Debug procedure…";
+    public const string MetadataContextDebugTrigger = "Debug trigger…";
+    public const string MetadataContextDebugFunction = "Debug function…";
+    public const string DebuggerTabTitleFormat = "Debug: {0}";
+    // Launch panel.
+    public const string DebuggerLaunchHeader = "Launch debug session";
+    public const string DebuggerLaunchParametersHeader = "Input parameters";
+    public const string DebuggerLaunchNoParameters = "This routine takes no input parameters.";
+    // Compact launch form (D15.3 Seam A) — the inline NULL toggle beside each value field.
+    public const string DebuggerParamNullLabel = "null";
+    public const string DebuggerParamNullTooltip = "Set this parameter to NULL";
+    // The ONE marker for a value the app supplied rather than the user typing it here — used by every
+    // automatic mechanism (parameter history, carry-over across a rebuilt panel, and whatever comes next), so
+    // the user learns one convention instead of one per feature. The label says THAT it was filled in; the
+    // tooltip says by which mechanism. It disappears the moment the value is edited.
+    // Two words, not one word in two colours: Restored is the ordinary case and stays quiet, while Assumed is
+    // the ONE inference the panel makes and has to be recognisable at a glance, without reading the tooltip.
+    public const string LaunchValueRestoredMarker = "auto";
+    public const string LaunchValueAssumedMarker = "assumed";
+    public const string LaunchValueRestoredTooltip =
+        "Filled in automatically — this value was kept because it provably still fits this parameter.";
+    public const string LaunchValueAssumedTooltip =
+        "Filled in automatically, on an assumption: after matching by name this was the only parameter left on "
+        + "each side with a matching type, so the value was carried over. Check it before running.";
+    // Advanced section (D15.3 Seam B) — collapsed by default; transaction isolation lives here, out of the
+    // main Launch flow (most users never change it). The note leads with WHAT the option changes, then names
+    // the levels; the selector below shows the current level.
+    public const string DebuggerAdvancedSection = "Advanced options";
+    public const string DebuggerLaunchIsolationLabel = "Transaction isolation";
+    public const string DebuggerIsolationReadCommitted = "Read Committed";
+    public const string DebuggerIsolationSnapshot = "Snapshot";
+    public const string DebuggerIsolationNote =
+        "Controls which committed changes from other sessions you see while stepping. Read Committed shows " +
+        "changes other sessions commit during the run; Snapshot gives a consistent view from the moment you " +
+        "start, unchanged to the end. Either way the debug session runs in its own transaction and is rolled " +
+        "back when it ends.";
+    // The shortcut surfaces Seam C's keyboard-first launch — the whole operation is reachable from the keyboard.
+    // The label carries no parenthesised shortcut; the key is rendered in the shared shortcut-chip beside it.
+    public const string DebuggerLaunchButton = "Start debugging";
+    public const string DebuggerLaunchShortcut = "F5";
+    public const string DebuggerLaunchPreparing = "Preparing…";
+    // Pre-flight report (§9.2 / §4.6). D15.3 polish: the section is shown ONLY when it has something to say —
+    // no header, and no "all clear" line when clean (a clean launch form stays maximally quiet). Each surfaced
+    // item is a severity-striped row in the Error Bar visual language (warning = Alert Triangle / WarningBrush,
+    // blocking = octagon / ErrorBrush), so there is no header/clean string here anymore.
+    public const string DebuggerPreflightAutonomousTx =
+        "Contains IN AUTONOMOUS TRANSACTION — work committed there is permanent and survives the debug rollback.";
+    public const string DebuggerPreflightGenerator =
+        "Uses a generator/sequence (GEN_ID / NEXT VALUE FOR) — generator values are consumed permanently and are not restored on rollback.";
+    public const string DebuggerPreflightUnsteppable =
+        "The routine source could not be parsed into step points — debugging cannot start.";
+    // Toolbar / commands.
+    public const string DebuggerContinueTooltip = "Continue · F5";
+    public const string DebuggerStepIntoTooltip = "Step Into · F11";
+    public const string DebuggerStepOverTooltip = "Step Over · F10";
+    public const string DebuggerStepOutTooltip = "Step Out · Shift+F11";
+    public const string DebuggerRunToCursorTooltip = "Run To Cursor · Ctrl+F10";
+    public const string DebuggerRunToCursorMenu = "Run to Cursor";
+    public const string DebuggerStopTooltip = "Stop debugging · Shift+F5";
+    public const string DebuggerRestartTooltip = "Restart · Ctrl+Shift+F5";
+    public const string DebuggerToggleBreakpointTooltip = "Toggle breakpoint · F9";
+    // Status line.
+    public const string DebuggerStatusReady = "Ready to launch.";
+    public const string DebuggerStatusPausedFormat = "Paused at line {0} — {1}";
+    public const string DebuggerStatusRunning = "Running…";
+    public const string DebuggerStatusCompleted = "Completed — transaction rolled back.";
+    // Short, fixed-height headline; the full Firebird message goes to the Error Bar (D15.2 Seam C).
+    public const string DebuggerStatusFaulted = "Unhandled exception — transaction rolled back.";
+    public const string DebuggerStatusStopped = "Stopped — transaction rolled back.";
+    public const string DebuggerStatusLaunchFailedFormat = "Could not start the debug session: {0}";
+    public const string DebuggerStopReasonEntry = "entry";
+    public const string DebuggerStopReasonStep = "step";
+    public const string DebuggerStopReasonBreakpoint = "breakpoint";
+    // Advanced-breakpoint stop reasons (D12, spec §9.8).
+    public const string DebuggerStopReasonException = "exception";
+    public const string DebuggerStopReasonSuspend = "suspended";
+    public const string DebuggerStopReasonDataBreakpoint = "data change";
+    public const string DebuggerStopReasonDataChangedFormat = "data breakpoint — {0} changed";
+    public const string DebuggerStopReasonConditionErrorFormat = "breakpoint condition error — {0}";
+    // Error Bar (D15.2 Seam C) — its own thin row below the toolbar; shows on a fault / Break-on-Exception pause.
+    public const string DebuggerErrorUnknown = "Unknown error";
+    // Friendly error text (D15.4 Seam B) — one short, categorised line per FriendlyErrorCategory, shown on the
+    // three expression surfaces (Immediate result / Watch value / breakpoint-condition reason). The raw
+    // Firebird message stays reachable (row tooltip, Executed SQL, Error Bar) — "friendly + raw available".
+    public const string DebuggerFriendlyUserExceptionFormat = "Exception raised: {0}";
+    public const string DebuggerFriendlyConstraint =
+        "A database constraint was violated (NOT NULL, CHECK, or unique key).";
+    public const string DebuggerFriendlySqlError =
+        "SQL error — check the expression's syntax and that all names exist.";
+    public const string DebuggerFriendlyRawTooltip = "Full Firebird message";
+    // Save + compile from the debugger tab (UX Polish Seam 5b). Saving is a deliberate new work cycle: it
+    // ends a live session (which was compiled from the old code) before recompiling the routine.
+    public const string DebuggerSave = "Save";
+    public const string DebuggerSaveTooltip = "Save and compile the routine · Ctrl+S";
+    public const string DebuggerSaveUnavailable = "This debugger tab cannot save (no connection).";
+    // (the empty-buffer refusal is the shared EditorNothingToCompile — one wording for every editor)
+    public const string DebuggerSaveEndsSessionTitle = "Save ends the debug session";
+    public const string DebuggerSaveEndsSessionMessage =
+        "Saving recompiles {0}, so the running debug session no longer matches the code.\n\n"
+        + "The session will be stopped and its transaction rolled back before compiling. "
+        + "You can start debugging again straight away with the new code.";
+    public const string DebuggerSaveEndsSessionConfirm = "Stop session and save";
+    public const string DebuggerSaveCompileFailedFormat = "Compile failed: {0}";
+    public const string DebuggerStatusSaved = "Saved and compiled.";
+    // Save during a debugging cycle: the session is rebuilt on the compiled code with the settings the user
+    // already made, so they land back where they were instead of re-entering the launch form.
+    public const string DebuggerStatusSavedRestarting = "Saved — restarting the session…";
+    // The compile was refused: the tab stays on the source so the code can be fixed and saved again.
+    // The server's own message is in the Error Bar — this is only the short status-line headline.
+    public const string DebuggerStatusSaveFailed = "Save failed — fix the code and save again.";
+    // The first edit during a live session ends it: the session was built from the text that just changed, so
+    // stepping on would run code the user can no longer see. Says what happened AND what to do next — the
+    // toolbar going grey is the visual cue, this is the reason. (Until Restart can run the edited text without
+    // saving, Save is the way back into a session — hence naming it here.)
+    public const string DebuggerStatusEndedByEdit =
+        "Session ended — the code changed. Restart (Ctrl+Shift+F5) runs the current code without saving.";
+    // The routine's HEADER changed, so the parameter list the engine reads from the catalog no longer describes
+    // this text and a draft-sourced session cannot be started from it yet. Names the one way forward.
+    public const string DebuggerStatusEndedByHeaderEdit =
+        "Session ended — the routine header changed. Save (Ctrl+S) to compile and debug the new signature.";
+    public const string DebuggerUnsavedSourceFormat = "{0} — modified source (not compiled)";
+    // Variables panel.
+    public const string DebuggerVariablesHeader = "Variables";
+    public const string DebuggerVariablesEmpty = "No variables in the current frame.";
+    public const string DebuggerVariablesColumnName = "Name";
+    public const string DebuggerVariablesColumnValue = "Value";
+    public const string DebuggerVariablesColumnKind = "Kind";
+    public const string DebuggerVariableNull = "<null>";
+    public const string DebuggerVariableKindParameter = "param";
+    public const string DebuggerVariableKindLocal = "local";
+    public const string DebuggerVariableKindIn = "IN";
+    public const string DebuggerVariableKindOut = "OUT";
+    public const string DebuggerVariableKindContextNew = "NEW record";
+    public const string DebuggerVariableKindContextOld = "OLD record";
+    public const string DebuggerVariableKindReturn = "return";
+    public const string DebuggerVariableGroupPinned = "Pinned";
+    public const string DebuggerVariableGroupContext = "Context";
+    public const string DebuggerVariableGroupParameters = "Parameters";
+    public const string DebuggerVariableGroupLocals = "Locals";
+    // D-function: the return-value row/group shown only when a function is the debug root. The row displays
+    // "not returned yet" until RETURN runs (the session completes at RETURN), then the returned value.
+    public const string DebuggerVariableGroupReturn = "Return";
+    public const string DebuggerReturnRowName = "«return»";
+    public const string DebuggerReturnPending = "— (not returned yet)";
+    public const string DebuggerVariableFilterWatermark = "Filter variables…";
+    public const string DebuggerVariablePinTooltip = "Pin to top / unpin";
+    public const string DebuggerVariableEditTooltip = "Double-click to edit (Enter to apply, Esc to cancel)";
+    public const string DebuggerVariableBlobFormat = "[BLOB · {0} B]";
+    // Call stack (single-frame in D4, but the header exists).
+    public const string DebuggerCallStackHeader = "Call stack";
+    // Errors.
+    public const string DebuggerNoConnection = "Connect to a database before debugging.";
+    public const string ProcedureDebugTooltip = "Debug procedure";
+    public const string TriggerDebugTooltip = "Debug trigger";
+    public const string FunctionDebugTooltip = "Debug function";
+    public const string DebuggerSourceUnavailableFormat = "Could not load the source of {0}.";
+    // Trigger debugging (Stage X / D10) — the launch panel's NEW/OLD context editors + the out-of-scope refusal.
+    public const string DebuggerTriggerOutOfScope =
+        "Only relation triggers (BEFORE/AFTER INSERT/UPDATE/DELETE) can be debugged — database-level and DDL triggers are out of scope.";
+    public const string DebuggerTriggerActionLabel = "Fires for";
+    public const string DebuggerTriggerActionInsert = "INSERT";
+    public const string DebuggerTriggerActionUpdate = "UPDATE";
+    public const string DebuggerTriggerActionDelete = "DELETE";
+    public const string DebuggerTriggerNewHeader = "NEW values";
+    public const string DebuggerTriggerOldHeader = "OLD values";
+    public const string DebuggerTriggerNoColumns = "This trigger references no columns of this record.";
+    // Bottom tabbed panel (D5 layout redesign) — extensible: Call Stack / Breakpoints / Output join later.
+    public const string DebuggerBottomTabImmediate = "Immediate";
+    public const string DebuggerBottomTabWatches = "Watches";
+    public const string DebuggerBottomTabCallStack = "Call Stack";
+    public const string DebuggerBottomTabBreakpoints = "Breakpoints";
+    public const string DebuggerBottomTabResults = "Results";
+    // Run to next SUSPEND + its result grid (D12 Seam E2, spec §9.8). The button label is now an
+    // SvgIcon + text (D15.2 Seam A); only the tooltip remains here.
+    public const string DebuggerRunToSuspendTooltip =
+        "Run to next SUSPEND — produce the next result row of a selectable procedure (rows collect in the Results tab).";
+    // Loop fast-forward (D13) — enabled only while paused inside a WHILE / FOR loop.
+    public const string DebuggerRunToNextIterationTooltip =
+        "Next Iteration — finish the current loop iteration and pause at the start of the next (or after the loop if it exits). Available inside a loop.";
+    public const string DebuggerRunToLoopExitTooltip =
+        "Continue Until Loop Exit — run the rest of the current loop and pause just after it (any exit: condition, LEAVE/BREAK, EXIT). Available inside a loop.";
+    public const string DebuggerResultsEmpty =
+        "No rows yet. Use “Suspend” to run a selectable procedure to its next SUSPEND; each emitted row is collected here.";
+    // Breakpoints panel (D12 Seam E, spec §9.8) — a pure view of the Core Breakpoint / DataBreakpoint objects.
+    public const string DebuggerBreakpointsEmpty =
+        "No breakpoints. Click the editor gutter to add a line breakpoint; right-click a variable → " +
+        "\"Break when changes\" for a data breakpoint.";
+    public const string DebuggerBreakpointsLineHeader = "Line breakpoints";
+    public const string DebuggerBreakpointsDataHeader = "Data breakpoints (break on change)";
+    public const string DebuggerBreakpointLineFormat = "Line {0}";
+    public const string DebuggerBreakpointConditionWatermark = "condition, e.g. IDX = 3";
+    public const string DebuggerBreakpointWhenLabel = "when";
+    public const string DebuggerBreakpointHitsLabel = "hits";
+    public const string DebuggerBreakpointRemoveTooltip = "Remove breakpoint";
+    public const string DebuggerBreakOnException = "Break on exception";
+    public const string DebuggerBreakOnExceptionTooltip =
+        "Pause at the raising statement before the exception is routed to a WHEN … DO handler (spec §9.8.1).";
+    public const string DebuggerDataBreakpointMenu = "Break when changes";
+    // Hit-count kinds, in HitCountKind order (Always / Exactly / AtLeast / Multiple).
+    public const string DebuggerHitCountAlways = "always";
+    public const string DebuggerHitCountExactly = "= N";
+    public const string DebuggerHitCountAtLeast = "≥ N";
+    public const string DebuggerHitCountMultiple = "every N";
+    // Harness Log (Sprint D10.5) — a DEBUG-only diagnostic surface for developing/diagnosing the debugger
+    // itself. It is built in code-behind under #if DEBUG (DebuggerTabView.axaml.cs), so these strings are
+    // referenced only in DEBUG builds; in RELEASE they are simply unused consts. It replaced the misnamed
+    // "Executed SQL" tab (that name read as the user's SQL history, which it never was).
+    public const string DebuggerBottomTabHarnessLog = "Harness Log";
+    public const string DebuggerHarnessLogDescription =
+        "Diagnostic tool (debug builds only). Shows the EXECUTE BLOCK harnesses the debugger generates " +
+        "internally to evaluate expressions and statements on the server — this is how the debugger works " +
+        "under the hood, not a history of your SQL.";
+    public const string DebuggerHarnessLogEmpty =
+        "No harnesses generated yet. Evaluate an expression (Shift+F9) or run an Immediate statement while " +
+        "the session is paused, and the generated harness SQL will appear here.";
+    public const string DebuggerBottomPanelCollapseTooltip = "Collapse / expand the panel";
+    // Call Stack panel (D8, spec §5).
+    public const string DebuggerCallStackEmpty = "No call stack — not paused.";
+    public const string DebuggerCallStackLineFormat = "line {0}";
+    public const string DebuggerCallStackSimulatedGlyph = "△";
+    public const string DebuggerCallStackSimulatedTooltip =
+        "Simulated frame — reached by Step Into (interpreted), which can differ from real execution.";
+    public const string DebuggerCallStackPeekHeaderFormat = "{0} — line {1}";
+    // Expression evaluation — Evaluate / Immediate / Executed SQL (D5, spec §9.5 / §10.3).
+    public const string DebuggerImmediateHeader = "Immediate / Executed SQL";
+    public const string DebuggerImmediateWatermark = "Evaluate an expression, e.g. v_counter * 2";
+    // A short line of valid-expression examples shown under the Immediate/Watches empty-state (D15.4 Seam A —
+    // hints). Kept concise and separated by "·"; these are illustrative shapes, not references to real vars.
+    public const string DebuggerExpressionExamples =
+        "Examples: v_counter * 2 · v_status = 'OK' · char_length(v_text)";
+    public const string DebuggerImmediateAsStatement = "as statement";
+    public const string DebuggerImmediateAsStatementTooltip =
+        "Run the text as a PSQL statement against the live frame (may assign variables). Off: evaluate it as an expression.";
+    public const string DebuggerImmediateEvaluateButton = "Evaluate";
+    public const string DebuggerImmediateClearTooltip = "Clear";
+    public const string DebuggerEvaluateSelectionTooltip = "Evaluate the selected expression · Shift+F9";
+    public const string DebuggerImmediateEmpty = "No evaluations yet. Evaluate an expression, or select one in the source and press Shift+F9.";
+    public const string DebuggerEvalKindExpression = "expression";
+    public const string DebuggerEvalKindStatement = "statement";
+    public const string DebuggerEvalStatementOk = "(statement ran)";
+    public const string DebuggerEvalErrorUnknown = "evaluation failed";
+    // Watches panel (D5 seam b, §9.5).
+    public const string DebuggerWatchesHeader = "Watches";
+    public const string DebuggerWatchWatermark = "Watch an expression, e.g. v_status = 'OK'";
+    public const string DebuggerWatchAddButton = "Add";
+    public const string DebuggerWatchAddTooltip = "Add a watch (re-evaluated after every step)";
+    public const string DebuggerWatchRemoveTooltip = "Remove watch";
+    public const string DebuggerWatchesEmpty = "No watches. Add an expression to re-evaluate after every step.";
+    public const string DebuggerWatchNotEvaluated = "—";
+    public const string DebuggerWatchSideEffectTooltip =
+        "This watch is not a pure expression — it runs real SQL in the debug transaction each time it is re-evaluated, and may have side effects.";
 }

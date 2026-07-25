@@ -576,7 +576,9 @@ public partial class NewTableTabViewModel : ViewModelBase, IUnsavedWorkSource, I
     public async Task<EditorSaveResult> SaveAsync(CancellationToken cancellationToken = default)
     {
         if (!IsValid()) return new EditorSaveResult(false, ValidationMessage);
-        if (CompileRequested is null) return new EditorSaveResult(false, ValidationMessage);
+        // No owner wired ⇒ the create path cannot run. Report the reason rather than an empty
+        // ValidationMessage, so the batch report says WHY nothing was written (Seam 6b).
+        if (CompileRequested is null) return new EditorSaveResult(false, UiStrings.NoConnectionMessage);
         await CompileRequested(this).ConfigureAwait(true);
         return string.IsNullOrEmpty(ValidationMessage)
             ? new EditorSaveResult(true, null)

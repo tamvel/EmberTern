@@ -392,6 +392,18 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
     /// parameters and returns the outcome.</summary>
     public Func<string, IReadOnlyList<QueryParameter>, Task<ProcedureExecOutcome>>? RunExecuteRequested { get; set; }
 
+    /// <summary>Set by the owner — opens a debugger tab for this function, launched as the debug ROOT
+    /// (D-function). Null when debugging is unavailable.</summary>
+    public Action? DebugRequested { get; set; }
+
+    /// <summary>Debug is available for an EXISTING (compiled) function only — a New function has no catalog
+    /// object to launch. Fixed at construction (<see cref="DebugRequested"/> + <see cref="IsNew"/> do not
+    /// change), so this needs no change notification (mirrors <c>ProcedureDetailTabViewModel.CanDebugProcedure</c>).</summary>
+    public bool CanDebugFunction => DebugRequested is not null && !IsNew;
+
+    [RelayCommand(CanExecute = nameof(CanDebugFunction))]
+    private void DebugFunction() => DebugRequested?.Invoke();
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasExecResult))]
     [NotifyPropertyChangedFor(nameof(ShowExecError))]

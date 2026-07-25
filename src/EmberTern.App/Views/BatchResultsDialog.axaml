@@ -59,14 +59,12 @@
                    TextAlignment="Center"
                    TextWrapping="Wrap"
                    FontSize="14"
-                   Foreground="{DynamicResource ForegroundBrush}"
-                   Classes.error="{Binding PreparationFailed}">
-          <TextBlock.Styles>
-            <Style Selector="TextBlock.error">
-              <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
-            </Style>
-          </TextBlock.Styles>
-        </TextBlock>
+                   Classes.error="{Binding PreparationFailed}" />
+        <!-- UX Polish Seam 4 — the local DangerIconBrush override is gone: an error message reads in
+             ErrorBrush everywhere in the IDE (DangerIconBrush is for destructive-action ICONS), and the
+             shared ":is(TextBlock).error" style now supplies it. The local Foreground had to go with it:
+             a local value outranks any style setter, so the "failed" tint could never have applied while
+             it was set — the dialog inherits the same ForegroundBrush anyway. -->
         <ProgressBar Width="320"
                      IsVisible="{Binding !PreparationFailed}"
                      IsIndeterminate="{Binding PreparationIsIndeterminate}"
@@ -89,7 +87,7 @@
           <Setter Property="Foreground" Value="{DynamicResource SuccessIconBrush}" />
         </Style>
         <Style Selector="TextBlock.result-failed">
-          <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
+          <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
         </Style>
       </DataGrid.Styles>
       <DataGrid.Columns>
@@ -109,8 +107,22 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{x:Static app:UiStrings.BatchResultsColumnError}"
-                            Binding="{Binding Error}" SortMemberPath="Error" Width="*" />
+        <!-- The message reads in ErrorBrush like every other error in the IDE (UX Polish Seam 4's one visual
+             language). A template column because a DataGridTextColumn cannot carry the class; it reuses the
+             result-failed style already defined above rather than introducing a second error tint. -->
+        <DataGridTemplateColumn Header="{x:Static app:UiStrings.BatchResultsColumnError}"
+                                SortMemberPath="Error" Width="*">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:BatchResultRowViewModel">
+              <TextBlock Text="{Binding Error}"
+                         VerticalAlignment="Center"
+                         Margin="8,0"
+                         TextTrimming="CharacterEllipsis"
+                         ToolTip.Tip="{Binding Error}"
+                         Classes.result-failed="{Binding IsFailed}" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
       </DataGrid.Columns>
     </DataGrid>
 

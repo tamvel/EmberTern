@@ -38,6 +38,11 @@ public partial class MainWindow : Window
     private DataGrid? _resultGrid;
     private MainWindowViewModel? _currentVm;
     private SqlCompletionController? _completion;
+    // Guards the one-time, VM-arrival wiring of the main SQL editor's language capabilities (D3). The
+    // window's VM is set after construction (App.axaml.cs: new MainWindow { DataContext = … }), so the
+    // shared SqlEditorBehavior.Attach — which needs a stable, non-null VM — runs once the VM first arrives
+    // in OnDataContextChanged, not in the ctor.
+    private bool _completionAttached;
     // Feeds + navigates the Diagnostics bottom tab (S4/S5). The SQL Editor has a single SQL document, so
     // the LastFocusedSqlDocument rule collapses onto it — but it goes through the SAME host as the object
     // editors on purpose: one targeting mechanism, so the panel and F8 can never disagree anywhere.
@@ -126,77 +131,23 @@ public partial class MainWindow : Window
             reveal: _ => { if (_resultsMaximized) ToggleResultsMaximized(); });
         _editor = this.FindControl<TextEditor>("SqlEditor");
         _ddlEditor = this.FindControl<TextEditor>("DdlEditor");
+        if (_ddlEditor is not null) SqlEditorBehavior.AttachReadOnlyHighlighting(_ddlEditor);
         _resultGrid = this.FindControl<DataGrid>("ResultGrid");
         _maxRestoreGlyph = this.FindControl<SvgIcon>("MaxRestoreGlyph");
 
         ApplyEditorThemeColors();
         if (_editor is not null)
         {
-            _editor.TextChanged += OnEditorTextChanged;
+            // The main SQL editor's language capabilities — completion, semantic highlighting, hover +
+            // navigation, squiggles, related-elements, language-completion, typing-ergonomics, search — are
+            // wired in OnDataContextChanged, through the SAME shared SqlEditorBehavior.Attach the object
+            // editors use: ONE attach path (D3; gotcha #219, previously two hand-maintained copies). They
+            // cannot be wired here because the window's VM is set after construction (App.axaml.cs:
+            // new MainWindow { DataContext = … }), and the shared path needs a stable, non-null
+            // MainWindowViewModel — so it runs once, when the VM first arrives ("subscribe once the VM
+            // arrives"). Only the TextChanged→QueryText sync, which needs no VM, stays here.
             // Double-click (INSERT/VALUES helper + name-based open) is owned by NavigationController.
-            _completion = new SqlCompletionController(
-                _editor,
-                metadataSnapshot: CreateMetadataSnapshot,
-                ensureColumnsAsync: EnsureColumnsAsync,
-                ensureRoutineParamsAsync: EnsureRoutineParametersAsync,
-                // Metadata generation → the model rebuilds on the next deliberate trigger when a
-                // category loads (prefetch on connect), so IntelliSense is live without a keystroke.
-                metadataGeneration: () => _currentVm?.Metadata.ObjectsGeneration ?? 0,
-                // Sprint 1 (point b) + Package 5 (Stage B/C): warm the columns + rich detail of the
-                // objects the current statement references, so completion / Quick Info / hover are
-                // complete on tab open without typing "table.".
-                warmReferencedMetadata: WarmReferencedMetadataAsync);
-            // Rebuild the model when a metadata category finishes loading so late-loaded objects
-            // (views / selectable procedures in FROM) resolve. The metadata event is wired to the
-            // STABLE VM in OnDataContextChanged (below) — NOT via the controller's attach-time hook,
-            // which silently latched "subscribed" even when _currentVm was still null at attach time,
-            // permanently dropping the ObjectsChanged handler and leaving views/procs (which prefetch
-            // last) unresolved. The VM outlives this window, so subscribe-once there is leak-free.
-            // Semantic highlighting (Etap 6): colour identifiers by resolved role, driven by the
-            // completion controller's cached semantic model.
-            Completion.SemanticHighlighter.Attach(_editor, _completion);
-            // Hover + navigation (Etap 6 / M4 + the unified hover): PLAIN hover → one info card (the
-            // diagnostic behind a squiggle and/or the semantic Quick Info); Ctrl+hover → the underline +
-            // hand-cursor actionability cue; Ctrl+Click → go-to-definition. Same cached model + cached
-            // diagnostics. Callbacks delegate to the current VM (null-safe before connect).
-            Completion.NavigationController.Attach(
-                _editor,
-                () => _completion?.Model,
-                // The cached, version-matched diagnostics — the same list the squiggles paint from, so
-                // the underline and its explanation can never disagree.
-                () => _completion?.Diagnostics ?? Array.Empty<EmberTern.Core.Sql.Language.Diagnostic>(),
-                () => _completion?.IsPopupOpen ?? false,
-                (name, kind) => _currentVm?.TryOpenSchemaObject(name, kind) ?? false,
-                word => _currentVm?.TryOpenDdlForWord(word) ?? false,
-                (name, kind) => _currentVm?.FetchObjectDefinitionAsync(name, kind) ?? Task.FromResult<string?>(null),
-                // Double-click on a value → the unified Parameter Helper (owned by the completion controller).
-                showParameterHelper: offset => _completion?.TryShowParameterHelperAt(offset) ?? false);
-            // Stage 7 / S3: diagnostic squiggles, driven by the same cached model + ModelUpdated cycle.
-            // Attached explicitly because this editor does NOT go through SqlEditorBehavior.Attach (it
-            // hand-wires the capabilities above with null-safe _currentVm callbacks) — the object editors
-            // get the renderer from that seam instead. The duplication is known and tracked separately;
-            // until it is resolved, a new editor capability must be added in BOTH places.
-            Completion.SquiggleRenderer.Attach(_editor, _completion);
-            // Stage 7 / S4 + S5: the Diagnostics bottom-panel tab — a view of the SAME cached diagnostics
-            // the squiggles paint, republished on the same ModelUpdated cycle (no parse, no re-analysis) —
-            // and F8 / Shift+F8 navigation over them. The VM is resolved lazily: it attaches after this
-            // constructor runs. Tracking here is also what gives this editor its F8 handler: it does NOT
-            // go through SqlEditorBehavior.Attach (gotcha #219).
-            _diagnostics.Track(_editor, _completion);
-            // Stage 8 / M1: Related Elements Highlighting — ONE renderer (selection occurrences + caret
-            // symbol references + matching brackets + matching BEGIN/END), driven by the same cached model +
-            // ModelUpdated cycle. Attached here too (gotcha #219): the main editor does NOT go through
-            // SqlEditorBehavior.Attach. Replaced the former occurrence + reference highlighters.
-            Completion.RelatedElementsRenderer.Attach(_editor, _completion);
-            // Language Completion: Tab-completes a daily Firebird construct the developer started typing,
-            // with a passive OverlayLayer hint. Thin, stateless consumer of the Core resolver. Attached here
-            // too (gotcha #219): the main editor does NOT go through SqlEditorBehavior.Attach.
-            Completion.LanguageExpansionController.Attach(_editor, _completion);
-            // Typing Ergonomics: `begin … end` pairing, delimiter pairing, auto-indent — the mechanical
-            // editing aids. Attached here too (gotcha #219): the main editor does NOT go through
-            // SqlEditorBehavior.Attach.
-            Completion.TypingErgonomicsController.Attach(_editor);
-            Completion.EditorSearch.Install(_editor);
+            _editor.TextChanged += OnEditorTextChanged;
         }
         // S5: the panel's activation gestures (double-click / Enter / F8) target the active SQL document.
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("SqlDiagnosticsPanel");
@@ -530,23 +481,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // A metadata category finished loading — rebuild the main SQL editor's semantic model against a
-    // fresh snapshot so newly-loaded objects (notably views + selectable procedures referenced in
-    // FROM) begin resolving. The controller coalesces the burst of per-category signals into one
-    // rebuild. Wired to the stable VM in OnDataContextChanged (never dropped).
-    private void OnMainEditorMetadataChanged() => _completion?.NotifyMetadataChanged();
-
-    // Prefetch complete → the main SQL editor rebuilds against the now-complete metadata and warms all
-    // referenced objects (columns + detail + routine parameters), publishing one complete Semantic Model
-    // (Package 5 closure). The authoritative completion step for a document open before connect.
-    private void OnMainEditorMetadataReady() => _completion?.RefreshModelForMetadataReady();
-
-    // Warms the columns + rich Quick Info detail of the objects the SQL editor's current statement
-    // references (Sprint 1 point b + Package 5 Stage B/C). Delegates to the VM; null-safe before connect.
-    private Task<bool> WarmReferencedMetadataAsync(
-        System.Collections.Generic.IReadOnlyList<string> names, System.Threading.CancellationToken ct)
-        => _currentVm?.WarmReferencedAsync(names, ct) ?? Task.FromResult(false);
-
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_currentVm is not null)
@@ -568,8 +502,6 @@ public partial class MainWindow : Window
             _currentVm.EditorFocusRequested -= OnEditorFocusRequested;
             _currentVm.SelectedQueryTextProvider = null;
             _currentVm.ReplaceSelectedOrAllText = null;
-            _currentVm.Metadata.ObjectsChanged -= OnMainEditorMetadataChanged;
-            _currentVm.Metadata.MetadataReady -= OnMainEditorMetadataReady;
         }
 
         _currentVm = DataContext as MainWindowViewModel;
@@ -593,13 +525,22 @@ public partial class MainWindow : Window
             _currentVm.EditorFocusRequested += OnEditorFocusRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
-            // Late-loaded metadata (a category finishing prefetch/expand/refresh) → rebuild the SQL
-            // editor's semantic model so views / selectable procedures used in FROM start resolving
-            // (colour + Ctrl-nav + Quick Info). Tied to the stable VM here, so it can never be dropped.
-            _currentVm.Metadata.ObjectsChanged += OnMainEditorMetadataChanged;
-            // Prefetch complete → the definitive rebuild + full warm + publish for the main editor
-            // (Package 5 closure). Tied to the stable VM here so it can never be dropped.
-            _currentVm.Metadata.MetadataReady += OnMainEditorMetadataReady;
+
+            // D3 — wire the main SQL editor's language capabilities ONCE, now that the stable VM has
+            // arrived, through the SAME shared path the object editors use (SqlEditorBehavior.Attach). The
+            // shared controller subscribes to metadata-changed / metadata-ready and warms referenced objects
+            // itself (leak-free via the editor's visual-tree lifetime) — which is why the main window no
+            // longer hand-wires those Metadata events: the shared path owns that responsibility now.
+            if (!_completionAttached && _editor is not null)
+            {
+                _completion = SqlEditorBehavior.Attach(_editor, _currentVm);
+                // Diagnostics panel + F8 navigation stay a HOST responsibility (this window's own
+                // DiagnosticsPanelHost, with its own reveal), outside the shared intrinsic block — exactly
+                // like the object editors' callers. (Gotcha #219 consolidation boundary: intrinsic block
+                // only; DiagnosticsPanelHost / AmbientModelRefresh / SqlSnippetDropTarget are per-host.)
+                _diagnostics.Track(_editor, _completion);
+                _completionAttached = true;
+            }
 
             // Metadata-object drop target on the main SQL editor (once — the VM is stable here).
             if (!_snippetDropAttached && _editor is not null)
@@ -634,9 +575,10 @@ public partial class MainWindow : Window
                 _editor.Text = _currentVm.QueryText;
             }
 
-            // Seed the newly-attached VM's Diagnostics panel from the cached diagnostics. The editor was
-            // wired before any VM existed, so a model built in the meantime published into nothing; an
-            // unchanged restored text also raises no TextChanged to republish on.
+            // Seed this VM's Diagnostics panel from the cached diagnostics. The model builds on a background
+            // pass, so it may not be ready at attach time above; and an unchanged restored text raises no
+            // TextChanged to republish on. (On a VM swap, the editor attach is guarded to run once, so this
+            // is also what re-seeds the incoming VM's panel.)
             _diagnostics.Republish();
 
             // Apply persisted sidebar width/collapse + results height once the VM
@@ -1228,23 +1170,11 @@ public partial class MainWindow : Window
         Dispatcher.UIThread.Post(() => _editor.TextArea.Focus(), DispatcherPriority.Background);
     }
 
-    // Dot autocomplete plumbing — warms (and caches) an uncached table's columns
-    // for the controller's dot completion. Object/keyword/alias resolution now runs
-    // in the Core CompletionEngine against the semantic model (M5); the controller
-    // no longer pulls the object/known-table/cached-column lists directly.
-    private Task<System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>> EnsureColumnsAsync(string tableName)
-        => _currentVm?.EnsureColumnsAsync(tableName)
-           ?? Task.FromResult<System.Collections.Generic.IReadOnlyList<EmberTern.Core.Metadata.ColumnSpec>>(System.Array.Empty<EmberTern.Core.Metadata.ColumnSpec>());
-
-    // Warms a routine's parameters for the editor's Signature Help (Etap 5 / M7).
-    private Task EnsureRoutineParametersAsync(string routineName)
-        => _currentVm?.EnsureRoutineParametersAsync(routineName) ?? Task.CompletedTask;
-
-    // Immutable metadata snapshot for the SQL editor's semantic model (Etap 5 / M1).
-    // Built on the UI thread; consumed off-thread. Empty provider when no VM/connection.
-    private EmberTern.Core.Sql.Language.Semantics.ISqlMetadataProvider CreateMetadataSnapshot()
-        => _currentVm?.CreateMetadataSnapshot()
-           ?? EmberTern.Core.Sql.Language.Semantics.EmptyMetadataProvider.Instance;
+    // (D3) EnsureColumnsAsync / EnsureRoutineParametersAsync / CreateMetadataSnapshot / metadata-generation
+    // + warm callbacks used to be hand-passed here into a MainWindow-owned SqlCompletionController. The main
+    // SQL editor now goes through the shared SqlEditorBehavior.Attach, which wires those from the VM's own
+    // methods (vm.EnsureColumnsAsync / vm.EnsureRoutineParametersAsync / vm.CreateMetadataSnapshot /
+    // vm.WarmReferencedAsync) — so these MainWindow forwarders are gone. See OnDataContextChanged.
 
     // Returns the currently-selected text in the SQL editor, or null when nothing
     // is selected. Used by the VM to scope Execute / Format SQL to the selection.

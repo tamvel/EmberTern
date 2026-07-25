@@ -83,7 +83,7 @@ public class DeleteConfirmationAuditTests
         var form = new NewTableTabViewModel(h.Main) { TableName = "FOO" };
         var tab = WorkspaceTabViewModel.CreateNewTable(h.Main, form, null);
         h.Main.WorkspaceTabs.Add(tab);
-        h.Main.ConfirmationRequested += _ => Task.FromResult(false);
+        h.Main.ChoiceRequested += _ => Task.FromResult<string?>("cancel");
 
         await h.Main.RequestCloseTabAsync(tab);
 
@@ -91,13 +91,13 @@ public class DeleteConfirmationAuditTests
     }
 
     [Fact]
-    public async Task CloseNewTableTab_WithContent_Confirmed_ClosesTab()
+    public async Task CloseNewTableTab_WithContent_Discarded_ClosesTab()
     {
         using var h = new Harness();
         var form = new NewTableTabViewModel(h.Main) { TableName = "FOO" };
         var tab = WorkspaceTabViewModel.CreateNewTable(h.Main, form, null);
         h.Main.WorkspaceTabs.Add(tab);
-        h.Main.ConfirmationRequested += _ => Task.FromResult(true);
+        h.Main.ChoiceRequested += _ => Task.FromResult<string?>("discard");
 
         await h.Main.RequestCloseTabAsync(tab);
 

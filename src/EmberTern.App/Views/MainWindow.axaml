@@ -26,7 +26,11 @@
   </Design.DataContext>
 
   <Window.KeyBindings>
-    <KeyBinding Gesture="F5" Command="{Binding ExecuteQueryCommand}" />
+    <!-- F5 is the application-level "Go" router (MainWindowViewModel.GoCommand): it means Execute Query in the
+         SQL editor, Start Debugging on a debugger launch panel, and Continue in a paused debug session — the
+         active workspace tab decides. Ctrl+Enter stays a SQL-editor-specific Execute. Shift+F5 stays Execute
+         (full) for now; making it debugger-aware (Stop) is a scoped follow-up. -->
+    <KeyBinding Gesture="F5" Command="{Binding GoCommand}" />
     <KeyBinding Gesture="Ctrl+Enter" Command="{Binding ExecuteQueryCommand}" />
     <KeyBinding Gesture="Shift+F5" Command="{Binding ExecuteQueryFullCommand}" />
     <KeyBinding Gesture="Alt+F" Command="{Binding FormatSqlCommand}" />
@@ -558,6 +562,15 @@
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextExecuteProcedure}"
                                 Command="{Binding ExecuteProcedureCommand}"
                                 IsVisible="{Binding IsProcedureLeaf}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
+                                Command="{Binding DebugProcedureCommand}"
+                                IsVisible="{Binding IsProcedureLeaf}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugTrigger}"
+                                Command="{Binding DebugTriggerCommand}"
+                                IsVisible="{Binding IsTriggerLeaf}" />
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
+                                Command="{Binding DebugFunctionCommand}"
+                                IsVisible="{Binding IsFunctionLeaf}" />
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
                                 Command="{Binding ActivateCommand}"
                                 IsVisible="{Binding ShowActivate}" />
@@ -698,9 +711,14 @@
                               BorderThickness="0"
                               Command="{Binding ActivateCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                          <!-- The debugger tab wears the two-colour debugger identity mark
+                               (D15.2 Seam B); every other tab uses its single-colour SvgIcon. -->
+                          <controls:DebuggerIcon Width="14" Height="14" VerticalAlignment="Center"
+                                                 IsVisible="{Binding IsDebuggerTab}" />
                           <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
                                             Width="14" Height="14"
-                                            VerticalAlignment="Center">
+                                            VerticalAlignment="Center"
+                                            IsVisible="{Binding !IsDebuggerTab}">
                             <controls:SvgIcon.Foreground>
                               <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                                 <Binding Path="IconResourceKey" />
@@ -795,8 +813,7 @@
                   <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource OnAccentBrush}"
                                     Width="14" Height="14" VerticalAlignment="Center" />
                   <TextBlock Text="{Binding ExecuteLabel}" VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding ExecuteHint}" FontSize="10"
-                             Foreground="{DynamicResource OnAccentSubtleBrush}" VerticalAlignment="Center" />
+                  <TextBlock Classes="shortcut-chip" Text="{Binding ExecuteHint}" />
                 </StackPanel>
               </Button>
               <Button Classes="flat" Padding="10,4"
@@ -985,10 +1002,15 @@
                       Command="{Binding ActiveViewDetail.FormatSqlCommand}" IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
-              <!-- Procedure: execute / format / comment / uncomment -->
+              <!-- Procedure: execute / debug / format / comment / uncomment -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureExecuteTooltip}"
                       Command="{Binding ActiveProcedureDetail.ExecuteProcedureCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+              </Button>
+              <!-- Debugger entry point (Stage X / D5) — same launch as the sidebar "Debug procedure…". -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureDebugTooltip}"
+                      Command="{Binding ActiveProcedureDetail.DebugProcedureCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
+                <controls:DebuggerIcon />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveProcedureDetail.FormatSqlCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
@@ -1002,7 +1024,12 @@
                       Command="{Binding ActiveProcedureDetail.UncommentBodyCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
-              <!-- Trigger: format / comment / uncomment -->
+              <!-- Trigger: debug / format / comment / uncomment -->
+              <!-- Debugger entry point (Stage X / D10) — same launch as the sidebar "Debug trigger…". -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TriggerDebugTooltip}"
+                      Command="{Binding ActiveTriggerDetail.DebugTriggerCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
+                <controls:DebuggerIcon />
+              </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveTriggerDetail.FormatSqlCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
@@ -1015,10 +1042,16 @@
                       Command="{Binding ActiveTriggerDetail.UncommentBodyCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
-              <!-- Function: execute / format / comment / uncomment -->
+              <!-- Function: execute / debug / format / comment / uncomment -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FunctionExecuteTooltip}"
                       Command="{Binding ActiveFunctionDetail.ExecuteFunctionCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+              </Button>
+              <!-- Debugger entry point (D-function) — same launch as the sidebar "Debug function…"; the
+                   function runs as the debug root (Return group in Variables). -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FunctionDebugTooltip}"
+                      Command="{Binding ActiveFunctionDetail.DebugFunctionCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
+                <controls:DebuggerIcon />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveFunctionDetail.FormatSqlCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
@@ -1032,6 +1065,21 @@
                       Command="{Binding ActiveFunctionDetail.UncommentBodyCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
+              <!-- Package: debug the selected Members-tab member (D15.3 Seam E) — the action lives on the
+                   editor toolbar, like the procedure/trigger Debug buttons, rather than as a row inside the
+                   Members tab. Reuses the ONE launch path (DebugSelectedMemberCommand); enabled only for a
+                   debuggable selection; the contextual tooltip explains a disabled state. Wrapped in a
+                   hit-testable Border so the tooltip shows even while the button is disabled (a disabled button
+                   raises no pointer events). Pure presentation — no VM change (selection is tracked by the
+                   Members TreeView's SelectedItem binding). -->
+              <Border Background="Transparent" IsVisible="{Binding IsPackageDetailTabActive}"
+                      ToolTip.Tip="{Binding ActivePackageDetail.DebugMemberTooltip}">
+                <Button Classes="icon"
+                        Command="{Binding ActivePackageDetail.DebugSelectedMemberCommand}"
+                        ToolTip.Tip="{Binding ActivePackageDetail.DebugMemberTooltip}">
+                  <controls:DebuggerIcon />
+                </Button>
+              </Border>
               <!-- Package: format / comment / uncomment (act on the active Package/Body editor) -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
                       Command="{Binding ActivePackageDetail.FormatSqlCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
@@ -1129,6 +1177,9 @@
               <views:ScriptExecutorTabView x:Name="ScriptExecutorView"
                                            DataContext="{Binding ActiveScriptExecutor}"
                                            IsVisible="{Binding DataContext.IsScriptExecutorTabActive, ElementName=RootWindow}" />
+              <views:DebuggerTabView x:Name="DebuggerView"
+                                     DataContext="{Binding ActiveDebugger}"
+                                     IsVisible="{Binding DataContext.IsDebuggerTabActive, ElementName=RootWindow}" />
             </Grid>
 
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query
@@ -1483,22 +1534,45 @@
                 <ScrollViewer IsVisible="{Binding HasMessages}">
                   <ItemsControl ItemsSource="{Binding Messages}">
                     <ItemsControl.ItemTemplate>
+                      <!-- The Messages panel stays a LOG (timestamp column + scrolling rows) — deliberately
+                           not a stack of MessageBanners. A problem entry borrows just enough of the IDE's
+                           message language to be spotted instantly: the severity stripe and the severity
+                           colour, both from the SAME MessageBanner.BrushKeyFor mapping (via the row VM), so
+                           log and banner cannot drift. NO severity icon here: an icon column widens only the
+                           rows that have one, so the timestamps stop lining up — and in a log, a column you
+                           scan down matters more than a glyph. The stripe alone carries the signal. -->
                       <DataTemplate DataType="vm:QueryMessageViewModel">
-                        <Border Padding="14,6"
+                        <Border Padding="0,6,14,6"
                                 BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="0,0,0,1">
-                          <Grid ColumnDefinitions="80,*">
-                            <TextBlock Grid.Column="0"
+                          <Grid ColumnDefinitions="3,80,*">
+                            <Border Grid.Column="0" IsVisible="{Binding ShowSeverityMarker}">
+                              <Border.Background>
+                                <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                                  <Binding Path="SeverityBrushKey" />
+                                  <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+                                </MultiBinding>
+                              </Border.Background>
+                            </Border>
+                            <TextBlock Grid.Column="1"
                                        Text="{Binding TimestampLabel}"
                                        Classes="subtle"
                                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                                        FontSize="11"
+                                       Margin="14,0,0,0"
                                        VerticalAlignment="Top" />
-                            <SelectableTextBlock Grid.Column="1"
+                            <SelectableTextBlock Grid.Column="2"
                                        Text="{Binding Text}"
                                        FontSize="12"
-                                       TextWrapping="Wrap"
-                                       Classes.error="{Binding IsError}" />
+                                       LineHeight="18"
+                                       TextWrapping="Wrap">
+                              <SelectableTextBlock.Foreground>
+                                <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                                  <Binding Path="MessageBrushKey" />
+                                  <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+                                </MultiBinding>
+                              </SelectableTextBlock.Foreground>
+                            </SelectableTextBlock>
                           </Grid>
                         </Border>
                       </DataTemplate>
@@ -1541,9 +1615,25 @@
                      FontSize="11"
                      VerticalAlignment="Center" />
         </StackPanel>
+        <!-- Column 1 belongs to the ACTIVE TAB: the SQL Editor puts its query stats here, the debugger its
+             session status (UX Polish Seam 6a — moved out of the debugger toolbar, which needed the room for
+             Break on exception + Save). Every other tab kind leaves it empty. The two are mutually exclusive
+             by their IsVisible gates, so the Auto column only ever measures the one that is showing.
+             The debugger VM is untouched: MainWindowViewModel already exposes ActiveDebugger, and Avalonia
+             subscribes to the nested VM's PropertyChanged along the binding path. Column 0 keeps its own
+             owner (connection state); debugger status must never be written into MainWindowViewModel.StatusText. -->
         <TextBlock Grid.Column="1"
                    Text="{Binding QueryStatsText}"
+                   IsVisible="{Binding IsQueryTabActive}"
                    Classes="subtle"
+                   FontSize="11"
+                   Margin="20,0,0,0"
+                   VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding ActiveDebugger.StatusText}"
+                   IsVisible="{Binding IsDebuggerTabActive}"
+                   Classes="subtle"
+                   Classes.error="{Binding ActiveDebugger.IsFaulted}"
                    FontSize="11"
                    Margin="20,0,0,0"
                    VerticalAlignment="Center" />

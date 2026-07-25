@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER VERIFICATION TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Stage X / D8 (Call stack + nested stored routines) — the §F fidelity gate: drive the REAL
+    FirebirdDebugExecutor step-by-step (Step Into) through a 3-level nested-procedure chain against the
+    lab and compare the simulated outputs to REAL execution of the same routines. Fidelity is proven
+    against real execution, never against the interpreter's self-consistency (Developer Contract #12).
+
+    Deliberately NOT in EmberTern.slnx (explicit <Project> entries, no globs): it needs a live server
+    and a password, which the hermetic test suite must never need.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.4" />
+    <!-- References the REAL Core + Firebird assemblies — the same interpreter, executor, harness and
+         driver path the app ships, so a PASS here is a statement about the shipped code. -->
+    <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
+  </ItemGroup>
+
+</Project>

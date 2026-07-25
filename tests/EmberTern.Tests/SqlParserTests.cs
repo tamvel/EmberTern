@@ -167,7 +167,31 @@ public class SqlParserTests
     [InlineData("execute procedure xxx_test(:a, :b)", "XXX_TEST")]
     [InlineData("EXECUTE PROCEDURE \"MixedProc\"()", "MixedProc")]
     public void ExecuteProcedureStatement_ReadsName(string sql, string expected)
-        => Assert.Equal(expected, Assert.IsType<ExecuteProcedureStatement>(Single(sql)).ProcedureName);
+    {
+        var ep = Assert.IsType<ExecuteProcedureStatement>(Single(sql));
+        Assert.Equal(expected, ep.ProcedureName);
+        Assert.Null(ep.PackageName); // unqualified — no package (Stage X / D11)
+    }
+
+    [Theory]
+    // A package-qualified call (Stage X / D11): the routine is the part after the dot, the qualifier is the package.
+    [InlineData("EXECUTE PROCEDURE PKG_DBG.PUB_RUN(:n) RETURNING_VALUES :r", "PKG_DBG", "PUB_RUN")]
+    [InlineData("execute procedure my_pkg.do_it", "MY_PKG", "DO_IT")]
+    [InlineData("EXECUTE PROCEDURE \"Pkg\".\"Proc\"", "Pkg", "Proc")]
+    public void ExecuteProcedureStatement_ReadsQualifiedName(string sql, string pkg, string routine)
+    {
+        var ep = Assert.IsType<ExecuteProcedureStatement>(Single(sql));
+        Assert.Equal(pkg, ep.PackageName);
+        Assert.Equal(routine, ep.ProcedureName);
+    }
+
+    [Fact] // the qualified name must not disturb argument / RETURNING_VALUES parsing (they already dot-skip)
+    public void ExecuteProcedureStatement_Qualified_StillReadsArgsAndReturning()
+    {
+        var ep = Assert.IsType<ExecuteProcedureStatement>(Single("EXECUTE PROCEDURE PKG_DBG.PUB_RUN(:n) RETURNING_VALUES :r"));
+        Assert.Single(ep.Arguments);
+        Assert.Equal(new[] { "R" }, ep.ReturningTargets);
+    }
 
     [Theory]
     [InlineData("SET GENERATOR G TO 0", "GENERATOR")]

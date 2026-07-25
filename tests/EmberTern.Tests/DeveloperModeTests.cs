@@ -136,6 +136,56 @@ public class DeveloperModeTests
         Assert.Equal(TimeSpan.FromSeconds(FirebirdDdlExecutor.DdlLockTimeoutSeconds), dev.WaitTimeout);
     }
 
+    // ── Per-segment TPB (Sequenced mode, Step 4 seam A) ────────────────────
+    //
+    // A Sequenced run commits one segment at a time, so — unlike the single-transaction modes above
+    // — each segment can carry the wait policy its KIND deserves: a schema segment WAITs (Dev
+    // Mode-aware) so a deployment can outlast another session's transient hold, while a data segment
+    // stays NOWAIT so ordinary row locks never block the deployment. The planner assigns the policy
+    // (SegmentTransactionPolicy); ResolveSegmentTransactionOptions only maps it to a TPB.
+
+    [Fact]
+    public void Segment_Schema_TakesTheDdlWaitPolicy_Standard()
+    {
+        var o = FirebirdScriptExecutor.ResolveSegmentTransactionOptions(
+            SegmentTransactionPolicy.SchemaWait, developerMode: false);
+        Assert.NotNull(o);
+        Assert.True(o!.TransactionBehavior.HasFlag(FbTransactionBehavior.Wait));
+        Assert.False(o.TransactionBehavior.HasFlag(FbTransactionBehavior.NoWait));
+        Assert.Equal(TimeSpan.FromSeconds(FirebirdDdlExecutor.DdlSelfReleaseTimeoutSeconds), o.WaitTimeout);
+    }
+
+    [Fact]
+    public void Segment_Schema_TakesTheDdlWaitPolicy_Developer_WaitsLonger()
+    {
+        var o = FirebirdScriptExecutor.ResolveSegmentTransactionOptions(
+            SegmentTransactionPolicy.SchemaWait, developerMode: true);
+        Assert.NotNull(o);
+        Assert.True(o!.TransactionBehavior.HasFlag(FbTransactionBehavior.Wait));
+        Assert.Equal(TimeSpan.FromSeconds(FirebirdDdlExecutor.DdlLockTimeoutSeconds), o.WaitTimeout);
+    }
+
+    // A schema segment's TPB is the SAME object Compile uses — one definition, no drift.
+    [Fact]
+    public void Segment_Schema_Tpb_IsTheSameBuilderCompileUses()
+    {
+        var seg = FirebirdScriptExecutor.ResolveSegmentTransactionOptions(
+            SegmentTransactionPolicy.SchemaWait, developerMode: true);
+        var compile = FirebirdDdlExecutor.BuildDdlTransactionOptions(developerMode: true);
+        Assert.NotNull(seg);
+        Assert.Equal(compile.TransactionBehavior, seg!.TransactionBehavior);
+        Assert.Equal(compile.WaitTimeout, seg.WaitTimeout);
+    }
+
+    // A data segment is null = the working transaction's NOWAIT default — in BOTH modes. Developer
+    // Mode never makes a data operation WAIT (the whole point of splitting the policy per segment).
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Segment_Data_TakesNoWaitDefault_RegardlessOfDeveloperMode(bool developerMode)
+        => Assert.Null(FirebirdScriptExecutor.ResolveSegmentTransactionOptions(
+            SegmentTransactionPolicy.DataNoWait, developerMode));
+
     // ── Real deployment scripts, through the real parser ───────────────────
     //
     // The tests above pin the DECISION over hand-built statement lists. These pin the INPUT: that

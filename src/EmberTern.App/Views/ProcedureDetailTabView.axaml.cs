@@ -65,6 +65,7 @@ public partial class ProcedureDetailTabView : UserControl
         _sqlEditor = this.FindControl<TextEditor>("ProcSqlEditor");
         _bodyEditor = this.FindControl<TextEditor>("ProcBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("ProcDdlEditor");
+        if (_ddlEditor is not null) SqlEditorBehavior.AttachReadOnlyHighlighting(_ddlEditor);
         _cursorEditor = this.FindControl<TextEditor>("CursorSourceEditor");
         _subprogramEditor = this.FindControl<TextEditor>("SubprogramSourceEditor");
         _resultGrid = this.FindControl<DataGrid>("ProcResultGrid");

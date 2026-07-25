@@ -29,7 +29,7 @@ decided and why*, not just its conclusions.
 |---|---|---|
 | 1 | **Harness never materializes "uninitialized" as an explicit `NULL` assignment.** Harness params/RETURNS use **base types**; frame variables are declared **verbatim**. | Changes Firebird semantics otherwise — and crashes on `NOT NULL` domains. §3.4 |
 | 2 | **Preserve single-request semantics via a SAVEPOINT per simulated frame.** | Firebird's call atomicity is real and observable. §4.5 |
-| 3 | **`WHEN … DO` is control flow, not a feature.** AST deepening is a **prerequisite** to D1. | The client owns control flow; exceptions *are* control flow. §3.6 / P1 |
+| 3 | **`WHEN … DO` is control flow, not a feature.** AST deepening is a **prerequisite** to D1. A `WhenHandler` models one `WHEN` clause with an **ordered list of conditions** (Firebird allows a comma-separated condition list per `WHEN`), matched in declaration order (refined 2026-07-17). | The client owns control flow; exceptions *are* control flow. §3.6 / P1 |
 | 4 | **Do not emulate `CURRENT_TIMESTAMP` & co. Document them as Fidelity Boundaries** — generators included. | Emulation is incomplete by construction and would trade an honest boundary for a hidden one. §12 |
 | 5 | **No "fourth lane". The debugger gets its own connection + transaction, owned by the *session*, not the profile.** | A lane is a per-profile singleton; sessions need independent transactions. §4.1 |
 | 6 | **Evaluate / Watches / Immediate = one HarnessBuilder mechanism, three UI surfaces.** A pin does **not** replace a Watch. | A watch is an *expression*, not a variable. §9.5 |
@@ -82,6 +82,13 @@ authentication failure.
 
 So the explicit gate is not a removal of support — it **ratifies reality and makes the failure legible**.
 
+> **Status — DONE (P2, 2026-07-17).** `FirebirdConnectionService.IsSupportedServerVersion` (reusing
+> `FirebirdDdlReader.ParseServerMajor`) gates `ConnectAsync` (right after the first attachment opens,
+> before the Metadata/Ddl lanes) and `TestConnectionAsync`, refusing a positively-identified pre-FB3
+> server with a message that names the required version and closing cleanly. It **fails open** on an
+> unparseable version string (a live Srp connection is FB3+ by construction). Live rejection is unverified
+> (no FB2.5 instance); the predicate is table-pinned. See `docs/history/19-firebird-debugger.md`.
+
 > **⚠ Scope note for review.** The gate is **app-wide**, not debugger-scoped, so it is milestone **P2**,
 > deliberately *outside* the debugger's own milestones. It also touches a documented decision: *"Connection
 > errors show the raw server message… do not add hints or interpret error causes."* A **precondition check
@@ -98,7 +105,7 @@ So the explicit gate is not a removal of support — it **ratifies reality and m
 | `EXECUTE BLOCK` (the harness) | ✔ | ✔ | ✔ | FB2.0+. |
 | Sub-routines (`DECLARE PROCEDURE/FUNCTION`) | ✔ | ✔ | ✔ | FB3+. The reason FB2.5 is out. |
 | Packages | ✔ | ✔ | ✔ | FB3+. |
-| **Sub-routine closures over outer variables** | **⚠ VERIFY** | **⚠ VERIFY** | ✔ verified | **Blocks D9.** FB3 documented sub-routines as *unable* to access outer variables. If true, FB3 is *simpler* (no closures). §6.3 |
+| **Sub-routine closures over outer variables** | ✘ **measured: NO** (closed scope, SQL -206) | **⚠ VERIFY** | ✔ verified | **§6.3 gate RESOLVED (2026-07-18, §15.7).** FB3 closed ⇒ frame `LexicalParent = null`; FB5 closures ⇒ declaring frame. Harness branches on version. FB4 unverified. |
 | Savepoints (`SAVEPOINT` / `ROLLBACK TO`) | ✔ | ✔ | ✔ verified | Frame atomicity (§4.5). |
 | Multiple cursors + interleaved commands per attachment | ⚠ verify | ⚠ verify | ✔ verified | Cursor Bridge (§7). Driver-level; expected uniform. |
 | `DECFLOAT`, `INT128`, `TIME ZONE` types | — | ⚠ | ⚠ | Round-trip fidelity risk (§12.6). |
@@ -277,8 +284,14 @@ explain**. Never guess.
 v1 omitted `WHEN … DO` entirely — the most common PSQL control flow there is. It is **client-owned**, like
 `IF`/`WHILE`, and the interpreter must implement:
 
-- **Handler matching** — `WHEN ANY`, `WHEN EXCEPTION <name>`, `WHEN GDSCODE <x>`, `WHEN SQLCODE <x>`,
-  `WHEN SQLSTATE '<x>'`, in declaration order.
+- **Handler matching** — a `WHEN … DO` clause matches one of `ANY`, `EXCEPTION <name>`, `GDSCODE <x>`,
+  `SQLCODE <x>`, `SQLSTATE '<x>'`. Firebird lets a **single `WHEN` list several conditions**, comma-
+  separated, sharing one `DO` body (`WHEN GDSCODE a, GDSCODE b, EXCEPTION c DO …`); the interpreter tries
+  each condition of each clause **in declaration order** (conditions within a clause left-to-right, clauses
+  top-to-bottom). So the AST models **one `WhenHandler` per `WHEN` clause**, carrying an **ordered list of
+  conditions** (each a kind + its optional operand) plus the body — never a single condition per node
+  (decision 3, refined 2026-07-17). A `WHEN` whose shape the parser cannot recognise as `WHEN <conditions>
+  DO <body>` falls back to the lossless `PsqlLeafKind.Other` valve, never a misleading structured node.
 - **Propagation** — unwind frames until a handler matches; unwinding a frame triggers its savepoint
   rollback (§4.5).
 - **Re-raise** — bare `EXCEPTION;` inside a handler.
@@ -293,9 +306,10 @@ messages.
 
 > **⚠ Prerequisite P1 — AST deepening.** The AST does **not** model handlers: `PsqlLeafKind.Other` is
 > documented as *"a WHEN … DO handler leaf"*, i.e. handlers are an unstructured token bag. **The
-> interpreter cannot read exception control flow from the tree as it stands.** A `WhenHandler` node +
-> `BlockStatement.Handlers` is required **before D1**, following Etap 6.9's contract (parser producer →
-> binder consumer; formatter convergence later, only if a feature needs it).
+> interpreter cannot read exception control flow from the tree as it stands.** A `WhenHandler` node
+> (one per `WHEN` clause, holding an ordered `WhenCondition` list + a body) + `BlockStatement.Handlers`
+> is required **before D1**, following Etap 6.9's contract (parser producer → binder consumer; formatter
+> convergence later, only if a feature needs it).
 
 ### 3.7 Component map
 
@@ -510,11 +524,67 @@ in the call stack, with real variables, steppable line by line** — which IBExp
 Carry the sub-routine declarations verbatim (**always** — R5), inject the captured read set, read mutated
 captures back. Verified (Q5): 36 / 6, side effect and evaluation order both correct.
 
-### 6.3 ⚠ Version gate — blocks D9
+> **✅ DELIVERED (D9 seam b, 2026-07-18).** Part 1 — step *into* a local routine that reads+writes an outer
+> variable (closure capture over the declaring frame; the write reaches the parent frame). Part 2 — the
+> **transitive read/write-set fixpoint** (`SubroutineCatalog` + `ReadWriteSetAnalyzer.Analyze`'s optional
+> catalog arg) so a step-*over* of a local call injects the callee's captured read set (even a variable the call
+> site does not name) and reads its mutated captures back. Both proven simulated == real (§15.8/§15.9/§15.10).
+> Local routines are real, steppable frames with real closure variables — the capability IBExpert cannot deliver.
 
-§6.1 was measured on **FB5.0.3 only**. FB3 documented sub-routines as **unable** to access outer variables;
-if true, FB3 is *simpler* (no closures) and the closure harness is FB4+/FB5. **Measure Q2/Q3/Q4 on FB3 and
-FB4 before implementing D9** (FB3 is installed locally on port 4050). Recorded as a gate, not an assumption.
+### 6.3 ✅ Version gate — MEASURED (2026-07-18); resolved
+
+§6.1 was measured on **FB5.0.3 only**; this gate re-measured Q2/Q3/Q4 on **FB3.0.13 (port 4050)** with
+`tools/probes/Fb3ClosureProbe` (raw `EXECUTE BLOCK`, full log in **§15.7**). **Result:**
+
+- **FB3 sub-routines are CLOSED scopes** — an outer variable is rejected at compile time (SQL **-206**
+  "Column unknown"). FB3 is genuinely *simpler*: no closures.
+- **FB5 sub-routines are true closures** — read + write, **by reference** (confirms §6.1: `6`, `5→99`, `77`).
+- **FB4 unverified** (not installed) — a documented §F boundary; re-run the probe when an FB4 instance exists.
+
+**D9 consequence — the harness / interpreter branches on server version when it pushes a local-routine
+frame** (no new abstraction — the D8 `Frame.LexicalParent` split, gotcha #241, already models it):
+
+| Server | Local-routine frame `LexicalParent` | Closure harness (§6.2b) captures |
+|---|---|---|
+| **FB3** | **`null`** (closed — *forced correct*: an outer-referencing sub-routine can't even compile in the DB) | none — inject **only** the call arguments |
+| **FB5** | **declaring frame** (outer reads/writes resolve up the chain) | inject the read set (R1–R4) + carry the decl verbatim (R5) + read writes back |
+| **FB4** | unverified — treat conservatively at the boundary | — |
+
+The branch is one predicate on `FirebirdDdlReader.ParseServerMajor` (reused from P2) at frame construction.
+
+### 6.4 Step *into* a local FUNCTION — seam (c) *(✅ DELIVERED 2026-07-19)*
+
+§6.2(a) says "step into a local routine ⇒ just interpret it" — true for a local **procedure** (an
+`EXECUTE PROCEDURE` *statement* is a step point the interpreter owns). A local **function** is different: its
+call is an *element of a server-evaluated expression* (`v = f(x)`, `IF f(x)`, …), so D9 core steps **over** it
+(the server evaluates the whole expression in one harness). Faithful (§F), but you can't trace a complex local
+function's body line by line. **Seam (c)** closes that gap without breaking the responsibility split.
+
+> **Principle (ratified, final):** Step Into descends into a local function **only when the call is the ENTIRE
+> operand of a value-consuming position**, so the client never has to evaluate an expression around it.
+
+Covered (**Variant A** — one mechanism, all four positions): `v = f(args)` · `RETURN f(args)` · `IF f(args) THEN`
+· `WHILE f(args) DO`. **Excluded** (require expression decomposition ⇒ step-over, a permanent §F boundary):
+`f(x)+1`, `f(x)=5`, `f` as a sub-operand, `a AND f(x)`, `INSERT … VALUES(f(x))`. The boundary is architectural,
+not syntactic. **No new server path, no expression evaluator, no delivery/mini-harness:** the return value is
+delivered **client-side** via `SetResolvedValue` (the primitive procedures already use for `RETURNING_VALUES`),
+`RETURN <expr>` computes via the existing **Expression Harness** (result column typed as the function's `RETURNS`
+base type, R2), and the mechanism is a **Function Return Continuation** — a generalisation of `ApplyReturningValues`
+(procedures become its special case). Small AST deepening only (`CallExpression` + additive lone-call props;
+Contract #1). Full design + as-built: **[docs/history/19-...](../history/19-firebird-debugger.md)
+§"D9 seam (c)"**; milestone brief: the implementation plan's D9 section.
+
+> **✅ DELIVERED (2026-07-19, sub-steps c1–c3).** c1 — the AST (`CallExpression` + `PsqlLeafStatement.RhsCall`/
+> `.AssignmentTarget` + `If`/`WhileStatement.ConditionCall`, strict lone-call parser producers) + `SubroutineSignature.ReturnType`.
+> c2 — the pure-Core interpreter: `FunctionReturnContinuation` (`AssignTo`/`SetFrameReturn`/`BranchIf`/`DecideWhile`)
+> with a single `RecognizeStepInto` factory, `Frame` return state, `IDebugExecutor.ResolveFunction`/`EvaluateReturn`,
+> and one delivery switch generalising `ApplyReturningValues`. c3 — the Firebird executor: `ResolveFunction` walks
+> the lexical chain for a local function (a **local shadows a same-named global** — verified), builds its frame from
+> the AST body, seeds args through the shared harness, and carries the `RETURNS` base type; `EvaluateReturn` computes
+> the `RETURN` operand via the Expression Harness (shared with `EvaluateCondition`). **Live fidelity proven (§15.11):**
+> all four positions, six return types (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing, nesting and a
+> closure — simulated == real on the lab. **⚠ Firebird forbids nested sub-routines** (gotcha #244), so lexical-level
+> shadowing is not expressible — local-vs-global is the realistic case.
 
 ---
 
@@ -552,10 +622,17 @@ per iteration and assign the `INTO` targets into the frame client-side.
 **Directly enabled by AST work already done:** `ForSelectStatement.Query` and `DeclareCursorStatement.Query`
 are real `QueryNode`s with exact token spans (Etap 6.9 / B3.1) — the cursor's SQL is extractable verbatim.
 
-**Open sub-problems for D6:** `FOR SELECT … AS CURSOR c` with `WHERE CURRENT OF c` (positioned DML on a named
-DSQL cursor — **verify**); explicit `DECLARE … CURSOR` + `OPEN`/`FETCH`/`CLOSE` (same bridge, user-driven).
-**The real constraint is not the driver — it is §12.7** (a cursor query that calls a routine we are stepping
-into).
+**D6 as built (colon-only injection):** the pure `CursorBridge` builds the DSQL cursor SELECT from
+`ForSelectStatement.Query`'s span, rewriting **only the `:name`/`@name` parameter form** to positional `?`
+(the unambiguous variable-reference syntax; a bare name is a column — §15.5 / gotcha #239), and `IntoTargets`
+(D6a) map the fetched columns onto the frame. `CursorHandle` (Firebird) holds the real `FbDataReader` open
+across steps with **per-wire-op** locking. Nested `FOR SELECT` and fidelity are proven (§15.5).
+
+**Open sub-problems (follow-ups, not in D6's DoD):** `FOR SELECT … AS CURSOR c` with `WHERE CURRENT OF c` —
+positioned DML on a named DSQL cursor is **unsupported cross-context** (§15.5 [12], SQL -504); it surfaces as
+an honest step error (the AST now carries `CursorName` to detect it). Explicit `DECLARE … CURSOR` +
+`OPEN`/`FETCH`/`CLOSE` (same bridge, user-driven) is a later milestone. **The real constraint is not the
+driver — it is §12.7** (a cursor query that calls a routine we are stepping into).
 
 ---
 
@@ -604,10 +681,15 @@ package body and pushes a frame. A **private** routine (in the body, absent from
 metadata but **not callable from DSQL outside the package** — so the harness cannot call it. This lands on the
 §6 answer: **interpret it.** Step-over of a private routine = interpret without UI updates.
 
-> **⚠ Open probes for D11:** confirm a private package routine is not callable from an `EXECUTE BLOCK`, and
-> that private-routine source is extractable from the package body (a body is one source blob — extracting an
-> individual routine is real parsing work, not a lookup). The lab's `PKG_ORDERS` has only public routines
-> (`RDB$PRIVATE_FLAG = 0`) — **extend `Lab/setup.sql`** with a private routine and verify.
+> **✔ D11 probes — RESOLVED (§15.12, 2026-07-19).** A private package routine is **not** callable from an
+> `EXECUTE BLOCK` (`PKG_DBG.PRIV_DOUBLE(5)` ⇒ SQLSTATE 42000, *"Procedure PRIV_DOUBLE is private to package
+> PKG_DBG"*), while a public one is (`PKG_DBG.PUB_ADD(5)` ⇒ 6) — so a public routine can be run for real
+> (step-over) or fetched-and-stepped, and a private routine **must be interpreted**, never harness-called. The
+> package body is **one blob** (`RDB$PACKAGE_BODY_SOURCE`) returned verbatim, private routine included — so an
+> individual routine's source is extractable by **parsing** that blob (the blob starts at `BEGIN` and shapes each
+> routine like a D9 local `DECLARE PROCEDURE`, i.e. reuse the AST, not a hand-rolled scanner). Lab extended:
+> `PKG_DBG` (private `PRIV_DOUBLE` + public `PUB_ADD`/`PUB_RUN` with a private and a public sibling call) +
+> standalone `SP_DBG_PKG` entry point.
 
 ---
 
@@ -615,14 +697,46 @@ metadata but **not callable from DSQL outside the package** — so the harness c
 
 Philosophy: **a modern IDE debugger, not a DB admin tool.** Consistent with the rest of EmberTern.
 
+> **⚠ D4 UX-review backlog (user, 2026-07-17).** After the first real use of the D4 tab, the user filed an
+> 8-item UX-polish backlog (first-class Debug entry points; move transaction config to global Settings; a
+> subtler current-line marker — the amber fill is too aggressive in dark theme, wants a ~10–15% blue wash + a
+> thin left bar; variable-kind distinction IN/OUT/local; more distinct step icons; edit-params on a running
+> session; richer parameter history; AST-derived paused status). Full list + the binding directive
+> (**fix UX in the view/theme tokens, never by pushing logic into the debugger VMs/UI — keep the D1–D4 split**)
+> are in `docs/history/19-firebird-debugger.md` §"D4 UX review". Fold these into their natural milestones
+> (variable kinds → D7; the rest → a UI-polish pass); do not pre-build them.
+
 ### 9.1 A separate tab — confirmed
 
-**Debugging is a different activity from editing.** A debug tab is read-only source + runtime state; an editor
-tab is authoring. Conflating them means every editing affordance grows a "but not while debugging" mode — the
-complexity spiral EmberTern avoids.
+**Debugging is a different activity from editing.** A debug tab is its own surface — source + runtime state;
+an ordinary editor tab is authoring. Conflating them means every editing affordance grows a "but not while
+debugging" mode — the complexity spiral EmberTern avoids.
 
 Consequences: **no Easy Mode** (correct — it hides the body, and local routines live in the body); the source
 shown is the **full, real** routine source.
+
+> **⚠ AMENDED BY DELIVERY (2026-07-25) — the source is NOT read-only.** Real use showed the separation was
+> drawn one step too far: fixing what you just watched fail is the debugging loop, and sending the user to
+> another tab to do it is the tax. The tab is now a **normal editor at every phase**, under three rules that
+> keep "different activity" intact without a "not while debugging" mode:
+> 1. **The first change to the text ends the session** (no save, no step, no restart needed) — so a step can
+>    never run code the user is no longer looking at. Ending it is **permanent**; undoing the edit does not
+>    resurrect it.
+> 2. **The editor's current text is the session's source.** `Restart` starts a session on the **draft** — no
+>    compile, no write to the database — so a routine can be experimented on without being modified.
+> 3. **`Save` is the only operation that writes to the database.** It compiles the draft and resumes the
+>    session on the new code. (Making Restart compile was proposed and **rejected**: the debugger never asks
+>    the server to run the compiled routine — the harness never names it — so compiling to restart would write
+>    for no technical reason.)
+>
+> A draft-sourced session keeps the Fidelity Law but adds boundary **§12.14**. As-built: `docs/history/19-…`
+> ("An edit ends the session" · "Seam B" · "the live QA verdict").
+>
+> **A successful `Save` also refreshes every OTHER tab showing the same routine** (Seam 6d), so the app never
+> holds two views of one object with different text. The debugger raises the same "compiled an existing object"
+> notification the editors do and the workspace acts on it — no debugger-specific path. Two exclusions: a tab
+> with **unsaved work** is left alone (reloading would discard it — rule #11), and a **debugger tab is never a
+> refresh target** (reloading would reset the source its own session was built from).
 
 ### 9.2 Launch — a panel, not a modal
 
@@ -647,6 +761,32 @@ IBExpert's tax. It carries:
     browser. Typing 40 columns by hand is the worst part of trigger debugging today.
 - **Named parameter sets** — "last used" (auto) + saved presets per routine, in the existing history store.
   **Restart reuses the last values without re-prompting**, panel still editable.
+
+#### 9.3.1 When the signature changes under the panel *(delivered 2026-07-25 — C3)*
+
+Editing the routine can change what the panel must ask for, and the panel is then rebuilt. One rule governs
+what survives that rebuild, and it is the opposite of IBExpert's (which restarts happily and leaves stale values
+behind, sometimes in a state that cannot start at all):
+
+> **Keep everything that can be PROVEN still correct; hand back everything that cannot; never guess in between.**
+
+- **Proof of compatibility is equality of input kind** (the `ExecuteParamKind` family the typed editors already
+  classify a declared type into). Deliberately no narrowing analysis — whether a value *fits* is Firebird's
+  judgement, not the client's (§F / Contract #3). `INTEGER → BIGINT` keeps its value; `INTEGER → VARCHAR` does
+  not, because carrying it would mean converting it.
+- **Parameters** match **by name first, then by the sole remaining pair** — the second only when exactly one row
+  is left unmatched on each side, which is the rename case. Two or more left over on either side carries
+  nothing, because any pairing would then be a guess.
+- **A trigger's `NEW`/`OLD` rows match by name only.** A parameter has positional identity; a context row is a
+  **column**, whose identity is its name in the target table — its position in the grid merely follows the order
+  the body mentions it in. A changed **target table** resets both grids. The chosen **action** is carried
+  separately (it is a decision, not a value) and by the event itself rather than its index.
+- **The same proof governs the parameter history**, so an automatic restore can never be laxer than a
+  carry-over. A stored value records the declared type it was entered under; without one it cannot be proven and
+  is not applied.
+- **One marking convention for every automatic source** — the row reports where its value came from, the panel
+  renders that in one place, and a value resting on the pair rule's assumption is visibly distinct from one that
+  was merely kept. Any edit clears the marker, so it never describes a value the user has replaced.
 
 ### 9.4 The Variables window
 
@@ -713,7 +853,11 @@ pure expression**, and the Executed SQL panel (§10.3) records every evaluation 
 - **Set Next Statement** — move the instruction pointer (drag the marker / `Ctrl+Shift+F10`). **Trivial here**
   because control flow is client-side, and powerful. Guard: it cannot un-execute side effects already
   performed (§12 — offer D14's step-back instead when available).
-- Read-only source. Editing is a different activity (§9.1).
+- **Editable source at every phase** (amended 2026-07-25 — see §9.1): the first edit ends the session, the
+  editor's current text is what the next `Restart` runs (no compile, no DB write), and `Save` is the only
+  operation that writes to the database. Breakpoints survive an edit only where their offsets are **provably**
+  still the same statement start (the edit's unchanged prefix, re-checked against the new parse); anything
+  below the edit is dropped rather than guessed at (§0).
 
 ### 9.7 Keyboard (VS-standard — do not invent)
 
@@ -866,9 +1010,35 @@ Each is **named, detected where possible, and surfaced**. None is silently appro
    execution.** IBExpert has the identical constraint and doesn't say so.
 10. **Domain `CHECK` on injection** (§3.4/R2). Base-typed harness parameters skip domain validation *on
     injection*; the user's own assignments still validate (R3). Accepted trade (decision 1).
-11. **FB3/FB4 closure semantics unverified** (§6.3, §1.4) — a gate on D9, not an assumption.
+11. **FB3 closure semantics measured; FB4 unverified** (§6.3/§15.7, 2026-07-18). FB3 sub-routines are
+    **closed** (no outer access, SQL -206); FB5 are **closures**; FB4 not installed. The frame's
+    `LexicalParent` branches on server major — not an assumption. FB4 is a documented §F boundary.
 12. **Unparseable source.** If a routine's source does not yield step points (the `RawStatement`/§0 valve),
     the debugger **refuses to start, with the reason** — it never debugs a partial understanding.
+13. **Local-function step-into in a proper sub-expression** (§6.4, seam c). Step Into descends into a local
+    function only when its call is the **entire** operand of a value-consuming position (`v = f(x)`,
+    `RETURN f(x)`, `IF f(x)`, `WHILE f(x)`). A function call that is a *sub-expression* (`f(x)+1`, `a AND f(x)`,
+    `f` inside `VALUES(…)`, an argument to another expression) steps **over** — descending would force the
+    client to evaluate the surrounding expression, becoming a second engine (§F / Contract #3). Step-over stays
+    100% faithful (the server evaluates the whole expression). This is an **architectural boundary, not a gap**.
+14. **Draft-sourced session — wherever the SERVER resolves the routine by NAME, it gets the COMPILED version**
+    (new class, 2026-07-25; §9.1's amendment). Since `Restart` runs the editor's current text without
+    compiling it, the client interprets the draft while the database still holds the old routine. The Fidelity
+    Law is unaffected for every ordinary statement — Firebird computes them all, and the harness **never names
+    the routine** — but three shapes cross the line, and **all three are statically detectable from the
+    draft's own AST**: (a) **recursion** — a self-call falls through `ResolveRoutine`'s local and package
+    branches to `ResolveRoutineAsync`, which fetches the *compiled* source, so a step-into would silently
+    descend into old code; (b) **a selectable procedure used inside its own body** — same mechanism, through
+    the cursor path; (c) **a draft that would not compile** — it runs *partially*, because Firebird's PSQL
+    compile-time validation never happened. Note that step-**over** is no escape from (a) and (b): the server
+    runs the *compiled* routine, so a self-referencing draft has no coherent path at all. Surfacing these in the
+    pre-flight is **C3.4's** job, together with the root frame layout coming from the AST header (which also
+    removes the interim gate that today lets a draft run only while its *header* is byte-identical to the
+    compiled one). That layout must **resolve `TYPE OF` rather than regress on it**: the catalog resolves such a
+    parameter today, so routing it into the AST path without support would trade a working case for a rarer one
+    (an earlier note called this an "accepted regression" — it is not, and the correction is ratified). C3.4
+    also owns adding **`RETURNS`** to the launch signature, which is only load-bearing once a changed header can
+    run. **C3.4 is deferred by user decision (2026-07-25)** pending real usage.
 
 ### 12.1 Fast-forward (D13) — the optimisation and its price
 
@@ -904,10 +1074,10 @@ next. Foundation-first; never big-bang.
 | **D3** | **Editor-wiring consolidation** | §11.1 — one seam; solve "subscribe once the VM arrives". | **Moved from v1's D0.** Now it lands immediately before the first UI, where it actually pays. |
 | **D4** | **Debugger tab MVP** | Tab shell, launch panel + parameters (reuse), breakpoint gutter, current-line, Continue/Stop/Restart/Step, basic variables. **Standalone procedures only.** | First real user value. Everything after is depth. |
 | **D5** | **Expression evaluation surface** | Evaluate + Watches + Immediate on **one** engine (§9.5). | **Early on purpose:** the best test instrument for D2's harness, and immediate user value. |
-| **D6** | **Cursor Bridge** | `FOR SELECT` + `DECLARE CURSOR` incremental stepping (§7); the per-wire-operation locking rule. | `FOR SELECT` is in nearly every real procedure — D4 isn't truly usable without it. Before the flashier work. |
+| **D6 ✅** | **Cursor Bridge** | `FOR SELECT` incremental stepping via a real DSQL cursor (§7); per-wire-op locking; colon-only injection (§15.5). **DONE** (nested cursors + fidelity proven; `WHERE CURRENT OF`/`DECLARE CURSOR` explicit cursors are follow-ups). | `FOR SELECT` is in nearly every real procedure — D4 isn't truly usable without it. Before the flashier work. |
 | **D7** | **Variables window, full** | Grouping/icons, change highlight, inline edit + validation, pins, types, `<null>`, lazy BLOBs, filter, **data tips**. | The most important panel, once there is state worth showing. |
 | **D8** | **Call stack + nested stored routines** | Frames, stack panel, **Breadcrumbs** (shared feature), Peek Frame, frame keyboard nav, simulated-frame indicator. | Nesting needs a working single frame first. |
-| **D9** | **Local procedures & functions** 🏁 | Sub-routine frames (§6.2a) + closure harness (§6.2b) + read/write sets + **R5**. **Run §6.3's FB3/FB4 probes first.** | **The flagship.** Falls out of D1+D2+D8 — the design's central claim. |
+| **D9** ✅ | **Local procedures & functions** 🏁 | **COMPLETE (2026-07-19).** Sub-routine frames (§6.2a) + closure harness (§6.2b) + the transitive read/write-set fixpoint + **R5**. §6.3 gate (§15.7): frame `LexicalParent` branches on version. Procedure step-into + step-over faithful (§15.8–§15.10); **seam (c)** — local-**function** step-into in all four value-consuming positions (§6.4) — delivered + live-fidelity-proven (§15.11: four positions, six return types, shadowing, nesting, closure — sim==real). | **The flagship — DELIVERED.** Real, steppable local-routine frames (procedures *and* functions) with real closure variables; IBExpert cannot do this. |
 | **D10** | **Triggers** | Action selector, NEW/OLD editor + availability rules, span-based substitution, seed-from-row. | Independent surface; needs D4+D7. |
 | **D11** | **Packages** | Public + private routines (§8.2). **Extend the lab with a private routine first.** | Smallest remaining surface. |
 | **D12** | **Advanced breakpoints** | Break on exception, conditional + hit counts, data breakpoints, **run to next `SUSPEND`** (+ its result grid). | Cheap *given* the engine; pure additions. |
@@ -927,13 +1097,25 @@ next. Foundation-first; never big-bang.
 ## 14. Open items
 
 **Probes that block a milestone (measure — never infer):**
-- **§6.3 / §1.4** — sub-routine outer-variable capture on **FB3 / FB4** (probes Q2/Q3/Q4). **Blocks D9.**
-- **§8.2** — private package routine callable from `EXECUTE BLOCK`? Source extractable from the body blob?
-  **Blocks D11.**
-- **§7** — `WHERE CURRENT OF` on a named DSQL cursor. **Blocks D6.**
-- **§1.4** — cursor interleaving verified on FB5; confirm on **FB3/FB4**. **Blocks D6.**
+- ~~**§6.3 / §1.4** — sub-routine outer-variable capture on **FB3 / FB4** (probes Q2/Q3/Q4).~~ **RESOLVED
+  (§15.7, 2026-07-18):** FB3 = **closed** (SQL -206); FB5 = **closures** (read+write byref). FB4 unverified
+  (not installed). D9's frame `LexicalParent` branches on server major (FB3 `null`, FB5 declaring frame).
+- ~~**§8.2** — private package routine callable from `EXECUTE BLOCK`? Source extractable from the body blob?~~
+  **RESOLVED (§15.12, 2026-07-19):** private is **NOT** callable (SQLSTATE 42000 *"Procedure … is private to
+  package"*) ⇒ interpret it; the whole body **is** extractable from `RDB$PACKAGE_BODY_SOURCE` verbatim (private
+  routine included), so an individual routine is a parse of that blob. Lab extended with `PKG_DBG` (a private
+  routine + public siblings) + `SP_DBG_PKG`.
+- ~~**§7** — `WHERE CURRENT OF` on a named DSQL cursor.~~ **RESOLVED (§15.5 [12]):** unsupported cross-context
+  (SQL -504) — a §F boundary, surfaced as an honest step error; not in D6's DoD.
+- ~~**§1.4** — cursor interleaving verified on FB5; confirm on **FB3/FB4**.~~ **RESOLVED (§15.5 [11]):** FB3 +
+  FB5 verified; FB4 unverified (no instance).
 - **§12.8** — `DECFLOAT` / `INT128` / `TIME ZONE` / array round-trip fidelity through the driver. **Blocks
   FB4+ support of D2.**
+- **§9.1 / §12.14 — draft vs catalog equivalence.** A `DebuggerFidelityProbe` case must prove that the same
+  routine, run **from the catalog** and as an **identical draft**, produces identical stops and identical
+  values on the lab. **Blocks C3.4** (Contract #12) — the one part of that work that cannot be cut. (The
+  re-analysis cut everything else that was cuttable: the rest of the original Seam C became **C3**, a launch-
+  configuration concern with no engine change, and shipped.)
 
 **Design questions still open for review:**
 1. **`F5` = Continue inside the debug tab** (§9.7), against the app-wide `F5` = Execute.
@@ -991,5 +1173,248 @@ Driver probes: `FirebirdSql.Data.FirebirdClient` 10.3.4 in a throwaway console a
 | **[4]** | Two cursors open simultaneously | **SUCCESS** | **Nested `FOR SELECT` is possible.** §7 |
 | **[5]** | `SAVEPOINT` + `ROLLBACK TO SAVEPOINT` through the driver | **rows after rollback-to = 0** | **Frame atomicity is implementable.** §4.5 |
 
-*(Incidental: `PKG_ORDERS`' routines are all `RDB$PRIVATE_FLAG = 0` — the lab has no private package routine,
-hence §8.2's open probe.)*
+*(Incidental: `PKG_ORDERS`' routines are all `RDB$PRIVATE_FLAG = 0`; the lab gained a private package routine in
+`PKG_DBG` for D11 — see §15.12.)*
+
+### 15.4 D2 seam (c) — executor fidelity (simulated vs real, FB5 lab)
+
+The mandated §2.1 proof: the real `FirebirdDebugExecutor` drove `DebugSession` through three lab procedures
+step-by-step and the result was compared to **real execution** of the same routine. All identical.
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **[6]** | `FbException` identity fields (user `EXCEPTION` / `NOT NULL` domain validation) | user exc → `isc_except` (335544517) present, **name on the message's first line**; validation → SQLSTATE 42000 / GDS 335544879 | The `DebugErrorMapper` mapping (§3.6). |
+| **[7]** | `SP_DBG_SUMMARY` — assignment + **domain `NOT NULL` local** + IF/ELSE + SUSPEND | sim `(120,BIG)`/`(10,SMALL)` == real | R1/R2/R3 hold; a domain-`NOT NULL` uninitialized local **does not crash** (the DoD case). |
+| **[8]** | `SP_DBG_GUARD` — `EXCEPTION` + `WHEN EXCEPTION … DO` | sim `OK`/`CAUGHT` == real | Exception routing through the **real** `FbException` → `DebugError` → `ExceptionRouter`. |
+| **[9]** | `SP_ADD_ORDER(1,…)` — `SELECT … INTO`, IF, DML `INSERT` (+ trigger), SUSPEND | inserted order matches; **session rollback undoes it** | DML leaves + savepoint/tx rollback. |
+| **[10]** | `SP_ADD_ORDER(999,…)` — unhandled `EXCEPTION E_CUSTOMER_NOT_FOUND` | `Faulted`, name resolved, **root frame rolled back**, no row | Unhandled-exit frame savepoint rollback (§4.5). |
+
+**Finding (drove a design decision):** a reused `SELECT … INTO` statement surfaces **no** local references
+from the binder (the query binder records its FROM/columns, not the `:`-colon refs in the `WHERE` nor the
+`INTO` targets — a token-walked `INSERT`/assignment/`IF` surfaces its refs correctly). Its precise read/write
+set is therefore empty, which would drop the `INTO` write-back. **Resolution:** the executor falls back to
+§3.5's named "inject all in-scope" primitive (`InScopeLocals` — correct, chattier) when the model surfaces
+nothing, never a wrong narrow set (gotcha #238). Precise narrowing stays in force for every statement whose
+refs the binder does surface. (A future binder deepening that surfaces reused-`SELECT`/`INTO` refs would let
+the fallback stop firing — pinned by `ReadWriteSetAnalyzerTests.SelectInto_SurfacesNoLocalRefs_*`.)
+
+### 15.5 D6 — Cursor Bridge (driver probes + fidelity, FB3 @ 4050 + FB5 @ 3050)
+
+Probes run before implementing D6 (managed driver, `FirebirdClient` 10.3.4). **FB4 unavailable** (only FB3.0 +
+FB5.0 installed) — recorded unverified, same posture as P2's FB2.5.
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **[11]** | Cursor interleaving on **FB3** (harness stmt while a cursor is open; resume; two cursors at once) | **all SUCCESS** — mirrors FB5 §15.3 [1]–[4] | **Cursor Bridge feasible on FB3 and FB5.** FB4 unverified (no instance). |
+| **[12]** | `WHERE CURRENT OF <name>` on a separately-opened DSQL cursor | **fails** — SQL -504 "Cursor … not found in the current context"; `FbCommand.CursorName` not settable | Positioned DML on a bridged cursor is **not** supportable cross-context — a §F boundary (§7). Not in D6's DoD; a body `WHERE CURRENT OF` surfaces as an honest step-level error. |
+| **[13]** | Does the binder surface local refs for a `FOR SELECT` query? | **bare** refs yes (`role=Variable/Parameter`, in-query); **colon `:name`** no (a single `Parameter` token, #238) | Point B: bare refs *are* surfaced — but see the finding below. |
+
+**Finding (drove the design — §F "verify, don't infer").** The first cut rewrote **every** frame reference the
+binder surfaced (bare + colon) to a `?` parameter. Live fidelity caught it: a routine that both
+`RETURNS (LINE_NO …)` **and** does `SELECT LINE_NO …` has the binder resolve the SELECT-list **column**
+`LINE_NO` to the output **parameter** (locals shadow columns in its resolution order), so the column was
+rewritten to `?` → `SELECT ?, …` → **SQL -804 "Data type unknown"**. **Resolution:** `CursorBridge` rewrites
+**only the colon/`@` parameter form** (`:name`/`@name` — a `Parameter` token, Firebird's *unambiguous*
+variable-reference syntax in a query, and a native DSQL bind once extracted). A **bare** identifier in a query
+is a **column** in DSQL and is left verbatim — matching Firebird's own disambiguation. A bare local ref that
+Firebird would resolve as a variable is rare, ambiguous, and surfaces as an honest step-level "column unknown"
+if it cannot bind, never a silent wrong result (§F: correctness over reach). Gotcha #239.
+
+**Fidelity (simulated vs real, FB5 lab — the mandated §2.1 proof).** The real `FirebirdDebugExecutor` + Cursor
+Bridge drove `DebugSession` through the two new lab cursor procs; outputs compared to real execution.
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **[14]** | `SP_DBG_CURSOR(1000)` — single `FOR SELECT` over `ORDER_ITEMS`, **fully stepped** (Step Into per row) | sim `(1,20,20),(2,25.5,45.5)` == real; 10 steps, `Completed` | Per-step real-cursor fetch; `:P_ORDER` bound; INTO targets land in the frame; running-sum body correct. |
+| **[15]** | `SP_DBG_CURSOR(1001)` | sim `(1,20,20)` == real | Second parameter value; single-row cursor. |
+| **[16]** | `SP_DBG_NESTED` — nested `FOR SELECT` (outer `ORDERS`, inner `ORDER_ITEMS WHERE ORDER_ID = :V_OID`) | sim `(1000,2),(1001,1)` == real | **Two cursors open simultaneously**; inner cursor injects the outer frame's local; DoD met. |
+
+*(The `20` vs `20.00` display difference is numeric scale only — the values are equal.)*
+
+### 15.6 D8 seam (b) — nested stored-routine step-into fidelity (simulated vs real, FB5 lab)
+
+The real `FirebirdDebugExecutor` (with D8's `ResolveRoutine`) drove `DebugSession` **Step Into** through a
+3-level lab chain; outputs + call depth compared to real execution (`tools/probes/DebuggerFidelityProbe`, the
+mandated §2.1 proof). Lab zoo extended with `SP_DBG_LEAF` / `SP_DBG_MID` / `SP_DBG_ROOT` (`Lab/setup.sql`,
+`.fdb` rebuilt).
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **[17]** | **Is `:P` valid as the RHS of a PSQL assignment?** (`x = :y;` in an `EXECUTE BLOCK` body) | **SQL -104, "token unknown" at the `:`** | The colon form is a query-only syntax; the argument-seeding harness must rewrite `:name`/`@name` → **bare** name (by span, like the Cursor Bridge). Gotcha #242. |
+| **[18]** | `SP_DBG_MID(5)` — Step Into `SP_DBG_LEAF`, argument seeding + `RETURNING_VALUES` write-back | depth **2**, chain `SP_DBG_MID → SP_DBG_LEAF`; real `Q = 12` | Step-into resolves a stored callee to a real frame; the arg (`:P`) is evaluated in the caller and seeds the callee input param; the callee's output binds back into the caller's local. |
+| **[19]** | `SP_DBG_ROOT(5)` — the **A→B→C** DoD chain (`ROOT → MID → LEAF`), `SUSPEND RESULT` | depth **3**, chain `SP_DBG_ROOT → SP_DBG_MID → SP_DBG_LEAF`; **simulated `RESULT = 112` == real `112`** | Nested frames, argument seeding and `RETURNING_VALUES` write-back are faithful across three levels (`LEAF(5)=6`, `MID=12`, `ROOT=112`). D8's DoD met. |
+
+*(Every resolved callee is a **stored** routine → a closed scope, `LexicalParent = null` (gotcha #241); a
+package/qualified callee — D11 — and a local sub-routine — D9 — still step over in place, 100% faithful §5.3.)*
+
+### 15.7 D9 — the §6.3 closure version gate (FB3 @ 4050 + FB5 @ 3050)
+
+Run **before** implementing D9 (`tools/probes/Fb3ClosureProbe`, raw `EXECUTE BLOCK` on a throwaway scratch
+DB per instance — **no EmberTern interpreter**: this measures the *engine*, per Developer Contract "verify,
+don't infer"). It resolves the §6.3 gate: §6.1 measured closures on **FB5.0 only**; FB3 historically
+documented sub-routines as having **no** outer access. **FB4 unavailable** (only FB3.0 + FB5.0 installed) —
+recorded unverified, the same posture as P2's FB2.5 and D6's §15.5 [11].
+
+| # | Question | FB 3.0.13 | FB 5.0.3 | Consequence |
+|---|---|---|---|---|
+| **Q2** | Sub-**function** *reads* an outer variable (`RETURN OUTER_V + 1`, `OUTER_V = 5`) | **REJECTED** — SQL **-206** "Column unknown `OUTER_V`" at compile | **COMPILED** — `RESULT = 6` | The outer var is **out of scope** in an FB3 sub-routine; it is a **true closure** in FB5. |
+| **Q3** | Sub-function sees the outer var **mutated** between calls (5 then 99) | **REJECTED** (-206) | **COMPILED** — `R1 = 5, R2 = 99` | FB5 capture is **by reference**, not by value. |
+| **Q4** | Sub-**procedure** *writes* an outer variable (`OUTER_V = 77`) | **REJECTED** (-206) | **COMPILED** — `RESULT = 77` | FB5 writes **propagate back** to the parent frame. |
+
+> **Verdict — FB3 sub-routines are CLOSED scopes; FB5 sub-routines are true closures (read + write, by
+> reference).** The gate anticipated this exactly ("if true, FB3 is *simpler* — no closures").
+
+**Design consequence (drives D9 — no new abstraction; §6.2 holds).** The D8 `Frame.LexicalParent` split
+(gotcha #241) already models both worlds, so D9 only has to *pick* the lexical parent by server version when
+it pushes a local-routine frame:
+
+- **FB3 → `LexicalParent = null`** (closed scope, exactly like a stored callee). This is not merely
+  "simpler" — it is *forced correct*: a sub-routine that references an outer variable **cannot compile in the
+  database on FB3** (-206), so no stored FB3 routine can contain one; a closed frame therefore reproduces the
+  engine with 100% fidelity by construction. The closure harness (§6.2b) injects **only the call arguments** —
+  there are no captures.
+- **FB5 → `LexicalParent = declaring frame`** (§6.1/§6.2b): outer reads/writes resolve up the scope chain
+  against `FrameValues`, and the step-over harness injects the captured read set (R1–R4) + carries the
+  sub-routine declaration verbatim (R5) + reads mutated captures back. The carried declaration references the
+  parent's variables, which the harness declares at the enclosing level — so FB5's by-reference capture makes
+  the harness work with no extra machinery.
+- **FB4 → unverified.** Treat conservatively at the version boundary (a documented §F boundary until an FB4
+  instance is available); re-run `Fb3ClosureProbe` against port `4050`-equivalent when one is. Recommendation
+  recorded in §6.3.
+
+The server major is already available (`FirebirdDdlReader.ParseServerMajor`, reused by P2's connect gate), so
+the branch is a single predicate at frame construction, not a new code path through the interpreter.
+
+### 15.8 D9 seam (a) Part 2 — local-procedure step-into fidelity (simulated vs real, FB5 lab)
+
+Run with the real `FirebirdDebugExecutor` on the FB5 lab (`tools/probes/DebuggerFidelityProbe`, extended — not
+a new probe; Developer Contract #12: fidelity is proven against real execution). Lab routine **`SP_DBG_LOCAL`**:
+a local `DECLARE FUNCTION TRIPLE` + a local `DECLARE PROCEDURE ADD_TAX` (input `AMOUNT`, output `WITH_TAX`, its
+own local `BONUS`); body: `ACC = TRIPLE(BASE); EXECUTE PROCEDURE ADD_TAX(:ACC) RETURNING_VALUES :TOTAL; SUSPEND;`.
+
+| # | Assertion | Result |
+|---|---|---|
+| 1 | Step Into descends into the **local** procedure (depth) | **depth 2** ✔ |
+| 2 | Frame chain | `SP_DBG_LOCAL → ADD_TAX` ✔ |
+| 3 | **Simulated `TOTAL` == real** (`SELECT TOTAL FROM SP_DBG_LOCAL(5)`) | **sim 115 == real 115** ✔ |
+
+> **Verdict — a local `DECLARE PROCEDURE` steps into a real frame with full fidelity:** argument seeding
+> (`ACC` → `AMOUNT`, via the D8 harness), its own local (`BONUS`), `RETURNING_VALUES` write-back (`WITH_TAX` →
+> `TOTAL`), and the local **function** `TRIPLE` exercised server-side (a step-over, carried into the harness
+> verbatim as R5). The local routine's param/`RETURNS` types were derived from the **AST header** (no
+> `RDB$PROCEDURE_PARAMETERS` row exists for a local routine). D8's stored-chain cases (§15.6) unchanged.
+> **Scope:** the sub-routines are self-contained; **outer-variable closures are D9 seam (b)** (the closure
+> harness + transitive read/write-set fixpoint) — not yet implemented.
+
+### 15.9 D9 seam (b) Part 1 — closure capture (stepped-into), simulated vs real (FB5 lab)
+
+Run with the real `FirebirdDebugExecutor` on the FB5 lab (`tools/probes/DebuggerFidelityProbe`, extended). Lab
+routine **`SP_DBG_CLOSURE(SEED)`**: a local `PROCEDURE BUMP` (no params) doing `ACC = ACC + 10`, where `ACC` is
+the *enclosing* routine's variable — a read+write **closure capture** over the declaring frame. Called twice;
+`TOTAL = ACC`.
+
+| # | Assertion | Result |
+|---|---|---|
+| 1 | Step Into descends into the local closure procedure (depth) | **depth 2** ✔ |
+| 2 | Frame chain | `SP_DBG_CLOSURE → BUMP` ✔ |
+| 3 | **Simulated `TOTAL` == real** (`SELECT TOTAL FROM SP_DBG_CLOSURE(5)`) | **sim 25 == real 25** ✔ |
+
+> **Verdict — a local routine that reads *and* writes a captured outer variable steps into a real frame with
+> full fidelity:** the harness declares + injects the captured `ACC` (from the parent frame up the lexical
+> chain), the server computes `ACC + 10`, and the write-back is routed to the **declaring** frame (`ACC`: 5 →
+> 15 → 25). This is FB5-only by construction — an FB3 sub-routine referencing an outer variable does not compile
+> (§6.3), so no such routine can exist on FB3; a closed FB3 frame is therefore 100% faithful by construction.
+> **Boundary:** a **step-OVER** of a local call with direct arguments whose callee mutates *other* outer
+> variables still needs the transitive read/write-set fixpoint (**D9 seam (b) Part 2** — see §15.10).
+
+### 15.10 D9 seam (b) Part 2 — transitive fixpoint (step-over a local call with a hidden capture), simulated vs real (FB5 lab)
+
+Run with the real `FirebirdDebugExecutor` on the FB5 lab (`tools/probes/DebuggerFidelityProbe`, extended — the
+simulator gained a `StepKind` parameter). Two lab routines exercise a callee that reads+writes an OUTER variable
+`HIDDEN` **not named at the call site** (the call passes only the literal `10`): **`SP_DBG_CLOSURE_FN`** (a local
+`FUNCTION`, `TOTAL = BUMP_HIDDEN(10)` — a function call in a leaf runs server-side, a natural step-over) and
+**`SP_DBG_CLOSURE_OVER`** (a local `PROCEDURE`, `EXECUTE PROCEDURE ACCUMULATE(10) RETURNING_VALUES :TOTAL`,
+driven with explicit Step Over).
+
+| # | Case | Assertion | Result |
+|---|---|---|---|
+| 6 | `SP_DBG_CLOSURE_FN(5)` | function runs server-side (depth 1); **sim `TOTAL` == real** | **sim 15 == real 15** ✔ |
+| 7 | `SP_DBG_CLOSURE_OVER(5)` | call stepped over (depth 1); **sim `TOTAL` == real** | **sim 15 == real 15** ✔ |
+
+> **Verdict — the transitive read/write-set fixpoint makes a step-over of a local call with a hidden capture
+> faithful:** the call-graph analysis injects the outer `HIDDEN` the callee reads and returns the value it wrote,
+> even though the call site names only `10`. Without it, `HIDDEN` would be injected as `NULL` and its mutation
+> dropped (sim ≠ real). This closes D9 core: **local procedures step faithfully both into (§15.8/§15.9) and over
+> (§15.10)**; seam (c) below adds the same for local **functions**.
+
+### 15.11 D9 seam (c) — local-FUNCTION step-into, simulated vs real (FB5 lab)
+
+Run with the real `FirebirdDebugExecutor` on the FB5 lab (`tools/probes/DebuggerFidelityProbe`, extended — cases
+8–11; the lab gained `SP_DBG_FN_POS`/`SP_DBG_FN_TYPES`/`SP_DBG_FN_SHADOW`/`SP_DBG_FN_CLOSURE`). Proves stepping
+**into** a local `DECLARE FUNCTION` in the four value-consuming positions, across return types, and that
+`ResolveFunction` picks the correct definition (lexical shadowing). Two existing cases were re-pointed by seam c:
+case 4 now steps into the local **function** `TRIPLE` as well as the procedure `ADD_TAX` (`SP_DBG_LOCAL → TRIPLE →
+ADD_TAX`), and case 6 is now driven with explicit Step **Over** (Step Into would descend into the function).
+
+| # | Case | Assertion | Result |
+|---|---|---|---|
+| 8 | `SP_DBG_FN_POS(5)` | step into a local function at **`=` / `RETURN` / `IF` / `WHILE`**; depth 3 (`… → WRAP → INC`); **sim == real** | **sim 10 == real 10** ✔ |
+| 9 | `SP_DBG_FN_TYPES` | RETURN via the Expression Harness across **INTEGER / BIGINT / NUMERIC / VARCHAR / BOOLEAN / NULL** | **all 6 sim == real** (42, 9000000000, 3.14, hello, True, `<null>`) ✔ |
+| 10 | `SP_DBG_FN_SHADOW(5)` | a **local** function shadows the same-named **stored** `FN_ADD_TAX` → the local is chosen (depth 2); **sim == real** | **sim 5005 == real 5005** ✔ |
+| 11 | `SP_DBG_FN_CLOSURE(5)` | step into a local function that **closes over** an outer variable (`BASE`); **sim == real** | **sim 105 == real 105** ✔ |
+
+> **Verdict — a local FUNCTION is a real, steppable debugger frame in every value-consuming position, with the
+> server reproducing its `RETURN` value across all common types:** the client owns only the descent + the return
+> continuation; the Expression Harness (typed as the function's `RETURNS` base type) computes the value. Shadowing
+> is resolved local-first, matching the engine (§F). **Boundary (permanent, §6.4):** a function call that is a
+> proper sub-expression (`f(x)+1`, `a AND f(x)`, `VALUES(f(x))`) steps *over* — descending would require the client
+> to evaluate the surrounding expression. **⚠ Firebird forbids nested sub-routines** (gotcha #244), so lexical-level
+> function-name shadowing across sub-routine levels is not expressible; local-vs-global is the realistic case
+> tested here. **D9 IS COMPLETE — local procedures *and* functions step faithfully, into and over.**
+
+### 15.12 D11 — package probes (blocking; FB5 lab, ASCII build copy)
+
+The two §8.2 blocking questions, measured against the rebuilt lab (extended first with `PKG_DBG` + `SP_DBG_PKG`).
+Raw `isql` / `EXECUTE BLOCK` — no debugger interpreter (they measure the *engine*, like the §6.3 gate).
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **P-A1** | Is a **private** package routine callable from an `EXECUTE BLOCK`? (`PKG_DBG.PRIV_DOUBLE(5)`) | **NO** — SQLSTATE 42000, *"Procedure PRIV_DOUBLE is private to package PKG_DBG"* | A private routine **must be interpreted**; the harness can never call it. §8.2 |
+| **P-A2** | Is a **public** package routine callable from an `EXECUTE BLOCK`? (`PKG_DBG.PUB_ADD(5)`) | **6** | A public routine runs for real — step-**over** is a real call; step-**into** fetches its source. §8.2 |
+| **P-A3** | Does the standalone caller run for real? (`SP_DBG_PKG(5)` → `PKG_DBG.PUB_RUN`) | **RESULT = 16** (`5*2 + (5+1)`) | The fidelity baseline for D11 (private + public sibling calls). |
+| **P-B** | Is a private routine's **source** extractable from the body blob? (`RDB$PACKAGE_BODY_SOURCE`) | **YES** — whole body verbatim, `PROCEDURE PRIV_DOUBLE … AS BEGIN … END` included | Extract an individual routine by **parsing the blob** (it starts at `BEGIN`, each routine shaped like a D9 local `DECLARE PROCEDURE`). §8.2 |
+
+> **Verdict — D11 is unblocked.** Public routines behave like D8 stored routines (real step-over, source-fetch
+> step-into); private routines are the §6 answer (interpret — a real frame, never a DSQL call). The package body
+> is one parseable blob, so `PackageSourceScanner`/the AST locate + slice a routine — no hand-rolled scanner, no
+> temporary metadata. `PKG_DBG`'s routines are structurally D9-local-shaped, so the executor seam reuses the D8/D9
+> frame machinery rather than a new path. `RDB$PRIVATE_FLAG` distinguishes the two (1 = private).
+
+**Seam B design probes (same rebuilt lab):**
+
+| # | Question | Result | Consequence |
+|---|---|---|---|
+| **P-C1** | Are package member params (public **and** private) in `RDB$PROCEDURE_PARAMETERS` keyed by `RDB$PACKAGE_NAME`? | **YES** — `PRIV_DOUBLE`/`PUB_ADD`/`PUB_RUN` each with `P_N` (in) + `R` (out) | The D8 catalog layout **generalizes** with a package-name filter — a package member reuses `BuildFrameVariablesAsync`, not a new metadata path. |
+| **P-C2** | Can an `EXECUTE BLOCK` **declare** a private routine's body as a sub-routine and call it? | **R = 42** (`21*2`) | The **D9 R5 mechanism works for a private sibling** — declaring every package routine in the harness makes a private call resolvable, so step-**over** of a private routine needs no DSQL call. |
+
+### 15.13 D11 seam B — package routine step fidelity (simulated vs real, FB5 lab)
+
+The real `FirebirdDebugExecutor` drove `DebugSession` through `SP_DBG_PKG` (`DebuggerFidelityProbe` cases 18–19).
+A package member is built the **D8** way (reconstruct `CREATE PROCEDURE` from the body-blob slice, catalog params
+keyed by package, seed args); a sibling call resolves through the **D9 R5** harness (every package routine declared
+as a harness sub-routine — so a private routine, not DSQL-callable, runs inside the harness). One execution path;
+no parallel package executor.
+
+| # | Case | Assertion | Result |
+|---|---|---|---|
+| 18 | `SP_DBG_PKG(5)` step **Into** | descend `SP_DBG_PKG → PUB_RUN` (public) `→ PRIV_DOUBLE` (private, interpreted) + `PUB_ADD` (public); depth 3; **sim == real** | **sim 16 == real 16** ✔ |
+| 19 | `SP_DBG_PKG(5)` step **Into** `PUB_RUN` then step **Over** its siblings | the private `PRIV_DOUBLE` + public `PUB_ADD` run via the **R5 harness** (depth 2 — never entered as frames); **sim == real** | **sim 16 == real 16** ✔ |
+
+> **Verdict — package procedures, public and private, step faithfully into and over.** A public member reuses D8
+> (real step-over is a genuine DSQL call from outside; step-into reconstructs + frames it); a private member reuses
+> D9 (reached only as a sibling from within a package frame; its calls run through the R5 harness like a local
+> sub-routine). Packages have no package-level variables (§8.2) and a member is a closed scope, so there is no
+> capture and the read/write fixpoint is a no-op — `ExecuteStatement`/`EvaluateCondition`/`BindValues` are
+> unchanged. **Boundary:** a package **function** call as a step-into is not yet modelled on the call side (seam A
+> parses function members generically, but `CallExpression` carries no package qualifier) — a documented §F stop
+> (step-over, faithful) until a lab case needs it.

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER VERIFICATION TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Script Executor Rewrite — Step 4 seam B (the Sequenced execution loop). Drives the REAL
+    FirebirdScriptExecutor in ScriptTransactionMode.Sequenced against a THROWAWAY scratch database
+    (never the lab) and proves the three live facts the loop rests on:
+      1. a mixed CREATE+INSERT migration RUNS end-to-end under Sequenced (gotcha #213 fixed by design);
+      2. the SAME script under AutoCommitOnSuccess still FAILS at the INSERT and rolls back (#213 bites
+         the old single-transaction mode — Sequenced is the fix, not a coincidence);
+      3. on a mid-script failure, earlier segments STAY committed and only the failing segment rolls
+         back (the honest, non-atomic cost, surfaced).
+
+    Deliberately NOT in EmberTern.slnx (explicit <Project> entries, no globs): it needs a live server
+    and a password, which the hermetic test suite must never need.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.4" />
+    <!-- The REAL Core + Firebird assemblies — the same parser, planner, executor and driver path the
+         app ships, so a PASS here is a statement about the shipped code. -->
+    <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
+  </ItemGroup>
+
+</Project>

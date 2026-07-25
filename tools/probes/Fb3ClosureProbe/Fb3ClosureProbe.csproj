@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER VERIFICATION TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Stage X / D9 (Local procedures & functions) — the spec §6.3 VERSION GATE. Measures, against a live
+    engine, whether a PSQL sub-routine (DECLARE FUNCTION / DECLARE PROCEDURE inside EXECUTE BLOCK) can
+    read, see-mutated, and write an OUTER variable of the enclosing block — i.e. whether Firebird
+    sub-routines are lexical closures over the parent frame. §6.1 measured this on FB5.0 only; FB3
+    historically documented sub-routines as having NO outer access. If FB3 differs, the D9 closure
+    harness must branch on version. This is raw EXECUTE BLOCK — no EmberTern interpreter involved.
+
+    Deliberately NOT in EmberTern.slnx (explicit <Project> entries, no globs): it needs a live server
+    and a password, which the hermetic test suite must never need. Raw driver only — no Core/Firebird
+    dependency: this is a statement about the ENGINE, not the shipped interpreter.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.4" />
+  </ItemGroup>
+
+</Project>

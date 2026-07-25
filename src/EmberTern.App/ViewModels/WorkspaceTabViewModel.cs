@@ -25,6 +25,7 @@ public enum WorkspaceTabKind
     SessionManager,
     GlobalSearch,
     ScriptExecutor,
+    Debugger,
 }
 
 public partial class WorkspaceTabViewModel : ViewModelBase
@@ -326,7 +327,35 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ScriptExecutor = script,
         };
 
+    // The Firebird debugger tab (Stage X / D4) — one per launched routine (NOT a singleton; the same
+    // procedure may be debugged in two tabs = two sessions). Opened from the sidebar "Debug" action; not
+    // persisted (a debug session is transient). The read-only routine source lives in the child VM.
+    // objectKind is the kind of the routine actually being debugged. It used to be hard-coded to Procedure,
+    // which was harmless while nothing read it — but Seam 6d matches sibling tabs on (kind, name), and a
+    // trigger or function debugged under a Procedure label would refresh the wrong object or none at all.
+    public static WorkspaceTabViewModel CreateDebugger(
+        MainWindowViewModel owner, DebuggerTabViewModel debugger, string routineName, string? connectionProfileId,
+        MetadataObjectKind objectKind)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.Debugger,
+            BaseTitle = string.Format(CultureInfo.CurrentCulture, UiStrings.DebuggerTabTitleFormat, routineName),
+            IsClosable = true,
+            ObjectName = routineName,
+            ObjectKind = objectKind,
+            ConnectionProfileId = connectionProfileId,
+            Icon = string.Empty,
+            // The debugger tab renders the DebuggerIcon composite (IsDebuggerTab), so the
+            // single-colour geometry/resource keys are unused for this kind.
+            IconResourceKey = string.Empty,
+            IconGeometryKey = string.Empty,
+            Debugger = debugger,
+        };
+
     public WorkspaceTabKind Kind { get; private init; }
+    // The debugger tab wears the two-colour DebuggerIcon identity mark instead of a
+    // single-colour keyed SvgIcon (D15.2 Seam B); the tab template branches on this.
+    public bool IsDebuggerTab => Kind == WorkspaceTabKind.Debugger;
     public bool IsClosable { get; private init; }
     public MetadataObjectKind? ObjectKind { get; private init; }
     public string? ObjectName { get; private init; }
@@ -353,6 +382,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public SessionManagerTabViewModel? SessionManager { get; private init; }
     public GlobalSearchTabViewModel? GlobalSearch { get; private init; }
     public ScriptExecutorTabViewModel? ScriptExecutor { get; private init; }
+    public DebuggerTabViewModel? Debugger { get; private init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayTitle))]
@@ -384,6 +414,9 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.PackageDetail => PackageDetail?.GetUnsavedWork(),
         WorkspaceTabKind.ExceptionDetail => ExceptionDetail?.GetUnsavedWork(),
         WorkspaceTabKind.IndexDetail => IndexDetail?.GetUnsavedWork(),
+        // Seam 5c — the debugger's source editor is a real editor now, so an edited routine here is
+        // unsaved work like any other tab's.
+        WorkspaceTabKind.Debugger => Debugger?.GetUnsavedWork(),
         _ => null,
     };
 
@@ -405,7 +438,30 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.PackageDetail => PackageDetail,
         WorkspaceTabKind.ExceptionDetail => ExceptionDetail,
         WorkspaceTabKind.IndexDetail => IndexDetail,
+        // A debugger tab is savable only when it actually has somewhere to save: a PACKAGE member tab's
+        // source is a reconstruction, so it reports its unsaved work but must never be offered "Save"
+        // (that DDL would create a standalone routine — see DebuggerTabViewModel.IsSavable).
+        WorkspaceTabKind.Debugger => Debugger is { IsSavable: true } debugger ? debugger : null,
         _ => null,
+    };
+
+    // Reloads this tab's object from the database (Seam 6d). The third member of the same per-kind family as
+    // UnsavedWork / SavableEditor above — it only reaches the editor, the reload logic stays in the editor.
+    // A kind with nothing to reload (Query, a read-only Ddl snapshot, the live-tool tabs) does nothing, so the
+    // caller does not need to know which kinds those are. The DEBUGGER is deliberately absent: reloading it
+    // would reset the source its session was built from, which belongs to the Draft model, not here.
+    public Task RefreshAsync() => Kind switch
+    {
+        WorkspaceTabKind.ViewDetail => ViewDetail?.RefreshAsync() ?? Task.CompletedTask,
+        WorkspaceTabKind.ProcedureDetail => ProcedureDetail?.RefreshAsync() ?? Task.CompletedTask,
+        WorkspaceTabKind.TriggerDetail => TriggerDetail?.RefreshAsync() ?? Task.CompletedTask,
+        WorkspaceTabKind.FunctionDetail => FunctionDetail?.RefreshAsync() ?? Task.CompletedTask,
+        WorkspaceTabKind.GeneratorDetail => GeneratorDetail?.RefreshAsync() ?? Task.CompletedTask,
+        WorkspaceTabKind.DomainDetail => DomainDetail?.RefreshAsync() ?? Task.CompletedTask,
+        WorkspaceTabKind.PackageDetail => PackageDetail?.RefreshAsync() ?? Task.CompletedTask,
+        WorkspaceTabKind.ExceptionDetail => ExceptionDetail?.RefreshAsync() ?? Task.CompletedTask,
+        WorkspaceTabKind.IndexDetail => IndexDetail?.RefreshAsync() ?? Task.CompletedTask,
+        _ => Task.CompletedTask,
     };
 
     [RelayCommand]

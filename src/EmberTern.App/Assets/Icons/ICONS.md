@@ -117,9 +117,47 @@ Reused (no new geometry) for the rest of the Table Detail toolbar: `Icon.Plus`
 (add field/row), `Icon.RefreshCw` (refresh data, Info), `Icon.ChevronFirst/Left/Right/Last`
 (Dane pagination), `Icon.Save` (save description).
 
+### Catalog (D15.2 Seam A) — debugger toolbar
+
+The debugger toolbar's action set. Authored in the same idiom (24×24, 2px stroke, round
+caps/joins); source `.svg` in `Debugger/`. **Colour = category/weight, not decoration** — most
+are neutral; only the load-bearing actions take a token. Continue reuses `Icon.Play`
+(Accent, the single primary action); Stop reuses `Icon.Stop` (Danger).
+
+| Geometry key | Debug source | Action | Colour token |
+|---|---|---|---|
+| `Icon.StepInto` | Debugger/step-into.svg | Step into | Neutral |
+| `Icon.StepOver` | Debugger/step-over.svg | Step over | Neutral |
+| `Icon.StepOut` | Debugger/step-out.svg | Step out | Neutral |
+| `Icon.RunToCursor` | Debugger/run-to-cursor.svg | Run to cursor | Neutral |
+| `Icon.RunToSuspend` | Debugger/run-to-suspend.svg | Run to next SUSPEND | Neutral |
+| `Icon.NextIteration` | Debugger/next-iteration.svg | Next loop iteration (two-arrow cycle) | `DebugLoopIconBrush` (teal) |
+| `Icon.LoopExit` | Debugger/loop-exit.svg | Continue until loop exit | `DebugLoopIconBrush` (teal) |
+| `Icon.Restart` | Debugger/restart.svg | Restart (skip-to-start) | Neutral |
+| `Icon.BreakException` | Debugger/break-on-exception.svg | Break on exception (toggle) | Warning |
+
+### Catalog (D15.2 Seam B) — debugger identity
+
+The debugger's tab + entry-point identity mark, replacing the old `Icon.Bug`. It is a
+**two-colour composite**, not a single stroked geometry: a **blue Play triangle** (the
+execution pointer, dominant) + a **small red breakpoint dot** nested into its lower-right,
+overlapping the tip so the two read as one "Start Debugging" glyph. Two colours + a filled
+dot can't be a single `SvgIcon`, so it is a dedicated control — `Controls/DebuggerIcon.cs`
+with its ControlTheme in `Themes/IconGeometries.axaml`. Both colours are **reused theme
+tokens**: `AccentIconBrush` (Play) + `DebugBreakpointBrush` (the same red the gutter
+breakpoint dot uses). Same idiom (24×24, 2px stroke, round caps/joins); canonical source
+`Debugger/debugger.svg`.
+
+| Control | Source | Purpose | Used in |
+|---|---|---|---|
+| `DebuggerIcon` | Debugger/debugger.svg | Debugger identity — blue Play + red breakpoint = "Start Debugging" | Debugger tab; Procedure + Trigger editor toolbar "Debug…" buttons |
+
+The fault message bar is Seam C.
+
 ### Migration status — COMPLETE
 
-No Unicode/emoji object or action glyphs remain in any view. The legacy
+No Unicode/emoji object or action glyphs remain in any view — the debugger toolbar was the
+last holdout (Unicode `▶ ⤵ ↷ ⤴ ■ ↻`), moved onto `SvgIcon` in D15.2 Seam A. The legacy
 `MetadataNodeViewModel.IconFor(...)` glyph map + the `*Icon` string constants in
 `UiStrings` are retained only as dead fallback / for tests — live UI renders SVG
 everywhere (metadata tree, tabs, Table Detail, DDL, dependency + field-dependency

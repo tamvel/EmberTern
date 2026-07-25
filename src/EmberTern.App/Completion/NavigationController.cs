@@ -18,6 +18,7 @@ using AvaloniaEdit.Rendering;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Language;
+using EmberTern.Core.Sql.Language.CodeActions;
 using EmberTern.Core.Sql.Language.Hover;
 using EmberTern.Core.Sql.Language.Matching;
 using EmberTern.Core.Sql.Language.Navigation;
@@ -74,6 +75,12 @@ internal sealed class NavigationController
     // Gap between the pointer and the card, so the card never sits under the cursor itself.
     private const double HoverGap = 16;
 
+    // Nudge past the flagged symbol, and the bulb's own footprint (icon + 2px padding each side) —
+    // needed to keep it inside the view when the symbol sits near the right edge.
+    private const double BulbGap = 3;
+    private const double BulbIconSize = 14;
+    private const double BulbSize = BulbIconSize + 4;
+
     private readonly TextEditor _editor;
     private readonly Func<SemanticModel?> _model;
     // The language service's CACHED, version-matched diagnostics — an input, never recomputed here (the
@@ -102,6 +109,20 @@ internal sealed class NavigationController
     private Control? _hoverCard;
     private TextSpan? _hoverSpan;
 
+    // The code-action menu (Ctrl+., Stage Q). OverlayLayer-hosted for the same reason as the hover card.
+    private Control? _codeActionMenu;
+    private ListBox? _codeActionList;
+    // The caret the open menu was built for. Its actions describe THAT position, so the menu is
+    // invalidated the moment the caret leaves it (or the text changes underneath).
+    private int _codeActionOffset = -1;
+
+    // The code-action light bulb (Q3) — a DISCOVERABILITY surface only. It decides whether to appear by
+    // calling the same GetActionsAtCaret the menu does, and clicking it runs the same ShowCodeActions;
+    // it owns no way to obtain or perform an action.
+    private Control? _bulb;
+    private int _bulbAnchor = -1;             // the document offset it is currently pinned to
+    private bool _bulbUpdating;               // re-entrancy guard — see UpdateBulb
+
     // Inline rename popup (M5), created lazily on first F2.
     private Popup? _renamePopup;
     private Border? _renameBorder;
@@ -118,6 +139,10 @@ internal sealed class NavigationController
     // at the clicked offset and returns whether that offset is a parameter site; null → no helper wired.
     private readonly Func<int, bool>? _showParameterHelper;
 
+    // Data-tip source for a paused debug session (spec §9.4): given a variable/parameter name, its live
+    // frame value, or null. Null on every non-debugger surface (the SQL editor is unaffected).
+    private readonly Func<string, DebugHoverValue?>? _debugValueLookup;
+
     private NavigationController(
         TextEditor editor,
         Func<SemanticModel?> model,
@@ -126,7 +151,8 @@ internal sealed class NavigationController
         Func<string, MetadataObjectKind, bool> openSchemaObject,
         Func<string, bool> openByName,
         Func<string, MetadataObjectKind, Task<string?>>? fetchDefinition,
-        Func<int, bool>? showParameterHelper)
+        Func<int, bool>? showParameterHelper,
+        Func<string, DebugHoverValue?>? debugValueLookup)
     {
         _editor = editor;
         _model = model;
@@ -136,6 +162,7 @@ internal sealed class NavigationController
         _openByName = openByName;
         _fetchDefinition = fetchDefinition;
         _showParameterHelper = showParameterHelper;
+        _debugValueLookup = debugValueLookup;
         _underline = new UnderlineRenderer(editor);
 
         _hoverDwell = new DispatcherTimer { Interval = HoverDwell };
@@ -156,6 +183,8 @@ internal sealed class NavigationController
     /// (M5); null → Peek shows only local declarations.</param>
     /// <param name="showParameterHelper">Shows the unified Parameter Helper at a double-clicked offset
     /// (returns whether it is a parameter site); null → double-click only does name-based open.</param>
+    /// <param name="debugValueLookup">Data-tip source for a paused debug session (spec §9.4): variable name →
+    /// its live frame value; null (the default) on non-debugger surfaces.</param>
     public static NavigationController Attach(
         TextEditor editor,
         Func<SemanticModel?> model,
@@ -164,11 +193,12 @@ internal sealed class NavigationController
         Func<string, MetadataObjectKind, bool> openSchemaObject,
         Func<string, bool> openByName,
         Func<string, MetadataObjectKind, Task<string?>>? fetchDefinition = null,
-        Func<int, bool>? showParameterHelper = null)
+        Func<int, bool>? showParameterHelper = null,
+        Func<string, DebugHoverValue?>? debugValueLookup = null)
     {
         var c = new NavigationController(
             editor, model, diagnostics, isOtherPopupOpen, openSchemaObject, openByName,
-            fetchDefinition, showParameterHelper);
+            fetchDefinition, showParameterHelper, debugValueLookup);
         editor.TextArea.TextView.BackgroundRenderers.Add(c._underline);
 
         // Ctrl+Click — tunneled so it runs before AvaloniaEdit's own selection handling, letting us
@@ -183,14 +213,23 @@ internal sealed class NavigationController
         // (so holding Ctrl over an already-hovered identifier lights it up, and releasing clears it).
         editor.KeyDown += c.OnKeyChanged;
         editor.KeyUp += c.OnKeyChanged;
-        // F2 (rename) / Alt+F12 (peek) — the M5 commands.
+        // F2 (rename) / Alt+F12 (peek) / Ctrl+. (code actions) — the command keys.
         editor.KeyDown += c.OnCommandKey;
+        // Escape-to-dismiss must beat AvaloniaEdit's own Escape handling, so it tunnels.
+        editor.AddHandler(InputElement.KeyDownEvent, c.OnTunnelKey, RoutingStrategies.Tunnel);
         // Double-click → INSERT/VALUES column helper (P6) or name-based open. Consolidated here so
         // there is ONE double-click handler (the two duplicated ones in SqlEditorBehavior / MainWindow
         // move here), avoiding an e.Handled ordering dance between two subscribers on one event.
         editor.DoubleTapped += c.OnDoubleTapped;
         // An edit invalidates the card: it describes an offset in a document that just changed.
         editor.TextChanged += c.OnTextChanged;
+        // The code-action bulb follows the caret's LINE and must be repositioned when the view scrolls
+        // under it.
+        editor.TextArea.Caret.PositionChanged += c.OnCaretMovedForBulb;
+        editor.TextArea.TextView.ScrollOffsetChanged += c.OnScrollForBulb;
+        // The moment the line geometry becomes valid again — the same signal BreakpointMargin repaints
+        // on. A bulb whose placement could not be computed yet gets its chance here.
+        editor.TextArea.TextView.VisualLinesChanged += c.OnVisualLinesChangedForBulb;
         return c;
     }
 
@@ -205,11 +244,17 @@ internal sealed class NavigationController
         _editor.KeyDown -= OnKeyChanged;
         _editor.KeyUp -= OnKeyChanged;
         _editor.KeyDown -= OnCommandKey;
+        _editor.RemoveHandler(InputElement.KeyDownEvent, OnTunnelKey);
         _editor.DoubleTapped -= OnDoubleTapped;
         _editor.TextChanged -= OnTextChanged;
+        _editor.TextArea.Caret.PositionChanged -= OnCaretMovedForBulb;
+        _editor.TextArea.TextView.ScrollOffsetChanged -= OnScrollForBulb;
+        _editor.TextArea.TextView.VisualLinesChanged -= OnVisualLinesChangedForBulb;
+        HideBulb();
         _hoverDwell.Stop();
         _hoverDwell.Tick -= OnHoverDwellElapsed;
         HideHover();
+        CloseCodeActionMenu(); // overlay-hosted, so it would otherwise outlive the controller
         _peekGeneration++;
         if (_renamePopup is not null) _renamePopup.IsOpen = false;
         if (_peekPopup is not null) _peekPopup.IsOpen = false;
@@ -238,7 +283,17 @@ internal sealed class NavigationController
         if (_pointerInside) UpdateNavigationAffordance(e.KeyModifiers);
     }
 
-    private void OnTextChanged(object? sender, EventArgs e) => HideHover();
+    private void OnTextChanged(object? sender, EventArgs e)
+    {
+        HideHover();
+        // The text changed under the open menu, so its actions describe a document that no longer
+        // exists — close it rather than let one be picked.
+        CloseCodeActionMenu();
+        // The diagnostics now describe text that no longer exists, so the bulb would be offering a fix
+        // for a problem that may already be gone. Hide it NOW and let the recomputed diagnostics decide
+        // whether it comes back (RefreshCodeActionIndicator, called on ModelUpdated).
+        HideBulb();
+    }
 
     /// <summary>Clears both cues — the pointer left, or a click/navigation happened.</summary>
     private void Clear()
@@ -313,8 +368,9 @@ internal sealed class NavigationController
         var model = _model();
         if (offset is null || model is null) return;
 
-        // Pure lookup over two already-computed results — no parse, no analysis on the pointer path.
-        var hover = HoverInfoEngine.GetHover(model, _diagnostics(), offset.Value);
+        // Pure lookup over already-computed results — no parse, no analysis on the pointer path. The debug
+        // value lookup (when wired) reads the paused frame's client-side truth, not the server.
+        var hover = HoverInfoEngine.GetHover(model, _diagnostics(), offset.Value, _debugValueLookup);
         if (hover is null) return;
         ShowHover(hover);
     }
@@ -325,7 +381,12 @@ internal sealed class NavigationController
         if (overlay is null) return;
 
         HideHover();
-        var card = HoverInfoView.Build(hover, _editor.ActualThemeVariant);
+        // Only claim a fix exists when one really does — the hint is computed from the SAME
+        // GetActionsAtCaret the menu and the bulb use, over the hovered span's own diagnostics, so the
+        // three surfaces can never disagree about whether there is anything to offer. Read-only: the
+        // card shows the shortcut, it does not become a way to run it (§15.1.1).
+        bool hasFixes = !_editor.IsReadOnly && GetActionsAtCaret(hover.Span.Start).Count > 0;
+        var card = HoverInfoView.Build(hover, _editor.ActualThemeVariant, hasFixes);
         // Never intercept the pointer: a hit-testable card under the cursor fires PointerExited on the
         // editor and flickers itself shut. It must also never take focus — hovering is not an action.
         card.IsHitTestVisible = false;
@@ -363,6 +424,10 @@ internal sealed class NavigationController
     {
         // Any click dismisses the info card — you have started doing something, not reading.
         HideHover();
+        // A click back in the editor dismisses the menu too, and hands the keyboard back. LostFocus
+        // alone would close it, but only once focus actually moved; doing it here also covers a click
+        // that lands on the editor without changing focus.
+        CancelCodeActionMenu();
 
         var props = e.GetCurrentPoint(_editor).Properties;
         if (!props.IsLeftButtonPressed) return;
@@ -464,6 +529,468 @@ internal sealed class NavigationController
         {
             if (BeginPeek()) e.Handled = true;
         }
+        else if (e.Key == Key.OemPeriod && (e.KeyModifiers & KeyModifiers.Control) == KeyModifiers.Control)
+        {
+            if (ShowCodeActions()) e.Handled = true;
+        }
+    }
+
+    // Escape must close the menu wherever the keyboard happens to be, and the two places need two
+    // subscriptions for one behaviour — not two behaviours. The menu lives in the window's OverlayLayer,
+    // which is NOT a descendant of the editor, so a key pressed with the list focused never reaches the
+    // editor at all (the list's own handler covers that). With focus still in the editor, a BUBBLE
+    // handler is too late: AvaloniaEdit's TextArea marks Escape handled at the source, so it never
+    // reaches an ancestor — the same trap as gotcha #224 (Tab), and the reason this is TUNNELLED.
+    private void OnTunnelKey(object? sender, KeyEventArgs e)
+    {
+        if (_detached || _codeActionMenu is null) return;
+
+        // While the menu is open it OWNS these keys — the same bargain the completion list makes. It
+        // must tunnel: AvaloniaEdit's TextArea handles Escape and the arrows at the source, so a bubble
+        // handler would never see them (the gotcha #224 trap).
+        switch (e.Key)
+        {
+            case Key.Escape:
+                CancelCodeActionMenu();
+                e.Handled = true;
+                break;
+            case Key.Down:
+                MoveCodeActionSelection(1);
+                e.Handled = true;
+                break;
+            case Key.Up:
+                MoveCodeActionSelection(-1);
+                e.Handled = true;
+                break;
+            case Key.Enter or Key.Tab:
+                ApplySelectedCodeAction();
+                e.Handled = true;
+                break;
+        }
+    }
+
+    // Wraps around: with two or three actions, stopping at the ends is just a keystroke that does
+    // nothing.
+    private void MoveCodeActionSelection(int delta)
+    {
+        if (_codeActionList is not { ItemCount: > 0 } list) return;
+        int next = (list.SelectedIndex + delta + list.ItemCount) % list.ItemCount;
+        list.SelectedIndex = next;
+        list.ScrollIntoView(next);
+    }
+
+    // ── Code actions — Ctrl+. (Stage Q / Q2) ─────────────────────────────────────────────────────
+    //
+    // The light bulb (Q3) is a second TRIGGER for this same method, never a second implementation: both
+    // build their list from one GetActionsAtCaret call and apply through one InvokeCodeAction.
+
+    /// <summary>Opens the code-action menu at the caret, if anything is offered there. The public entry
+    /// point for a THIRD trigger (the Diagnostics panel, Q5) — it goes through the same ShowCodeActions
+    /// as Ctrl+. and the bulb, so a fix can never be reached by a path of its own.</summary>
+    public bool TryShowCodeActions() => ShowCodeActions();
+
+    /// <summary>Test seam: the actions offered at <paramref name="offset"/>, without the menu UI.</summary>
+    internal IReadOnlyList<CodeAction> CodeActionsForTest(int offset) => GetActionsAtCaret(offset);
+
+    /// <summary>Test seam: offers the actions at the caret and applies the one at
+    /// <paramref name="index"/>, exercising the same path the menu does.</summary>
+    internal bool InvokeCodeActionForTest(int offset, int index)
+    {
+        var actions = GetActionsAtCaret(offset);
+        return index >= 0 && index < actions.Count && InvokeCodeAction(actions[index]);
+    }
+
+    // Every fix offered for every diagnostic covering the caret. The diagnostics are the language
+    // service's CACHED list — this performs no analysis, exactly as the hover does not (§4).
+    private IReadOnlyList<CodeAction> GetActionsAtCaret(int offset) => GetActionsAtCaret(offset, out _);
+
+    /// <param name="anchorOffset">Where the FIRST offering diagnostic ends — i.e. the end of the flagged
+    /// symbol itself. The bulb is placed there rather than at the end of the line: the user is looking at
+    /// the problem, not at the right margin. Computed here, in the same pass that finds the actions, so
+    /// the indicator and the menu can never describe different spans.</param>
+    private IReadOnlyList<CodeAction> GetActionsAtCaret(int offset, out int anchorOffset)
+    {
+        anchorOffset = -1;
+        var model = _model();
+        if (model is null) return Array.Empty<CodeAction>();
+
+        List<CodeAction>? actions = null;
+        foreach (var d in _diagnostics())
+        {
+            if (offset < d.Start || offset > d.End) continue;
+            foreach (var action in QuickFixEngine.GetFixes(model, d))
+            {
+                (actions ??= new List<CodeAction>()).Add(action);
+                if (anchorOffset < 0) anchorOffset = d.End;
+            }
+        }
+        return (IReadOnlyList<CodeAction>?)actions ?? Array.Empty<CodeAction>();
+    }
+
+    // THE single activation point (design §3 / CodeAction's own note): every surface that offers an
+    // action ends up here, so the day a non-edit action exists, exactly one method learns about it.
+    private bool InvokeCodeAction(CodeAction action)
+    {
+        if (_editor.IsReadOnly) return false; // never mutate a read-only surface (§0)
+        if (!TextEditApplier.TryApply(_editor.Document, action.Edits, _editor.CaretOffset, out int caret))
+        {
+            return false;
+        }
+        _editor.CaretOffset = caret;
+        _editor.TextArea.Focus();
+        return true;
+    }
+
+    // Returns false when there is nothing to offer, leaving Ctrl+. unhandled — a shortcut that silently
+    // does nothing is better than a menu that says "no actions here".
+    private bool ShowCodeActions()
+    {
+        if (_editor.IsReadOnly) return false;
+        var actions = GetActionsAtCaret(_editor.CaretOffset);
+        if (actions.Count == 0) return false;
+
+        var overlay = OverlayLayer.GetOverlayLayer(_editor);
+        if (overlay is null) return false;
+
+        CloseCodeActionMenu();
+
+        // OverlayLayer, like the hover card — a bare Popup renders invisibly on the desktop despite
+        // IsOpen/Visible/Opacity all being true (gotcha #209).
+        // Styled as another editor popup, not a window of its own: the chrome below mirrors the
+        // completion list's (elevated surface, 1px border) and the row metrics live in the shared
+        // `code-action-menu` style so the two cannot drift apart.
+        var list = new ListBox
+        {
+            ItemsSource = actions,
+            DisplayMemberBinding = new Avalonia.Data.Binding(nameof(CodeAction.Title)),
+            SelectedIndex = 0,
+            MinWidth = 180,
+            MaxHeight = 180,
+        };
+        list.Classes.Add("code-action-menu");
+        var card = new Border
+        {
+            Background = ThemeBrush("ElevatedPanelBrush"),
+            BorderBrush = ThemeBrush("BorderBrush"),
+            BorderThickness = new Thickness(1),
+            Child = list,
+        };
+
+        // A single click runs the action: the ListBox has already moved the selection onto the pressed
+        // item by the time this fires, so "click" and "Enter on the selection" are literally the same
+        // operation — one selection model, three ways to reach it.
+        list.PointerReleased += (_, e) =>
+        {
+            if ((e.Source as Control)?.FindAncestorOfType<ListBoxItem>() is not null) ApplySelectedCodeAction();
+        };
+
+        var anchor = EditorPopups.TryGetCaretRect(_editor, out var caretRect)
+            ? _editor.TranslatePoint(new Point(caretRect.X, caretRect.Bottom), overlay)
+            : new Point(0, 0);
+        Canvas.SetLeft(card, anchor?.X ?? 0);
+        Canvas.SetTop(card, anchor?.Y ?? 0);
+        overlay.Children.Add(card);
+
+        _codeActionMenu = card;
+        _codeActionList = list;
+        _codeActionOffset = _editor.CaretOffset;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(_codeActionMenu, card)) return;
+            EditorPopups.ClampIntoOverlay(overlay, card, flipOffset: caretRect.Height);
+        }, DispatcherPriority.Background);
+
+        // Focus deliberately STAYS in the editor, exactly as the completion window works: an
+        // overlay-hosted list does not reliably take keyboard focus, and a menu whose arrow keys depend
+        // on that is a menu that needs a mouse. OnTunnelKey drives it instead, so the keyboard behaves
+        // the same wherever focus happens to be.
+        return true;
+    }
+
+    // ── The light bulb (Q3) — discoverability ONLY ───────────────────────────────────────────────
+    //
+    // Ctrl+. ─┐
+    //          ├── GetActionsAtCaret() ──► menu ──► InvokeCodeAction()
+    // bulb   ─┘
+    //
+    // The bulb contributes nothing to that flow. It answers one question — "is there at least one
+    // action here?" — with the same call the menu uses, and its click is literally ShowCodeActions.
+
+    /// <summary>Re-evaluates the bulb. Called when the diagnostics have been recomputed — the moment a
+    /// just-applied fix must stop being offered.</summary>
+    public void RefreshCodeActionIndicator()
+    {
+        if (_detached) return;
+        UpdateBulb();
+    }
+
+    /// <summary>Test seam: whether the bulb is currently offered (headless probe).</summary>
+    internal bool IsCodeActionIndicatorVisible => _bulb is not null;
+
+    /// <summary>Test seam: the armed action's index in the open menu, or -1.</summary>
+    internal int CodeActionSelectionForTest => _codeActionList?.SelectedIndex ?? -1;
+
+    /// <summary>Test seam: whether the code-action menu is open. Asserted directly rather than by
+    /// counting overlay children — the bulb shares that overlay and moves in and out on its own.</summary>
+    internal bool IsCodeActionMenuOpen => _codeActionMenu is not null;
+
+
+    private void OnCaretMovedForBulb(object? sender, EventArgs e)
+    {
+        // An open menu describes the caret it was built for. If the caret moved, that context is gone —
+        // close rather than let the user pick a fix for a position they have left.
+        InvalidateCodeActionMenuIfMoved();
+        UpdateBulb();
+    }
+
+    // Scrolling does not change WHETHER there are actions, only where the line is — so reposition
+    // without re-evaluating.
+    private void OnScrollForBulb(object? sender, EventArgs e)
+    {
+        if (_bulb is not null) PositionBulb(_bulbAnchor);
+    }
+
+    // The view's geometry just became valid/changed: place a bulb that could not be placed before, and
+    // keep an existing one on its line.
+    private void OnVisualLinesChangedForBulb(object? sender, EventArgs e)
+    {
+        if (_detached) return;
+        if (_bulb is not null) { PositionBulb(_bulbAnchor); return; }
+        UpdateBulb(); // a placement that failed earlier gets its retry here
+    }
+
+    private void UpdateBulb()
+    {
+        // Adding to / removing from the overlay changes layout, which can raise VisualLinesChanged
+        // SYNCHRONOUSLY — and that handler calls back in here. Without this guard the hide/show pair
+        // below interleaves with a nested update: both add a control, only the last is remembered, and
+        // the first is stranded in the overlay forever (found by the Q3 placement test, which saw two
+        // children where one was expected).
+        if (_bulbUpdating) return;
+        _bulbUpdating = true;
+        try
+        {
+            UpdateBulbCore();
+        }
+        finally
+        {
+            _bulbUpdating = false;
+        }
+    }
+
+    private void UpdateBulbCore()
+    {
+        if (_detached || _editor.IsReadOnly)
+        {
+            HideBulb();
+            return;
+        }
+
+        var doc = _editor.Document;
+        int anchor = -1;
+        int actionCount = doc is null ? -1 : GetActionsAtCaret(_editor.CaretOffset, out anchor).Count;
+        if (doc is null || actionCount == 0 || anchor < 0)
+        {
+            HideBulb();
+            return;
+        }
+
+        // Pinned to the flagged SYMBOL. While the caret moves within the same flagged span the anchor is
+        // unchanged, so the bulb sits perfectly still — re-showing it in place would read as a flicker.
+        if (_bulb is not null && anchor == _bulbAnchor)
+        {
+            PositionBulb(anchor);
+            return;
+        }
+
+        HideBulb();
+        ShowBulb(anchor);
+    }
+
+    // Theme-scoped resources MUST be looked up with the theme variant. Control.FindResource(key) does
+    // not supply one, so every brush in ThemeDictionaries comes back UNSET — which is how the bulb ended
+    // up with a null Foreground: the control had a size, a position and IsEffectivelyVisible=true, and
+    // painted nothing, because SvgIcon strokes its geometry with Foreground. Geometries are NOT
+    // theme-scoped, which is why Data resolved and hid the problem. This is the same lookup
+    // HoverInfoView uses; nothing in this file may use FindResource for a brush again.
+    private IBrush? ThemeBrush(string key)
+        => Application.Current?.Resources.TryGetResource(key, _editor.ActualThemeVariant, out var v) == true
+           && v is IBrush b ? b : null;
+
+    private void ShowBulb(int anchorOffset)
+    {
+        var overlay = OverlayLayer.GetOverlayLayer(_editor);
+        if (overlay is null) return;
+
+        // A FILLED path, not the stroked SvgIcon family: at this size an outline reads as an empty ring.
+        var icon = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Application.Current?.Resources.TryGetResource("Icon.LightbulbFilled", null, out var g) == true
+                ? g as Geometry : null,
+            Fill = ThemeBrush("CodeActionBrush"),
+            Width = BulbIconSize,
+            Height = BulbIconSize,
+            Stretch = Stretch.Uniform,
+        };
+        var button = new Border
+        {
+            Child = icon,
+            Background = Brushes.Transparent, // a hit target, not a painted chip
+            Padding = new Thickness(2),
+            CornerRadius = new CornerRadius(3),
+            Cursor = HandCursor,
+            Opacity = 1.0,
+            [ToolTip.TipProperty] = UiStrings.CodeActionsTooltip,
+        };
+        // Amber-gold at rest so it reads as "a fix is available" at a glance (its own CodeActionBrush —
+        // an offer, not a warning); the accent on hover says "and you can click me".
+        button.PointerEntered += (_, _) => icon.Fill = ThemeBrush("AccentIconBrush");
+        button.PointerExited += (_, _) => icon.Fill = ThemeBrush("CodeActionBrush");
+        // The ONE flow: no separate retrieval, no separate invocation.
+        button.PointerPressed += (_, e) =>
+        {
+            e.Handled = true;
+            ShowCodeActions();
+        };
+
+        // Position BEFORE committing: if the geometry is not available yet, nothing has been added to
+        // the overlay and no state has been touched, so the next VisualLinesChanged simply tries again.
+        if (!TryGetSymbolAnchor(anchorOffset, overlay, out var anchor)) return;
+
+        Canvas.SetLeft(button, anchor.X);
+        Canvas.SetTop(button, anchor.Y);
+        overlay.Children.Add(button);
+        _bulb = button;
+        _bulbAnchor = anchorOffset;
+    }
+
+    private void PositionBulb(int anchorOffset)
+    {
+        if (_bulb is not { } bulb) return;
+        var overlay = OverlayLayer.GetOverlayLayer(_editor);
+        if (overlay is null) { HideBulb(); return; }
+
+        // Geometry not ready is NOT the same as "the symbol is gone": keep the bulb and let
+        // VisualLinesChanged reposition it once the view settles.
+        if (!TryEnsureVisualLines()) return;
+        if (!TryGetSymbolAnchor(anchorOffset, overlay, out var anchor))
+        {
+            HideBulb(); // lines are valid and this offset has no geometry ⇒ it scrolled out of view
+            return;
+        }
+
+        Canvas.SetLeft(bulb, anchor.X);
+        Canvas.SetTop(bulb, anchor.Y);
+    }
+
+    // Reading TextView.VisualLines while they are invalid THROWS (EditorPopups' rule, learned from the
+    // double-click crash: "never access VisualLines while it's invalid"). A background RENDERER may skip
+    // this — its Draw only runs when they are valid by construction, which is why the inline-values idiom
+    // this placement was lifted from has no guard. The bulb positions from a timer tick and from
+    // ModelUpdated, i.e. OUTSIDE the render pass, so the guarantee does not transfer and the guard is
+    // mandatory. False ⇒ not computable right now; try again on the next VisualLinesChanged.
+    private bool TryEnsureVisualLines()
+    {
+        var tv = _editor.TextArea.TextView;
+        if (tv.VisualLinesValid) return true;
+        try { tv.EnsureVisualLines(); }
+        catch (InvalidOperationException)
+        {
+            return false; // a build is already running mid-Measure
+        }
+        return tv.VisualLinesValid;
+    }
+
+    // The anchor just past the end of the line's text — placement chosen because it provably never covers
+    // code and never shifts the document (the left gutter is unavailable: every SQL surface shows line
+    // numbers). False ⇒ the line has no geometry, i.e. it is not currently visible.
+    // The anchor sits immediately after the flagged symbol — where the user is already looking, rather
+    // than out at the right margin (the line-end placement was measurably correct and practically
+    // useless: nobody looks there). Overlapping whatever follows the symbol is accepted: the bulb is
+    // present only while the caret rests on the problem and goes the moment it moves.
+    // False ⇒ this offset has no geometry right now, i.e. it is not visible.
+    private bool TryGetSymbolAnchor(int offset, OverlayLayer overlay, out Point anchor)
+    {
+        anchor = default;
+        var doc = _editor.Document;
+        if (doc is null || offset < 0 || offset > doc.TextLength) return false;
+        if (!TryEnsureVisualLines()) return false;
+
+        var textView = _editor.TextArea.TextView;
+        Point top, bottom;
+        try
+        {
+            // Same idiom as EditorPopups.TryGetCaretRect: ask the view where a document position is, then
+            // take out the scroll offset to get viewport coordinates.
+            var position = new TextViewPosition(doc.GetLocation(offset));
+            top = textView.GetVisualPosition(position, VisualYPosition.LineTop) - textView.ScrollOffset;
+            bottom = textView.GetVisualPosition(position, VisualYPosition.LineBottom) - textView.ScrollOffset;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+
+        // Vertically centred on the line so it reads as sitting beside the word, not on top of it; and
+        // kept inside the view, so a symbol near the right edge still shows its bulb.
+        double x = Math.Min(top.X + BulbGap, Math.Max(0, textView.Bounds.Width - BulbSize));
+        double y = top.Y + Math.Max(0, (bottom.Y - top.Y - BulbSize) / 2);
+        if (y < -BulbSize || y > textView.Bounds.Height) return false; // scrolled out of view
+
+        var point = textView.TranslatePoint(new Point(x, y), overlay);
+        if (point is null) return false;
+        anchor = point.Value;
+        return true;
+    }
+
+    private void HideBulb()
+    {
+        if (_bulb is not null)        if (_bulb is { } bulb)
+        {
+            // Remove from the panel that ACTUALLY holds it, not from whatever GetOverlayLayer resolves
+            // to now: clearing the field while the control stayed parented is how one gets stranded in
+            // the overlay with nothing left pointing at it.
+            (bulb.Parent as Panel)?.Children.Remove(bulb);
+            _bulb = null;
+        }
+        _bulbAnchor = -1;
+    }
+
+    private void ApplySelectedCodeAction()
+    {
+        var action = _codeActionList?.SelectedItem as CodeAction;
+        CloseCodeActionMenu();          // close FIRST: applying moves focus back to the editor
+        if (action is not null) InvokeCodeAction(action);
+    }
+
+    private void CloseCodeActionMenu()
+    {
+        if (_codeActionMenu is { } card)
+        {
+            OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card);
+            _codeActionMenu = null;
+            _codeActionList = null;
+            _codeActionOffset = -1;
+        }
+    }
+
+    // Dismissal that returns the user to what they were doing: the editor keeps the keyboard, so they
+    // can carry straight on typing. Used by Escape and by a click that lands back in the editor — NOT by
+    // LostFocus, where focus has deliberately gone somewhere else and stealing it back would be wrong.
+    private void CancelCodeActionMenu()
+    {
+        if (_codeActionMenu is null) return;
+        CloseCodeActionMenu();
+        _editor.TextArea.Focus();
+    }
+
+    // The open menu's actions were computed for one caret position. Once the caret leaves it, the menu is
+    // describing a context the user has abandoned. (Applying a stale action could not corrupt anything —
+    // TextEditApplier's drift check would refuse it — but offering it at all is the wrong behaviour.)
+    private void InvalidateCodeActionMenuIfMoved()
+    {
+        if (_codeActionMenu is null) return;
+        if (_editor.CaretOffset != _codeActionOffset) CloseCodeActionMenu();
     }
 
     // Opens the inline rename box iff the caret is on a safely-renameable local (the Navigation
@@ -483,7 +1010,7 @@ internal sealed class NavigationController
         _renameActive = rename;
 
         // Prefill from the identifier text as written at the caret (preserves the user's casing).
-        var caretSpan = SpanAtCaret(rename, _editor.CaretOffset) ?? rename.Occurrences[0];
+        var caretSpan = SpanAtCaret(rename, _editor.CaretOffset) ?? rename.Occurrences[0].Span;
         _renameCurrent = SafeGetText(caretSpan);
         _renameBox!.Text = _renameCurrent;
         SetRenameError(false);
@@ -559,31 +1086,23 @@ internal sealed class NavigationController
     // Replaces every occurrence with the new name in ONE undo group, last-to-first so offsets stay
     // valid. Verifies each span still reads as the original identifier first — if the document has
     // drifted from the model, it aborts without editing anything (§0). Returns whether it applied.
+    // Rename is a CodeAction like any other: a set of edits applied atomically. It owns the decision of
+    // WHAT to replace (the binder's exact occurrences of one local symbol) and hands it to the one
+    // applier, which owns bounds-checking, drift control, ordering and the undo unit. There is no
+    // second mutation path here — the previous hand-rolled verify/sort/BeginUpdate loop is gone
+    // (editor-quick-fixes.md §2.2). ExpectedOldText is the text the BINDER saw at each occurrence, not
+    // text re-read from the document, so the check compares against the model's belief rather than
+    // against itself — and it is per-occurrence, so mixed casing needs no folding rule here.
     private bool TryApplyRename(NavigationRename rename, string newName)
     {
-        var doc = _editor.Document;
-        if (doc is null) return false;
-
-        foreach (var s in rename.Occurrences)
+        var edits = new List<TextEdit>(rename.Occurrences.Count);
+        foreach (var o in rename.Occurrences)
         {
-            if (s.Start < 0 || s.End > doc.TextLength) return false;
-            if (!string.Equals(FoldIdentifier(doc.GetText(s.Start, s.Length)), rename.CurrentName, StringComparison.Ordinal))
-            {
-                return false; // drift → abort, never corrupt
-            }
+            edits.Add(new TextEdit(o.Span.Start, o.Span.Length, newName, o.Text));
         }
 
-        var spans = new List<TextSpan>(rename.Occurrences);
-        spans.Sort(static (a, b) => b.Start.CompareTo(a.Start));
-        doc.BeginUpdate();
-        try
-        {
-            foreach (var s in spans) doc.Replace(s.Start, s.Length, newName);
-        }
-        finally
-        {
-            doc.EndUpdate();
-        }
+        if (!TextEditApplier.TryApply(_editor.Document, edits, _editor.CaretOffset, out int caret)) return false;
+        _editor.CaretOffset = caret;
         return true;
     }
 
@@ -806,9 +1325,9 @@ internal sealed class NavigationController
 
     private static TextSpan? SpanAtCaret(NavigationRename rename, int caret)
     {
-        foreach (var s in rename.Occurrences)
+        foreach (var o in rename.Occurrences)
         {
-            if (caret >= s.Start && caret <= s.End) return s;
+            if (caret >= o.Span.Start && caret <= o.Span.End) return o.Span;
         }
         return null;
     }

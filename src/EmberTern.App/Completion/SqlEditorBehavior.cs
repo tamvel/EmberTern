@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Avalonia.Controls;
+using Avalonia.VisualTree;
 using AvaloniaEdit;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Sql.Language.Semantics;
@@ -7,16 +9,39 @@ using EmberTern.Core.Sql.Language.Semantics;
 namespace EmberTern.App.Completion;
 
 /// <summary>
-/// Shared wiring that gives any AvaloniaEdit <see cref="TextEditor"/> the same
-/// SQL-editor capabilities the main SQL Editor has — autocomplete (object + column
-/// suggestions via <see cref="SqlCompletionController"/>) and open-object navigation
-/// (double-click + Ctrl+click on an identifier → <see cref="MainWindowViewModel.TryOpenDdlForWord"/>).
-/// One implementation, reused by the SQL Editor's surfaces and the Procedure Detail
-/// editors — the completion + resolution logic lives in <see cref="SqlCompletionController"/>
-/// / <see cref="SqlCompletionContext"/> / the VM, not duplicated here.
+/// The ONE attach path for an AvaloniaEdit <see cref="TextEditor"/>'s SQL-editor language capabilities —
+/// completion (<see cref="SqlCompletionController"/>), semantic highlighting, hover + open-object navigation,
+/// diagnostic squiggles, related-elements highlighting, language completion, typing ergonomics, and
+/// Find/Replace. Every SQL surface goes through here: the object editors (Procedure / Function / Trigger /
+/// View / Package detail + Script Executor) and — since D3 — the main SQL Editor, which calls this once its
+/// VM arrives (<c>MainWindow.OnDataContextChanged</c>), rather than hand-wiring a second copy.
+/// <para>
+/// This is the "intrinsic block" — the capabilities that are identical on every surface (gotcha #219: they
+/// used to live in two hand-maintained copies, which is how S3 shipped with no squiggles in the main editor).
+/// Genuinely per-host wiring stays with the caller: the Diagnostics panel + F8 nav
+/// (<see cref="DiagnosticsPanelHost"/>), Easy-mode ambient refresh (<see cref="AmbientModelRefresh"/>), and
+/// the metadata-object drop target (<see cref="EmberTern.App.Sql.SqlSnippetDropTarget"/>).
+/// </para>
+/// <para>Requires a stable, non-null <see cref="MainWindowViewModel"/> — the completion controller subscribes
+/// to that VM's metadata events (leak-free via the editor's visual-tree lifetime) and warms referenced
+/// objects itself. The main SQL editor cannot call this in its ctor because the window's VM is set after
+/// construction; it waits for the VM ("subscribe once the VM arrives").</para>
 /// </summary>
 internal static class SqlEditorBehavior
 {
+    /// <summary>"Show the code actions at this editor's caret", published by <see cref="Attach"/> so any
+    /// surface holding the editor can reach the one code-action flow. Null on an editor that was never
+    /// attached (a read-only DDL preview), which is also exactly where actions must not be offered.</summary>
+    public static readonly Avalonia.AttachedProperty<Func<bool>?> CodeActionsProperty =
+        Avalonia.AvaloniaProperty.RegisterAttached<TextEditor, Func<bool>?>(
+            "CodeActions", typeof(SqlEditorBehavior));
+
+    public static void SetCodeActions(TextEditor editor, Func<bool>? value)
+        => editor.SetValue(CodeActionsProperty, value);
+
+    public static Func<bool>? GetCodeActions(TextEditor editor)
+        => editor.GetValue(CodeActionsProperty);
+
     /// <param name="contextTableProvider">For a trigger body editor: returns the
     /// trigger's table so <c>NEW.</c> / <c>OLD.</c> complete that table's columns.
     /// Null for ordinary editors (NEW/OLD have no meaning there).</param>
@@ -28,7 +53,8 @@ internal static class SqlEditorBehavior
         TextEditor editor,
         MainWindowViewModel vm,
         Func<string?>? contextTableProvider = null,
-        Func<IReadOnlyList<Symbol>>? ambientSymbols = null)
+        Func<IReadOnlyList<Symbol>>? ambientSymbols = null,
+        Func<string, EmberTern.Core.Sql.Language.Hover.DebugHoverValue?>? debugValueLookup = null)
     {
         var completion = new SqlCompletionController(
             editor,
@@ -65,7 +91,7 @@ internal static class SqlEditorBehavior
         // model + cached diagnostics. Owns the Ctrl+Click gesture; a name-based open is the fallback for
         // editors the model can't fully resolve (e.g. a body-only Easy-mode trigger editor whose CREATE
         // header isn't in the text).
-        NavigationController.Attach(
+        var navigation = NavigationController.Attach(
             editor,
             () => completion.Model,
             // The cached, version-matched diagnostics — the same list the squiggles paint from, so the
@@ -76,13 +102,26 @@ internal static class SqlEditorBehavior
             word => vm.TryOpenDdlForWord(word),
             (name, kind) => vm.FetchObjectDefinitionAsync(name, kind),
             // Double-click on a value → the unified Parameter Helper (owned by the completion controller).
-            showParameterHelper: offset => completion.TryShowParameterHelperAt(offset));
+            showParameterHelper: offset => completion.TryShowParameterHelperAt(offset),
+            // Debugger data tips (spec §9.4): the paused frame's value for the variable under the pointer.
+            // Null on every non-debugger surface, so the SQL/object editors are unaffected.
+            debugValueLookup: debugValueLookup);
+
+        // Stage Q / Q5: publish "show code actions here" ON the editor. The Diagnostics panel is hosted
+        // by eleven different views, none of which build the NavigationController — an attached property
+        // lets the panel reach the ONE flow without threading a delegate through every one of them.
+        SetCodeActions(editor, navigation.TryShowCodeActions);
+
+        // Stage Q / Q3: the code-action bulb re-evaluates the moment the diagnostics are recomputed —
+        // which is exactly when a just-applied fix must stop being offered. Waiting for its own dwell
+        // would leave a stale bulb proposing a repair for a problem that no longer exists.
+        completion.ModelUpdated += (_, _) => navigation.RefreshCodeActionIndicator();
 
         // Stage 7 / S3: diagnostic squiggles — a wavy underline under each Diagnostic the pure-Core
         // DiagnosticsEngine produced, computed on the same background pass the completion controller
         // owns (one parse per editor) and repainted on the shared ModelUpdated cycle. Renderer only —
-        // no analysis on the paint path. This seam covers the object editors; the main SQL Editor
-        // hand-wires the same capabilities in MainWindow and attaches the renderer itself.
+        // no analysis on the paint path. (D3: this is now the single attach path — the main SQL Editor
+        // routes through here too, so there is no second copy to keep in sync.)
         SquiggleRenderer.Attach(editor, completion);
 
         // Stage 8 / M1: Related Elements Highlighting — ONE renderer for selection-word occurrences, the
@@ -92,13 +131,12 @@ internal static class SqlEditorBehavior
 
         // Language Completion: finish a daily Firebird construct the developer started typing (if→if () then,
         // gro→group by) via Tab + a passive OverlayLayer hint. Thin, stateless consumer of the pure Core
-        // resolver; shares the completion controller only to avoid competing with the list. Attach in BOTH
-        // seams (gotcha #219).
+        // resolver; shares the completion controller only to avoid competing with the list.
         LanguageExpansionController.Attach(editor, completion);
 
         // Typing Ergonomics: the mechanical editing aids — `begin … end` pairing, delimiter pairing,
         // auto-indent. A separate responsibility from Language Completion (which finishes constructs), and
-        // a thin consumer of the pure Core rules. Attach in BOTH seams (gotcha #219).
+        // a thin consumer of the pure Core rules.
         TypingErgonomicsController.Attach(editor);
 
         // Find (Ctrl+F) / Replace (Ctrl+H) + right-click menu — one shared installer.
@@ -108,5 +146,53 @@ internal static class SqlEditorBehavior
         // handler, no duplicate here (§10 / P6).
 
         return completion;
+    }
+
+    /// <summary>
+    /// Attaches the SEMANTIC highlighting layer ONLY to a <b>read-only SQL preview</b> editor — the DDL
+    /// tabs of the object editors and the sidebar DDL preview — so those surfaces colour schema objects
+    /// and domains exactly like the main Editor tab (D15.1's "app-wide highlighting"). It deliberately
+    /// does NOT wire the interactive machinery (<see cref="SqlCompletionController"/> completion,
+    /// squiggles, typing ergonomics) that a read-only preview must not have. The lexical XSHD layer is
+    /// applied by each view's own theme code (<c>ApplyEditorTheme</c>); this adds the missing semantic
+    /// accent layer, which was the DDL/Editor inconsistency.
+    /// <para>The model is rebuilt from the editor's text + the window's <see cref="MainWindowViewModel"/>
+    /// metadata snapshot on every text change and whenever a metadata category finishes loading (so
+    /// late-loaded objects begin to resolve). The VM is resolved from the visual tree on attach — every
+    /// DDL preview calls this with just the editor, no per-view VM plumbing — and the metadata
+    /// subscription is released on detach, so it is leak-free.</para>
+    /// </summary>
+    public static void AttachReadOnlyHighlighting(TextEditor editor)
+    {
+        if (editor is null) return;
+
+        SemanticModel? model = null;
+        MainWindowViewModel? vm = null;
+
+        void Rebuild()
+        {
+            var text = editor.Text;
+            model = string.IsNullOrEmpty(text) || vm is null
+                ? null
+                : SemanticModel.Build(text, vm.CreateMetadataSnapshot());
+            editor.TextArea.TextView.Redraw();
+        }
+
+        // Highlight-only: a bare model source (the test/read-only seam), no controller.
+        SemanticHighlighter.Attach(editor, () => model);
+
+        void OnObjectsChanged() => Rebuild();
+
+        editor.TextChanged += (_, _) => Rebuild();
+        editor.AttachedToVisualTree += (_, _) =>
+        {
+            vm = editor.FindAncestorOfType<Window>()?.DataContext as MainWindowViewModel;
+            if (vm is not null) vm.Metadata.ObjectsChanged += OnObjectsChanged;
+            Rebuild();
+        };
+        editor.DetachedFromVisualTree += (_, _) =>
+        {
+            if (vm is not null) vm.Metadata.ObjectsChanged -= OnObjectsChanged;
+        };
     }
 }

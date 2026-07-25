@@ -43,6 +43,7 @@ public partial class PackageDetailTabView : UserControl
         _headerEditor = this.FindControl<TextEditor>("PackageHeaderEditor");
         _bodyEditor = this.FindControl<TextEditor>("PackageBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("PackageDdlEditor");
+        if (_ddlEditor is not null) SqlEditorBehavior.AttachReadOnlyHighlighting(_ddlEditor);
         // S5: the panel's activation gestures navigate the active SQL document.
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("PackageDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
@@ -239,6 +240,18 @@ public partial class PackageDetailTabView : UserControl
         if (sender is Control { DataContext: PackageMemberItemNode node } && _currentVm is not null)
         {
             _currentVm.NavigateToMember(node.Member);
+            e.Handled = true;
+        }
+    }
+
+    // "Debug procedure…" on a package member (D11 seam C) — the MenuItem inherits the member node as its
+    // DataContext from the ContextMenu's placement target. Mirrors the double-click handler; the VM raises the
+    // intent and the owner launches via the one debug-launch path.
+    private void OnMemberDebugClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: PackageMemberItemNode node } && _currentVm is not null)
+        {
+            _currentVm.RequestDebugMember(node.Member);
             e.Handled = true;
         }
     }

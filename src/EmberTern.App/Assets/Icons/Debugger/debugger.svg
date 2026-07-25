@@ -1,0 +1,10 @@
+<!-- Debugger identity mark (D15.2 Seam B): a blue Play triangle (execution pointer,
+     dominant) + a small red breakpoint dot nested into its lower-right, overlapping the
+     tip so the two read as one "Start Debugging" glyph. Runtime uses the DebuggerIcon
+     ControlTheme (Themes/IconGeometries.axaml), which paints these two shapes with the
+     reused AccentIconBrush + DebugBreakpointBrush theme tokens; the hex values below are
+     the light-theme tokens, shown here only so the source .svg previews faithfully. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M6 4 L18 12 L6 20 Z" stroke="#2D6BBF"/>
+  <circle cx="16" cy="15.5" r="2.25" fill="#C42B1C"/>
+</svg>

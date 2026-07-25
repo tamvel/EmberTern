@@ -325,6 +325,29 @@ public sealed class FirebirdDdlReader
     }
 
     /// <summary>
+    /// Reconstructs a standalone procedure's full <c>CREATE OR ALTER PROCEDURE</c> source on a
+    /// <b>caller-supplied</b> connection + transaction (Stage X / D8: the debugger reads a stepped-into
+    /// callee's source on its own debug session, holding the session's command lock across the multi-command
+    /// build). Reuses the exact reconstruction of <see cref="FetchProcedureSourceAsync"/> — this is only a
+    /// seam so the debugger can drive it on the debug attachment/tx instead of the metadata lane, avoiding a
+    /// second DDL reconstruction. The caller serializes wire access (this issues several reads and does not
+    /// lock).
+    /// </summary>
+    internal static Task<string> BuildProcedureSourceAsync(
+        FbConnection connection, FbTransaction? tx, string name, int serverMajor, Encoding fallback, CancellationToken ct)
+        => BuildProcedureDdlAsync(connection, tx, name, serverMajor, fallback, ct);
+
+    /// <summary>Reads a package's raw body source (<c>RDB$PACKAGE_BODY_SOURCE</c> — a <c>BEGIN … END</c> blob of
+    /// member routine declarations) on a <b>caller-supplied</b> connection + transaction (Stage X / D11: the
+    /// debugger reads a stepped-into package member's source on its own debug session). Reuses the shared blob
+    /// reader; null when the package has no body. The caller serializes wire access.</summary>
+    internal static Task<string?> ReadPackageBodySourceAsync(
+        FbConnection connection, FbTransaction? tx, string packageName, Encoding fallback, CancellationToken ct)
+        => ReadBlobAsync(connection, tx,
+            "SELECT RDB$PACKAGE_BODY_SOURCE FROM RDB$PACKAGES WHERE RDB$PACKAGE_NAME = @name",
+            packageName.ToUpperInvariant(), fallback, ct);
+
+    /// <summary>
     /// Fetches a procedure's BODY alone — <c>RDB$PROCEDURE_SOURCE</c> is exactly
     /// the text after <c>AS</c> (the DECLARE…BEGIN…END), with no header. This is
     /// what Procedure Detail Easy mode edits, alongside catalog-derived params, so
@@ -420,6 +443,44 @@ public sealed class FirebirdDdlReader
         catch (FbException ex)
         {
             throw new MetadataReadException($"Could not read body for PACKAGE {obj.Name}: {ex.Message}", ex);
+        }
+        finally
+        {
+            commandLock.Release();
+        }
+    }
+
+    /// <summary>Reconstructs a package PROCEDURE member's standalone <c>CREATE PROCEDURE …</c> source (Stage X /
+    /// D11 seam C) so the debugger can launch it as a ROOT frame with the SAME machinery a stored routine uses:
+    /// reads the raw <c>RDB$PACKAGE_BODY_SOURCE</c> blob and slices out the member via the one shared reconstructor
+    /// (<see cref="EmberTern.Core.Sql.Language.SqlParser.ReconstructPackageMemberSource(string?, string, EmberTern.Core.Sql.Language.Ast.SubroutineKind)"/>).
+    /// Returns null when the package has no readable body or has no such member of that kind. Both PROCEDURE and
+    /// FUNCTION members are launchable (Seam D added the function root); <paramref name="kind"/> selects which,
+    /// defaulting to PROCEDURE for the D11 callers. The reconstruction itself is kind-generic — a FUNCTION member
+    /// slice includes its <c>RETURNS</c>, so it reconstructs as a valid standalone <c>CREATE FUNCTION</c>.</summary>
+    public async Task<string?> FetchPackageMemberSourceAsync(
+        string packageName, string memberName,
+        EmberTern.Core.Sql.Language.Ast.SubroutineKind kind = EmberTern.Core.Sql.Language.Ast.SubroutineKind.Procedure,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(memberName);
+
+        var connection = LaneConnection();
+        var fallback = CharsetCatalog.Resolve(_connectionService.ActiveProfile?.Charset);
+        var tx = _lane.TransactionForCommand;
+        var commandLock = LaneLock();
+        await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var body = await ReadPackageBodySourceAsync(connection, tx, packageName, fallback, cancellationToken)
+                .ConfigureAwait(false);
+            return EmberTern.Core.Sql.Language.SqlParser.ReconstructPackageMemberSource(body, memberName, kind);
+        }
+        catch (FbException ex)
+        {
+            throw new MetadataReadException(
+                $"Could not read body for PACKAGE {packageName}: {ex.Message}", ex);
         }
         finally
         {

@@ -107,7 +107,14 @@ internal sealed partial class SemanticBinder
                 BindParamList(t, k + 1, close - 1, scope, ddl, ParameterDirection.Output);
                 k = close;
             }
-            // else: a function's single return type — nothing to bind here.
+            else if (IsNameToken(At(t, k))
+                && ResolveObject(FoldedName(t[k])) is { Kind: SymbolKind.Domain } returnDomain)
+            {
+                // A function's single return type that is a domain (e.g. RETURNS T_ID) — bind just the
+                // one type token so it colours/navigates like a type; a builtin (RETURNS INTEGER) is a
+                // keyword and is skipped, and we never scan past it into the body.
+                AddReference(t[k], returnDomain, ReferenceRole.SchemaObject);
+            }
         }
 
         // The body (after the header's top-level AS) is the parser's BlockStatement tree.
@@ -220,10 +227,13 @@ internal sealed partial class SemanticBinder
         var t = exec.Tokens;
         int hi = t.Count;
 
-        // EXECUTE PROCEDURE <name> — record a reference to the procedure object.
+        // EXECUTE PROCEDURE <name> — record a reference to the object at the first name token. For a
+        // package-qualified call (PKG.PROC) that token is the package, so resolve the package name there
+        // (the routine part is a package member, not a standalone object — D11); a bare call resolves the
+        // routine as today.
         if (hi >= 3 && IsWord(t[2]))
         {
-            AddReference(t[2], ResolveObject(exec.ProcedureName), ReferenceRole.SchemaObject);
+            AddReference(t[2], ResolveObject(exec.PackageName ?? exec.ProcedureName), ReferenceRole.SchemaObject);
         }
 
         // RETURNING_VALUES :a, :b, … — the targets are host/PSQL variables (recorded as references;
@@ -277,12 +287,91 @@ internal sealed partial class SemanticBinder
         if (body is not null) BindBlock(body, scope, stmt);
     }
 
-    // A BEGIN … END block: its DECLARE section (routine / EXECUTE BLOCK body only) then its statements.
-    // The block's own BEGIN/END keyword tokens carry no references, so they are not scanned.
+    // A BEGIN … END block: its DECLARE section (routine / EXECUTE BLOCK body only), its statements, then
+    // its WHEN … DO exception handlers. The block's own BEGIN/END keyword tokens carry no references, so
+    // they are not scanned.
     private void BindBlock(BlockStatement block, Scope scope, SqlStatement stmt)
     {
         foreach (var decl in block.Declarations) BindDeclaration(decl, scope, stmt);
+        foreach (var routine in block.LocalRoutines) BindLocalRoutine(routine, scope, stmt);
         foreach (var s in block.Statements) BindPsqlStatement(s, scope, stmt);
+        foreach (var h in block.Handlers) BindWhenHandler(h, scope, stmt);
+    }
+
+    // A local DECLARE PROCEDURE/FUNCTION sub-routine (Stage X / D9). It introduces the FIRST genuine nested
+    // scope in a PSQL body: its own parameters + RETURNS outputs + local variable declarations live in a
+    // CHILD of the declaring scope, and its body binds against that child. Two consequences fall out of the
+    // scope tree for free: the sub-routine's own symbols resolve inside it, and — because Resolve walks to
+    // the parent — an outer variable also resolves (the FB5 closure). On FB3 a sub-routine is a CLOSED scope
+    // (an outer reference won't even compile), but that is a RUNTIME distinction the debugger honours via its
+    // LexicalParent-by-version choice (D9 seam b); the static editor model has no server version and stays
+    // permissive here, consistent with the diagnostics engine's "prefer silence over false positives". The
+    // sub-routine's NAME is not declared as a callable symbol yet (resolving a local call is D9 seam b).
+    private void BindLocalRoutine(SubroutineDeclaration routine, Scope scope, SqlStatement stmt)
+    {
+        var child = scope.NewChild(ScopeKind.RoutineBody, StatementSpan(routine), stmt);
+
+        // Header (params + RETURNS) — read from the sub-routine's own tokens, before its body's BEGIN. Same
+        // shape as a top-level routine header, so the same list binders apply.
+        var t = routine.Tokens;
+        int hi = routine.Body is { } body ? HeaderEnd(t, body) : t.Count;
+        int k = 0;
+        if (k < hi && IsKeyword(At(t, k), "DECLARE")) k++;
+        if (k < hi && (IsKeyword(At(t, k), "PROCEDURE") || IsKeyword(At(t, k), "FUNCTION"))) k++;
+        while (k < hi && (IsNameToken(At(t, k)) || At(t, k).Kind == TokenKind.Dot)) k++; // the sub-routine name
+
+        if (At(t, k).Kind == TokenKind.LParen)
+        {
+            int close = SkipParens(t, k, hi);
+            BindParamList(t, k + 1, close - 1, child, stmt, ParameterDirection.Input);
+            k = close;
+        }
+        if (IsKeyword(At(t, k), "RETURNS"))
+        {
+            k++;
+            if (At(t, k).Kind == TokenKind.LParen)
+            {
+                int close = SkipParens(t, k, hi);
+                BindParamList(t, k + 1, close - 1, child, stmt, ParameterDirection.Output);
+            }
+            // else: a local function's single return type — nothing to bind here.
+        }
+
+        // The body (its own DECLARE section + BEGIN … END) binds against the child scope.
+        BindBody(routine.Body, child, stmt);
+    }
+
+    // A WHEN … DO exception handler (Stage X / P1). Each WHEN EXCEPTION <name> condition references a user
+    // exception as a schema object (resolved when metadata knows it, else a plain unresolved occurrence —
+    // the model stays error-tolerant); the other condition kinds (ANY / GDSCODE / SQLCODE / SQLSTATE)
+    // carry no schema reference. The handler body binds against the ENCLOSING scope — Firebird PSQL has no
+    // block-local scopes, so the one RoutineBody scope is the whole body's (the documented simplification
+    // the rest of this binder already relies on). A handler body that is itself a block recurses through
+    // BindBlock, so a nested handler section is bound too.
+    private void BindWhenHandler(WhenHandler handler, Scope scope, SqlStatement stmt)
+    {
+        foreach (var cond in handler.Conditions)
+        {
+            if (cond.Kind == WhenHandlerKind.ExceptionName && ExceptionNameToken(cond) is { } nameTok)
+            {
+                AddReference(nameTok, ResolveObject(FoldedName(nameTok)), ReferenceRole.SchemaObject);
+            }
+        }
+        if (handler.Body is not null) BindPsqlStatement(handler.Body, scope, stmt);
+    }
+
+    // The exception-name token of a WHEN EXCEPTION <name> condition — the first word after the leading
+    // EXCEPTION keyword in the condition's OWN tokens (a bounded read of a leaf's operand, like
+    // DeclNameToken; not a structural re-scan). Null when the name is absent (mid-edit).
+    private static SqlToken? ExceptionNameToken(WhenCondition cond)
+    {
+        var toks = cond.Tokens;
+        for (int k = 0; k < toks.Count; k++)
+        {
+            if (IsWordText(toks[k], "EXCEPTION"))
+                return k + 1 < toks.Count && IsWord(toks[k + 1]) ? toks[k + 1] : (SqlToken?)null;
+        }
+        return null;
     }
 
     // Dispatches one PSQL body statement to the right binding — an AST CONSUMER throughout: subqueries /
@@ -319,7 +408,7 @@ internal sealed partial class SemanticBinder
                 break;
 
             case PsqlLeafStatement leaf:
-                BindLeaf(leaf.Tokens, leaf.Children, scope, stmt);
+                BindLeaf(leaf.Tokens, leaf.Children, leaf.Kind, scope, stmt);
                 break;
 
             // An embedded DSQL statement reused node (B5) — a SELECT / INSERT / UPDATE / DELETE / MERGE /
@@ -338,7 +427,9 @@ internal sealed partial class SemanticBinder
     {
         var skip = new List<SqlNode>();
         BindEmbedded(conditionExprs, scope, stmt, skip);
-        BindPsqlExpression(toks, 0, HeaderEnd(toks, firstChild), scope, stmt, skip);
+        // An IF/WHILE condition is a pure value expression over locals — an unresolved bare identifier
+        // there is an unknown variable (flag it), never a column (no FROM).
+        BindPsqlExpression(toks, 0, HeaderEnd(toks, firstChild), scope, stmt, skip, flagUnresolvedLocals: true);
     }
 
     // FOR <cursor query> [INTO <vars>] DO — the cursor query is its own child scope; the header's INTO
@@ -352,7 +443,7 @@ internal sealed partial class SemanticBinder
 
     // A PSQL-only leaf (assignment / RETURN / EXCEPTION / SUSPEND / cursor op / …): its embedded
     // subqueries/CASE become their own scopes; the interior binds column/local/param references.
-    private void BindLeaf(IReadOnlyList<SqlToken> toks, IReadOnlyList<SqlNode> embedded, Scope scope, SqlStatement stmt)
+    private void BindLeaf(IReadOnlyList<SqlToken> toks, IReadOnlyList<SqlNode> embedded, PsqlLeafKind kind, Scope scope, SqlStatement stmt)
     {
         var skip = new List<SqlNode>();
         BindEmbedded(embedded, scope, stmt, skip);
@@ -366,7 +457,12 @@ internal sealed partial class SemanticBinder
         int cursorOperand = CursorOperandIndex(toks);
         if (cursorOperand >= 0) BindCursorReference(toks[cursorOperand], scope);
 
-        BindPsqlExpression(toks, 0, toks.Count, scope, stmt, skip, excludeToken: cursorOperand);
+        // Only an assignment's or RETURN's operands are a pure variable expression where an unresolved
+        // bare identifier is unambiguously an unknown variable. EXCEPTION names, LEAVE labels, POST_EVENT
+        // operands, cursor ops and the §0 "Other" valve are NOT — so they never flag (ET0003 stays quiet),
+        // exactly as before this seam.
+        bool flagLocals = kind is PsqlLeafKind.Assignment or PsqlLeafKind.Return;
+        BindPsqlExpression(toks, 0, toks.Count, scope, stmt, skip, excludeToken: cursorOperand, flagUnresolvedLocals: flagLocals);
     }
 
     // The token index of the cursor named by an OPEN / CLOSE / FETCH statement, or -1 when the leaf is
@@ -496,6 +592,30 @@ internal sealed partial class SemanticBinder
         scope.Declare(v);
         AddSymbol(v);
         AddReference(nameTok, v, ReferenceRole.Variable, isDefinition: true);
+
+        // A domain used as the variable's type resolves + colours like any schema object (D15.1).
+        int afterName = 0;
+        while (afterName < toks.Count && toks[afterName].Start != nameTok.Start) afterName++;
+        BindDomainTypeReference(toks, afterName + 1, toks.Count);
+    }
+
+    // D15.1 — a domain used as a data type (DECLARE VARIABLE / parameter / RETURNS column) is emitted as a
+    // schema-object reference, so it colours, hovers and Ctrl+Click-navigates like any other database object
+    // (the App paints a domain-as-type like a SQL type until a dedicated domain accent is designed). The type
+    // name is the first bare identifier in [lo, hi) — the type position, right after the declared name; a
+    // builtin type is a catalogued keyword (TokenKind.Keyword), so only a user identifier is a candidate. A
+    // reference is added ONLY when the name resolves to a Domain in metadata: never guessing, so an unknown
+    // name (a typo, or a not-yet-warmed catalog) adds no reference and no false diagnostic. The caller MUST
+    // bound [lo, hi) to the declaration/parameter segment so the scan cannot reach the routine body.
+    private void BindDomainTypeReference(IReadOnlyList<SqlToken> t, int lo, int hi)
+    {
+        for (int i = lo; i < hi && i < t.Count; i++)
+        {
+            if (!IsNameToken(t[i])) continue;
+            if (ResolveObject(FoldedName(t[i])) is { Kind: SymbolKind.Domain } domain)
+                AddReference(t[i], domain, ReferenceRole.SchemaObject);
+            return; // only the first identifier (the type position) is a domain candidate
+        }
     }
 
     // The name token of a DECLARE VARIABLE/CURSOR node — the first identifier after DECLARE and an
@@ -519,7 +639,7 @@ internal sealed partial class SemanticBinder
     // boundary: an expression walker, not a query walker.
     private void BindPsqlExpression(
         IReadOnlyList<SqlToken> t, int lo, int hi, Scope scope, SqlStatement stmt, IReadOnlyList<SqlNode> skip,
-        int excludeToken = -1)
+        int excludeToken = -1, bool flagUnresolvedLocals = false)
     {
         int k = lo;
         while (k < hi)
@@ -555,7 +675,10 @@ internal sealed partial class SemanticBinder
 
             if (IsNameToken(tok) && At(t, k + 1).Kind != TokenKind.LParen)
             {
-                BindBareLocal(tok, scope);
+                // NEXT VALUE FOR <seq>: the identifier after the keyword FOR is a sequence, not a variable —
+                // never flag it. (In an assignment / RETURN / IF / WHILE, keyword FOR appears only there.)
+                bool flag = flagUnresolvedLocals && !(k > lo && IsWordText(t[k - 1], "FOR"));
+                BindBareLocal(tok, scope, flag);
                 k++;
                 continue;
             }
@@ -578,11 +701,27 @@ internal sealed partial class SemanticBinder
         AddReference(tok, sym, role);
     }
 
-    // Records a reference only when the bare identifier resolves to a local (variable / parameter /
-    // cursor / record alias). Bare identifiers that don't (columns without a qualifier, keywords,
-    // functions) are left alone in a routine body — column resolution happens inside the body's
-    // Query scopes.
-    private void BindBareLocal(SqlToken tok, Scope scope)
+    // Firebird's bare (non-keyword, non-parenthesised) context variables — legal identifiers in a PSQL
+    // value expression that are NOT user variables, so an unresolved one must never be flagged as an
+    // unknown variable. The CURRENT_* family are lexer keywords (excluded by IsNameToken already); these
+    // are the ones the keyword catalog does not carry. INSERTING/UPDATING/DELETING/RESETTING also resolve
+    // to a TriggerPredicateSymbol inside a trigger — listed here so a stray use elsewhere still stays quiet.
+    private static readonly HashSet<string> BareContextVariables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ROW_COUNT", "SQLCODE", "GDSCODE", "SQLSTATE",
+        "INSERTING", "UPDATING", "DELETING", "RESETTING",
+        "USER",
+    };
+
+    // Records a reference for a bare identifier that resolves to a local (variable / parameter / cursor /
+    // record alias / trigger predicate). When <paramref name="flagUnresolved"/> is set — only in an
+    // unambiguous PSQL value position (an assignment / RETURN operand or an IF/WHILE condition, never a
+    // query/DML range) — an identifier that resolves to nothing and is not a bare context variable is
+    // recorded as an UNRESOLVED variable reference, so DiagnosticsEngine flags it (ET0003) exactly as it
+    // already flags an undeclared :name. Otherwise an unresolved bare name is left alone (it may be an
+    // unqualified column, an exception name, a loop label, a sequence, …): column resolution happens
+    // inside the body's Query scopes.
+    private void BindBareLocal(SqlToken tok, Scope scope, bool flagUnresolved = false)
     {
         var name = FoldedName(tok);
         var sym = scope.Resolve(name);
@@ -602,6 +741,9 @@ internal sealed partial class SemanticBinder
                 break;
             case TriggerPredicateSymbol:
                 AddReference(tok, sym, ReferenceRole.ContextVariable);
+                break;
+            case null when flagUnresolved && name is not null && !BareContextVariables.Contains(name):
+                AddReference(tok, null, ReferenceRole.Variable);
                 break;
         }
     }
@@ -632,6 +774,9 @@ internal sealed partial class SemanticBinder
             scope.Declare(p);
             AddSymbol(p);
             AddReference(nameTok, p, ReferenceRole.Parameter, isDefinition: true);
+
+            // A domain used as the parameter / RETURNS-column type (bounded to this segment).
+            BindDomainTypeReference(t, ni + 1, segHi);
         }
     }
 

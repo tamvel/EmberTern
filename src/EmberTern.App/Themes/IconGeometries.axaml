@@ -67,6 +67,11 @@
        "m…" sub-paths are re-anchored to absolute M + explicit l so figure
        concatenation doesn't carry the previous endpoint. -->
   <StreamGeometry x:Key="Icon.Hammer">M15 12 l-9.373 9.373a1 1 0 0 1-3.001-3L12 9 M18 15 l4-4 M21.5 11.5 l-1.914-1.914A2 2 0 0 1 19 8.172v-.344a2 2 0 0 0-.586-1.414l-1.657-1.657A6 6 0 0 0 12.516 3H9l1.243 1.243A6 6 0 0 1 12 8.485V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5</StreamGeometry>
+  <!-- Lightbulb, FILLED — the code-action affordance (Stage Q / Q3). Deliberately outside the stroked
+       Lucide family: at 14px an outline reads as an empty ring, which is the legibility problem this
+       replaces. Painted (not stroked) with CodeActionBrush, so it is used with a Path/Fill rather than
+       SvgIcon — the DebuggerIcon precedent for a mark that cannot be a single stroked icon. -->
+  <StreamGeometry x:Key="Icon.LightbulbFilled">M12 3.2A6.4 6.4 0 1 0 12 16A6.4 6.4 0 1 0 12 3.2Z M8.8 16.6h6.4v1.9H8.8Z M10.1 19.6h3.8v1.8h-3.8Z</StreamGeometry>
   <!-- Folder-plus (Lucide folder-plus): all sub-paths start absolute M — verbatim. -->
   <StreamGeometry x:Key="Icon.FolderPlus">M12 10v6 M9 13h6 M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z</StreamGeometry>
   <!-- New Table — composed from Lucide primitives (no `table-plus` in Lucide core):
@@ -173,6 +178,29 @@
   <StreamGeometry x:Key="Icon.Connection">M4 2 H20 A2 2 0 0 1 22 4 V8 A2 2 0 0 1 20 10 H4 A2 2 0 0 1 2 8 V4 A2 2 0 0 1 4 2 Z M4 14 H20 A2 2 0 0 1 22 16 V20 A2 2 0 0 1 20 22 H4 A2 2 0 0 1 2 20 V16 A2 2 0 0 1 4 14 Z M6 6 h.01 M6 18 h.01</StreamGeometry>
   <StreamGeometry x:Key="Icon.Folder">M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z</StreamGeometry>
 
+  <!-- Debugger (Stage X / D15.2 Seam A) — the debugger toolbar action set, authored in the
+       same idiom as the rest (24×24, 2px stroke, round caps/joins). Source .svg files live in
+       Assets/Icons/Debugger/. Continue reuses Icon.Play and Stop reuses Icon.Stop (reuse before
+       create); the metaphors: Step Into/Out = arrow into/out of a line; Step Over = arc over a
+       node; Run to Cursor = arrow to a caret; Run to Suspend = arrow to a pause bar; Next
+       Iteration = a two-arrow cycle (repeat the loop body); Loop Exit = a loop with an arrow
+       leaving; Restart = skip-to-start (bar + rewind triangle); Break on Exception = a stop
+       octagon with an exclamation (halt when an exception is raised). -->
+  <StreamGeometry x:Key="Icon.StepInto">M12 4 V13 M8 9 L12 13 L16 9 M4 19 H20</StreamGeometry>
+  <StreamGeometry x:Key="Icon.StepOut">M12 20 V11 M8 15 L12 11 L16 15 M4 5 H20</StreamGeometry>
+  <StreamGeometry x:Key="Icon.StepOver">M4 17 C4 8 20 8 20 17 M16 15 L20 17 L20 13</StreamGeometry>
+  <StreamGeometry x:Key="Icon.RunToCursor">M3 12 H14 M10 8 L14 12 L10 16 M18 5 V19 M16 5 H20 M16 19 H20</StreamGeometry>
+  <StreamGeometry x:Key="Icon.RunToSuspend">M3 12 H12 M8 8 L12 12 L8 16 M16 7 V17 M20 7 V17</StreamGeometry>
+  <StreamGeometry x:Key="Icon.NextIteration">M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8 M21 3v5h-5 M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16 M3 21v-5h5</StreamGeometry>
+  <StreamGeometry x:Key="Icon.LoopExit">M6 18 a6 6 0 1 1 6 -6 M12 12 L20 4 M15 4 H20 M20 4 V9</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Restart">M6 5 V19 M19 6 L10 12 L19 18 Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.BreakException">M8 3 H16 L21 8 V16 L16 21 H8 L3 16 V8 Z M12 8 V13 M12 16 h.01</StreamGeometry>
+  <!-- Alert Triangle — the universally-recognised WARNING mark ("you can continue, but you should know").
+       Shares the canonical Lucide triangle-alert shape (Assets/Icons/Metadata/triangle-alert.svg) but has its
+       OWN semantic key: the octagon (Icon.BreakException) stays reserved for blocking/error + stop, so a
+       warning never wears an error shape. Used by the launch-panel pre-flight rows (D15.3), toned WarningBrush. -->
+  <StreamGeometry x:Key="Icon.AlertTriangle">M21.73 18 l-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3 M12 9 v4 M12 17 h.01</StreamGeometry>
+
   <!-- ============================================================================
        SvgIcon ControlTheme — the single render path for every icon above.
        A fixed 24×24 Canvas inside a Uniform Viewbox guarantees a consistent
@@ -194,6 +222,41 @@
                   StrokeThickness="2"
                   StrokeLineCap="Round"
                   StrokeJoin="Round" />
+          </Canvas>
+        </Viewbox>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- ============================================================================
+       DebuggerIcon ControlTheme — the debugger's two-colour identity mark
+       (Stage X / D15.2 Seam B), replacing the old Icon.Bug at every debugger
+       entry point. A blue Play triangle (the execution pointer, dominant) with a
+       small red breakpoint dot nested into its lower-right, overlapping the tip so
+       the two read as ONE "Start Debugging" glyph. Two colours + a filled dot can't
+       be a single stroked SvgIcon, hence a dedicated composite; both brushes are
+       REUSED theme tokens (accent blue + the very DebugBreakpointBrush the gutter
+       dot uses), so it stays inside the central theme system and recolours per
+       theme. Same idiom: 24×24, 2px stroke, round caps/joins. Default 16; the tab
+       overrides to 14. Canonical source: Assets/Icons/Debugger/debugger.svg.
+       ============================================================================ -->
+  <ControlTheme x:Key="{x:Type controls:DebuggerIcon}" TargetType="controls:DebuggerIcon">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Viewbox Stretch="Uniform">
+          <Canvas Width="24" Height="24">
+            <Path Data="M6 4 L18 12 L6 20 Z"
+                  Stroke="{DynamicResource AccentIconBrush}"
+                  StrokeThickness="2"
+                  StrokeLineCap="Round"
+                  StrokeJoin="Round" />
+            <!-- The breakpoint dot is an accent on the pointer, not a second subject: kept at the same
+                 centre (16, 15.5) and the same overlap with the triangle's tip, diameter trimmed 6 → 4.5
+                 so it reads as a mark rather than competing with the play shape. -->
+            <Ellipse Canvas.Left="13.75" Canvas.Top="13.25" Width="4.5" Height="4.5"
+                     Fill="{DynamicResource DebugBreakpointBrush}" />
           </Canvas>
         </Viewbox>
       </ControlTemplate>

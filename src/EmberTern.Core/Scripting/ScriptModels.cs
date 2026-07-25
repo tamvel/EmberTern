@@ -67,6 +67,17 @@ public enum ScriptTransactionMode
     /// <summary>Run every statement, then COMMIT if none failed else ROLLBACK — never a
     /// half-applied script, never per-statement autocommit.</summary>
     AutoCommitOnSuccess,
+
+    /// <summary>DEPLOYMENT — run statements in order on ONE lane, committing at a boundary after
+    /// each schema (DDL/DCL) statement so a later statement can use an object an earlier one
+    /// created (gotcha #213 — a transaction cannot use an object it created but has not committed).
+    /// Schema segments run WAIT-bounded (Developer-Mode-aware); data segments stay NOWAIT. This is
+    /// the only shape Firebird permits for a MIXED DDL+DML migration (what isql's
+    /// <c>SET AUTODDL ON</c> does). <b>NOT atomic</b> — a segment that already committed stays
+    /// applied if a later segment fails; the trade-off (surfaced, not hidden) is the whole point,
+    /// since Firebird cannot both let a transaction use an object it created and keep it
+    /// rollbackable. See <see cref="ScriptSegmentPlanner"/> and the transaction review §5.</summary>
+    Sequenced,
 }
 
 /// <summary>Aggregate outcome of a script run.</summary>

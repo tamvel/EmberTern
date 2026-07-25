@@ -205,6 +205,9 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     public event Action<MetadataObjectKind>? NewObjectRequested;
     public event Action<MetadataObject>? DeleteObjectRequested;
     public event Action<MetadataObject>? ExecuteProcedureRequested;
+    public event Action<MetadataObject>? DebugProcedureRequested;
+    public event Action<MetadataObject>? DebugTriggerRequested;
+    public event Action<MetadataObject>? DebugFunctionRequested;
     public event Action<MetadataObjectKind>? RecompileGroupRequested;
     // Single trigger activate/deactivate (bool = activate).
     public event Action<MetadataObject, bool>? SetObjectActiveRequested;
@@ -382,6 +385,9 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     internal void RequestNewObject(MetadataObjectKind kind) => NewObjectRequested?.Invoke(kind);
     internal void RequestDeleteObject(MetadataObject obj) => DeleteObjectRequested?.Invoke(obj);
     internal void RequestExecuteProcedure(MetadataObject obj) => ExecuteProcedureRequested?.Invoke(obj);
+    internal void RequestDebugProcedure(MetadataObject obj) => DebugProcedureRequested?.Invoke(obj);
+    internal void RequestDebugTrigger(MetadataObject obj) => DebugTriggerRequested?.Invoke(obj);
+    internal void RequestDebugFunction(MetadataObject obj) => DebugFunctionRequested?.Invoke(obj);
     internal void RequestRecompileGroup(MetadataObjectKind kind) => RecompileGroupRequested?.Invoke(kind);
     internal void RequestSetObjectActive(MetadataObject obj, bool activate) => SetObjectActiveRequested?.Invoke(obj, activate);
     internal void RequestBulkSetActive(TriggerBulkRequest request) => BulkSetActiveRequested?.Invoke(request);

@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.Core.Scripting;
+using EmberTern.Core.Sql;
 using EmberTern.Firebird;
 
 namespace EmberTern.App.ViewModels;
@@ -30,6 +31,9 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
 
     private readonly List<ScriptResultRowViewModel> _allRows = new();
     private IReadOnlyList<ScriptStatement> _lastStatements = Array.Empty<ScriptStatement>();
+    // For a Sequenced run, statement index → 1-based committed-step number (empty otherwise). Built
+    // from the SAME planner the engine ran, so the displayed boundaries match what actually committed.
+    private int[] _segmentMap = Array.Empty<int>();
     private CancellationTokenSource? _cts;
 
     public ScriptExecutorTabViewModel(
@@ -49,9 +53,14 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
     // Editor content — pushed in from the view's TextChanged (two-way TextEditor.Text is flaky).
     [ObservableProperty] private string _scriptText = string.Empty;
 
-    // 0 = Manual (review then commit, DEFAULT), 1 = Auto-commit on success.
+    // 0 = Manual (review then commit, DEFAULT), 1 = Auto-commit on success, 2 = Sequenced (deployment).
+    [NotifyPropertyChangedFor(nameof(SelectedModeDescription))]
     [ObservableProperty] private int _transactionModeIndex;
     [ObservableProperty] private bool _stopOnError = true;
+
+    /// <summary>The selected execution mode's description — surfaced on the picker so the Sequenced
+    /// (non-atomic) trade-off is stated where the mode is chosen. Recomputed on selection change.</summary>
+    public string SelectedModeDescription => ResolveModeDescription(TransactionModeIndex);
 
     [NotifyCanExecuteChangedFor(nameof(RunCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
@@ -87,8 +96,24 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
 
     public bool HasResults => _allRows.Count > 0;
 
-    private ScriptTransactionMode Mode
-        => TransactionModeIndex == 1 ? ScriptTransactionMode.AutoCommitOnSuccess : ScriptTransactionMode.Manual;
+    private ScriptTransactionMode Mode => ResolveMode(TransactionModeIndex);
+
+    // Pure picker-index → mode mapping (0 Manual · 1 Auto-commit · 2 Sequenced; anything else Manual).
+    // Internal + static so the mapping is unit-pinned without the VM's services.
+    internal static ScriptTransactionMode ResolveMode(int index) => index switch
+    {
+        1 => ScriptTransactionMode.AutoCommitOnSuccess,
+        2 => ScriptTransactionMode.Sequenced,
+        _ => ScriptTransactionMode.Manual,
+    };
+
+    // Pure picker-index → description mapping (same order as ResolveMode).
+    internal static string ResolveModeDescription(int index) => index switch
+    {
+        1 => UiStrings.ScriptModeAutoCommitDescription,
+        2 => UiStrings.ScriptModeSequencedDescription,
+        _ => UiStrings.ScriptModeManualDescription,
+    };
 
     /// <summary>The view writes the TSV to the clipboard (VM holds no clipboard type).</summary>
     public event Action<string>? CopyToClipboardRequested;
@@ -147,7 +172,18 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
             return;
         }
 
+        // A single-transaction mode (Manual / Auto-commit) cannot run a mixed DDL+DML migration
+        // (gotcha #213). Stop BEFORE the first statement with a message that points at Sequenced,
+        // rather than letting the executor fail on a later statement with "Table unknown".
+        var mixedBlock = ResolveMixedScriptBlock(statements, Mode);
+        if (mixedBlock is not null)
+        {
+            Fail(mixedBlock);
+            return;
+        }
+
         _lastStatements = statements;
+        _segmentMap = BuildSegmentMap(statements, Mode);
         _cts = new CancellationTokenSource();
         var progress = new Progress<ScriptStatementResult>(AddResultRow);
         try
@@ -157,7 +193,12 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
                 .ConfigureAwait(true);
             TransactionOpen = outcome.TransactionLeftOpen && _transactionService.IsActive;
             HasError = outcome.AnyFailed;
-            StatusText = BuildOutcomeStatus(outcome);
+            StatusText = BuildOutcomeStatus(outcome, Mode, _segmentMap);
+            // Sequenced only (no-op otherwise): now the run is done, stamp each row with its step's
+            // commit/rollback outcome so the grid can show which steps persisted, then append a muted
+            // row for every statement a stop-on-error / cancellation left unexecuted.
+            ApplyStepStatuses(_allRows, _segmentMap, outcome.Results);
+            AppendNotRunRows(outcome.Results);
         }
         catch (OperationCanceledException)
         {
@@ -291,7 +332,8 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
     {
         int offset = result.Index < _lastStatements.Count ? _lastStatements[result.Index].SourceOffset : -1;
         int length = result.Index < _lastStatements.Count ? _lastStatements[result.Index].SourceLength : 0;
-        var row = new ScriptResultRowViewModel(result, offset, length);
+        int step = result.Index < _segmentMap.Length ? _segmentMap[result.Index] : 0;
+        var row = new ScriptResultRowViewModel(result, offset, length, step);
         _allRows.Add(row);
         if (result.Success) SuccessCount++; else FailedCount++;
         if (PassesFilter(row)) Rows.Add(row);
@@ -307,9 +349,31 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasResults));
     }
 
+    // Appends a synthesized "not run" row for every statement a Sequenced stop-on-error / cancellation
+    // left unexecuted (from FindNotRunStatements — empty for single-transaction modes, so a no-op there).
+    // Not-run statements are always a contiguous suffix (execution stops/cancels and never resumes), so
+    // appending in index order keeps the grid in source order. They are neither success nor failure, so
+    // SuccessCount/FailedCount are untouched.
+    private void AppendNotRunRows(IReadOnlyList<ScriptStatementResult> results)
+    {
+        var notRun = FindNotRunStatements(_segmentMap, results);
+        if (notRun.Count == 0) return;
+
+        foreach (int index in notRun)
+        {
+            if (index >= _lastStatements.Count) continue;
+            int step = index < _segmentMap.Length ? _segmentMap[index] : 0;
+            var row = new ScriptResultRowViewModel(_lastStatements[index], index, step);
+            _allRows.Add(row);
+            if (PassesFilter(row)) Rows.Add(row);
+        }
+        OnPropertyChanged(nameof(HasResults));
+    }
+
     private bool PassesFilter(ScriptResultRowViewModel row) => SelectedFilterIndex switch
     {
-        1 => !row.IsFailed,
+        // "Success" = statements that actually succeeded — a not-run row succeeded no more than it failed.
+        1 => !row.IsFailed && !row.IsNotRun,
         2 => row.IsFailed,
         _ => true,
     };
@@ -323,13 +387,43 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         }
     }
 
-    private string BuildOutcomeStatus(ScriptRunOutcome outcome)
+    // Internal + static so the summary wording per mode is unit-pinned without the VM's services. The
+    // optional segmentMap (Sequenced only) carries the plan the engine ran, so the summary can lead with
+    // a "N of M steps committed" headline (seam C3). It is empty/absent for single-transaction modes and
+    // in the existing 2-arg callers, where no headline is prepended.
+    internal static string BuildOutcomeStatus(ScriptRunOutcome outcome, ScriptTransactionMode mode)
+        => BuildOutcomeStatus(outcome, mode, Array.Empty<int>());
+
+    internal static string BuildOutcomeStatus(
+        ScriptRunOutcome outcome, ScriptTransactionMode mode, int[] segmentMap)
     {
-        if (outcome.Cancelled) return UiStrings.ScriptStatusCancelled;
+        // Sequenced headline (empty otherwise): committed steps of all planned steps. Prefixed to both
+        // the deployment summary and the cancelled message, so the user always sees what persisted.
+        var stepPrefix = mode == ScriptTransactionMode.Sequenced
+            ? BuildStepSummary(segmentMap, outcome.Results)
+            : string.Empty;
+        string WithSteps(string body) => stepPrefix.Length == 0 ? body : stepPrefix + " " + body;
+
+        if (outcome.Cancelled)
+        {
+            // Sequenced never leaves a transaction open, so the generic "transaction still open"
+            // cancelled line would mislead — it committed step-by-step.
+            return mode == ScriptTransactionMode.Sequenced
+                ? WithSteps(UiStrings.ScriptStatusSequencedCancelled)
+                : UiStrings.ScriptStatusCancelled;
+        }
 
         var elapsed = TimeSpan.Zero;
         foreach (var r in outcome.Results) elapsed += r.Elapsed;
         var elapsedText = FormatDuration(elapsed);
+
+        if (mode == ScriptTransactionMode.Sequenced)
+        {
+            // Committed step-by-step — state the non-atomic reality, not a single verdict.
+            return WithSteps(string.Format(CultureInfo.CurrentCulture,
+                UiStrings.ScriptStatusSequencedSummaryFormat,
+                outcome.SuccessCount, outcome.FailedCount, elapsedText));
+        }
 
         if (!outcome.TransactionLeftOpen)
         {
@@ -373,6 +467,144 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         return ownLeftover ? UiStrings.ScriptBlockOwnTxOpen : UiStrings.ScriptBlockExternalTxOpen;
     }
 
+    // Pure: statement index → 1-based committed-step (Sequenced segment) number, reconstructed from
+    // the SAME planner the engine ran — so the displayed step boundaries match what actually committed.
+    // Empty for a non-Sequenced run (the whole script is one transaction — there are no steps). App
+    // presentation only; the planner is Core and unchanged.
+    internal static int[] BuildSegmentMap(IReadOnlyList<ScriptStatement> statements, ScriptTransactionMode mode)
+    {
+        if (mode != ScriptTransactionMode.Sequenced || statements.Count == 0) return Array.Empty<int>();
+
+        var map = new int[statements.Count];
+        int index = 0, step = 0;
+        foreach (var segment in ScriptSegmentPlanner.Plan(statements))
+        {
+            step++;
+            for (int i = 0; i < segment.Statements.Count && index < map.Length; i++) map[index++] = step;
+        }
+        return map;
+    }
+
+    // Pure: reconstructs each Sequenced step's commit/rollback outcome from the segment map (the plan
+    // the engine ran) + the per-statement results, mirroring FirebirdScriptExecutor.RunSequencedAsync
+    // EXACTLY — a step commits only if every one of its planned statements ran and none failed;
+    // otherwise it rolled back (any failure, OR a partial run with no failure = cancelled mid-step),
+    // and a step with no results at all was never reached. This is why a statement can be Success yet
+    // its step rolled back: a LATER statement in the same step (transaction) failed. Empty in →
+    // empty out (non-Sequenced run). App reconstruction only; the engine is untouched.
+    internal static IReadOnlyDictionary<int, ScriptStepStatus> BuildStepStatuses(
+        int[] segmentMap, IReadOnlyList<ScriptStatementResult> results)
+    {
+        var statuses = new Dictionary<int, ScriptStepStatus>();
+        if (segmentMap.Length == 0) return statuses;
+
+        var planned = new Dictionary<int, int>();
+        foreach (var step in segmentMap)
+            planned[step] = planned.TryGetValue(step, out var c) ? c + 1 : 1;
+
+        var executed = new Dictionary<int, int>();
+        var failed = new Dictionary<int, int>();
+        foreach (var r in results)
+        {
+            if (r.Index < 0 || r.Index >= segmentMap.Length) continue;
+            int step = segmentMap[r.Index];
+            executed[step] = executed.TryGetValue(step, out var e) ? e + 1 : 1;
+            if (!r.Success) failed[step] = failed.TryGetValue(step, out var f) ? f + 1 : 1;
+        }
+
+        foreach (var (step, plannedCount) in planned)
+        {
+            int exec = executed.TryGetValue(step, out var e) ? e : 0;
+            int fail = failed.TryGetValue(step, out var f) ? f : 0;
+            statuses[step] =
+                exec == 0 ? ScriptStepStatus.NotRun
+                : fail > 0 ? ScriptStepStatus.RolledBack
+                : exec == plannedCount ? ScriptStepStatus.Committed
+                : ScriptStepStatus.RolledBack; // partial run, no failure ⇒ cancelled mid-step
+        }
+        return statuses;
+    }
+
+    // Presentation: stamps each row with its Sequenced step's outcome (from BuildStepStatuses), so the
+    // grid can colour the Step cell. Static + pure over the rows/map/results it is given (no services)
+    // so it is unit-pinned. A no-op for a non-Sequenced run (empty map). Does NOT change the
+    // reconstruction — it only distributes the step outcome onto the rows of that step.
+    internal static void ApplyStepStatuses(
+        IReadOnlyList<ScriptResultRowViewModel> rows, int[] segmentMap, IReadOnlyList<ScriptStatementResult> results)
+    {
+        if (segmentMap.Length == 0) return;
+        var statuses = BuildStepStatuses(segmentMap, results);
+        foreach (var row in rows)
+            row.StepStatus = row.Step > 0 && statuses.TryGetValue(row.Step, out var s) ? s : ScriptStepStatus.NotRun;
+    }
+
+    // Pure: the Sequenced headline — how many steps (transactions) COMMITTED of all the steps the run
+    // planned (committed + rolled-back + not-run = statuses.Count). Reuses the existing step-status
+    // reconstruction (BuildStepStatuses — unchanged), so the count matches exactly what the grid shows;
+    // this only counts and formats. Empty for a single-transaction run (empty map) → no headline. App
+    // presentation only; the engine and the reconstruction are untouched.
+    internal static string BuildStepSummary(int[] segmentMap, IReadOnlyList<ScriptStatementResult> results)
+    {
+        if (segmentMap.Length == 0) return string.Empty;
+        var statuses = BuildStepStatuses(segmentMap, results);
+        if (statuses.Count == 0) return string.Empty;
+
+        int committed = 0;
+        foreach (var status in statuses.Values)
+            if (status == ScriptStepStatus.Committed) committed++;
+
+        return string.Format(CultureInfo.CurrentCulture,
+            UiStrings.ScriptStatusSequencedStepsFormat, committed, statuses.Count);
+    }
+
+    // Pure: the statement indices (in source order) a Sequenced run left UNEXECUTED — a stop-on-error
+    // stopped the run, or a cancellation ended it, before them, so they produced NO result row (rows
+    // arrive only via the progress callback). Reconstructed from the plan (segmentMap has one entry per
+    // statement) minus the indices the results cover. Empty for a single-transaction run (empty map),
+    // so nothing is synthesized there — this is Sequenced presentation only, like the rest of seam C.
+    // App reconstruction only; the engine is untouched.
+    internal static IReadOnlyList<int> FindNotRunStatements(
+        int[] segmentMap, IReadOnlyList<ScriptStatementResult> results)
+    {
+        if (segmentMap.Length == 0) return Array.Empty<int>();
+
+        var ran = new HashSet<int>();
+        foreach (var r in results)
+            if (r.Index >= 0 && r.Index < segmentMap.Length) ran.Add(r.Index);
+
+        var notRun = new List<int>();
+        for (int i = 0; i < segmentMap.Length; i++)
+            if (!ran.Contains(i)) notRun.Add(i);
+        return notRun;
+    }
+
+    // Pure pre-flight gate: returns the block message when a single-transaction mode (Manual /
+    // Auto-commit) is asked to run a MIXED DDL+DML script, else null. Sequenced is built for mixed
+    // migrations, so it is never blocked. The engine is untouched — this only stops the run earlier,
+    // with a message that explains the single-transaction limitation and names Sequenced, instead of
+    // letting a later statement fail on "Table unknown" (gotcha #213).
+    internal static string? ResolveMixedScriptBlock(IReadOnlyList<ScriptStatement> statements, ScriptTransactionMode mode)
+    {
+        if (mode == ScriptTransactionMode.Sequenced) return null;
+        return IsMixedMigration(statements) ? UiStrings.ScriptStatusMixedNeedsSequenced : null;
+    }
+
+    // Pure: true when the script contains BOTH a schema statement (DDL/DCL) and a non-schema one —
+    // the #213 risk surface. Classification comes from the AST-based SqlStatementClassifier (the same
+    // authority the Sequenced planner uses), so "mixed" here and "segmented there" can never disagree.
+    // A non-schema (Data or Ambiguous) statement counts as the data side (the classifier's safe default).
+    private static bool IsMixedMigration(IReadOnlyList<ScriptStatement> statements)
+    {
+        bool hasSchema = false, hasNonSchema = false;
+        foreach (var statement in statements)
+        {
+            if (SqlStatementClassifier.Classify(statement.Text) == SqlStatementCategory.Schema) hasSchema = true;
+            else hasNonSchema = true;
+            if (hasSchema && hasNonSchema) return true;
+        }
+        return false;
+    }
+
     // Pure: lists the offending transaction-control / session statements so the message is
     // actionable ("remove these: COMMIT; SET NAMES WIN1250") rather than generic.
     internal static string BuildDisallowedMessage(IReadOnlyList<ScriptStatement> disallowed)
@@ -389,14 +621,31 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
     }
 }
 
+/// <summary>
+/// A Sequenced step's (committed transaction's) outcome, reconstructed by the App from the plan +
+/// results. Distinct from a statement's own success: a <see cref="Committed"/> step's changes
+/// persisted; a <see cref="RolledBack"/> step's changes vanished (a statement in it failed, or it was
+/// cancelled mid-way) even if this particular statement reported success; <see cref="NotRun"/> = the
+/// step was never reached.
+/// </summary>
+public enum ScriptStepStatus
+{
+    NotRun,
+    Committed,
+    RolledBack,
+}
+
 /// <summary>One row in the Script Executor results grid.</summary>
-public sealed class ScriptResultRowViewModel
+public sealed partial class ScriptResultRowViewModel : ObservableObject
 {
     private const int PreviewMaxLength = 100;
 
-    public ScriptResultRowViewModel(ScriptStatementResult result, int sourceOffset, int sourceLength)
+    public ScriptResultRowViewModel(ScriptStatementResult result, int sourceOffset, int sourceLength, int step = 0)
     {
         Line = result.Index + 1;
+        Step = step;
+        // Sequenced: the 1-based committed step; blank in single-transaction modes (step == 0).
+        StepText = step > 0 ? step.ToString(CultureInfo.CurrentCulture) : string.Empty;
         Statement = Elide(result.Text);
         TypeText = KindLabel(result.Kind);
         IsFailed = !result.Success;
@@ -408,11 +657,64 @@ public sealed class ScriptResultRowViewModel
         SourceLength = sourceLength;
     }
 
+    /// <summary>
+    /// A synthesized "not run" row (Step 5 seam C2b-2): a statement a Sequenced stop-on-error /
+    /// cancellation left unexecuted. It has no <see cref="ScriptStatementResult"/> — the fields come
+    /// from the source statement, and it is neither a success nor a failure. Its would-be step number
+    /// is shown so the user sees which step never ran.
+    /// </summary>
+    public ScriptResultRowViewModel(ScriptStatement statement, int index, int step)
+    {
+        Line = index + 1;
+        Step = step;
+        StepText = step > 0 ? step.ToString(CultureInfo.CurrentCulture) : string.Empty;
+        Statement = Elide(statement.Text);
+        TypeText = KindLabel(statement.Kind);
+        IsNotRun = true;
+        IsFailed = false;
+        Result = UiStrings.ScriptResultNotRun;
+        RowsText = string.Empty;
+        Duration = string.Empty;
+        Error = string.Empty;
+        SourceOffset = statement.SourceOffset;
+        SourceLength = statement.SourceLength;
+        StepStatus = ScriptStepStatus.NotRun;
+    }
+
     public int Line { get; }
+    /// <summary>1-based Sequenced step (0 in single-transaction modes). See <see cref="StepText"/>.</summary>
+    public int Step { get; }
+
+    // The step's commit/rollback outcome — set once after the run (via ScriptExecutorTabViewModel
+    // .ApplyStepStatuses). Observable so the grid recolours the Step cell when it lands. A step's
+    // outcome is NOT the statement's own result: a Success statement can still be RolledBack.
+    [NotifyPropertyChangedFor(nameof(IsStepCommitted))]
+    [NotifyPropertyChangedFor(nameof(IsStepRolledBack))]
+    [NotifyPropertyChangedFor(nameof(StepStatusTooltip))]
+    [ObservableProperty] private ScriptStepStatus _stepStatus;
+
+    public bool IsStepCommitted => StepStatus == ScriptStepStatus.Committed;
+    public bool IsStepRolledBack => StepStatus == ScriptStepStatus.RolledBack;
+    public string StepStatusTooltip => StepStatus switch
+    {
+        ScriptStepStatus.Committed => UiStrings.ScriptStepCommittedTooltip,
+        ScriptStepStatus.RolledBack => UiStrings.ScriptStepRolledBackTooltip,
+        _ => UiStrings.ScriptColumnStepTooltip,
+    };
+
+    public string StepText { get; }
     public string Statement { get; }
     public string TypeText { get; }
     public string Result { get; }
     public bool IsFailed { get; }
+    /// <summary>A statement a stop-on-error / cancellation left unexecuted (Sequenced). Neither
+    /// succeeded nor failed — shown muted. See <see cref="IsSucceeded"/>.</summary>
+    public bool IsNotRun { get; }
+    /// <summary>Actually succeeded — excludes the not-run rows, so the Result cell colours "OK"
+    /// green only for a real success and shows "Not run" muted (never green) otherwise.</summary>
+    public bool IsSucceeded => !IsFailed && !IsNotRun;
+    /// <summary>Explains a not-run row on the Result cell; null for executed rows (no tooltip).</summary>
+    public string? ResultTooltip => IsNotRun ? UiStrings.ScriptResultNotRunTooltip : null;
     public string RowsText { get; }
     public string Duration { get; }
     public string Error { get; }

@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:EmberTern.App"
+             xmlns:controls="using:EmberTern.App.Controls"
+             x:Class="EmberTern.App.Controls.MessageBanner"
+             x:Name="Root"
+             x:DataType="controls:MessageBanner">
+
+  <!-- Chrome (Background / BorderBrush / BorderThickness) is NOT set here on purpose: it comes from the
+       two shared variants in Themes/ControlStyles.axaml (standalone = the default, .docked = a strip
+       attached to a panel edge). A local value here would outrank those style setters and re-open the
+       per-host divergence this control exists to close. -->
+
+  <!-- Every binding here is an ELEMENT binding onto the control itself (#Root.…), never the inherited
+       DataContext — so a consumer's own DataContext flows through untouched and only the banner's own
+       properties drive its chrome. -->
+  <Grid ColumnDefinitions="3,Auto,*,Auto">
+
+    <!-- Severity stripe: a thin left accent, the whole of the "how bad is this" signal together with the
+         icon. No loud fill — the banner stays calm on a PanelBrush background. -->
+    <Border Grid.Column="0">
+      <Border.Background>
+        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+          <Binding ElementName="Root" Path="SeverityBrushKey" />
+          <Binding ElementName="Root" Path="ActualThemeVariant" />
+        </MultiBinding>
+      </Border.Background>
+    </Border>
+
+    <controls:SvgIcon Grid.Column="1" Width="14" Height="14" Margin="8,0,6,0"
+                      VerticalAlignment="Center"
+                      Data="{Binding #Root.SeverityGeometryKey,
+                                     Converter={x:Static app:IconGeometryConverter.Instance}}">
+      <controls:SvgIcon.Foreground>
+        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+          <Binding ElementName="Root" Path="SeverityBrushKey" />
+          <Binding ElementName="Root" Path="ActualThemeVariant" />
+        </MultiBinding>
+      </controls:SvgIcon.Foreground>
+    </controls:SvgIcon>
+
+    <!-- Body. The message text carries the SAME severity brush as the stripe and the icon — an Error
+         message reads as an error in full, never half red and half neutral. Expanded (the default) shows
+         the whole message, wrapped + selectable, capped at MaxExpandedHeight and then scrolled so a rare
+         long message can never dominate its host. Collapsed is the opt-in one-line "safety valve" (only
+         reachable when ShowExpand is set). -->
+    <TextBlock Grid.Column="2" Text="{Binding #Root.Message}"
+               IsVisible="{Binding !#Root.IsExpanded}"
+               VerticalAlignment="Center" Margin="0,5,8,5" FontSize="12" LineHeight="18"
+               TextTrimming="CharacterEllipsis">
+      <TextBlock.Foreground>
+        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+          <Binding ElementName="Root" Path="SeverityBrushKey" />
+          <Binding ElementName="Root" Path="ActualThemeVariant" />
+        </MultiBinding>
+      </TextBlock.Foreground>
+    </TextBlock>
+    <ScrollViewer Grid.Column="2" IsVisible="{Binding #Root.IsExpanded}"
+                  MaxHeight="{Binding #Root.MaxExpandedHeight}"
+                  VerticalAlignment="Center" Margin="0,5,8,5" VerticalScrollBarVisibility="Auto">
+      <SelectableTextBlock Text="{Binding #Root.Message}" FontSize="12" LineHeight="18"
+                           TextWrapping="Wrap">
+        <SelectableTextBlock.Foreground>
+          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+            <Binding ElementName="Root" Path="SeverityBrushKey" />
+            <Binding ElementName="Root" Path="ActualThemeVariant" />
+          </MultiBinding>
+        </SelectableTextBlock.Foreground>
+      </SelectableTextBlock>
+    </ScrollViewer>
+
+    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2"
+                VerticalAlignment="Center" Margin="0,0,4,0">
+      <Button Classes="icon" Padding="4" Click="OnCopyClick"
+              IsVisible="{Binding #Root.ShowCopy}"
+              ToolTip.Tip="{x:Static app:UiStrings.MessageBannerCopyTooltip}">
+        <controls:SvgIcon Data="{StaticResource Icon.Copy}" Width="14" Height="14" />
+      </Button>
+      <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding #Root.ShowExpand}">
+        <Button Classes="icon" Padding="4" Click="OnToggleExpandClick"
+                IsVisible="{Binding !#Root.IsExpanded}"
+                ToolTip.Tip="{x:Static app:UiStrings.MessageBannerExpandTooltip}">
+          <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="14" Height="14" />
+        </Button>
+        <Button Classes="icon" Padding="4" Click="OnToggleExpandClick"
+                IsVisible="{Binding #Root.IsExpanded}"
+                ToolTip.Tip="{x:Static app:UiStrings.MessageBannerCollapseTooltip}">
+          <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="14" Height="14" />
+        </Button>
+      </StackPanel>
+      <Button Classes="icon" Padding="4" Command="{Binding #Root.DismissCommand}"
+              IsVisible="{Binding #Root.ShowDismiss}"
+              ToolTip.Tip="{x:Static app:UiStrings.MessageBannerDismissTooltip}">
+        <controls:SvgIcon Data="{StaticResource Icon.X}" Width="14" Height="14" />
+      </Button>
+    </StackPanel>
+  </Grid>
+</UserControl>

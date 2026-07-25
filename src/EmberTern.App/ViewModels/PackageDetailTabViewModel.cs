@@ -147,6 +147,59 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
     /// caret + selection in the matching editor and brings it into view.</summary>
     public event Action<PackageMemberLocation>? NavigateToMemberRequested;
 
+    /// <summary>Raised when the user debugs a package member (Stage X / D11 seam C — procedures; Seam D —
+    /// functions) — carries the whole <see cref="PackageMember"/> (name + kind) so the owner reconstructs it as
+    /// the right CREATE PROCEDURE/FUNCTION and launches it as a debug ROOT via the ONE launch path
+    /// (<c>MainWindowViewModel.OpenDebuggerForPackageMember</c>). This VM only signals intent — the debugger
+    /// architecture is untouched.</summary>
+    public event Action<PackageMember>? DebugMemberRequested;
+
+    /// <summary>Signals a debug request for a package member. PROCEDURE and FUNCTION members are debuggable
+    /// (both launch as a ROOT — the packaged-function root, Seam D); a null member is a no-op.</summary>
+    public void RequestDebugMember(PackageMember? member)
+    {
+        if (member is null || member.Kind is not (PackageMemberKind.Procedure or PackageMemberKind.Function)) return;
+        DebugMemberRequested?.Invoke(member);
+    }
+
+    // ── Members-tab Debug button (D15.3 Seam E) ─────────────────────────────────────────────────────
+    // A persistent, discoverable Debug entry point on the Members tab, driving the SAME DebugMemberRequested
+    // path as the context menu (no parallel launch logic). It is always visible; enabled only for a currently
+    // debuggable member kind. Extending support to package FUNCTIONS (the Function-as-Root milestone) is the
+    // ONLY change needed here — widen CanDebugSelectedMember + its tooltip case; the button/XAML are already
+    // data-driven, so the UI does not change.
+
+    /// <summary>The Members tree's current selection (a group or member node, or null) — bound to the
+    /// TreeView's SelectedItem. The single source of truth for the Debug button's enabled state + tooltip.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanDebugSelectedMember))]
+    [NotifyPropertyChangedFor(nameof(DebugMemberTooltip))]
+    [NotifyCanExecuteChangedFor(nameof(DebugSelectedMemberCommand))]
+    private object? _selectedMemberNode;
+
+    /// <summary>True when the selected member is a debuggable kind — a PROCEDURE (D11) or a FUNCTION (Seam D),
+    /// both launched as a ROOT.</summary>
+    public bool CanDebugSelectedMember
+        => SelectedMemberNode is PackageMemberItemNode { Member.Kind: PackageMemberKind.Procedure or PackageMemberKind.Function };
+
+    /// <summary>The contextual reason shown on the (possibly disabled) Debug button, so it explains its own
+    /// availability: ready (procedure or function) / not debuggable / nothing selected.</summary>
+    public string DebugMemberTooltip => SelectedMemberNode switch
+    {
+        PackageMemberItemNode { Member.Kind: PackageMemberKind.Procedure or PackageMemberKind.Function }
+            => UiStrings.PackageDebugMemberTooltipReady,
+        PackageMemberItemNode => UiStrings.PackageDebugMemberTooltipNotDebuggable,
+        _ => UiStrings.PackageDebugMemberTooltipNoSelection,
+    };
+
+    /// <summary>Debug the selected member — routes through the SAME <see cref="RequestDebugMember"/> path as the
+    /// context menu (no second launch logic). Gated by <see cref="CanDebugSelectedMember"/>.</summary>
+    [RelayCommand(CanExecute = nameof(CanDebugSelectedMember))]
+    private void DebugSelectedMember()
+    {
+        if (SelectedMemberNode is PackageMemberItemNode node) RequestDebugMember(node.Member);
+    }
+
     /// <summary>Navigates to a member's declaration/implementation: prefers the
     /// body (where you'd edit it), falling back to the header. No-op when the token
     /// can't be located in either source.</summary>
@@ -361,10 +414,22 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
     /// </summary>
     public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {
-        if (_ddlExecutor is null) return;
+        // Both pre-condition refusals REPORT (Seam 6b) — see the contract on ISavableObjectEditor:
+        // a compile that never ran must not leave ErrorMessage null, or SaveAsync claims success
+        // having written nothing. An empty header means there is no package to compile at all (the
+        // body alone cannot be applied), so it is the same "nothing to compile" refusal.
+        if (_ddlExecutor is null)
+        {
+            ErrorMessage = UiStrings.NoConnectionMessage;
+            return;
+        }
 
         var header = HeaderSource;
-        if (string.IsNullOrWhiteSpace(header)) return;
+        if (string.IsNullOrWhiteSpace(header))
+        {
+            ErrorMessage = UiStrings.EditorNothingToCompile;
+            return;
+        }
 
         ErrorMessage = null;
         try
@@ -593,4 +658,9 @@ public sealed class PackageMemberItemNode
     public string DisplayName => Member.Name;
     public string IconGeometryKey { get; init; } = string.Empty;
     public string IconResourceKey { get; init; } = string.Empty;
+    /// <summary>True for a PROCEDURE member — gates the "Debug procedure…" context-menu item (D11 seam C).</summary>
+    public bool IsProcedure => Member?.Kind == PackageMemberKind.Procedure;
+    /// <summary>True for a FUNCTION member — gates the "Debug function…" context-menu item (Seam D — a packaged
+    /// function launches as a debug root).</summary>
+    public bool IsFunction => Member?.Kind == PackageMemberKind.Function;
 }

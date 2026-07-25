@@ -106,6 +106,27 @@ CREATE TABLE AUDIT_LOG (
   CONSTRAINT PK_AUDIT_LOG PRIMARY KEY (LOG_ID)
 );
 
+/* A small table dedicated to the debugger's trigger zoo (Stage X / D10). Isolated from ORDERS so its
+   BEFORE DELETE (OLD-only) and BEFORE INSERT OR UPDATE (multi-action) triggers touch independent columns
+   (STATUS for the delete-guard, NOTE for the predicate writes) and never interfere with each other or with
+   the ORDERS triggers — giving clean, independent simulated-vs-real fidelity checks. */
+CREATE TABLE TRIG_LAB (
+  ID     INTEGER NOT NULL,
+  STATUS VARCHAR(8) DEFAULT 'NEW' NOT NULL,
+  NOTE   VARCHAR(20),
+  CONSTRAINT PK_TRIG_LAB PRIMARY KEY (ID)
+);
+
+/* A second isolated table for the debugger's trigger zoo (Stage X / D10, gotcha #248). Its BEFORE UPDATE
+   trigger assigns a local from a scalar subquery that references NEW inside the subquery's WHERE — the case
+   where the harness must colon-prefix the NEW/OLD synthetic (a bare name there is read by Firebird as a
+   COLUMN → SQL -206). Kept apart from TRIG_LAB so it never clashes with the multi-action UPDATE trigger. */
+CREATE TABLE TRIG_SUBQ_LAB (
+  ID   INTEGER NOT NULL,
+  NOTE VARCHAR(20),
+  CONSTRAINT PK_TRIG_SUBQ_LAB PRIMARY KEY (ID)
+);
+
 /* ---------- Standalone indexes --------------------------------------
    Exercise the Index Detail surface: a plain index, a DESCENDING index,
    a composite index, a standalone UNIQUE index, an expression index, and
@@ -229,6 +250,401 @@ BEGIN
   SUSPEND;
 END^
 
+/* ---------- Debugger zoo (Stage X / D2) ----------------------------
+   D2 step units: assignment, IF/ELSE, a domain NOT NULL local (declared
+   but not assigned at entry — must not crash under the harness, §3.4 R1),
+   SUSPEND, and a WHEN … DO exception handler caught through the real
+   FbException → DebugError mapping. Nested calls / cursors / local
+   routines / autonomous tx grow this zoo per their own milestones
+   (D6/D8/D9), which is where the debugger can step them.               */
+
+CREATE PROCEDURE SP_DBG_SUMMARY(P_QTY INTEGER, P_PRICE NUMERIC(15,2))
+RETURNS (LINE_TOTAL NUMERIC(15,2), LABEL VARCHAR(20))
+AS
+  DECLARE VARIABLE V_TOTAL D_AMOUNT NOT NULL;   /* domain NOT NULL local */
+BEGIN
+  V_TOTAL = P_QTY * P_PRICE;
+  IF (V_TOTAL > 100) THEN
+    LABEL = 'BIG';
+  ELSE
+    LABEL = 'SMALL';
+  LINE_TOTAL = V_TOTAL;
+  SUSPEND;
+END^
+
+CREATE PROCEDURE SP_DBG_GUARD(P_AMOUNT NUMERIC(15,2))
+RETURNS (RESULT VARCHAR(20))
+AS
+BEGIN
+  BEGIN
+    IF (P_AMOUNT < 0) THEN
+      EXCEPTION E_NEGATIVE_AMOUNT;
+    RESULT = 'OK';
+  WHEN EXCEPTION E_NEGATIVE_AMOUNT DO
+    RESULT = 'CAUGHT';
+  END
+  SUSPEND;
+END^
+
+/* D6 (Cursor Bridge): a single FOR SELECT over ORDER_ITEMS. Exercises a colon-param WHERE
+   (:P_ORDER, a native DSQL bind), INTO colon targets mapped positionally, a body that reads
+   /writes a running-sum local, and SUSPEND emitting one row per iteration.
+   SP_DBG_CURSOR(1000) => (1, 20.00, 20.00), (2, 25.50, 45.50); (1001) => (1, 20.00, 20.00). */
+CREATE PROCEDURE SP_DBG_CURSOR(P_ORDER INTEGER)
+RETURNS (LINE_NO INTEGER, AMOUNT NUMERIC(15,2), RUNNING NUMERIC(15,2))
+AS
+  DECLARE VARIABLE V_SUM NUMERIC(15,2);
+BEGIN
+  V_SUM = 0;
+  FOR SELECT LINE_NO, QTY * UNIT_PRICE
+      FROM ORDER_ITEMS
+      WHERE ORDER_ID = :P_ORDER
+      ORDER BY LINE_NO
+      INTO :LINE_NO, :AMOUNT DO
+  BEGIN
+    V_SUM = V_SUM + AMOUNT;
+    RUNNING = V_SUM;
+    SUSPEND;
+  END
+END^
+
+/* D6 (Cursor Bridge): NESTED FOR SELECT — two cursors open simultaneously (outer ORDERS, inner
+   ORDER_ITEMS per order). The inner cursor's WHERE references the outer frame's local (:V_OID),
+   proving frame injection + concurrent cursors (probe [4]).
+   SP_DBG_NESTED => (1000, 2), (1001, 1). */
+CREATE PROCEDURE SP_DBG_NESTED
+RETURNS (ORDER_ID INTEGER, ITEM_COUNT INTEGER)
+AS
+  DECLARE VARIABLE V_OID INTEGER;
+  DECLARE VARIABLE V_LINE INTEGER;
+  DECLARE VARIABLE V_CNT INTEGER;
+BEGIN
+  FOR SELECT ORDER_ID FROM ORDERS ORDER BY ORDER_ID INTO :V_OID DO
+  BEGIN
+    V_CNT = 0;
+    FOR SELECT LINE_NO FROM ORDER_ITEMS WHERE ORDER_ID = :V_OID INTO :V_LINE DO
+      V_CNT = V_CNT + 1;
+    ORDER_ID = V_OID;
+    ITEM_COUNT = V_CNT;
+    SUSPEND;
+  END
+END^
+
+/* D8 (Call stack + nested stored routines): a THREE-level call chain proving step-into a stored
+   procedure — argument seeding (each level passes its param down) and RETURNING_VALUES write-back
+   (each callee's output binds into the caller's local). SP_DBG_LEAF and SP_DBG_MID are EXECUTABLE
+   (no SUSPEND → called via EXECUTE PROCEDURE); SP_DBG_ROOT is selectable.
+   SP_DBG_ROOT(5): LEAF(5)=6, MID=6*2=12, ROOT=12+100=112 => RESULT = 112. */
+CREATE PROCEDURE SP_DBG_LEAF(P INTEGER)
+RETURNS (Q INTEGER)
+AS
+BEGIN
+  Q = P + 1;
+END^
+
+CREATE PROCEDURE SP_DBG_MID(P INTEGER)
+RETURNS (Q INTEGER)
+AS
+  DECLARE VARIABLE T INTEGER;
+BEGIN
+  EXECUTE PROCEDURE SP_DBG_LEAF(:P) RETURNING_VALUES :T;
+  Q = T * 2;
+END^
+
+CREATE PROCEDURE SP_DBG_ROOT(P INTEGER)
+RETURNS (RESULT INTEGER)
+AS
+  DECLARE VARIABLE T INTEGER;
+BEGIN
+  EXECUTE PROCEDURE SP_DBG_MID(:P) RETURNING_VALUES :T;
+  RESULT = T + 100;
+  SUSPEND;
+END^
+
+/* D9 (Local procedures & functions — the flagship): a routine with a local FUNCTION (TRIPLE) and a
+   local PROCEDURE (ADD_TAX), proving STEP INTO a local sub-procedure as a real debugger frame — argument
+   seeding (ACC → AMOUNT) + RETURNING_VALUES write-back (WITH_TAX → TOTAL), a local variable inside the
+   sub-procedure (BONUS), and a local function exercised server-side (a faithful step-over, carried into the
+   harness verbatim as R5). Each sub-routine is SELF-CONTAINED (no outer-variable closure — that is D9
+   seam b); the local procedure's parameters have no RDB$PROCEDURE_PARAMETERS row, so the debugger derives
+   their types from the AST header. SP_DBG_LOCAL(5): TRIPLE(5)=15, ADD_TAX(15): BONUS=100, WITH_TAX=115
+   => TOTAL = 115. */
+CREATE PROCEDURE SP_DBG_LOCAL(BASE INTEGER)
+RETURNS (TOTAL INTEGER)
+AS
+  DECLARE FUNCTION TRIPLE(N INTEGER) RETURNS INTEGER
+  AS
+  BEGIN
+    RETURN N * 3;
+  END
+  DECLARE PROCEDURE ADD_TAX(AMOUNT INTEGER) RETURNS (WITH_TAX INTEGER)
+  AS
+    DECLARE VARIABLE BONUS INTEGER;
+  BEGIN
+    BONUS = 100;
+    WITH_TAX = AMOUNT + BONUS;
+  END
+  DECLARE VARIABLE ACC INTEGER;
+BEGIN
+  ACC = TRIPLE(BASE);
+  EXECUTE PROCEDURE ADD_TAX(:ACC) RETURNING_VALUES :TOTAL;
+  SUSPEND;
+END^
+
+/* D9 seam (b) — closure capture: a local PROCEDURE BUMP that READS and WRITES an OUTER variable (ACC),
+   proving Step Into a local routine whose body captures the declaring frame's variable (an FB5 closure,
+   §6.1/§6.2b). The debugger declares + injects + writes back the captured outer variable in BUMP's harness,
+   and the closure write reaches the parent frame. FB3 could not compile this (closed scopes, §6.3) — the lab
+   is FB5, so this is a legitimate zoo member. SP_DBG_CLOSURE(5): ACC=5, BUMP→15, BUMP→25 => TOTAL = 25. */
+CREATE PROCEDURE SP_DBG_CLOSURE(SEED INTEGER)
+RETURNS (TOTAL INTEGER)
+AS
+  DECLARE VARIABLE ACC INTEGER;
+  DECLARE PROCEDURE BUMP
+  AS
+  BEGIN
+    ACC = ACC + 10;
+  END
+BEGIN
+  ACC = SEED;
+  EXECUTE PROCEDURE BUMP;
+  EXECUTE PROCEDURE BUMP;
+  TOTAL = ACC;
+  SUSPEND;
+END^
+
+/* D9 seam (b) Part 2 — transitive read/write-set fixpoint (Step OVER a local call with a HIDDEN capture).
+   A local FUNCTION BUMP_HIDDEN reads+writes the outer variable HIDDEN, which is NOT mentioned at the call
+   site (the call passes only the literal 10). Without the call-graph fixpoint the debugger would inject
+   HIDDEN as NULL and drop its mutation; with it, HIDDEN is injected + written back. Exercised as a natural
+   step-over (a function call inside a leaf runs server-side). SP_DBG_CLOSURE_FN(5): HIDDEN=5, BUMP_HIDDEN(10)
+   => HIDDEN=15, returns 15 => TOTAL = 15. */
+CREATE PROCEDURE SP_DBG_CLOSURE_FN(SEED INTEGER)
+RETURNS (TOTAL INTEGER)
+AS
+  DECLARE VARIABLE HIDDEN INTEGER;
+  DECLARE FUNCTION BUMP_HIDDEN(DELTA INTEGER) RETURNS INTEGER
+  AS
+  BEGIN
+    HIDDEN = HIDDEN + DELTA;
+    RETURN HIDDEN;
+  END
+BEGIN
+  HIDDEN = SEED;
+  TOTAL = BUMP_HIDDEN(10);
+  SUSPEND;
+END^
+
+/* D9 seam (b) Part 2 — the same fixpoint for a local PROCEDURE stepped OVER. ACCUMULATE reads+writes the
+   outer HIDDEN (a hidden capture — the call passes only the literal 10 and returns into TOTAL). Proven with
+   Step Over on the call. SP_DBG_CLOSURE_OVER(5): HIDDEN=5, ACCUMULATE(10) => HIDDEN=15, RESULT=15
+   => TOTAL = 15. */
+CREATE PROCEDURE SP_DBG_CLOSURE_OVER(SEED INTEGER)
+RETURNS (TOTAL INTEGER)
+AS
+  DECLARE VARIABLE HIDDEN INTEGER;
+  DECLARE PROCEDURE ACCUMULATE(DELTA INTEGER) RETURNS (RESULT INTEGER)
+  AS
+  BEGIN
+    HIDDEN = HIDDEN + DELTA;
+    RESULT = HIDDEN;
+  END
+BEGIN
+  HIDDEN = SEED;
+  EXECUTE PROCEDURE ACCUMULATE(10) RETURNING_VALUES :TOTAL;
+  SUSPEND;
+END^
+
+/* D9 seam (c) — step INTO a local FUNCTION in each of the four value-consuming positions (§6.4): an
+   assignment RHS (V = INC(P)), a RETURN operand (inside WRAP: RETURN INC(N)), an IF condition
+   (IF (POSITIVE(V))), and a WHILE condition (WHILE (POSITIVE(3 - I))). Each call is the ENTIRE operand, so
+   the debugger descends without evaluating a surrounding expression; the return value is delivered to the
+   caller position client-side. Depth reaches 3 (SP_DBG_FN_POS → WRAP → INC via the RETURN operand).
+   SP_DBG_FN_POS(5): V=INC(5)=6; POSITIVE(6) → V=WRAP(6)=INC(6)=7; loop POSITIVE(3),(2),(1) true, (0) false
+   → I=3; RESULT = 7 + 3 = 10. */
+CREATE PROCEDURE SP_DBG_FN_POS(P INTEGER)
+RETURNS (RESULT INTEGER)
+AS
+  DECLARE FUNCTION INC(N INTEGER) RETURNS INTEGER AS BEGIN RETURN N + 1; END
+  DECLARE FUNCTION POSITIVE(N INTEGER) RETURNS BOOLEAN AS BEGIN RETURN N > 0; END
+  DECLARE FUNCTION WRAP(N INTEGER) RETURNS INTEGER AS BEGIN RETURN INC(N); END
+  DECLARE VARIABLE V INTEGER;
+  DECLARE VARIABLE I INTEGER;
+BEGIN
+  V = INC(P);
+  IF (POSITIVE(V)) THEN
+    V = WRAP(V);
+  I = 0;
+  WHILE (POSITIVE(3 - I)) DO
+    I = I + 1;
+  RESULT = V + I;
+  SUSPEND;
+END^
+
+/* D9 seam (c) — the Expression Harness must reproduce the server's RETURN value across diverse types. Each
+   local function returns a different type; each is stepped INTO (an assignment RHS) and its RETURN operand is
+   computed by the Expression Harness typed as the function's RETURNS base type (R2). Covers INTEGER, BIGINT
+   (a value beyond INT32), NUMERIC, VARCHAR, BOOLEAN, and NULL. Every output column is compared simulated vs
+   real. */
+CREATE PROCEDURE SP_DBG_FN_TYPES
+RETURNS (R_INT INTEGER, R_BIG BIGINT, R_NUM NUMERIC(15,2), R_TXT VARCHAR(20), R_BOOL BOOLEAN, R_NUL INTEGER)
+AS
+  DECLARE FUNCTION F_INT RETURNS INTEGER AS BEGIN RETURN 42; END
+  DECLARE FUNCTION F_BIG RETURNS BIGINT AS BEGIN RETURN 9000000000; END
+  DECLARE FUNCTION F_NUM RETURNS NUMERIC(15,2) AS BEGIN RETURN 3.14; END
+  DECLARE FUNCTION F_TXT RETURNS VARCHAR(20) AS BEGIN RETURN 'hello'; END
+  DECLARE FUNCTION F_BOOL RETURNS BOOLEAN AS BEGIN RETURN TRUE; END
+  DECLARE FUNCTION F_NUL RETURNS INTEGER AS BEGIN RETURN NULL; END
+BEGIN
+  R_INT = F_INT();
+  R_BIG = F_BIG();
+  R_NUM = F_NUM();
+  R_TXT = F_TXT();
+  R_BOOL = F_BOOL();
+  R_NUL = F_NUL();
+  SUSPEND;
+END^
+
+/* D9 seam (c) — ResolveFunction lexical SHADOWING + choosing the correct definition. FN_ADD_TAX exists as a
+   standalone stored FUNCTION (defined above); here a LOCAL function of the same name shadows it. Firebird
+   resolves the call to the LOCAL sub-routine (a local declaration shadows a global one), so the debugger must
+   ALSO pick the local — step INTO it (depth 2) — rather than treating the name as the global stored function
+   (which would step over, depth 1). depth == 2 proves the local definition was chosen; simulated == real ==
+   P + 5000 proves fidelity. (Firebird does not permit sub-routines nested inside sub-routines, so lexical
+   shadowing across sub-routine levels is not expressible — local-vs-global is the realistic case.)
+   SP_DBG_FN_SHADOW(5) → 5005. */
+CREATE PROCEDURE SP_DBG_FN_SHADOW(P INTEGER)
+RETURNS (RESULT INTEGER)
+AS
+  DECLARE FUNCTION FN_ADD_TAX(N INTEGER) RETURNS INTEGER AS BEGIN RETURN N + 5000; END
+BEGIN
+  RESULT = FN_ADD_TAX(P);
+  SUSPEND;
+END^
+
+/* D9 seam (c) — step INTO a local FUNCTION that CLOSES OVER an outer variable (an FB5 closure, §6.2b): the
+   function reads BASE, which is not one of its parameters. Stepping into RESULT = ADD_BASE(P) descends into
+   ADD_BASE, whose harness declares + injects the captured outer BASE, so RETURN N + BASE computes correctly.
+   SP_DBG_FN_CLOSURE(5): BASE=100, ADD_BASE(5) = 5 + 100 = 105 → RESULT = 105. */
+CREATE PROCEDURE SP_DBG_FN_CLOSURE(P INTEGER)
+RETURNS (RESULT INTEGER)
+AS
+  DECLARE VARIABLE BASE INTEGER;
+  DECLARE FUNCTION ADD_BASE(N INTEGER) RETURNS INTEGER AS BEGIN RETURN N + BASE; END
+BEGIN
+  BASE = 100;
+  RESULT = ADD_BASE(P);
+  SUSPEND;
+END^
+
+/* D12 (Advanced breakpoints): the deterministic D12 workhorse — a counting WHILE loop, one SUSPEND per
+   iteration, with a running accumulator that changes every iteration. Pure arithmetic (no row-data
+   dependency), so the iteration count is EXACTLY N — which the row-driven cursor procedures cannot promise.
+   One routine exercises four of the five D12 modes deterministically:
+     - Run to next SUSPEND: emits exactly N rows, one per iteration.
+     - Hit-count breakpoints: a breakpoint on any loop-body step is hit exactly N times (enables the
+       "break on the Nth hit" / "every Nth hit" policies that 2 iterations cannot).
+     - Conditional breakpoints: condition on the clean integer counter, e.g. IDX = 3 (stops once).
+     - Data breakpoints: ACC (and I / IDX) change on every iteration.
+   Selectable (SUSPEND). SP_DBG_LOOP(5) => (1,5),(2,15),(3,30),(4,50),(5,75); ACC(i) = ACC(i-1) + i*5. */
+CREATE PROCEDURE SP_DBG_LOOP(N INTEGER)
+RETURNS (IDX INTEGER, ACC INTEGER)
+AS
+  DECLARE VARIABLE I INTEGER;
+BEGIN
+  I = 0;
+  ACC = 0;
+  WHILE (I < N) DO
+  BEGIN
+    I = I + 1;
+    ACC = ACC + I * 5;
+    IDX = I;
+    SUSPEND;
+  END
+END^
+
+/* ---------- D13 (Fast Forward) loop workhorses --------------------------------------
+   Deterministic, selectable routines for the two D13 run modes (Continue Until Loop
+   Exit, Next Iteration) and the interpreter's LEAVE/BREAK/EXIT control flow. All emit
+   clean integer state per SUSPEND so simulated-vs-real fidelity compares row-by-row. */
+
+/* Nested WHILE loops — for capturing the INNERMOST loop (Next Iteration advances the
+   inner J; Continue Until Loop Exit on the inner loop lands back in the outer body).
+   SP_DBG_LOOP_NESTED(2) => (1,1,11),(1,2,23),(2,1,44),(2,2,66); ACC += I*10 + J. */
+CREATE PROCEDURE SP_DBG_LOOP_NESTED(N INTEGER)
+RETURNS (OI INTEGER, OJ INTEGER, ACC INTEGER)
+AS
+  DECLARE VARIABLE I INTEGER;
+  DECLARE VARIABLE J INTEGER;
+BEGIN
+  ACC = 0;
+  I = 0;
+  WHILE (I < N) DO
+  BEGIN
+    I = I + 1;
+    J = 0;
+    WHILE (J < N) DO
+    BEGIN
+      J = J + 1;
+      ACC = ACC + I * 10 + J;
+      OI = I;
+      OJ = J;
+      SUSPEND;
+    END
+  END
+END^
+
+/* Early loop exit via LEAVE (unlabeled — breaks the innermost loop, then control
+   continues AFTER the loop). A statement follows the loop so Continue Until Loop Exit
+   has a concrete step point to land on. SP_DBG_LOOP_LEAVE(5) => one row (3,1). */
+CREATE PROCEDURE SP_DBG_LOOP_LEAVE(N INTEGER)
+RETURNS (R INTEGER, DONE INTEGER)
+AS
+BEGIN
+  R = 0;
+  WHILE (R < N) DO
+  BEGIN
+    R = R + 1;
+    IF (R = 3) THEN LEAVE;
+  END
+  DONE = 1;
+  SUSPEND;
+END^
+
+/* Early loop exit via BREAK (legacy synonym of unlabeled LEAVE — proves the interpreter
+   treats it identically). SP_DBG_LOOP_BREAK(5) => one row (3,1). */
+CREATE PROCEDURE SP_DBG_LOOP_BREAK(N INTEGER)
+RETURNS (R INTEGER, DONE INTEGER)
+AS
+BEGIN
+  R = 0;
+  WHILE (R < N) DO
+  BEGIN
+    R = R + 1;
+    IF (R = 3) THEN BREAK;
+  END
+  DONE = 1;
+  SUSPEND;
+END^
+
+/* EXIT from inside the loop terminates the WHOLE routine — the post-loop statement must
+   NOT run, so DONE stays 0 and no SUSPEND fires (zero rows). Proves EXIT ends the frame
+   (Continue Until Loop Exit therefore completes the session). SP_DBG_LOOP_EXIT(5) => no rows. */
+CREATE PROCEDURE SP_DBG_LOOP_EXIT(N INTEGER)
+RETURNS (R INTEGER, DONE INTEGER)
+AS
+BEGIN
+  R = 0;
+  DONE = 0;
+  WHILE (R < N) DO
+  BEGIN
+    R = R + 1;
+    IF (R = 3) THEN EXIT;
+  END
+  DONE = 1;
+  SUSPEND;
+END^
+
 SET TERM ; ^
 
 /* ---------- Triggers (PSQL) ----------------------------------------
@@ -264,6 +680,44 @@ BEGIN
               'Status changed from ' || TRIM(OLD.STATUS) || ' to ' || TRIM(NEW.STATUS));
 END^
 
+/* BEFORE DELETE — OLD-only context (NEW unavailable); guards a locked row.
+   Debugger D10: exercises OLD availability + the DELETE event.                 */
+CREATE TRIGGER TR_TRIG_BD FOR TRIG_LAB
+ACTIVE BEFORE DELETE POSITION 0
+AS
+BEGIN
+  IF (OLD.STATUS = 'LOCKED') THEN
+    EXCEPTION E_ORDER_LOCKED;
+END^
+
+/* BEFORE INSERT OR UPDATE — a MULTI-ACTION trigger driven by the context
+   predicates. Debugger D10: exercises INSERTING/UPDATING substitution, the
+   action selector, and a writable NEW in both events. Writes NOTE (not STATUS)
+   so it never clashes with the delete-guard above.                             */
+CREATE TRIGGER TR_TRIG_BIU FOR TRIG_LAB
+ACTIVE BEFORE INSERT OR UPDATE POSITION 0
+AS
+BEGIN
+  IF (INSERTING) THEN
+    NEW.NOTE = 'INSERTED';
+  IF (UPDATING) THEN
+    NEW.NOTE = 'UPDATED';
+END^
+
+/* BEFORE UPDATE with an EMBEDDED SCALAR SUBQUERY that references NEW inside its WHERE (gotcha #248). The
+   assignment CNT = COALESCE((SELECT ... WHERE oi.ORDER_ID = NEW.ID), 0) is a PSQL statement, so the NEW.ID
+   reference sits inside a DSQL subquery and MUST be colon-prefixed in the harness (:ET_CTX_i) — a bare name
+   there is a column (SQL -206). Debugger D10: proves the per-reference colon decision. NEW.ID = 1000 counts
+   the two ORDER_ITEMS rows of order 1000 ⇒ NEW.NOTE = 'CNT=2'.                                              */
+CREATE TRIGGER TR_SUBQ_BU FOR TRIG_SUBQ_LAB
+ACTIVE BEFORE UPDATE POSITION 0
+AS
+DECLARE VARIABLE CNT INTEGER = 0;
+BEGIN
+  CNT = COALESCE((SELECT COUNT(*) FROM ORDER_ITEMS oi WHERE oi.ORDER_ID = NEW.ID), 0);
+  NEW.NOTE = 'CNT=' || CAST(CNT AS VARCHAR(10));
+END^
+
 SET TERM ; ^
 
 /* ---------- Package + body (PSQL) ----------------------------------
@@ -297,6 +751,72 @@ BEGIN
     UPDATE ORDERS SET TOTAL_AMOUNT = PKG_ORDERS.ORDER_TOTAL(:P_ORDER_ID)
       WHERE ORDER_ID = :P_ORDER_ID;
   END
+END^
+
+/* ---------- Package for the debugger - D11 (packages) --------------
+   Covers the D11 debug matrix: PUBLIC routines (callable from DSQL - real step-over,
+   step-into by source), a PRIVATE routine (body-only, absent from the header - NOT
+   callable from DSQL, so the debugger must INTERPRET it), a PUBLIC sibling call and a
+   PRIVATE sibling call. SP_DBG_PKG (standalone) is the debugger entry point that steps
+   into the package.                                                                    */
+
+CREATE PACKAGE PKG_DBG
+AS
+BEGIN
+  PROCEDURE PUB_RUN(P_N INTEGER) RETURNS (R INTEGER);
+  PROCEDURE PUB_ADD(P_N INTEGER) RETURNS (R INTEGER);
+  /* Seam D: a PUBLIC package FUNCTION, debuggable as a ROOT. Calls the PRIVATE sibling PRIV_DOUBLE so a
+     package-function root exercises the package sibling context (R5), just like PUB_RUN does. */
+  FUNCTION PUB_FN(P_N INTEGER) RETURNS INTEGER;
+END^
+
+CREATE PACKAGE BODY PKG_DBG
+AS
+BEGIN
+  /* PRIVATE routine - declared in the body only, absent from the header. Not callable from
+     DSQL outside the package (D11 probe A), so the debugger INTERPRETS it (spec 8.2), never
+     calls it via the harness. */
+  PROCEDURE PRIV_DOUBLE(P_N INTEGER) RETURNS (R INTEGER)
+  AS
+  BEGIN
+    R = P_N * 2;
+  END
+
+  PROCEDURE PUB_ADD(P_N INTEGER) RETURNS (R INTEGER)
+  AS
+  BEGIN
+    R = P_N + 1;
+  END
+
+  PROCEDURE PUB_RUN(P_N INTEGER) RETURNS (R INTEGER)
+  AS
+    DECLARE VARIABLE A INTEGER;
+    DECLARE VARIABLE B INTEGER;
+  BEGIN
+    EXECUTE PROCEDURE PRIV_DOUBLE(:P_N) RETURNING_VALUES :A;   /* private sibling call */
+    EXECUTE PROCEDURE PUB_ADD(:P_N)     RETURNING_VALUES :B;   /* public  sibling call */
+    R = A + B;
+  END
+
+  /* Seam D — a PUBLIC package FUNCTION debugged as a ROOT: calls the PRIVATE sibling PRIV_DOUBLE (resolved via
+     the package context / R5), then RETURNs. PKG_DBG.PUB_FN(5) => 5*2 + 1 = 11. */
+  FUNCTION PUB_FN(P_N INTEGER) RETURNS INTEGER
+  AS
+    DECLARE VARIABLE V INTEGER;
+  BEGIN
+    EXECUTE PROCEDURE PRIV_DOUBLE(:P_N) RETURNING_VALUES :V;   /* private sibling call */
+    RETURN V + 1;
+  END
+END^
+
+CREATE PROCEDURE SP_DBG_PKG(P_N INTEGER) RETURNS (RESULT INTEGER)
+AS
+BEGIN
+  /* Standalone entry point: step INTO the public package procedure, then into its private
+     and public siblings. SP_DBG_PKG(5) => 5*2 + (5+1) = 16. Selectable (SUSPEND) so the
+     fidelity probe can read RESULT via SELECT, as it does for SP_DBG_ROOT. */
+  EXECUTE PROCEDURE PKG_DBG.PUB_RUN(:P_N) RETURNING_VALUES :RESULT;
+  SUSPEND;
 END^
 
 SET TERM ; ^

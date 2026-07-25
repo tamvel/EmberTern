@@ -84,9 +84,31 @@ internal sealed partial class SemanticBinder
         var qscope = BindQueryNode(cte.Body, scope, stmt);
 
         var cteName = FoldedName(cte.NameToken) ?? string.Empty;
+
+        // The CTE's output columns, used to resolve qualified references (cte.col) against the CTE's
+        // OWN projection rather than the metadata catalog. An explicit column list (WITH c(a,b) AS …) is
+        // authoritative; otherwise derive them from the body's anchor SELECT — but only unambiguous item
+        // shapes, marking the set incomplete for *, t.*, or an unaliased expression (never invent a name).
+        var explicitCols = cte.ColumnTokens is null
+            ? Array.Empty<string>()
+            : ReadNameList(cte.ColumnTokens, 0, cte.ColumnTokens.Count);
+        IReadOnlyList<string> outputColumns;
+        bool columnsComplete;
+        if (explicitCols.Count > 0)
+        {
+            outputColumns = explicitCols;
+            columnsComplete = true;
+        }
+        else
+        {
+            (outputColumns, columnsComplete) = ExtractCteProjection(cte.Body);
+        }
+
         var sym = new CteSymbol(cteName)
         {
-            Columns = cte.ColumnTokens is null ? Array.Empty<string>() : ReadNameList(cte.ColumnTokens, 0, cte.ColumnTokens.Count),
+            Columns = explicitCols,
+            OutputColumns = outputColumns,
+            ColumnsComplete = columnsComplete,
             DeclarationSpan = TextSpan.Of(cte.NameToken),
             DeclaringStatement = stmt,
             QueryScope = qscope,
@@ -94,6 +116,128 @@ internal sealed partial class SemanticBinder
         scope.Declare(sym);
         AddSymbol(sym);
         AddReference(cte.NameToken, sym, ReferenceRole.SchemaObject, isDefinition: true);
+    }
+
+    // ── CTE projection extraction (the CTE's own output columns, no metadata) ─────────────────────
+
+    // Derives a CTE's OUTPUT column names from its body's anchor SELECT projection — Firebird names a
+    // CTE's columns after its first (anchor) SELECT when no explicit column list is given. Returns the
+    // names AND whether the set is COMPLETE. We accept ONLY item shapes whose output name is unambiguous:
+    //   • a bare column           `col`         → col
+    //   • a qualified column      `t.col`       → col
+    //   • an explicit alias       `<expr> AS n` → n     (the alias is the tail of the item)
+    // Anything else — `*`, `t.*`, an unaliased expression/function/literal, an unrecognised body, or an
+    // empty projection — makes the set INCOMPLETE. We NEVER synthesise a name (§0 / Paramount Law): an
+    // incomplete set lets the model degrade to "cannot verify → no diagnostic" instead of guessing.
+    private static (IReadOnlyList<string> Names, bool Complete) ExtractCteProjection(QueryNode? body)
+    {
+        var select = AnchorSelect(body);
+        if (select is null) return (Array.Empty<string>(), false);
+
+        var t = select.Tokens;
+        int hi = t.Count;
+        int i = SkipSelectPrefix(t, hi); // past SELECT [FIRST v] [SKIP v] [DISTINCT | ALL]
+
+        var names = new List<string>();
+        bool complete = true;
+        while (i < hi)
+        {
+            int itemEnd = TopLevelCommaEnd(t, i, hi);
+            if (TryProjectionItemName(t, i, itemEnd, out var name)) names.Add(name);
+            else complete = false;
+            i = itemEnd < hi ? itemEnd + 1 : itemEnd; // step past the comma
+        }
+
+        // A CTE with no enumerable output name (empty / malformed projection) cannot be verified — never
+        // treat an empty set as "complete" (that would flag every cte.col as unknown).
+        if (names.Count == 0) complete = false;
+        return (names, complete);
+    }
+
+    // The anchor SELECT of a CTE body: the leftmost SELECT of a set operation (its column names win in
+    // Firebird), or the main query of a nested WITH. A RawQuery / null cannot be enumerated.
+    private static SelectClause? AnchorSelect(QueryNode? q) => q switch
+    {
+        SelectQuery sq => sq.Select,
+        SetOperationQuery so => AnchorSelect(so.Left),
+        WithQuery wq => AnchorSelect(wq.Query),
+        _ => null,
+    };
+
+    // Advances past a SelectClause's leading `SELECT [FIRST <v>] [SKIP <v>] [DISTINCT | ALL]` prefix to
+    // the first projection-item token. `FIRST`/`SKIP` take an integer literal, a query parameter, or a
+    // parenthesised expression — skipped as one token or one paren group (valid Firebird forms).
+    private static int SkipSelectPrefix(IReadOnlyList<SqlToken> t, int hi)
+    {
+        int i = 0;
+        if (i < hi && IsKeyword(t[i], "SELECT")) i++;
+        while (i < hi && (IsKeyword(t[i], "FIRST") || IsKeyword(t[i], "SKIP")))
+        {
+            i++;
+            if (i < hi && t[i].Kind == TokenKind.LParen) i = SkipParens(t, i, hi);
+            else if (i < hi) i++;
+        }
+        if (i < hi && (IsKeyword(t[i], "DISTINCT") || IsKeyword(t[i], "ALL"))) i++;
+        return i;
+    }
+
+    // The exclusive end of the projection item starting at <paramref name="lo"/>: the next top-level
+    // (paren-depth 0) comma, or <paramref name="hi"/>. (A comma inside a function call / subquery is at
+    // depth > 0 and does not split an item.)
+    private static int TopLevelCommaEnd(IReadOnlyList<SqlToken> t, int lo, int hi)
+    {
+        int depth = 0;
+        for (int i = lo; i < hi; i++)
+        {
+            var k = t[i].Kind;
+            if (k == TokenKind.LParen) depth++;
+            else if (k == TokenKind.RParen) { if (depth > 0) depth--; }
+            else if (k == TokenKind.Comma && depth == 0) return i;
+        }
+        return hi;
+    }
+
+    // The unambiguous output name of one projection item [lo, hi), or false when it cannot be named
+    // without guessing (see ExtractCteProjection). Order matters: a top-level `*` is rejected first, then
+    // a trailing top-level `AS <name>` wins, else only a pure `col` / `t.col` item is accepted.
+    private static bool TryProjectionItemName(IReadOnlyList<SqlToken> t, int lo, int hi, out string name)
+    {
+        name = string.Empty;
+        if (lo >= hi) return false;
+
+        int depth = 0;
+        for (int i = lo; i < hi; i++)
+        {
+            var tk = t[i];
+            if (tk.Kind == TokenKind.LParen) { depth++; continue; }
+            if (tk.Kind == TokenKind.RParen) { if (depth > 0) depth--; continue; }
+            if (depth != 0) continue;
+
+            // A top-level star (`*` or `t.*`) exposes columns we cannot enumerate.
+            if (tk.Kind == TokenKind.Operator && tk.Text == "*") return false;
+
+            // An explicit alias `<expr> AS <name>` — accepted only when the alias is the item's tail, so
+            // an inner `CAST(x AS type)` (at depth > 0) can never be mistaken for it.
+            if (IsKeyword(tk, "AS") && i + 2 == hi && IsNameToken(t[i + 1]))
+            {
+                name = FoldedName(t[i + 1])!;
+                return true;
+            }
+        }
+
+        // No alias: accept only a pure column reference as the whole item — `col` or `t.col`.
+        if (hi - lo == 1 && IsNameToken(t[lo]))
+        {
+            name = FoldedName(t[lo])!;
+            return true;
+        }
+        if (hi - lo == 3 && IsNameToken(t[lo]) && t[lo + 1].Kind == TokenKind.Dot && IsNameToken(t[lo + 2]))
+        {
+            name = FoldedName(t[lo + 2])!;
+            return true;
+        }
+
+        return false; // an unaliased expression/function/literal — ambiguous, never guessed
     }
 
     // ── FROM items (from FromClause / JoinedTable nodes) ──────────────────────────────────────
@@ -314,7 +458,13 @@ internal sealed partial class SemanticBinder
         {
             case TableReferenceSymbol tref:
                 AddReference(qualifier, tref, ReferenceRole.Qualifier);
-                AddReference(member, ResolveColumn(tref.TargetName, FoldedName(member)), ReferenceRole.Column);
+                // A CTE-backed reference resolves against the CTE's OWN projection (its output columns),
+                // never the metadata catalog (which has no CTE) — that was the source of the false
+                // "unknown column" on cte.col. A catalog table/view still resolves through ResolveColumn.
+                var col = tref.Target is CteSymbol cte
+                    ? ResolveCteColumn(cte, FoldedName(member))
+                    : ResolveColumn(tref.TargetName, FoldedName(member));
+                AddReference(member, col, ReferenceRole.Column);
                 break;
 
             case RecordAliasSymbol rec:
@@ -371,6 +521,33 @@ internal sealed partial class SemanticBinder
     }
 
     // ── Column symbols (cached so references to the same column share one symbol) ─────────────
+
+    // Resolves a qualified reference against a CTE's OWN output columns (not the catalog). Returns a
+    // lightweight ColumnSymbol when the name is one of the CTE's projected/declared columns, else null.
+    // A null here is flagged as an unknown column by the diagnostics engine ONLY when the CTE's column
+    // set is COMPLETE (see DiagnosticsEngine.QualifierResolvesTable); for an incomplete set (a *, an
+    // unaliased expression, …) the engine stays silent — we never guess a projection we can't enumerate.
+    private readonly Dictionary<string, ColumnSymbol?> _cteColumnCache = new(StringComparer.Ordinal);
+
+    private ColumnSymbol? ResolveCteColumn(CteSymbol cte, string? column)
+    {
+        if (string.IsNullOrEmpty(column)) return null;
+
+        string? matched = null;
+        foreach (var c in cte.OutputColumns)
+        {
+            if (string.Equals(c, column, StringComparison.OrdinalIgnoreCase)) { matched = c; break; }
+        }
+        if (matched is null) return null;
+
+        var key = cte.Name + (char)0 + matched;
+        if (_cteColumnCache.TryGetValue(key, out var cached)) return cached;
+
+        var sym = new ColumnSymbol(matched) { OwningTable = cte.Name };
+        AddSymbol(sym);
+        _cteColumnCache[key] = sym;
+        return sym;
+    }
 
     private readonly Dictionary<string, ColumnSymbol?> _columnCache = new(StringComparer.OrdinalIgnoreCase);
 

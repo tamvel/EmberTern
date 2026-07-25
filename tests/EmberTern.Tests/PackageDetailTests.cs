@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using EmberTern.App;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
@@ -320,6 +321,110 @@ public class PackageDetailTests
         Assert.Equal(PackageDetailTabViewModel.BodySubTabIndex, vm.ActiveSubTabIndex);
     }
 
+    // ─── Debug member entry point (D11 seam C) ─────────────────────────────
+
+    [Fact] // a PROCEDURE member raises DebugMemberRequested with the member (name + kind)
+    public void RequestDebugMember_Procedure_RaisesWithMember()
+    {
+        var vm = new PackageDetailTabViewModel("PKG_DBG");
+        PackageMember? raised = null;
+        vm.DebugMemberRequested += member => raised = member;
+
+        vm.RequestDebugMember(new PackageMember("PUB_RUN", PackageMemberKind.Procedure));
+
+        Assert.NotNull(raised);
+        Assert.Equal("PUB_RUN", raised!.Name);
+        Assert.Equal(PackageMemberKind.Procedure, raised.Kind);
+    }
+
+    [Fact] // Seam D: a FUNCTION member IS launchable as a debug root — it raises with the member; null is a no-op
+    public void RequestDebugMember_Function_RaisesWithMember()
+    {
+        var vm = new PackageDetailTabViewModel("PKG_DBG");
+        PackageMember? raised = null;
+        vm.DebugMemberRequested += member => raised = member;
+
+        vm.RequestDebugMember(new PackageMember("ORDER_TOTAL", PackageMemberKind.Function));
+        Assert.NotNull(raised);
+        Assert.Equal("ORDER_TOTAL", raised!.Name);
+        Assert.Equal(PackageMemberKind.Function, raised.Kind);
+
+        raised = null;
+        vm.RequestDebugMember(null); // null → no-op
+        Assert.Null(raised);
+    }
+
+    [Fact] // the context-menu visibility gates: a procedure node offers "Debug procedure…", a function node "Debug function…"
+    public void MemberNode_KindGatesDebug()
+    {
+        var vm = new PackageDetailTabViewModel("PKG_DBG");
+        vm.SetMembers(new[]
+        {
+            new PackageMember("ORDER_TOTAL", PackageMemberKind.Function),
+            new PackageMember("PUB_RUN", PackageMemberKind.Procedure),
+        });
+
+        var func = vm.MemberGroups.Single(g => g.Header.StartsWith("Functions", StringComparison.Ordinal)).Children.Single();
+        var proc = vm.MemberGroups.Single(g => g.Header.StartsWith("Procedures", StringComparison.Ordinal)).Children.Single();
+        Assert.False(func.IsProcedure);
+        Assert.True(func.IsFunction);   // Seam D — the "Debug function…" menu item gate
+        Assert.True(proc.IsProcedure);
+        Assert.False(proc.IsFunction);
+    }
+
+    // ─── Members-tab Debug button (D15.3 Seam E) ───────────────────────────
+
+    [Fact] // enabled + its tooltip reflect the selection: procedure/function = ready, group/none = pick one
+    public void DebugButton_EnablementAndTooltip_FollowSelection()
+    {
+        var vm = new PackageDetailTabViewModel("PKG_DBG");
+        vm.SetMembers(new[]
+        {
+            new PackageMember("ORDER_TOTAL", PackageMemberKind.Function),
+            new PackageMember("PUB_RUN", PackageMemberKind.Procedure),
+        });
+        var funcGroup = vm.MemberGroups.Single(g => g.Header.StartsWith("Functions", StringComparison.Ordinal));
+        var func = funcGroup.Children.Single();
+        var proc = vm.MemberGroups.Single(g => g.Header.StartsWith("Procedures", StringComparison.Ordinal)).Children.Single();
+
+        // nothing selected
+        Assert.False(vm.CanDebugSelectedMember);
+        Assert.False(vm.DebugSelectedMemberCommand.CanExecute(null));
+        Assert.Equal(EmberTern.App.UiStrings.PackageDebugMemberTooltipNoSelection, vm.DebugMemberTooltip);
+
+        // a group node is not a member
+        vm.SelectedMemberNode = funcGroup;
+        Assert.False(vm.CanDebugSelectedMember);
+        Assert.Equal(EmberTern.App.UiStrings.PackageDebugMemberTooltipNoSelection, vm.DebugMemberTooltip);
+
+        // a FUNCTION member → enabled, "ready" tooltip (Seam D — packaged function as a debug root)
+        vm.SelectedMemberNode = func;
+        Assert.True(vm.CanDebugSelectedMember);
+        Assert.True(vm.DebugSelectedMemberCommand.CanExecute(null));
+        Assert.Equal(EmberTern.App.UiStrings.PackageDebugMemberTooltipReady, vm.DebugMemberTooltip);
+
+        // a PROCEDURE member → enabled, "ready" tooltip
+        vm.SelectedMemberNode = proc;
+        Assert.True(vm.CanDebugSelectedMember);
+        Assert.True(vm.DebugSelectedMemberCommand.CanExecute(null));
+        Assert.Equal(EmberTern.App.UiStrings.PackageDebugMemberTooltipReady, vm.DebugMemberTooltip);
+    }
+
+    [Fact] // the button reuses the ONE launch path — it raises DebugMemberRequested, no parallel logic
+    public void DebugButton_RoutesThroughDebugMemberRequested()
+    {
+        var vm = new PackageDetailTabViewModel("PKG_DBG");
+        vm.SetMembers(new[] { new PackageMember("PUB_RUN", PackageMemberKind.Procedure) });
+        var proc = vm.MemberGroups.Single().Children.Single();
+        PackageMember? raised = null;
+        vm.DebugMemberRequested += member => raised = member;
+
+        vm.SelectedMemberNode = proc;
+        vm.DebugSelectedMemberCommand.Execute(null);
+
+        Assert.Equal("PUB_RUN", raised!.Name);
+    }
+
     // ─── TryParsePackageName (New flow reopen-by-name) ─────────────────────
 
     [Theory]
@@ -386,12 +491,14 @@ public class PackageDetailTests
     }
 
     [Fact]
-    public async Task Compile_EmptyHeader_NoOp()
+    public async Task Compile_NoExecutorAndEmptyHeader_ReportsNoConnection()
     {
-        // No executor + empty header → ExecuteCompileAsync returns early, no throw.
+        // Seam 6b — was "Compile_EmptyHeader_NoOp" (ErrorMessage null). ExecuteCompileAsync still returns
+        // early without throwing, but it now SAYS why, so SaveAsync cannot read "no error" as success.
+        // The executor guard is checked first, so this VM (no executor AND no header) reports that reason.
         var vm = new PackageDetailTabViewModel("PKG_X");
         await vm.ExecuteCompileAsync();
-        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(UiStrings.NoConnectionMessage, vm.ErrorMessage);
     }
 
     // ─── Reader SQL shape pins (no live DB) ────────────────────────────────

@@ -87,8 +87,9 @@ public static class SqlParameterScanner
     {
         if (string.IsNullOrEmpty(sql)) return null;
         var statements = SqlParser.Parse(sql!).Root.Statements;
-        return statements.Count > 0 && statements[0] is ExecuteProcedureStatement ep
-            ? ep.ProcedureName
-            : null;
+        if (statements.Count == 0 || statements[0] is not ExecuteProcedureStatement ep) return null;
+        // A package-qualified call keeps its qualifier so the catalog lookup can find the package member
+        // (PKG.PROC), not a nonexistent standalone routine named PROC (Stage X / D11).
+        return ep.PackageName is null ? ep.ProcedureName : ep.PackageName + "." + ep.ProcedureName;
     }
 }

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
@@ -34,6 +35,18 @@ public partial class DiagnosticsPanelView : UserControl
         if ((e.Source as Control)?.DataContext is DiagnosticRowViewModel row)
         {
             Navigator?.ActivateRow(row);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Right-click → "Quick Fix…" (Q5). Jumps to the finding and opens the same menu Ctrl+. and
+    /// the bulb open; the item is simply inert when that finding has no fix, which is honest and needs no
+    /// extra state to keep in sync.</summary>
+    private void OnQuickFixClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is DiagnosticRowViewModel row)
+        {
+            Navigator?.ShowCodeActionsForRow(row);
             e.Handled = true;
         }
     }

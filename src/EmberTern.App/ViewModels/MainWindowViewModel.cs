@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Completion;
+using EmberTern.App.Controls;
 using EmberTern.App.Diagnostics;
 using EmberTern.App.Export;
 using EmberTern.App.Security;
@@ -36,6 +37,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly ConnectionProfileStore _store;
     private readonly FolderStore _folderStore;
     private readonly ParameterHistoryStore _parameterHistory;
+    private readonly WatchStore _watchStore;
     private FolderState _folderState = new();
     private readonly FirebirdConnectionService _service;
     // Data lane (connection #1): SQL Editor F5, data preview/edit.
@@ -150,6 +152,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // Execute Procedure/Function parameter history persists in the shared file.
         _parameterHistory = new ParameterHistoryStore(
             System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
+        // Same shared settings.dat — debugger Watch expressions persist per routine (Stage X / D5).
+        _watchStore = new WatchStore(
+            System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
         _folderState = _folderStore.Load();
         _service = service;
         _transactionService = transactionService;
@@ -193,7 +198,8 @@ public partial class MainWindowViewModel : ViewModelBase
         // Catalog (indexes/selectivity/cardinality) for the advisor — read on the metadata lane
         // for the profiled query's tables when the Performance panel builds (Phase 3a).
         _catalogReader = new FirebirdCatalogReader(_service, _metadataLane);
-        // Script Executor runs on the DATA lane (co-location, gotcha #122) as the working tx.
+        // Script Executor runs on the DATA lane because it IS the user working transaction
+        // (long-lived, manual Commit/Rollback; one tx per connection, gotcha #89) — not co-location.
         _scriptExecutor = new FirebirdScriptExecutor(_service, _transactionService);
         _performanceAnalyzer = new PerformanceAnalyzer();
         // The SQL Editor gets its OWN Performance context (its own captured run). Procedure/
@@ -208,6 +214,9 @@ public partial class MainWindowViewModel : ViewModelBase
         Metadata.NewObjectRequested += OnNewObjectRequested;
         Metadata.DeleteObjectRequested += OnDeleteObjectRequested;
         Metadata.ExecuteProcedureRequested += OnExecuteProcedureRequested;
+        Metadata.DebugProcedureRequested += OnDebugProcedureRequested;
+        Metadata.DebugTriggerRequested += OnDebugTriggerRequested;
+        Metadata.DebugFunctionRequested += OnDebugFunctionRequested;
         Metadata.RecompileGroupRequested += OnRecompileGroupRequested;
         Metadata.SetObjectActiveRequested += OnSetObjectActiveRequested;
         Metadata.BulkSetActiveRequested += OnBulkSetActiveRequested;
@@ -215,6 +224,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // Workspace tabs start empty — no Query tab until a connection becomes active.
         // Each ConnectionProfile owns its own Query+DDL tab list via _workspacesByConnection.
         WorkspaceTabs = new ObservableCollection<WorkspaceTabViewModel>();
+        // Seam 6d — one wiring point for "an editor in this workspace compiled its object", rather than the
+        // several dozen places that add a tab. A tab kind added later is covered without anyone remembering to.
+        WorkspaceTabs.CollectionChanged += OnWorkspaceTabsChanged;
         SavedQueries = new ObservableCollection<SavedQueryViewModel>();
         SavedQueries.CollectionChanged += (_, _) =>
         {
@@ -324,6 +336,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveGlobalSearch))]
     [NotifyPropertyChangedFor(nameof(IsScriptExecutorTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveScriptExecutor))]
+    [NotifyPropertyChangedFor(nameof(IsDebuggerTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveDebugger))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
     [NotifyPropertyChangedFor(nameof(CanExportDdl))]
     [NotifyCanExecuteChangedFor(nameof(ExportDdlCommand))]
@@ -421,6 +435,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsGlobalSearchTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GlobalSearch };
     public GlobalSearchTabViewModel? ActiveGlobalSearch
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GlobalSearch } t ? t.GlobalSearch : null;
+
+    public bool IsDebuggerTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Debugger };
+    public DebuggerTabViewModel? ActiveDebugger
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.Debugger } t ? t.Debugger : null;
 
     // Drives the whole editor-toolbar Border's IsVisible so an empty command strip never
     // reserves space above the document tabs. True for every tab kind that exposes at
@@ -1626,8 +1644,10 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         foreach (var tab in WorkspaceTabs)
         {
-            // The Security Manager and Activity Monitor are live tools, not persisted.
-            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch or WorkspaceTabKind.ScriptExecutor) continue;
+            // Live tools + transient sessions are never persisted. A Debugger tab is a
+            // transient debug session (rolled back on close), not a document — it must not
+            // be captured (else an empty tab is "restored" on the next launch of the app).
+            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch or WorkspaceTabKind.ScriptExecutor or WorkspaceTabKind.Debugger) continue;
 
             if (tab.Kind == WorkspaceTabKind.Query)
             {
@@ -2080,6 +2100,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 _ = sm.DisposeAsync(); // stop the MON$ poll timer on disconnect (best-effort)
             else if (t.Kind == WorkspaceTabKind.ScriptExecutor && t.ScriptExecutor is { } se)
                 se.Detach(); // unsubscribe from the transaction-state event
+            else if (t.Kind == WorkspaceTabKind.Debugger && t.Debugger is { } dbg)
+                _ = dbg.DisposeAsync(); // roll back + close the debug session's attachment (§4.4) — a debug tab is bound to this DB (best-effort)
         }
         WorkspaceTabs.Clear();
         _tabActivationHistory.Clear();
@@ -2209,7 +2231,18 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public event Func<ConfirmRequest, Task<bool>>? ConfirmationRequested;
     private Task<bool> RequestConfirmAsync(ConfirmRequest request)
-        => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
+    {
+        // A Save-and-close / Save-and-disconnect batch is itself shown in a MODAL "Saving changes"
+        // dialog, and every dialog in this app is ShowDialog(MainWindow). An editor that asks for
+        // confirmation mid-batch would therefore open a second modal owned by an already-disabled
+        // window: unreachable, so its SaveAsync never returns and the batch hangs at 0/N with an
+        // empty grid (QA, 2026-07-25). Proceed instead of asking — same reasoning as the
+        // "recompile dependents?" suppression below, and the only confirm reachable from any
+        // SaveAsync is the debugger's "saving ends the debug session", which during a shutdown or
+        // disconnect is moot: the session is being torn down either way (§4.4).
+        if (_bulkSaveInProgress) return Task.FromResult(true);
+        return ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
+    }
 
     // Multi-outcome (N-button) sibling of ConfirmationRequested — Commit / Roll back /
     // Cancel (disconnect) and Cancel / Discard-and-exit (app close). Returns the chosen
@@ -3808,6 +3841,9 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.DeleteRequested += OnPackageDeleteRequested;
         detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
+        // D11 seam C — "Debug procedure…" on a package member launches it as a debug root via the one path.
+        detail.DebugMemberRequested += member => OpenDebuggerForPackageMember(
+            detail.PackageName, member.Name, member.Kind == PackageMemberKind.Function);
         return detail;
     }
 
@@ -4133,6 +4169,8 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
         detail.RunExecuteRequested = RunProcedureExecuteAsync;
+        // Editor-toolbar Debug entry point (Stage X / D5) — reuses the one debugger-launch path.
+        detail.DebugRequested = () => OpenDebuggerForObject(detail.ProcedureName, MetadataObjectKind.Procedure);
         // Its OWN Performance context — analyzes only this procedure tab's Execute.
         detail.PerformanceContext = CreatePerformanceContext();
         // Lazy column loader for the Variables grid's merged Domain/Column picker.
@@ -4186,6 +4224,8 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
+        // Editor-toolbar Debug entry point (Stage X / D10) — reuses the one debugger-launch path.
+        detail.DebugRequested = () => OpenDebuggerForObject(detail.TriggerName, MetadataObjectKind.Trigger);
         // Lazy column loader for the Variables grid's merged Domain/Column picker.
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadTriggerListsAsync(detail);
@@ -4235,6 +4275,9 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
         detail.RunExecuteRequested = RunFunctionExecuteAsync;
+        // Editor-toolbar Debug entry point (D-function) — reuses the one debugger-launch path; the function
+        // launches as the debug root (DebugLaunchSpec.IsFunction → function root frame + Return group).
+        detail.DebugRequested = () => OpenDebuggerForObject(detail.FunctionName, MetadataObjectKind.Function);
         // Its OWN Performance context — analyzes only this function tab's Execute.
         detail.PerformanceContext = CreatePerformanceContext();
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
@@ -4634,6 +4677,8 @@ public partial class MainWindowViewModel : ViewModelBase
             _ = sm.DisposeAsync(); // stop the MON$ poll timer (best-effort)
         else if (tab.Kind == WorkspaceTabKind.ScriptExecutor && tab.ScriptExecutor is { } se)
             se.Detach(); // unsubscribe from the transaction-state event
+        else if (tab.Kind == WorkspaceTabKind.Debugger && tab.Debugger is { } dbg)
+            _ = dbg.DisposeAsync(); // roll back + close the debug session's attachment (§4.4, best-effort)
 
         if (wasSelected && WorkspaceTabs.Count > 0)
         {
@@ -4761,6 +4806,126 @@ public partial class MainWindowViewModel : ViewModelBase
         OnOpenDdlRequested(obj);
         var cmd = ActiveProcedureDetail?.ExecuteProcedureCommand;
         if (cmd is not null && cmd.CanExecute(null)) cmd.Execute(null);
+    }
+
+    // Sidebar "Debug procedure…" (Stage X / D4). Opens a debugger tab for a standalone procedure and kicks
+    // its preparation (fetch source → parse → launch panel). NOT a singleton — the same procedure may be
+    // debugged in two tabs (two sessions). The tab's read-only source + launch panel + stepping live in the
+    // child DebuggerTabViewModel; the debug session's own attachment/transaction is opened only on Launch.
+    private void OnDebugProcedureRequested(MetadataObject obj)
+    {
+        if (obj.Kind != MetadataObjectKind.Procedure) return;
+        OpenDebuggerForObject(obj.Name, MetadataObjectKind.Procedure);
+    }
+
+    private void OnDebugTriggerRequested(MetadataObject obj)
+    {
+        if (obj.Kind != MetadataObjectKind.Trigger) return;
+        OpenDebuggerForObject(obj.Name, MetadataObjectKind.Trigger);
+    }
+
+    private void OnDebugFunctionRequested(MetadataObject obj)
+    {
+        if (obj.Kind != MetadataObjectKind.Function) return;
+        OpenDebuggerForObject(obj.Name, MetadataObjectKind.Function);
+    }
+
+    // The one debugger-launch path, reused by the sidebar "Debug procedure…" / "Debug trigger…" and the
+    // procedure/trigger editor's Debug toolbar button (Stage X / D5, D10) — the buttons are only additional
+    // entry points, not new logic. The kind selects how the source is fetched (procedure vs trigger) and, for a
+    // trigger, the columns provider types its NEW/OLD context grid.
+    private void OpenDebuggerForObject(string name, MetadataObjectKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return;
+        if (!_service.IsConnected)
+        {
+            AddMessage(MessageSeverity.Error, UiStrings.DebuggerNoConnection);
+            return;
+        }
+
+        var launcher = new EmberTern.App.Debugging.FirebirdDebugSessionLauncher(_service);
+        var debugger = new DebuggerTabViewModel(
+            name,
+            ct => FetchObjectDefinitionAsync(name, kind),
+            launcher,
+            _parameterHistory,
+            _service.ActiveProfile?.Id,
+            _watchStore,
+            columnsProvider: (t, ct) => EnsureColumnsAsync(t, ct));
+
+        // Seam 5b — the debugger tab saves + compiles the routine it is debugging through the SAME Ddl-lane
+        // executor and the SAME confirmation dialog every object editor uses; no second save mechanism.
+        debugger.DdlExecutor = _ddlExecutor;
+        debugger.ConfirmationRequested += RequestConfirmAsync;
+
+        var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, name, _service.ActiveProfile?.Id, kind);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+        _ = debugger.PrepareAsync();
+    }
+
+    // Debugger launch for a PACKAGE member (Stage X / D11 seam C — procedures; Seam D — functions) — the Package
+    // editor's Members-tab Debug entry point. Reuses the ONE launch path (OpenDebuggerForObject's shape): the
+    // source provider reconstructs the member as a standalone CREATE PROCEDURE/FUNCTION (by kind) and the package
+    // name is threaded into the launch so the executor builds a package root frame (sibling-call resolution +
+    // package-keyed catalog params). A FUNCTION member reconstructs as CREATE FUNCTION → the VM sets IsFunction →
+    // the launcher builds a packaged function root (D1). The tab title is the qualified PKG.MEMBER name; the
+    // frame name is the member name (matching how a stepped-into package member is named, seam B).
+    internal void OpenDebuggerForPackageMember(string packageName, string memberName, bool isFunction)
+    {
+        if (string.IsNullOrWhiteSpace(packageName) || string.IsNullOrWhiteSpace(memberName)) return;
+        if (!_service.IsConnected)
+        {
+            AddMessage(MessageSeverity.Error, UiStrings.DebuggerNoConnection);
+            return;
+        }
+
+        var launcher = new EmberTern.App.Debugging.FirebirdDebugSessionLauncher(_service);
+        var debugger = new DebuggerTabViewModel(
+            memberName,
+            ct => FetchPackageMemberSourceAsync(packageName, memberName, isFunction, ct),
+            launcher,
+            _parameterHistory,
+            _service.ActiveProfile?.Id,
+            _watchStore,
+            columnsProvider: (t, ct) => EnsureColumnsAsync(t, ct),
+            packageName: packageName);
+
+        // No DdlExecutor here on purpose (Seam 5b): a package member's source is RECONSTRUCTED as a
+        // standalone CREATE PROCEDURE/FUNCTION so the engine can frame it — compiling that text would create
+        // a standalone routine instead of altering the package. Editing a package member stays the Package
+        // editor's job; the VM refuses to save a package tab regardless, this just never offers it.
+        var title = string.Format(CultureInfo.CurrentCulture, "{0}.{1}", packageName, memberName);
+        var tab = WorkspaceTabViewModel.CreateDebugger(
+            this, debugger, title, _service.ActiveProfile?.Id,
+            isFunction ? MetadataObjectKind.Function : MetadataObjectKind.Procedure);
+        WorkspaceTabs.Add(tab);
+        SelectTab(tab);
+        _ = debugger.PrepareAsync();
+    }
+
+    // Source provider for a package member launch: the member reconstructed as a standalone CREATE
+    // PROCEDURE/FUNCTION by kind (the same reconstruction the step-into path uses, via the one shared SqlParser
+    // reconstructor). A FUNCTION reconstructs as CREATE FUNCTION so the VM detects IsFunction. Returns null on a
+    // read failure / missing member → the VM reports "source unavailable".
+    private async Task<string?> FetchPackageMemberSourceAsync(
+        string packageName, string memberName, bool isFunction, CancellationToken cancellationToken)
+    {
+        var kind = isFunction
+            ? EmberTern.Core.Sql.Language.Ast.SubroutineKind.Function
+            : EmberTern.Core.Sql.Language.Ast.SubroutineKind.Procedure;
+        try
+        {
+            return await _ddlReader.FetchPackageMemberSourceAsync(packageName, memberName, kind, cancellationToken).ConfigureAwait(true);
+        }
+        catch (MetadataReadException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     // ─── Bulk operations (recompile / recompute stats / activate-deactivate) ──
@@ -5221,6 +5386,96 @@ public partial class MainWindowViewModel : ViewModelBase
     /// (This handles ONLY deletions performed inside EmberTern; external/other-session
     /// deletes are deliberately out of scope for this sprint.)
     /// </summary>
+    // ─── Keeping sibling tabs current after a compile (Seam 6d) ────────────
+    //
+    // Compiling an object updates the database, but nothing used to tell the OTHER tabs showing that object,
+    // so a routine saved from the debugger (or from any editor) left a second tab sitting on the old text
+    // until the next reconnect. There is no stale cache behind this — the readers read live — it was simply a
+    // missing notification, which is what these two members supply.
+
+    // Subscribes each newly-added tab's "I compiled my object" notification. The editors already raise it
+    // (CompiledExistingObject); this is the subscriber they never had. Nothing unsubscribes on close because
+    // nothing needs to: the delegate lives on the tab's own editor, so tab and handler are collected together.
+    private void OnWorkspaceTabsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is null) return;
+        foreach (var item in e.NewItems)
+        {
+            if (item is WorkspaceTabViewModel tab) WireObjectCompiled(tab);
+        }
+    }
+
+    // The per-kind reach into the editor that raises the notification — the same shape as
+    // WorkspaceTabViewModel.SavableEditor / UnsavedWork, so the three switches stay recognisably one idea.
+    // Only the editors that actually raise it appear here; the rest are refresh TARGETS only.
+    private void WireObjectCompiled(WorkspaceTabViewModel tab)
+    {
+        switch (tab.Kind)
+        {
+            case WorkspaceTabKind.ViewDetail when tab.ViewDetail is { } view:
+                view.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+            case WorkspaceTabKind.PackageDetail when tab.PackageDetail is { } package:
+                package.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+            case WorkspaceTabKind.ProcedureDetail when tab.ProcedureDetail is { } proc:
+                proc.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+            case WorkspaceTabKind.TriggerDetail when tab.TriggerDetail is { } trigger:
+                trigger.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+            case WorkspaceTabKind.FunctionDetail when tab.FunctionDetail is { } func:
+                func.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+            case WorkspaceTabKind.Debugger when tab.Debugger is { } debugger:
+                // The debugger saves through the same Ddl lane as every editor and reports it the same way —
+                // it is not a special case here, just another tab that can compile its object.
+                debugger.CompiledExistingObject += () => RefreshOtherTabsForObject(tab);
+                break;
+        }
+    }
+
+    /// <summary>Reloads every OTHER tab showing the same object as <paramref name="source"/>, after that tab
+    /// compiled it. Keyed on (kind, name) exactly as <see cref="CloseTabsForObject"/> and the open/focus dedup
+    /// in <see cref="OnOpenDdlRequested"/> are, so "the tabs for this object" means one thing everywhere.
+    /// <para><b>A tab with unsaved work is left alone.</b> Refreshing reloads from the database and resets the
+    /// dirty state, so refreshing a dirty sibling would silently destroy edits the user has not saved — stale
+    /// text is a nuisance, discarded work is rule #11. That tab keeps its own edits and its own Save.</para>
+    /// <para>A debugger tab is never a refresh target: reloading it would reset the source its session was
+    /// built from (and tear down a live session), which is the Draft model's business, not this seam's.</para></summary>
+    internal void RefreshOtherTabsForObject(WorkspaceTabViewModel source)
+    {
+        foreach (var tab in TabsNeedingRefreshAfterCompile(source)) _ = tab.RefreshAsync();
+    }
+
+    /// <summary>Which tabs <see cref="RefreshOtherTabsForObject"/> reloads — the decision, separated from the
+    /// doing so it can be asserted without a database (a reload against no connection changes nothing
+    /// observable, so testing the action alone would prove nothing). See that method for why each exclusion
+    /// exists.</summary>
+    internal IReadOnlyList<WorkspaceTabViewModel> TabsNeedingRefreshAfterCompile(WorkspaceTabViewModel source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (source.ObjectKind is not { } kind || string.IsNullOrEmpty(source.ObjectName))
+        {
+            return Array.Empty<WorkspaceTabViewModel>();
+        }
+
+        var result = new List<WorkspaceTabViewModel>();
+        foreach (var tab in WorkspaceTabs)
+        {
+            if (ReferenceEquals(tab, source)) continue;
+            if (tab.Kind == WorkspaceTabKind.Debugger) continue;
+            if (tab.ObjectKind != kind || !string.Equals(tab.ObjectName, source.ObjectName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+            if (tab.UnsavedWork is not null) continue; // never overwrite work the user has not saved (#11)
+
+            result.Add(tab);
+        }
+        return result;
+    }
+
     internal void CloseTabsForObject(MetadataObjectKind kind, string name)
     {
         // Snapshot — CloseTab mutates WorkspaceTabs.
@@ -5432,6 +5687,24 @@ public partial class MainWindowViewModel : ViewModelBase
         ulong hash = offset;
         foreach (var ch in (sql ?? string.Empty).Trim()) { hash ^= ch; hash *= prime; }
         return hash.ToString("x16", CultureInfo.InvariantCulture);
+    }
+
+    // F5 is an APPLICATION-level "Go" shortcut whose meaning depends on the active workspace tab — like modern
+    // IDEs — NOT a synonym for Execute Query. This is the ONE window-level interpreter of F5 (bound in
+    // MainWindow.axaml); the debugger participates HERE instead of fighting the global binding with a local,
+    // focus-dependent key handler (which only won while focus happened to sit inside the debugger tab). Kept out
+    // of ExecuteQueryCommand so that command's meaning stays unambiguous (execute the SQL editor). Routing:
+    //   • Debugger tab active → the debugger decides (launch panel = Start Debugging, paused session = Continue).
+    //   • anything else       → Execute Query (the SQL editor), exactly as F5 always behaved for other tabs.
+    // Scope is F5 only; Shift+F5 / Ctrl+Shift+F5 stay on the query commands (a deliberate later follow-up).
+    [RelayCommand]
+    private Task GoAsync()
+    {
+        if (ActiveDebugger is { } debugger)
+        {
+            return debugger.RequestGoAsync();
+        }
+        return ExecuteQueryAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanExecute))]
@@ -5769,26 +6042,72 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// User-initiated tab close. Confirms (Discard / Cancel) before discarding ANY
-    /// tab that reports unsaved work — a New Table form, an uncompiled new view /
-    /// procedure, a modified-but-not-compiled source, or a table designer with
-    /// queued structural changes. Clean tabs (and DDL / read-only tabs, reopenable
-    /// from the tree) close silently. Programmatic closes (post-compile,
+    /// User-initiated tab close. Prompts before discarding ANY tab that reports unsaved work — a New Table
+    /// form, an uncompiled new view / procedure, a modified-but-not-compiled source, a table designer with
+    /// queued structural changes, or (since Seam 5c) an edited routine in a debugger tab. Clean tabs (and
+    /// DDL / read-only tabs, reopenable from the tree) close silently. Programmatic closes (post-compile,
     /// delete-table cleanup) call <see cref="CloseTab"/> directly and never prompt.
+    /// <para>
+    /// The prompt is three-way — <b>Save / Discard / Cancel</b> — whenever the tab has somewhere to save,
+    /// matching disconnect and app-close instead of forcing "discard or stay". Save routes through the
+    /// editor's own <see cref="ISavableObjectEditor.SaveAsync"/> (the one save path); a failed save keeps
+    /// the tab open and selected, with the error already on its own surface. A tab that reports unsaved
+    /// work but cannot save it still gets the honest Discard / Cancel pair.
+    /// </para>
     /// </summary>
     public async Task RequestCloseTabAsync(WorkspaceTabViewModel tab)
     {
         if (tab.UnsavedWork is { } work)
         {
-            var confirmed = await RequestConfirmAsync(new ConfirmRequest
+            var message = string.Format(
+                CultureInfo.CurrentCulture, UiStrings.CloseTabUnsavedConfirmFormat, work.Label);
+
+            if (tab.SavableEditor is { } editor)
             {
-                Title = UiStrings.CloseTabUnsavedConfirmTitle,
-                Message = string.Format(CultureInfo.CurrentCulture, UiStrings.CloseTabUnsavedConfirmFormat, work.Label),
-                ConfirmLabel = UiStrings.CloseTabUnsavedConfirmYes,
-                CancelLabel = UiStrings.DialogCancel,
-                IsDestructive = true,
-            }).ConfigureAwait(true);
-            if (!confirmed) return;
+                var id = await RequestChoiceAsync(new ChoiceRequest
+                {
+                    Title = UiStrings.CloseTabUnsavedConfirmTitle,
+                    Message = message,
+                    Options = new[]
+                    {
+                        new ChoiceOption { Id = "save", Label = UiStrings.CloseTabUnsavedSave, IsDefault = true },
+                        new ChoiceOption
+                        {
+                            Id = "discard", Label = UiStrings.CloseTabUnsavedConfirmYes, IsDestructive = true,
+                        },
+                        new ChoiceOption { Id = "cancel", Label = UiStrings.DialogCancel, IsCancel = true },
+                    },
+                }).ConfigureAwait(true);
+
+                if (id is null or "cancel") return;
+                if (id == "save")
+                {
+                    var result = await editor.SaveAsync().ConfigureAwait(true);
+
+                    // Proceed only if the work is genuinely GONE, not merely if the save reported success.
+                    // This is the one place where trusting a wrong "success" would silently destroy the
+                    // user's code, so it is verified against the same UnsavedWork the prompt was built from
+                    // rather than taken on faith from eleven separate editor adapters.
+                    if (!result.Success || tab.UnsavedWork is not null)
+                    {
+                        // Stay open on the offending tab — the editor has already surfaced the reason.
+                        SelectTab(tab);
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                var confirmed = await RequestConfirmAsync(new ConfirmRequest
+                {
+                    Title = UiStrings.CloseTabUnsavedConfirmTitle,
+                    Message = message,
+                    ConfirmLabel = UiStrings.CloseTabUnsavedConfirmYes,
+                    CancelLabel = UiStrings.DialogCancel,
+                    IsDestructive = true,
+                }).ConfigureAwait(true);
+                if (!confirmed) return;
+            }
         }
         CloseTab(tab);
     }

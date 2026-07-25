@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:app="using:EmberTern.App"
+        xmlns:controls="using:EmberTern.App.Controls"
         xmlns:vm="using:EmberTern.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -107,11 +108,11 @@
       </ItemsControl>
     </ScrollViewer>
 
-    <!-- Validation line (invalid time blocks Execute) -->
-    <TextBlock Grid.Row="4" Margin="16,0,16,8"
-               Text="{x:Static app:UiStrings.ProcedureExecuteDialogTimeInvalid}"
-               Foreground="{DynamicResource ErrorBrush}" FontSize="11"
-               IsVisible="{Binding HasValidationError}" />
+    <!-- Validation line (invalid time blocks Execute) — the IDE's ONE message surface (UX Polish Seam 4). -->
+    <controls:MessageBanner Grid.Row="4" Margin="16,0,16,8"
+                            Severity="Error"
+                            Message="{x:Static app:UiStrings.ProcedureExecuteDialogTimeInvalid}"
+                            IsVisible="{Binding HasValidationError}" />
 
     <Border Grid.Row="5"
             Background="{DynamicResource PanelBrush}"

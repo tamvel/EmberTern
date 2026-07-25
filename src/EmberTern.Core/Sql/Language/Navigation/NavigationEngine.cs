@@ -65,11 +65,13 @@ public static class NavigationEngine
         var symbol = model.ReferenceAt(offset)?.Symbol;
         if (symbol is null || !IsRenameableLocal(symbol)) return null;
 
-        var spans = new List<TextSpan>();
-        foreach (var r in model.ReferencesTo(symbol)) spans.Add(r.Span);
-        if (spans.Count == 0) return null;
+        // Each occurrence carries the text the binder saw there, so the App can state per-occurrence what
+        // it expects to replace — the input to the one shared drift check (editor-quick-fixes.md §2.2).
+        var occurrences = new List<RenameOccurrence>();
+        foreach (var r in model.ReferencesTo(symbol)) occurrences.Add(new RenameOccurrence(r.Span, r.Text));
+        if (occurrences.Count == 0) return null;
 
-        return new NavigationRename(symbol, symbol.Name, spans);
+        return new NavigationRename(symbol, symbol.Name, occurrences);
     }
 
     // The only symbols a rename may touch: names that live entirely in the script. A table

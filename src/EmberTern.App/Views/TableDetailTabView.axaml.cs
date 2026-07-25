@@ -20,6 +20,7 @@ using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.Converters;
+using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
@@ -58,6 +59,7 @@ public partial class TableDetailTabView : UserControl
     {
         InitializeComponent();
         _ddlEditor = this.FindControl<TextEditor>("TableDetailDdlEditor");
+        if (_ddlEditor is not null) SqlEditorBehavior.AttachReadOnlyHighlighting(_ddlEditor);
         _dataPreviewGrid = this.FindControl<DataGrid>("DataPreviewGrid");
         _fieldsGrid = this.FindControl<DataGrid>("FieldsGrid");
         if (_fieldsGrid is not null)

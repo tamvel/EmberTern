@@ -89,11 +89,54 @@ public class HoverInfoEngineTests
     private static object? QuickInfoEngine_GetQuickInfo(string sql, int offset, ISqlMetadataProvider meta)
         => EmberTern.Core.Sql.Language.QuickInfo.QuickInfoEngine.GetQuickInfo(SemanticModel.Build(sql, meta), offset);
 
+    // ══ D7 — data tips (a DebugValue section fed by a lookup) ════════════════════════════════
+
+    private const string DebugSql = "execute block as declare v integer; begin v = :v; end";
+
+    [Fact]
+    public void DebugValue_DataTip_ShownForVariable_WhenLookupProvided()
+    {
+        int offset = DebugSql.IndexOf(":v", StringComparison.Ordinal) + 1; // the V reference (colon form)
+        var model = SemanticModel.Build(DebugSql);
+        Func<string, DebugHoverValue?> lookup = name =>
+            string.Equals(name, "V", StringComparison.OrdinalIgnoreCase) ? new DebugHoverValue("V", "42", false) : null;
+
+        var hover = HoverInfoEngine.GetHover(model, DiagnosticsEngine.Analyze(model), offset, lookup);
+
+        Assert.NotNull(hover);
+        Assert.NotNull(hover!.DebugValue);
+        Assert.Equal("42", hover.DebugValue!.ValueText);
+    }
+
+    [Fact]
+    public void DebugValue_Absent_WithoutLookup()
+    {
+        int offset = DebugSql.IndexOf(":v", StringComparison.Ordinal) + 1;
+        var model = SemanticModel.Build(DebugSql);
+
+        var hover = HoverInfoEngine.GetHover(model, DiagnosticsEngine.Analyze(model), offset);
+
+        Assert.Null(hover?.DebugValue); // hover itself may be null — either way, no data tip
+    }
+
+    [Fact]
+    public void DebugValue_NotShown_ForNonVariableOffset()
+    {
+        // A type keyword, not a variable/parameter occurrence — the gate is the reference role, not the lookup.
+        int offset = DebugSql.IndexOf("integer", StringComparison.Ordinal);
+        var model = SemanticModel.Build(DebugSql);
+        Func<string, DebugHoverValue?> always = _ => new DebugHoverValue("?", "should-not-appear", false);
+
+        var hover = HoverInfoEngine.GetHover(model, DiagnosticsEngine.Analyze(model), offset, always);
+
+        Assert.Null(hover?.DebugValue);
+    }
+
     /// <summary>An undeclared local in a routine body — a local-scope diagnostic, no metadata needed.</summary>
     [Fact]
     public void UnresolvedVariable_HoverExplainsTheSquiggle()
     {
-        const string sql = "execute block as begin a = :undeclared_one; end";
+        const string sql = "create procedure loc returns (a integer) as begin a = :undeclared_one; end";
         int offset = sql.IndexOf("undeclared_one", StringComparison.Ordinal) + 1;
 
         var hover = Hover(sql, offset);
@@ -183,7 +226,7 @@ public class HoverInfoEngineTests
     [Fact]
     public void DiagnosticHitTest_IsInclusiveAtSpanEnd()
     {
-        const string sql = "execute block as begin a = :undeclared_one; end";
+        const string sql = "create procedure loc returns (a integer) as begin a = :undeclared_one; end";
         var model = SemanticModel.Build(sql);
         var diagnostics = DiagnosticsEngine.Analyze(model);
         var d = Assert.Single(diagnostics);

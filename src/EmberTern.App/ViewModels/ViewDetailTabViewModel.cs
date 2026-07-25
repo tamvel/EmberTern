@@ -694,11 +694,22 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
 
     public async Task ExecuteCompileAsync(CancellationToken cancellationToken = default)
     {
-        if (_ddlExecutor is null) return;
+        // Both pre-condition refusals REPORT (Seam 6b) — see the contract on ISavableObjectEditor:
+        // a compile that never ran must not leave ErrorMessage null, or SaveAsync claims success
+        // having written nothing and the WorkGuard discards the view's uncompiled source.
+        if (_ddlExecutor is null)
+        {
+            ErrorMessage = UiStrings.NoConnectionMessage;
+            return;
+        }
         // Easy mode reassembles the statement from the structured model; Source mode
         // compiles the raw editor text.
         var sql = BuildCompileSql();
-        if (string.IsNullOrWhiteSpace(sql)) return;
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            ErrorMessage = UiStrings.EditorNothingToCompile;
+            return;
+        }
 
         ErrorMessage = null;
         try

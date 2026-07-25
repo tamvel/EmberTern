@@ -645,10 +645,9 @@
       </TabItem>
     </TabControl>
 
-    <!-- Error banner -->
-    <Border Grid.Row="1" IsVisible="{Binding HasError}" Background="{DynamicResource PanelBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="10,6">
-      <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" />
-    </Border>
+    <!-- Error banner — the IDE's ONE message surface (UX Polish Seam 4). -->
+    <controls:MessageBanner Grid.Row="1" Classes="docked"
+                            IsVisible="{Binding HasError}"
+                            Severity="Error" Message="{Binding ErrorMessage}" />
   </Grid>
 </UserControl>

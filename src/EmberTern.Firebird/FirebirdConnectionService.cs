@@ -12,12 +12,13 @@ namespace EmberTern.Firebird;
 /// <summary>
 /// Which physical attachment a command runs on. Three connections to the same database:
 /// <see cref="Data"/> (#1) carries user SQL/DML (SQL editor F5, table-data edits, Execute
-/// Procedure) and the data working transaction; <see cref="Metadata"/> (#2) carries metadata
-/// browsing and the metadata working transaction; <see cref="Ddl"/> (#3) carries
-/// Compile/structure DDL and NOTHING else — it never holds a working transaction, so DDL can
-/// always begin its own autonomous transaction without waiting on the user to settle theirs.
-/// Separate attachments are required because the managed FirebirdClient forbids two
-/// transactions on one FbConnection (gotcha #89).
+/// Procedure) and the data working transaction; <see cref="Metadata"/> (#2) carries read-only
+/// catalog browsing and owns NO transaction — reads use an implicit per-command transaction
+/// (see <see cref="MetadataLane"/>), so they never entangle with, block, or are blocked by the
+/// user's working transaction; <see cref="Ddl"/> (#3) carries Compile/structure DDL and NOTHING
+/// else — it never holds a working transaction, so DDL can always begin its own autonomous
+/// transaction without waiting on the user to settle theirs. Separate attachments are required
+/// because the managed FirebirdClient forbids two transactions on one FbConnection (gotcha #89).
 /// </summary>
 public enum ConnectionRole
 {
@@ -55,6 +56,11 @@ public sealed class FirebirdConnectionService : IDisposable
     private readonly SemaphoreSlim _commandLock = new(1, 1);
     private readonly SemaphoreSlim _metadataCommandLock = new(1, 1);
     private readonly SemaphoreSlim _ddlCommandLock = new(1, 1);
+
+    // Live debug sessions (Stage X / D2, spec §4.1). Each owns its OWN attachment + transaction — decision
+    // 5: a session is not a lane. Tracked here only so disconnect/reconnect tears them down deterministically
+    // (the attachments must not outlive the profile's connection). A session deregisters itself on dispose.
+    private readonly List<DebugSessionConnection> _debugSessions = new();
 
     public bool IsConnected => _activeConnection is { State: System.Data.ConnectionState.Open };
 
@@ -139,6 +145,18 @@ public sealed class FirebirdConnectionService : IDisposable
             throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
         }
 
+        // FB3+ precondition gate (decision 8 / spec §1.3) — refuse a pre-FB3 server the moment the FIRST
+        // attachment is open, BEFORE opening the Metadata/Ddl lanes (same server ⇒ same version, so gating
+        // the first covers all three, and we never open extra attachments to an unsupported server). Not
+        // error interpretation: a check on a fact we know, on an already-open connection — MapErrorMessage
+        // stays untouched. Close cleanly so no half-open attachment is left behind.
+        if (!IsSupportedServerVersion(connection.ServerVersion))
+        {
+            var serverVersion = connection.ServerVersion;
+            await CloseAndDisposeAsync(connection).ConfigureAwait(false);
+            throw new ConnectionFailedException(UnsupportedServerMessage(serverVersion));
+        }
+
         _activeConnection = connection;
         _activeProfile = profile;
 
@@ -177,12 +195,77 @@ public sealed class FirebirdConnectionService : IDisposable
         ActiveConnectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public async Task DisconnectAsync()
+    /// <summary>
+    /// Opens a dedicated attachment for a new debug session and returns its
+    /// <see cref="DebugSessionConnection"/> (spec §4.1) — its own <see cref="FbConnection"/> and its own
+    /// transaction (begun with the explicit debug TPB, §4.2), independent of the Data/Metadata/Ddl lanes.
+    /// The session is registered so <see cref="DisconnectAsync"/>/<see cref="Dispose"/> tears it down; it
+    /// deregisters itself when disposed. Each session is another attachment — a server connection-limit
+    /// refusal surfaces as a <see cref="ConnectionFailedException"/> (the thinking behind gotcha #89), never
+    /// a broken app.
+    /// </summary>
+    public async Task<DebugSessionConnection> CreateDebugSessionAsync(
+        DebugIsolation isolation, CancellationToken cancellationToken = default)
     {
-        if (_activeConnection is null && _metadataConnection is null && _ddlConnection is null)
+        if (_activeProfile is null || !IsConnected)
+        {
+            throw new InvalidOperationException("No active Firebird connection.");
+        }
+
+        var profile = _activeProfile;
+        var connectionString = BuildConnectionString(profile);
+        var connection = new FbConnection(connectionString);
+        try
+        {
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+            throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
+        }
+
+        var session = new DebugSessionConnection(connection, isolation, this);
+        try
+        {
+            await session.BeginAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await session.DisposeAsync().ConfigureAwait(false); // closes the attachment, no half-open state
+            throw;
+        }
+        _debugSessions.Add(session);
+        return session;
+    }
+
+    // A debug session deregisters itself here on dispose (called from DebugSessionConnection.DisposeAsync).
+    internal void RemoveDebugSession(DebugSessionConnection session) => _debugSessions.Remove(session);
+
+    // Tears down every live debug session — their attachments must not outlive the profile's connection.
+    // Snapshots first because each DisposeAsync deregisters itself (mutating _debugSessions).
+    private async Task TearDownDebugSessionsAsync()
+    {
+        if (_debugSessions.Count == 0)
         {
             return;
         }
+        foreach (var session in _debugSessions.ToArray())
+        {
+            try { await session.DisposeAsync().ConfigureAwait(false); } catch { /* best-effort teardown */ }
+        }
+        _debugSessions.Clear();
+    }
+
+    public async Task DisconnectAsync()
+    {
+        if (_activeConnection is null && _metadataConnection is null && _ddlConnection is null
+            && _debugSessions.Count == 0)
+        {
+            return;
+        }
+
+        await TearDownDebugSessionsAsync().ConfigureAwait(false);
 
         await CloseAndDisposeAsync(_ddlConnection).ConfigureAwait(false);
         _ddlConnection = null;
@@ -225,11 +308,21 @@ public sealed class FirebirdConnectionService : IDisposable
         try
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            await connection.CloseAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
+        }
+
+        // Same FB3+ precondition as ConnectAsync (spec §1.3) — a Test against a pre-FB3 server refuses
+        // with the same legible message rather than reporting a bare "success". The `await using` disposes
+        // the connection either way, so nothing is left half-open.
+        var supported = IsSupportedServerVersion(connection.ServerVersion);
+        var serverVersion = connection.ServerVersion;
+        await connection.CloseAsync().ConfigureAwait(false);
+        if (!supported)
+        {
+            throw new ConnectionFailedException(UnsupportedServerMessage(serverVersion));
         }
     }
 
@@ -462,6 +555,15 @@ public sealed class FirebirdConnectionService : IDisposable
 
     public void Dispose()
     {
+        // Tear down live debug sessions first — their attachments must not outlive the service. Block
+        // best-effort at shutdown; DebugSessionConnection.DisposeAsync uses ConfigureAwait(false) throughout,
+        // so GetResult cannot deadlock on a captured context. Snapshot: each dispose deregisters itself.
+        foreach (var session in _debugSessions.ToArray())
+        {
+            try { session.DisposeAsync().AsTask().GetAwaiter().GetResult(); } catch { /* best-effort */ }
+        }
+        _debugSessions.Clear();
+
         try
         {
             _ddlConnection?.Close();
@@ -556,6 +658,30 @@ public sealed class FirebirdConnectionService : IDisposable
         {
             return "<could not parse>";
         }
+    }
+
+    // FB3+ precondition (decision 8 / spec §1.3). EmberTern requires Firebird 3.0 or later (the debugger's
+    // sub-routines/packages are FB3+, and the managed driver is Srp-only so FB2.5 is already unreachable);
+    // this makes a pre-FB3 server a legible refusal instead of a confusing auth failure. Reuses the app's
+    // one version parser (FirebirdDdlReader.ParseServerMajor) rather than adding a second version-parsing
+    // site. Pure over the version string, so it is unit-testable without a live server.
+    //
+    // Fail-OPEN on an unparseable version (ParseServerMajor → 0): a successfully-opened connection is FB3+
+    // by construction (the driver only speaks Srp, introduced in FB3), so a version string we cannot read
+    // must not produce a false rejection — reject ONLY a positively-identified pre-FB3 major (1 or 2).
+    internal static bool IsSupportedServerVersion(string? serverVersion)
+    {
+        var major = FirebirdDdlReader.ParseServerMajor(serverVersion);
+        return major == 0 || major >= 3;
+    }
+
+    // The refusal message for a pre-FB3 server — states the fact and names the required version. Built in
+    // this (Firebird) layer beside MapErrorMessage, the established home for connection-failure messages;
+    // EmberTern.App.UiStrings is unreachable here (App references Firebird, never the reverse).
+    internal static string UnsupportedServerMessage(string? serverVersion)
+    {
+        var v = string.IsNullOrWhiteSpace(serverVersion) ? "unknown" : serverVersion.Trim();
+        return $"Unsupported Firebird server ({v}). EmberTern requires Firebird 3.0 or later.";
     }
 
     internal static string MapErrorMessage(Exception ex, ConnectionProfile profile)

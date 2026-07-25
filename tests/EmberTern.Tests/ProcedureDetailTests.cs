@@ -127,21 +127,26 @@ public class ProcedureDetailTests
     }
 
     [Fact]
-    public async Task ExecuteCompile_NoExecutor_IsNoOp()
+    public async Task ExecuteCompile_NoExecutor_ReportsNoConnection()
     {
+        // Seam 6b — was "…_IsNoOp" and asserted ErrorMessage stayed NULL, which is precisely the defect:
+        // SaveAsync reads "no error" as success, so a silent exit made the save-and-close WorkGuard
+        // believe the code had been written when nothing ran.
         var vm = new ProcedureDetailTabViewModel("SP_X") { SourceText = "CREATE OR ALTER PROCEDURE SP_X AS BEGIN END" };
         await vm.ExecuteCompileAsync();
-        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(UiStrings.NoConnectionMessage, vm.ErrorMessage);
     }
 
     [Fact]
-    public async Task ExecuteCompile_EmptySource_IsNoOp()
+    public async Task ExecuteCompile_EmptySource_ReportsNothingToCompile()
     {
+        // The second silent exit (executor wired, buffer emptied). Same reasoning as above — and here a
+        // wrong "success" would discard source the user still has on screen.
         using var harness = new Harness();
         var vm = harness.Main.CreateProcedureDetail(new MetadataObject("SP_X", MetadataObjectKind.Procedure));
         vm.SourceText = "   ";
         await vm.ExecuteCompileAsync();
-        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(UiStrings.EditorNothingToCompile, vm.ErrorMessage);
     }
 
     [Fact]

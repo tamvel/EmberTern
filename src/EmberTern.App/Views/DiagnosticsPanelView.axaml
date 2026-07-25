@@ -37,6 +37,13 @@
         <DataTemplate DataType="vm:DiagnosticRowViewModel">
           <!-- severity icon · code · message · location -->
           <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,1">
+            <!-- Q5: the panel as a third trigger for the code-action menu. It jumps to the finding and
+                 opens the SAME menu Ctrl+. and the bulb open — no separate way to obtain or run a fix. -->
+            <Grid.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="{x:Static app:UiStrings.CodeActionsMenuItem}" Click="OnQuickFixClick" />
+              </ContextMenu>
+            </Grid.ContextMenu>
 
             <controls:SvgIcon Grid.Column="0"
                               Data="{Binding SeverityGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"

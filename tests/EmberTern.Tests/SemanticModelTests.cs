@@ -101,6 +101,71 @@ public class SemanticModelTests
         Assert.Equal(SymbolKind.Procedure, procSym.Kind);
     }
 
+    // ══ Domain used as a data type resolves as a schema object (D15.1 domain Feature seam) ═══════════
+    //
+    // A Firebird domain in a type position (DECLARE VARIABLE / parameter / RETURNS column / scalar RETURNS)
+    // must be emitted as a Domain schema-object reference — so it colours, hovers and Ctrl+Click-navigates
+    // like any object — while a BUILTIN type (a catalogued keyword) must NOT produce a reference. Emission
+    // is gated on metadata: an unknown name produces nothing (no false reference, no false diagnostic).
+    // Built strict (whole CREATE stays one bound routine, gotcha #238), the editor's semantic path.
+
+    private static SemanticModel BuildStrict(string sql, ISqlMetadataProvider meta)
+        => SemanticModel.Build(SqlParser.Parse(sql).Root, meta);
+
+    [Fact]
+    public void DomainAsType_InDeclareVariable_ResolvesAsDomainObject()
+    {
+        var meta = new FakeMetadata().Object("T_STRING500", SymbolKind.Domain);
+        const string sql = "create procedure p as declare variable v_text t_string500; begin end";
+        var model = BuildStrict(sql, meta);
+
+        var r = RefAt(model, sql, "t_string500");
+        Assert.NotNull(r);
+        var sym = Assert.IsType<SchemaObjectSymbol>(r!.Symbol);
+        Assert.Equal(SymbolKind.Domain, sym.Kind);
+    }
+
+    [Fact]
+    public void DomainAsType_InParameterAndReturns_ResolvesAsDomainObject()
+    {
+        var meta = new FakeMetadata()
+            .Object("T_ID", SymbolKind.Domain)
+            .Object("T_NOTE", SymbolKind.Domain);
+        const string sql = "create procedure p (p_id t_id) returns (r_note t_note) as begin end";
+        var model = BuildStrict(sql, meta);
+
+        var pin = RefAt(model, sql, "t_id");
+        Assert.Equal(SymbolKind.Domain, Assert.IsType<SchemaObjectSymbol>(pin!.Symbol).Kind);
+
+        var rout = RefAt(model, sql, "t_note");
+        Assert.Equal(SymbolKind.Domain, Assert.IsType<SchemaObjectSymbol>(rout!.Symbol).Kind);
+    }
+
+    [Fact]
+    public void BuiltinType_InDeclaration_ProducesNoObjectReference()
+    {
+        // INTEGER is a catalogued keyword (coloured by the XSHD lexical layer), never a schema object —
+        // the binder must not emit a reference for it, and the default expression's function call must
+        // not be mistaken for a domain.
+        var meta = new FakeMetadata().Object("SOME_FUNC", SymbolKind.Function);
+        const string sql = "create procedure p as declare variable v_n integer; begin end";
+        var model = BuildStrict(sql, meta);
+
+        Assert.Null(RefAt(model, sql, "integer"));
+    }
+
+    [Fact]
+    public void UnknownDomainName_InDeclaration_ProducesNoReference()
+    {
+        // Not in metadata (typo, or catalog not warmed) → silence, never a guessed reference (§0 / Stage 7
+        // "prefer silence over false positives").
+        var meta = new FakeMetadata();
+        const string sql = "create procedure p as declare variable v_x t_unknown_dom; begin end";
+        var model = BuildStrict(sql, meta);
+
+        Assert.Null(RefAt(model, sql, "t_unknown_dom"));
+    }
+
     // INSERT … SELECT must NOT be split at its SELECT source (a false boundary would break the INSERT).
     [Fact]
     public void InsertSelect_WithoutSemicolon_StaysOneStatement()
@@ -500,6 +565,60 @@ public class SemanticModelTests
         Assert.Contains(scope.Symbols, s => s is CursorSymbol { Name: "CUR" });
     }
 
+    // ── Stage X / D9 seam (a): a local DECLARE PROCEDURE/FUNCTION gets its own nested scope ──────
+
+    // A local sub-routine introduces the first genuine nested scope in a PSQL body: its params + RETURNS
+    // outputs + local variables live in a CHILD of the declaring scope, and do NOT leak out.
+    [Fact]
+    public void LocalRoutine_GetsItsOwnNestedScope_WithParamsAndLocals_ThatDoNotLeakOut()
+    {
+        const string sql =
+            "create procedure p (n integer) returns (r integer) as\n" +
+            "declare procedure sp (a integer) returns (o integer) as\n" +
+            "declare variable tmp integer;\n" +
+            "begin\n" +
+            "  tmp = a * 2;\n" +
+            "  o = tmp;\n" +
+            "end\n" +
+            "begin\n" +
+            "  execute procedure sp(n) returning_values r;\n" +
+            "end";
+        var m = Build(sql);
+
+        var routineScopes = m.RootScope.DescendantsAndSelf().Where(s => s.Kind == ScopeKind.RoutineBody).ToList();
+        Assert.Equal(2, routineScopes.Count); // the outer routine + the local sub-routine
+
+        var subScope = routineScopes.Single(s => s.Symbols.Any(sym => sym is ParameterSymbol { Name: "A" }));
+        Assert.Contains(subScope.Symbols, s => s is ParameterSymbol { Name: "A", Direction: ParameterDirection.Input });
+        Assert.Contains(subScope.Symbols, s => s is ParameterSymbol { Name: "O", Direction: ParameterDirection.Output });
+        Assert.Contains(subScope.Symbols, s => s is VariableSymbol { Name: "TMP" });
+
+        // The outer routine's scope does not own the sub-routine's params/locals — they don't leak out.
+        var outerScope = routineScopes.Single(s => s.Symbols.Any(sym => sym is ParameterSymbol { Name: "N" }));
+        Assert.DoesNotContain(outerScope.Symbols, s => s is ParameterSymbol { Name: "A" });
+        Assert.DoesNotContain(outerScope.Symbols, s => s is VariableSymbol { Name: "TMP" });
+    }
+
+    // A reference inside a local sub-routine's body resolves to the sub-routine's OWN parameter.
+    [Fact]
+    public void LocalRoutine_BodyReference_ResolvesToItsOwnParameter()
+    {
+        const string sql =
+            "create procedure p (n integer) returns (r integer) as\n" +
+            "declare procedure sp (a integer) returns (o integer) as\n" +
+            "begin\n" +
+            "  o = a * 2;\n" +
+            "end\n" +
+            "begin\n" +
+            "  r = n;\n" +
+            "end";
+        var m = Build(sql);
+
+        var aRef = RefAt(m, sql, "a * 2")!;
+        Assert.Equal(ReferenceRole.Parameter, aRef.Role);
+        Assert.Equal("A", aRef.Symbol!.Name);
+    }
+
     [Fact]
     public void CreateView_BindsItsQuery_AndDeclaresTheView()
     {
@@ -731,5 +850,65 @@ public class SemanticModelTests
         var schemaRefs = m.References.Where(r => r.Span.Start == start && r.Role == ReferenceRole.SchemaObject).ToList();
         Assert.Single(schemaRefs);
         Assert.Equal(SymbolKind.Procedure, Assert.IsType<SchemaObjectSymbol>(schemaRefs[0].Symbol).Kind);
+    }
+
+    // ── Stage X / P1: WHEN … DO exception handlers ─────────────────────────────────────────────
+
+    [Fact]
+    public void WhenExceptionHandler_ReferencesTheExceptionByName()
+    {
+        // A WHEN EXCEPTION <name> handler condition references the user exception as a schema object,
+        // resolved when the catalog knows it — the binder consumes the new WhenHandler node.
+        var meta = new FakeMetadata().Object("MY_EXC", SymbolKind.Exception);
+        const string sql = "create procedure p as begin x = 1; when exception my_exc do x = 2; end";
+        var m = Build(sql, meta);
+        var r = RefAt(m, sql, "my_exc");
+        Assert.NotNull(r);
+        Assert.Equal(ReferenceRole.SchemaObject, r!.Role);
+        Assert.True(r.IsResolved);
+        Assert.Equal(SymbolKind.Exception, r.Symbol!.Kind);
+    }
+
+    [Fact]
+    public void WhenExceptionHandler_UnknownException_IsAnUnresolvedOccurrence()
+    {
+        // Error-tolerant: an unknown exception name is still recorded as a SchemaObject occurrence, just
+        // unresolved (never guessed, never thrown).
+        const string sql = "create procedure p as begin x = 1; when exception no_such_exc do x = 2; end";
+        var m = Build(sql); // no metadata
+        var r = RefAt(m, sql, "no_such_exc");
+        Assert.NotNull(r);
+        Assert.Equal(ReferenceRole.SchemaObject, r!.Role);
+        Assert.False(r.IsResolved);
+    }
+
+    [Fact]
+    public void MultiConditionWhen_ReferencesEachExceptionName()
+    {
+        // Every EXCEPTION condition of a multi-condition WHEN is referenced (GDSCODE operands are not
+        // schema objects → no reference).
+        var meta = new FakeMetadata().Object("E1", SymbolKind.Exception).Object("E2", SymbolKind.Exception);
+        const string sql = "create procedure p as begin x = 1; when exception e1, gdscode grant_obj_notfound, exception e2 do x = 2; end";
+        var m = Build(sql, meta);
+        var r1 = RefAt(m, sql, "e1");
+        var r2 = RefAt(m, sql, "e2");
+        Assert.True(r1 is { Role: ReferenceRole.SchemaObject, IsResolved: true });
+        Assert.True(r2 is { Role: ReferenceRole.SchemaObject, IsResolved: true });
+        // The GDSCODE symbolic operand is NOT a schema reference.
+        Assert.Null(RefAt(m, sql, "grant_obj_notfound"));
+    }
+
+    [Fact]
+    public void HandlerBody_BindsAgainstEnclosingScope()
+    {
+        // A local variable used inside a handler body resolves to the routine's DECLARE (the handler body
+        // binds in the enclosing RoutineBody scope).
+        const string sql = "create procedure p as declare variable v integer; begin x = 1; when any do v = 2; end";
+        var m = Build(sql);
+        // The 'v' inside the handler body resolves to the declared variable.
+        var bodyRef = RefAt(m, sql, "v = 2");
+        Assert.NotNull(bodyRef);
+        Assert.Equal(ReferenceRole.Variable, bodyRef!.Role);
+        Assert.True(bodyRef.IsResolved);
     }
 }

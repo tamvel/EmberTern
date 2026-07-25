@@ -93,6 +93,62 @@ public class PsqlAstTests
         AssertSpansMapToSource(sql, body);
     }
 
+    // ── D6a: FOR SELECT INTO targets + AS CURSOR name (additive AST overlay) ──────────────────────────
+
+    private static ForSelectStatement For(string sql)
+        => Assert.IsType<ForSelectStatement>(Body(sql).Statements.Single());
+
+    [Fact]
+    public void ForSelect_IntoTargets_ColonForm_ExtractedAndFolded()
+    {
+        var loop = For("begin for select id, val from t where owner = :p into :a, :b do suspend; end");
+        Assert.Equal(new[] { "A", "B" }, loop.IntoTargets);
+        Assert.Null(loop.CursorName);
+    }
+
+    [Fact]
+    public void ForSelect_IntoTargets_BareForm_ExtractedAndFolded()
+    {
+        var loop = For("begin for select id, val from t into a, b do suspend; end");
+        Assert.Equal(new[] { "A", "B" }, loop.IntoTargets);
+    }
+
+    [Fact]
+    public void ForSelect_AsCursor_NameExtracted_NoInto()
+    {
+        var loop = For("begin for select id from t as cursor c do suspend; end");
+        Assert.Empty(loop.IntoTargets);
+        Assert.Equal("C", loop.CursorName);
+    }
+
+    [Fact]
+    public void ForSelect_IntoAndCursor_BothExtracted_EitherOrder()
+    {
+        var a = For("begin for select id from t into :x as cursor c do suspend; end");
+        Assert.Equal(new[] { "X" }, a.IntoTargets);
+        Assert.Equal("C", a.CursorName);
+
+        var b = For("begin for select id from t as cursor c into :x do suspend; end");
+        Assert.Equal(new[] { "X" }, b.IntoTargets);
+        Assert.Equal("C", b.CursorName);
+    }
+
+    [Fact]
+    public void ForSelect_SubqueryInWhere_IntoNotLeakedFromSubquery()
+    {
+        // A subquery's own (would-be) INTO/columns must not leak: the depth-0 INTO is the loop's.
+        var loop = For("begin for select id from t where id in (select x from u) into :a do suspend; end");
+        Assert.Equal(new[] { "A" }, loop.IntoTargets);
+    }
+
+    [Fact]
+    public void ForSelect_NoInto_NoCursor_Empty()
+    {
+        var loop = For("begin for select id from t do suspend; end");
+        Assert.Empty(loop.IntoTargets);
+        Assert.Null(loop.CursorName);
+    }
+
     [Fact]
     public void NestedBegin_ProducesNestedBlock()
     {
@@ -134,6 +190,48 @@ public class PsqlAstTests
         Assert.IsType<SelectQuery>(insert.SourceQuery);
         // The reused nodes are debugger step points.
         Assert.All(body.Statements, s => Assert.IsAssignableFrom<IExecutableStatement>(s));
+    }
+
+    // ── Stage X / D8: EXECUTE PROCEDURE arguments + RETURNING_VALUES (additive AST overlay) ──────────
+
+    private static ExecuteProcedureStatement Call(string sql)
+        => Assert.IsType<ExecuteProcedureStatement>(Body(sql).Statements.Single());
+
+    [Fact]
+    public void ExecuteProcedure_NoArgs_NoReturning_HasEmptyLists()
+    {
+        var call = Call("begin execute procedure p; end");
+        Assert.Equal("P", call.ProcedureName);
+        Assert.Empty(call.Arguments);
+        Assert.Empty(call.ReturningTargets);
+    }
+
+    [Fact]
+    public void ExecuteProcedure_ParenthesizedArguments_AreSpans()
+    {
+        const string sql = "begin execute procedure p(:a, :b + 1); end";
+        var call = Call(sql);
+        Assert.Equal(2, call.Arguments.Count);
+        Assert.Equal(":a", sql.Substring(call.Arguments[0].Start, call.Arguments[0].Length));
+        Assert.Equal(":b + 1", sql.Substring(call.Arguments[1].Start, call.Arguments[1].Length));
+        Assert.Empty(call.ReturningTargets);
+    }
+
+    [Fact]
+    public void ExecuteProcedure_BareArguments_AndReturningValues_Folded()
+    {
+        const string sql = "begin execute procedure p :a, :b returning_values :x, :y; end";
+        var call = Call(sql);
+        Assert.Equal(new[] { ":a", ":b" }, call.Arguments.Select(a => sql.Substring(a.Start, a.Length)));
+        Assert.Equal(new[] { "X", "Y" }, call.ReturningTargets);
+    }
+
+    [Fact]
+    public void ExecuteProcedure_ParenthesizedReturningValues_NoArgs()
+    {
+        var call = Call("begin execute procedure p returning_values (:x); end");
+        Assert.Empty(call.Arguments);
+        Assert.Equal(new[] { "X" }, call.ReturningTargets);
     }
 
     [Fact]
@@ -215,5 +313,367 @@ public class PsqlAstTests
         var kinds = ddl.Body!.Statements.Select(s => s.GetType().Name).ToArray();
         Assert.Equal(new[] { nameof(IfStatement), nameof(WhileStatement) }, kinds);
         AssertSpansMapToSource(sql, ddl.Body);
+    }
+
+    // ── Stage X / P1: WHEN … DO exception handlers ─────────────────────────────────────────────
+
+    [Fact]
+    public void WhenAny_Handler_IsParsed_StatementStaysAStatement()
+    {
+        const string sql = "begin insert into t values (1); when any do exception e; end";
+        var body = Body(sql);
+        // The preceding INSERT stays a (reused DSQL) statement; the handler is peeled into Handlers.
+        Assert.IsType<InsertStatement>(body.Statements.Single());
+        var handler = Assert.Single(body.Handlers);
+        var cond = Assert.Single(handler.Conditions);
+        Assert.Equal(WhenHandlerKind.Any, cond.Kind);
+        Assert.Null(cond.ExceptionName);
+        Assert.Equal(PsqlLeafKind.Exception, Assert.IsType<PsqlLeafStatement>(handler.Body).Kind);
+        AssertSpansMapToSource(sql, body);
+    }
+
+    [Fact]
+    public void WhenExceptionName_ExposesTheName()
+    {
+        const string sql = "begin x = 1; when exception my_exc do x = 2; end";
+        var handler = Assert.Single(Body(sql).Handlers);
+        var cond = Assert.Single(handler.Conditions);
+        Assert.Equal(WhenHandlerKind.ExceptionName, cond.Kind);
+        Assert.Equal("MY_EXC", cond.ExceptionName);
+    }
+
+    [Fact]
+    public void WhenGdsCode_SqlCode_SqlState_Kinds()
+    {
+        const string sql = "begin x = 1; "
+                         + "when gdscode grant_obj_notfound do x = 2; "
+                         + "when sqlcode -803 do x = 3; "
+                         + "when sqlstate '23000' do x = 4; end";
+        var kinds = Body(sql).Handlers.Select(h => Assert.Single(h.Conditions).Kind).ToArray();
+        Assert.Equal(new[] { WhenHandlerKind.GdsCode, WhenHandlerKind.SqlCode, WhenHandlerKind.SqlState }, kinds);
+    }
+
+    [Fact]
+    public void MultiConditionWhen_KeepsEveryConditionInDeclarationOrder()
+    {
+        // Firebird allows a comma-separated condition list sharing one DO body (decision 3, refined).
+        const string sql = "begin x = 1; when gdscode a, gdscode b, exception c do begin exit; end end";
+        var handler = Assert.Single(Body(sql).Handlers);
+        Assert.Equal(
+            new[] { WhenHandlerKind.GdsCode, WhenHandlerKind.GdsCode, WhenHandlerKind.ExceptionName },
+            handler.Conditions.Select(c => c.Kind).ToArray());
+        Assert.Equal("C", handler.Conditions[2].ExceptionName);
+        Assert.IsType<BlockStatement>(handler.Body);
+        AssertSpansMapToSource(sql, Body(sql));
+    }
+
+    [Fact]
+    public void MultipleHandlerClauses_AreInDeclarationOrder()
+    {
+        const string sql = "begin x = 1; when exception a do x = 2; when any do x = 3; end";
+        var handlers = Body(sql).Handlers;
+        Assert.Equal(2, handlers.Count);
+        Assert.Equal(WhenHandlerKind.ExceptionName, Assert.Single(handlers[0].Conditions).Kind);
+        Assert.Equal(WhenHandlerKind.Any, Assert.Single(handlers[1].Conditions).Kind);
+    }
+
+    [Fact]
+    public void HandlerBodyCanBeABlock()
+    {
+        const string sql = "begin x = 1; when any do begin a = 1; b = 2; end end";
+        var body = Body(sql);
+        var handler = Assert.Single(body.Handlers);
+        var block = Assert.IsType<BlockStatement>(handler.Body);
+        Assert.Equal(2, block.Statements.Count);
+        AssertSpansMapToSource(sql, body);
+    }
+
+    [Fact]
+    public void MalformedWhen_NoDo_FallsBackToOtherLeaf_NotAHandler()
+    {
+        const string sql = "begin x = 1; when any exception e; end"; // no DO → unrecognised shape
+        var body = Body(sql);
+        Assert.Empty(body.Handlers);
+        Assert.Contains(body.Statements.OfType<PsqlLeafStatement>(), s => s.Kind == PsqlLeafKind.Other);
+        Assert.Equal(sql, SqlParser.Parse(sql).Root.ToSourceString()); // §0 — lossless
+    }
+
+    [Fact]
+    public void MalformedWhen_EmptyConditionList_IsNotAHandler()
+    {
+        // WHEN immediately followed by DO — no conditions → the whole clause falls back to a lossless
+        // leaf (never a handler). Its leaf Kind is incidental (ClassifyLeaf sees the '=' and calls it an
+        // assignment); what matters is that it is NOT peeled into Handlers and nothing is dropped.
+        const string sql = "begin x = 1; when do x = 2; end";
+        var body = Body(sql);
+        Assert.Empty(body.Handlers);
+        Assert.Contains(body.Statements, s => sql.Substring(s.Start, s.Length).StartsWith("when", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(sql, SqlParser.Parse(sql).Root.ToSourceString());
+    }
+
+    [Fact]
+    public void UnrecognisedConditionKeyword_FallsBackToOtherLeaf()
+    {
+        const string sql = "begin x = 1; when frobnicate do x = 2; end"; // not a condition form
+        var body = Body(sql);
+        Assert.Empty(body.Handlers);
+        Assert.Equal(sql, SqlParser.Parse(sql).Root.ToSourceString());
+    }
+
+    [Fact]
+    public void Handler_IsPresentInDdlRoutineBody()
+    {
+        const string sql = "create procedure p as begin insert into t values (1); when any do exception e; end";
+        var ddl = Assert.IsType<DdlStatement>(SqlParser.Parse(sql).Root.Statements[0]);
+        var handler = Assert.Single(ddl.Body!.Handlers);
+        Assert.Equal(WhenHandlerKind.Any, Assert.Single(handler.Conditions).Kind);
+        AssertSpansMapToSource(sql, ddl.Body);
+    }
+
+    // ── Stage X / D9 seam (a): local DECLARE PROCEDURE/FUNCTION sub-routines ────────────────────
+
+    private static BlockStatement RoutineBody(string sql)
+    {
+        var ddl = Assert.IsType<DdlStatement>(SqlParser.Parse(sql).Root.Statements[0]);
+        Assert.NotNull(ddl.Body);
+        return ddl.Body!;
+    }
+
+    [Fact]
+    public void LocalProcedure_IsASubroutineDeclaration_OutOfStatementsAndDeclarations()
+    {
+        const string sql = "create procedure outer_p (n integer) returns (r integer) as "
+                         + "declare procedure local_p (a integer) returns (o integer) as "
+                         + "begin o = a * 2; end "
+                         + "begin execute procedure local_p(n) returning_values r; end";
+        var body = RoutineBody(sql);
+
+        var sub = Assert.Single(body.LocalRoutines);
+        Assert.Equal(SubroutineKind.Procedure, sub.Kind);
+        Assert.Equal("LOCAL_P", sub.Name);
+        Assert.NotNull(sub.Body);
+        // Its body holds its own assignment — the header did not leak into it.
+        Assert.Equal(PsqlLeafKind.Assignment, Assert.IsType<PsqlLeafStatement>(sub.Body!.Statements.Single()).Kind);
+        // A sub-routine is neither a variable declaration nor a body statement.
+        Assert.Empty(body.Declarations);
+        Assert.IsType<ExecuteProcedureStatement>(body.Statements.Single());
+        AssertSpansMapToSource(sql, body);
+    }
+
+    [Fact]
+    public void LocalFunction_IsASubroutineDeclaration()
+    {
+        const string sql = "create procedure p as "
+                         + "declare function f (a integer) returns integer as begin return a + 1; end "
+                         + "begin end";
+        var sub = Assert.Single(RoutineBody(sql).LocalRoutines);
+        Assert.Equal(SubroutineKind.Function, sub.Kind);
+        Assert.Equal("F", sub.Name);
+        Assert.Equal(PsqlLeafKind.Return, Assert.IsType<PsqlLeafStatement>(sub.Body!.Statements.Single()).Kind);
+    }
+
+    [Fact]
+    public void LocalRoutine_WithOwnLocalVariable_HeaderNotTruncatedAtDeclareSemicolon()
+    {
+        // The sub-routine's own "declare variable tmp integer;" ends in ';' — the header boundary must be the
+        // top-level AS, not that ';', or the body (and the local variable) would be lost.
+        const string sql = "create procedure p as "
+                         + "declare procedure sp (a integer) returns (o integer) as "
+                         + "declare variable tmp integer; "
+                         + "begin tmp = a * 2; o = tmp; end "
+                         + "begin end";
+        var sub = Assert.Single(RoutineBody(sql).LocalRoutines);
+        Assert.NotNull(sub.Body);
+        var tmp = Assert.IsType<DeclareVariableStatement>(sub.Body!.Declarations.Single());
+        Assert.Equal("TMP", tmp.Name);
+        Assert.Equal(2, sub.Body.Statements.Count);
+    }
+
+    [Fact]
+    public void LocalRoutine_ForwardDeclaration_HasNoBody()
+    {
+        // A forward declaration (";", no body) enables mutual recursion; the real definition supplies the body.
+        const string sql = "create procedure p as "
+                         + "declare procedure sp (a integer) returns (o integer); "
+                         + "declare procedure sp (a integer) returns (o integer) as begin o = a; end "
+                         + "begin end";
+        var routines = RoutineBody(sql).LocalRoutines;
+        Assert.Equal(2, routines.Count);
+        Assert.Null(routines[0].Body);    // forward declaration
+        Assert.NotNull(routines[1].Body); // the real definition
+    }
+
+    [Fact]
+    public void DeclarationsAndLocalRoutines_InterleaveInSourceOrder()
+    {
+        const string sql = "create procedure p as "
+                         + "declare variable v1 integer; "
+                         + "declare procedure sp as begin end "
+                         + "declare variable v2 integer; "
+                         + "begin end";
+        var body = RoutineBody(sql);
+        Assert.Equal(2, body.Declarations.Count);
+        Assert.Single(body.LocalRoutines);
+        // Children (declarations + local routines merged) must be in non-decreasing source order.
+        int prev = int.MinValue;
+        foreach (var c in body.Children) { Assert.True(c.Start >= prev, "children out of source order"); prev = c.Start; }
+        AssertSpansMapToSource(sql, body);
+    }
+
+    [Fact]
+    public void LocalRoutine_RoundTripsByteForByte()
+    {
+        const string sql = "create procedure p as "
+                         + "declare procedure sp (a integer) returns (o integer) as begin o = a * 2; end "
+                         + "begin execute procedure sp(1) returning_values r; end";
+        Assert.Equal(sql, SqlParser.Parse(sql).Root.ToSourceString());
+    }
+
+    // ── D9 seam c (§6.4): lone-call recognition in the four value-consuming positions ────────────────────
+    // The parser recognises a call ONLY when it is the ENTIRE operand (assignment RHS, RETURN operand, whole
+    // IF/WHILE condition) — so the debugger can Step Into a local function without evaluating a surrounding
+    // expression. Strict: any sub-expression position leaves the property null ⇒ step-over. The parser does
+    // not decide local-vs-not (no catalog); it only models "a lone call name(args)".
+
+    private static PsqlLeafStatement Leaf(string sql)
+        => Assert.IsType<PsqlLeafStatement>(Body(sql).Statements.Single());
+
+    [Fact]
+    public void Assignment_LoneCallRhs_Recognised_WithTargetAndArg()
+    {
+        const string sql = "begin r = f(x); end";
+        var leaf = Leaf(sql);
+        Assert.Equal(PsqlLeafKind.Assignment, leaf.Kind);
+        Assert.NotNull(leaf.RhsCall);
+        Assert.Equal("F", leaf.RhsCall!.Name);
+        Assert.Equal("R", leaf.AssignmentTarget);
+        var arg = Assert.Single(leaf.RhsCall.Arguments);
+        Assert.Equal("x", sql.Substring(arg.Start, arg.Length));
+    }
+
+    [Fact]
+    public void Assignment_LoneCallRhs_NoArgs_Recognised()
+    {
+        var leaf = Leaf("begin r = f(); end");
+        Assert.NotNull(leaf.RhsCall);
+        Assert.Equal("F", leaf.RhsCall!.Name);
+        Assert.Empty(leaf.RhsCall.Arguments);
+    }
+
+    [Fact]
+    public void Assignment_LoneCallRhs_NestedCallArgument_IsOneStepOverArgument()
+    {
+        // f(g(x)): f is the step-into-able lone call; g(x) is ONE argument (evaluated server-side = step-over).
+        const string sql = "begin r = f(g(x)); end";
+        var leaf = Leaf(sql);
+        Assert.NotNull(leaf.RhsCall);
+        Assert.Equal("F", leaf.RhsCall!.Name);
+        var arg = Assert.Single(leaf.RhsCall.Arguments);
+        Assert.Equal("g(x)", sql.Substring(arg.Start, arg.Length));
+    }
+
+    [Fact]
+    public void Assignment_QuotedTargetAndCallee_Folded()
+    {
+        var leaf = Leaf("begin \"MyVar\" = \"MyFunc\"(1); end");
+        Assert.NotNull(leaf.RhsCall);
+        Assert.Equal("MyFunc", leaf.RhsCall!.Name);      // quoted → kept as written
+        Assert.Equal("MyVar", leaf.AssignmentTarget);
+    }
+
+    [Fact]
+    public void Return_LoneCallOperand_Recognised_NoTarget()
+    {
+        var leaf = Leaf("begin return f(a, b); end");
+        Assert.Equal(PsqlLeafKind.Return, leaf.Kind);
+        Assert.NotNull(leaf.RhsCall);
+        Assert.Equal("F", leaf.RhsCall!.Name);
+        Assert.Equal(2, leaf.RhsCall.Arguments.Count);
+        Assert.Null(leaf.AssignmentTarget); // a RETURN has no named target
+    }
+
+    [Fact]
+    public void IfCondition_LoneCall_Recognised()
+    {
+        var iff = Assert.IsType<IfStatement>(Body("begin if (f(x)) then y = 1; end").Statements.Single());
+        Assert.NotNull(iff.ConditionCall);
+        Assert.Equal("F", iff.ConditionCall!.Name);
+    }
+
+    [Fact]
+    public void WhileCondition_LoneCall_Recognised()
+    {
+        var loop = Assert.IsType<WhileStatement>(Body("begin while (f(x)) do y = 1; end").Statements.Single());
+        Assert.NotNull(loop.ConditionCall);
+        Assert.Equal("F", loop.ConditionCall!.Name);
+    }
+
+    // ── Negative cases — every excluded shape leaves the property null (⇒ step-over) ─────────────────────
+
+    [Fact]
+    public void Assignment_TrailingOperator_NotRecognised()
+        => Assert.Null(Leaf("begin r = f(x) + 1; end").RhsCall);
+
+    [Fact]
+    public void Assignment_PlainExpression_NotRecognised()
+        => Assert.Null(Leaf("begin r = a + b; end").RhsCall);
+
+    [Fact]
+    public void Assignment_TwoCalls_NotRecognised()
+        => Assert.Null(Leaf("begin r = f(x) = g(x); end").RhsCall);
+
+    [Fact]
+    public void Assignment_DottedTarget_NotRecognised()
+    {
+        // NEW.col = f(x): a dotted target is not a single bare identifier (a D10 trigger concern) ⇒ null.
+        var leaf = Leaf("begin new.col = f(x); end");
+        Assert.Null(leaf.RhsCall);
+        Assert.Null(leaf.AssignmentTarget);
+    }
+
+    [Fact]
+    public void Return_WithTrailingOperator_NotRecognised()
+        => Assert.Null(Leaf("begin return f(x) + 1; end").RhsCall);
+
+    [Fact]
+    public void Return_PlainValue_NotRecognised()
+        => Assert.Null(Leaf("begin return a + 1; end").RhsCall);
+
+    [Fact]
+    public void IfCondition_CompoundBoolean_NotRecognised()
+    {
+        var iff = Assert.IsType<IfStatement>(Body("begin if (f(x) and g(x)) then y = 1; end").Statements.Single());
+        Assert.Null(iff.ConditionCall);
+    }
+
+    [Fact]
+    public void IfCondition_Comparison_NotRecognised()
+    {
+        var iff = Assert.IsType<IfStatement>(Body("begin if (f(x) = 5) then y = 1; end").Statements.Single());
+        Assert.Null(iff.ConditionCall);
+    }
+
+    [Fact]
+    public void WhileCondition_Comparison_NotRecognised()
+    {
+        var loop = Assert.IsType<WhileStatement>(Body("begin while (i < f(x)) do y = 1; end").Statements.Single());
+        Assert.Null(loop.ConditionCall);
+    }
+
+    [Fact]
+    public void NonAssignmentReturnLeaf_HasNoRhsCall()
+    {
+        // A plain call statement is not a step point for seam c — only assignment RHS / RETURN operands are.
+        var leaf = Leaf("begin post_event 'x'; end");
+        Assert.Null(leaf.RhsCall);
+        Assert.Null(leaf.AssignmentTarget);
+    }
+
+    [Fact]
+    public void LoneCall_RoundTripsByteForByte()
+    {
+        // Additive overlay: recognition never changes the tokens (§0).
+        const string sql = "begin r = f(x); if (g(y)) then return h(z); while (k(w)) do r = m(); end";
+        Assert.Equal(sql, SqlParser.Parse(sql).Root.ToSourceString());
     }
 }

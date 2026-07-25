@@ -13,4 +13,8 @@ public sealed class UserSettings
     // Last-used Execute Procedure / Execute Function parameter sets, one entry per
     // (ConnectionId, ObjectKind, ObjectName). See ParameterHistoryStore.
     public List<ParameterHistoryEntry> ParameterHistory { get; set; } = new();
+
+    // Debugger Watch expressions, one entry per (ConnectionId, ObjectName). See WatchStore
+    // (Stage X / D5). Additive — an old settings.dat simply has an empty list.
+    public List<DebugWatchEntry> DebugWatches { get; set; } = new();
 }

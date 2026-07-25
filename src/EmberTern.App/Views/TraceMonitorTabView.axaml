@@ -20,7 +20,7 @@
     </Style>
     <!-- Error rows: the message shown in the Object column reads in the danger colour -->
     <Style Selector="TextBlock.trace-error">
-      <Setter Property="Foreground" Value="{DynamicResource DangerIconBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
     </Style>
     <!-- Segmented control (grouping + quick filter): flat segments, active one raised -->
     <Style Selector="Button.seg">
@@ -402,7 +402,7 @@
               <!-- error -->
               <Border Background="{DynamicResource RowAlternateBrush}" CornerRadius="4" Padding="8,6"
                       IsVisible="{Binding Detail.HasError}">
-                <TextBlock Text="{Binding Detail.ErrorText}" Foreground="{DynamicResource DangerIconBrush}"
+                <TextBlock Text="{Binding Detail.ErrorText}" Foreground="{DynamicResource ErrorBrush}"
                            TextWrapping="Wrap" FontSize="11" />
               </Border>
 

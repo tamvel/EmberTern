@@ -47,6 +47,7 @@ public partial class TriggerDetailTabView : UserControl
         _sqlEditor = this.FindControl<TextEditor>("TriggerSqlEditor");
         _bodyEditor = this.FindControl<TextEditor>("TriggerBodyEditor");
         _ddlEditor = this.FindControl<TextEditor>("TriggerDdlEditor");
+        if (_ddlEditor is not null) SqlEditorBehavior.AttachReadOnlyHighlighting(_ddlEditor);
         // S5: the panel's activation gestures navigate the active SQL document.
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("TriggerDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;

@@ -87,7 +87,7 @@ public sealed class NavigationTarget
 /// </summary>
 public sealed class NavigationRename
 {
-    internal NavigationRename(Symbol symbol, string currentName, IReadOnlyList<TextSpan> occurrences)
+    internal NavigationRename(Symbol symbol, string currentName, IReadOnlyList<RenameOccurrence> occurrences)
     {
         Symbol = symbol;
         CurrentName = currentName;
@@ -105,7 +105,22 @@ public sealed class NavigationRename
     public string CurrentName { get; }
 
     /// <summary>Every occurrence bound to the symbol — declaration and all uses — in source order.
-    /// The App replaces these spans with the new name in one atomic edit (last-to-first so offsets
-    /// stay valid). Never empty for a returned rename.</summary>
-    public IReadOnlyList<TextSpan> Occurrences { get; }
+    /// The App turns these into one atomic set of edits. Never empty for a returned rename.</summary>
+    public IReadOnlyList<RenameOccurrence> Occurrences { get; }
 }
+
+/// <summary>
+/// One occurrence of the symbol being renamed: where it is, and <b>what the binder saw there</b>.
+/// <para>
+/// <see cref="Text"/> is the identifier exactly as written — which is not the same as
+/// <see cref="NavigationRename.CurrentName"/>, the catalog-FOLDED name (a variable declared
+/// <c>V_Total</c> folds to <c>V_TOTAL</c>). Carrying it means the App can state, per occurrence, what it
+/// expects to find there, so the applier's drift check compares against the MODEL's belief rather than
+/// re-reading the document and comparing it with itself. That is what lets rename share one mutation
+/// path with Quick Fixes instead of keeping its own verification loop
+/// (<see href="../../docs/design/editor-quick-fixes.md">editor-quick-fixes.md</see> §2.2).
+/// </para>
+/// </summary>
+/// <param name="Span">Where the occurrence sits in the source.</param>
+/// <param name="Text">The identifier as written at that span.</param>
+public readonly record struct RenameOccurrence(TextSpan Span, string Text);

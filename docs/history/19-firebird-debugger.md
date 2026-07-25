@@ -1,0 +1,3500 @@
+# Firebird Debugger — implementation history
+
+The narrative "as-built" record of the **Stage X — Firebird Debugger** arc. The *what/why* authority is
+[`docs/design/firebird-debugger.md`](../design/firebird-debugger.md) (spec v2); the *order/rules* are in
+[`docs/design/firebird-debugger-implementation-plan.md`](../design/firebird-debugger-implementation-plan.md).
+This file is the diary of how each milestone actually landed.
+
+---
+
+## P1 — AST: exception handlers (2026-07-17)
+
+**Goal.** Make `WHEN … DO` readable from the AST. The interpreter (D1) owns exception control flow — like
+`IF`/`WHILE`, it is client-owned — but the tree gave it nothing to read: handlers were an unstructured
+`PsqlLeafKind.Other` token bag. P1 is a pure **parser-producer → binder-consumer** deepening, additive
+only, following Etap 6.9's contract (formatter convergence deferred — build grammar depth only when a
+feature needs it).
+
+### The one spec refinement (decision 3, ratified by the user)
+
+The brief prescribed a `WhenHandler` with a **single** `WhenHandlerKind` per node. Reading the Firebird
+grammar showed that a single `WHEN` may list **several** conditions, comma-separated, sharing one `DO`
+body:
+
+```sql
+WHEN GDSCODE grant_obj_notfound, GDSCODE grant_fld_notfound, EXCEPTION my_exc
+DO BEGIN … END
+```
+
+A single kind cannot represent that (all conditions share one body, so they cannot be separate nodes).
+Per Developer Contract #15 ("never silently change the frozen design — stop, report, get a decision"),
+implementation halted and the question was raised. The user chose to model the real grammar: **a
+`WhenHandler` holds one `WHEN` clause with an ordered list of conditions**, and D1's `ExceptionRouter`
+matches them in declaration order (conditions within a clause left-to-right, clauses top-to-bottom). Spec
+§3.6 + the decision log + the P1 brief were updated to record this before coding resumed. This is a model
+refinement to match Firebird faithfully, not a debugger-architecture change.
+
+### What was built
+
+**AST (`Ast/PsqlNodes.cs`).**
+- `WhenHandlerKind` — `Any` / `ExceptionName` / `GdsCode` / `SqlCode` / `SqlState`.
+- `WhenCondition : SqlNode` — one condition (kind + its tokens); an `ExceptionName` condition surfaces the
+  folded user-exception name (`ExceptionName`), the other kinds keep their operand only in `Tokens`.
+- `WhenHandler : PsqlStatement` — one `WHEN … DO` clause: an ordered `Conditions` list + a `Body`
+  (`SqlNode?`). `Children` = conditions then body (source order). Deliberately **not**
+  `IExecutableStatement` — the clause is control-flow routing; its body statements are the step points.
+- `BlockStatement.Handlers` (`IReadOnlyList<WhenHandler>`), added to `Children`. `Children` is built by a
+  two-pointer **merge** of `Statements` + `Handlers` by source position (not a concatenation): in
+  well-formed PSQL every statement precedes every handler, but a malformed trailing `WHEN` (a lossless
+  `Other` leaf that lands in `Statements`) can interleave, and the well-formedness invariant
+  (`StructuralAstDifferentialTests`) requires non-decreasing child order.
+
+**Parser (`SqlParser.Psql.cs`).** `ParsePsqlBlockBody`'s three unit loops now route through
+`ParseBodyUnit`, which sends a recognised `WHEN … DO` clause to `handlers` and everything else (statements,
+and malformed/unrecognised `WHEN`s) to `statements`. `ParseWhenHandler`:
+- Finds the clause's `DO` via `FindWhenDoIndex` — the first paren-depth-0 `DO` before the next depth-0
+  `WHEN`/`END`/end-of-input (so a following clause's `DO` is never mis-attached).
+- Parses the condition list (`ParseWhenConditions` → comma-split → `ParseOneWhenCondition`), recognising
+  each condition **strictly by its leading keyword** (never guessed from text).
+- Parses the body via `ParsePsqlUnit` (so a `BEGIN … END` body, a single leaf, or a reused DSQL statement
+  all work).
+- Falls back — exactly like `ParsePsqlIf` on a missing `THEN` — to a lossless `PsqlLeafStatement`
+  (`Other`) when there is no `DO`, an empty condition list, or an unrecognised condition keyword. A `WHEN`
+  at a body-unit position can only be an exception handler (a CASE/MERGE `WHEN` lives inside a leaf/DSQL
+  statement the leaf collector consumes whole), so this is unambiguous.
+
+**Binder (`SemanticBinder.Psql.cs`).** `BindBlock` now also iterates `block.Handlers`. `BindWhenHandler`
+references each `EXCEPTION <name>` condition as a `SchemaObject` (resolved when metadata knows it, else a
+plain unresolved occurrence — error-tolerant; the other condition kinds carry no schema reference) and
+binds the handler body against the **enclosing** scope (Firebird PSQL has no block-local scopes — the one
+`RoutineBody` scope is the whole body's, the simplification the rest of the binder already relies on). A
+handler body that is itself a block recurses through `BindBlock`, so a nested handler section binds too.
+
+### §0 / formatter byte-identity
+
+`SqlFormatter` was **not touched**. Its PSQL layout is token-based (`EmitPsqlUnit` walks tokens; a
+`WHEN` clause falls through to `CollectPsqlStatement`), and no existing test/corpus input contains a
+`WHEN` handler, so no existing formatting changed. The only coupling — `BuildLeafIndex` — is keyed by a
+collected statement's first-token start; a `WhenHandler` is not an indexed leaf type, so a handler clause
+now takes the pure token-layout path. New handler shapes added to `SqlTestCorpus.StructuralConstructs` are
+held to the formatter's idempotency + §0 token/comment-preservation invariants (guaranteed by the
+formatter's per-statement lexeme net regardless), and to the B0 differential harness's byte-for-byte
+round-trip + tree well-formedness. All green.
+
+### Tests
+
+- `PsqlAstTests` (+11): each handler form (ANY / EXCEPTION / GDSCODE / SQLCODE / SQLSTATE), the
+  multi-condition clause (ordered conditions + the trailing `EXCEPTION` name), multiple clauses in
+  declaration order, a block body, and three fall-back cases (no `DO`, empty condition list, unrecognised
+  condition keyword) — each asserting the clause is **not** a handler and the round-trip stays byte-exact.
+- `SemanticModelTests` (+4): the `EXCEPTION <name>` reference resolves against a fake catalog / stays an
+  unresolved occurrence when unknown; a multi-condition `WHEN` references each `EXCEPTION` name (but not a
+  `GDSCODE` operand); a handler body's local variable resolves to the routine's `DECLARE`.
+- `SqlTestCorpus.StructuralConstructs` (+6 handler shapes) feeds the differential + formatter invariant
+  suites.
+
+**Test-writing note (not a numbered gotcha — too minor):** a malformed `WHEN` clause that falls back to
+`ParsePsqlLeaf` gets its `PsqlLeafKind` from `ClassifyLeaf`, which returns `Assignment` whenever the leaf
+contains a top-level `=` (e.g. `when do x = 2;`). The `Kind` of a fallback leaf is therefore incidental —
+assert **"not a handler" + lossless round-trip**, never `Kind == Other`, for a malformed-WHEN test.
+
+### Verification
+
+Build 0 warnings / 0 errors. Tests run in two partitions to sidestep the documented full-suite hang
+(#94/#226): **4612** green with `ConnectionExpandBindingProbe` excluded, then that class **alone** green
+(27) — 4639 total, all green. Smoke: app launches cleanly. No live-engine (lab) work was needed — P1 is
+pure AST/binder structure over the parser, and the multi-condition `WHEN` grammar is documented Firebird
+syntax (stated as such in the session; the SYSDBA password for a live probe was not available, and
+`isql` cannot reach the repo path anyway — #149).
+
+Committed `590b220`.
+
+---
+
+## P2 — Server version gate (FB3+) (2026-07-17)
+
+**Goal.** Refuse a pre-FB3 server on connect with a legible message (decision 8, spec §1.3). App-wide,
+deliberately **outside** the debugger's own milestones. Free in the sense that it removes nothing that
+works: `FirebirdSql.Data.FirebirdClient` 10.3.4 is **Srp-only**, and FB2.5 authenticates only via
+Legacy_Auth, so FB2.5 is *already* unreachable — today it surfaces as a confusing auth failure; the gate
+turns that into a clear refusal.
+
+### What was built
+
+`FirebirdConnectionService`, two additions (both `internal static`, so the test project can pin them
+without a live server):
+
+- `IsSupportedServerVersion(string? serverVersion)` — reuses the app's **one** version parser,
+  `FirebirdDdlReader.ParseServerMajor` (do not add a second parsing site). It **fails open** on an
+  unparseable version: `ParseServerMajor` returns `0` for a string it cannot read, and a
+  *successfully-opened* connection is FB3+ by construction (the driver only speaks Srp, introduced in
+  FB3), so `0` must not produce a false rejection. It rejects **only** a positively-identified pre-FB3
+  major (1 or 2). Note: `ParseServerMajor` parses the **full** driver `ServerVersion`
+  (`"WI-V5.0.0.1306 Firebird 5.0"`), not a bare `"5.0.3"` — the tests table-drive realistic strings.
+- `UnsupportedServerMessage(string? serverVersion)` — the refusal text, naming the required version
+  ("EmberTern requires Firebird 3.0 or later") and echoing the detected server verbatim.
+
+The gate runs on both open paths:
+- `ConnectAsync` — right after the **first** (Data) attachment opens, **before** the Metadata/Ddl lanes.
+  All three attach to the same server, so gating the first covers all three, and we never open extra
+  attachments to an unsupported server. On refusal the connection is closed cleanly (`CloseAndDisposeAsync`)
+  before throwing `ConnectionFailedException` — no half-open attachment.
+- `TestConnectionAsync` — the same check, so the "Test" button refuses a pre-FB3 server rather than
+  reporting a bare success. The `await using` disposes the connection either way.
+
+### Two decisions worth recording
+
+1. **Precondition, not error interpretation.** The documented rule *"connection errors show the raw server
+   message — never interpret"* stands untouched; `MapErrorMessage` is unchanged. The gate is a check on a
+   fact we know for certain (`ServerVersion`) on an **already-open** connection — it runs before/independently
+   of any server error.
+2. **The message lives in the Firebird layer, not `UiStrings`.** The P2 brief listed `UiStrings (the
+   message)`, but `EmberTern.Firebird` cannot reference `EmberTern.App` (layering: App → Firebird, never
+   the reverse). Connection-failure messages already live in the Firebird layer (`MapErrorMessage`), so the
+   refusal message goes beside it — consistent with the established pattern, zero behavioural/design impact.
+   Flagged in the session, not a design change.
+
+### Verification
+
+- `FirebirdConnectionServiceTests` (+13): a `[Theory]` table-driving `IsSupportedServerVersion` over
+  realistic `ServerVersion` strings (FB1.5/FB2.5 → rejected; FB3/4/5 → allowed; empty/null/garbage →
+  fail-open), plus two message tests (names FB3.0, echoes the detected server / stays readable on null).
+- **Live rejection is unverified** — there is no FB2.5 instance to point at, and (per Developer Contract
+  #11/DoD) this is stated honestly rather than claimed. The predicate is table-pinned; the FB3/4/5 path is
+  behaviourally unchanged (FB5 ⇒ allowed ⇒ the connect flow is exactly as before).
+- Build 0/0. Tests: **4652** green in two partitions (4625 non-probe + 27 `ConnectionExpandBindingProbe`
+  alone, #94/#226). Smoke: app launches cleanly.
+
+**Follow-up (not urgent, per the brief):** the existing `serverMajor >= 3` catalog gates (e.g.
+`StandalonePackageFilter`, the FB5 `RDB$` column gates) are now statically true and could be simplified in
+a later cleanup.
+
+---
+
+## D1 — Debug engine core, seam (a) (2026-07-17)
+
+**Goal.** The interpreter of PSQL **control flow** — frames, scopes, stepping — proven with **zero server
+in the loop**. Control flow is the part the client owns (spec §3.1), therefore the part we can get wrong,
+therefore where tests are cheapest and most valuable. D1 is a **two-session milestone**; this session is
+the confirmed seam (a): frames + FrameValues + scopes + `StepPlanner` + the `DebugSession` state machine +
+the savepoint-on-entry model + a full test suite. Seam (b) — `ExceptionRouter`, unhandled-exit rollback,
+breakpoints — is the next session.
+
+### The design: an explicit resumable control stack
+
+The interpreter is a small VM. Each `Frame` holds a control stack of resumable **activations**
+(`SequenceActivation` for a block / branch, `WhileActivation`, `ForActivation`) — the frame's
+"instruction pointer". Two operations compose it:
+
+- **Navigation** (`Frame.NextStepPoint`) — *pure, no server*: descends into nested blocks, pushes the loop
+  activations, pops completed sequences, and returns the next `IExecutableStatement` step point (a leaf,
+  an `IF`, or a loop header). A nested `BEGIN…END` is structural (not a step point); `IF`/`WHILE`/`FOR`
+  headers and leaves are step points.
+- **Execution** (`DebugSession.ExecuteCurrent`) — the *only* place the server (executor) is touched:
+  evaluate an `IF`/`WHILE` condition and push the taken branch/body; open a `FOR` cursor and fetch a row,
+  applying the `INTO` writes and pushing the body; run a leaf and apply its write-back. A `WHILE`/`FOR`
+  header re-presents itself as the step point each iteration (the activation stays on the stack).
+
+This split is what makes "every step decision is a pure function of (AST, frames, command)" literally true:
+navigation is deterministic structure-walking, and the stop decision is `StepPlanner.ShouldStop`, a pure
+function. The server only ever answers "what did this statement do / what is this condition" — it never
+drives the walk.
+
+### Stepping
+
+`Step(Into/Over/Out/Continue)`, `RunToCursor(offset)`, `SetNextStatement(offset)`. Into and Over both stop
+at the next step point after one executed step; they differ **only** in how a call is handled: **Into**
+`EXECUTE PROCEDURE` resolves a callee body (`IDebugExecutor.ResolveRoutine`) and pushes a **new frame**;
+**Over** runs the call on the server in place (spec §5.3 — step-over is real execution, step-into is
+simulation). Out runs (Over-style) until the starting frame returns. Continue runs to completion (seam b
+adds breakpoints). Run To Cursor runs until the target step point. Set Next repositions within the
+current/enclosing active block (a documented D1 limit: it cannot jump into a branch/loop not yet entered).
+
+### Frames, scopes, savepoints
+
+A `Frame` carries its `Body`, `FrameValues` (the client-side truth, case-insensitive), a lexical `Parent`,
+a `CallSite`, and a `SavepointName`. The **scope chain** (`TryResolveValue`/`SetResolvedValue` walking
+`Parent`) is the mechanism the flagship D9 (local routines as closures, spec §6.1) builds on — provided and
+tested now, wired to local routines later. The **savepoint model is present from day one** (spec §4.5, the
+brief's hard requirement): `EnterFrameSavepoint` on every frame push (root included), `LeaveFrameSavepoint`
+on normal exit. The unhandled-exit `ROLLBACK TO` needs the `ExceptionRouter`, so it is seam (b); seam (a)
+stops a raised statement at `DebugState.Faulted` (no routing).
+
+### The one seam: `IDebugExecutor`
+
+Every server interaction goes through this one contract (spec §3.3) — execute statement, evaluate
+condition, open cursor, resolve routine, enter/leave savepoint. It is the **single precedented exception**
+to Architecture rule #2 (Core declares the contract it needs, exactly as `ISqlMetadataProvider` does);
+D2/D6/D8 implement it, D1 drives it with a scripted fake. The interpreter never evaluates an expression,
+coerces a type, or decides a boolean.
+
+### Tests
+
+`DebugEngineTests` (+24) against a scripted fake executor: leaf step ordering; IF true/false/no-else;
+WHILE re-evaluating its header per iteration; FOR iterating rows, applying `INTO`, closing the cursor,
+and the no-rows case; nested-block-is-structural; step Into pushing a frame (with savepoint order asserted)
+/ callee completing + releasing + caller resuming / step Over executing in place / unresolvable call
+falling back / step Out; Continue; Run To Cursor; Set Next forward/backward/unreachable; raised → Faulted;
+SUSPEND rows; write-back into frame values; and the scope chain resolving + writing an outer variable
+through a real nested frame (no reflection — Core does not expose internals, so the test drives the public
+session API).
+
+### Verification
+
+Build 0/0. Tests: **4676** green in two partitions (4649 non-probe + 27 `ConnectionExpandBindingProbe`
+alone, #94/#226). Smoke: app launches (the engine is pure Core, not yet wired to any UI). No lab needed
+(no server). Seam (b) parked, recorded in CLAUDE.md's "Current state".
+
+## D1 — Debug engine core, seam (b) (2026-07-17)
+
+The second half of D1: **exception routing** (the client-owned other half of control flow, spec §3.6) and
+**breakpoints**. Still pure Core (zero Avalonia, zero FirebirdSql), still driven only through
+`IDebugExecutor`, still proven with a scripted fake — control flow is the part we own, so it is where
+depth is cheapest. Purely additive to `EmberTern.Core.Sql.Language.Debugging`; nothing outside the
+namespace changed.
+
+### `ExceptionRouter` — matching + propagation + unwind
+
+`ExceptionRouter.TryRoute(frames, error, executor)` is the whole of exception control flow. When a
+statement or a control-flow condition raises (the executor reports a `DebugError`), the router:
+
+1. **Searches the innermost frame** for a `WHEN … DO` handler, walking the frame's control stack from the
+   innermost active `BEGIN…END` block outward. For each block it tries its handlers **top-to-bottom**, and
+   each handler's conditions **left-to-right** (Firebird's declaration order, spec §3.6). Matching reads
+   the AST (`WhenHandler`/`WhenCondition` from P1) — **never re-parses**. All five `WHEN` forms are
+   matched: `ANY` (always), `EXCEPTION <name>` (the surfaced folded name), `GDSCODE` (numeric *or*
+   symbolic), `SQLCODE` (signed number), `SQLSTATE` ('literal'). The operands of the last three P1
+   deliberately left in the condition's tokens, so the router reads them from `WhenCondition.Tokens` — a
+   leaf-value read, not structure the AST already owns.
+2. **On a match**, it repositions that frame's control stack so the handler body is the next thing to run:
+   abandon the inner activations (closing any abandoned `FOR SELECT` cursor via `Frame.PopForUnwind`),
+   skip the catching block's remaining statements (`seq.Index = Items.Count`), mark the block
+   `HandlerActive = true` so its own handler body cannot re-enter it, and `PushBranch(handler.Body)`. The
+   catching frame is **not** rolled back — a `WHEN`-handling block's prior statements survive (§4.5,
+   measured).
+3. **On no match in a frame**, it closes that frame's open cursors, `RollbackFrameSavepoint`s it (§4.5 —
+   the simulated frame's side effects are undone atomically, as a real call's would be), pops it, and
+   continues in the caller. When **no frame** catches — the root included — every frame is rolled back and
+   `TryRoute` returns false; the session `Faulted`s (and `CurrentStatement`/`CurrentError` reflect that).
+
+**Re-raise** (`EXCEPTION;` in a handler) needs no special interpreter state: the executor re-raises it and
+the router routes the resulting error like any other. The `HandlerActive` guard is what makes a handler not
+catch its own body's exception — it propagates out to an enclosing block (or frame), exactly as Firebird
+does. This keeps the router **pure control flow**: it never evaluates, coerces, or interprets Firebird
+error semantics — the error's identity is what the driver already reported.
+
+`IDebugExecutor` gained one method for this — `RollbackFrameSavepoint(name)` — the unhandled-exit
+counterpart of the seam-(a) `EnterFrameSavepoint`/`LeaveFrameSavepoint`. The interface is a D1 deliverable
+split across the two seams; this is the only contract change.
+
+### Breakpoints
+
+`BreakpointSet` — a mutable set of step-point **offsets** (`Add`/`Remove`/`Toggle`/`Contains`/`Clear`),
+exposed as `DebugSession.Breakpoints`. The stepping loop stops at the next step point whose offset is set,
+with `StopReason.Breakpoint`; a breakpoint always wins the stop reason over `Step`. The current step is
+never re-stopped on resume (it is executed before the next breakpoint check), and a breakpoint inside a
+callee stops while continuing (depth preserved). Conditional breakpoints / hit counts / break-on-exception
+are D12 — they compose with this set, they are not modelled here.
+
+### The loop
+
+Seam (a)'s "raise → `Faulted`, no routing" was replaced by "raise → `ExceptionRouter.TryRoute`": caught ⇒
+clear the error and fall through to the command's normal stop/continue decision (so Step stops at the
+handler body, Continue runs through it); uncaught ⇒ `Faulted`. Then, before the movement stop decision, the
+loop checks `Breakpoints`. Every decision remains a pure function of (AST, frames, breakpoints, command).
+
+### Tests
+
+`DebugEngineTests` (+15, now 39 total) against the scripted fake: `WHEN ANY` catching in the same block
+(prior statements survive, frame not rolled back); `EXCEPTION <name>` matching and *not* matching (fault +
+rollback); `GDSCODE` by number and by symbol; `SQLCODE` signed; `SQLSTATE` literal; a multi-condition
+`WHEN`; propagation to the caller with the callee frame rolled back and the caller catching; re-raise
+propagating out with the `HandlerActive` guard proven (inner handler does not re-catch its own body); a
+`FOR SELECT` body raising both unhandled (cursor closed + frame rolled back) and handled (cursor closed on
+unwind to the catching block, no frame rollback); and four breakpoint cases (stop, resume-past, removed,
+inside-callee). One test-only gotcha surfaced and is documented in the test: the fake keys outcomes by a
+node's `Start`, which is shared across frames' coordinate spaces (both `begin `-prefixed bodies put their
+first statement at offset 6), so a cross-frame raise test must not run a root leaf at the callee's raising
+offset.
+
+### Verification
+
+Build 0/0. Tests: **4691** green in **one** `dotnet test` run (~6 s). Smoke: app launches (the engine is
+pure Core, not yet wired to any UI). No lab needed (no server — fidelity vs real execution is D2's
+lab-mandatory proof). **D1 is COMPLETE.** Next: **D2** (harness + session connection + executor) — a
+separate session, per the plan's order (P1 → P2 → D1 → D2 → D3 …).
+
+## D2 — Harness + session connection + executor, seam (a) (2026-07-17)
+
+D2's first seam: the **debug session connection** — a session's own attachment + transaction + frame
+savepoints (spec §4.1/§4.2/§4.5). Seams (b) `HarnessBuilder`/`ReadWriteSetAnalyzer` and (c)
+`FirebirdDebugExecutor` + the lab-mandatory fidelity proof are **not** in this seam (the full milestone did
+not safely fit the session's remaining context, so it was split at the plan's designated seam boundary and
+this checkpoint landed green).
+
+### `DebugSessionConnection` (EmberTern.Firebird)
+
+A session owns a dedicated `FbConnection` + one `FbTransaction` — **decision 5: a session is not a lane**
+(the Data/Metadata/Ddl lanes are per-profile singletons, but two debug tabs are two sessions are two
+transactions, impossible on one lane). It never touches the Data lane (a debug rollback there would destroy
+the user's uncommitted work, rule #11). The TPB is **explicit** (never a bare `IsolationLevel`, #85):
+`BuildDebugTransactionOptions(DebugIsolation)` → write + (read_committed rec_version | concurrency) +
+**NOWAIT** — `NOWAIT` because the debug transaction *will* meet locks held by the user's Data transaction,
+and a step-level error at a known line beats a silent hang (§4.2). Isolation (`ReadCommitted` / `Snapshot`)
+is user-selectable at launch (§12.4) — a routine normally run under SNAPSHOT sees different data under READ
+COMMITTED, so it is surfaced, never silently defaulted. Mirrors the established per-job pure-static TPB
+builder pattern (`FirebirdDdlExecutor.BuildDdlTransactionOptions`), reuse over a parallel builder.
+
+**Frame savepoints (§4.5)** are the point of this seam: `SetSavepointAsync` (frame entry),
+`ReleaseSavepointAsync` (normal exit), `RollbackToSavepointAsync` (unhandled exit) — the async counterparts
+of D1's `IDebugExecutor.Enter/Leave/RollbackFrameSavepoint`, which seam (c)'s executor will bridge. Names
+come from `Frame.SavepointName` (`ET_DBG_FRAME_{id}`) and are validated as bare SQL identifiers before
+concatenation, so no path can inject through them. `SAVEPOINT` / `RELEASE SAVEPOINT` / `ROLLBACK TO
+SAVEPOINT` are verified working through `FirebirdClient` 10.3.4 (§15.3 probe [5]). Every wire operation is
+serialized on the session's **own** command lock, captured once per acquire/release (#31/#98/#120/#236 — a
+session connection never flips lanes, so it is a single lock; interleaving fine, concurrency not). `CommitAsync`
+(the rare explicit `Commit debug transaction`, §4.4) / `RollbackAsync` (the default at session end) / an
+idempotent `DisposeAsync` that rolls back then closes the attachment and deregisters.
+
+### Lifecycle in `FirebirdConnectionService`
+
+`CreateDebugSessionAsync(DebugIsolation)` opens a fresh attachment from the active profile, begins the
+session transaction, registers it, and returns the `DebugSessionConnection`; a connection-limit refusal
+surfaces as `ConnectionFailedException` (the thinking behind #89), never a broken app. Sessions are tracked
+in `_debugSessions` **only** so `DisconnectAsync`/`Dispose` tear them down deterministically — their
+attachments must not outlive the profile's connection (spec §4.1); each session deregisters itself on
+dispose (`RemoveDebugSession`). `DisconnectAsync` tears sessions down first (async, proper rollback);
+`Dispose` blocks best-effort (safe: `DisposeAsync` uses `ConfigureAwait(false)` throughout, so `GetResult`
+cannot deadlock on a captured context). **No `ConnectionRole.Debug`** was added (decision 5) — a session
+connection is not a lane, so it sidesteps the lane machinery (`GetCommandLock(role)`, the accessor hazard)
+entirely.
+
+### Tests
+
+`DebugSessionConnectionTests` (+13, pure — mirrors `TransactionTpbTests`): the debug TPB for both
+isolations (READ COMMITTED = write/read_committed/rec_version/nowait, never Wait/Concurrency; SNAPSHOT =
+write/concurrency/nowait, never ReadCommitted/Wait); the three savepoint statement forms; and savepoint-name
+validation (bare identifiers accepted, empty / leading-digit / spaces / injection rejected, and
+`SavepointStatement` throws on a bad name). The **live** round-trip (open → begin → savepoint set/rollback-
+to/release → commit/rollback → teardown) needs a real server and is **awaits user confirmation** per the QA
+rule (the driver capability itself is already confirmed, §15.3 [5]).
+
+### Verification
+
+Build 0/0. Tests: **4704** green in one run (~8 s). Smoke: app launches. **D2 seam (a) DONE.** Parked for
+the next session: **seam (b)** `HarnessBuilder` + `ReadWriteSetAnalyzer` + the §3.4 R1–R5 rules (pure Core,
+unit-tested) and **seam (c)** `FirebirdDebugExecutor : IDebugExecutor` + the lab-mandatory simulated-vs-real
+fidelity comparison (extend `Lab/setup.sql` with the debugging zoo first). Order within D2: (a) → (b) → (c),
+per the plan.
+
+## D2 — Harness + session connection + executor, seam (b) (2026-07-17)
+
+D2's second seam: the **Evaluation Harness builder** and the **read/write-set analyzer** — the intellectual
+core of D2, and the §3.4 rules R1–R5, all in **pure Core** (zero Avalonia, zero FirebirdSql). Seam (c)
+(`FirebirdDebugExecutor` + the lab-mandatory fidelity proof) is deferred to the next session.
+
+### `HarnessBuilder` — the one server mechanism, as a pure function
+
+`HarnessBuilder.Build(HarnessRequest) → HarnessResult` generates the anonymous `EXECUTE BLOCK` that is the
+**only** server mechanism (§3.2/§3.3) — every step, condition, watch and evaluation is the same builder with
+a different fragment. It is a pure function: the fragment text, each variable's verbatim declaration + base
+type + current value, the sub-routine declarations and the read/write set are all **inputs** (the Firebird
+executor derives them from metadata + the frame in seam c; tests supply them directly). That decoupling is
+exactly what makes the non-negotiable §3.4 rules unit-testable **without a live server** — the rules are
+proven here; fidelity vs real execution is seam (c)'s lab proof. The rules, enforced in `Build`:
+
+- **R1 — never assign an injected `NULL`.** Only reads with a non-null value become a parameter + an
+  injection assignment; a declared variable is already `NULL`, and assigning `NULL` into a `NOT NULL`-domain
+  variable is what crashes real ERP code (the whole reason v1 died on the first procedure).
+- **R2 — parameters and `RETURNS` columns use the variable's BASE type**, never its domain (a domain-typed
+  `RETURNS` re-validates on `SUSPEND` and fails on a legitimately-null write-back). Base types are an input
+  (`HarnessVariable.BaseType`); their derivation from metadata is seam (c)'s job.
+- **R3 — frame variables declared VERBATIM** (`HarnessVariable.Declaration`, copied from source — domain /
+  `NOT NULL` / `CHECK` / default preserved), so the statement's own assignments keep domain semantics.
+- **R4 — inject only the reads, return only the writes.**
+- **R5 — every in-scope sub-routine declaration carried, verbatim, always** (dropping one lets a local
+  `F()` silently resolve to a global `F()` — a §F violation). Emitted after the variable declarations
+  (Firebird's required order).
+
+Statement mode runs the fragment verbatim; Expression mode (conditions / watches) evaluates it into an
+`ET_DBG_RESULT` column of the caller-supplied result type. `HarnessResult` carries the SQL, the ordered
+parameter values (only the injected non-null reads — R1), the `RETURNS`→variable write-back map, and the
+result-column name. Param/return names use distinctive `ET_P_`/`ET_O_`/`ET_DBG_` prefixes (not the spec
+example's terse `P_`/`O_`) so they cannot collide with a real ERP variable name. A statement with no reads
+and no writes is a plain executable block (no `RETURNS`, no `SUSPEND`).
+
+### `ReadWriteSetAnalyzer` — the read/write set from the model
+
+`Analyze(statement, model) → ReadWriteSet` computes the read/write-set-driven injection (§3.5) by
+**consuming the binder's resolved references** (rule #1/#2 — never re-parse, never re-resolve). **Reads** =
+the variable/parameter references in the statement's span (over-inclusion is safe: a variable appearing only
+as an assignment target is harmless to inject, and R1 skips a null anyway). **Writes** = the variables it
+may mutate: an assignment writes exactly its **leftmost l-value** (narrowed precisely); a control-flow
+condition (`IF`/`WHILE`) writes nothing; any other statement's writes are the reads (a correct, chattier
+superset — a single statement changes only variables it references).
+
+Two deliberate boundaries, both documented in the type: the **transitive fixpoint over the sub-routine call
+graph** belongs to **D9** (where local routines become frames) — meanwhile the sub-routine *declarations*
+are always carried in full by the harness (R5), so nothing is silently lost; and the §3.5 **inject-all-in-
+scope** fallback is exposed as the named primitive `InScopeLocals(model, offset)` for a caller that genuinely
+cannot compute a precise set (a Watch on an arbitrary expression, D5) — **not** an auto-branch, because the
+binder never emits an unresolved-*local* signal (an unrecognised bare identifier is not a frame variable —
+it is a column/function/typo, correctly dropped), so an auto-fallback would be untestable dead code (the
+gotcha-#233 lesson: don't ship untested branches).
+
+### Tests
+
+`HarnessBuilderTests` (+11): the injection shape; **R1** (null-valued and absent-valued reads are neither
+parameter nor assignment); **R2** (base type on param + `RETURNS`, never the domain); **R3** (verbatim
+declaration); **R4** (an unreferenced variable is declared but neither injected nor returned); **R5** (sub-
+routine carried verbatim, after the variable declarations); expression mode (result column + no write-backs)
+and its required result type; the plain-executable-block case; auto-terminator. `ReadWriteSetAnalyzerTests`
+(+5) against the **real** `SemanticModel` (strict parse of a whole `CREATE PROCEDURE`, so the body binds
+against the declared scope): assignment reads/writes, the leftmost-l-value target, a condition that reads but
+writes nothing, a plain DML's superset writes, and `InScopeLocals`. **Note recorded (test lesson):** the
+editor's `SemanticModel.Build(string)` uses the *lenient* newline-split parse, which breaks a routine apart
+so its body binds without the declared variables — the debugger must build the model from the **strict**
+`SqlParser.Parse(sql).Root` of the whole routine.
+
+### Verification
+
+Build 0/0. Tests green (user-verified; the full-suite run was slow so it was confirmed manually). Smoke: app
+launches. **D2 seam (b) DONE.** Parked for the next session: **seam (c)** `FirebirdDebugExecutor :
+IDebugExecutor` — wires D1's interpreter to seam (a)'s `DebugSessionConnection` through this harness, then
+the **lab-mandatory** simulated-vs-real fidelity comparison (extend `Lab/setup.sql` with the debugging zoo
+first). `HarnessBuilder`/`ReadWriteSetAnalyzer` are deliberately-parked pure infrastructure (mitigating
+#233 — recorded here because nothing calls them until seam c). Order within D2: (a) → (b) → **(c)**.
+
+## D2 seam (c) — FirebirdDebugExecutor + live fidelity (2026-07-17)
+
+The seam that closes the debugger foundation: the real executor, driving `DebugSession` against a live
+Firebird, with the mandated simulated-vs-real fidelity comparison (spec §2.1). Landed at natural
+sub-seams, each green and committable.
+
+**c.1 — `PsqlDeclarationExtractor` (pure Core).** Lifts a routine frame's local variable declarations
+verbatim (R3 — domain / `NOT NULL` / `CHECK` / default preserved) and their type spec (the R2 base-type
+resolver's input) from the parsed `BlockStatement` + source. Paren-aware type-spec slicing
+(`NUMERIC(15,2)` whole, `DEFAULT`/`NOT NULL` excluded); `TYPE OF` kept verbatim for the resolver.
+`SubRoutines` (R5) is empty in D2 **by construction** — a local `DECLARE PROCEDURE/FUNCTION` is not in
+`BlockStatement.Declarations` (the parser's `IsDeclarationStart` excludes it; it is D9's flagship). 6
+tests. Commit `21c7270`.
+
+**c.2 — `FirebirdDebugExecutor` + `DebugErrorMapper` + `FirebirdDebugMetadata`.** The executor implements
+`IDebugExecutor`: each step / DML leaf → a Statement-mode harness; each `IF`/`WHILE` condition →
+an Expression-mode `BOOLEAN` harness; the read/write set narrows the payload; frame values injected
+(R1 skips null/absent), write-backs applied. `SUSPEND` is control flow — the output row is emitted
+client-side from the output params, no round-trip. Savepoints delegate to the session. The
+sync-over-async bridge (`IDebugExecutor` is synchronous — D1's frozen contract) blocks on the async
+session; deadlock-safe because everything is `ConfigureAwait(false)` and stepping runs off the UI thread
+(D4). D2 boundaries (§F, explained stops): `ResolveRoutine` → null (a call runs in place = step-over,
+100% faithful §5.3; step-into is D8/D9), `OpenCursor` → the Cursor Bridge (D6).
+
+`FirebirdDebugMetadata` resolves the frame variable templates once at session start: **R2 base types**
+come from `RDB$FIELDS` via the existing `FirebirdDdlReader.FormatType` ("derivation, not guessing"),
+params from `RDB$PROCEDURE_PARAMETERS` (declared with their user domain, R3; base-typed injection, R2),
+locals via the c.1 extractor. `TYPE OF` is a bounded D2 stop. `DebugErrorMapper` maps `FbException` →
+`DebugError` from SQLSTATE/GDS, **grounded against the live engine** (a throwaway driver probe): a user
+`EXCEPTION` carries `isc_except` (335544517) with its name on the message's **first line**; a `NOT NULL`
+domain validation is SQLSTATE 42000 / GDS 335544879; the small vector entries (0, 1) are argument
+separators, not GDS codes. The pure `Build()` decision is unit-tested (an `FbException` cannot be
+constructed in a test); `SqlCode` (the legacy code the driver does not distinctly expose) and the
+symbolic GDS name are documented D2 boundaries. 5 tests. Commit `d077a5f`.
+
+**c.3 — lab zoo + live fidelity.** A small **D1 extension** was needed first: `DebugSession` had no way
+to seed the root frame's input-parameter arguments (the root has no caller to provide them), so it gained
+an optional `rootValues` ctor arg (additive; existing tests pass null). The lab was extended with two D2
+procedures — `SP_DBG_SUMMARY` (assignment, a **domain `NOT NULL` local**, IF/ELSE, SUSPEND) and
+`SP_DBG_GUARD` (`EXCEPTION` + `WHEN … DO`) — mirrored into `Lab/setup.sql` and the `.fdb` rebuilt at an
+ASCII temp path then copied back (#149).
+
+The fidelity harness (throwaway) drove the **real** `FirebirdDebugExecutor` through `DebugSession`
+step-by-step and compared the DB state + outputs to **real execution** of the same routine. All seven
+cases matched:
+
+- `SP_DBG_SUMMARY(2,60)` → `(120,BIG)`, `(1,10)` → `(10,SMALL)` — the domain-`NOT NULL` local `V_TOTAL`,
+  declared but unassigned at entry, **does not crash** (R1: never inject the null; R3: declared verbatim;
+  R2: base-typed write-back) — the explicit DoD case.
+- `SP_DBG_GUARD(10)` → `OK`, `(-5)` → `CAUGHT` — an `EXCEPTION` routed through the **real** `FbException`
+  → `DebugErrorMapper` → `ExceptionRouter` → the `WHEN EXCEPTION` body.
+- `SP_ADD_ORDER(1,…)` — `SELECT … INTO`, IF, DML `INSERT` (firing `TR_ORDERS_BI`), SUSPEND: inserts a
+  matching order, and the session rollback undoes it (savepoint/tx).
+- `SP_ADD_ORDER(999,…)` — unhandled `EXCEPTION E_CUSTOMER_NOT_FOUND`: `Faulted`, name resolved, root frame
+  rolled back, no row.
+
+**The finding that only the live comparison caught (gotcha #238).** The first `SP_ADD_ORDER` runs both
+silently mis-behaved — the customer check no-oped. Diagnosis: a reused `SELECT … INTO` statement
+(Etap 6.9 / B5) surfaces **no** local references from the binder (the query binder records its
+`FROM`/columns, not the `:`-colon refs in the `WHERE` nor the `INTO` targets — a token-walked
+`INSERT`/assignment/`IF` records theirs correctly), so `ReadWriteSetAnalyzer.Analyze` returns empty reads
+AND empty writes — dropping the `INTO` write-back the statement exists to perform. Fixed in the consumer,
+not with a second resolver: when the model surfaces nothing (empty/empty) the executor falls back to
+§3.5's named `InScopeLocals` primitive (inject/return ALL in-scope locals — correct, chattier), never a
+guess; precise narrowing stays in force for every statement whose refs the binder does surface. Pinned by
+`ReadWriteSetAnalyzerTests.SelectInto_SurfacesNoLocalRefs_*` (a Core test that flips if the binder is ever
+deepened to surface those refs). This is the §2.1 lesson in miniature: a green unit suite proved the
+interpreter self-consistent; only the lab proved it **faithful**.
+
+Build 0/0; **4732 tests green in one run**; smoke clean. D2 COMPLETE. Next: **D3** (editor-wiring
+consolidation) — the first non-pure milestone, immediately before the first debugger UI.
+
+## D3 — Editor-wiring consolidation (2026-07-17)
+
+**The first non-pure debugger milestone, and the one with zero debugger code.** Spec §11.1, gotcha #219,
+plan §2 (D3). Its job is to collapse the *two* hand-maintained copies of the SQL editor's language wiring
+into **one attach path** — *before* the debug tab (D4) becomes a third host bringing four new renderers at
+once, in the exact pattern that shipped S3 with no squiggles in the main editor.
+
+### The two seams, and why they diverged
+
+The **intrinsic block** — the capabilities identical on every SQL surface — is: `SqlCompletionController`
+-> `SemanticHighlighter` -> `NavigationController` -> `SquiggleRenderer` -> `RelatedElementsRenderer` ->
+`LanguageExpansionController` -> `TypingErgonomicsController` -> `EditorSearch`. It lived in two copies:
+
+- **`SqlEditorBehavior.Attach`** — the object editors' installer (Procedure / Function / Trigger / View /
+  Package detail + Script Executor). Runs at `OnAttachedToVisualTree`, where a **stable, non-null**
+  `MainWindowViewModel` is reachable via `FindAncestorOfType<Window>().DataContext`. Uses the completion
+  controller's built-in `subscribeMetadataChanged` / `subscribeMetadataReady` hooks.
+- **`MainWindow` ctor** — the main SQL editor, hand-wired with null-safe `_currentVm?.…` callbacks, because
+  the window's `DataContext` (its VM) is set *after* construction (`App.axaml.cs`:
+  `new MainWindow { DataContext = … }`). It deliberately **bypassed** the controller's metadata hooks —
+  they latched "subscribed" against a null VM and dropped the handler — and instead wired
+  `Metadata.ObjectsChanged` / `MetadataReady` to the stable VM in `OnDataContextChanged`
+  (`OnMainEditorMetadataChanged` / `OnMainEditorMetadataReady`), plus a private `WarmReferencedMetadataAsync`
+  and private `CreateMetadataSnapshot` / `EnsureColumnsAsync` / `EnsureRoutineParametersAsync` forwarders.
+
+The only real difference between the two copies was **timing** — the VM is the same type and stable once
+known; the main editor just knows it late. So the null-safety, the bespoke metadata handlers, and the
+metadata forwarders were *all* workarounds for attaching before the VM existed.
+
+### The approach — "attach at VM-arrival" (user-ratified over a shared-helper alternative)
+
+Rather than factor the block into a null-safe shared helper (which would preserve the timing but keep the
+lifecycle problem encapsulated rather than solved), the main editor's wiring **moves from the ctor to the
+first non-null `OnDataContextChanged`**, where it calls the *same* `SqlEditorBehavior.Attach(_editor,
+_currentVm)` the object editors use — with a stable, non-null VM. This is precisely what the spec meant by
+"subscribe once the VM arrives," and it dissolves the historical workaround instead of encapsulating it.
+
+Feasibility was grounded before touching anything: `_completion` is referenced **nowhere** in `MainWindow`
+except the wiring block and the two metadata handlers, so the blast radius is contained; and `DataContext`
+is set via an object initializer after construction, so `OnDataContextChanged` reliably fires with the
+non-null VM before `Show()` (the app already depends on that event for all its VM-event wiring).
+
+**Consolidation boundary (user-confirmed): the intrinsic block only.** The genuinely per-host wiring stays
+with the caller — `DiagnosticsPanelHost.Track` (per-window host + reveal), `AmbientModelRefresh`
+(routine/trigger editors only), and `SqlSnippetDropTarget.Attach` (context varies) — because they truly
+differ per host, were never the #219 duplication risk, and folding them into `Attach` would force
+artificial per-host parameters for no proportional gain.
+
+### The change
+
+- `MainWindow` ctor: the ~65-line hand-wired language block is deleted; only `_editor.TextChanged +=
+  OnEditorTextChanged` (needs no VM) stays. The DDL-preview editor + `diagnosticsPanel.Navigator` wiring
+  (also VM-free) stay in the ctor untouched.
+- `MainWindow.OnDataContextChanged`: a guarded (`_completionAttached`) one-time block calls
+  `_completion = SqlEditorBehavior.Attach(_editor, _currentVm)` then `_diagnostics.Track(_editor,
+  _completion)`. The `Metadata.ObjectsChanged` / `MetadataReady` subscribe+unsubscribe lines are removed.
+- **Deleted as now-dead** (Developer Contract #20): `OnMainEditorMetadataChanged`, `OnMainEditorMetadataReady`,
+  `WarmReferencedMetadataAsync`, and the private `CreateMetadataSnapshot` / `EnsureColumnsAsync` /
+  `EnsureRoutineParametersAsync` forwarders — every one of their responsibilities is now owned by the shared
+  `Attach` (which reads `vm.CreateMetadataSnapshot` / `vm.EnsureColumnsAsync` / `vm.EnsureRoutineParametersAsync`
+  / `vm.WarmReferencedAsync` and subscribes the controller's own metadata hooks to `vm.Metadata`). Removal
+  came **after** the new path built + tested green, per the user's explicit "prove before delete" directive.
+- `SqlEditorBehavior` gained no new parameters — the consolidation is achieved by *deleting* the second copy,
+  not growing the shared one (lighter than the plan implied; user agreed this is the better result). Its
+  XML-doc + the stale "attach in BOTH seams" comments (here, in `TypingErgonomicsController`,
+  `LanguageExpansionController`, and the `SquiggleRenderer`/`MainWindow` inline notes) were corrected to
+  describe one path.
+
+### Responsibility-transfer proof (why the deletion was safe)
+
+| Removed MainWindow mechanism | Responsibility | New owner in the shared path |
+|---|---|---|
+| `OnMainEditorMetadataChanged` | rebuild model when a metadata category loads | controller's `subscribeMetadataChanged` hook -> `_language.NotifyMetadataChanged()` (wired via `vm.Metadata.ObjectsChanged`) |
+| `OnMainEditorMetadataReady` | definitive rebuild + full warm + publish on prefetch complete | controller's `subscribeMetadataReady` hook -> `_language.RefreshModelWithMetadata()` (via `vm.Metadata.MetadataReady`) |
+| `WarmReferencedMetadataAsync` | warm referenced objects' columns/detail | `Attach`'s `warmReferencedMetadata: (n,ct) => vm.WarmReferencedAsync(n,ct)` |
+| `CreateMetadataSnapshot` | metadata snapshot for the model | `Attach`'s `metadataSnapshot: vm.CreateMetadataSnapshot` |
+| `EnsureColumnsAsync` | dot-completion column warm | `Attach`'s `ensureColumnsAsync: t => vm.EnsureColumnsAsync(t)` |
+| `EnsureRoutineParametersAsync` | signature-help param warm | `Attach`'s `ensureRoutineParamsAsync: t => vm.EnsureRoutineParametersAsync(t)` |
+| `metadataGeneration: … ?? 0` | generation counter | `Attach`'s `metadataGeneration: () => vm.Metadata.ObjectsGeneration` |
+
+Each responsibility has a live owner, and — the strongest evidence — **the object editors already run this
+exact path in production**, exercised by the full suite (including the headless `ConnectionExpandBindingProbe`,
+which drives `SqlEditorBehavior.Attach` and types real key events into the editor).
+
+A behavioural equivalence worth noting: the old main-editor metadata subscription was tied to the stable VM
+(always live); the new one is scoped to the *editor's visual-tree lifetime* (subscribe on attach, unsubscribe
+on detach). For the main SQL editor — a permanent part of the window layout that never detaches — these are
+equivalent; the lifetime scoping exists for the object editors' tabs, which do detach/reattach.
+
+### Verification
+
+Build 0/0; **4732 tests green in one run** (identical to the D2 baseline — no tests added or removed, this is
+behaviour-preserving); smoke clean. Per the QA rule, the visual equivalence of every capability on every
+surface (squiggles, hover, related-elements, completion, language-completion, diagnostics panel, F8
+navigation — in the SQL Editor *and* the object editors, in *both* themes) cannot be proven by tests; it was
+verified by a **manual QA pass — user-confirmed 2026-07-17**. Gotcha #219 updated to "resolved by D3"; the
+plan's "Dual wiring (until D3)" danger row retired.
+
+**Next: D4 (debugger tab MVP)** — the first debugger UI, now attaching its renderers through the one seam.
+
+---
+
+## D4 — Debugger tab MVP (2026-07-17)
+
+The first debugger UI: launch a **standalone procedure**, set breakpoints, step, watch variables. Built as
+a **thin presentation layer** over the already-proven engine (D1 interpreter + D2 executor/harness/session),
+per Developer Contract #1–#5 — the tab never evaluates an expression, coerces a type, or re-implements
+Firebird semantics.
+
+### What shipped
+
+- **Tab infrastructure.** `WorkspaceTabKind.Debugger`; `ActiveDebugger`/`IsDebuggerTabActive` on the
+  `_selectedWorkspaceTab` notify chain (gotcha #25); `WorkspaceTabViewModel.CreateDebugger`; hosted in
+  `MainWindow.axaml` exactly like `ScriptExecutorTabView` (a per-kind view gated on `IsDebuggerTabActive`).
+  Opened from the sidebar procedure-leaf **"Debug procedure…"** context item — `MetadataNodeViewModel.DebugProcedure`
+  → `MetadataExplorerViewModel.DebugProcedureRequested` → `MainWindowViewModel.OnDebugProcedureRequested`
+  (mirrors the Execute-procedure chain). Not a singleton (two tabs = two sessions). Torn down on tab close
+  (`CloseTab` → `DebuggerTabViewModel.DisposeAsync` → rollback + close the attachment, §4.4).
+- **`DebuggerTabViewModel`** (App). Parses the routine **once** — the strict whole-routine
+  `SqlParser.Parse(source).Root` → `SemanticModel.Build(...)` → the `DdlStatement.Body` (gotcha #238: a
+  `CREATE PROCEDURE` stays one `DdlStatement` whose body binds with its declares in scope) — to derive the
+  launch panel and the step-point set. Built **without** a metadata provider, so `DiagnosticsEngine`'s
+  object/column categories stay silent (conservative — the routine already compiled). Then drives D1's
+  `DebugSession` through the launcher seam. Every engine call blocks on a wire op (the sync-over-async
+  executor), so stepping runs on `Task.Run` and the awaiting continuation updates observable state.
+- **`IDebugSessionLauncher`** (App seam). The one place App touches the Firebird debug backend, so the VM is
+  server-lessly unit-testable. Production `FirebirdDebugSessionLauncher` opens a `DebugSessionConnection`
+  (`FirebirdConnectionService.CreateDebugSessionAsync`), builds `FirebirdDebugExecutor.CreateAsync`, constructs
+  the `DebugSession` over the body + root parameter values, and `Start()`s it (paused at entry). A test fake
+  builds the session over a scripted `IDebugExecutor` with a no-op teardown.
+- **Launch panel** (`§9.2` — inline, not a modal, because you re-run constantly). Typed parameters **reuse**
+  the Smart-Parameters infrastructure (`ExecuteProcedureDialogViewModel` — typed per-kind rows + persisted
+  history + validation + `Resolve()`), so there is no second parameter editor; its `AcceptCommand` is the
+  resolve/validate/record path, and input-parameter arguments seed the root frame (§9.3). An isolation selector
+  (Read Committed / Snapshot, §4.2). A **pre-flight** (`DebugPreflight`): `DiagnosticsEngine` unresolved-name
+  warnings + a conservative **lexical** scan for the §4.6 data-safety boundaries that survive the debug rollback
+  (`IN AUTONOMOUS TRANSACTION`, `GEN_ID` / `NEXT VALUE FOR`), + the §F "no step points ⇒ cannot start" blocking
+  refusal. The §4.6 warnings ship **with** the MVP, as the plan requires.
+- **Editor surface.** The read-only source editor attaches D3's **one** `SqlEditorBehavior.Attach` seam (intrinsic
+  highlighting/hover over the source), then the debugger renderers alongside it (spec §11.1): `CurrentLineRenderer`
+  (an `IBackgroundRenderer` painting a translucent-amber band over the paused step point) and `BreakpointMargin`
+  (a clickable `AbstractMargin` red-dot gutter). Breakpoints **snap to an `IExecutableStatement`** (§9.6) — the
+  margin/keyboard report the clicked offset, the VM maps it to the nearest step point. Repaint via
+  `TextView.Redraw()`, never `InvalidateVisual()` (gotcha #223).
+- **Stepping + keyboard.** Continue / Step Into / Over / Out / Run-To-Cursor / Stop(rollback) / Restart. Keyboard
+  is VS-standard and **tab-scoped** (`F5`=Continue, `F10`=Over, `F11`=Into, `Shift+F11`=Out, `Shift+F5`=Stop,
+  `Ctrl+Shift+F5`=Restart, `F9`=toggle breakpoint, `Ctrl+F10`=Run-To-Cursor) — tunnelled on the editor so the
+  read-only control never swallows them. `F5`=Continue is the one deliberate contradiction with the app-wide
+  Execute (spec §9.7).
+- **Variables.** A basic list from the current frame — the declared symbols (params then locals) as the roster,
+  the client-side frame as the live values, `<null>` rendered distinctly. The rich window (grouping, change
+  highlight, inline edit, data tips) is D7.
+- **Theme.** New tokens `DebugCurrentLineColor`/`Brush` + `DebugBreakpointColor`/`Brush` in **both** dictionaries.
+
+### Boundaries kept (§F)
+
+Step-into resolves to nothing in D4 (`FirebirdDebugExecutor.ResolveRoutine` → null), so a call runs on the
+server = **step-over**, 100% faithful (§5.3); stepping into a stored/local routine is D8/D9. Triggers, packages,
+cursors, and the Watches/Immediate/Evaluate surfaces are their own later milestones.
+
+### Verification
+
+- **VM unit tests** (`DebuggerTabVmTests`, +12) against a fake launcher over a scripted `IDebugExecutor` — no
+  server: preparation derives the input parameters + readies launch; the pre-flight flags autonomous-tx +
+  generator use; an unsteppable/missing source blocks; launch pauses at entry with the variable roster; Step
+  Over advances the current statement then completes; Continue runs to completion; a write-back updates a
+  variable; an unhandled raise faults; Stop tears the run down and clears; a breakpoint snaps to a step-point
+  start and stops Continue at the marked statement.
+- Build 0/0; **4744 tests green in one run**; smoke clean (app launches).
+- **User-confirmed on the live lab (2026-07-17):** a manual pass launched `XXX_ZESTAWIENIE` (a `WHILE` loop with
+  a `SELECT … INTO` and `SUSPEND`), stepped through it, hit breakpoints, and watched variables update — the
+  debugger worked and felt stable. Follow-ups still open: an automated **simulated-vs-real lab comparison** (§13
+  DoD) and a headless view-attach probe in `ConnectionExpandBindingProbe`.
+
+### D4 UX review — backlog for later milestones (user, after first real use)
+
+The user reviewed D4 in real use and confirmed it works well; the notes below are **explicitly not a D4 change**
+— they are recorded here to be folded into later milestones (UI polish + wherever the debugger grows). The
+standing directive: **address them as UX/theme in the view + theme tokens; never patch UX by pushing logic into
+the ViewModels/UI layer — keep the D1–D4 responsibility split (Core interpreter · Firebird executor · thin VM ·
+view).**
+
+1. **First-class entry points.** The debugger is one of EmberTern's most important features but today launches
+   only from the sidebar context menu ("Debug procedure…"). Add first-category affordances: a Debug button in the
+   procedure view, a bug-icon toolbar button, and a keyboard shortcut — keep PPM as an alternative, not the
+   primary path.
+2. **Transaction config belongs in global Settings.** The per-launch isolation selector is technically right but
+   reads as an advanced knob most users never change (IBExpert doesn't surface it every run). Once global app
+   settings exist, move Debugger transaction options there (isolation, wait/no-wait, read-only, …) and show only
+   the routine's **parameters** at launch. Fine as-is for now.
+3. **Current-line marker is too aggressive (esp. dark theme).** The amber fill dominates the syntax colouring.
+   Re-style to a subtle blue wash (~10–15% opacity) + a thin blue left bar (optionally a margin arrow) — highlight
+   the statement without masking the syntax highlight. This is a `DebugCurrentLineBrush` re-tune (both dicts) +
+   possibly a left-edge draw in `CurrentLineRenderer`; no VM change.
+4. **Variables must show kind.** IN params, OUT params, and locals look identical (name + type only). Distinguish
+   them by icon / icon colour / grouping / sections (e.g. `→ IN`, `← OUT`, `◇ local`). This is the D7 Variables
+   window's job — the VM already knows the kind (`ParameterSymbol.Direction` / `VariableSymbol`), so it's an
+   icon-key + template concern, not new logic.
+5. **Step Into / Over / Out icons too similar.** Adopt a more distinctive, VS/JetBrains-like icon set with clearer
+   colour differentiation so the controls are recognisable at a glance.
+6. **Edit parameters on a running session.** The inline launch-panel model is less convenient than a dialog once
+   running — there's no easy way to change parameters mid-session. Preferred model: first run shows the params;
+   while debugging, an "Edit Parameters…" affordance re-opens them → Restart. (Keeps the panel's "no re-prompt on
+   Restart" while restoring easy editing.)
+7. **Grow parameter history.** The history mechanism is liked; future additions: pin favourites, recent, group by
+   date, delete entries.
+8. **Richer paused status.** "Paused at line 14 — step" is thin; the AST knows the statement kind, so show e.g.
+   "Paused — SELECT INTO (line 14)" / "Paused — WHILE loop (line 14)" / "Paused — FOR SELECT (line 27)". Low
+   priority, pure presentation off the current step node.
+
+**Overall (user):** the debugger architecture looks very good; D4 proved the engine + UI integration work and that
+D3's single `SqlEditorBehavior.Attach` seam paid off. The main area to refine is UX — a natural product stage, not
+an architecture or implementation flaw.
+
+**Next: D5 (Evaluate / Watches / Immediate — one HarnessBuilder mechanism, three surfaces).**
+
+## D5 — Expression evaluation surface, seam (a): Evaluate + Immediate (2026-07-18)
+
+**Cel (§9.5, decision 6):** expression evaluation as **one engine, three surfaces** (Evaluate / Watches /
+Immediate). This seam ships **Evaluate + Immediate + the Executed SQL audit**; **Watches + per-routine
+persistence is seam (b)** (the plan splits D5 into two sessions — this is session one, stopped at the
+architectural seam with the repo green).
+
+### The one engine (Core) — no second evaluator (D5 risk #1)
+Every surface is *literally the harness with a user-supplied fragment* (§3.2/§3.3), so nothing new evaluates
+anything:
+- **`EvaluationModels.cs`** (`EmberTern.Core.Sql.Debugging`): `EvaluationKind` (Expression | Statement),
+  `EvaluationRequest` (fragment + kind + `ScopeOffset`), `EvaluationResult` (the generated `Sql` — the
+  §10.3/§F audit anchor — plus `Value` / `Error` / `Writes`, with `HasError`/`HadWriteBack`).
+- **`IDebugExecutor.Evaluate(request, frame)`** — a **new method on the one server seam**. An arbitrary
+  fragment has **no AST node**, so its injected read/write set is the §3.5 **`ReadWriteSetAnalyzer.InScopeLocals`**
+  primitive — which is *exactly* why D2 carved that out named ("a Watch on an arbitrary expression the model
+  did not bind — D5"). The fake scripts it; the Firebird executor implements it with the machinery it already
+  had.
+- **`DebugSession.Evaluate(fragment, kind)`** — the pure orchestration face the VM talks to. Requires
+  **Paused** (a live frame exists only while paused), delegates to the executor against `CurrentFrame`, and
+  for **Statement** mode applies the write-back to the live frame (the Immediate window operates *on the live
+  frame*, §9.5). It never evaluates/coerces/interprets anything itself.
+- **`FirebirdDebugExecutor.Evaluate`** — builds a `HarnessRequest` (Expression → result column, Statement →
+  verbatim + write-back), reusing `BindValues`/`RunHarnessAsync`. An arbitrary expression has **no known
+  type** (unlike an `IF`/`WHILE` condition, which is `BOOLEAN`), so the result column is a wide
+  `VARCHAR(8191) CHARACTER SET UTF8` — the server casts the value to text and we surface it as text (typed,
+  per-kind inspection of a *declared* variable is the Variables window, D7). A value that cannot cast (a
+  binary BLOB) raises and is surfaced as the error, never guessed (§F).
+
+### Deviation from the plan (Developer Contract): no `EvaluateController`
+The plan named an App-side `EvaluateController`. **The real "one engine" is Core's `DebugSession.Evaluate`;**
+the App orchestration (background-thread run + append to the audit log) is thin enough to live on the VM —
+exactly as *stepping* is orchestrated today (`Task.Run` + `RefreshFromSession`). A separate controller would
+be pure indirection over `Task.Run` + a collection append. So evaluation is a few methods on
+`DebuggerTabViewModel`, and seam (b)'s Watches refresh loop will call the same `DebugSession.Evaluate` from
+`RefreshFromSession`. (Precedent: D3 chose "solve the lifecycle" over the plan's letter, documented.)
+
+### App — the two inline surfaces + the audit log
+- **`DebugExecutedSqlRowViewModel`** — one Executed-SQL entry (spec §10.3): fragment, kind label, result
+  text (value / statement note / error), the **generated harness SQL kept visible** (the row's tooltip), a
+  timestamp, and an `IsError` / `HasSideEffect` flag. A **statement is always flagged `±`** (it ran real SQL
+  in the debug transaction — side-effect-capable by nature, §9.5); an expression never is. The precise
+  "which variables changed" is the Variables panel's job (it reflects the applied write-back), not the audit
+  flag's.
+- **`DebuggerTabViewModel`** — added `ExecutedSql` (newest-first, capped at 200), `ImmediateInput` +
+  `ImmediateAsStatement`, `EvaluateImmediateCommand` (gated on Paused + non-empty input), and the shared
+  `EvaluateFragmentAsync(fragment, kind)` used by both Immediate and Evaluate(Shift+F9). Evaluation runs on
+  `Task.Run` with **Phase → Busy for the duration**, which gives mutual exclusion with stepping *via the
+  existing state machine* (a step can't start while Busy; evaluation requires Paused) — so the non-thread-safe
+  `DebugSession` is never touched concurrently. A clean evaluation clears the input (REPL-style); a **server
+  raise keeps it** so the user can edit and retry. The audit log is cleared on Launch (fresh session) and
+  Stop.
+- **`DebuggerTabView`** — a bottom panel (below a horizontal splitter): the Immediate input (Enter =
+  evaluate) + an "as statement" checkbox + an Evaluate button, and the Executed SQL list (fragment + result,
+  error rows in `ErrorBrush`, `±` in `WarningBrush`, harness SQL on the row tooltip). **Shift+F9** in the
+  source editor evaluates the selection (or the identifier under the caret) as an expression through the same
+  engine (spec §9.7). All theme tokens; no new colours; no UX polish (the D4 UX backlog stays deferred).
+
+### Tests (+11)
+- `DebugEngineTests` (+5): expression returns a value and does not mutate the frame; statement applies
+  write-back to the live frame; expression mode never applies write-back (even if the executor returned
+  writes); evaluate-when-not-paused throws; empty fragment throws. The fake grew a scriptable `Evaluate`.
+- `DebuggerTabVmTests` (+6): Immediate expression appends the result + clears input; Immediate statement
+  flags the side effect + updates live variables + passes Statement mode; a server error shows an error row +
+  **keeps** the input; Evaluate(selection) routes through the same engine; the command is disabled when not
+  paused; Stop clears the audit log. The fake grew a scriptable `Evaluate`.
+
+**Build 0/0; 4755 tests green in one run; smoke clean.** **Live evaluation awaits user confirmation** (needs
+a server, per the QA rule) — the §9.5 verification is: evaluate an expression calling a stored function and
+compare to `SELECT <expr> FROM RDB$DATABASE`. Manual QA checklist prepared.
+
+### Follow-ups after manual QA (2026-07-18, same session)
+
+Two small UX/discoverability changes the user asked for after trying seam (a) — **no engine/architecture
+change** (the D1–D5 responsibility split is untouched):
+
+1. **Immediate input is no longer auto-cleared after a successful evaluation.** The typical workflow is
+   experimenting with the *same* expression and tweaking it, so clearing forced re-typing. Now the input is
+   **kept**, and a small inline **Clear (✕)** button (inside the text box, right-aligned, visible only when
+   there is text) clears it on demand (`ClearImmediateCommand`, gated on `HasImmediateInput`). Pure
+   view/VM-presentation: `EvaluateFragmentAsync` dropped its "did it succeed → clear" return; the row/audit
+   logic is unchanged. (+1 test: `ClearImmediate_EmptiesTheInput`; the former "clears input" assertion became
+   "keeps input".)
+2. **Debugger entry point on the Procedure editor toolbar** — a bug-icon button immediately right of the
+   existing Run Procedure button, **reusing the one launch path**. `MainWindowViewModel.OnDebugProcedureRequested`
+   was refactored to extract `OpenDebuggerForProcedure(routineName)` (the sidebar handler now calls it), and
+   the procedure detail VM raises a new `DebugRequested` intent (mirroring `RunExecuteRequested`) wired by the
+   host to `OpenDebuggerForProcedure(detail.ProcedureName)`. `DebugProcedureCommand` is gated on
+   `!IsNew` (an uncompiled New-procedure tab can't be debugged — mirrors `CanExecuteProcedure`); both inputs
+   are fixed at construction, so no change-notification is needed. New `Icon.Bug` (Lucide) + `ProcedureDebugTooltip`.
+   **No new debug logic** — it is only an additional entry point onto the existing `DebuggerTabViewModel` launch.
+
+**Deferred (flagged to the user): Debug buttons on the Trigger / Package editors.** The user also asked for
+these, but the debugger's current scope is **standalone procedures only** (D4/D5). Triggers (NEW/OLD context,
+no input params) are **D10**; package members need package-qualified resolution (a later milestone);
+`OnDebugProcedureRequested`/`FirebirdDebugMetadata` handle only `MetadataObjectKind.Procedure`. Adding a Debug
+button there now would be a **dead entry point** (a broken promise, against the QA/honesty rules), so it was
+**not** added — it belongs with the milestone that makes those debuggable. Functions likewise (not yet
+supported). Recommendation recorded: add each editor's Debug entry point *with* its enabling milestone.
+
+Build 0/0; **4756 tests green in one run**; smoke clean.
+
+### Backlog (user, 2026-07-18 — NOT part of D5; do not implement now)
+
+**Immediate should pre-validate syntax locally before hitting the server.** Today an invalid Immediate
+expression is sent to Firebird and the user sees a server SQL error. The user would prefer Immediate to run
+the entered text through the **existing `EditorLanguageService` (Lexer + Parser + Diagnostics)** *before*
+issuing the `EXECUTE BLOCK`, so **syntax** errors are caught locally (no round-trip). Constraints: **reuse the
+existing Language Service** — do **not** build a separate debugger parser/validator; **syntax** errors are
+caught locally, **semantic + execution** errors stay the server's responsibility (the harness). A future UX
+improvement, explicitly not D5. Recorded here per the user's request.
+
+## D5 — Expression evaluation surface, seam (b): Watches (2026-07-18). **D5 IS COMPLETE.**
+
+**Cel:** the third surface of §9.5's *one engine, three surfaces* — **Watches**: expressions re-evaluated
+after every step, persisted per routine, with the non-pure ones flagged.
+
+### One engine — Watches add no evaluation mechanism (D5 risk #1)
+Every watch is evaluated through the **same** `DebugSession.Evaluate(expression, Expression)` built in seam
+(a). The tab VM re-evaluates all watches after each pause; there is **no** separate watch evaluator.
+- **Auto re-evaluation.** After every pause-producing engine op — a step (`RunStepAsync`), launch/entry
+  (`LaunchAsync`), and an Immediate run that may have mutated the frame (`EvaluateFragmentAsync`) — the VM
+  calls `EvaluateWatchesAsync()` **while `Phase == Busy`**, so the non-thread-safe `DebugSession` is never
+  touched concurrently (the same mutual-exclusion-via-state-machine rule as seam a). Each watch is a wire op,
+  run on a background thread (`Task.Run`), then the row values are applied on the UI thread. When the session
+  is not paused (completed/faulted) the rows reset to the `—` placeholder — there is no live frame.
+- **`WatchRowViewModel`** (App) — unlike the other read-only row VMs it is **mutable** (`ObservableObject`):
+  its `ValueText`/`IsError`/`Evaluated` update each pause; `Expression` and the side-effect flag are fixed.
+
+### Persistence per routine
+New Core `WatchStore` (`EmberTern.Core.Settings`) — a section facade over the shared `settings.dat`
+(mirroring `ParameterHistoryStore`), owning `UserSettings.DebugWatches` (one `DebugWatchEntry` per
+`(ConnectionId, ObjectName)`; additive property, **no schema bump** — an old file simply has none). The VM
+**loads** watches in its ctor (they show, unevaluated, before launch) and **saves** the whole list on every
+add/remove. `MainWindowViewModel` builds one `WatchStore` on the same directory+protector as
+`ParameterHistoryStore` and passes it to the debugger tab. Stop keeps the (persisted) rows and only resets
+their live values.
+
+### Side-effect flagging (§9.5 guard)
+New pure Core `WatchSideEffectDetector.HasSideEffect(fragment)` — an auto-re-evaluated watch runs real SQL in
+the debug transaction, so a watch that is **not a pure expression** is flagged. It **reuses the one
+`SqlLexer`** (Developer Contract — no new parser) and looks for a side-effecting keyword among the fragment's
+**tokens** (`INSERT`/`UPDATE`/`DELETE`/`MERGE`/`EXECUTE`/`POST_EVENT`); a keyword only matches as a bare
+token, so a string literal (`'please UPDATE'`) or a quoted identifier (`"UPDATE"`) never trips it. It is a
+deliberately conservative **lexical warning cue**, not semantic analysis (a UDF with hidden side effects is
+inherently the server's domain). The flagged rows show a `±` marker with an explanatory tooltip. (This is the
+minimal honest flag; the user's separate backlog item — richer pre-validation via `EditorLanguageService` —
+stays deferred.)
+
+### UI
+The right panel splits into **Variables** (top) + **Watches** (bottom, own splitter): a watch input (Enter =
+Add) + Add button, and the list — each row `± | expression / value | ✕`, value in `SubtleForegroundBrush`
+(or `ErrorBrush` on a raise), the `✕` removing via the tab VM's `RemoveWatchCommand` (ancestor binding). All
+theme tokens; no new colours.
+
+### Deviation from the plan (documented, same rationale as seam a)
+No standalone `WatchesPanelViewModel` — the Watches collection + input + add/remove + the re-evaluation loop
+live on `DebuggerTabViewModel`, consistent with `Variables`/`ExecutedSql` and the seam-a `EvaluateController`
+decision (a separate panel VM would need the session + the evaluation path + persistence — tight coupling to
+the tab VM for no gain). `WatchRowViewModel` is the per-row VM.
+
+### Tests (+26)
+- `WatchStoreTests` (+6): round-trip across instances (in order), replace, empty removes, per-routine, blank
+  key disables.
+- `WatchSideEffectDetectorTests` (+14): pure expressions (incl. a scalar subquery, an equality, a keyword in
+  a string) not flagged; DML/EXECUTE/POST_EVENT/MERGE flagged; case-insensitive; blank.
+- `DebuggerTabVmTests` (+6): add-when-paused evaluates immediately + clears input; re-evaluates after each
+  step; side-effect flag; remove; Stop resets values but keeps rows; watches persist per routine across VM
+  instances.
+
+**Build 0/0; 4782 tests green in one run; smoke clean. Live evaluation of watches awaits user confirmation**
+(needs a server; the shared engine's live fidelity is the same as seam a's). Manual QA checklist prepared.
+
+**D5 IS COMPLETE** — Evaluate + Immediate + Watches, all on the one `HarnessBuilder`/`DebugSession.Evaluate`
+engine (decision 6).
+
+## D5 — Debugger panel layout redesign (2026-07-18; UX only, no debugger logic change)
+
+After manual QA the user asked for a **layout redesign before D6+ adds more panels** (cheaper now than later).
+**Presentation only** — `DebugSession` / `Evaluate` / `WatchStore` / `WatchSideEffectDetector` and all Watches
+functionality (persistence, auto-re-evaluation) are untouched; only the view + two presentation VM properties
+changed.
+
+**Analysis / decision (endorsed the user's proposal with one refinement).** Future debugger panels — Call
+Stack, Breakpoints, Output, the selectable-procedure result grid — are **width-hungry** (tables / logs), not
+height-hungry. So:
+- **Right panel = Variables only** (the primary inspection surface, full editor height — widened to 300).
+- **Bottom panel = a full-width, collapsible `TabControl`** (`bottom-tab` style, exactly like the SQL editor)
+  with **Immediate / Executed SQL / Watches**; a new tab (Call Stack / Breakpoints / Output) is one `TabItem`.
+  **Refinement over "bottom under the editor only":** the bottom spans the **full width** (under editor +
+  Variables) — it mirrors the SQL results panel the user referenced (same collapse intuition) and serves the
+  width-hungry future tabs; Variables get the full height whenever the bottom is collapsed (the common
+  focused-stepping state). The one conscious trade-off (Variables always-visible on the right, Watches as one
+  bottom tab) follows the user's stated priority; docking is a separate future concern, not precluded.
+- **Collapse** mirrors the SQL results panel: a chevron overlays the tab strip (`ChevronsDown` collapse /
+  `ChevronsUp` expand, bound to `IsBottomPanelCollapsed`); the view toggles the bottom grid **row height**
+  between the remembered (draggable) pixel height and **Auto** in code-behind (`ApplyBottomPanel`, mirroring
+  `MainWindow.ApplyResultsRowForActiveTab`). Each tab's content binds `IsVisible` to `!IsBottomPanelCollapsed`,
+  so an Auto row measures to just the tab strip — collapsed → editor + Variables reclaim the height.
+
+**Immediate vs Executed SQL split (non-redundant).** The Immediate tab is a self-contained REPL: the input +
+the **latest** result inline (new presentation prop `LatestEvaluation` = newest audit row); the Executed SQL
+tab is the **full audit history**. New VM presentation members only: `IsBottomPanelCollapsed` +
+`ToggleBottomPanelCommand`, `LatestEvaluation` (+ `HasLatestEvaluation`). Watches moved verbatim into its tab
+(same input + list + `±` flag + `✕` remove).
+
+Build 0/0; **4784 tests green** (+2 presentation: toggle-collapse, latest-evaluation-tracks-and-clears); smoke
+clean. The live layout (collapse, tab switching, ancestor `RemoveWatchCommand` binding) **awaits user
+confirmation** (the debugger tab renders only against a live DB).
+
+**Next milestone: D6 (Cursor Bridge). D6+ not started.**
+
+## Debugger tab UX follow-up — transient tab + double-click-to-collapse (2026-07-18)
+
+Two small IDE-behaviour fixes surfaced during manual QA, landed as one commit *before* starting D6 (cheaper
+now, before D6 adds panels/state). No debugger logic changed.
+
+1. **Debugger tabs are session-transient — never persisted.** With a debugger tab open, closing the app then
+   relaunching "restored" an empty tab. Root cause: `MainWindowViewModel.SnapshotCurrentTabs` skipped only the
+   live-tool kinds (SecurityManager/TraceMonitor/SessionManager/GlobalSearch/ScriptExecutor); a `Debugger` tab
+   fell through to the final `else` and was captured as a `CoreTabKind.Ddl` tab (routine name + empty DDL),
+   which re-opened as an empty tab on the next launch. Fix: add `WorkspaceTabKind.Debugger` to that skip-list —
+   a debug session is transient (rolled back on close), not a document. Consequences, all now correct: **app
+   close** → not captured → **restart** restores nothing; **disconnect** already clears every visible tab, and
+   `ClearWorkspaceTabs` now also tears the debug session down (`DisposeAsync` = §4.4 rollback + close the
+   session's attachment) the same way it disposes the monitors — so a debug tab bound to the disconnected DB is
+   closed *and* its attachment released. No new architecture — the tab was already `IsClosable`, already torn
+   down on explicit tab-close (`RequestCloseTabAsync`); this only stops it leaking into persisted state and
+   adds the disconnect teardown. Pinned by `WorkspacePersistenceVmTests.DebuggerTab_IsTransient_NotCaptured`.
+2. **Double-click the bottom panel's tab strip to collapse/expand.** A second, more natural affordance beside
+   the chevron button, reusing the **same** `ToggleBottomPanelCommand` (no second mechanism). Handled on the
+   bottom `Border`'s `DoubleTapped` in `DebuggerTabView`: when expanded, only a double-tap whose source has a
+   `TabItem` ancestor toggles (so double-clicking panel *content* — rows, inputs — is left alone; the selected
+   content lives in the TabControl's ContentPresenter, not under a `TabItem`); when collapsed only the strip is
+   visible, so any double-tap on the bar expands it. A double-tap that lands on the chevron `Button` is ignored
+   (the button owns its own click). Presentation-only; view + `DoubleTapped` wiring only.
+
+Build 0/0; **4785 tests green** (+1); smoke clean. Live behaviour (transient tab across restart/disconnect,
+double-click collapse) awaits user confirmation (the debugger tab renders only against a live DB).
+
+## D6 — Cursor Bridge (2026-07-18)
+
+`FOR SELECT` bodies now step through a **real, incremental DSQL cursor** instead of the D2 hard stop. Landed
+in two seams after the spec-mandated probes.
+
+**Probes first (§F "verify, don't infer", spec §15.5).** Three probes ran before any code:
+- **Binder for `FOR SELECT`** (point B, empirical): bare local refs in the query *are* surfaced
+  (`role=Variable/Parameter`); colon `:name` refs are **not** (a single `Parameter` token, #238). Initially
+  read as "existing architecture suffices."
+- **Cursor interleaving on FB3** (managed driver): harness stmt while a cursor is open, resume, two cursors —
+  **all succeed**, mirroring FB5 §15.3. Cursor Bridge feasible on FB3 + FB5. **FB4 unavailable** (only FB3.0 +
+  FB5.0 installed) → unverified, recorded honestly (P2's FB2.5 posture).
+- **`WHERE CURRENT OF`** on a separately-opened DSQL cursor: **fails**, SQL -504 "cursor not found in the
+  current context"; `FbCommand.CursorName` not settable. → a §F boundary, not in D6's DoD.
+
+**D6a — AST deepening (commit `5f7d222`).** `ForSelectStatement` gained `IntoTargets` (ordered, folded INTO
+variable names) + `CursorName` (`AS CURSOR c`), parsed order-independently at paren depth 0. The interpreter
+maps a fetched row's columns onto `IntoTargets` positionally; `CursorName` lets a `WHERE CURRENT OF` be
+detected. Additive overlay — tokens round-trip (§0), binder + formatter untouched. Per Developer Contract #1
+(don't token-scan the Firebird layer for structure that belongs in the AST). +6 `PsqlAstTests`.
+
+**D6b — the bridge.** Pure Core `CursorBridge` (mirrors `HarnessBuilder`: `Build(source, loop) →
+CursorQueryPlan` — the DSQL SELECT with frame refs rewritten to positional `?`, the ordered parameter names,
+the INTO targets) + Firebird `CursorHandle : IDebugCursor` (holds the real `FbDataReader` open across steps,
+**per-wire-op** command locking #236 — the lock is taken per fetch/close, never for the cursor's lifetime, so
+harness steps inside the loop don't deadlock) + `FirebirdDebugExecutor.OpenCursor` glue (binds the plan's
+parameter names from the frame, opens the reader; `FOR EXECUTE STATEMENT` → a clear §F refusal). +5
+`CursorBridgeTests` (pure).
+
+**The design correction (§F caught it live).** The first cut rewrote *every* frame ref the binder surfaced —
+bare **and** colon. Live fidelity broke it: `SP_DBG_CURSOR` both `RETURNS (LINE_NO …)` and does
+`SELECT LINE_NO …`, and the binder resolves the SELECT-list **column** `LINE_NO` to the output **parameter**
+(locals shadow columns), so the column was rewritten to `?` → `SELECT ?, …` → **SQL -804 "Data type
+unknown"**. This was invisible to the pure unit tests (valid-looking SQL) — only the sim-vs-real run exposed
+it. **Fix:** rewrite **only the colon/`@` form** (`:name`/`@name` — Firebird's unambiguous variable syntax in
+a query, a native DSQL bind once extracted); a bare name is a **column** and is left verbatim. This also
+dropped the `SemanticModel` dependency from `CursorBridge` entirely. Gotcha #239.
+
+**Lab zoo + fidelity (spec §15.5, the §2.1 proof).** `Lab/setup.sql` gained `SP_DBG_CURSOR` (single
+`FOR SELECT` over `ORDER_ITEMS`, colon-param WHERE, INTO targets, running-sum body, SUSPEND per row) and
+`SP_DBG_NESTED` (nested `FOR SELECT`, two simultaneous cursors, inner WHERE injects the outer frame's local).
+The real executor drove `DebugSession` through them; outputs matched real execution exactly — including a
+**fully stepped** run of `SP_DBG_CURSOR(1000)` (10 steps, per-step cursor fetch) and the nested case.
+
+Build 0/0; **4797 tests green** (+11: 6 D6a AST, 5 CursorBridge); smoke clean; live fidelity proven. The
+in-app stepping UX (breakpoints inside a loop body, Variables reflecting INTO targets live) awaits user
+confirmation (renders only against a live DB). **Next: D7 (Variables window, full).**
+
+---
+
+## Bottom-panel splitter double-click — root-cause fix (2026-07-18)
+
+Three prior commits (`1b77c55`, `c5bf882`, `282fd4d`) tried to fix "double-click the bottom-panel
+GridSplitter to collapse, re-expand restores the height" by fiddling with the splitter gesture itself
+(a `_splitterGestureHeight` snapshot captured on `PointerPressed` with `handledEventsToo`, restored before
+the toggle). It still misbehaved: after a real drag, collapse + re-expand left the panel "glued" to the
+editor.
+
+**Root cause (found by comparing to the SQL editor, not the splitter).** `ApplyBottomPanel` mutated **only**
+the bottom row (Row 2 of `DebugLayout`), never the top row (Row 0). Avalonia's `GridSplitter`
+(`ResizeBehavior=PreviousAndNext`) between a `*` (star) top row and an absolute-pixel bottom row **converts
+the star row to an absolute pixel height** on a genuine drag. Once Row 0 is stuck absolute, the grid has **no
+star row** to reclaim vacated space — so collapse leaves a gap and re-expand can't re-establish the
+editor↔panel relationship. The SQL editor never has this bug because `ApplyResultsRowForActiveTab` /
+`ApplyResultsMaximized` are a **single re-normalization point that always sets both rows** (editor row → `*`,
+results row → pixel/0) on every layout apply; the splitter's transient mutations never survive to the next
+normalize.
+
+**Fix (unify, delete the workaround).** `ApplyBottomPanel` is now the debugger's single re-normalization
+point: it sets **Row 0 back to star** in both branches and Row 2 to Auto (collapsed) / remembered pixel
+height (expanded) — structurally identical to `ApplyResultsRowForActiveTab`. With full re-normalization on
+every toggle, the double-click's spurious micro-drag is absorbed exactly as the SQL editor's maximize/restore
+absorbs it (collapse captures the post-drag height, imperceptibly close to the original), so the
+`_splitterGestureHeight` field, `OnBottomSplitterPointerPressed`, and the `handledEventsToo` registration are
+**deleted** — one collapse/expand logic, no per-gesture exception.
+
+**Part 2 — the double-click still didn't hide the panel (part 1 was necessary but not sufficient).** On live
+QA the *chevron button* collapsed/expanded perfectly, but *double-clicking the splitter* did nothing useful.
+Both call the same `ToggleBottomPanelCommand` → `ApplyBottomPanel`, so the difference had to be the context:
+the button fires when nothing is mid-gesture; the double-click fires **while the GridSplitter is still handling
+its own pointer gesture**, and the collapse **hides that very splitter** (`IsVisible="{Binding
+!IsBottomPanelCollapsed}"`). Toggling synchronously mid-gesture leaves the collapse half-applied. This also
+explains the user's own SQL-editor comparison: that splitter's double-click does maximize/restore, which never
+hides the splitter, so it works. **Fix:** defer the toggle — `Dispatcher.UIThread.Post(...)` it in
+`OnBottomSplitterDoubleTapped` — so it runs after the gesture completes, making the double-click behave exactly
+like the button. Gotcha #240 (both parts). Build 0/0; 4797 green; smoke clean; live behaviour awaits user
+confirmation.
+
+---
+
+## D7 — Variables window, full (2026-07-18)
+
+The basic D4 list becomes the rich window of spec §9.4. Split into two seams; both build green.
+
+**Seam (a) — grouping / kinds / change-highlight / pins / filter.** `DebugVariableRowViewModel` was rewritten
+as a *mutable* row updated **in place** across steps, so pins, group expansion and selection survive a step.
+`Variables` stays the flat roster; new `VariableGroups` is its grouped + filtered presentation over the *same*
+row instances (one roster, two projections — no duplicated logic). New `DebugVariableGroupViewModel` (Header /
+Rows / IsExpanded). Groups shipped: **Pinned / Parameters / Locals**, reusing persistent group instances so
+IsExpanded survives the per-step rebuild; empty groups are hidden. `Context` (triggers, D10) and `Cursors`
+(needs cursor surfacing) are deliberately **not** shipped as empty groups (gotcha #233). Each row carries a
+kind glyph (⬤ IN / ◑ OUT / ○ local) coloured by a theme **key string** via `IconBrushConverter` (never a
+brush — rule #1); the declared type; a distinct `<null>` (subtle + italic); and per-step change-highlight
+(new `DebugVariableChangedBrush`, both dictionaries) computed by reusing `FrameValues.Snapshot()` with the
+baseline reset on frame-identity change. Type-to-filter mirrors the sidebar. `TogglePin` moves a row to the
+top Pinned group (session-scoped; not a Watch — §9.5).
+
+**Seam (b) — inline edit + data tips + lazy BLOBs.**
+- **Data tips** (§9.4): a `DebugValue` section was added to the ordered aggregate `HoverInfo` (no
+  `IHoverProvider` — extended, per rule #2). `HoverInfoEngine.GetHover` gained an *optional*
+  `Func<string, DebugHoverValue?>? debugValueLookup` (default null → the SQL/object editors are unaffected);
+  it is an **input**, so the no-analysis guarantee still holds by signature. Threaded through
+  `NavigationController.Attach` and `SqlEditorBehavior.Attach` (both optional, default null);
+  `DebuggerTabView` supplies a lookup that reads the paused frame's value from the VM's roster (the same rows
+  the panel shows — one truth), gated to the paused state. The card renders the data tip **first** (in a
+  paused debugger the value is the reason you hovered), reusing the existing `QuickInfoView` chrome. A
+  colon/at-sigil is stripped when a reference is unresolved.
+- **Inline edit** (§9.4 "trivial — the frame is client-side truth"): double-click a value → a text box
+  (Enter commits, Esc cancels). Setting is `frame.SetResolvedValue`; the only real work is
+  `TryParseEditedValue`, a best-effort typed parse (InvariantCulture, prefers the value's CLR type, else the
+  type name). A parse failure keeps the box open with a red border — **shape validated at edit time; the real
+  domain CHECK still surfaces on the next injection** (§3.4/§F — never a guessed value). The edit box is
+  seeded from the value's **full untruncated** raw string, never the possibly-truncated display text (§0).
+- **Lazy BLOBs**: a binary BLOB (`byte[]`) renders as a `[BLOB · N B]` placeholder and is **not** text-editable
+  (`IsEditable`); a long text value is truncated inline (256 chars) while staying fully editable. A dedicated
+  "…→ value viewer" popup is a documented follow-up — no reusable viewer exists to wire yet.
+
+Build 0/0; **4807 tests green** (+4 seam a: grouping / change / pins / filter; +3 seam b hover; +3 seam b
+inline edit). Smoke clean. Live behaviour (data tips, inline edit, change-highlight against a real session)
+**awaits user confirmation**. **D7 DONE. Next: D8 (Call stack + nested stored routines).**
+
+### D7 UX backlog (user, 2026-07-18 — deferred, NOT to implement ad hoc)
+
+After confirming D7 works (grouping, filtering, pinning, inline edit, live value updates while stepping all
+behaved as expected), the user filed three UX items for later sessions:
+
+1. **GridSplitter double-click — still not identical to the main SQL Editor.** Two fixes shipped this session
+   (re-normalize both rows — gotcha #240 part 1; `Dispatcher.Post` the collapse off the splitter gesture —
+   part 2) and it is still not right. **Directive: stop iterating on the current implementation.** The user
+   believes the project already contains the correct mechanism (the SQL Editor's results-panel
+   collapse/maximize) and wants a **dedicated session to reuse that exact mechanism** rather than more local
+   patches. Left open.
+2. **Variables icons too similar** — every row reads as a dot. Distinguish **Parameters / Returns(OUT) /
+   Locals / Cursor variables** (cursors land in a later milestone) with distinct **icons or clearly different
+   colours**, not near-identical glyphs.
+3. **Pinned star blends into the kind glyph** — consider a different colour (e.g. yellow), more spacing from
+   the kind glyph, or a **pin icon** instead of the star.
+
+Per the standing directive ([[feedback-debugger-ux-polish-backlog]]): fix these as UX/theme in the view +
+tokens; never push logic into the VMs to paper over UX.
+
+### Post-D7 bugfixes (2026-07-18) — splitter (real root cause), Variables icons, pin
+
+Three UX bugfixes before D8 (user-reported after D7 manual QA).
+
+**1. GridSplitter double-click — the ACTUAL root cause (parts 1+2 were wrong places).** Earlier this session
+re-normalized both rows (part 1) and deferred the toggle off the gesture (part 2); neither fixed it. The user
+directed: stop iterating, find the SQL Editor's mechanism, reuse the exact pattern, refactor if needed. The
+structural divergence, found by that comparison: the debugger bound the **splitter's own `IsVisible` to
+`!IsBottomPanelCollapsed`** — the very state the splitter's double-click toggles, so the control was entangled
+with its own action. MainWindow's results splitter keeps its visibility on an **independent** condition
+(`IsQueryTabActive`), never on what `ToggleResultsMaximized` does. Fix: the debugger splitter is now **always
+visible** while the debug view shows (it already lives inside a host gated on that), and the double-click
+handler is synchronous — structurally identical to `OnResultsSplitterDoubleTapped`. The `Dispatcher.Post`
+deferral from part 2 was removed. Gotcha #240 (part 3 = the real fix). Awaits live confirmation.
+
+**2. Variables kind icons — distinct shape + colour per kind.** IN and OUT previously shared the accent colour
+and near-identical dot glyphs, so every row read the same. Now each kind has a distinct SHAPE — ▶ IN / ◆ OUT /
+● local (all full-size black shapes → equal optical mass; the initial small ▸ read lighter and was bumped to
+▶) — AND a distinct hue via dedicated theme tokens (both dictionaries): `DebugParamInBrush` (blue),
+`DebugParamOutBrush` (amber), `DebugLocalBrush` (green). The row VM's `KindGlyph`/`KindBrushKey` map per kind;
+the colour is still a theme **key string** resolved through `IconBrushConverter` (never a brush — rule #1).
+Cursor variables get their own glyph/token when a later milestone surfaces them.
+
+**3. Pinned star.** The pinned ★ shared the accent colour with the kind glyph beside it, so they blended. Now
+the pinned star is **gold** (`DebugPinBrush`, both dictionaries), the unpinned ☆ is faint (subtle + 0.6 opacity),
+both a touch larger, with a 4px gap added between the pin button and the kind glyph.
+
+Build 0/0; **4807 green** (no test changes — no test asserts glyph/colour strings); smoke clean. UX awaits the
+user's visual confirmation.
+
+## D8 — Call stack + nested stored routines, seam (a): AST deepening + Frame model (2026-07-18, pure Core)
+
+D8's DoD ("A→B→C stack navigable; simulated vs real") requires a **faithful** Step Into of a stored
+procedure — pass its arguments, write its `RETURNING_VALUES` back — which the AST could not express. Analysis
+(presented to the user before coding, per the "stop and recommend if AST/binder deepening is needed" rule)
+found two structural gaps; the user ratified **full D8, starting from a pure-Core seam (a)**. Seam (a) lands
+the AST + Frame-model foundation with **zero server** in the loop and no production behaviour change — the
+executor's `ResolveRoutine` still returns null (seam b activates it), so no callee frame is pushed in prod yet.
+
+### 1. AST — `ExecuteProcedureStatement` deepened (Contract #1: structure belongs in the AST, not a token scan)
+
+The node carried only `ProcedureName`. It now also produces (parser producer, additive overlay — §0 tokens
+still round-trip; formatter untouched, token-based):
+- **`Arguments`** — `IReadOnlyList<CallArgument>`, each a **source span** of one positional argument (not a
+  tree child — it carries only a span, like `ForSelectStatement.IntoTargets`). A step-into slices the span and
+  evaluates the argument expression **in the caller frame** to seed the callee's input parameters (seam b). The
+  argument's ordinary-expression interior stays in the tokens (structural-depth boundary — no subquery/CASE
+  recursion into arguments in D8, a documented boundary).
+- **`ReturningTargets`** — `IReadOnlyList<string>`, the `RETURNING_VALUES` targets folded to the resolution
+  convention (reusing the one `ForTargetName` INTO-target reader), so they key straight into a frame.
+
+Parser: `ReadProcedureCallParts` (SqlParser.cs) — skips the (possibly dotted) name, finds the top-level
+`RETURNING_VALUES` (an identifier, matched by text — mirrors the binder), splits the argument and returning
+sections at paren-depth-0 commas, tolerating the optional surrounding parens Firebird allows in either section.
+The binder is **unchanged**: it already binds the `:var` argument/returning tokens via `BindPsqlExpression`
+(the sanctioned expression-interior token walk), so the read/write sets already see them — no new binding.
+
+### 2. Frame model — `LexicalParent` split from the call-stack `Parent`; `OutputParameterNames`
+
+The load-bearing correction: D1's `Frame.Parent` conflated **two roles** — the call-stack parent (caller) and
+the lexical/scope-chain parent (closure). For a **stored** routine these differ: the callee has a caller (call
+stack, savepoint nesting, `RETURNING_VALUES` write-back, the future caller-line marker) but is a **closed
+scope** — it cannot see the caller's variables. D1 never exercised this (only the root frame existed); D8 is
+the first milestone that pushes a second frame, so it is where the two first diverge. Left conflated, in seam
+(b) an unassigned callee local `X` would resolve up to a caller `X` and inject the wrong value — a §F bug.
+
+- New `Frame.LexicalParent` (distinct from `Parent`); `TryResolveValue` / `SetResolvedValue` now walk
+  `LexicalParent`. A stored callee gets `LexicalParent = null` (closed scope, D8); a **local** sub-routine will
+  get its declaring frame (spec §6 closure — D9). This is exactly the spec §6 "lexical parent" language, now
+  first-class.
+- New `Frame.OutputParameterNames` (declaration order) + `DebugRoutine.OutputParameterNames` /
+  `DebugRoutine.LexicalParent` — additive ctor params (defaults preserve every existing caller).
+
+### 3. Interpreter — `RETURNING_VALUES` write-back on normal return
+
+`AdvanceToNextStepPoint` now calls `ApplyReturningValues` before releasing a completing frame's savepoint: on a
+callee's **normal** exit, its output parameters are bound **positionally** into the caller's `RETURNING_VALUES`
+targets (spec §5 — a real `EXECUTE PROCEDURE` binds outputs into the caller; a simulated frame reconstructs
+that client-side from the callee's own values). A no-op for the root / a call with no `RETURNING_VALUES` / an
+unhandled unwind (the `ExceptionRouter` rolls those back — a faulted call returns nothing); zips to the shorter
+list on a malformed pair, never throws.
+
+### A D1 test that encoded the wrong assumption (corrected, not deleted)
+
+`ScopeChain_InnerFrameResolvesAndWritesOuterVariable` used `execute procedure p` as a **proxy** for the
+scope-chain mechanism and asserted the callee resolves the caller's variable — true only for a *local*
+sub-routine (D9), **false** for a stored one (D8). Split into two honest tests:
+`StoredCallee_IsAClosedScope_DoesNotSeeCallerVariables` (D8 default) and
+`LocalCallee_IsAClosure_ResolvesAndWritesOuterVariable` (the D9 mechanism, driven by the fake executor's new
+`asLocalClosure` mode that sets `LexicalParent = caller`). Plus `StepInto_ReturningValues_...` (the write-back)
+and 4 `PsqlAstTests` (paren/bare arguments, paren/bare + folded returning targets, the no-arg regression).
+
+Build 0/0; **4813 green** (in one run); smoke clean. **Nothing user-visible yet** — seam (a) is the
+foundation; seam (b) (Firebird `ResolveRoutine` + lab fidelity) and seam (c) (Call Stack / breadcrumbs / frame
+nav UI) follow. Gotcha #241 (the LexicalParent-vs-Parent distinction).
+
+### D8 seam (b) part 1 — `FirebirdDebugExecutor` multi-routine context (2026-07-18, behavior-preserving)
+
+`FirebirdDebugExecutor` held **single-routine** state (`_source` / `_model` / `_variableTemplates` /
+`_outputParameters`) — fine while only the root frame ever ran, but a D8 call stack activates **distinct
+routines**, each with its own source / model / variable templates / outputs. Refactored the four fields into a
+`Dictionary<BlockStatement, RoutineContext>` keyed by the routine's **body node** (the stable per-frame key):
+every method now reads `Ctx(frame)` (via `frame.Body`) and threads its `Source` / `Model` / `VariableTemplates`
+/ `OutputParameters` through the (now `static`) helpers `ResolveReadWrite` / `BindValues` / `SnapshotOutputs` /
+`Slice` / `ConditionExpression` / `AllTemplateNames`. The root registers its context in `CreateAsync`; a
+stepped-into stored routine will register its own in `ResolveRoutine` (part 2). **Recursion is correct for
+free**: the same body on two frames shares one context (same declarations + types; the per-frame *values* live
+on the `Frame`).
+
+**Behavior-preserving**: `ResolveRoutine` still returns null, so no callee frame is pushed and the single
+routine's path is byte-for-byte the same lookup as before — the whole suite stays green (4813) and the live
+single-routine behaviour is unchanged. This is the necessary foundation for part 2 (`ResolveRoutine` — fetch +
+parse + metadata the callee, evaluate its arguments through the harness, register its context) + the mandatory
+**lab fidelity** verification (nested procedures, simulated vs real), which the §F rule requires be proven
+against real execution in a focused session.
+
+Build 0/0; **4813 green**; smoke clean.
+
+### D8 seam (b) part 2 — `ResolveRoutine` + argument seeding + live fidelity (2026-07-18). **D8 DoD MET.**
+
+The capability that makes the call stack real: **Step Into a stored procedure**. `FirebirdDebugExecutor.ResolveRoutine`
+now, for a standalone `EXECUTE PROCEDURE`:
+1. **fetches the callee's source** on the DEBUG session (its own attachment + tx) — a new internal
+   `FirebirdDdlReader.BuildProcedureSourceAsync(connection, tx, …)` seam reusing the exact CREATE-OR-ALTER
+   reconstruction the metadata readers use (Contract #17: no second DDL builder), holding the session command
+   lock across the multi-command build (#98/#120/#236);
+2. **parses it** the same way the launch path does (gotcha #238: the strict whole-`CREATE PROCEDURE` parse, so
+   the body's declares are in scope) → `SemanticModel` + `BlockStatement` body;
+3. **resolves its frame variable templates** (R2/R3) via `FirebirdDebugMetadata` — now also returning the
+   ordered **input** parameters (`DebugFrameLayout.InputParameters`);
+4. **evaluates the call's arguments in the CALLER frame** through the SAME harness as a step (Contract #4 — no
+   second evaluator): a Statement-mode `EXECUTE BLOCK` declaring the caller's variables (injecting its
+   in-scope reads, §3.5) and assigning each argument expression to a synthetic `ET_ARG_i` **typed as the
+   callee's i-th input param base type** (R2), so the server computes each argument with full fidelity and
+   returns it typed → the values seed the callee frame's input parameters positionally;
+5. **registers the callee's context** (multi-routine map from part 1) and returns a `DebugRoutine` (a stored
+   routine ⇒ `LexicalParent = null`, a closed scope — gotcha #241).
+
+The interpreter (D8 seam a) then pushes the callee frame; on its normal return `ApplyReturningValues` binds
+its outputs into the caller's `RETURNING_VALUES` targets. **Every unresolvable call runs in place = step-over,
+100% faithful (§5.3):** a non-`EXECUTE PROCEDURE` step, a call with no readable name, a package/qualified name
+(D11), a local sub-routine (D9), or a callee whose source/metadata can't be read (`FbException` → null).
+
+**§F live boundary caught by probing, not reasoning (gotcha #242):** the argument-seeding harness first tried
+`ET_ARG_0 = :P;` — and a quick live test showed `:name` is a **SQL error** as a PSQL assignment RHS (SQL -104;
+the colon form is query-only). Fix: `RewriteColonRefsToBare` rewrites each `:name`/`@name` (a `Parameter`
+token) to its bare name **by span** over the statement's tokens (a colon inside a string literal is a `String`
+token, untouched) — mirroring the Cursor Bridge's span rewrite (gotcha #239; there → `?`, here → bare name).
+
+**Lab fidelity — the mandated §2.1 proof (`tools/probes/DebuggerFidelityProbe`, spec §15.6).** Extended the lab
+zoo with a 3-level chain — `SP_DBG_LEAF` (`Q = P + 1`, executable), `SP_DBG_MID` (calls LEAF, `Q = T*2`),
+`SP_DBG_ROOT` (calls MID, `RESULT = T + 100`, selectable). The real executor drove `DebugSession` Step Into
+through it: **depth reached 3 (`SP_DBG_ROOT → SP_DBG_MID → SP_DBG_LEAF`), and the simulated `RESULT = 112`
+equalled real execution's `112`** — arg seeding + `RETURNING_VALUES` write-back faithful across three frames.
+**ALL PASS.**
+
+Build 0/0; tests green (user-confirmed — the full run is slow in this env); smoke clean. No new unit tests
+(the value is the live fidelity proof, which a unit test structurally cannot give — Contract #12). **D8 seams
+(a) + (b) COMPLETE.** Remaining for D8: seam (c) — the Call Stack panel / Breadcrumbs / frame-nav UI over this
+now-real call stack.
+
+### D8 seam (c) part 1 — Call Stack panel (display-only) (2026-07-18; awaits visual confirmation)
+
+The first UI over the now-real call stack: a **Call Stack** panel (a new bottom `TabItem`, joining
+Immediate / Executed SQL / Watches). It lists frames **innermost-first** (`DebugSession.CallStack`), each row
+showing the routine name, its position **line** (the current statement for the innermost frame, the **call
+site** for a caller — computed against **that frame's own source**, which is why the small Core enabler
+`Frame.Source` / `DebugRoutine.Source` / `DebugSession(rootSource)` was added: a frame carries its routine's
+text so its line resolves and, later, its source can be shown), the current-frame marker (▶), and the
+**simulated-frame indicator** (△ + tooltip) on any frame reached by Step Into — interpreted, so it can differ
+from real execution (§5.3; the root is not marked). `DebugFrameRowViewModel` (immutable row), rebuilt each
+pause by `RebuildCallStack` (presentation only — it reads the engine's stack, never touches the session);
+cleared when not paused.
+
+**Deliberately display-only (documented seam-c boundary).** Full frame-selection **navigation** (selecting a
+caller frame repoints the editor source **and** the Variables panel) needs the callee's **own semantic-model
+roster** (its params/locals with kinds + declared types) surfaced to the VM — the roster lives in the
+executor's per-routine context (D8 seam b part 1), not in the VM's single root model — so it is real
+infrastructure, not a mechanical add. That, plus **Breadcrumbs** (a *shared* editor feature, not a
+debugger-local copy) and **Peek Frame** (reuse Peek Definition), are **seam (c) part 2**. This part gives the
+primary value now — you SEE the A→B→C stack with the simulation indicator — as a clean, green increment.
+
+Build 0/0; +1 `DebuggerTabVmTests` (`CallStack_ShowsRootFrame_WhilePaused_ClearedOnStop`; the debugger subset
+of 126 tests green — the full run hangs in this env, run manually); smoke clean. **Awaits the user's visual
+confirmation** (UI, per the QA rule).
+
+### D8 seam (c) part 2 — frame navigation (2026-07-18; awaits visual confirmation). **D8 IS COMPLETE.**
+
+The display-only panel becomes navigable. First real use of the Call Stack surfaced two gaps that share one
+cause: after a Step Into (1) the editor **stayed on the parent's source** instead of following the callee, and
+(2) the Variables panel kept showing the **root routine's roster** — so a callee's own locals were missing and
+the caller's like-named variables lingered. Both are "the UI is pinned to the root, not the current frame."
+
+**Per-frame model, surfaced without a re-parse (Developer Contract #1).** The roster the Variables panel
+projects is a property of a *routine* — its declared parameters (with IN/OUT direction) and locals, with types
+— which needs the routine's whole `SemanticModel` (parameters come from the `CREATE` header, not the body). The
+root's model lives on the VM; a callee's was built by `FirebirdDebugExecutor.ResolveRoutine` and lived only in
+its private per-routine context. Rather than re-parse the callee source in the VM (Contract #1 forbids it, and
+it duplicates work), the model is **threaded onto the frame exactly as `Source` already is** — a new
+`Frame.Model` / `DebugRoutine.Model` / `DebugSession(rootModel)`, filled by the launcher (`spec.Model`) for the
+root and by `ResolveRoutine` (the very model it already built) for a callee. The interpreter never reads it;
+it is carried for the UI, precedent set by `Frame.Source`. The Variables panel now builds its roster from
+`frame.Model` (falling back to the VM's root model when a frame carries none — the fake-driven tests), so it
+shows **that frame's** parameters + locals.
+
+**One selection truth.** The VM gained a `_selectedFrame` (the inspected frame, reset to the innermost on every
+pause) and a single `ApplySelectedFrame(frame, computeChanges)` that sets **everything together** — `SourceText`
+(→ the frame's source), the current-line marker (→ the frame's position in *its own* source), the Variables
+roster + values, and both selection controls (`SelectedFrameRow` for the Call Stack list, `SelectedBreadcrumbIndex`
+for the breadcrumb bar) under a `_syncingFrameSelection` guard. So a frame and everything mirroring it cannot
+disagree, and the three ways to pick a frame — a Call Stack row, a breadcrumb, `Ctrl+Alt+Up/Down` — all route
+through the one `SelectFrame`. Selection is **navigation, never execution**: it reads `DebugSession.CallStack`
+and never touches the session, and the change-highlight step-baseline is only updated on the innermost-frame
+step path (`computeChanges: true`), so browsing a caller never disturbs it.
+
+**Caller-line bug fixed (seam c part 1).** A caller's "current line" is the call it made into its child —
+`stack[i-1].CallSite`, a statement in **this** frame's source — not `frame.CallSite`, whose offset is in the
+*parent's* source. Part 1 used the latter (measured against this frame's text), a latent mismatch that only
+looked right when two routines shared layout. See gotcha #243: an offset only means something against the exact
+source it came from, so switching the shown document must switch the marker offset to that document's space in
+the same step.
+
+**Breadcrumbs are a genuinely shared control**, not a debugger-local copy (the plan's directive). New
+`EmberTern.App.Controls.BreadcrumbBar` (`.axaml` + code-behind) is generic — an `ItemsSource` of arbitrary
+items (each rendered by `ToString`) + a two-way `SelectedIndex`, "›"-separated clickable segments, theme tokens
+only, zero debugger knowledge — with the debugger as its first consumer (fed the call stack outermost→innermost,
+so it reads left-to-right as the call chain). Any editor surface can reuse it.
+
+**Peek Frame** is a transient card (double-click a call-stack row) previewing that frame's routine source
+without changing the pinned frame — a debugger-local card, because the editor's Peek Definition is private to
+`NavigationController` (reusing the *pattern*, not the private impl).
+
+**Breakpoints stay root-routine-scoped.** They belong to the launched routine; while the editor shows a
+different frame's source (a stepped-into callee, or a selected caller other than the root) the breakpoint
+offsets are in a different coordinate space, so `BreakpointOffsets` surfaces none and `ToggleBreakpointAt` /
+`RunToCursorAsync` no-op (gated on `IsViewingRootSource`). Stepping (Into/Over/Out/Continue) is unaffected;
+nested-routine breakpoints are D12. To manage breakpoints you view the root frame — which frame selection makes
+one click away.
+
+**DoD met:** an A→B stack is navigable; selecting a frame repoints editor + variables; breadcrumbs mirror the
+stack; frame savepoints (unchanged from D1) are correct on unwind. Build 0/0; **+5 `DebuggerTabVmTests`**
+(`StepInto_PushesCalleeFrame_SwitchesSourceAndRoster`, `SelectingCallerFrame_RepointsSourceRosterAndMarker`,
+`MoveFrameSelection_WalksTheStack_BothDirections`, `Breakpoints_AreRootScoped_HiddenWhileViewingACallee`,
+`StepInto_PeekFrame_ReturnsCalleeSource`) driven by a fake executor whose `ResolveRoutine` returns a real parsed
+callee; full suite green (run manually — the full `dotnet test` hangs in this env, #94/#226); smoke clean.
+**Awaits the user's visual confirmation** (UI, per the QA rule). Gotchas #241/#242/#243. **Next: D9 — local
+procedures & functions (the flagship).**
+
+---
+
+## D9 — Local Procedures & Functions (the flagship) — the §6.3 closure version gate (2026-07-18)
+
+D9's first, mandatory unit is the spec **§6.3 version gate**: §6.1 measured sub-routine closure semantics on
+**FB5.0 only**, and FB3 historically documented sub-routines as having *no* access to outer variables. The
+plan makes this a hard blocker — *"Run §6.3's FB3/FB4 probes first"* — because if FB3 differs, the D9 closure
+harness must branch on server version. Verify, don't infer (Developer Contract).
+
+**The probe** (`tools/probes/Fb3ClosureProbe`, raw `EXECUTE BLOCK` against a throwaway scratch DB on each
+instance — deliberately **no EmberTern interpreter**, so it measures the *engine*, not the shipped code):
+three anonymous blocks, each declaring an outer variable and a sub-routine that reads it (Q2), sees it mutated
+between calls (Q3), or writes it (Q4). FB3 on port 4050, FB5 on 3050. FB4 is **not installed** in this
+environment (only FB3.0 + FB5.0 listening), recorded unverified — the same honest posture as P2's FB2.5 and
+D6's §15.5 [11].
+
+**Result (decisive):**
+
+| | FB 3.0.13 | FB 5.0.3 |
+|---|---|---|
+| Q2 sub-fn *reads* outer | **REJECTED** — SQL -206 "Column unknown `OUTER_V`" at compile | **COMPILED** — `RESULT = 6` |
+| Q3 sees outer *mutated* (byref) | **REJECTED** (-206) | **COMPILED** — `R1 = 5, R2 = 99` |
+| Q4 sub-proc *writes* outer | **REJECTED** (-206) | **COMPILED** — `RESULT = 77` |
+
+**FB3 sub-routines are CLOSED scopes; FB5 sub-routines are true closures (read + write, by reference).**
+Exactly what §6.3 anticipated ("if true, FB3 is *simpler* — no closures").
+
+**Why this is elegant, not a complication.** The D8 `Frame.LexicalParent` split (gotcha #241) already models
+both worlds — D8 gave stored callees `LexicalParent = null` (closed) and *reserved* `LexicalParent = declaring
+frame` for D9 local routines. The gate simply tells D9 which to pick, by server major:
+
+- **FB3 → `LexicalParent = null`.** Not just "simpler" — *forced correct*: a sub-routine that references an
+  outer variable **cannot compile in the database on FB3** (-206), so no stored FB3 routine can contain one; a
+  closed frame reproduces the engine with 100% fidelity by construction. The step-over closure harness injects
+  **only the call arguments** — there are no captures.
+- **FB5 → `LexicalParent = declaring frame`.** Outer reads/writes resolve up the scope chain against
+  `FrameValues`; the harness injects the captured read set (R1–R4), carries the sub-routine declaration
+  verbatim (R5), and reads mutated captures back. The carried declaration references the parent's variables,
+  which the harness declares at the enclosing level — FB5's by-reference capture makes it work with no extra
+  machinery.
+- **FB4 → unverified**, a documented §F boundary; re-run `Fb3ClosureProbe` against an FB4 instance when one
+  exists.
+
+The branch is a single predicate on `FirebirdDdlReader.ParseServerMajor` (already reused from P2's connect
+gate) at frame construction — **no new abstraction**, matching the plan's "New: little or nothing."
+
+**State.** Pure gate work: a new out-of-solution probe + design-doc updates (spec §6.3 resolved, §15.7 log
+added, compatibility matrix + open-items + roadmap rows updated; plan D9 risk resolved). **No production code
+touched** ⇒ build 0/0 and the test suite are unaffected. Committed as the D9 gate. **Next session: D9 seam a**
+— `FirebirdDebugExecutor.ResolveRoutine` resolves a local `DECLARE PROCEDURE/FUNCTION` call to a real frame
+(interpret §6.2a), picking `LexicalParent` by version; then seam b — the closure harness + transitive
+read/write-set fixpoint over the sub-routine call graph + R5. See the handoff at the end of this session.
+
+## D9 — Local Procedures & Functions (the flagship) — seam (a) Part 1: AST deepening + binder + extractor (2026-07-18)
+
+The plan's D9 seam (a) is *"`ResolveRoutine` resolves a local `DECLARE PROCEDURE/FUNCTION` to a real
+interpreted frame"* — but the moment we started it, the spec §6.2a assumption ("just interpret the local
+routine's body") proved too optimistic against the **existing AST**: a local sub-routine was **not modelled
+at all**. Its header (`DECLARE PROCEDURE p (…) … AS`) was a lossless `PsqlLeafKind.Other` leaf and its body a
+bare sibling `BlockStatement` — both dropped into the enclosing body's flat `Statements`. Two consequences,
+each fatal to a faithful step-into: the interpreter would step **onto the unrunnable header** and **through
+the sub-routine's body as if it were the enclosing routine's main flow**; and `ResolveRoutine` would have to
+**re-scan tokens** to recover the callee's structure — a direct **Contract #1** violation ("the parser owns
+structure; the executor never re-derives it"). So — exactly as D8 seam (a) deepened the AST for `ExecuteProcedure`
+arguments/`RETURNING_VALUES` before its Firebird seam — D9 seam (a) is split: **Part 1 (this) = pure Core AST
++ binder + extractor foundation; Part 2 = the runtime** (`ResolveRoutine`, local frames, `FirebirdDebugMetadata`,
+`LexicalParent`-by-version, lab fidelity). Part 1 changes **no runtime behaviour** — `ResolveRoutine` still
+returns `null` for a local call (⇒ step-over in place, 100% faithful §5.3), so the live debugger is byte-identical.
+
+**AST (Contract #1 — additive overlay, §0 unchanged).** New `SubroutineDeclaration : PsqlStatement` (+
+`SubroutineKind` procedure/function) in `Ast/PsqlNodes.cs`: a named unit carrying `Kind`, `Name`, and a real
+`Body` (a `BlockStatement`, or `null` for a forward declaration). Its span (and `Tokens`) cover the **whole**
+sub-routine — header *and* body — like every other compound node, so the `Body` child nests (the
+well-formedness invariant); the header is the token run before the body's `BEGIN`, from which the binder/
+extractor read the signature verbatim (R2/R3), never re-modelled as tree fields. `BlockStatement` gained a
+new `LocalRoutines` list (between `Declarations` and `Statements`); its `Children` now **merge** declarations
++ local routines **by source position** (Firebird permits `DECLARE VARIABLE` and `DECLARE PROCEDURE` in either
+order), so children stay in non-decreasing source order.
+
+**Parser producer (`SqlParser.Psql.cs`).** The pre-`BEGIN` declaration loop was factored into `ParseDeclarationSection`,
+which now consumes **both** `DECLARE VARIABLE/CURSOR` (→ `Declarations`) and `DECLARE PROCEDURE/FUNCTION` (→
+`LocalRoutines`, via the new `ParseSubroutineDeclaration`). The **load-bearing subtlety**: a sub-routine's
+header ends at its first depth-0 `AS` (⇒ a body follows) or depth-0 `;` (⇒ a forward declaration) — **not** at
+the first `;`, because the sub-routine's own `declare variable tmp integer;` ends in a `;` too; scanning to
+that would truncate the header and lose the body. The body is parsed by the new `ParseScopedBlockBody` —
+declarations + one `BEGIN … END`, **block-scoped (non-lenient)**, so it stops at its own matching `END` and
+never swallows the enclosing routine's main `BEGIN` (the way the `isTopLevel` path folds trailing tokens
+would). `ParsePsqlUnit` now routes a stray `DECLARE PROCEDURE/FUNCTION` at a statement position (mid-edit /
+malformed — Firebird declares these only pre-`BEGIN`) through the **same** `ParseSubroutineDeclaration`, so the
+now-dead `ParsePsqlHeaderLeaf` and the now-unused `IsDeclarationStart` were **deleted** (replaced by
+`IsLocalRoutineStart`) — no dead code.
+
+**Binder (`SemanticBinder.Psql.cs`) — the first genuine nested scope in a PSQL body.** `BindBlock` now binds
+`block.LocalRoutines` via a new `BindLocalRoutine`: a **child `RoutineBody` scope** per sub-routine, its
+header params + `RETURNS` outputs + local variables declared into it (reusing the same `BindParamList` /
+`BindBody` the top-level routine uses), the body bound against that child. Two things fall out of the scope
+tree for free: the sub-routine's own symbols resolve inside it, and — because `Resolve` walks to the parent —
+an outer variable also resolves (the **FB5 closure**). On FB3 a sub-routine is a **closed scope**, but that is
+a *runtime* distinction the debugger honours in Part 2 via `LexicalParent`-by-version; the static editor model
+has no server version and stays permissive here (consistent with the diagnostics engine's "prefer silence over
+false positives"). The sub-routine **name** is not yet a callable symbol — resolving a local call is Part 2.
+
+**Extractor (`PsqlDeclarationExtractor`).** `RoutineDeclarations.SubRoutines` — modelled in D2 but always
+empty — is now **filled**: each `block.LocalRoutines` entry sliced verbatim (header + body) for **R5** (the
+harness re-declares each 1:1 so a call in the frame binds to the local, never a like-named global — a §F
+violation if dropped). The per-sub-routine base-type derivation + frame layout the callee frames need stay the
+Firebird layer's job (Part 2).
+
+**Tests / verification.** +7 `PsqlAstTests` (local procedure/function shape, own-local-variable header-not-
+truncated, forward declaration, interleaved decls+routines in source order, byte round-trip), +2
+`SemanticModelTests` (nested scope with non-leaking params/locals; a body reference resolving to the
+sub-routine's own param), +1 `PsqlDeclarationExtractorTests` (verbatim R5 carry) + the stale "InD2" test
+renamed, +4 `SqlTestCorpus` shapes feeding the §0 differential harness (round-trip + well-formedness). Build
+0/0; **4848 tests green** (4821 + the 27-test `ConnectionExpandBindingProbe` in its own partition, #94/#226);
+smoke clean. One commit. **Next: D9 seam (a) Part 2** — the runtime: `FirebirdDebugExecutor.ResolveRoutine`
+resolves a local call to an interpreted frame (`Frame.LexicalParent` by server major — FB3 `null` / FB5
+declaring frame), `FirebirdDebugMetadata` derives the callee's param base types (R2), and lab fidelity proves
+simulated == real for a stepped local call. Then **seam (b)** — the closure harness + transitive read/write-set
+fixpoint over the sub-routine call graph.
+
+## D9 — Local Procedures & Functions (the flagship) — seam (a) Part 2: local-procedure step-into runtime + live fidelity (2026-07-18)
+
+**DoD met: Step Into a local `DECLARE PROCEDURE` works as a real debugger frame, proven simulated == real on
+the lab.** Part 1 laid the pure-Core foundation (AST `SubroutineDeclaration` + `BlockStatement.LocalRoutines`,
+binder nested scope, extractor R5 carry) but left `ResolveRoutine` returning `null` for a local call (staged,
+gotcha #233). Part 2 is the runtime that turns a local `EXECUTE PROCEDURE` into a real frame.
+
+### 1. `ResolveRoutine` — resolve a LOCAL sub-procedure before any server fetch
+
+`FirebirdDebugExecutor.ResolveRoutine` now tries a **local** sub-procedure *first* (before the D8 stored-source
+fetch and before the D11 dotted-name step-over):
+
+- **`TryFindLocalProcedure(name, frame)`** walks the **lexical scope chain** (`frame`, then `frame.LexicalParent`,
+  …) exactly as name resolution does (spec §6), checking each frame's `Body.LocalRoutines` for a
+  `SubroutineDeclaration { Kind: Procedure, Body: not null }` whose name matches (case-insensitive). It returns
+  the declaration **and the declaring frame** (the callee's lexical parent). A local **function** is never here
+  (it is called inside an expression, not as an `EXECUTE PROCEDURE` step point); a forward declaration (null
+  body) is skipped (not runnable).
+- **`BuildLocalRoutineAsync`** builds the callee frame from the **already-parsed** `routine.Body` — **no source
+  fetch**, because a local routine's body is part of the enclosing routine's AST. It reuses the D8
+  argument-seeding harness (`SeedInputParametersAsync` — Contract #4, no second evaluator) to evaluate the
+  call's arguments in the caller frame and seed the callee's input params, then returns a `DebugRoutine` sharing
+  the **enclosing** `Source` + `Model` (a local routine's spans and its scope live in the enclosing routine, not
+  a separate compilation unit) — distinct from a D8 **stored** callee, which gets its own fetched source/model.
+- **`LexicalParent` by server major (the §6.3 gate):** `FirebirdDdlReader.ParseServerMajor` ⇒ **FB5** → the
+  declaring frame (a true closure), **FB3/FB4** → `null` (a closed scope; FB4 conservative, a documented §F
+  boundary — closure semantics unverified there). This reuses the D8 `Frame.LexicalParent`/`Parent` split
+  (gotcha #241) — **no new abstraction**, exactly as the plan's D9 brief predicted.
+
+### 2. The one new metadata path — a local routine is not a catalog object
+
+A local `DECLARE PROCEDURE` has **no `RDB$PROCEDURE_PARAMETERS` row**, so its parameter and `RETURNS` types
+cannot be read from the catalog. New `FirebirdDebugMetadata.BuildLocalRoutineFrameVariablesAsync` derives them
+from the **AST header** instead, via a new pure-Core primitive:
+
+- **`PsqlDeclarationExtractor.ExtractSignature(SubroutineDeclaration, source)`** reads the sub-routine's input
+  params + `RETURNS (…)` output params from **its own header tokens** (before the body's `BEGIN`), returning
+  `SubroutineParam(Name, TypeSpec)` lists (Contract #1 — consume the AST, never re-parse). A local **function**'s
+  single `RETURNS <type>` yields no output parameter (its value returns via `RETURN`). The type-spec scanner
+  (`TypeSpecBetween`) was factored out of the existing `TypeSpecOf` so both share one paren-aware "type up to
+  `NOT`/`CHECK`/`DEFAULT`/`COLLATE`/`=`/terminator" reader.
+- Each param is then declared **verbatim** with its written type (R3 — a domain keeps its semantics) and its
+  **base type** derived from `RDB$FIELDS` (R2, reusing `ResolveBaseTypeAsync` — a domain resolves, a builtin is
+  itself), exactly as a stored routine's params are, only sourced from the AST rather than the catalog. Body
+  locals extract as usual.
+
+### 3. R5 wired into the harness — a local function runs faithfully server-side
+
+`RoutineContext` gained a `SubRoutines` field (R5): the routine's in-scope local sub-routine declarations,
+computed once from `PsqlDeclarationExtractor.Extract` in `Register` and threaded into **every** `HarnessRequest`
+(step, condition, evaluate, argument-seed). So a statement that calls a local `TRIPLE()`/`ADD_TAX()` has those
+declarations in its `EXECUTE BLOCK` and binds to the **local**, never a like-named global (a §F violation). This
+is what lets a local **function** be exercised faithfully as a **step-over** (the server runs it). Empty for a
+routine with no sub-routines (all D2–D8 routines) — no harness change there, no regression.
+
+### 4. Scope boundary (seam a part 2)
+
+The local routines here are **self-contained** — no outer-variable references. Outer-variable **closure
+injection** (the closure harness) and the **transitive read/write-set fixpoint** over the sub-routine call graph
+are **seam (b)**, deliberately not started. A self-contained routine does not exercise the closure, so on FB5 the
+`LexicalParent = declaring frame` is set correctly (forward-looking) but behaviourally inert; an FB5 local
+routine that *did* reference an outer variable would surface a harness error (the outer var isn't in the callee's
+own frame templates) rather than a silent wrong value — the honest §F stop until seam (b) wires injection.
+
+### 5. Lab + live fidelity (§F — mandatory)
+
+`Lab/setup.sql` gained **`SP_DBG_LOCAL(BASE)`**: a local `DECLARE FUNCTION TRIPLE` + a local `DECLARE PROCEDURE
+ADD_TAX` (input param `AMOUNT`, output `WITH_TAX`, its own local `BONUS`), the main body doing
+`ACC = TRIPLE(BASE); EXECUTE PROCEDURE ADD_TAX(:ACC) RETURNING_VALUES :TOTAL; SUSPEND;`. Rebuilt the `.fdb` at an
+ASCII path and copied in (gotcha #149). `DebuggerFidelityProbe` was **extended** (not duplicated): the real
+`FirebirdDebugExecutor` Step-Into'd `SP_DBG_LOCAL(5)` → **depth 2**, frame chain `SP_DBG_LOCAL → ADD_TAX`,
+**simulated `TOTAL = 115` == real `115`** (TRIPLE(5)=15 server-side; ADD_TAX(15): BONUS=100 → WITH_TAX=115 →
+TOTAL). D8's stored-chain cases unchanged. **ALL PASS.**
+
+### Result
+
+Build 0/0; **4852 tests green** (+4 `PsqlDeclarationExtractorTests` for `ExtractSignature`); smoke clean; live
+fidelity proven. One commit. **Next: D9 seam (b)** — the closure harness (inject captured outer variables into a
+local routine frame) + the transitive read/write-set fixpoint over the sub-routine call graph, so a local
+routine that reads/writes an *outer* variable (an FB5 closure) steps faithfully.
+
+## D9 — Local Procedures & Functions (the flagship) — seam (b) Part 1: closure capture for stepped-INTO frames (2026-07-18)
+
+**Step Into a local routine whose body READS and WRITES an OUTER variable — an FB5 closure over the declaring
+frame (§6.1/§6.2b) — now works, proven simulated == real on the lab.** Seam (a) made a local `DECLARE
+PROCEDURE` a real frame but the zoo was *self-contained* (no outer-variable references). Seam (b) closes the
+closure: a sub-routine statement that touches an outer variable now injects it, and its mutation reaches the
+parent frame.
+
+The key realisation: **the D1 scope-chain mechanism (`Frame.LexicalParent` walk in `TryResolveValue`/
+`SetResolvedValue`) already existed and was tested** (`LocalCallee_IsAClosure_ResolvesAndWritesOuterVariable`).
+What was missing was (a) the interpreter *using* it when applying a statement's write-back, (b) the harness
+*declaring + injecting* the captured outer variables, and (c) correct *ownership* of a name during the walk.
+Three focused changes, **no new abstraction** (Contract: if D9 needs a new abstraction, something earlier was
+built wrong — it did not).
+
+### 1. Core `Frame` — declared-names for correct ownership (shadowing)
+
+`TryResolveValue`/`SetResolvedValue` previously decided "which frame owns this name" by `Values.Contains(name)`
+— true only once a variable is *assigned*. That mis-handles two cases: a not-yet-assigned outer variable
+written from inside a sub-routine (would leak to the wrong frame), and an inner local **shadowing** a like-named
+outer (an unassigned inner local would resolve to the outer). Fix: `Frame` now records its **declared names**
+(its parameters + its body's `DECLARE VARIABLE`s) at construction, and the walk uses
+`Owns(name) = _declaredNames.Contains(name) || Values.Contains(name)`. A declared local is owned from frame
+entry, so it stops the walk (shadowing) and receives its own writes. Empty declared-names (the fake-driven D1
+tests, whose bodies have no `DECLARE`s) fall back to the old Values-only behaviour — so every existing test is
+unaffected.
+
+### 2. Core `DebugSession` — route write-backs up the closure chain
+
+The interpreter applied a statement's write-back with `frame.Values.Apply(outcome.Writes)` — writing only the
+*callee* frame. For a closure statement writing a captured outer variable, that created a spurious callee local
+and left the parent stale (a §F bug). New private `ApplyWrites(frame, writes)` routes each write through
+`frame.SetResolvedValue`, which walks the lexical chain to the **owning** frame. Applied at all three write-back
+sites (statement outcome, `FOR SELECT` `INTO`, the Immediate window). For a non-closure frame (no lexical
+parent) `SetResolvedValue` writes locally — behaviourally identical to the old direct apply, so nothing else
+changes.
+
+### 3. Firebird `FirebirdDebugExecutor.BindValues` — declare the captured outer variables
+
+The harness for a sub-routine statement previously declared only the frame's **own** templates. A closure
+statement references outer variables that aren't there → the harness fragment references an undeclared variable
+→ SQL error. `BindValues` now, beyond the frame's own templates, walks `frame.LexicalParent` and declares
+**every ancestor frame's variables** (verbatim R3, current value resolved through the chain), so the harness can
+declare + inject the captured reads (R1) and return the captured writes. An inner declaration **shadows** a
+like-named outer (first-seen wins, this frame first). For a non-closure frame the chain loop does nothing, so
+D2–D8 harnesses are byte-identical. **No fixpoint is needed for step-INTO**: the statement's own references are
+precise (`ReadWriteSetAnalyzer.Analyze` surfaces the outer reference via the shared enclosing model), so exactly
+the touched outer variables are injected/written.
+
+### Lab + live fidelity (§F)
+
+`Lab/setup.sql` +`SP_DBG_CLOSURE(SEED)`: a local `PROCEDURE BUMP` with **no** parameters that does
+`ACC = ACC + 10`, where `ACC` is the enclosing routine's variable — a read+write closure capture. Called twice;
+`TOTAL = ACC`. FB5-only by construction (FB3 sub-routines are closed scopes and can't compile an outer reference,
+§6.3), which is exactly why the lab is FB5. Rebuilt the `.fdb` (#149). `DebuggerFidelityProbe` **extended**:
+the real executor Step-Into'd `BUMP` twice → depth 2, chain `SP_DBG_CLOSURE → BUMP`, **simulated `TOTAL = 25` ==
+real `25`** (ACC 5 → 15 → 25 — each closure write reaching the parent frame). D8 + seam-a cases unchanged. ALL
+PASS.
+
+### Boundary — seam (b) Part 2 (NOT done)
+
+A **step-OVER** of a local call **with direct arguments** — `EXECUTE PROCEDURE p(x) RETURNING_VALUES y` — whose
+callee `p` also mutates OTHER outer variables (not `x`/`y`) still drops those mutations: `Analyze` returns the
+precise `{x, y}` set (non-empty, so the `InScopeLocals` fallback does not fire), and the callee's *hidden*
+captured writes are neither injected nor returned. Closing that is the **transitive read/write-set fixpoint over
+the sub-routine call graph** (spec §3.5), which is D9 seam (b) Part 2. Two things already keep the common cases
+correct meanwhile: a **no-argument** local call has no direct refs → the `InScopeLocals` fallback injects/returns
+all in-scope locals (correct, chattier), and **R5** carries every sub-routine declaration verbatim (seam a Part
+2) so the call binds to the local. And **step-INTO is fully correct** — the flagship capability (a local routine
+as a real, steppable frame with real closure variables) works.
+
+### Result
+
+Build 0/0; **4853 tests green** (+1 `DebugEngineTests` pinning the interpreter's closure write-back routing);
+smoke clean; live fidelity proven. One commit. **Next: D9 seam (b) Part 2** — the transitive read/write-set
+fixpoint over the sub-routine call graph.
+
+## D9 — Local Procedures & Functions (the flagship) — seam (b) Part 2: the transitive read/write-set fixpoint (2026-07-18). 🏁 D9 COMPLETE
+
+**Closes the last gap: a step-OVER of a local call whose callee captures an OUTER variable NOT named at the call
+site now injects that capture and reads its mutation back — proven simulated == real on the lab.** Seam (b)
+Part 1 handled step-*into* (the callee's own statements directly reference the outer var, so `Analyze` surfaces
+it). Part 2 handles step-*over*: the call `EXECUTE PROCEDURE p(x) RETURNING_VALUES y` (or a local **function**
+call `z = f(x)` inside a leaf — always a step-over) hides the callee's captures behind the call site, so the
+statement's direct read/write set (`{x, y}`) drops them. The fix is the spec §3.5 **fixpoint over the
+sub-routine call graph**.
+
+### The mechanism (reusing existing architecture, no parallel path)
+
+New pure-Core **`SubroutineCatalog`** (`Sql/Language/Debugging/SubroutineCatalog.cs`): the authoritative name →
+`SubroutineDeclaration` map of the in-scope local sub-routines, built by the executor from
+`BlockStatement.LocalRoutines` up the lexical (closure) chain. It is *scope*, not a resolver.
+
+`ReadWriteSetAnalyzer.Analyze` gained an **optional** third argument `SubroutineCatalog? subroutines = null` —
+so every existing caller (and D2–D8) is byte-identical (the direct-reference set). When a catalog is supplied
+and the statement **calls** an in-scope local sub-routine, `FoldTransitiveCaptures`:
+
+1. **Detects the call** — `CalledSubroutines` scans the statement's tokens for an identifier whose folded name
+   is a catalog key. A conservative **name-membership** check (over-detection only adds a callee's captures =
+   safe), covering both an `EXECUTE PROCEDURE` proc call and an expression-embedded function call. This is *not*
+   a variable resolver — variable references still come only from the binder (Architecture rule #2); the AST
+   models the call graph but the binder does not yet resolve local calls as symbols (the seam-a-part-1 note), so
+   this token-membership check is the pragmatic call-site detector at the structural-depth boundary.
+2. **Collects the callee's transitively-referenced variables** — `CollectTransitiveReferencedVars` unions every
+   Variable/Parameter reference in the callee body's span (from `model.References` — **reuses the binder**), which
+   is *inherently transitive for a nested sub-routine* (its body lies within the parent's span), and recurses
+   into every catalog sibling the callee calls. A **visited set** terminates mutual recursion.
+3. **Keeps only the captures visible at the call site** — intersect with `InScopeLocals(model, call.Start)`, so
+   the callee's own params/locals (out of scope here) drop out and only the outer captures remain.
+4. **Adds them to both reads and writes.** Over-inclusion is §F-safe: a returned-but-unchanged variable writes
+   its own value back; an injected-but-unused value is harmless (R1 skips a null anyway).
+
+The executor threads the catalog through `ResolveReadWrite` (built once per statement via
+`BuildSubroutineCatalog(frame)`), so both the statement harness (`ExecuteStatement`) and the condition harness
+(`EvaluateCondition`) get the fixpoint. D5 `Evaluate` already uses the `InScopeLocals` superset, so it needs no
+change. **BindValues already declares the frame's + ancestors' variables (seam b Part 1)** — so the fixpoint
+only widens what is *injected/returned*, never what is *declared*; the captured variable is already in the
+harness, it just now gets its value.
+
+### Why this is precise, not "inject everything"
+
+The old empty-set fallback (`InScopeLocals` as both reads+writes) already made a **no-argument** local call
+correct, but a call **with** direct arguments has a non-empty precise set and skipped the fallback — dropping the
+hidden captures. The fixpoint targets exactly the callee's captures (e.g. a 10 MB BLOB variable the call does not
+touch is *not* shipped both ways every step — the §3.5 perf motivation), rather than widening to all in-scope
+locals.
+
+### Lab + live fidelity (§F)
+
+`Lab/setup.sql` +**`SP_DBG_CLOSURE_FN`** (a local `FUNCTION BUMP_HIDDEN` that reads+writes the outer `HIDDEN`;
+the call `TOTAL = BUMP_HIDDEN(10)` names only the literal 10) and +**`SP_DBG_CLOSURE_OVER`** (a local
+`PROCEDURE ACCUMULATE` that reads+writes `HIDDEN`; stepped OVER). Rebuilt the `.fdb` (#149).
+`DebuggerFidelityProbe` extended — `SimulateAsync` gained a `StepKind` parameter so a routine can be driven with
+Step Over:
+- **Case 6** (`SP_DBG_CLOSURE_FN`, function via natural step-over): depth 1, **sim `TOTAL = 15` == real `15`**.
+- **Case 7** (`SP_DBG_CLOSURE_OVER`, procedure, explicit `StepKind.Over`): depth 1, **sim `TOTAL = 15` == real
+  `15`**.
+
+Without the fixpoint both would simulate `NULL`/stale (HIDDEN injected as NULL, its mutation dropped). ALL PASS;
+D8 + seam-a + seam-b-Part-1 cases unchanged.
+
+### Result — 🏁 the flagship is complete
+
+Build 0/0; **4856 tests green** (+3 `ReadWriteSetAnalyzerTests`: a called function's captured outer var folded in
+while its own param is filtered out; transitivity across the call graph; null/empty catalog = the direct set);
+smoke clean; live fidelity proven. One commit. **D9 CORE is COMPLETE — local procedures and functions are real,
+steppable debugger frames with real closure variables, the capability IBExpert cannot deliver.** A local
+**procedure** is faithful both step-into and step-over; a local **function** is faithful step-over. The one
+remaining asymmetry — step *into* a local function's body — is closed by **seam (c)** below (designed here,
+implemented next).
+
+## D9 seam (c) — Step Into a local FUNCTION — DESIGN (2026-07-18; NOT implemented — full handoff for a new session)
+
+During manual QA of D9 the user found an asymmetry: **Step Into works for a local procedure but a local
+function runs whole and returns (effectively Step Over)** — you cannot trace a complex local function's body
+line by line. After an architectural analysis (recorded below) we ratified a small closing seam. **Nothing is
+implemented; this section is the complete design so the next session codes without re-analysing.**
+
+### Why functions differ (root cause)
+
+A **procedure** call is a *statement* (`EXECUTE PROCEDURE p(...)`) — a discrete step point the interpreter owns.
+A **function** call is an *element of a server-evaluated expression* (`v = f(x)`, `if (f(x))`, …). The whole
+expression is computed by the server in one harness (§F / Contract #3: the client owns control flow, the server
+owns **all** semantics). Stepping into a function *in the general case* would force the client to decompose and
+drive expression evaluation — becoming an expression evaluator, exactly what the architecture forbids. **The
+general case is a permanent §F boundary, NOT a gap to fix.**
+
+### The Step Into principle (ratified, final)
+
+> **Step Into descends into a local function only when the function call is the ENTIRE operand of a
+> value-consuming position, so the client never has to evaluate an expression around it.**
+
+Covered (Variant A — all four positions):
+
+| Position | Consumer of the return value `r` | Client evaluates an expression? |
+|---|---|---|
+| `v = LocalFunction(args)` (assignment; Firebird PSQL uses `=`, not `:=`) | the assignment target `v` | no |
+| `RETURN LocalFunction(args)` | the enclosing function frame's return value | no |
+| `IF LocalFunction(args) THEN` | the IF branch decision (`r == true`) | no |
+| `WHILE LocalFunction(args) DO` | the WHILE loop decision (re-evaluated per iteration) | no |
+
+The function's **arguments** may be arbitrary (server-evaluated during seeding, incl. a nested `g(...)` which is
+step-over). **Excluded** (require expression decomposition → step-over, no exceptions): `f(x)+1`, `f(x)=5`,
+`f(g(x))` [f is stepped-in, g is a step-over argument — this IS covered; the *excluded* form is f being a
+sub-operand], `a AND f(x)`, `INSERT … VALUES(f(x))`, and any proper-sub-expression position.
+
+### Ratified architectural decisions (final)
+
+1. Small closing seam before D10. **No §F violation. No expression evaluator. No new SERVER path.**
+2. Reuse only: **Statement Harness**, **Expression Harness**, **`SetResolvedValue` / `ApplyReturningValues`**,
+   `Frame`, `LexicalParent`, closures, argument seeding.
+3. **No mini-harness for delivery.** Delivery of `r` is **client-side** via `SetResolvedValue` — the same
+   primitive procedures use for `RETURNING_VALUES`. A delivery harness was rejected for TWO reasons: (a) it
+   would be a second delivery mechanism (procedures deliver client-side ⇒ duplication), and (b) declaring the
+   target with its domain (R3) would **re-validate the domain mid-flight**, contradicting R2 (which deliberately
+   base-types harness slots to avoid exactly that). Coercion faithfulness: the function's **own** return
+   coercion (operand → its `RETURNS` type) IS faithful — done by the server inside the Expression Harness whose
+   result column is typed as the function's `RETURNS` base type (R2). The **outer** assignment coercion
+   (function type → `v`'s type) is raw client-side, **identical to procedure `RETURNING_VALUES`**, and
+   self-heals at `v`'s next injection (declared with its type ⇒ the server coerces). The only residual is a
+   cosmetic display difference if `v` is emitted by `SUSPEND` before any use — the same, accepted boundary as
+   procedures.
+4. `RETURN <expr>` inside a stepped function is evaluated by the **existing Expression Harness** (result column
+   typed as the function's `RETURNS` base type). Never route a `RETURN` leaf through the Statement Harness — it
+   is invalid inside `EXECUTE BLOCK` (would error).
+5. **Function Return Continuation** — a generalized, client-side mechanism: "the caller statement is paused
+   pending the callee function's return value, then consumes it per the call position." `ApplyReturningValues`
+   becomes the procedure special-case of this idea (both fire at the callee frame's normal return in
+   `AdvanceToNextStepPoint`).
+6. Small AST deepening (Contract #1 — structure in the tree, never a token-scan in the Firebird layer).
+
+### Impact — AST
+
+New node **`CallExpression`** (`Ast/ExpressionNodes.cs`): a lone call — `Name : string` (folded, like
+`ExecuteProcedureStatement.ProcedureName`) + `Arguments : IReadOnlyList<CallArgument>` (reuse D8's
+`CallArgument` span record). Its span is the whole `name(args)`.
+
+Additive properties on existing nodes, set by the parser **only** when the operand is *exactly* a lone call
+(strict recognition — under-recognise → step-over is always safe):
+- `PsqlLeafStatement.RhsCall : CallExpression?` — the lone-call RHS of an `Assignment` leaf **or** the lone-call
+  operand of a `Return` leaf.
+- `PsqlLeafStatement.AssignmentTarget : string?` — the folded bare-identifier target of an `Assignment` whose
+  RHS is a lone call (null for a `Return` leaf and when the target is dotted/`NEW.col` → not recognised, a D10
+  concern). Precedent for a folded name in the AST: `ProcedureName` / `ReturningTargets`.
+- `IfStatement.ConditionCall : CallExpression?` and `WhileStatement.ConditionCall : CallExpression?` — non-null
+  when the **entire** condition (inside the header parens) is exactly a lone call.
+
+Parser producers recognise these shapes strictly (a trailing operator / second call / dotted target ⇒ leave the
+property null ⇒ step-over). The parser does **not** decide local-function-vs-not (no catalog) — it models "a
+lone call `name(args)`"; the **debugger** resolves whether `name` is an in-scope local function. Additive
+overlay; §0 round-trip unchanged; `SqlFormatter` untouched (token-based).
+
+Extend `PsqlDeclarationExtractor.ExtractSignature` → `SubroutineSignature.ReturnType : string?` — a local
+**function**'s single `RETURNS <typespec>` (the tokens between `RETURNS` and `AS`, no parens); null for a
+procedure. Feeds R2 base-type derivation for the Expression Harness result column.
+
+### Impact — interpreter (`DebugSession.ExecuteCurrent` / `AdvanceToNextStepPoint`)
+
+- **Step-into recognition (4 positions).** When `kind == StepKind.Into` and the relevant `CallExpression` is
+  present and `_executor.ResolveFunction(call, frame)` returns a routine: push a **function frame** (its
+  `LexicalParent` per server major — FB5 declaring frame / FB3+FB4 null; seeded input params; carrying its
+  `ReturnType`) with a **Function Return Continuation** derived from the position. Do **not** advance the caller
+  sequence / decide the branch yet — the continuation does that on the callee's return. If `ResolveFunction`
+  returns null (not a local function, e.g. a stored/builtin) → run the statement normally (Statement/Expression
+  Harness — the function runs server-side, step-over). For `StepKind.Over/Out/Continue` the `CallExpression` is
+  ignored (always run normally).
+- **`RETURN` inside a function frame.** A `Return` leaf in a function frame is NOT run through the Statement
+  Harness. Instead: if its `RhsCall` is a step-into-able local function (and `StepKind.Into`) → step into it
+  with a `SetFrameReturn` continuation; otherwise → `_executor.EvaluateReturn(returnLeaf, frame)` (Expression
+  Harness typed as `frame.ReturnType`) → set `frame.ReturnValue` and terminate the frame (clear its control
+  stack so it completes).
+- **Delivery on normal return.** `AdvanceToNextStepPoint`, when a frame completes, generalises the existing
+  `ApplyReturningValues` step: a **procedure** callee delivers output params → `RETURNING_VALUES` targets (as
+  today); a **function** callee runs its `ReturnContinuation` against the caller frame + `frame.ReturnValue`:
+  - `AssignTo(target)` → `caller.SetResolvedValue(target, r)`; consume the assignment leaf.
+  - `SetFrameReturn` → `caller.ReturnValue = r`; terminate the caller (its own `RETURN` completes → its
+    continuation fires — recursion handled naturally).
+  - `BranchIf(ifNode)` → advance past the IF; `caller.PushBranch(r == true ? then : else)`.
+  - `DecideWhile(whileNode)` → `r == true` ? `caller.PushBranch(body)` : pop the `WhileActivation`.
+  A raised function (exception) unwinds via `ExceptionRouter` (savepoint rollback) and the continuation does
+  **not** fire — identical to procedures.
+- A function frame that completes with no `RETURN` on its path (Firebird runtime error "function returned no
+  value") → surface a `DebugError`/step error; do not silently deliver null. (§F boundary — documented.)
+
+### Impact — DebugSession (state/API)
+
+Same class as the interpreter. New: `PushFrame` gains an optional continuation + return type. No public API
+change for the tab VM (Step Into is the same command). `CallStack`, breadcrumbs, frame navigation all work for a
+function frame unchanged (it is a `Frame`, marked simulated △ like any stepped-in local routine).
+
+### Impact — HarnessBuilder
+
+**NONE.** The `RETURN` operand and the seeding reuse Statement/Expression modes exactly as they are.
+
+### Impact — runtime (`FirebirdDebugExecutor` / `FirebirdDebugMetadata`)
+
+- New `IDebugExecutor.ResolveFunction(CallExpression call, Frame frame) : DebugRoutine?` — mirrors
+  `ResolveRoutine`: `BuildSubroutineCatalog(frame)` → an in-scope local **function** named `call.Name` with a
+  body → build the frame (reuse the `BuildLocalRoutineAsync` path; **no server source fetch** — the body is in
+  the enclosing AST), seed input params from `call.Arguments` (generalise `SeedInputParametersAsync` to take
+  `IReadOnlyList<CallArgument>` + the enclosing tokens/source), `LexicalParent` per server major, carry
+  `ReturnType` (R2, from `SubroutineSignature.ReturnType` via `FirebirdDebugMetadata`). Null → step-over.
+- New `IDebugExecutor.EvaluateReturn(IExecutableStatement returnStatement, Frame frame) : (value/error)` —
+  refactor `EvaluateCondition` into a private typed-expression evaluator (`EvaluateExpression(fragment, frame,
+  resultType, reads)`), with two public entry points: `EvaluateCondition` (BOOLEAN → `ConditionOutcome`) and
+  `EvaluateReturn` (`frame.ReturnType` → value). Same Expression Harness; reuses `ResolveReadWrite` for the
+  operand's reads (incl. the seam-b fixpoint if the operand itself calls a local routine).
+- `FirebirdDebugMetadata`: derive the function's `RETURNS` base type (R2) from `SubroutineSignature.ReturnType`
+  (reuse `ResolveBaseTypeAsync`).
+- **No `DebugSessionConnection` change. No new SERVER round-trip type.**
+
+### Impact — UI
+
+Minimal / none required for the mechanism (Step Into descends automatically in the recognised positions; the
+function frame shows in the Call Stack / breadcrumbs / Variables like any local-routine frame). **Optional
+polish (defer, D4-backlog style — view/status only, no VM logic):** (a) a subtle "will step into f()" cue in the
+richer paused-status when the current step point is a step-into-able function call, to make the boundary
+predictable; (b) show a function frame's `ReturnValue` as a synthetic `⟵ RETURN` row in Variables once set.
+
+### New classes / structures — responsibilities
+
+| Type | Where | Responsibility |
+|---|---|---|
+| `CallExpression` | Core `Ast/ExpressionNodes.cs` | A lone call operand (name + arg spans) recognised in a value-consuming position. |
+| `PsqlLeafStatement.RhsCall` / `.AssignmentTarget` | Core AST (additive props) | The lone-call RHS/RETURN-operand + the assignment target. |
+| `IfStatement.ConditionCall` / `WhileStatement.ConditionCall` | Core AST (additive props) | The lone-call whole-condition. |
+| `SubroutineSignature.ReturnType` | Core `PsqlDeclarationExtractor` | A local function's single `RETURNS` type spec (R2 input). |
+| `FunctionReturnContinuation` (variants `AssignTo` / `SetFrameReturn` / `BranchIf` / `DecideWhile`) | Core `Sql/Language/Debugging` | Encapsulates "resume the caller statement with the callee function's return value." |
+| `Frame.ReturnValue` / `.ReturnType` / `.ReturnContinuation` | Core `Frame` | A function frame's computed return, its `RETURNS` base type (for the Expression Harness), and how its result is delivered. |
+| `IDebugExecutor.ResolveFunction` | Core seam + Firebird impl | Resolve a lone local-function call → a function frame (or null → step-over). |
+| `IDebugExecutor.EvaluateReturn` | Core seam + Firebird impl | Evaluate a `RETURN` operand via the Expression Harness typed as the function's `RETURNS` type. |
+
+### Implementation plan — small, safe, committable sub-steps
+
+- **c1 — AST only (pure Core, no runtime change). ✅ DONE (2026-07-19).** `CallExpression`
+  (`Ast/ExpressionNodes.cs`: folded `Name` + reused D8 `CallArgument` spans; **not a tree child** — an
+  additive overlay referenced by typed props, so `Descendants`/round-trip/formatter are untouched). The
+  additive props + strict parser producers (`SqlParser.Psql.cs`): `PsqlLeafStatement.RhsCall` +
+  `.AssignmentTarget` (an assignment whose **whole** RHS is a lone call, with a **single bare** target only —
+  `eq == lo+1`; `NEW.col` is left null, a D10 concern) and `RhsCall` for a `RETURN` operand;
+  `IfStatement.ConditionCall` / `WhileStatement.ConditionCall` (the whole header condition — a single
+  enclosing paren pair stripped first, then the remainder must be exactly a lone call). Shared helpers
+  `TryReadLoneCall` (name → `(` → matching `)` is the **last** token, nothing trailing) / `TryReadConditionCall`
+  / `ReadLeafCall` / `FindTopLevelAssign`, **reusing** the D8 `ReadCallArgumentList` + `MatchParenTok` (rule
+  #1 — no second scanner). `PsqlDeclarationExtractor.ExtractSignature` gained
+  `SubroutineSignature.ReturnType` (a local function's single `RETURNS` type spec, captured up to the header's
+  depth-0 `AS` via a new `FindHeaderAs` so the `AS` is not absorbed — the R2 base-type input for c3's
+  Expression Harness result column; null for a procedure). **Producer-only, deliberately staged:**
+  `CallExpression` has no consumer yet (`IDebugExecutor.ResolveFunction` / `EvaluateReturn` are c2/c3), so the
+  tests assert the **AST is produced correctly** at this layer; the "is it actually called" surface assertion
+  arrives with the consumer in c2/c3 (gotcha #233 — a tested-but-uncalled component; recorded as the c1→c2
+  boundary). Additive overlay — §0 round-trip byte-identical, binder + `SqlFormatter` untouched. Tests: +19
+  `PsqlAstTests` (each of the 4 positions recognised; no-arg `f()`; nested-arg `f(g(x))` = one step-over
+  argument; quoted target+callee folding; **negatives** for a trailing operator, a plain expression, two
+  calls, a dotted target, a `RETURN` with a trailing op, a compound/comparison IF/WHILE condition, a
+  non-assignment leaf; a lone-call round-trip), +3 `PsqlDeclarationExtractorTests` (function `ReturnType`:
+  scalar / parametrised / domain / null-for-procedure), +2 `SqlTestCorpus` shapes (round-trip +
+  well-formedness). Build 0/0; targeted tests green (402); full suite hangs in this env (#94/#226) —
+  user-verified green; smoke clean. *(Mirrors seam-a Part 1.)*
+- **c2 — Core interpreter (fake-executor-driven). ✅ DONE (2026-07-19).** New internal
+  `FunctionReturnContinuation` (`Sql/Language/Debugging/FunctionReturnContinuation.cs`) — four variants
+  (`AssignTo(target)` / `SetFrameReturn` / `BranchIf(ifNode)` / `DecideWhile(whileNode)`) plus a
+  `RecognizeStepInto(step)` factory returning `FunctionStepInto?` (the call + its continuation). **Per the
+  user's architectural request, `RecognizeStepInto` is the single concentration point:** the interpreter's
+  "is this a step-into-able local-function position, and which continuation consumes the return" decision lives
+  in ONE place, not scattered across the IF/WHILE/leaf branches of the step loop. `Frame` gained
+  `ReturnType`/`ReturnValue`/`ReturnContinuation` + `IsFunctionFrame` (⟺ has a continuation) + `SetReturnValue`
+  / `TerminateForReturn` (close cursors + clear the control stack — a RETURN exits regardless of block
+  nesting). `IDebugExecutor` gained `ResolveFunction(CallExpression, Frame)` + `EvaluateReturn(returnStmt,
+  Frame)` (+ the `ReturnOutcome` record, + `DebugRoutine.ReturnType`). `DebugSession.ExecuteCurrent` got two
+  guarded branches **before** the node switch: (1) `kind==Into && RecognizeStepInto(step) is {} into &&
+  ResolveFunction(into.Call, frame) is {} fn` → push a function frame carrying `into.Continuation` (the
+  caller's control flow is **not** advanced/branched now — the continuation owns that on return, so it fires
+  exactly once); (2) a `RETURN <expr>` in a function frame → `EvaluateReturn` (Expression Harness) → record
+  the value + `TerminateForReturn`. `AdvanceToNextStepPoint` got `ApplyReturnContinuation(completed)` — the ONE
+  delivery switch generalising `ApplyReturningValues`: `AssignTo` writes the value + consumes the assignment
+  leaf; `SetFrameReturn` sets the caller's own return value + terminates it (its continuation fires next —
+  recursion for `RETURN f()`); `BranchIf`/`DecideWhile` resume the caller's branch/loop with the returned
+  boolean. A raised function unwinds via the `ExceptionRouter` and its continuation never fires (identical to a
+  procedure). **`FirebirdDebugExecutor` got c2 stubs** — `ResolveFunction` → null (⇒ every local-function call
+  still steps over), `EvaluateReturn` → `NotSupportedException` (unreachable while no function frame exists) —
+  so **live behaviour is byte-identical to D9 core** until c3. All types internal (no new public API; the tab
+  VM's Step Into command is unchanged). +11 `DebugEngineTests` (each of the 4 positions + deliver + savepoints,
+  nested `RETURN f()` propagation, IF then/else, WHILE iteration count, unresolved ⇒ step-over, Step Over
+  ignores the call, unresolved IF condition ⇒ server `EvaluateCondition`, a raising function ⇒ no continuation
+  + frame rollback, plain `RETURN <expr>` ⇒ `EvaluateReturn` not the Statement Harness). Build 0/0; targeted
+  green (508 across the debugger + parser classes); full suite hangs in this env (#94/#226) — user-verified;
+  smoke clean. *(Mirrors D1 / seam-a Core work.)*
+- **c3 — Firebird executor + live fidelity. ✅ DONE (2026-07-19).** `FirebirdDebugExecutor.ResolveFunction`
+  resolves a lone local-function call: a generalised `TryFindLocalRoutine(name, frame, SubroutineKind)` (the D9
+  seam-a `TryFindLocalProcedure` widened, now shared by `ResolveRoutine` for procedures and `ResolveFunction`
+  for functions) walks the lexical chain **nearest-first** (so a local shadows a same-named global); a match →
+  `BuildLocalFunctionAsync` (mirrors `BuildLocalRoutineAsync`) builds the frame from the **already-parsed AST
+  body** (no server source fetch), seeds input params through the **shared** `SeedInputParametersAsync`
+  (generalised from `(ExecuteProcedureStatement exec, …)` to `(IReadOnlyList<CallArgument> arguments,
+  IReadOnlyList<SqlToken> callTokens, int callStart, …)`; the procedure callers pass `exec.Arguments/.Tokens/
+  .Start`, the function passes `call.Arguments`, the caller body's tokens, `call.Start`), sets `LexicalParent`
+  by the §6.3 server-major gate, and carries the `RETURNS` base type. `EvaluateReturn` computes the `RETURN`
+  operand (`ReturnOperandExpression` — the tokens after `RETURN`, before `;`) via the Expression Harness typed
+  as `frame.ReturnType`, through a new private `EvaluateExpression` **shared with `EvaluateCondition`** (one
+  server path — no second evaluator). `FirebirdDebugMetadata`: `DebugFrameLayout` gained `ReturnType`, derived
+  in `BuildLocalRoutineFrameVariablesAsync` from `SubroutineSignature.ReturnType` via the existing
+  `ResolveBaseTypeAsync` (R2; null for a procedure). **Lab zoo +4** (`Lab/setup.sql`, `.fdb` rebuilt at an ASCII
+  temp path #149): `SP_DBG_FN_POS` (four positions), `SP_DBG_FN_TYPES` (six return types), `SP_DBG_FN_SHADOW`
+  (a local shadows the stored `FN_ADD_TAX`), `SP_DBG_FN_CLOSURE` (a function closing over an outer var). **Live
+  fidelity (spec §15.11):** `DebuggerFidelityProbe` cases 8–11 (+ re-pointed 4 & 6) — all four positions (depth
+  3), all six return types (INTEGER/BIGINT/NUMERIC/VARCHAR/BOOLEAN/NULL), shadowing (depth 2 → local chosen),
+  nesting, a closure — **all sim == real**. **Live-verified boundary:** Firebird rejects a **nested sub-routine**
+  (`SQLSTATE 0A000 "nested sub function"` — gotcha #244), so the first shadow design (a sub-function inside a
+  sub-procedure) was invalid; lexical-level shadowing is not expressible in Firebird — the realistic case is
+  local-vs-global (`SP_DBG_FN_SHADOW`). Build 0/0; 508 Core tests green (no regression — c3 is Firebird/metadata
+  only); smoke clean. *(Mirrors seam-a Part 2 / seam-b live fidelity.)*
+- **c4 — optional UI polish** (the two view/status items above). Deferred; not required to close the seam.
+
+### Danger zones for the implementer
+
+- A `RETURN` leaf inside a function frame must go through `EvaluateReturn` (Expression Harness), **never** the
+  Statement Harness — `RETURN` is invalid inside `EXECUTE BLOCK`.
+- Do **not** advance the caller sequence / decide the branch when pushing the function frame — the continuation
+  owns that on return (otherwise the branch/assignment fires twice or in the wrong order).
+- The continuation fires **only** on normal return; an exception unwinds via `ExceptionRouter` and must not run
+  it.
+- **No delivery harness** — deliver client-side (`SetResolvedValue`); a harness would duplicate the procedure
+  path and violate R2 (mid-flight domain re-validation).
+- Parser recognition must be **strict**: under-recognise (step-over) rather than over-recognise. A recognised
+  shape the interpreter cannot deliver cleanly is a bug.
+- Firebird PSQL assignment is `=`, not `:=`.
+
+**🏁 c1–c3 LANDED (2026-07-19): D9 is fully closed — local procedures *and* functions step faithfully, both
+into and over (spec §15.8–§15.11). Next: D10 (Triggers).**
+
+---
+
+## D10 — Triggers
+
+Debug a trigger body with user-supplied `NEW`/`OLD` (spec §8.1). No engine API attaches to a real firing
+trigger, so — like IBExpert, and honest about it — **debugging a trigger does not perform the triggering DML**:
+the user supplies `NEW`/`OLD`, we interpret the body. `NEW`/`OLD` do not exist inside an `EXECUTE BLOCK`, so the
+interpreter models them as **frame variables** and the harness **substitutes** them.
+
+### Architecture review (ratified before any code)
+
+The plan (2 sessions) was reviewed against the post-D8/D9 codebase and found **cheaper than budgeted**: the
+mechanism is *one pure-Core engine + one new metadata path + a launch/UI extension*, all resting on shipped,
+live-verified seams. Ratified decisions:
+
+- **Split into 3 committable seams** (A pure Core → B Firebird + Live Fidelity → C UI), mirroring the D8/D9
+  rhythm, instead of the plan's monolithic "2 sessions". Each seam ends build 0/0 + green + smoke + docs +
+  committable.
+- **User decisions:** (2) `NEW`/`OLD` inside a `FOR SELECT` cursor (or a stepped-into callee) is a **§F
+  boundary** — D10 shows a clear refusal rather than partial fidelity; (3) extend the lab with a **BEFORE
+  DELETE** and a **BEFORE INSERT OR UPDATE** trigger to close the full trigger matrix; (4) **"seed from a real
+  row"** deferred to Seam **C2** so C1 stays small.
+- **No heavyweight `TriggerContextModel` (user's architectural request).** The "trigger context" decomposes into
+  already-existing state: the context columns are ordinary `HarnessVariable`s (they go into
+  `RoutineContext.VariableTemplates`), their values live on the `Frame`, and the synthetic names are a naming
+  *convention*, not stored state. What genuinely remains is a *small* value — the simulated event + timing —
+  from which the §8.1 availability rules derive. So it lands as an **optional field on the existing
+  `RoutineContext`** (Seam B), carried by a small pure-Core `TriggerContext` record, **not** a parallel model.
+- **`ContextSubstitution` is entirely `SemanticModel`/`SymbolReference`-driven, never a text search (user's
+  second architectural request).** Confirmed feasible by reading the binder: `AddReference` records a reference
+  **even when the symbol is null**, so in the debugger's **metadata-less** model (`SemanticModel.Build(
+  SqlParser.Parse(source).Root)` with no provider) `NEW.STATUS` still yields two references — `NEW` (role
+  `RecordAlias`, resolved) and `STATUS` (role `Column`, span + `Text="STATUS"` present though the column symbol
+  does not resolve). The engine anchors every rewrite on those reference spans; the column name comes from the
+  reference's own text. A `'NEW.'` inside a string literal/comment/quoted identifier has no such reference and
+  is therefore untouched — the substring-corruption risk the danger-zone warns about is structurally excluded.
+
+### Seam A — pure Core (2026-07-19)
+
+Pure Core, no server, no UI, **unwired** (staged per gotcha #233 — the engine ships tested-but-uncalled; Seam B
+wires it):
+
+- `EmberTern.Core.Sql.Debugging.ContextSubstitution` — the **one** substitution engine (designed to also serve
+  the §3.6 handler error context `GDSCODE`/`SQLSTATE`/`RDB$ERROR` — one mechanism, two consumers):
+  - `BuildColumns(model, scope)` scans the body's references for each distinct `NEW.col`/`OLD.col`
+    (a `RecordAlias` reference immediately followed by a `Column` reference — how the binder records a dotted
+    ref) and assigns each a **stable, compact synthetic name** `ET_CTX_i`. Index-based on purpose: it stays a
+    valid ≤31-char identifier regardless of column-name length (FB3's identifier limit — `ET_CTX_NEW_<col>`
+    could overflow). This class is the **single owner** of the naming convention; Seam B's metadata (base type)
+    and the write-back both consume the names it hands out. Assigned once over the whole body so the same
+    `NEW.col` is the same frame variable in every statement, in the frame, and in the Variables window.
+  - `Substitute(model, source, region, context)` rewrites each `NEW.col`/`OLD.col` reference span to its
+    synthetic and each `INSERTING`/`UPDATING`/`DELETING` predicate to `TRUE`/`FALSE` for the simulated
+    `TriggerContext.Event`, returning the rewritten fragment + the context **reads** (inject) and **writes**
+    (return for write-back). Reads = every context occurrence (over-inclusive is safe — R1 skips a null value).
+    Writes = `NEW` columns only when `TriggerContext.NewWritable` (a BEFORE trigger); over-inclusive there (a
+    merely-read `NEW.col` written back returns its own value, harmlessly) so it can never *miss* a real write —
+    the alternative (missing a write) would leave the frame/Variables stale, a §F divergence. `OLD` is never
+    written back. Edits are applied by a non-overlapping span splice (reference spans don't overlap), mirroring
+    the executor's existing `RewriteColonRefsToBare`/`CursorBridge` span rewrites — a generalisation of a proven
+    pattern, not a new class of mechanism.
+- `TriggerContext` record (`TargetTable`/`Event`/`Timing`/`Columns`) + `TriggerEvent`/`TriggerTiming`/
+  `TriggerRecord` enums + `ContextColumn` record. The §8.1 availability table is expressed as computed
+  properties: `OldAvailable` (UPDATE/DELETE), `NewAvailable` (INSERT/UPDATE), `NewWritable` (BEFORE ∧
+  NewAvailable). This is the value Seam B mounts on `RoutineContext`.
+
+**Tests — built the debugger's way (strict whole-routine parse, NO metadata):** 13 `ContextSubstitutionTests`
+covering distinct + deduplicated columns, synthetic rewrite with the read/write split, AFTER trigger ⇒ no NEW
+write, predicate literals flipping with the simulated event, a **string literal `'…OLD.STATUS'` left
+byte-for-byte intact beside a real rewritten `OLD.STATUS`** (the reference-driven proof), a no-context statement
+returned verbatim, and the full §8.1 availability matrix (6 cases). The metadata-less build is the load-bearing
+case — it proves the `Column` reference is present and usable even when it does not resolve to a symbol.
+
+Build 0/0; Seam A (13) + 191 neighbouring Core/semantic tests green (full suite hangs in this env, #94/#226 —
+ran filtered); smoke clean.
+
+### Seam B — Firebird executor + metadata + Live Fidelity (2026-07-19)
+
+The pure-Core substitution from Seam A is wired to the live executor and proven sim==real on the lab.
+
+**Wiring (behaviour-preserving for non-triggers):**
+- `FirebirdDebugExecutor.RoutineContext` gained an optional `TriggerContext? Trigger`, **non-null only for a
+  trigger's root frame**. A stepped-into stored/local callee has no NEW/OLD in scope, so its context stays null
+  and the D8/D9 step-into paths are byte-for-byte untouched.
+- A new `CreateAsync` overload takes the `TriggerContext`: it skips the (pointless) `RDB$PROCEDURE_PARAMETERS`
+  query (a trigger is not a procedure), builds the **NEW/OLD context column templates** and merges them into the
+  frame variable templates, then registers the trigger context on the root.
+- `ExecuteStatement` and `EvaluateCondition` route every trigger-frame fragment / condition through
+  `ContextSubstitution.Substitute` (over the node span / the condition's paren-group span), replacing the
+  verbatim `Slice`, and **union** the context reads/writes into the local read/write set. `ConditionExpression`
+  was split into a reusable `ConditionBounds` so the condition region can be substituted, not only sliced.
+- `OpenCursor` **refuses** a `FOR SELECT` whose query references NEW/OLD with a clear message — the §F boundary
+  (decision 2): a cursor is a separately-opened DSQL statement where the harness's synthetic context variables
+  do not exist, so a partially-faithful cursor is never opened.
+- `DebugLaunchSpec` + `FirebirdDebugSessionLauncher` carry the `TriggerContext` through to `CreateAsync`.
+
+**One new metadata path** — `FirebirdDebugMetadata.BuildTriggerContextVariablesAsync`: types each context
+column from the **trigger's target table** (`RDB$RELATION_FIELDS ⨝ RDB$FIELDS` via the existing
+`FirebirdDdlReader.FormatType` — derivation, not guessing), producing one `HarnessVariable` per `ContextColumn`.
+
+**Two §F corrections found by probing, not reasoning** (Contract: verify-don't-infer):
+- **Base type, never the domain (gotcha #246).** First cut declared a context variable with its column domain
+  (mirroring `ReadProcedureParametersAsync`'s R3). The probe seeded `NEW.TOTAL_AMOUNT = -5` for `TR_ORDERS_BU`
+  (which raises `E_NEGATIVE_AMOUNT` on a negative amount); the harness died on entry with *"validation error for
+  variable ET_CTX_0, value -5.00"* — the `D_AMOUNT CHECK (VALUE >= 0)` domain re-validated the injected value
+  before the trigger's own logic ran. A NEW/OLD field is a **record field**, not a domain-constrained local: in a
+  real trigger the value can violate the column CHECK (that is exactly what a BEFORE trigger is there to catch;
+  the constraint is enforced at write time, after the trigger, which the debugger never performs). Fixed by
+  declaring context variables with the **base type** (R2) — `BuildTriggerContextVariablesAsync` now reads only
+  the base type.
+- **Colon prefix inside DSQL (gotcha #247).** `TR_ORDERS_AU`'s `INSERT INTO AUDIT_LOG … VALUES (…, NEW.ORDER_ID,
+  …)` failed with *"Column unknown ET_CTX_2"*: inside an embedded DSQL statement Firebird reads a **bare**
+  identifier as a **column**, so a PSQL variable there must be `:ET_CTX_2`. This flips the direction of the other
+  colon rewrites (#239 `:v`→`?`, #242 `:v`→bare). `ContextSubstitution.Substitute` gained a `colonReferences`
+  flag; the executor sets it with `node is not PsqlStatement` (DSQL statements are `SqlStatement`, PSQL leaves are
+  `PsqlStatement`). Reads/writes stay the bare synthetic (the harness declares + injects it bare); only the
+  fragment reference is qualified.
+
+**Lab extended** (`Lab/setup.sql` + rebuilt `.fdb`, #149): an isolated `TRIG_LAB` table + `TR_TRIG_BD` (BEFORE
+DELETE, OLD-only) and `TR_TRIG_BIU` (BEFORE INSERT OR UPDATE, multi-action, writes NOTE not STATUS). Isolating
+them on their own table means they never clobber each other or the ORDERS triggers, giving clean independent
+fidelity checks and closing the full trigger matrix.
+
+**Live fidelity PROVEN** (`DebuggerFidelityProbe` +5 cases; the spec's method — compare the body's *effects*,
+since the triggering DML is not performed): (12) `TR_ORDERS_BU` raises `E_NEGATIVE_AMOUNT` on `NEW.TOTAL_AMOUNT
+= -5` — sim faults == a real UPDATE faults with the same exception; a non-negative amount completes. (13)
+`TR_ORDERS_AU` writes an `AUDIT_LOG` row on a STATUS change — the sim's DETAILS (read from the debug tx before
+rollback) == the real UPDATE's DETAILS ("Status changed from ACT to DONE"). (14) `TR_TRIG_BD` (OLD-only) raises
+`E_ORDER_LOCKED` on `OLD.STATUS='LOCKED'` — sim == a real DELETE of a locked row; a non-locked row completes.
+(15/16) `TR_TRIG_BIU` produces `NEW.NOTE='INSERTED'` for the INSERTING event and `='UPDATED'` for UPDATING —
+sim == the persisted value from a real INSERT / UPDATE, proving predicate substitution + the writable-NEW
+write-back for a multi-action trigger. All 11 D8/D9 cases stayed green (the executor changes are regression-free).
+
+Build 0/0; 122 debugger Core/Firebird unit tests green (full suite hangs #94/#226 — ran filtered); smoke clean.
+**Next: Seam C — the UI (`TriggerContextEditor` with the action selector + NEW/OLD grids honouring the §8.1
+availability rules, trigger-mode `DebuggerTabViewModel`, the Variables Context group, and the sidebar / trigger-
+editor "Debug trigger…" entry points). "Seed from a real row" is deferred to C2.**
+
+## D10 Seam C — trigger launch UI + terminal debug states (2026-07-19, user-confirmed)
+
+**Seam C (Triggers UI) — commit `050b790`.** The trigger becomes debuggable end-to-end. New Core
+`TriggerHeaderReader` derives `(TargetTable, Timing, Events)` from the parsed `CREATE TRIGGER` (matching header
+words by TEXT, since Firebird lexes BEFORE/AFTER/ACTIVE as identifiers) and returns null for a DB-level / DDL
+trigger (out of scope, §8.1). `TriggerContextEditorViewModel` is a **dumb VM**: it holds no availability rules —
+it builds a Core `TriggerContext` for the picked action and reads `NewAvailable`/`OldAvailable` from it; the
+NEW/OLD grids show **only the columns the body references** (`ContextSubstitution.BuildColumns`, typed via
+`EnsureColumnsAsync`) and reuse the Smart-Parameters editor; `CollectRootValues` maps each entered value onto its
+synthetic frame variable (`ET_CTX_i`). `DebuggerTabViewModel` gained trigger mode (prepare → header/columns/
+editor; launch → synthetic rootValues + `TriggerContext` into `DebugLaunchSpec`), a Variables **Context** group
+(rows resolved through a new `DebugVariableRowViewModel.ResolveName` = synthetic; filtered by availability), and
+entry points across `MetadataExplorer`/`MetadataNode`/`MainWindow`/`TriggerDetail` (sidebar + editor toolbar
+"Debug trigger…"). Manual entry only; "seed from a real row" is a future C2.
+
+**QA bug — gotcha #248 (per-reference colon).** A real ERP trigger stopped with `SQL -206, Column unknown
+ET_CTX_3` on `podstwylcen = coalesce((select … where k.id_kartoteka = new.id_kartoteka), 0)`. Root cause: #247's
+colon-vs-bare decision was **per statement** (`node is not PsqlStatement`), but a PSQL assignment can embed a DSQL
+subquery — the `NEW.id_kartoteka` inside the subquery must be `:ET_CTX_3` while the l-value stays bare. Fix:
+`ContextSubstitution.Substitute` takes `colonRegions` and decides **per reference**; the executor derives the
+regions from the AST (whole node if it is a DSQL statement, else each embedded `SubqueryExpression` span —
+`FirebirdDebugExecutor.ColonRegions`), never a token scan. Lab +`TRIG_SUBQ_LAB`/`TR_SUBQ_BU`; `DebuggerFidelityProbe`
+case 17 proves sim==real (`NEW.NOTE='CNT=2'`), all prior cases still green.
+
+**Terminal debug states — Completed / Faulted (follow-up commit).** At end-of-run the debugger no longer clears
+the session (which made it "vanish"). **Completed** keeps the terminal snapshot visible with the block's closing
+`END` marked (execution finished there — IBExpert-like), Variables / Context / Call Stack showing FINAL values.
+**Faulted** stops **on the raising statement** (marked), keeps Variables / Context / Call Stack with the values
+**at the error**, and the status line renders **red + bold** (`IsFaulted`). In both, stepping is disabled and
+only Restart / Stop are active; **Stop** tears the session down and clears. Additive Core: `DebugSession` retains
+`FinalFrame`/`LastStatement` (Completed) and snapshots `FaultStatement`/`FaultFrame`/`FaultStack` **before**
+`ExceptionRouter.TryRoute` unwinds — the unwind DB-rolls-back + pops each frame but never touches its client-side
+`frame.Values`, so the snapshot preserves the state at the raise (§4.5). `CurrentFrame`/`CallStack` still go null
+after termination (existing contract unchanged). The debugger now has four distinct states: Running / Completed /
+Faulted / Stopped. Architecturally the whole D10 + terminal-state work is additive, contract-preserving, unit-
+tested, and live-fidelity-verified.
+
+---
+
+## Sprint D10.5 — UX polish: the harness-audit tab is now DEBUG-only ("Harness Log")
+
+A short cleanup sprint between D10 and D11 (no new debugger capability). The debugger's bottom-panel
+**"Executed SQL"** tab exposed the generated `EXECUTE BLOCK` harnesses (the §10.3/§F audit log) directly in the
+production UI. Two problems: (1) the name read as "the user's SQL history", which it never was — it is a view of
+how the debugger evaluates expressions/statements on the server; (2) that internal mechanism should not be part
+of the interface a normal EmberTern user sees at all. It is a diagnostic surface for *developing / diagnosing the
+debugger itself*.
+
+**Decision (user, mid-sprint).** No new setting, no toggle, no reuse of the existing per-connection
+`ConnectionProfile.DeveloperMode` — that flag has a specific, narrow domain meaning (metadata/DDL WAIT policy for
+one connection) and must not be overloaded with debugger diagnostics; two different concepts. Instead the tab is
+made a **compile-time DEBUG-only** surface: present in DEBUG builds, *absent* (not hidden, not disabled — simply
+not compiled) in RELEASE.
+
+**Implementation (additive, one commit's worth).**
+- The tab's markup was **removed from `DebuggerTabView.axaml`** entirely and is now **built in code-behind under
+  `#if DEBUG`** (`DebuggerTabView.axaml.cs` → `InsertHarnessLogTab` / `BuildHarnessLogTab` / `BuildHarnessRow`),
+  inserted into the named `BottomTabs` `TabControl` at its historical position (right after Immediate). In RELEASE
+  the `#if DEBUG` block (and its DEBUG-only `using`s) is not compiled, so the tab does not exist. Chosen over a
+  csproj `Configuration`-conditioned separate `.axaml` (fragile XAML-globbing surgery, and a RELEASE-only path I
+  can't runtime-verify here) and over runtime `IsVisible` hiding (the user explicitly wanted it *not compiled*,
+  not merely hidden). The code-behind row builder faithfully mirrors the former XAML row (time | fragment | ±
+  side-effect, then result/error text, harness SQL on the row tooltip) and consumes theme brushes as live
+  `DynamicResource`s via `GetResourceObservable` (project rule: brushes via DynamicResource, never a snapshot).
+- **Renamed** "Executed SQL" → **"Harness Log"** (`UiStrings.DebuggerBottomTabHarnessLog`); the dead
+  `DebuggerBottomTabExecutedSql` const was removed.
+- **Task 3 — self-explanation:** a persistent purpose description (`DebuggerHarnessLogDescription`) sits at the top
+  of the tab and is also the header tooltip, plus a dedicated empty-state (`DebuggerHarnessLogEmpty`). Both state
+  plainly that this is a diagnostic view of the debugger's generated `EXECUTE BLOCK`s, *not* a history of the
+  user's SQL.
+- **Nothing else changed.** The audit log itself (`DebuggerTabViewModel.ExecutedSql` / `HasExecutedSql` /
+  `LatestEvaluation` / `AddExecutedSql`) is untouched and still collected in **every** build — it also feeds the
+  Immediate tab's inline latest-result — so `HarnessBuilder`, `DebugSession.Evaluate`, Immediate, Evaluate
+  (Shift+F9), Watches and the harness-SQL tooltips are all behaviour-identical. The `DebuggerTabVmTests` that
+  assert on `ExecutedSql`/`HasExecutedSql` pass unchanged.
+
+**Verification.** Build **0/0 in BOTH Debug and Release** (the RELEASE build proves the harness UI compiles out
+cleanly with no unused-symbol warnings under `TreatWarningsAsErrors`), **4929 tests green** in one run. Live visual
+confirmation (open a debug session in a DEBUG build → the "Harness Log" tab shows with its description; a RELEASE
+build has no such tab) is the user's to make, per the QA rule.
+
+---
+
+## D11 — Packages (Seam 0 + Seam A + Seam B done; Seam C + close remain)
+
+D11 makes packaged procedures — **public and private** — real debugger frames. The plan splits it A/B/C like
+D8/D9/D10, preceded by the mandatory probe/lab step (Seam 0), and the whole milestone is governed by one binding
+user directive: **one execution path — public package procs maximally reuse D8, private maximally reuse D9; do
+NOT build a parallel "package executor". If tempted, stop and extend the existing mechanism.**
+
+### Seam 0 — lab + blocking probes (commit `f229b94`)
+
+D11 was probe-blocked (implementation plan): §8.2 rested on two unverified claims. The lab had **no** private
+package routine, so the very first step was to extend it and measure the engine.
+
+- **Lab (`Lab/setup.sql` + rebuilt `.fdb`, #149):** `PKG_DBG` — header `PUB_RUN`/`PUB_ADD`; body a PRIVATE
+  `PRIV_DOUBLE` (body-only, absent from the header) + the two public routines, with `PUB_RUN` calling the private
+  sibling (`PRIV_DOUBLE`) and the public sibling (`PUB_ADD`). Standalone `SP_DBG_PKG` steps into the package
+  (`SP_DBG_PKG(5)` -> `PKG_DBG.PUB_RUN` -> `5*2 + (5+1) = 16`); made **selectable** (`SUSPEND`) in Seam B so the
+  probe reads `RESULT` via `SELECT`.
+- **Probes (section 15.12), raw `isql`/`EXECUTE BLOCK` — the engine, not the interpreter:**
+  - **A private routine is NOT callable from an `EXECUTE BLOCK`** — `PKG_DBG.PRIV_DOUBLE(5)` -> SQLSTATE 42000,
+    *"Procedure PRIV_DOUBLE is private to package PKG_DBG"*. So a private routine **must be interpreted**, never
+    harness-called.
+  - **A public routine IS callable** (`PKG_DBG.PUB_ADD(5)` -> 6; `SP_DBG_PKG(5)` -> 16). So real step-over /
+    source-fetch step-into.
+  - **The whole body is verbatim in `RDB$PACKAGE_BODY_SOURCE`** (private routine included), starting at `BEGIN` —
+    so an individual routine is a **parse of the blob**, and each routine is shaped exactly like a D9 local
+    `DECLARE PROCEDURE` *without the `DECLARE`*. A strong reuse signal.
+
+### Seam A — pure Core AST/parser (commit `ead3a41`)
+
+Additive; no server; a package call still steps over until Seam B.
+
+1. **Qualified call name.** `ExecuteProcedureStatement.PackageName`; the parser reads `EXECUTE PROCEDURE
+   PKG.PROC` as `(PackageName=PKG, ProcedureName=PROC)` — previously the whole name folded to just the package
+   (the D8 "package/qualified => step-over" boundary; the D8 executor even had a `Contains('.')` guard
+   anticipating this). Argument / `RETURNING_VALUES` parsing already dot-skipped, so it was unaffected. Consumers
+   kept correct: the binder still references the **package** object at the first name token
+   (`ResolveObject(PackageName ?? ProcedureName)`); `SqlParameterScanner` now returns the qualified `PKG.PROC`.
+2. **Package-body member parser.** New `SqlParser.ParsePackageBodyMembers(bodySource)` turns the
+   `RDB$PACKAGE_BODY_SOURCE` blob into member `SubroutineDeclaration` nodes (spans indexing into the blob).
+   `ParseSubroutineDeclaration` was **generalized** to accept the leading `DECLARE` (D9 local) OR a bare
+   `PROCEDURE/FUNCTION` (package member) — the `DECLARE` path is byte-identical; `ParseScopedBlockBody`
+   (CASE-aware) is reused, so there is **no hand-rolled scanner**. Private-ness stays a metadata fact
+   (`RDB$PRIVATE_FLAG`), supplied by the executor in Seam B; the parser only structures the source. Sibling calls
+   inside a member surface as unqualified `ExecuteProcedureStatement`s (resolved against the frame's package in B).
+   +11 tests (qualified name; member order/kind/bodies/spans; sibling-call exposure; function member; edge cases).
+
+### Seam B — Firebird executor + live fidelity (commit `e07ad40`)
+
+Two more design probes first (section 15.13): **(P-C1)** package member params — public **and** private — ARE in
+`RDB$PROCEDURE_PARAMETERS` keyed by `RDB$PACKAGE_NAME` (so the D8 catalog layout generalizes with a package
+filter, not a new metadata path); **(P-C2)** an `EXECUTE BLOCK` that DECLAREs a private routine's body as a
+sub-routine and calls it returns the right value (so the D9 R5 mechanism works for a private sibling => step-over
+of a private routine needs no DSQL call).
+
+The design that fell out — **one path, reuse both**:
+
+- **A package member frame is built the D8 way.** The member is reconstructed as a standalone
+  `CREATE PROCEDURE` (`"CREATE "` + its slice of `RDB$PACKAGE_BODY_SOURCE`), so the SAME D8 pipeline applies:
+  strict parse -> scope-bound `SemanticModel` + body, catalog params (via a generalized `BuildFrameVariablesAsync`
+  keyed by package name — the ONE catalog difference), argument seeding through the shared harness. A PUBLIC
+  member behaves exactly like a D8 stored routine (real step-over from outside is a genuine DSQL call; step-into
+  reconstructs + frames it).
+- **Sibling calls reuse the D9 R5 harness.** The frame's `RoutineContext` carries the package + its members
+  (parsed once via Seam A's `ParsePackageBodyMembers`, cached per session), and **every package routine is
+  declared as a harness sub-routine** (R5, `DECLARE ` + the member's verbatim body). So an unqualified sibling
+  call — public OR **private** — resolves *inside* the harness like a D9 local routine. This is the only way a
+  private routine (not DSQL-callable) can step-over at all.
+- **A package member is a closed scope.** Packages have no package-level variables (§8.2) and a member sees no
+  caller variables, so `LexicalParent` stays null, there is no capture, and the read/write fixpoint is a no-op —
+  `ExecuteStatement` / `EvaluateCondition` / `BindValues` / `ResolveReadWrite` are **unchanged**; a package frame
+  flows through them exactly as a stored frame does. `FirebirdDdlReader.ReadPackageBodySourceAsync` (reusing the
+  shared blob reader) fetches the body on the debug session.
+
+**Files:** `FirebirdDdlReader` (+`ReadPackageBodySourceAsync`), `FirebirdDebugMetadata` (optional `packageName`
+on `BuildFrameVariablesAsync`/`ReadProcedureParametersAsync`), `FirebirdDebugExecutor` (`RoutineContext` gained
+`PackageName`/`PackageMembers`; `TryResolvePackageCall` -> `ResolvePackageMemberAsync` + `PackageBodyFor` cache +
+`RegisterPackageMember`).
+
+**Live fidelity PROVEN — sim == real (section 15.13, `DebuggerFidelityProbe` cases 18-19):**
+- **18 (step Into):** `SP_DBG_PKG -> PUB_RUN` (public) `-> PRIV_DOUBLE` (private, interpreted) `+ PUB_ADD` (public);
+  depth 3; **sim 16 == real 16**.
+- **19 (step Into `PUB_RUN`, then step Over its siblings):** the private `PRIV_DOUBLE` + public `PUB_ADD` run via
+  the **R5 harness** (depth 2 — never entered as frames); **sim 16 == real 16**. (`SimulateAsync` gained an
+  optional per-pause step chooser for this mixed strategy.)
+- All 17 prior D8/D9/D10 cases still pass — no regression.
+
+### Key architectural decisions
+
+- **One execution path (the user's binding directive).** Public = D8 (reconstruct + catalog + real call);
+  private = D9 (R5 harness). The private case is *not* a special executor — it is the existing D9 local-routine
+  mechanism (declare the routine in the harness), applied to a package sibling. The catalog param query is the
+  same D8 query with an added `RDB$PACKAGE_NAME` filter. No `PackageExecutor`, no parallel path.
+- **Reconstruct-as-CREATE** gives a package member a properly scope-bound model + body for free (the D8 binder
+  path), so the read/write narrowing and everything downstream work unchanged — instead of hand-binding member
+  scopes over the blob.
+- **Structure vs. semantics split held:** the parser (Seam A) only structures the package body; private-ness and
+  types are metadata (Seam B). The parser never learns "private".
+
+### Project boundaries (§F — explained stops, not guesses)
+
+- **A package FUNCTION call as a step-into** is not modelled on the call side: Seam A parses function *members*
+  generically, but `CallExpression` carries no package qualifier, so `v = PKG.FN(x)` steps **over** (faithful).
+  Adding it would mirror Seam A's `PackageName` onto `CallExpression` + a `ResolveFunction` package branch — do it
+  when a real lab case needs it, not pre-emptively (gotcha #233).
+- **Launching a package member as the debug ROOT** (a "Debug..." entry point on a package member) is Seam C.
+  Today a package is reached by stepping into it from a standalone caller; the DoD's "both appear as frames" is
+  met from that direction, and Seam C adds the direct launch + UI.
+
+### Seam C — launch a package member as the debug ROOT (C1 engine `fd50411`, C2 UI `0b6259d`)
+
+Seam C adds the direct "Debug procedure…" entry point for a package member, launched as the debug ROOT. Split
+into C1 (engine + live-fidelity proof) and C2 (UI, awaits-then-confirmed by user QA) — mirroring the A/B/C
+cadence — and governed by the same directive: **reuse the ONE execution path, do NOT build a parallel package
+executor.**
+
+**Seam C1 — engine (pure/Firebird/App plumbing + live fidelity):**
+- **The reconstruction has one owner now.** New `SqlParser.ReconstructPackageMemberSource` (members-taking +
+  blob-taking overloads) is the single `"CREATE " + member-slice` reconstruction. The step-into path
+  (`FirebirdDebugExecutor.ResolvePackageMemberAsync`, seam B) was refactored to route through it, so the root
+  launch and step-into share the exact reconstruction — no second implementation.
+- **`FirebirdDdlReader.FetchPackageMemberSourceAsync`** reads the raw `RDB$PACKAGE_BODY_SOURCE` blob (via the
+  existing `ReadPackageBodySourceAsync`) and reconstructs the member's standalone source — the App/probe root
+  source provider. Only PROCEDURE members (a package function-as-root is out of scope, §F).
+- **`FirebirdDebugExecutor.CreateAsync`** gained an optional `packageName`: when set it builds a **package root
+  frame** exactly as a stepped-into package member is built (seam B) — package-keyed catalog params
+  (`BuildFrameVariablesAsync(..., packageName)`), every package routine declared as a harness sub-routine (R5,
+  via `RegisterPackageMember`) so a sibling — public OR private — resolves, package + members on the frame
+  context. Closed scope (`LexicalParent` null) ⇒ `ExecuteStatement`/`EvaluateCondition`/`BindValues` untouched.
+- **App:** `DebugLaunchSpec.PackageName` (additive) threaded through `FirebirdDebugSessionLauncher`;
+  `DebuggerTabViewModel` gained a `packageName` ctor arg it forwards into the spec at launch;
+  `MainWindowViewModel.OpenDebuggerForPackageMember` + `FetchPackageMemberSourceAsync` reuse the
+  `OpenDebuggerForObject` launch shape (same §9.3 parameter panel + launcher). The tab title is the qualified
+  `PKG.MEMBER`; the root frame's name is the member name (matching a stepped-into member, seam B).
+- **Live fidelity PROVEN (`DebuggerFidelityProbe` case 20):** `PKG_DBG.PUB_RUN(5)` launched as ROOT (not
+  reached via a standalone caller — the new path) steps into its private `PRIV_DOUBLE` + public `PUB_ADD`
+  siblings, chain `PUB_RUN → PRIV_DOUBLE → PUB_ADD`, **sim R 16 == real 16** (`EXECUTE PROCEDURE
+  PKG_DBG.PUB_RUN(5)`); all 19 prior cases pass. +4 `PackageBodyParserTests` (reconstruction).
+
+**Seam C2 — UI (entry point only, no debugger-architecture change):**
+- **Package editor → Members tab**: a **"Debug procedure…"** context menu on a member, visible only for
+  PROCEDURE members (`PackageMemberItemNode.IsProcedure`; a function shows nothing — §F). Reuses the sidebar's
+  existing `MetadataContextDebugProcedure` label and mirrors the Members tab's own double-click code-behind
+  pattern (`OnMemberDebugClick` → `PackageDetailTabViewModel.RequestDebugMember`).
+- `PackageDetailTabViewModel.DebugMemberRequested(memberName)` (mirrors the sidebar's `DebugProcedureRequested`)
+  is wired in `MainWindowViewModel` to the C1 `OpenDebuggerForPackageMember` path.
+- **No** sidebar package-member leaf (packages don't expand in the sidebar) and **no** package toolbar button
+  (which member? = a new workflow) — the Members tab is the unambiguous, natural entry point. +3
+  `PackageDetailTests`. Build 0/0; 66 package tests green; smoke clean.
+- **User QA confirmed (2026-07-20):** launch from Members → "Debug procedure…" opens the member as a root
+  frame, parameters pass, Step Into works for public AND private siblings, result as expected; functions offer
+  no Debug item.
+
+**🏁 D11 (Packages) COMPLETE** — packaged procedures (public and private) are real, steppable debugger frames,
+both by stepping into them from a caller AND by launching a member directly as the root; one execution path,
+no parallel package executor, live-fidelity-proven. (A package FUNCTION call as a step-into remains the one §F
+boundary — step-over, faithful — to be added only when a real lab case needs it.)
+
+---
+
+## D12 — Advanced breakpoints (COMPLETE + user-confirmed 2026-07-20 — all seams 0 / A / B / C1 / C2 / D / E1 / E2 done)
+
+D12 (spec §9.8, plan brief "D12 — Advanced breakpoints") adds cheap, high-value stop modes *given* the
+existing engine: **break on exception**, **conditional breakpoints + hit counts**, **data breakpoints**, and
+**run to next `SUSPEND`** (+ its result grid). The binding constraints (plan): every breakpoint condition is
+*just an expression* → the one D5 engine (no second evaluator); everything is **additive** over the existing
+components (`BreakpointSet`, `StepPlanner`, `ExceptionRouter`, D5 `Evaluate`, `FrameValues`); §F holds; verify
+before implement.
+
+**Session split** (mirroring D8–D11 — one committable seam at a time, each ending build 0/0 + green tests +
+independent commit + a user QA checkpoint):
+
+- **Seam 0** — lab verification + the `SP_DBG_LOOP` workhorse *(commit `211a629`)*.
+- **Seam A** — Core: Break on Exception *(commit `a8b160a`)*.
+- **Seam B** — Core: Conditional breakpoints + hit counts *(commit `f9beba7`)*.
+- **Seam C1** — Core: Data breakpoints *(commit `5561e10`)*.
+- **Seam C2** — Core: Run to next `SUSPEND` *(done)*.
+- **Seam D** — Firebird + Live Fidelity (sim==real + stop-moment fidelity on the lab) *(done; probe-only)*.
+- **Seam E1** — UI: Breakpoints panel + Break-on-Exception toggle + data-breakpoint gesture *(commit `cab2f5b`)*.
+- **Seam E2** — UI: Run-to-`SUSPEND` command + Results grid over `EmittedRows` *(commit `9a96bb3`)*.
+- **QA fixes** — gutter hit-test (`c8fc061`) + first-statement breakpoint (`863c89d` → `01b66dd`). **← D12 closed here.**
+
+C was **deliberately split into C1 (Data Breakpoints) and C2 (Run-to-SUSPEND)** — architecturally distinct (a
+post-step diff *policy* vs a new *run mode*), and the user prefers two small coherent seams over one wide one.
+
+### Seam 0 — lab verified + `SP_DBG_LOOP` (commit `211a629`)
+
+A formal confirmation that the lab covers all four D12 scenarios, plus the one deterministic routine the
+existing zoo lacked. Coverage (measured against the live FB5 lab): break-on-exception is covered by
+`SP_DBG_GUARD(-5)` (a real `FbException` at a known line, caught by a `WHEN` handler; the Faulted path is pure
+control flow proven by Seam A fake-executor tests → no new raise routine); data-bp by `SP_DBG_CURSOR`; but
+every loop-based routine was capped at 2 (row-data-driven) iterations — too thin for hit-count policies and a
+multi-row run-to-SUSPEND. The one minimal extension: **`SP_DBG_LOOP(N) RETURNS (IDX, ACC)`** — a deterministic
+counting `WHILE` loop, one `SUSPEND`/iteration, a running accumulator. Pure arithmetic → exact `N`; serves
+run-to-SUSPEND (N rows), hit-count (N hits), conditional (clean `IDX`), data-bp (`ACC` changes each iteration).
+Verified live: `SP_DBG_LOOP(5)` → `(1,5),(2,15),(3,30),(4,50),(5,75)`. `.fdb` rebuilt via the #149 dance.
+
+### Seam A — Break on Exception (commit `a8b160a`)
+
+**Constraint (user):** a **pause in front of the ONE existing routing path**, not an alternative exception
+mechanism; after a resume it must route exactly as an un-broken raise would. Realized by: **`RouteRaisedException`**
+(the inline raise-handling extracted into the single place a raise is routed — immediate OR after a break) +
+**`_pendingRaise`** (an armed raise is held — the raising step + a pre-routing call-stack snapshot — and the
+session pauses `Paused`/`StopReason.Exception`, frame intact, no savepoint touched; the next resume consumes it
+and calls the same `RouteRaisedException`). Routing cannot diverge because `AdvanceSequence` already runs before
+a raise is reported and nothing mutates `_frames` between pause and resume. `SetNextStatement` abandons a held
+raise. `StopReason.Exception` now means "an exception is why we stopped": `(Faulted, Exception)` terminal /
+`(Paused, Exception)` a break, told apart by **`IsPausedOnException`**. New `BreakOnException` (default false,
+toggleable). +6 `DebugEngineTests` incl. the "one path" proof (caught raise → SAME terminal state / rows /
+savepoint trace with the break on or off).
+
+### Seam B — Conditional breakpoints + hit counts (commit `f9beba7`)
+
+**Constraint (user):** `Breakpoint` is a **stop-policy object**, extensible by evolving the model — not parallel
+collections/flags. New Core: **`Breakpoint`** (`Offset`, `Condition`, `HitCount` policy, hit tally;
+`ShouldBreak(conditionSatisfied)` = the pure policy — a false/NULL condition never counts, a true one
+increments and breaks iff the hit-count policy is met); **`HitCountPolicy`** value object (`Always` /
+`Exactly(n)` / `AtLeast(n)` / `Multiple(n)`, `IsMetAt(hits)`) + `HitCountKind`; **`BreakpointSet`** promoted
+`HashSet<int>` → map `offset → Breakpoint`, whole prior API byte-compatible, + `Get`/`GetOrAdd` (`All` deferred
+to Seam E — no consumer yet, gotcha #233). **Condition = an expression through the ONE engine:**
+`IDebugExecutor.EvaluateCondition(string fragment, int scopeOffset, Frame)` — the SAME typed-`BOOLEAN`
+`EvaluateExpression` path `IF`/`WHILE` use, fed a string, `InScopeLocals` read set; result interpreted exactly
+as `IF`/`WHILE` (`NULL` → not-true, else `Convert.ToBoolean`) — **no boolean text parsed** (§F). `DebugSession`'s
+check became **`ShouldBreakAt(step)`**; a condition that **raises** stops + surfaces (`BreakpointConditionError`),
+never silently skipped, and does not count. Additive (a plain breakpoint never touches the condition engine).
++11 `DebugEngineTests`.
+
+### Seam C1 — Data breakpoints (commit `5561e10`)
+
+**Constraint (user):** the watched value is **another stop policy**, not a special case of the loop; the change
+detection is **local** (snapshot → diff → decision). New Core (mirroring `Breakpoint`/`BreakpointSet`):
+**`DataBreakpoint`** (owns the decision `ShouldBreak(old, new)` = "did it change?", `NULL`/`DBNull` equivalent,
+matching the Variables change-highlight's `ValuesEqual`); **`DataBreakpointSet`** (the collection AND the local
+detection — `Snapshot(frame)` before, `FindChanged(before, frame)` after; names resolve via
+`Frame.TryResolveValue`, so a closure variable (D9) is watchable). Engine hookup is minimal: new
+`StopReason.DataBreakpoint`; `DataBreakpoints` + `DataBreakpointHit` (cleared on resume); `RunStepping`
+snapshots before a step and — **only when the innermost frame is unchanged** — diffs after. **The
+frame-identity gate mirrors the D7 change-highlight** (`_previousFrameId == frame.Id`) so a step-into/out
+(scope crossing) can't false-positive; **a cross-frame change on a callee's return is a documented boundary.**
+Purely client-side (like the D7 highlight it reuses) — **no server round-trip, no Firebird change, no
+live-fidelity for C1**. Additive (the snapshot block is gated on `Count > 0`). +6 `DebugEngineTests`.
+
+### Seam C2 — Run to next `SUSPEND` (Core)
+
+**Constraint (user + plan):** run-to-SUSPEND is a **new run mode**, not a special case of the loop, and its
+stop is the SUSPEND **event** — not a step-point property. Realized additively over the existing engine, with
+the same shape as Continue/Data-breakpoints:
+
+- New **`StepKind.RunToSuspend`** — runs full speed (calls execute in place, like Continue). In `StepPlanner`
+  it returns `false` (never a *movement* stop); the stop is decided in `DebugSession`, exactly like a
+  breakpoint / data breakpoint is (a runtime event, not `StepPlanner`'s concern).
+- `StopReason.Suspend` (already in the enum since D1, previously never set) is now the reason.
+- **Detection is a row-count delta.** Only `ExecutionStatus.Suspended` appends to `_emittedRows`, so
+  `RunStepping` captures `rowsBefore` at the top of each iteration and `suspended = _emittedRows.Count >
+  rowsBefore` after `ExecuteCurrent`. No new signal on `ExecuteCurrent`, no new field on the outcome — the
+  SUSPEND event is already fully expressed by the emitted-rows list. It pauses at the step point **after** the
+  SUSPEND (so the user inspects the row + frame, then resumes for the next row); with no further SUSPEND the
+  routine runs to completion (rows unchanged).
+- **Public API:** a dedicated `DebugSession.RunToSuspend()` method (mirrors `RunToCursor(int)`); `Step(kind)`
+  now rejects `RunToSuspend` alongside `RunToCursor`/`SetNext` (dedicated commands).
+- **Precedence:** the SUSPEND check sits right after the data-breakpoint check and before the breakpoint /
+  step-planner check — mirroring data-bp (both are "the step just executed produced an event" stops that win
+  over a line stop). Data-bp stays first, so a watched change on the same step remains the more specific
+  reason; the **same coincidence boundary** as data-bp applies (a breakpoint exactly on the post-SUSPEND step
+  point is not separately re-reported — its hit-count is not incremented for that arrival). A breakpoint
+  reached *before* a SUSPEND still stops normally (breakpoints are checked every step, as under Continue).
+
+Purely client-side and additive: only the `RunToSuspend` mode reacts, so every existing mode is byte-identical
+(a SUSPEND during Continue still just emits its row and keeps running — pinned by a test). **No server
+round-trip, no Firebird change, no live-fidelity for C2** (that is Seam D). +6 `DebugEngineTests` (single
+suspend + position; multi-suspend one-row-per-resume + run-to-completion on the SP_DBG_LOOP shape; no-suspend
+→ completion; breakpoint-before-suspend still stops; Continue does not stop on suspend; `Step(RunToSuspend)`
+throws).
+
+### Seam D — Firebird + Live Fidelity (probe-only; sim == real AND stop-moment fidelity)
+
+**The most important seam of D12** (user): it closes the proof that every D12 mechanism behaves *identically*
+on the real engine — and, per the user's explicit directive, proves **not only WHAT happened (the final
+result) but WHEN the debugger stopped relative to the executing code, and in what order.** No production code
+changed — Seam D is **probe-only** (`tools/probes/DebuggerFidelityProbe`, +6 cases 21–26), because every D12
+mode is a *client-side stop policy over the interpreter that already drives the REAL `FirebirdDebugExecutor`*:
+the values each policy observes, and the SUSPEND / condition / change / raise that triggers each stop, are all
+computed by Firebird. So the fidelity question is purely "does the client pause at the right logical moment
+over real engine state?" — which is exactly what these cases assert.
+
+**Method.** A new probe helper `SimulateStopsAsync` drives a routine while capturing the **sequence of stops**
+— each a `StopSnapshot` (reason, paused-statement text, emitted-row count so far, is-paused-on-exception, the
+changed data-bp variable, and requested live-frame variable values). `SP_DBG_LOOP(5)` is the deterministic
+workhorse; its **real** per-iteration `(IDX, ACC)` sequence — `(1,5),(2,15),(3,30),(4,50),(5,75)`, fetched
+live via `SELECT … FROM SP_DBG_LOOP(5)` — is the ground truth every mode is compared against.
+
+**The six cases (all sim == real, live on FB5):**
+- **21 — Run-to-SUSPEND** (`SP_DBG_LOOP`): exactly **5** Suspend stops, one per `SUSPEND`, **in order**; after
+  the k-th resume exactly k rows are emitted and the live frame `(IDX, ACC)` == the real k-th row; then it
+  completes. The emitted set == the full real result set. (Proves the *moment*: one pause per SUSPEND, in
+  sequence — "give me the next row" is faithful.)
+- **22 — Run-to-SUSPEND over a `FOR SELECT` cursor** (`SP_DBG_CURSOR(1000)`): one Suspend stop per cursor
+  row, in order, `(1,20.00,20.00),(2,25.50,45.50)` == real — run-to-SUSPEND works over the D6 cursor bridge,
+  not just a `WHILE`.
+- **23 — Conditional breakpoint** `IDX = 3` (`SP_DBG_LOOP`): stops **exactly once**, skipping iterations 1 & 2
+  (the condition is evaluated on the engine each arrival), at `IDX=3, ACC=30` (== real 3rd row), then runs to
+  completion with the full real result set. (Proves *when*: the first iteration the real state satisfies it.)
+- **24 — Hit-count** `Exactly(4)` (`SP_DBG_LOOP`): stops on the **4th arrival**, `IDX=4, ACC=50` (== real 4th
+  row) — the hit tally aligns with real iteration order.
+- **25 — Data breakpoint on `ACC`** (`SP_DBG_LOOP`): stops on **every** change, value sequence
+  `0 → 5 → 15 → 30 → 50 → 75` (the `ACC = 0` init + one per iteration); the per-iteration tail == the real ACC
+  sequence. (The ACC values are real harness write-backs, so the change sequence *is* the engine's.)
+- **26 — Break on Exception** (`SP_DBG_GUARD(-5)`): pauses **at the raising statement**
+  (`EXCEPTION E_NEGATIVE_AMOUNT`), `IsPausedOnException`, **before** routing (frame intact, not a fault); the
+  resume routes it through the `WHEN … DO` handler and completes with `RESULT = 'CAUGHT'` == real; the same run
+  with break **OFF** yields the identical result — a pause, not a second handler (one routing path).
+
+**No regression:** all 20 prior D8/D9/D10/D11 cases still pass (`ET_LAB_PWD=… dotnet run --project
+tools\probes\DebuggerFidelityProbe` → **ALL PASS**, 26 cases). Build 0/0; **160 debugger tests green**
+(unchanged from C2 — Seam D added no production code); smoke clean.
+
+### Seam E1 — Breakpoints panel + Break-on-Exception toggle + data-bp gesture (commit `cab2f5b`)
+
+The first UI seam. Design principle: **the Breakpoints panel is a pure VIEW of the Core domain objects, never
+a parallel model.** The VM keeps ONE `BreakpointSet` + one `DataBreakpointSet` as its own store; the launch
+spec passes those very sets to the `DebugSession`, which **shares** them (no mirroring, no copy) — so a row's
+condition / hit-count-kind / hit-count-operand / enable edit mutates the exact `Breakpoint` object the engine
+consults on its next stop decision. `BreakpointRowViewModel` / `DataBreakpointRowViewModel` are dumb
+projections (offset → line, the policy fields); the kind→operand-enabled mapping and the picked-kind→policy
+construction route through Core (`HitCountPolicy.Of`, `HitCountKind`), so the choice-to-policy logic stays in
+Core, not the VM. The panel adds / removes / edits breakpoints and shows data breakpoints; the Break-on-Exception
+toggle sets `DebugSession.BreakOnException`; a data-breakpoint gesture (watch a variable) adds to the
+`DataBreakpointSet`. No new colours, tokens through the theme system.
+
+### Seam E2 — Run-to-`SUSPEND` command + Results grid (commit `9a96bb3`)
+
+The toolbar **Run-to-`SUSPEND`** command drives `DebugSession.RunToSuspend()`; a **Results grid** renders
+`DebugSession.EmittedRows` (reusing the shared data-grid infrastructure — each resume appends the next
+`SUSPEND` row). This closes the "selectable procedure: give me the next row" loop end-to-end.
+
+### QA fixes (manual QA on the live lab)
+
+Two defects surfaced by manual QA, each an independent commit:
+
+1. **Gutter hit-test (`c8fc061`).** The breakpoint margin was not hit-testable, so a click on the gutter never
+   registered — you could not set a breakpoint by clicking. Fixed so the margin receives the pointer and toggles
+   the breakpoint on the clicked line's step unit.
+
+2. **First-statement breakpoint always skipped (`863c89d` → refined + superseded by `01b66dd`).** A breakpoint on
+   the FIRST executed statement never stopped execution; breakpoints from the second statement onward worked.
+   **Root cause:** `RunStepping` made the breakpoint stop-decision at the BOTTOM of the loop — *after*
+   `ExecuteCurrent` ran the current statement and advanced to the next — so it structurally could not decide the
+   statement a run command RESUMES from. Launch always pauses at **Entry** on the first statement, and the
+   breakpoint gutter only appears once a run is live (the source editor is hidden on the launch panel), so the
+   user's first breakpoint is set *while paused at entry on the first statement* — exactly the statement the
+   first `Continue` executed unchecked. Commit `863c89d`'s first attempt (call `ShouldBreakAt` inside `Start`)
+   only helped when the breakpoint already existed at `Start`, which it never does in the real UI, and was itself
+   the first-statement special case. **Ratified fix — ONE pre-execute gate, one semantics, no first-statement
+   branch (`01b66dd`):** the stop decision moved into a single `TryStopBeforeExecuting` gate applied to EVERY
+   statement in EVERY run mode, on the statement the IP points at, *before* it executes. `Start` decides nothing
+   — Entry is a pre-execution pause (`_atDeliveredArrival = false`). A **resume-guard** lets a run command LEAVE
+   the statement it is currently sitting on (no double-stop): it suppresses re-breaking the current statement
+   when the pause was a *delivered arrival* (a prior breakpoint / step / data-bp / SUSPEND / Set-Next stop) OR the
+   command is an explicit **movement** (Into/Over/Out — which steps away, so Step behaviour is unchanged per the
+   DoD). The only un-guarded case is a **run** command (Continue / RunToCursor / RunToSuspend) resuming from
+   Entry, so a breakpoint set at entry fires on the first resume exactly like any later arrival. Routing a held
+   Break-on-Exception raise is a different operation ("about to route", not "about to execute") and bypasses the
+   gate. +7 `DebugEngineTests` (fired-on-resume, no double-stop, set-after-launch, restart via shared set, second
+   statement unaffected, Step-from-entry unchanged) + the 3 first-statement VM tests reworked to the ratified
+   model (launch → Entry, breakpoint honored on first Continue). Gotcha: the engine's `BreakpointSet` is a flat
+   offset map, so a callee step point at the same raw offset as a root breakpoint collides — a pre-existing
+   nested-breakpoint boundary (breakpoints are root-scoped in the VM; nested-routine breakpoints are future), not
+   changed by this fix.
+
+### D12 final state — COMPLETE (2026-07-20, user-confirmed)
+
+**Shipped end-to-end, live-fidelity-proven:** break on exception, conditional breakpoints + hit counts, data
+breakpoints, run to next `SUSPEND` (+ result grid), all editable in the Breakpoints panel.
+
+**Final architecture (ratified):**
+
+- **`Breakpoint` is a domain stop-policy object** — offset + optional `Condition` + `HitCountPolicy` + a running
+  hit tally, with `ShouldBreak(conditionSatisfied)` the pure policy — not a bare offset in a set. Future
+  breakpoint kinds grow as properties on this one model.
+- **`HitCountPolicy`** is an immutable value object (`Always` / `Exactly` / `AtLeast` / `Multiple`, `IsMetAt`,
+  `Of`), so the count comparison lives in Core.
+- **`DataBreakpoint`** is another stop policy — `ShouldBreak(old, new)` = "changed?" with `NULL`≡`DBNull`; the
+  `DataBreakpointSet` also owns the LOCAL snapshot→diff detection over the scope chain (a closure var is
+  watchable). Purely client-side.
+- **Run-to-`SUSPEND`** is a run mode (`StepKind.RunToSuspend`) whose stop is the `SUSPEND` *event* (a row-count
+  delta), not a movement decision.
+- **Break on Exception** is a *pause before routing*, never a second handler: the next resume routes the held
+  raise through the very same `ExceptionRouter` path.
+- **A condition is just an expression through the ONE D5 evaluation engine** (`EvaluateCondition` reuses the
+  typed-`BOOLEAN` `EvaluateExpression` path of `IF`/`WHILE`) — no second evaluator; a raising condition stops +
+  surfaces, never silently skipped.
+- **ONE breakpoint model is shared by the VM and `DebugSession`** — the panel edits the domain objects directly,
+  no mirroring.
+- **ONE decision point "before executing a statement"** governs every run mode (`TryStopBeforeExecuting`).
+- **Live Fidelity is the proof of Firebird conformance** — `DebuggerFidelityProbe` **26/26 sim == real** on FB5,
+  matching both the real values AND the stop-moment / ordering, not just the final result.
+
+**Metrics:** Build 0/0; full suite **4998 tests green** (one run); `DebuggerFidelityProbe` **26/26**; smoke
+clean. Docs: closed 2026-07-20. **Remaining debugger milestones D13 (Fast-forward) and D14 (Step-back) are
+optional — build only if real usage asks.** 🏁 **D12 IS FORMALLY CLOSED.**
+
+## D13 — Fast Forward (loop fast-forward) — COMPLETE + user-confirmed 🏁
+
+D12 being formally closed, the user opened **D13 (Fast Forward)** — commands that eliminate the repeated
+Continue-pressing of loop debugging. **The hard constraint, set by the user up front: Fast Forward must NOT
+create a new execution path — it is only another way to *control* the existing `DebugSession`.** This is not
+a general "fast-forward everything" milestone; it is deliberately small.
+
+> **STATUS: COMPLETE + user-confirmed (2026-07-20).** Seam 0 (`1049c71`) → Seam A (`3fd541e`) → Seam B
+> (`424c676`, Live Fidelity) → Seam C (`c6c4ebf`, UI) → Seam D (docs/close). Two commands ship — **Continue
+> Until Loop Exit** and **Next Iteration** — as pure client-side stop policies (no new execution path),
+> live-fidelity-proven `Simulator == Real Firebird` (`DebuggerFidelityProbe` 34/34 on FB5). See the closing
+> summary at the end of this section. **D14 (Step-back) remains optional — build only if real usage asks.**
+
+### Design analysis + scope (accepted)
+
+Grounding the design in the actual engine (`DebugSession`, `StepPlanner`, `Frame`, `DebugEnums`) surfaced the
+key insight: **Fast Forward is not a new mechanism — it is the existing D12 "run mode + event-based stop"
+pattern.** `Continue`, `RunToCursor` and `RunToSuspend` already run at full speed and stop on an *event*
+(`StepPlanner` returns false for the run modes; the stop is decided in `RunStepping`, e.g. `RunToSuspend`'s
+row-count delta). So each Fast Forward variant is just another "run until <predicate>" whose predicate is a
+pure function of (AST, frames, command) — which is exactly what satisfies "no new execution path".
+
+Every proposed feature was evaluated. Most were **already delivered by D12** or **redundant**:
+
+- *Continue Until Exception* ≈ D12 **Break on Exception**; *Continue Until Variable Changes* ≈ D12 **Data
+  Breakpoint**; *Continue Until END* ≈ `Continue` (root) / `Step Out` (nested); *Run to next SUSPEND* = D12.
+  Adding these as Fast Forward modes would be a **second path to the same feature** (drift) — rejected.
+- *Skip Current Iteration* is a **control jump** (skips statements) = a `SetNextStatement` variant. It **does
+  create a divergent path**, so it violates the core constraint — rejected from Fast Forward (a possible future
+  "Control Jump" concern, not this milestone).
+- *Continue Until RETURN* overlaps `Step Out` (for procedures, effectively identical); marginal value — deferred.
+
+The genuinely-new, high-value, pure-run-until commands are **loop-scoped** (loops are the #1 reason for
+repeated Continue), with **zero D12 overlap**:
+
+- **Continue Until Loop Exit** — run to the end of the current loop, stop just after it.
+- **Next Iteration** — finish the current iteration normally, stop at the start of the next (or at loop exit).
+
+**Accepted D13 scope = exactly these two.** Nothing else. (Continue Until RETURN and Skip Current Iteration
+explicitly out.) Seam plan accepted: **0 (lab) → A (Core) → B (Live Fidelity) → C (UI) → D (docs)**.
+
+### Seam 0 — lab + a scope-changing discovery (commit `1049c71`, 2026-07-20)
+
+Seam 0 extended the lab with four deterministic, selectable loop workhorses (rebuilt `EmberTern_Lab.fdb` from
+canonical `setup.sql`, ASCII-temp method #149; live values verified on FB5):
+
+- `SP_DBG_LOOP_NESTED(2)` → `(1,1,11),(1,2,23),(2,1,44),(2,2,66)` — nested `WHILE`; proves **innermost-loop**
+  capture (Next Iteration advances the inner `J`; Loop Exit on the inner loop lands back in the outer body).
+- `SP_DBG_LOOP_LEAVE(5)` → `(3,1)` — early exit via unlabeled `LEAVE`, with a statement AFTER the loop.
+- `SP_DBG_LOOP_BREAK(5)` → `(3,1)` — `BREAK` (legacy synonym of `LEAVE`).
+- `SP_DBG_LOOP_EXIT(5)` → **no rows** — `EXIT` terminates the whole routine before any `SUSPEND`.
+
+**The lab did its job — it revealed a plan-changing fact before implementation:**
+
+**The interpreter models no `LEAVE` / `EXIT` control flow.** `DebugSession.ExecuteCurrent` has cases only for
+`IF`/`WHILE`/`FOR`/`RETURN`(in a function)/step-into; `Leave`/`Exit` leaves fall to the `default` server path.
+Consequences on the real engine:
+
+- **`LEAVE;`** → wrapped in a one-statement `EXECUTE BLOCK` harness, where `LEAVE` outside a loop is a **compile
+  error** → `FbException` → the session **faults with a spurious error**.
+- **`EXIT;`** → the one-statement block just exits (a no-op) and the interpreter `AdvanceSequence`s onward →
+  **`EXIT` is silently ignored**, the routine keeps running.
+
+This is a **pre-existing latent gap** (no lab routine exercised `LEAVE`/`EXIT` before), independent of D13. A
+live throwaway-DB probe confirmed **FB5 accepts `EXIT`, `LEAVE`, `LEAVE <label>` and `BREAK`**; the AST does
+**not** model loop labels (`WhileStatement`/`ForSelectStatement` carry no `Label`).
+
+**Why this forces a decision (and the user's ruling):** the DoD of `RunToLoopExit` — stop correctly *regardless
+of how the loop is left* (the user's explicit test requirement) — cannot be met as a pure stop policy while the
+interpreter doesn't pop the loop activation on `LEAVE`/`EXIT`. Teaching the interpreter minimal `LEAVE`/`EXIT`
+is a **new control mechanism**, beyond the "pure stop policy" agreed for D13, so — per the project's staged
+contract (*never silently change a ratified design; stop and consult*) — it was surfaced. **User decision:
+fold minimal `LEAVE`/`BREAK`/`EXIT` control flow into Seam A as an explicit correctness patch; keep
+`LEAVE <label>` to an outer loop a documented §F boundary** (labels are not in the AST).
+
+### Seam A — loop fast-forward (Core) + LEAVE/BREAK/EXIT control flow (commit `3fd541e`, 2026-07-20)
+
+Pure Core, off-by-default, fake-executor-tested. Three coordinated pieces:
+
+1. **The correctness patch (interpreter).** `ExecuteCurrent` now handles `EXIT`/`LEAVE`/`BREAK` as **pure
+   control flow** (the client owns control, §3.1 — never a server round-trip): `EXIT` → `Frame.ExitRoutine`
+   (close cursors + clear the control stack → the frame terminates); unlabeled `LEAVE` → `Frame.LeaveInnermostLoop`
+   (pop control activations down to and including the innermost loop activation, closing a `FOR` cursor).
+   The parser now maps **`BREAK` → `PsqlLeafKind.Leave`** (one "break the loop" leaf kind; §0 round-trip
+   unchanged — the leaf's tokens are preserved verbatim). *Rationale: this is not scope creep — it is exactly
+   what the user's "stop on every exit path" requirement demands, and it fixes a latent bug for ordinary
+   stepping through `LEAVE`/`EXIT` routines as a bonus.*
+
+2. **The loop mechanism.** A minimal `LoopActivation` base (parent of `WhileActivation`/`ForActivation`) carries
+   only the per-iteration counter `Iteration`, incremented in `ExecuteCurrent` when a loop enters a body pass.
+   *(Decision, honoring the user's "reconsider a shared class" note: the pattern-match-in-`DebugSession`
+   alternative was evaluated and rejected — the base gives one home for `Iteration` and a semantic
+   `is LoopActivation` test; `Node` stays type-specific on each derived activation, untouched.)* `Frame` owns
+   the control-stack introspection: `InnermostLoop()`, `IsInLoop`, `ContainsActivation`.
+
+3. **The two run modes.** New `StepKind.RunToLoopExit` / `RunToNextIteration`; `StepPlanner` returns **false**
+   for both (they run at Continue speed). The stop is a **loop-lifecycle event decided in `RunStepping`'s tail**
+   (mirroring `RunToSuspend`): the innermost loop is **captured once** from the current frame at the command,
+   and the tail stops when that activation has **left the control stack** (Loop Exit — any path: condition
+   false / cursor exhausted / `EXIT` / `LEAVE`/`BREAK`) or, for Next Iteration, when its **iteration counter
+   incremented** past the captured value (or it exited first). `Step(kind)` **rejects** the two new kinds;
+   dedicated `RunToLoopExit()` / `RunToNextIteration()` methods drive them. New public **`IsInsideLoop`** gates
+   the commands (for the UI, Seam C) and throws if invoked outside a loop. **Breakpoints inside the loop still
+   win** — they are decided by the pre-execute gate (`TryStopBeforeExecuting`) before the tail runs. Off by
+   default ⇒ existing sessions byte-identical.
+
+**Architecture, as built (for review):**
+
+- **D13 stays a pure stop policy** — no new execution path, no new control-*movement* mechanism; the only new
+  interpreter behaviour is the `LEAVE`/`EXIT` correctness patch (a control-*flow* fix, prerequisite, not part of
+  the stop policy).
+- **The `RunToSuspend` pattern is the template** — `StepPlanner` false + an event stop in `RunStepping`'s tail.
+- **One capture, at the command** — the innermost loop + its iteration count are locals in `RunStepping`; no new
+  session state, keeping `DebugSession` simple.
+- **`StopReason.Step`** is reused for both modes (a "movement completed" stop, like `RunToCursor`); the command
+  identity is known to the caller (the VM), so no new `StopReason` was needed.
+- **`LEAVE <label>` to an outer loop = §F boundary** — treated as unlabeled (breaks the innermost loop);
+  documented in `Frame.LeaveInnermostLoop` and the enum.
+
+**Tests (+15 `DebugEngineTests`, fake executor):** Next Iteration from mid-body / loop header / nested-inner /
+`FOR SELECT`; Loop Exit natural / via `LEAVE` / via `BREAK` / via `EXIT` (completes the session) /
+nested-inner→outer body / `FOR SELECT` (cursor closed); `LEAVE` & `EXIT` plain-stepping control flow (the
+statement after them never runs); breakpoint-inside-loop wins over Loop Exit; `IsInsideLoop` membership +
+throws-when-not-in-a-loop; `Step` rejects the new kinds.
+
+**Metrics:** Build **0/0** (full solution — no exhaustive `StepKind` switch broke under
+`TreatWarningsAsErrors`); full suite **5013 tests green in one run** (4998 baseline + 15 D13); parser/AST/§0
+regression after the `BREAK` change **260 green, no regression**; smoke n/a (no UI change).
+
+### Seam B — Live Fidelity (probe-only; sim == real AND stop-moment fidelity) (2026-07-20)
+
+**Probe-only — NO production code.** Both D13 commands are pure client-side stop policies over the interpreter
+that already drives the REAL `FirebirdDebugExecutor` (the D12 `RunToSuspend` template: `StepPlanner` false, the
+stop is a loop-lifecycle event in `RunStepping`'s tail), so every value and the loop condition / `SUSPEND` /
+`LEAVE` / `BREAK` / `EXIT` that ends each stop is computed by Firebird. Seam B proves that on FB5 by extending
+`DebuggerFidelityProbe` with **+8 cases (27–34)** over the four Seam-0 workhorses × both modes — asserting not
+only the emitted-row set but the **logical moment** each fast-forward lands (statement, in-loop membership,
+rows-so-far, live variable state):
+
+- **27 `SP_DBG_LOOP_NESTED(2)` / Next Iteration** — from inside the INNER `J` loop, three `RunToNextIteration`s
+  walk inner iteration 1 → 2, then the inner loop **exits to the outer header** (row `(1,2,23)` emitted); the
+  innermost-loop capture is proven (Next Iteration advances `J`, not the outer `I`). Full set `== real`.
+- **28 `SP_DBG_LOOP_NESTED(2)` / Continue Until Loop Exit** — `RunToLoopExit` on the inner loop runs BOTH inner
+  iterations (`(1,1,11),(1,2,23)`) and lands at the OUTER loop header (the enclosing body), not the routine end.
+- **29/31 `_LEAVE` / `_BREAK` — Continue Until Loop Exit** — the loop is left via `LEAVE` (and its synonym
+  `BREAK`) at `R=3`; the stop lands at the post-loop `DONE = 1` (`R=3`, no row yet), then completes with the
+  single real row `(3,1)`. Proves `BREAK ≡ unlabeled LEAVE`.
+- **30/32 `_LEAVE` / `_BREAK` — Next Iteration** — stepping pass-by-pass, the 4th `RunToNextIteration` hits the
+  `LEAVE`/`BREAK` pass and **falls through to the same loop-exit landing** (`DONE = 1`, `R=3`); rows `== real`.
+- **33 `_EXIT` / Continue Until Loop Exit** — `EXIT` (at `R=3`) clears the frame's control stack → the routine
+  ends BEFORE the post-loop `SUSPEND`, so the fast-forward **completes the session** (never pauses after the
+  loop) with **0 rows == real**.
+- **34 `_EXIT` / Next Iteration** — walking the passes reaches the `EXIT` pass → the session completes with 0
+  rows `== real`.
+
+**A probe lesson recorded (not a code bug):** a `WhileStatement`'s span covers the WHOLE loop (header + body),
+so the outer while's text also contains the inner `"J < N"` — text matching cannot tell nested loops apart. The
+probe navigates to the inner loop by **variable state** (`J` is assigned only just before the inner loop, so
+"inside a loop AND `J` initialised" first holds at the inner header) and identifies a loop header with
+`StartsWith("WHILE (I < N)")` (the span starts at the `WHILE` keyword). This is a test-authoring nuance, not an
+engine fact — the interpreter's loop capture is by activation identity, never text.
+
+**Metrics:** probe builds 0/0; **`DebuggerFidelityProbe` 34/34 ALL PASS** (85 assertions) on FB5 — all 26 prior
+D8–D12 cases still green, +8 D13. Full solution build **0/0**. No production code touched ⇒ the debugger test
+suite is unchanged from the Seam-A baseline (5013 green). The incidental `Lab/EmberTern_Lab.fdb` header churn
+from attaching (Firebird bumps the on-disk transaction counter even though every debug/real transaction rolls
+back — no schema or data change) was restored to the committed file.
+
+### Seam C — UI (thin presentation; user-confirmed) (2026-07-20)
+
+**Thin UI, no business logic** — the two D13 commands are surfaced exactly like D12's Run-to-`SUSPEND` (Seam E2):
+two `[RelayCommand]`s on `DebuggerTabViewModel` that **delegate straight to the engine** through the existing
+`RunStepAsync` background-step path (the same one every step/continue uses — Phase→Busy, run off the UI thread,
+re-render on pause):
+
+- `RunToLoopExitAsync()` → `s.RunToLoopExit()`
+- `RunToNextIterationAsync()` → `s.RunToNextIteration()`
+
+**Gating uses the engine's own `IsInsideLoop`** (no UI-side loop logic): a new `CanFastForward` computed gate
+(`Phase == Paused && Session is { IsInsideLoop: true }`) is the `CanExecute` for both commands, and both are
+added to the `Phase` property's `NotifyCanExecuteChangedFor` list — so their enabled state re-evaluates on every
+step (each step cycles Phase Busy→Paused), lighting the buttons up as stepping enters a loop and dimming them
+when it leaves. Because the fast-forward always targets the **innermost executing frame** (`_frames[^1]`), the
+gate is correct even while the editor is viewing a caller frame — no `IsViewingRootSource` restriction (unlike
+Run-To-Cursor, which targets root offsets).
+
+Two toolbar buttons (`↻ Next Iter`, `⤶ Loop Exit`) sit next to `⏭ SUSPEND` in the debugger toolbar, bound to the
+commands with tooltips (new `UiStrings.DebuggerRunToNextIteration*` / `DebuggerRunToLoopExit*`). **No keyboard
+shortcut** — mirroring Run-to-`SUSPEND` (also toolbar-only); the plan prescribed no gesture for these, and
+inventing one would be arbitrary. All theme tokens, both dictionaries unaffected (reuses the `flat` button
+style + existing brushes).
+
+**Metrics:** full solution build **0/0**; the view uses compiled bindings (`x:DataType` on the root), so the two
+new command bindings were validated **at compile time**; smoke clean (app launches). **User-confirmed by manual
+QA (2026-07-20)** — the toolbar buttons enable only inside a loop and both fast-forward correctly on the live lab.
+
+### D13 — COMPLETE + user-confirmed (Seam D — docs/close, 2026-07-20) 🏁
+
+**D13 (Fast Forward — loop fast-forward) is DONE.** Two commands ship end-to-end, live-fidelity-proven and
+manually QA-confirmed: **Continue Until Loop Exit** and **Next Iteration**. Nothing else (Skip Current Iteration
+and Continue Until RETURN stayed out of scope by design).
+
+**Final functional scope (exactly what shipped):**
+
+- **Continue Until Loop Exit** (`DebugSession.RunToLoopExit()`) — run the rest of the innermost enclosing loop
+  and pause just after it, for **any** exit path: condition false, `FOR` cursor exhausted, unlabeled `LEAVE`,
+  `BREAK`, or `EXIT` (which ends the whole routine → the session completes). On a nested loop it lands back in
+  the enclosing body.
+- **Next Iteration** (`DebugSession.RunToNextIteration()`) — finish the current iteration and pause at the start
+  of the next; if the loop exits first, pause after it (identical to Loop Exit). Advances the **innermost** loop.
+- Both gated on **`DebugSession.IsInsideLoop`**; a UI toolbar affordance (`↻ Next Iter`, `⤶ Loop Exit`) beside
+  `⏭ SUSPEND`.
+
+**The seams, at a glance:**
+
+| Seam | What | Commit | Proof |
+|---|---|---|---|
+| 0 | Lab: 4 deterministic loop workhorses (`SP_DBG_LOOP_NESTED`/`_LEAVE`/`_BREAK`/`_EXIT`) + the `LEAVE`/`EXIT`-gap discovery | `1049c71` | live values verified on FB5 |
+| A | Core: two run modes + the `LEAVE`/`BREAK`/`EXIT` control-flow correctness patch + minimal `LoopActivation` | `3fd541e` | +15 `DebugEngineTests` (fake executor); suite 5013 green |
+| B | Live Fidelity: `DebuggerFidelityProbe` +8 cases (probe-only, no production code) | `424c676` | **34/34 ALL PASS** on FB5 |
+| C | UI: two toolbar commands, thin presentation, gated on `IsInsideLoop` | `c6c4ebf` | build 0/0; manual QA confirmed |
+
+**The load-bearing architectural decisions (ratified across the milestone):**
+
+1. **No new execution path — Fast Forward only *controls* the existing `DebugSession`.** The hard constraint the
+   user set up front; honoured throughout. Both commands are **client-side stop policies** over the same
+   interpreter that already drives the real `FirebirdDebugExecutor`.
+2. **The D12 `RunToSuspend` pattern is the template** — `StepKind.RunToLoopExit`/`RunToNextIteration`,
+   `StepPlanner` returns `false` (run at Continue speed), and the stop is a **loop-lifecycle event decided in
+   `RunStepping`'s tail**. No new evaluator, no new server round-trip, no new frame machinery.
+3. **One capture, at the command** — the innermost loop + its iteration counter are locals in `RunStepping`; no
+   new `DebugSession` state. Loop Exit = the captured activation **left the control stack**; Next Iteration = its
+   **iteration counter incremented** past the captured value (or it exited first).
+4. **The `LEAVE`/`BREAK`/`EXIT` correctness patch is a control-*flow* fix, a prerequisite — not part of the stop
+   policy.** It was surfaced and user-ratified before implementation (the staged contract): `EXIT` →
+   `Frame.ExitRoutine`; unlabeled `LEAVE` and `BREAK` (parser maps `BREAK` → `PsqlLeafKind.Leave`) →
+   `Frame.LeaveInnermostLoop`. Pure control flow, never a server round-trip. Bonus: it fixes ordinary stepping
+   through `LEAVE`/`EXIT` routines, a latent pre-existing gap.
+5. **`LEAVE <label>` to an outer loop = §F boundary** — labels are not in the AST; treated as unlabeled
+   (breaks the innermost loop). Documented in `Frame.LeaveInnermostLoop` and the enum.
+6. **`StopReason.Step` reused** for both modes (a "movement completed" stop, like `RunToCursor`); the command
+   identity is the caller's (the VM), so no new `StopReason` was needed.
+7. **Thin UI** — the VM commands are pure delegation through the existing `RunStepAsync` path; gating reuses the
+   engine's `IsInsideLoop`; no business logic in the view or VM.
+
+**Live Fidelity (the proof of Firebird conformance):** because every mode is a stop policy over the interpreter
+that drives the REAL executor, every value and the loop condition / `SUSPEND` / `LEAVE` / `BREAK` / `EXIT` that
+ends each stop is computed by Firebird. `DebuggerFidelityProbe` proves **Simulator == Real Firebird** on FB5 —
+not only the final emitted rows but the **logical stop-moment** (current statement, in-loop membership, rows
+emitted so far, live variable state) — across the four workhorses × both modes. **34/34 ALL PASS** (85
+assertions), all 26 prior D8–D12 cases still green.
+
+**Final metrics:** Core build **0/0**, full solution build **0/0**; **+15 new `DebugEngineTests`** (Seam A;
+Seams B and C added no production tests — Seam B is probe-only, Seam C is thin UI validated by compiled bindings
++ manual QA); full suite **5013 tests green**; `DebuggerFidelityProbe` **34/34 ALL PASS** on FB5; smoke clean.
+
+**Philosophy held:** no new execution path (Fast Forward only controls the session) · the new features are stop
+policies (the `RunToSuspend` template) · `Simulator == Real Firebird` (live-fidelity-proven). **🏁 D13 COMPLETE.**
+
+---
+
+## D14 (Step Back) — ANALYZED + DEFERRED (2026-07-20)
+
+A full architecture/feasibility analysis was run at the user's request and **accepted**; the user decided **not**
+to start D14 — it stays an optional milestone, revisited only when real debugger usage shows the need. Ratified
+conclusions (do not re-derive; full text in the plan's D14 brief STATUS block + [[project-d14-step-back-deferred]]):
+Step Back is **not** another stop policy like D12/D13 — it needs a **new engine capability, reversible state**
+(the forward `_control` stack was designed one-way: mutable, `internal` activations). **Replay is rejected
+unconditionally** (re-executes DML, double-increments generators, diverges `CURRENT_TIMESTAMP`, re-fires
+autonomous tx → breaks Sim==Real); the only acceptable path is **full-client-state snapshot + one savepoint per
+step + undo-only** (reverse DB effects solely via `ROLLBACK TO`), matching spec §9.8.5. It needs a **second
+savepoint layer** (`ET_DBG_STEP_{n}`) NOT eagerly released on normal frame exit. **v1 scope if built:** single
+step-back over leaf/DML/IF/assignment + step-back over a stepped-over CALL; **OUT:** loops/`FOR SELECT` (a live
+server cursor cannot be rewound — the hard blocker), exception routing, Set-Next/post-fast-forward. **§4.6
+irreversibles** (autonomous tx, generator increments, `EXECUTE STATEMENT ON EXTERNAL`, side-effecting UDFs)
+survive rollback → must be disclosed, not hidden. **Live Fidelity:** no real Step Back to compare against →
+verify by a round-trip invariant (forward→N record; back→M; forward→N again == the recorded ground-truth
+forward-fidelity already validated) + assert a §4.6 effect persists. **Difficulty High; ~5 sessions** (the
+plan's old "2" predates the snapshot/restore surface). Recommendation stood: **defer until real usage asks.**
+
+---
+
+## D15 (Debugger Experience & IDE Polish) — PLANNING PHASE COMPLETE (2026-07-20)
+
+After D13 closed and D14 was deferred, the next major stage was scoped as a full project — **not** a bag of UI
+tweaks — and its design was ratified over two review passes. The complete, self-contained implementation guide
+is [docs/design/d15-debugger-experience-and-ide-polish.md](../design/d15-debugger-experience-and-ide-polish.md);
+a future session starts any milestone from there **without re-analysing**. Summary of what planning settled:
+
+- **Organising principle — Presentation vs Feature.** Every milestone is either **P** (view/theme/tokens only,
+  obeys the "no logic in VM/Core" directive) or **F** (new data/Core surface, full debugger rigour + live
+  fidelity where it touches engine behaviour). The user called the split "bardzo trafiony".
+- **Milestones:** D15.1 Editor Readability (P, **app-wide** — one highlighting pipeline serves every editor;
+  readability-first palette + rebuilt full-width calm-blue current-line with a gutter bar); D15.2 Toolbar
+  Visual System + Error Bar (P — a whole **SVG icon system** in EmberTern's *own* visual language, not a
+  VS/Rider copy; the debugger icon becomes an **execution-tracing/flow** metaphor, not a bug; the fault message
+  moves to its **own bar** with copy + expand so it never shifts the toolbar); D15.3 Launch & Entry Experience
+  (P + tiny persist — compact form, type subordinate to name, isolation practical-description-first in an
+  Advanced section, launch keyboard shortcut + post-launch focus, **Quick Relaunch yes / favorites deferred**);
+  D15.4 Expression UX + Friendly Errors (P+F — placeholders/examples + friendly errors via the existing
+  `EditorLanguageService` local pre-validation and `DebugErrorMapper`); D15.5 Inline Values (F — only
+  current-line-used OR changed-since-last-step, never all; AvaloniaEdit renderer/generator, no text shift);
+  D15.6 Debugger Performance (F — **direction reversed**: no debug-time timing (harness overhead misleads);
+  integrate with the existing Performance Analysis; any future debug metric labelled "debugger runtime"); D15.7
+  Global UI Audit (analysis-only catalogue for a future visual-refresh stage).
+- **Priority order (ratified):** Script Executor **Step 0 Probe** → D15.1 → D15.2 → D15.3 → **Script Executor
+  Rewrite (Steps 1–6)** → D15.4 → D15.5 → D15.6; D15.7 in the background. Rationale: the probe is measurement,
+  not implementation, and unblocks a correctness decision; readability is highest-value + app-wide; toolbar +
+  launch are the visible debugger polish; the rewrite is a self-contained debt block slotted after the quick
+  wins; the feature-bearing seams come last.
+- **Script Executor Rewrite** is a **parallel correctness-debt track** with its own ratified plan
+  ([../design/script-executor-transaction-review.md](../design/script-executor-transaction-review.md) §5/§6):
+  the `Sequenced` mode fixes gotcha #213; **Step 0 (Probe) is the immediate next actionable** (measurement),
+  and the rewrite proper starts only after its results are recorded.
+
+**Nothing in D15 or the Script Executor Rewrite is implemented — this is the end of the planning phase.**
+
+---
+
+## "An edit ends the session" — Seam A of the code/session-coherence rule (2026-07-25)
+
+### The report
+
+After several days of real use the user filed one problem, precisely: *editing during an active session is
+allowed, but a Step Into / Step Over / Continue afterwards still executes the version the session launched
+with.* Technically correct — Seam 5a deliberately separated `_source` (what the database holds, and what the
+running session was compiled from) from `_editBuffer` (the editable text), so stepping could rewrite the
+display on every frame change without clobbering an unsaved edit. From the user's chair it reads as: **I see
+code A, the debugger executes code B.** The adopted rule is IBExpert's: the **first change to the text ends
+the session** — no save, no step, no restart required.
+
+### The seam boundary (the user's own correction, worth keeping)
+
+An early draft of the plan claimed Seam A already delivers "I see A / I execute A". It does not, and the
+distinction is exactly where responsibility divides:
+
+- **Seam A** — while the text is unchanged, the session runs what was launched; the first edit ends it
+  immediately; **from then on no step can run stale code.** It removes the possibility of executing the old
+  version. It does **not** start a session on the new text.
+- **Seams B + C** — start a session **from the edited text**, with no compile and no write to the database
+  (the Draft model, below).
+
+### The rejected detour: Restart → Save → Compile → Launch
+
+The first proposal routed a dirty Restart through `SaveAsync` (compile, then the existing auto-relaunch). It
+was cheap and reused a pipeline that already existed — and the user rejected it on architectural grounds that
+were right: *Save and Restart must not be the same operation.* The debugger never asks the server to run the
+compiled routine — it interprets the AST and executes every statement through an anonymous `EXECUTE BLOCK`
+harness **that never names the routine** — so making Restart compile would write to the database for no
+technical reason and destroy the ability to experiment on a routine without modifying it. Ratified split:
+**Save is the only operation that writes to the database; Restart runs the current text without saving.**
+
+Re-verified against the code before accepting (rather than repeating the earlier Draft-model note):
+
+- The **only** catalog read keyed by the debugged object's own name is its parameter list —
+  `ReadProcedureParametersAsync` (`RDB$PROCEDURE_PARAMETERS`) or `ReadFunctionParametersAsync`
+  (`RDB$FUNCTION_ARGUMENTS`). A **trigger** root reads none (its NEW/OLD types come from the target
+  **table**).
+- **Half the root layout is already draft-sourced**: `BuildFrameVariablesAsync` takes the body's locals from
+  `PsqlDeclarationExtractor.Extract(body, source)` — the AST the VM hands it, not the catalog.
+- The replacement path is **already proven live**: D9's `BuildLocalRoutineFrameVariablesAsync` builds a
+  complete frame for a local `DECLARE PROCEDURE` — an object with *no catalog row at all* — from the AST
+  header via `ExtractSignature`, whose own docstring says *"Same shape as a top-level routine header"*.
+  `TypeSpecBetween` already stops at `NOT NULL` / `DEFAULT` / `CHECK` / `COLLATE` / `=`, so a
+  `CREATE PROCEDURE` header parses cleanly with no new scanning.
+
+So the Fidelity Law holds for a draft-sourced session: Firebird still computes every statement, and the one
+catalog artefact is replaced by a mechanism that is already live-fidelity-proven one level down. Three §F
+boundaries were identified for B/C, all statically detectable from the draft's own AST — **recursion**
+(verified: a self-call falls through `ResolveRoutine`'s local and package branches to `ResolveRoutineAsync`,
+which fetches the **compiled** source, so stepping into it would silently descend into old code), a
+**selectable procedure used in its own body**, and a **draft that would not compile** (it runs partially,
+because PSQL compile-time validation never happened). One functional regression to disclose: a parameter
+typed `TYPE OF …` resolves from the catalog today but throws an explained `NotSupportedException` from the
+AST — accepted, because an explained stop beats a guess (§F), and body locals already behave that way.
+
+### Seam A as built
+
+The rule lives in one place. `ApplySourceEdit` — already the single VM entry point for typing, already
+early-returning when the text is unchanged or a callee frame is being viewed — now calls `OnSourceChanged`,
+which decides by phase:
+
+- **Paused (or otherwise live)** → `EndSessionForEditAsync`: teardown (rollback + close the attachment, §4.4),
+  clear the session surfaces, `Phase = Editing`. The Error Bar is deliberately **kept**: after a fault, that
+  message is what the user is editing against.
+- **Busy** → set `_condemnedByEdit` and return. See the gotcha below.
+- **Completed / Faulted** → the retained frame stays inspectable (you want the values at the fault *while*
+  fixing the code); only the position marker is dropped, because it points into text that has just moved.
+
+Everything else fell out for free: every stepping and evaluation command is already gated on
+`Phase == Paused && Session is not null`, so ending the session disabled Continue / Step Into / Over / Out /
+Run-to-SUSPEND / fast-forward / Evaluate with **no per-button work**.
+
+`DebuggerPhase.SaveFailed` was **renamed to `Editing`** (Contract #16 — a name states responsibility, not
+history): the state now has two entry reasons — an edit ended the session, or a save was refused — and one
+meaning: *there is no session, and the tab keeps showing the source because the code is what matters.*
+`StopAsync` and the new path share `ClearSessionSurfaces()`; what differs between them (the Error Bar, the
+resume intent, the phase) stays at the call site, where it is a decision rather than a parameter.
+
+**Interim restriction, deliberately introduced:** `CanLaunch` and the new `CanRestart` both require a clean
+buffer. Restart runs `_source` — the last *compiled* text — so offering it behind an edited editor would be
+the very "I see A, it executes B" this rule removes, only by button instead of by step. Save (compile →
+resume, unchanged) is the way into a session while the buffer is dirty. The gate disappears in Seam B, when
+Restart gains the draft — it is removed, not relaxed.
+
+`SaveAsync` needed no change: the edit-triggered end arms `_resumeAfterSave` exactly as the save-triggered
+stop does, so a Save from `Editing` still compiles and resumes on the new code. One consequence worth
+recording: the *"saving ends the running session"* confirmation is now all but unreachable — saving requires a
+dirty buffer, and the edit that made it dirty already ended the session. The guard is **kept** for the one
+remaining window (a `Ctrl+S` landing while a step is still on the wire) rather than deleted on the strength of
+a reachability argument.
+
+### The trap: a teardown that fabricates an error (gotcha #253)
+
+Ending the session directly from the edit handler while `Phase == Busy` would have disposed the attachment
+underneath a step running on `Task.Run`. That step then throws on return — and `RunStepAsync`'s `catch` maps
+any exception to `Phase = Faulted` plus a red Error Bar. The user would have been shown a **fabricated
+Firebird fault** for something they did on purpose. The fix is not a lock and not a cancellation token: the
+in-flight operation's own tail ends the session, at the three places a wire operation returns (`LaunchAsync`,
+`RunStepAsync`, `EvaluateFragmentAsync`) — and the `catch` checks the flag **first**, so a condemned
+operation's exception is read as the teardown it is.
+
+### Verification
+
+Build 0/0. Full suite **5230 green**. Seven new `DebuggerTabVmTests` pin the rule: an edit ends a live session
+(teardown asserted through `FakeLauncher.Disposed`) and keeps the user on the code; every debugging command
+goes with it while Stop stays and Restart does not; undoing the edit re-arms Restart; an edit **during** a
+step ends the session on return **without faulting** (driven by a new `FakeExecutor.BlockAt` gate that holds
+the engine mid-step — one test double, no parallel implementation); a terminal session keeps its inspection
+state but drops the marker; and Launch is blocked while dirty. Four existing tests were rewritten rather than
+patched, because their premise ("edit while paused, then keep stepping / then save with a warning") is exactly
+what the rule removes. Smoke: the app launches clean. **Live QA on the lab: PASSED** — see "Seams A + B — the
+live QA verdict" below.
+
+### Ratified afterwards (user, on accepting Seam A)
+
+**Ending the session is a PERMANENT state.** Undoing the edit back to byte-identical text must not resurrect
+it; Restart may become available again, but only as a deliberate new start. Pinned by
+`SourceEdit_EndsTheSessionPermanently_EvenIfTheTextIsUndone`.
+
+---
+
+## Seam B — one current program, and Restart runs the draft (2026-07-25)
+
+### What changed
+
+Before this seam the VM held a duality: `_source` meant both *"what the database holds"* and *"what the parse
+describes"*. Every position-bearing feature read the second meaning — markers, breakpoint snapping, the
+pre-flight, the launch panel, the launch spec — so with an edited buffer they all described text nobody was
+looking at. Seam B splits the two:
+
+- **`_baseline`** — what the database holds. Its only jobs are `IsSourceDirty` and being what Save compares
+  against. It is deliberately *not* what the debugger runs.
+- **`_editBuffer` + its parse** — **the program.** `DebugLaunchSpec` is built from it, so **Restart starts a
+  session on the text the editor shows, with no compile and no write to the database.**
+
+Re-parsing is **lazy, not debounced**: a `DispatcherTimer` would re-introduce a path no headless test can
+reach (gotcha #251) and there is nothing to repaint from the model between keystrokes. An edit marks the
+program stale; the few places that genuinely need a current parse ask for one — a gutter click, a launch, a
+save. Command gates never do, so they stay cheap and side-effect-free. The two duplicated parse blocks
+(`PrepareAsync` and `AdoptSavedSource`) collapsed into one `ReparseProgram`, with `AdoptBaseline` as the only
+place the two texts are declared equal.
+
+### Restart ≡ Save without the compile
+
+`SaveAsync`'s tail became `ResumeOnCurrentProgramAsync(relaunch, relaunchStatus, ct)` and both commands now go
+through it: ensure the parse is current → is the launch panel still describing this routine? → rebuild the
+inputs if not → re-run the pre-flight against **this** text → relaunch. Save simply puts a compile in front of
+it. One path, one definition of "what the user still has to decide".
+
+That comparison hid a trap, which is now **gotcha #254**: it used to read the signature into a local at the
+top of the save and compare after. That was correct only while the model described the database text — once
+the model follows the buffer, any re-parse between the two readings (a gutter click suffices) makes it compare
+the new value **with itself**, and a genuinely changed parameter list would pass as "still valid". The
+signature is now recorded where the decision was made (`_panelSignature`, set when the panel is built).
+
+### Breakpoints survive the loop
+
+Clearing every breakpoint on each edit (what Save used to do) would have gutted the `Edit → Restart → Test`
+loop this milestone exists to enable. Instead two **provable** filters run, neither of which guesses:
+
+- **unchanged prefix** — the bytes before an edit's first divergence are identical, so a breakpoint there still
+  points at exactly the statement it was set on. Below it, an offset may have shifted by an amount we refuse to
+  invent (§0), so it goes.
+- **still a statement start** — after a re-parse, an offset that no longer *starts* a step point describes
+  nothing and is dropped, verified against the new parse.
+
+A pleasant consequence: editing *inside* a statement keeps its own breakpoint, because the statement still
+starts where it did. The blanket clear in `AdoptSavedSource` was deleted (Contract #20) — by the time a save
+compiles, the breakpoints have already been pruned against that exact text.
+
+### The one remaining catalog dependency (and the interim it forces)
+
+A draft-sourced session still reads its **root parameter list** from the catalog, which describes the
+**compiled** header. So Seam B ships an honest gate: a draft runs while its routine **header** is byte-identical
+to the compiled one — proven, without a parse, by the same common-prefix length reaching the baseline's body
+start. Body edits (the debugging loop) always qualify; a header edit blocks with a status naming Save. **Seam C
+removes this by taking the root layout from the AST header** — the path D9 already uses for a local
+`DECLARE PROCEDURE`, which has no catalog row at all.
+
+### Verification
+
+Build 0/0. Full suite **5235 green**. Six new tests: Restart runs the draft (asserting `LastSpec.Source` is the
+edited text and that no DDL executor is involved), step points and breakpoints describe the draft, breakpoints
+above an edit survive while those below are dropped, a **header** edit blocks Launch and Restart while a body
+edit of the same size does not, the pre-flight is re-run against the draft (an `IN AUTONOMOUS TRANSACTION`
+introduced by the edit is reported), and a trigger whose body starts referencing another NEW/OLD column is sent
+back to the launch panel rather than silently reusing the old form. Four Seam-A tests were updated where they
+pinned the interim block Seam B removes. Smoke: the app launches clean. **Live QA on the lab: PASSED**,
+including the interesting one — edit a body, Restart, and the new behaviour runs while the stored procedure in
+the database is unchanged. See the verdict below.
+
+---
+
+## Seams A + B — the live QA verdict, and what remains (2026-07-25)
+
+### The verdict
+
+The user ran both seams against the live lab and confirmed the workflow end to end. Verbatim, the four
+things checked and found working:
+
+- **the first edit of the code immediately ends the debugger session** — no save, no step, no restart needed;
+- **the user stays in the editor** (`Phase = Editing`), with the code still on screen, because the code is what
+  they are working on;
+- **executing stale code after an edit is no longer possible** — the whole stepping toolbar goes with the
+  session;
+- **Restart starts a session on the current editor text** (the draft), **without writing the procedure to the
+  database**; the stored procedure is verifiably untouched afterwards, and **Save remains the only operation
+  that writes DDL**.
+
+With that, *"I see code A, the debugger executes code B"* — the report this arc started from — is gone for
+every path a user can take: a step cannot reach the old text (Seam A), and a restart runs the new text
+(Seam B).
+
+### The two decisions this arc ratified, and why they hold
+
+**1. `Save` is the only operation that writes to the database; `Restart` runs the current text without
+saving.** The proposal to make a dirty Restart go through Save → Compile → Launch was cheap and reused an
+existing pipeline — and it was rejected, correctly. The debugger **never asks the server to run the compiled
+routine**: it owns control flow from the AST and executes every statement through an anonymous `EXECUTE BLOCK`
+harness **that never names the routine**. Compiling in order to restart would therefore write to the database
+for no *technical* reason, and it would destroy the thing an interactive debugger is for — experimenting on a
+routine without modifying it. Keeping the two operations distinct is what makes the loop
+`Edit → Restart → Test → Edit → … → Save` possible: everything before `Save` is free of consequence, and
+`Save` is the single, deliberate moment the database changes.
+
+**2. Ending the session is permanent.** Undoing the edit back to byte-identical text does not resurrect the
+session; only a deliberate Restart starts a new one. A session that could flicker back into existence because
+the text happened to match again would be a second, invisible rule about when code and session are "the same",
+which is precisely what this arc removed.
+
+### Why Restart can run a draft at all (the fact that made this possible)
+
+It is worth restating, because it is the load-bearing fact and it is easy to mis-remember as a trick: for a
+**root** frame the catalog is consulted for exactly **one** thing — the routine's **parameter / `RETURNS`
+types** (`ReadProcedureParametersAsync` / `ReadFunctionParametersAsync`; a **trigger** root reads none, its
+NEW/OLD types come from the target *table*). Everything else the session needs — the body, every statement, the
+locals (R3), the sub-routines (R5), the control flow — already comes from the **parsed text**. And the
+replacement for that one dependency is not speculative: D9's `BuildLocalRoutineFrameVariablesAsync` already
+builds a complete frame for a local `DECLARE PROCEDURE`, an object with **no catalog row at all**, from the AST
+header via `ExtractSignature` — live-fidelity-proven one level down. This is also why IBExpert can run edited
+code without saving: the same reason, not a trick.
+
+The **Fidelity Law still holds** for a draft-sourced session — Firebird computes every statement's semantics
+exactly as before. What a draft introduces is a new **class** of §F boundary, not a weakening of the law:
+wherever the *server* resolves the routine **by name**, it gets the **compiled** version while the client
+interprets the draft.
+
+### What remained after A + B — Seam C, and the directive to re-scope it first
+
+> **Superseded by the re-analysis below.** This section records what Seam C looked like on the day A and B
+> closed; the session that picked it up was told to re-scope it before writing code, and did — see
+> *"Seam C re-analysed"* and the C3 sections that follow. Kept because the §F boundaries listed here were
+> verified in code and are still the reference.
+
+**Seam C is the only remaining stage of the Draft model.** It is **not started**, and by user directive
+(2026-07-25) the next session **re-analyses its scope before writing any code**: Seams A and B absorbed more
+than the original plan assumed, so C's responsibility has shrunk, and the first task is to check whether it can
+be narrowed further — possibly to little more than the header case.
+
+Its remaining candidate scope, for that analysis to confirm or cut:
+
+- generalise `PsqlDeclarationExtractor.ExtractSignature` to a **top-level** routine header (its own docstring
+  already says it is *"the same shape as a top-level routine header"*);
+- build the **root frame layout from the AST** when the source is a draft — the D9 path applied one level up —
+  which is what **removes Seam B's header interim** (today a draft runs only while its routine header is
+  byte-identical to the compiled one, because the root parameter list still comes from the catalog; a body
+  edit always qualifies, a header edit blocks with a status naming Save);
+- surface the draft-specific §F boundaries in the **pre-flight**;
+- and the part that **cannot** be cut (Contract #12): a **`DebuggerFidelityProbe` case proving that the same
+  routine, run from the catalog and as an identical draft, produces identical stops and identical values** on
+  the live lab.
+
+The §F boundaries for a draft-sourced session are **already verified in code** — inputs to that analysis, not
+things to re-derive. All three are statically detectable from the draft's own AST:
+
+1. **Recursion.** A self-call falls through `ResolveRoutine`'s local and package branches to
+   `ResolveRoutineAsync`, which fetches the **compiled** source — so a step-into would silently descend into
+   the old code.
+2. **A selectable procedure used inside its own body.** Same mechanism, through the cursor path.
+3. **A draft that would not compile.** It runs partially, because Firebird's PSQL compile-time validation never
+   happened.
+
+Plus one accepted regression to disclose: a parameter typed **`TYPE OF …`** resolves from the catalog today but
+throws an explained stop from the AST — accepted, because an explained stop beats a guess (§F), and body locals
+already behave that way.
+
+---
+
+## Seam C re-analysed — the Draft model was already delivered (2026-07-25)
+
+The session that picked Seam C up was told, before writing any code, to verify its scope **against the code
+rather than against the earlier notes**. That re-analysis reversed the milestone's premise, and the reversal is
+the most useful thing in this section.
+
+### What the code said
+
+**The whole App layer was already draft-sourced.** `BuildParameters` reads `ParameterSymbol`s from the draft
+model; `BuildLaunchSignature` too; `TryPrepareTriggerAsync` reads the header from the AST and the NEW/OLD
+columns from the model; the pre-flight scans the edit buffer; the step points come from the draft parse; and
+`DebugLaunchSpec` carries the buffer, its body and its model. Of the six items in the original Seam-6c sketch,
+**four had already shipped in A and B**, and a fifth (Save compiling the draft in place) shipped before the arc
+even began.
+
+**A trigger root reads nothing about itself from the catalog.** `FirebirdDebugExecutor.CreateAsync` passes
+`routineName: null` for a trigger, so `BuildFrameVariablesAsync` skips the parameter query entirely; NEW/OLD
+types come from the **target table**, a different object with its own existence. So for triggers the Draft model
+was already complete, and Seam B's header gate was blocking them for no technical reason at all.
+
+**The one real catalog dependency is the root parameter list** — `ReadProcedureParametersAsync` for a procedure,
+`ReadFunctionParametersAsync` (inputs *and* the `RETURNS` base type) for a function.
+
+### What the gate is actually holding back — and why it is not cosmetic
+
+Worth writing down, because "just remove the gate" is the obvious idea and it is wrong. `BindValues` builds the
+harness variables from the routine context's templates (catalog parameters + AST locals), and
+`HarnessBuilder.Build` looks every read and write up in that index with `TryGetValue`, **silently skipping a
+name it does not find**. A parameter that exists only in the draft would therefore be neither declared, injected,
+nor written back. In pure PSQL that surfaces as an ugly but visible *"Column unknown"*; inside an embedded DSQL
+statement a bare name is read as a **column** (gotcha #247), so if a table in scope happens to have one of that
+name, the statement runs with a **silently wrong value**. That is precisely the class §F forbids, so the gate
+stays until the layout genuinely comes from the draft.
+
+### Two corrections to the earlier plan
+
+**The `TYPE OF` regression is created by Seam C, not fixed by it.** Today `ReadProcedureParametersAsync` resolves
+a `TYPE OF COLUMN X.Y` parameter perfectly well through `RDB$FIELD_SOURCE`; moving the layout to
+`ExtractSignature` would route it into `ResolveBaseTypeAsync`, which throws on any `TYPE …` spec. The earlier
+note called this "one accepted regression"; after A and B it is not acceptable as written — it trades a working
+case for a rarer one — so resolving `TYPE OF` belongs *inside* that work rather than beside it.
+
+**`RETURNS` does not belong in the launch signature yet.** It was flagged as a gap (a draft changing only
+`RETURNS INTEGER → BIGINT` keeps the same signature). But the signature answers *"does the user have a new
+decision to make?"*, and `RETURNS` has no field in the panel — it is not a decision. Under the header gate a
+`RETURNS` change forces a Save anyway, after which the catalog is correct. It becomes load-bearing only when a
+changed header can run, so it moved into C3.4's brief rather than being added prematurely.
+
+### The verdict
+
+The Draft model **is delivered.** What remained was not a foundation but two separable things: **disclosing §F
+boundaries that exist today** (a self-call reaches the compiled source through `ResolveRoutineAsync` — and,
+notably, *step-over does not save you either*, since the server runs the compiled routine too), and **supporting
+a changed signature without a Save**. The user then redirected the milestone: rather than "run a changed
+signature", C3 became **rebuilding the launch configuration after a signature change**, under one rule.
+
+---
+
+## C3 — the launch configuration survives a signature change (2026-07-25, COMPLETE)
+
+### The rule (the user's, and the opposite of IBExpert's)
+
+> The debugger keeps everything it can **prove** is still correct. Everything it cannot prove, it hands back to
+> the user as a decision. It never guesses.
+
+IBExpert lets you restart after a signature change but does not police the configuration, so a parameter that
+went `INTEGER → VARCHAR` keeps a value that no longer means anything and the session can end up unstartable.
+EmberTern does the inverse.
+
+Ratified before any code:
+
+- **Proof of compatibility = equality of `ExecuteParamKind`** (the input-kind family the panel already
+  classifies types into). No narrowing analysis — whether a value *fits* is Firebird's job, not ours.
+- **Matching is two passes for parameters**: by **name** first, then the **sole remaining pair** — the second
+  firing only when exactly one row is left unmatched on each side. Two or more left over on either side carries
+  nothing, because then any pairing is a guess.
+- **Trigger NEW/OLD columns get the name pass only** (below).
+- **A value carried by the pair rule is marked**, because it rests on an assumption.
+- **The proof rule holds everywhere**, including the automatic restore from parameter history.
+
+### C3.1 — one derivation for the panel and its detector (`46e5e67`)
+
+Originally "make the signature a structured record so the diff has data". That scope was **dropped**: once
+carry-over was settled as a function over parameter *rows*, the diff snapshots the panel itself and the signature
+went back to being purely a detector — for which the existing string is adequate. Building the record would have
+been a component with no consumer (#233, Contract #14).
+
+What was underneath it was real. `BuildLaunchSignature` and `BuildParameters` each derived the input list from
+the model separately, and `BuildLaunchSignature` and `TryPrepareTriggerAsync` each derived the trigger facts
+separately — kept in step by hand, with the docstring *claiming* they could not drift. They are now two consumers
+of one derivation (`ReadInputParameters`, `ReadTriggerFacts`), and the key string is byte-identical.
+
+### C3.2 — a stored value is restored only when it provably still fits (`1b97b0f`)
+
+`ParameterValue` gained the **declared type the value was entered under**. That is what turns a restore into a
+proof: a value re-applies only when its recorded type classifies to the target row's kind. The **raw type text**
+is stored rather than a classification, so the proof always follows the current classifier instead of a snapshot
+of it. The field is additive and the settings schema version is deliberately **not** bumped — a bump would trip
+the downgrade protection in `Load` and make older builds refuse the whole file, whereas an unknown member is
+simply ignored.
+
+Three things came out of following the value's whole life-cycle rather than just adding the field:
+
+1. **`ParameterHistoryStore.Record` rebuilds each `ParameterValue` by hand** — it would have dropped the new fact
+   silently, leaving the feature dead behind green row-level tests.
+2. **`ValuesEqual` decides whether a run is a repeat.** Without the type in that comparison, re-running the same
+   text under a changed type would refresh the old entry and keep its **stale** type, so the value the user had
+   just used could never be proven again.
+3. **`ApplyHistoryValue` mutated the row before the value existed** — it un-checked NULL and *then* parsed, so a
+   text that matched the kind but failed to parse left the constructor's default on screen as though someone had
+   entered it. It now parses first and touches the row only on success (gotcha #256).
+
+Accepted consequence, stated rather than hidden: entries written before this carry no type, so the first Quick
+Relaunch after upgrading does not auto-fill. It self-heals on the next run, and only *entered* values are
+affected — a stored NULL would restore the state the row already starts in.
+
+### C3.3a — carry-over, and one marking convention (`178f503`)
+
+`LaunchValueCarryOver` is a pure function over rows and knows nothing about procedures, functions, package members
+or triggers — deliberately, since a rule that had to be told what it was looking at would be a rule with places
+to diverge. It also **does not implement the proof**: a value travels through the same stored form the history
+uses (`ToHistoryValue` → `ApplyHistoryValue`), so there is exactly one answer to *"does this still fit"*, in one
+place.
+
+Two primitives, composed by the caller rather than selected by a flag:
+
+```
+parameters:        ByName → SoleRemainingPair
+trigger NEW/OLD:   ByName
+```
+
+**`ByName` claims the pair whether or not the value survives the proof.** The two rows *are* that parameter; the
+proof only decides whether its value still means anything. Leaving a retyped one unclaimed would let the pair rule
+offer its value to some other row we can already tell apart by name — moving a guess rather than removing it.
+Pinned by a test whose outcome differs without the rule.
+
+The marker is **one convention, not one per mechanism** (the user's directive after C3.2): every automatic source
+reports through the row's `ValueOrigin` — history and same-name carry-over as `Restored`, the pair rule as
+`Assumed` — rendered in one place. It also tells the truth about the value that is there *now*: any edit resets
+the origin, so a row the user has replaced stops claiming it was filled in.
+
+### C3.3b — trigger context, and an assumption that looks like one (`8acbb6f`)
+
+Trigger NEW/OLD rows carry **by name only**, and this is the one place the rules genuinely differ. A parameter has
+positional identity, so a rename can be recognised by the slot it occupies. A NEW/OLD row is a **column**, whose
+identity is its name in the target table and nothing else — its position in the grid merely follows the order the
+body happens to mention it in. "The only row left on each side" would be evidence of nothing: a body that stops
+reading `NEW.STATUS` and starts reading `NEW.STATE` refers to two different columns rather than renaming one.
+
+A changed **target table** resets both grids (the same name on another table is another column). The chosen
+**action** is carried separately — it is a decision, not a value — and **by the event itself rather than its
+index**, since the declared list may have gained or lost an action, which makes the index meaningless while the
+choice is still valid.
+
+The marker gained its second weight in the same seam, at the user's request: `Restored` keeps the quiet italic in
+the subtle reading colour; `Assumed` loses the italic, gains weight, takes the **accent** and says *"assumed"*.
+Accent rather than the warning colour on purpose — it is a "worth a look", not a claim that something is wrong.
+Still the same `ValueOrigin`; the brush arrives as a **key** through `IconBrushConverter` with the theme variant
+(gotcha #250), never as a brush on a VM.
+
+### Verification
+
+Build 0/0 after every seam; the suite grew from 5235 to 5254 across C3.1–C3.3a (+19), plus two more in C3.3b.
+Smoke clean throughout. **User QA on the live app passed for the whole of C3** — parameters, history, carry-over,
+triggers, and the legibility of `Restored` vs `Assumed`.
+
+One coverage note worth keeping honest: the **parameter** rebuild is reachable only through a compile that
+succeeds, i.e. a live server, so its call site is manual QA — the same boundary the launch-signature tests already
+document. The **trigger** rebuild needs no server (a body edit does not touch the header gate), so that one *is*
+pinned at the surface: the panel really is rebuilt, the proven value comes with it, and the newly-read column is
+left for the user.
+
+### What remains — C3.4 only, and deliberately deferred
+
+**C3.4** is the original engine work: the root frame layout from the AST header, `TYPE OF` resolved properly,
+`RETURNS` added to the signature, the §F boundaries surfaced in the pre-flight, and the mandatory
+`DebuggerFidelityProbe` case proving that a routine run from the catalog and as an identical draft produces
+identical stops and values. Only then does the header gate come off.
+
+It is **deferred by user decision** (2026-07-25), and the reason is a good one: after A and B the debugger is
+usable enough that the real question — how often a signature actually changes mid-debugging — is answerable by
+using it rather than by arguing about it. If practice says it hurts, C3.4 returns as its own independent stage.
+
+---
+
+## Seam 6d — a compiled object refreshes the other tabs showing it (2026-07-25, COMPLETE)
+
+The last incoherence, and the smallest: saving a routine from the debugger updated the database but told nothing
+else, so a second tab open on that routine sat on the old text until the next reconnect (reconnect closes every
+tab, which is why reopening always looked fine).
+
+### There was never a cache to invalidate
+
+Worth restating because it is the kind of bug people fix in the wrong layer. The readers read **live**, the
+Metadata lane uses implicit per-command transactions so committed DDL is visible immediately, and the only
+caches in play are columns and per-session package bodies — none of which hold routine source. What was missing
+was a **notification**, and specifically a *subscriber*: the object editors had raised
+`CompiledExistingObject` after every successful compile of an existing object since long before this, and
+**nothing had ever listened to it.** The event compiled, ran, and did nothing, in three view-models, invisibly
+(gotcha #258).
+
+### As built
+
+The debugger raises **the same event, under the same name**, after its own save — it compiles through the same
+Ddl lane as every editor, so it reports it the same way rather than through a path of its own. The subscriber
+they were all missing lives in the class that owns the tabs, and it is wired **once**, on
+`WorkspaceTabs.CollectionChanged`, rather than at the ~39 places that add a tab; a tab kind added later is
+covered without anyone remembering to. The sibling lookup keys on **(kind, name)**, exactly as
+`CloseTabsForObject` and the open/focus dedup already do, so "the tabs for this object" keeps meaning one thing.
+The reload itself is each editor's own existing `RefreshAsync`, reached through a new
+`WorkspaceTabViewModel.RefreshAsync()` that mirrors the `SavableEditor` / `UnsavedWork` per-kind dispatch — the
+third member of one family rather than a new idea.
+
+### Two exclusions, both deliberate
+
+**A tab with unsaved work is left alone.** `RefreshAsync` reloads from the database and clears the dirty state,
+so refreshing a dirty sibling would silently destroy edits the user had not saved. Stale text is a nuisance;
+discarded work is rule #11. That tab keeps its edits and its own Save.
+
+**A debugger tab is never a refresh target.** Reloading it would reset the source its session was built from and
+tear down a live session — the Draft model's business, and out of this seam's scope by construction.
+
+### The refactor 6d forced
+
+A debugger tab hard-coded `ObjectKind = MetadataObjectKind.Procedure`. Harmless while nothing read it — and
+this seam is the thing that started reading it, so a debugged **trigger** or **function** would have matched the
+wrong object or none at all. `CreateDebugger` now takes the real kind, and making the parameter **required**
+rather than optional is what made the compiler enumerate the call sites instead of leaving them quietly wrong.
+
+### Verification
+
+Build 0/0; smoke clean; **user QA on the live app passed** (siblings refresh after a debugger save, dirty tabs
+are untouched, the debugger does not refresh itself, and (kind, name) matching behaves). +7 tests assert the
+**decision** — which tabs get reloaded — because a reload against no connection changes nothing observable, so
+testing the action alone would have passed for the wrong reasons.
+
+### Left alone on purpose
+
+`OfferRecompileDependentsAsync` — the "recompile dependents?" offer — is **still dead code**. It was
+`CompiledExistingObject`'s intended consumer and has never been called; the view subscribes
+`RecompileDependentsRequested`, but nothing raises it. Reviving it would change what Save does, which is outside
+this seam. Recorded here so the next person finds it deliberately parked rather than freshly broken.
+
+---
+
+## 🏁 The Firebird debugger is closed (2026-07-25)
+
+Everything planned is delivered and confirmed on the live lab or the live app: the engine (P1/P2, D1–D9), the
+surfaces it needed (triggers, packages, advanced breakpoints, fast-forward), the experience stage (D15, with
+D15.6 dropped on product judgement and D15.7 left as background), functions as a debug root (standalone and
+packaged), the **Draft model** — a session runs the code the editor shows, and only `Save` writes to the
+database — the **launch-configuration rebuild** under the prove-or-ask rule, and finally **Seam 6d**.
+
+Two items remain, both **deferred by decision rather than by difficulty**, each with a ratified brief so
+neither needs re-analysis if it returns:
+
+- **D14 (Step Back)** — snapshot + per-step savepoint + undo-only; rejected replay; ~5 sessions, High.
+- **C3.4** — root frame layout from the AST header, `TYPE OF` resolved, `RETURNS` in the signature, the §F
+  boundaries in the pre-flight, and the catalog-vs-draft fidelity probe; only then does the header gate come off.
+
+The through-line worth carrying into the next area of EmberTern is the one the whole stage was built on: the
+client owns **control flow**, the server owns **all semantics**, and every place the two cannot be made to agree
+is a **named, surfaced boundary** rather than a quiet approximation. That is what made a debugger possible on an
+engine with no debugging API, and it is why the answer to "why does it do that?" has been findable every time.

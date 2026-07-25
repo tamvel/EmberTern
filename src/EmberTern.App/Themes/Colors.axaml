@@ -46,6 +46,37 @@
       <Color x:Key="RelatedElementHighlightBorderColor">#E6C85A00</Color>
       <SolidColorBrush x:Key="RelatedElementHighlightBrush" Color="{StaticResource RelatedElementHighlightColor}" />
       <SolidColorBrush x:Key="RelatedElementHighlightBorderBrush" Color="{StaticResource RelatedElementHighlightBorderColor}" />
+      <!-- Stage X / D4 — Debugger. The current-statement marker: a translucent amber band over the step
+           point the session is paused on. D15.1 Seam B rebuilt it: a CALM BLUE full-line wash (~16% over
+           the near-black editor — a quiet backdrop that leads the eye without the old amber "aggression")
+           plus a crisp accent bar at the line's left edge (DebugCurrentLineBarBrush). Alpha-first ARGB.
+           The breakpoint glyph is a solid red dot in the gutter — its own token (not ErrorColor: a
+           breakpoint is a deliberate stop, never an error). -->
+      <Color x:Key="DebugCurrentLineColor">#4A5A8AC8</Color>
+      <Color x:Key="DebugCurrentLineBarColor">#E65A8AC8</Color>
+      <Color x:Key="DebugBreakpointColor">#E51400</Color>
+      <SolidColorBrush x:Key="DebugCurrentLineBrush" Color="{StaticResource DebugCurrentLineColor}" />
+      <SolidColorBrush x:Key="DebugCurrentLineBarBrush" Color="{StaticResource DebugCurrentLineBarColor}" />
+      <SolidColorBrush x:Key="DebugBreakpointBrush" Color="{StaticResource DebugBreakpointColor}" />
+      <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4).
+           Deliberately the SAME hue as the debugger's current-line wash (DebugCurrentLineColor #5A8AC8) —
+           "this changed" is part of the debugger's own visual language, not a separate colour accent. The
+           two never share a control (marker = editor, wash = Variables panel), so no ambiguity; alpha sits
+           just under the editor wash because PanelBrush makes the same value read stronger here. -->
+      <Color x:Key="DebugVariableChangedColor">#3D5A8AC8</Color>
+      <SolidColorBrush x:Key="DebugVariableChangedBrush" Color="{StaticResource DebugVariableChangedColor}" />
+      <!-- Variables panel: per-kind glyph colours (distinct hues for fast recognition) + the pin (gold). -->
+      <Color x:Key="DebugParamInColor">#5B9BD5</Color>
+      <Color x:Key="DebugParamOutColor">#E8A020</Color>
+      <Color x:Key="DebugLocalColor">#4EC994</Color>
+      <Color x:Key="DebugPinColor">#F2C94C</Color>
+      <!-- Stage X / D10 — trigger NEW/OLD context columns: a distinct purple, apart from IN/OUT/local hues. -->
+      <Color x:Key="DebugContextColor">#C678DD</Color>
+      <SolidColorBrush x:Key="DebugParamInBrush"  Color="{StaticResource DebugParamInColor}" />
+      <SolidColorBrush x:Key="DebugParamOutBrush" Color="{StaticResource DebugParamOutColor}" />
+      <SolidColorBrush x:Key="DebugLocalBrush"    Color="{StaticResource DebugLocalColor}" />
+      <SolidColorBrush x:Key="DebugPinBrush"      Color="{StaticResource DebugPinColor}" />
+      <SolidColorBrush x:Key="DebugContextBrush"  Color="{StaticResource DebugContextColor}" />
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
@@ -80,6 +111,16 @@
       <Color x:Key="WarningIconColor">#DBA13C</Color>
       <Color x:Key="InfoIconColor">#5BA7D0</Color>
       <Color x:Key="NeutralIconColor">#C8CCD2</Color>
+      <!-- Stage Q / Q3: the code-action light bulb. Its OWN token, not WarningIconBrush — "a fix is
+           available here" is an offer, not a problem, and the two must not drift if either is retuned.
+           Amber-gold reads as the universal light-bulb cue at a glance; hover switches to the accent so
+           the bulb also says "interactive". -->
+      <Color x:Key="CodeActionColor">#F0C05A</Color>
+      <!-- D15.2 Seam A: shared subtle accent for the "loop operations" category (Next Iteration /
+           Loop Exit). Teal — deliberately NOT the PSQL-keyword violet from D15.1 (that would cross
+           the syntax domain into the toolbar). Colour marks the category, not each icon. -->
+      <Color x:Key="DebugLoopIconColor">#4FC1B5</Color>
+      <SolidColorBrush x:Key="DebugLoopIconBrush" Color="{StaticResource DebugLoopIconColor}" />
       <!-- Icon-button hover overlay — a touch stronger than HoverOverlay so a
            toolbar icon's hover reads clearly. ARGB: ~13% white on dark. -->
       <Color x:Key="IconHoverColor">#22FFFFFF</Color>
@@ -122,6 +163,7 @@
       <SolidColorBrush x:Key="WarningIconBrush" Color="{StaticResource WarningIconColor}" />
       <SolidColorBrush x:Key="InfoIconBrush" Color="{StaticResource InfoIconColor}" />
       <SolidColorBrush x:Key="NeutralIconBrush" Color="{StaticResource NeutralIconColor}" />
+      <SolidColorBrush x:Key="CodeActionBrush" Color="{StaticResource CodeActionColor}" />
       <SolidColorBrush x:Key="IconHoverBrush" Color="{StaticResource IconHoverColor}" />
 
       <!-- Override FluentTheme's TreeViewItem state brushes. Without these the dark
@@ -186,14 +228,18 @@
       <!-- Query (SQL Editor) tab icon — neutral on dark, distinct from blue Table. -->
       <SolidColorBrush x:Key="IconColor_Query"       Color="#B0BEC5" />
 
-      <!-- Editor semantic-highlight accent (Etap 6, §9.2 "calm base, semantic accent").
-           Navigable schema objects reuse the IconColor_* palette above (editor colour ==
-           tree icon), so only two extra tokens are needed: columns get one calm readable
-           colour; local names (FROM/JOIN aliases, PSQL variables/parameters, cursors, CTEs,
-           NEW/OLD) a distinct low-chroma "local scope" hue. Hex is a conservative default —
-           final visual tuning in both themes is a follow-up. -->
+      <!-- Editor semantic-highlight accents — D15.1 readability pass (readability first,
+           colour = the exception that leads the eye). Navigable schema objects reuse the
+           IconColor_* palette above (editor colour == tree icon). Ordinary local names
+           (FROM/JOIN aliases, PSQL variables/parameters, cursors, CTEs) are now NEUTRAL —
+           EditorLocalBrush == the default foreground — so variables no longer claim a hue.
+           EditorColumnBrush is retained but the in-editor paint opts columns out (see
+           SemanticHighlighter); trigger-context variables keep a restrained accent below. -->
       <SolidColorBrush x:Key="EditorColumnBrush"     Color="#A8C7E0" />
-      <SolidColorBrush x:Key="EditorLocalBrush"      Color="#C8A8D8" />
+      <SolidColorBrush x:Key="EditorLocalBrush"      Color="#D4D4D4" />
+      <!-- A Firebird domain used as a data type paints like a SQL type (D15.1). MUST mirror the xshd
+           DataType colour (Assets/FirebirdSql.xshd) so a domain and a builtin type read identically. -->
+      <SolidColorBrush x:Key="EditorDataTypeBrush"   Color="#4EC9B0" />
       <!-- Trigger context variables (NEW/OLD/INSERTING/UPDATING/DELETING). Amber, the same family as
            the built-in context constants (CURRENT_DATE / CURRENT_USER) so they read as core language
            constructs — but with more chroma than the pale Function keyword (#DCDCAA) so they clearly
@@ -246,6 +292,32 @@
       <Color x:Key="RelatedElementHighlightBorderColor">#E6E0A030</Color>
       <SolidColorBrush x:Key="RelatedElementHighlightBrush" Color="{StaticResource RelatedElementHighlightColor}" />
       <SolidColorBrush x:Key="RelatedElementHighlightBorderBrush" Color="{StaticResource RelatedElementHighlightBorderColor}" />
+      <!-- Stage X / D4 — Debugger. Current-statement marker + breakpoint glyph (solid red dot).
+           D15.1 Seam B light-theme values: a calm blue full-line wash (~11% over the near-white editor)
+           + a crisp navy accent bar at the line's left edge; a deeper red for the breakpoint. See the dark
+           dictionary for the rationale. -->
+      <Color x:Key="DebugCurrentLineColor">#380033B3</Color>
+      <Color x:Key="DebugCurrentLineBarColor">#CC0033B3</Color>
+      <Color x:Key="DebugBreakpointColor">#C42B1C</Color>
+      <SolidColorBrush x:Key="DebugCurrentLineBrush" Color="{StaticResource DebugCurrentLineColor}" />
+      <SolidColorBrush x:Key="DebugCurrentLineBarBrush" Color="{StaticResource DebugCurrentLineBarColor}" />
+      <SolidColorBrush x:Key="DebugBreakpointBrush" Color="{StaticResource DebugBreakpointColor}" />
+      <!-- Variables panel: subtle wash behind a variable the last step changed (change-highlight, spec §9.4).
+           Same hue as this theme's current-line wash (DebugCurrentLineColor #0033B3) — see the Dark note. -->
+      <Color x:Key="DebugVariableChangedColor">#330033B3</Color>
+      <SolidColorBrush x:Key="DebugVariableChangedBrush" Color="{StaticResource DebugVariableChangedColor}" />
+      <!-- Variables panel: per-kind glyph colours (distinct hues for fast recognition) + the pin (gold). -->
+      <Color x:Key="DebugParamInColor">#2D6BBF</Color>
+      <Color x:Key="DebugParamOutColor">#C77800</Color>
+      <Color x:Key="DebugLocalColor">#1A7F4B</Color>
+      <Color x:Key="DebugPinColor">#C99700</Color>
+      <!-- Stage X / D10 — trigger NEW/OLD context columns: a distinct purple, apart from IN/OUT/local hues. -->
+      <Color x:Key="DebugContextColor">#8E44AD</Color>
+      <SolidColorBrush x:Key="DebugParamInBrush"  Color="{StaticResource DebugParamInColor}" />
+      <SolidColorBrush x:Key="DebugParamOutBrush" Color="{StaticResource DebugParamOutColor}" />
+      <SolidColorBrush x:Key="DebugLocalBrush"    Color="{StaticResource DebugLocalColor}" />
+      <SolidColorBrush x:Key="DebugPinBrush"      Color="{StaticResource DebugPinColor}" />
+      <SolidColorBrush x:Key="DebugContextBrush"  Color="{StaticResource DebugContextColor}" />
       <!-- Indigo/violet overlay marking a row with an unsaved modify edit in the Pola
            grid. The three pending states read at a glance — green = added, indigo =
            modified, red = dropped — and none collides with the blue hover/selection or
@@ -275,6 +347,15 @@
       <Color x:Key="WarningIconColor">#B5790E</Color>
       <Color x:Key="InfoIconColor">#2A7AA8</Color>
       <Color x:Key="NeutralIconColor">#3C3C3C</Color>
+      <!-- Stage Q / Q3: the code-action light bulb. Its OWN token, not WarningIconBrush — "a fix is
+           available here" is an offer, not a problem, and the two must not drift if either is retuned.
+           Amber-gold reads as the universal light-bulb cue at a glance; hover switches to the accent so
+           the bulb also says "interactive". -->
+      <Color x:Key="CodeActionColor">#B07B0A</Color>
+      <!-- D15.2 Seam A: shared subtle accent for the "loop operations" category (Next Iteration /
+           Loop Exit). Teal — deliberately NOT the PSQL-keyword violet from D15.1. -->
+      <Color x:Key="DebugLoopIconColor">#0E8074</Color>
+      <SolidColorBrush x:Key="DebugLoopIconBrush" Color="{StaticResource DebugLoopIconColor}" />
       <!-- ARGB: ~9% black on light. -->
       <Color x:Key="IconHoverColor">#18000000</Color>
 
@@ -316,6 +397,7 @@
       <SolidColorBrush x:Key="WarningIconBrush" Color="{StaticResource WarningIconColor}" />
       <SolidColorBrush x:Key="InfoIconBrush" Color="{StaticResource InfoIconColor}" />
       <SolidColorBrush x:Key="NeutralIconBrush" Color="{StaticResource NeutralIconColor}" />
+      <SolidColorBrush x:Key="CodeActionBrush" Color="{StaticResource CodeActionColor}" />
       <SolidColorBrush x:Key="IconHoverBrush" Color="{StaticResource IconHoverColor}" />
 
       <!-- Same TreeViewItem state-brush overrides for Light. See Dark dictionary above. -->
@@ -369,7 +451,10 @@
            kept distinct in both hue AND lightness from the object palette above (§9.3).
            Conservative default; final visual tuning is a follow-up. -->
       <SolidColorBrush x:Key="EditorColumnBrush"     Color="#2E5C82" />
-      <SolidColorBrush x:Key="EditorLocalBrush"      Color="#7A4E86" />
+      <!-- D15.1: ordinary locals neutral (== default foreground); see the Dark block comment. -->
+      <SolidColorBrush x:Key="EditorLocalBrush"      Color="#1F1F1F" />
+      <!-- Domain-as-type paints like a SQL type (D15.1). MUST mirror the Light xshd DataType (#0F766E). -->
+      <SolidColorBrush x:Key="EditorDataTypeBrush"   Color="#0F766E" />
       <!-- Trigger context variables — mirrors the Light "Function" lexical colour (#8C6600). -->
       <SolidColorBrush x:Key="EditorContextVariableBrush" Color="#8C6600" />
     </ResourceDictionary>

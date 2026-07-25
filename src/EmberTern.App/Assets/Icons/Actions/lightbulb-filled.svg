@@ -1,0 +1,12 @@
+<!-- EmberTern Icon System — a FILLED lightbulb (24x24), the code-action affordance (Stage Q / Q3).
+     Deliberately not part of the stroked Lucide family: at 14px a stroked outline reads as an empty
+     ring, which is exactly the legibility complaint this replaces. Same precedent as DebuggerIcon —
+     when a mark cannot be a single stroked SvgIcon, it gets its own filled geometry.
+     Mirrored into Themes/IconGeometries.axaml as Icon.LightbulbFilled and painted with CodeActionBrush. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+  <!-- glass -->
+  <path d="M12 3.2A6.4 6.4 0 1 0 12 16A6.4 6.4 0 1 0 12 3.2Z" />
+  <!-- screw base -->
+  <path d="M8.8 16.6h6.4v1.9H8.8Z" />
+  <path d="M10.1 19.6h3.8v1.8h-3.8Z" />
+</svg>

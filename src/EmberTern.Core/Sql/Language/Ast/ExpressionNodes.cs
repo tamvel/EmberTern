@@ -80,3 +80,44 @@ public sealed class CaseExpression : SqlNode
     /// ELSE result's structural sub-nodes — in source order.</remarks>
     public override IReadOnlyList<SqlNode> Children => _children;
 }
+
+/// <summary>
+/// A lone call operand — <c>name(args)</c> — recognised in a <b>value-consuming position where the call is
+/// the ENTIRE operand</b> (Stage X / D9 seam c, design §6.4): an assignment RHS (<c>v = f(x)</c>), a
+/// <c>RETURN</c> operand (<c>RETURN f(x)</c>), or a whole <c>IF</c>/<c>WHILE</c> condition
+/// (<c>IF (f(x)) THEN</c>). It lets the debugger Step Into a local <b>function</b>'s body without evaluating
+/// any surrounding expression — the four positions consume the return value directly, so a proper
+/// sub-expression (<c>f(x)+1</c>, <c>a AND f(x)</c>, <c>f</c> inside <c>VALUES(…)</c>) is deliberately NOT
+/// modelled here; it stays a token fragment and steps over (a permanent §F boundary). The parser models only
+/// "a lone call" — whether <see cref="Name"/> resolves to an in-scope local function is the debugger's
+/// decision (there is no catalog in the parser), so a stored / built-in / package call is modelled the same
+/// and simply resolves to step-over at run time.
+/// <para>
+/// <see cref="Arguments"/> reuses D8's <see cref="CallArgument"/> span record — a step-into slices and
+/// evaluates each argument in the <b>caller</b> frame to seed the callee's input parameters; the argument
+/// interior stays a token fragment (structural-depth boundary). This is an additive structural overlay
+/// referenced by typed properties on the owning leaf/branch (like <see cref="CallArgument"/> it is not a tree
+/// child); the tokens still round-trip (§0).
+/// </para>
+/// </summary>
+public sealed class CallExpression : SqlNode
+{
+    public CallExpression(int start, int length, string? name, IReadOnlyList<CallArgument>? arguments)
+        : base(start, length)
+    {
+        Name = name;
+        Arguments = arguments ?? Array.Empty<CallArgument>();
+    }
+
+    /// <summary>The called routine's name — an unquoted name upper-cased to match resolution, a quoted name
+    /// kept in its case (folded like <see cref="ExecuteProcedureStatement.ProcedureName"/>); null when it
+    /// could not be read (mid-edit).</summary>
+    public string? Name { get; }
+
+    /// <summary>The call's positional arguments, in order — each the source span of one argument expression
+    /// (reused from D8's <see cref="CallArgument"/>). Empty for a no-argument call.</summary>
+    public IReadOnlyList<CallArgument> Arguments { get; }
+
+    /// <inheritdoc/>
+    public override IReadOnlyList<SqlNode> Children => Array.Empty<SqlNode>();
+}

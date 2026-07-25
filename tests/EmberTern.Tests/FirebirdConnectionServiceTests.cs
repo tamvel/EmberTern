@@ -119,4 +119,45 @@ public class FirebirdConnectionServiceTests
         Assert.False(raised);
         Assert.Null(service.ActiveProfile);
     }
+
+    // --- P2: FB3+ server version gate (decision 8 / spec §1.3) ---
+    //
+    // The predicate reuses FirebirdDdlReader.ParseServerMajor, which parses the FULL driver ServerVersion
+    // (e.g. "WI-V5.0.0.1306 Firebird 5.0"), NOT a bare "5.0.3" — so these inputs are realistic
+    // ServerVersion strings. A pre-FB3 major is refused; an unparseable string fails OPEN (a live Srp
+    // connection is FB3+ by construction, so we never falsely reject one we merely can't read).
+
+    [Theory]
+    // Positively pre-FB3 → rejected.
+    [InlineData("WI-V2.5.9.27139 Firebird 2.5", false)]
+    [InlineData("LI-V2.5.9.27139 Firebird 2.5", false)]
+    [InlineData("Firebird 2.5", false)]
+    [InlineData("WI-V1.5.6.5026 Firebird 1.5", false)]
+    // FB3/4/5 → allowed.
+    [InlineData("WI-V3.0.7.33374 Firebird 3.0", true)]
+    [InlineData("WI-V4.0.2.2816 Firebird 4.0", true)]
+    [InlineData("WI-V5.0.0.1306 Firebird 5.0", true)]
+    [InlineData("LI-V5.0.1.1469 Firebird 5.0", true)]
+    // Unparseable / empty → fail-open (major 0 ⇒ treated as supported).
+    [InlineData("", true)]
+    [InlineData(null, true)]
+    [InlineData("some unexpected banner", true)]
+    public void IsSupportedServerVersion_GatesAtFB3(string? serverVersion, bool expectedSupported)
+        => Assert.Equal(expectedSupported, FirebirdConnectionService.IsSupportedServerVersion(serverVersion));
+
+    [Fact]
+    public void UnsupportedServerMessage_NamesRequiredVersion_AndTheDetectedServer()
+    {
+        var msg = FirebirdConnectionService.UnsupportedServerMessage("WI-V2.5.9.27139 Firebird 2.5");
+        Assert.Contains("Firebird 3.0 or later", msg);            // names the required version
+        Assert.Contains("WI-V2.5.9.27139 Firebird 2.5", msg);     // and the detected server, verbatim
+    }
+
+    [Fact]
+    public void UnsupportedServerMessage_NullVersion_IsStillReadable()
+    {
+        var msg = FirebirdConnectionService.UnsupportedServerMessage(null);
+        Assert.Contains("Firebird 3.0 or later", msg);
+        Assert.Contains("unknown", msg);
+    }
 }

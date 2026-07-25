@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using EmberTern.App;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
@@ -129,22 +130,25 @@ public class ViewDetailTests
     }
 
     [Fact]
-    public async Task ExecuteCompile_NoExecutor_IsNoOp()
+    public async Task ExecuteCompile_NoExecutor_ReportsNoConnection()
     {
+        // Seam 6b — was "…_IsNoOp" (ErrorMessage null), which is the defect itself: SaveAsync reads
+        // "no error" as success, so a silent exit told the WorkGuard the work was saved.
         var vm = new ViewDetailTabViewModel("V_X") { SourceText = "CREATE OR ALTER VIEW V_X AS SELECT 1 FROM RDB$DATABASE" };
         await vm.ExecuteCompileAsync();
-        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(UiStrings.NoConnectionMessage, vm.ErrorMessage);
     }
 
     [Fact]
-    public async Task ExecuteCompile_EmptySource_IsNoOp()
+    public async Task ExecuteCompile_EmptySource_ReportsNothingToCompile()
     {
         using var harness = new Harness();
         var vm = harness.Main.CreateViewDetail(new MetadataObject("V_X", MetadataObjectKind.View));
         vm.SourceText = "   ";
         await vm.ExecuteCompileAsync();
-        // Whitespace-only source short-circuits before any execution attempt.
-        Assert.Null(vm.ErrorMessage);
+        // Whitespace-only source still short-circuits before any execution attempt — but it now SAYS so,
+        // so the save adapter cannot mistake "nothing ran" for "saved" (Seam 6b).
+        Assert.Equal(UiStrings.EditorNothingToCompile, vm.ErrorMessage);
     }
 
     [Fact]
