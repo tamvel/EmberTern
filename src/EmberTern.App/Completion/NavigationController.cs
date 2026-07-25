@@ -114,12 +114,16 @@ internal sealed class NavigationController
     // The code-action menu (Ctrl+., Stage Q). OverlayLayer-hosted for the same reason as the hover card.
     private Control? _codeActionMenu;
     private ListBox? _codeActionList;
+    // The caret the open menu was built for. Its actions describe THAT position, so the menu is
+    // invalidated the moment the caret leaves it (or the text changes underneath).
+    private int _codeActionOffset = -1;
 
     // The code-action light bulb (Q3) — a DISCOVERABILITY surface only. It decides whether to appear by
     // calling the same GetActionsAtCaret the menu does, and clicking it runs the same ShowCodeActions;
     // it owns no way to obtain or perform an action.
     private Control? _bulb;
     private int _bulbLine = -1;               // the document line it is currently shown for
+    private bool _bulbUpdating;               // re-entrancy guard — see UpdateBulb
     private readonly DispatcherTimer _bulbDwell;
 
     // Inline rename popup (M5), created lazily on first F2.
@@ -215,8 +219,10 @@ internal sealed class NavigationController
         // (so holding Ctrl over an already-hovered identifier lights it up, and releasing clears it).
         editor.KeyDown += c.OnKeyChanged;
         editor.KeyUp += c.OnKeyChanged;
-        // F2 (rename) / Alt+F12 (peek) — the M5 commands.
+        // F2 (rename) / Alt+F12 (peek) / Ctrl+. (code actions) — the command keys.
         editor.KeyDown += c.OnCommandKey;
+        // Escape-to-dismiss must beat AvaloniaEdit's own Escape handling, so it tunnels.
+        editor.AddHandler(InputElement.KeyDownEvent, c.OnTunnelKey, RoutingStrategies.Tunnel);
         // Double-click → INSERT/VALUES column helper (P6) or name-based open. Consolidated here so
         // there is ONE double-click handler (the two duplicated ones in SqlEditorBehavior / MainWindow
         // move here), avoiding an e.Handled ordering dance between two subscribers on one event.
@@ -227,6 +233,9 @@ internal sealed class NavigationController
         // it) and must be repositioned when the view scrolls under it.
         editor.TextArea.Caret.PositionChanged += c.OnCaretMovedForBulb;
         editor.TextArea.TextView.ScrollOffsetChanged += c.OnScrollForBulb;
+        // The moment the line geometry becomes valid again — the same signal BreakpointMargin repaints
+        // on. A bulb whose placement could not be computed yet gets its chance here.
+        editor.TextArea.TextView.VisualLinesChanged += c.OnVisualLinesChangedForBulb;
         return c;
     }
 
@@ -241,10 +250,12 @@ internal sealed class NavigationController
         _editor.KeyDown -= OnKeyChanged;
         _editor.KeyUp -= OnKeyChanged;
         _editor.KeyDown -= OnCommandKey;
+        _editor.RemoveHandler(InputElement.KeyDownEvent, OnTunnelKey);
         _editor.DoubleTapped -= OnDoubleTapped;
         _editor.TextChanged -= OnTextChanged;
         _editor.TextArea.Caret.PositionChanged -= OnCaretMovedForBulb;
         _editor.TextArea.TextView.ScrollOffsetChanged -= OnScrollForBulb;
+        _editor.TextArea.TextView.VisualLinesChanged -= OnVisualLinesChangedForBulb;
         _bulbDwell.Stop();
         _bulbDwell.Tick -= OnBulbDwellElapsed;
         HideBulb();
@@ -283,6 +294,9 @@ internal sealed class NavigationController
     private void OnTextChanged(object? sender, EventArgs e)
     {
         HideHover();
+        // The text changed under the open menu, so its actions describe a document that no longer
+        // exists — close it rather than let one be picked.
+        CloseCodeActionMenu();
         // The diagnostics now describe text that no longer exists, so the bulb would be offering a fix
         // for a problem that may already be gone. Hide it NOW and let the recomputed diagnostics decide
         // whether it comes back (RefreshCodeActionIndicator, called on ModelUpdated).
@@ -414,6 +428,10 @@ internal sealed class NavigationController
     {
         // Any click dismisses the info card — you have started doing something, not reading.
         HideHover();
+        // A click back in the editor dismisses the menu too, and hands the keyboard back. LostFocus
+        // alone would close it, but only once focus actually moved; doing it here also covers a click
+        // that lands on the editor without changing focus.
+        CancelCodeActionMenu();
 
         var props = e.GetCurrentPoint(_editor).Properties;
         if (!props.IsLeftButtonPressed) return;
@@ -521,6 +539,19 @@ internal sealed class NavigationController
         }
     }
 
+    // Escape must close the menu wherever the keyboard happens to be, and the two places need two
+    // subscriptions for one behaviour — not two behaviours. The menu lives in the window's OverlayLayer,
+    // which is NOT a descendant of the editor, so a key pressed with the list focused never reaches the
+    // editor at all (the list's own handler covers that). With focus still in the editor, a BUBBLE
+    // handler is too late: AvaloniaEdit's TextArea marks Escape handled at the source, so it never
+    // reaches an ancestor — the same trap as gotcha #224 (Tab), and the reason this is TUNNELLED.
+    private void OnTunnelKey(object? sender, KeyEventArgs e)
+    {
+        if (_detached || e.Key != Key.Escape || _codeActionMenu is null) return;
+        CancelCodeActionMenu();
+        e.Handled = true;
+    }
+
     // ── Code actions — Ctrl+. (Stage Q / Q2) ─────────────────────────────────────────────────────
     //
     // The light bulb (Q3) is a second TRIGGER for this same method, never a second implementation: both
@@ -616,6 +647,7 @@ internal sealed class NavigationController
 
         _codeActionMenu = card;
         _codeActionList = list;
+        _codeActionOffset = _editor.CaretOffset;
         Dispatcher.UIThread.Post(() =>
         {
             if (!ReferenceEquals(_codeActionMenu, card)) return;
@@ -648,13 +680,29 @@ internal sealed class NavigationController
     /// <summary>Test seam: whether the bulb is currently offered (headless probe).</summary>
     internal bool IsCodeActionIndicatorVisible => _bulb is not null;
 
-    private void OnCaretMovedForBulb(object? sender, EventArgs e) => ScheduleBulb();
+
+    private void OnCaretMovedForBulb(object? sender, EventArgs e)
+    {
+        // An open menu describes the caret it was built for. If the caret moved, that context is gone —
+        // close rather than let the user pick a fix for a position they have left.
+        InvalidateCodeActionMenuIfMoved();
+        ScheduleBulb();
+    }
 
     // Scrolling does not change WHETHER there are actions, only where the line is — so reposition
     // without re-evaluating (and without the dwell, or the bulb would lag behind the text).
     private void OnScrollForBulb(object? sender, EventArgs e)
     {
         if (_bulb is not null) PositionBulb(_bulbLine);
+    }
+
+    // The view's geometry just became valid/changed: place a bulb that could not be placed before, and
+    // keep an existing one on its line.
+    private void OnVisualLinesChangedForBulb(object? sender, EventArgs e)
+    {
+        if (_detached) return;
+        if (_bulb is not null) { PositionBulb(_bulbLine); return; }
+        UpdateBulb(); // a placement that failed earlier gets its retry here
     }
 
     private void ScheduleBulb()
@@ -671,6 +719,25 @@ internal sealed class NavigationController
     }
 
     private void UpdateBulb()
+    {
+        // Adding to / removing from the overlay changes layout, which can raise VisualLinesChanged
+        // SYNCHRONOUSLY — and that handler calls back in here. Without this guard the hide/show pair
+        // below interleaves with a nested update: both add a control, only the last is remembered, and
+        // the first is stranded in the overlay forever (found by the Q3 placement test, which saw two
+        // children where one was expected).
+        if (_bulbUpdating) return;
+        _bulbUpdating = true;
+        try
+        {
+            UpdateBulbCore();
+        }
+        finally
+        {
+            _bulbUpdating = false;
+        }
+    }
+
+    private void UpdateBulbCore()
     {
         if (_detached || _editor.IsReadOnly)
         {
@@ -737,47 +804,82 @@ internal sealed class NavigationController
             ShowCodeActions();
         };
 
+        // Position BEFORE committing: if the geometry is not available yet, nothing has been added to
+        // the overlay and no state has been touched, so the next VisualLinesChanged simply tries again.
+        if (!TryGetLineEndAnchor(line, overlay, out var anchor)) return;
+
+        Canvas.SetLeft(button, anchor.X);
+        Canvas.SetTop(button, anchor.Y);
         overlay.Children.Add(button);
         _bulb = button;
         _bulbLine = line;
-        PositionBulb(line);
     }
 
-    // Past the end of the line's text — the same placement idiom as the debugger's inline values, chosen
-    // because it provably never covers code and never shifts the document. The left gutter is not
-    // available: every SQL surface shows line numbers there.
     private void PositionBulb(int line)
     {
         if (_bulb is not { } bulb) return;
         var overlay = OverlayLayer.GetOverlayLayer(_editor);
-        var doc = _editor.Document;
-        if (overlay is null || doc is null || line < 1 || line > doc.LineCount)
+        if (overlay is null) { HideBulb(); return; }
+
+        // Geometry not ready is NOT the same as "the line is gone": keep the bulb and let
+        // VisualLinesChanged reposition it once the view settles.
+        if (!TryEnsureVisualLines()) return;
+        if (!TryGetLineEndAnchor(line, overlay, out var anchor))
         {
-            HideBulb();
+            HideBulb(); // lines are valid and this one has no geometry ⇒ it scrolled out of view
             return;
         }
+
+        Canvas.SetLeft(bulb, anchor.X);
+        Canvas.SetTop(bulb, anchor.Y);
+    }
+
+    // Reading TextView.VisualLines while they are invalid THROWS (EditorPopups' rule, learned from the
+    // double-click crash: "never access VisualLines while it's invalid"). A background RENDERER may skip
+    // this — its Draw only runs when they are valid by construction, which is why the inline-values idiom
+    // this placement was lifted from has no guard. The bulb positions from a timer tick and from
+    // ModelUpdated, i.e. OUTSIDE the render pass, so the guarantee does not transfer and the guard is
+    // mandatory. False ⇒ not computable right now; try again on the next VisualLinesChanged.
+    private bool TryEnsureVisualLines()
+    {
+        var tv = _editor.TextArea.TextView;
+        if (tv.VisualLinesValid) return true;
+        try { tv.EnsureVisualLines(); }
+        catch (InvalidOperationException) { return false; } // a build is already running mid-Measure
+        return tv.VisualLinesValid;
+    }
+
+    // The anchor just past the end of the line's text — placement chosen because it provably never covers
+    // code and never shifts the document (the left gutter is unavailable: every SQL surface shows line
+    // numbers). False ⇒ the line has no geometry, i.e. it is not currently visible.
+    private bool TryGetLineEndAnchor(int line, OverlayLayer overlay, out Point anchor)
+    {
+        anchor = default;
+        var doc = _editor.Document;
+        if (doc is null || line < 1 || line > doc.LineCount) return false;
+        if (!TryEnsureVisualLines()) return false;
 
         var textView = _editor.TextArea.TextView;
         var documentLine = doc.GetLineByNumber(line);
         Rect? last = null;
         var segment = new TextSegment { StartOffset = documentLine.Offset, Length = documentLine.Length };
         foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, segment)) last = rect;
-        if (last is not { } r)
-        {
-            HideBulb(); // the line is scrolled out of view — nothing to point at
-            return;
-        }
+        if (last is not { } r) return false;
 
-        var anchor = textView.TranslatePoint(new Point(r.Right + BulbGap, r.Top), overlay);
-        Canvas.SetLeft(bulb, anchor?.X ?? 0);
-        Canvas.SetTop(bulb, anchor?.Y ?? 0);
+        var point = textView.TranslatePoint(new Point(r.Right + BulbGap, r.Top), overlay);
+        if (point is null) return false;
+        anchor = point.Value;
+        return true;
     }
 
     private void HideBulb()
     {
         if (_bulb is { } bulb)
         {
-            OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(bulb);
+            // Remove from the panel that ACTUALLY holds it, not from whatever GetOverlayLayer resolves
+            // to now: clearing the field while the control stayed parented is how one gets stranded in
+            // the overlay with nothing left pointing at it.
+            (bulb.Parent as Panel)?.Children.Remove(bulb);
             _bulb = null;
         }
         _bulbLine = -1;
@@ -787,8 +889,7 @@ internal sealed class NavigationController
     {
         if (e.Key == Key.Escape)
         {
-            CloseCodeActionMenu();
-            _editor.TextArea.Focus();
+            CancelCodeActionMenu();
             e.Handled = true;
         }
         else if (e.Key is Key.Enter or Key.Tab)
@@ -812,7 +913,27 @@ internal sealed class NavigationController
             OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card);
             _codeActionMenu = null;
             _codeActionList = null;
+            _codeActionOffset = -1;
         }
+    }
+
+    // Dismissal that returns the user to what they were doing: the editor keeps the keyboard, so they
+    // can carry straight on typing. Used by Escape and by a click that lands back in the editor — NOT by
+    // LostFocus, where focus has deliberately gone somewhere else and stealing it back would be wrong.
+    private void CancelCodeActionMenu()
+    {
+        if (_codeActionMenu is null) return;
+        CloseCodeActionMenu();
+        _editor.TextArea.Focus();
+    }
+
+    // The open menu's actions were computed for one caret position. Once the caret leaves it, the menu is
+    // describing a context the user has abandoned. (Applying a stale action could not corrupt anything —
+    // TextEditApplier's drift check would refuse it — but offering it at all is the wrong behaviour.)
+    private void InvalidateCodeActionMenuIfMoved()
+    {
+        if (_codeActionMenu is null) return;
+        if (_editor.CaretOffset != _codeActionOffset) CloseCodeActionMenu();
     }
 
     // Opens the inline rename box iff the caret is on a safely-renameable local (the Navigation

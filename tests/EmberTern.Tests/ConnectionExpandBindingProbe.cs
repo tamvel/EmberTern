@@ -1190,6 +1190,188 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
     }
 
+    // Stage Q — the APP half of the code-action pipeline on a REAL editor: GetActionsAtCaret sees the
+    // engine's actions, Ctrl+. opens the menu, and the menu is dismissed / invalidated the way a context
+    // menu must be. Lives here because real key events need the ONE shared headless session (#94/#226).
+    //
+    // NOT covered, deliberately: the bulb's DWELL path. Headless runs no DispatcherTimer at all (measured
+    // during the Q3 QA trace: a plain 450ms control timer ticked 0 times), so a dwell assertion here
+    // would pass or fail for reasons unrelated to the code. The bulb is therefore driven through its
+    // explicit refresh, which is the same UpdateBulb the timer reaches.
+    [Fact]
+    public async System.Threading.Tasks.Task CodeActionMenu_OpensOnCtrlPeriod_AndDismissesLikeAContextMenu()
+    {
+        var session = SharedSession;
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            const string Sql = "select id_rozliczenie from rozliczenie r join pozycja p on 1 = 1";
+            var meta = new ProbeMetadata()
+                .Col("ROZLICZENIE", "ID_ROZLICZENIE")
+                .Col("POZYCJA", "ID_ROZLICZENIE");
+
+            var model = SemanticModel.Build(Sql, meta);
+            var diagnostics = EmberTern.Core.Sql.Language.DiagnosticsEngine.Analyze(model);
+            log.AppendLine($"[1] diagnostics = {diagnostics.Count}");
+            foreach (var d in diagnostics) log.AppendLine($"    {d.Code} {d.Category} [{d.Start}..{d.End})");
+
+            var editor = new TextEditor { Document = new AvaloniaEdit.Document.TextDocument(Sql) };
+            var window = new Window { Content = editor, Width = 900, Height = 400 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var nav = NavigationController.Attach(
+                editor,
+                () => model,
+                () => diagnostics,
+                () => false,
+                (_, _) => false,
+                _ => false);
+
+            int columnOffset = Sql.IndexOf("id_rozliczenie", StringComparison.Ordinal);
+            editor.CaretOffset = columnOffset + 3;   // inside the ambiguous column
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[2] caret = {editor.CaretOffset}, IsReadOnly = {editor.IsReadOnly}");
+
+            var actions = nav.CodeActionsForTest(editor.CaretOffset);
+            log.AppendLine($"[3] GetActionsAtCaret = {actions.Count}");
+            Assert.Equal(2, actions.Count);
+
+            var overlay = OverlayLayer.GetOverlayLayer(editor);
+            Assert.NotNull(overlay);
+            int baseline = overlay!.Children.Count;
+
+            void CtrlPeriod()
+            {
+                editor.TextArea.RaiseEvent(new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = Key.OemPeriod,
+                    KeyModifiers = KeyModifiers.Control,
+                });
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            // Opens.
+            CtrlPeriod();
+            Assert.Equal(baseline + 1, overlay.Children.Count);
+
+            // Escape dismisses without applying, and hands the keyboard back so typing can continue.
+            editor.TextArea.RaiseEvent(new KeyEventArgs
+            {
+                RoutedEvent = InputElement.KeyDownEvent,
+                Key = Key.Escape,
+                KeyModifiers = KeyModifiers.None,
+            });
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[4] after Escape: children = {overlay.Children.Count}, text unchanged = {editor.Document.Text == Sql}");
+            Assert.Equal(baseline, overlay.Children.Count);
+            Assert.Equal(Sql, editor.Document.Text);   // Escape performed NO action
+
+            // Moving the caret invalidates an open menu: its actions describe the position it was built
+            // for, and offering them somewhere else is the wrong behaviour.
+            CtrlPeriod();
+            Assert.Equal(baseline + 1, overlay.Children.Count);
+            editor.CaretOffset = editor.Document.TextLength;
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[5] after caret move: children = {overlay.Children.Count}");
+            Assert.Equal(baseline, overlay.Children.Count);
+
+            // A text change under an open menu invalidates it too.
+            editor.CaretOffset = columnOffset + 3;
+            Dispatcher.UIThread.RunJobs();
+            CtrlPeriod();
+            Assert.Equal(baseline + 1, overlay.Children.Count);
+            editor.Document.Insert(editor.Document.TextLength, " ");
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[6] after text change: children = {overlay.Children.Count}");
+            Assert.Equal(baseline, overlay.Children.Count);
+
+            nav.Detach();
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Stage Q / Q3 — the bulb's PLACEMENT must survive being asked while the view's line geometry is not
+    // valid. It positions from a timer tick and from ModelUpdated, i.e. OUTSIDE the render pass, where
+    // TextView.VisualLines THROWS if a re-measure is pending (EditorPopups' rule; the double-click crash).
+    // The Q3 QA bug was exactly this: the placement idiom was lifted from a background RENDERER, whose
+    // Draw only ever runs when the lines are valid. A freshly-laid-out editor cannot reproduce it, so
+    // this drives the case directly: invalidate, then ask.
+    [Fact]
+    public async System.Threading.Tasks.Task CodeActionBulb_PlacementSurvivesInvalidVisualLines()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            const string Sql = "select id_rozliczenie from rozliczenie r join pozycja p on 1 = 1";
+            var meta = new ProbeMetadata()
+                .Col("ROZLICZENIE", "ID_ROZLICZENIE")
+                .Col("POZYCJA", "ID_ROZLICZENIE");
+            var model = SemanticModel.Build(Sql, meta);
+            var diagnostics = EmberTern.Core.Sql.Language.DiagnosticsEngine.Analyze(model);
+
+            var editor = new TextEditor { Document = new AvaloniaEdit.Document.TextDocument(Sql) };
+            var window = new Window { Content = editor, Width = 900, Height = 400 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var nav = NavigationController.Attach(
+                editor, () => model, () => diagnostics, () => false, (_, _) => false, _ => false);
+            editor.CaretOffset = Sql.IndexOf("id_rozliczenie", StringComparison.Ordinal) + 3;
+
+            // Force a pending re-measure, then ask for the bulb: this must not throw, and must not leave
+            // a control stranded in the overlay at a position that was never computed.
+            editor.TextArea.TextView.Redraw();
+            editor.TextArea.TextView.InvalidateMeasure();
+            var overlay = OverlayLayer.GetOverlayLayer(editor);
+            int baseline = overlay!.Children.Count;
+
+            nav.RefreshCodeActionIndicator();   // must not throw
+
+            Assert.True(
+                nav.IsCodeActionIndicatorVisible || overlay.Children.Count == baseline,
+                "the bulb was left in the overlay without a computed position");
+
+            // Once the view settles, it must be placeable.
+            Dispatcher.UIThread.RunJobs();
+            nav.RefreshCodeActionIndicator();
+            Assert.True(nav.IsCodeActionIndicatorVisible);
+
+            nav.Detach();
+            // Nothing stranded: this is what caught the re-entrancy that added a second, orphaned bulb.
+            Assert.Equal(baseline, overlay.Children.Count);
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    private sealed class ProbeMetadata : ISqlMetadataProvider
+    {
+        private readonly System.Collections.Generic.Dictionary<string, ObjectMetadata> _objects =
+            new(StringComparer.OrdinalIgnoreCase);
+        private readonly System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<ColumnMetadata>> _cols =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        public ProbeMetadata Col(string table, string name)
+        {
+            if (!_objects.ContainsKey(table)) _objects[table] = new ObjectMetadata(table, SymbolKind.Table);
+            if (!_cols.TryGetValue(table, out var list)) _cols[table] = list = new();
+            list.Add(new ColumnMetadata(name, "INTEGER"));
+            return this;
+        }
+
+        public ObjectMetadata? FindObject(string name) => _objects.TryGetValue(name, out var o) ? o : null;
+        public System.Collections.Generic.IReadOnlyList<ColumnMetadata> GetColumns(string t)
+            => _cols.TryGetValue(t, out var c) ? c : Array.Empty<ColumnMetadata>();
+        public System.Collections.Generic.IReadOnlyList<RoutineParameterMetadata> GetRoutineParameters(string r)
+            => Array.Empty<RoutineParameterMetadata>();
+        public System.Collections.Generic.IReadOnlyList<ObjectMetadata> AllObjects() => _objects.Values.ToList();
+    }
+
     // UX Polish Seam 4 — MessageBanner is the IDE's ONE message surface (debugger Error Bar + pre-flight rows
     // + every object editor + Execute Procedure + Security Manager). Its severity mapping is resolved at
     // RUNTIME (DynamicResource brush key + geometry key), so the build cannot validate it: pin that every
