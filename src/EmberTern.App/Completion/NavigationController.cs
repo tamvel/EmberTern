@@ -543,9 +543,40 @@ internal sealed class NavigationController
     // reaches an ancestor — the same trap as gotcha #224 (Tab), and the reason this is TUNNELLED.
     private void OnTunnelKey(object? sender, KeyEventArgs e)
     {
-        if (_detached || e.Key != Key.Escape || _codeActionMenu is null) return;
-        CancelCodeActionMenu();
-        e.Handled = true;
+        if (_detached || _codeActionMenu is null) return;
+
+        // While the menu is open it OWNS these keys — the same bargain the completion list makes. It
+        // must tunnel: AvaloniaEdit's TextArea handles Escape and the arrows at the source, so a bubble
+        // handler would never see them (the gotcha #224 trap).
+        switch (e.Key)
+        {
+            case Key.Escape:
+                CancelCodeActionMenu();
+                e.Handled = true;
+                break;
+            case Key.Down:
+                MoveCodeActionSelection(1);
+                e.Handled = true;
+                break;
+            case Key.Up:
+                MoveCodeActionSelection(-1);
+                e.Handled = true;
+                break;
+            case Key.Enter or Key.Tab:
+                ApplySelectedCodeAction();
+                e.Handled = true;
+                break;
+        }
+    }
+
+    // Wraps around: with two or three actions, stopping at the ends is just a keystroke that does
+    // nothing.
+    private void MoveCodeActionSelection(int delta)
+    {
+        if (_codeActionList is not { ItemCount: > 0 } list) return;
+        int next = (list.SelectedIndex + delta + list.ItemCount) % list.ItemCount;
+        list.SelectedIndex = next;
+        list.ScrollIntoView(next);
     }
 
     // ── Code actions — Ctrl+. (Stage Q / Q2) ─────────────────────────────────────────────────────
@@ -645,9 +676,13 @@ internal sealed class NavigationController
             Child = list,
         };
 
-        list.KeyDown += OnCodeActionMenuKey;
-        list.DoubleTapped += (_, _) => ApplySelectedCodeAction();
-        list.LostFocus += (_, _) => CloseCodeActionMenu();
+        // A single click runs the action: the ListBox has already moved the selection onto the pressed
+        // item by the time this fires, so "click" and "Enter on the selection" are literally the same
+        // operation — one selection model, three ways to reach it.
+        list.PointerReleased += (_, e) =>
+        {
+            if ((e.Source as Control)?.FindAncestorOfType<ListBoxItem>() is not null) ApplySelectedCodeAction();
+        };
 
         var anchor = EditorPopups.TryGetCaretRect(_editor, out var caretRect)
             ? _editor.TranslatePoint(new Point(caretRect.X, caretRect.Bottom), overlay)
@@ -665,7 +700,10 @@ internal sealed class NavigationController
             EditorPopups.ClampIntoOverlay(overlay, card, flipOffset: caretRect.Height);
         }, DispatcherPriority.Background);
 
-        list.Focus();
+        // Focus deliberately STAYS in the editor, exactly as the completion window works: an
+        // overlay-hosted list does not reliably take keyboard focus, and a menu whose arrow keys depend
+        // on that is a menu that needs a mouse. OnTunnelKey drives it instead, so the keyboard behaves
+        // the same wherever focus happens to be.
         return true;
     }
 
@@ -688,6 +726,9 @@ internal sealed class NavigationController
 
     /// <summary>Test seam: whether the bulb is currently offered (headless probe).</summary>
     internal bool IsCodeActionIndicatorVisible => _bulb is not null;
+
+    /// <summary>Test seam: the armed action's index in the open menu, or -1.</summary>
+    internal int CodeActionSelectionForTest => _codeActionList?.SelectedIndex ?? -1;
 
     /// <summary>Test seam: whether the code-action menu is open. Asserted directly rather than by
     /// counting overlay children — the bulb shares that overlay and moves in and out on its own.</summary>
@@ -913,20 +954,6 @@ internal sealed class NavigationController
             _bulb = null;
         }
         _bulbAnchor = -1;
-    }
-
-    private void OnCodeActionMenuKey(object? sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape)
-        {
-            CancelCodeActionMenu();
-            e.Handled = true;
-        }
-        else if (e.Key is Key.Enter or Key.Tab)
-        {
-            ApplySelectedCodeAction();
-            e.Handled = true;
-        }
     }
 
     private void ApplySelectedCodeAction()

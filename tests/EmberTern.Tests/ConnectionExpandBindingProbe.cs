@@ -1291,6 +1291,70 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
+    // Stage Q — the menu must be fully drivable from the keyboard, like every other completion list:
+    // first item preselected, arrows move, Enter applies. Focus deliberately stays in the EDITOR (an
+    // overlay-hosted list does not reliably take it), so these keys are raised at the TextArea — which
+    // is also exactly how they arrive in the real app.
+    [Fact]
+    public async System.Threading.Tasks.Task CodeActionMenu_IsDrivableFromTheKeyboard()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            const string Sql = "select id_rozliczenie from rozliczenie r join pozycja p on 1 = 1";
+            var meta = new ProbeMetadata()
+                .Col("ROZLICZENIE", "ID_ROZLICZENIE")
+                .Col("POZYCJA", "ID_ROZLICZENIE");
+            var model = SemanticModel.Build(Sql, meta);
+            var diagnostics = EmberTern.Core.Sql.Language.DiagnosticsEngine.Analyze(model);
+
+            var editor = new TextEditor { Document = new AvaloniaEdit.Document.TextDocument(Sql) };
+            var window = new Window { Content = editor, Width = 900, Height = 400 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var nav = NavigationController.Attach(
+                editor, () => model, () => diagnostics, () => false, (_, _) => false, _ => false);
+            editor.CaretOffset = Sql.IndexOf("id_rozliczenie", StringComparison.Ordinal) + 3;
+            Dispatcher.UIThread.RunJobs();
+
+            void Press(Key key, KeyModifiers modifiers = KeyModifiers.None)
+            {
+                editor.TextArea.RaiseEvent(new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = key,
+                    KeyModifiers = modifiers,
+                });
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            Press(Key.OemPeriod, KeyModifiers.Control);
+            Assert.True(nav.IsCodeActionMenuOpen);
+            Assert.Equal(0, nav.CodeActionSelectionForTest);   // the first item is armed on open
+
+            Press(Key.Down);
+            Assert.Equal(1, nav.CodeActionSelectionForTest);
+            Press(Key.Up);
+            Assert.Equal(0, nav.CodeActionSelectionForTest);
+            Press(Key.Up);                                      // wraps rather than sticking at the end
+            Assert.Equal(1, nav.CodeActionSelectionForTest);
+
+            // Enter applies the SELECTED action — the second one, so this also proves the arrows really
+            // chose it rather than the menu always running its first entry.
+            var expected = nav.CodeActionsForTest(editor.CaretOffset)[1];
+            Press(Key.Enter);
+
+            Assert.False(nav.IsCodeActionMenuOpen);
+            Assert.NotEqual(Sql, editor.Document.Text);
+            Assert.Contains(expected.Edits[0].NewText, editor.Document.Text, StringComparison.Ordinal);
+
+            nav.Detach();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     // Stage Q / Q3 — THE path that failed in QA: the user simply moves the caret onto a line that has a
     // code action, and the bulb must appear. Nothing else happens — no model rebuild, no scroll, no
     // explicit refresh. This is now reachable by a test only because the bulb no longer waits on a
