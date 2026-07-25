@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using EmberTern.Core.Sql.Language.Semantics;
 
 namespace EmberTern.Core.Sql.Language.CodeActions;
@@ -45,8 +46,106 @@ public static class QuickFixEngine
         return diagnostic.Category switch
         {
             DiagnosticCategory.AmbiguousColumn => QualifyAmbiguousColumn(model, diagnostic),
+            DiagnosticCategory.UnknownObject => DidYouMean(model, diagnostic, CatalogObjectNames(model)),
+            DiagnosticCategory.UnknownColumn => DidYouMean(model, diagnostic, QualifiedTableColumnNames(model, diagnostic)),
+            DiagnosticCategory.UnresolvedVariable or DiagnosticCategory.UnresolvedParameter
+                => DidYouMean(model, diagnostic, LocalNamesInScope(model, diagnostic.Start)),
             _ => Array.Empty<CodeAction>(),
         };
+    }
+
+    // ── ET0001/2/3/4 → "Did you mean '<name>'?" ───────────────────────────────────────────────
+    //
+    // One producer for four categories: they differ ONLY in where the candidate names come from, which
+    // is why each category above supplies its own list and the repair itself is written once. The
+    // candidates are always names the model already resolved or the catalog already holds — nothing is
+    // invented.
+    private static IReadOnlyList<CodeAction> DidYouMean(
+        SemanticModel model, Diagnostic diagnostic, IEnumerable<string>? candidates)
+    {
+        if (candidates is null) return Array.Empty<CodeAction>();
+
+        // Same drift guard as every producer: the span must still name the reference the diagnostic was
+        // built from, or the model has moved on and there is nothing safe to rewrite.
+        var reference = FindReferenceAt(model, diagnostic.Start, diagnostic.Length);
+        var typed = reference?.Text;
+        if (string.IsNullOrEmpty(typed)) return Array.Empty<CodeAction>();
+
+        // A variable/parameter reference's span INCLUDES its ':' or '@' sigil, and the sigil is not
+        // decoration: inside an embedded DSQL statement `:v` is a variable while `v` is a COLUMN.
+        // Dropping it would silently change what the code means — the corruption class rule #11 exists
+        // for. So match on the bare name and put the sigil back on the replacement.
+        char sigil = typed![0] is ':' or '@' ? typed[0] : '\0';
+        var bare = sigil == '\0' ? typed : typed.Substring(1);
+        if (bare.Length == 0) return Array.Empty<CodeAction>();
+
+        var suggestion = NameSuggestion.Best(bare, candidates);
+        if (suggestion is null) return Array.Empty<CodeAction>();
+
+        var replacement = sigil == '\0' ? suggestion : sigil + suggestion;
+        return new[]
+        {
+            new CodeAction(
+                string.Format(CultureInfo.CurrentCulture, Resources.DidYouMeanTitleFormat, suggestion),
+                new[] { new TextEdit(diagnostic.Start, diagnostic.Length, replacement, typed) }),
+        };
+    }
+
+    // ET0001: everything the live catalog knows. Only ever non-empty with a metadata connection, which
+    // is also the only condition under which the diagnostics engine emits UnknownObject at all.
+    private static IEnumerable<string> CatalogObjectNames(SemanticModel model)
+    {
+        foreach (var o in model.Metadata.AllObjects())
+        {
+            if (!string.IsNullOrEmpty(o.Name)) yield return o.Name;
+        }
+    }
+
+    // ET0002: the columns of the table the qualifier resolved to — never the whole catalog. The engine
+    // only emits UnknownColumn for a QUALIFIED reference whose table is known (design §6), and the
+    // binder records that qualifier immediately before the member, which is how the diagnostics engine
+    // tells the two shapes apart; the same relationship identifies the table here.
+    private static IEnumerable<string>? QualifiedTableColumnNames(SemanticModel model, Diagnostic diagnostic)
+    {
+        string? table = null;
+        SymbolReference? previous = null;
+        foreach (var r in model.References)
+        {
+            if (r.Span.Start == diagnostic.Start && r.Span.Length == diagnostic.Length)
+            {
+                table = previous?.Symbol switch
+                {
+                    TableReferenceSymbol { TargetName: { } t } => t,
+                    RecordAliasSymbol { TargetTable: { } t } => t,
+                    _ => null,
+                };
+                break;
+            }
+            previous = r;
+        }
+        if (table is null) return null;
+
+        var names = new List<string>();
+        foreach (var c in model.Metadata.GetColumns(table))
+        {
+            if (!string.IsNullOrEmpty(c.Name)) names.Add(c.Name);
+        }
+        return names;
+    }
+
+    // ET0003/4: the locals actually visible at that point — variables, parameters and cursors the binder
+    // resolved. A misspelt variable is nearly always a neighbouring declaration, and offering a name that
+    // is not in scope would produce code that still does not compile.
+    private static IEnumerable<string> LocalNamesInScope(SemanticModel model, int offset)
+    {
+        foreach (var s in model.SymbolsInScope(offset))
+        {
+            if (s.Kind is SymbolKind.Variable or SymbolKind.Parameter or SymbolKind.Cursor
+                && !string.IsNullOrEmpty(s.Name))
+            {
+                yield return s.Name;
+            }
+        }
     }
 
     // ── ET0005 AmbiguousColumn → "Qualify as '<alias>.<col>'" ─────────────────────────────────
@@ -158,5 +257,6 @@ public static class QuickFixEngine
     internal static class Resources
     {
         public const string QualifyColumnTitleFormat = "Qualify as '{0}'";
+        public const string DidYouMeanTitleFormat = "Did you mean '{0}'?";
     }
 }

@@ -774,13 +774,15 @@ internal sealed class NavigationController
         var overlay = OverlayLayer.GetOverlayLayer(_editor);
         if (overlay is null) return;
 
-        var icon = new Controls.SvgIcon
+        // A FILLED path, not the stroked SvgIcon family: at this size an outline reads as an empty ring.
+        var icon = new Avalonia.Controls.Shapes.Path
         {
-            Data = Application.Current?.Resources.TryGetResource("Icon.Lightbulb", null, out var g) == true
+            Data = Application.Current?.Resources.TryGetResource("Icon.LightbulbFilled", null, out var g) == true
                 ? g as Geometry : null,
+            Fill = ThemeBrush("CodeActionBrush"),
             Width = BulbIconSize,
             Height = BulbIconSize,
-            Foreground = ThemeBrush("CodeActionBrush"),
+            Stretch = Stretch.Uniform,
         };
         var button = new Border
         {
@@ -794,8 +796,8 @@ internal sealed class NavigationController
         };
         // Amber-gold at rest so it reads as "a fix is available" at a glance (its own CodeActionBrush —
         // an offer, not a warning); the accent on hover says "and you can click me".
-        button.PointerEntered += (_, _) => icon.Foreground = ThemeBrush("AccentIconBrush");
-        button.PointerExited += (_, _) => icon.Foreground = ThemeBrush("CodeActionBrush");
+        button.PointerEntered += (_, _) => icon.Fill = ThemeBrush("AccentIconBrush");
+        button.PointerExited += (_, _) => icon.Fill = ThemeBrush("CodeActionBrush");
         // The ONE flow: no separate retrieval, no separate invocation.
         button.PointerPressed += (_, e) =>
         {

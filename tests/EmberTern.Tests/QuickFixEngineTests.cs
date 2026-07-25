@@ -133,14 +133,15 @@ public class QuickFixEngineTests
     // ══ Silence — the part that protects the user's code ══════════════════════════════════════
 
     [Fact]
-    public void NoFixes_ForACategoryThatHasNoProducerYet()
+    public void NoFixes_ForACategoryThatHasNoProducer()
     {
-        // ET0001 has no producer until Q4. An unhandled category must yield nothing, never an
-        // approximation from a neighbouring producer.
+        // ET0006 has no producer and is not meant to: repairing an INSERT count mismatch needs to know
+        // WHICH column or value the user meant to add or drop, which is unknowable (design §8). An
+        // unhandled category must yield nothing, never an approximation from a neighbouring producer.
         var (_, actions) = FixesFor(
-            "select * from nieistniejaca",
-            new FakeMetadata().Col("KONTRAHENT", "NAZWA"),
-            DiagnosticCategory.UnknownObject);
+            "insert into kontrahent (id, nazwa) values (1)",
+            new FakeMetadata().Col("KONTRAHENT", "ID").Col("KONTRAHENT", "NAZWA"),
+            DiagnosticCategory.InsertCountMismatch);
 
         Assert.Empty(actions);
     }
@@ -209,6 +210,118 @@ public class QuickFixEngineTests
 
         Assert.Equal(2, actions.Count);
         Assert.DoesNotContain(actions, a => a.Title.Contains("m.", StringComparison.Ordinal));
+    }
+
+    // ══ Q4 — "Did you mean …?" (ET0001/2/3/4) ════════════════════════════════════════════════
+    //
+    // Four categories, ONE producer: they differ only in where the candidate names come from. Adding
+    // them touched QuickFixEngine and a new pure NameSuggestion — no UI, no applier, no diagnostics —
+    // which is the extensibility claim Q1 made, tested rather than asserted.
+
+    // ET0001 is emitted for an EXECUTE PROCEDURE of an unknown routine — an unknown table in FROM is
+    // deliberately NOT flagged (the binder models it as an unresolved table reference, and the engine
+    // stays silent). The fix shapes follow the diagnostic, not the other way round.
+    [Fact]
+    public void UnknownObject_OffersTheOneCloseCatalogName()
+    {
+        var (_, actions) = FixesFor(
+            "execute procedure sp_kontrahen",
+            new FakeMetadata().Object("SP_KONTRAHENT", SymbolKind.Procedure).Object("SP_TOWAR", SymbolKind.Procedure),
+            DiagnosticCategory.UnknownObject);
+
+        var action = Assert.Single(actions);
+        Assert.Equal("Did you mean 'SP_KONTRAHENT'?", action.Title);
+        var edit = Assert.Single(action.Edits);
+        Assert.Equal("SP_KONTRAHENT", edit.NewText);
+        Assert.Equal("sp_kontrahen", edit.ExpectedOldText);
+    }
+
+    [Fact]
+    public void UnknownColumn_OffersAColumnOfTHATTable_NotTheWholeCatalog()
+    {
+        // NAZWAA is one edit from KONTRAHENT.NAZWA and also from TOWAR.NAZWA — but only the qualified
+        // table's columns are candidates, so there is exactly one and it is offered.
+        var meta = new FakeMetadata()
+            .Col("KONTRAHENT", "NAZWA").Col("KONTRAHENT", "ID")
+            .Col("TOWAR", "OPIS");
+
+        var (_, actions) = FixesFor("select k.nazwaa from kontrahent k", meta, DiagnosticCategory.UnknownColumn);
+
+        var action = Assert.Single(actions);
+        Assert.Equal("Did you mean 'NAZWA'?", action.Title);
+        Assert.DoesNotContain(actions, a => a.Title.Contains("OPIS", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void UnresolvedVariable_OffersADeclaredLocalInScope()
+    {
+        const string Sql = "create procedure p returns (r integer) as declare variable v_total integer; begin r = :v_totl; end";
+
+        var (_, actions) = FixesFor(Sql, null, DiagnosticCategory.UnresolvedVariable);
+
+        var action = Assert.Single(actions);
+        Assert.Equal("Did you mean 'V_TOTAL'?", action.Title);
+        var edit = Assert.Single(action.Edits);
+        // The reference span INCLUDES the ':' sigil, and the replacement must keep it: inside an
+        // embedded DSQL statement ':v' is a variable while 'v' is a COLUMN, so dropping it would
+        // silently change what the code means.
+        Assert.Equal(":v_totl", edit.ExpectedOldText);
+        Assert.Equal(":V_TOTAL", edit.NewText);
+    }
+
+    // ── Silence: the half that protects the user's code ──────────────────────────────────────
+
+    [Fact]
+    public void NoSuggestion_WhenTwoCandidatesAreEquallyClose()
+    {
+        // KONTRAHENT_A and KONTRAHENT_B are both one edit away. The tool does not know which was meant,
+        // so it says nothing rather than picking one.
+        var (_, actions) = FixesFor(
+            "execute procedure sp_kontrahent_",
+            new FakeMetadata().Object("SP_KONTRAHENT_A", SymbolKind.Procedure).Object("SP_KONTRAHENT_B", SymbolKind.Procedure),
+            DiagnosticCategory.UnknownObject);
+
+        Assert.Empty(actions);
+    }
+
+    [Fact]
+    public void NoSuggestion_WhenNothingIsCloseEnough()
+    {
+        var (_, actions) = FixesFor(
+            "execute procedure zupelnie_inna_nazwa",
+            new FakeMetadata().Object("SP_KONTRAHENT", SymbolKind.Procedure),
+            DiagnosticCategory.UnknownObject);
+
+        Assert.Empty(actions);
+    }
+
+    [Fact]
+    public void NoSuggestion_ForAVeryShortName()
+    {
+        // At two characters almost anything is "one edit away" — a confident wrong rewrite is worse
+        // than no offer.
+        var (_, actions) = FixesFor(
+            "execute procedure ab",
+            new FakeMetadata().Object("AC", SymbolKind.Procedure),
+            DiagnosticCategory.UnknownObject);
+
+        Assert.Empty(actions);
+    }
+
+    [Theory]
+    // The three single-edit shapes a typo actually takes, each driven through the real engine rather
+    // than a helper: NameSuggestion is internal to Core on purpose, and its behaviour only matters here.
+    [InlineData("sp_kontrahen", "SP_KONTRAHENT")]     // deletion
+    [InlineData("sp_kontrahentt", "SP_KONTRAHENT")]   // insertion
+    [InlineData("sp_kontrahenx", "SP_KONTRAHENT")]    // substitution
+    public void UnknownObject_RecognisesTheSingleEditTypoShapes(string typed, string expected)
+    {
+        var (_, actions) = FixesFor(
+            "execute procedure " + typed,
+            new FakeMetadata().Object("SP_KONTRAHENT", SymbolKind.Procedure),
+            DiagnosticCategory.UnknownObject);
+
+        Assert.Equal($"Did you mean '{expected}'?", Assert.Single(actions).Title);
     }
 
     // ══ Shape ════════════════════════════════════════════════════════════════════════════════

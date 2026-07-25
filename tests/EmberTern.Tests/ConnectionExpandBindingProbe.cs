@@ -1176,8 +1176,8 @@ public sealed class ConnectionExpandBindingProbe
             // its geometry and both of its brush states are resolved at runtime and nothing else would
             // catch a typo in a key.
             Assert.True(
-                app.Resources.TryGetResource("Icon.Lightbulb", null, out var bulb) && bulb is Avalonia.Media.Geometry,
-                "code-action bulb geometry 'Icon.Lightbulb' does not resolve");
+                app.Resources.TryGetResource("Icon.LightbulbFilled", null, out var bulb) && bulb is Avalonia.Media.Geometry,
+                "code-action bulb geometry does not resolve");
             foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
             {
                 Assert.True(
@@ -1410,9 +1410,9 @@ public sealed class ConnectionExpandBindingProbe
             // STROKES its geometry with Foreground, so a null brush paints nothing while every other
             // property still looks healthy. Theme-scoped brushes need the theme variant on lookup —
             // Control.FindResource(key) does not supply one and silently yields UNSET.
-            var bulbIcon = Assert.IsType<EmberTern.App.Controls.SvgIcon>(((Border)bulb).Child);
+            var bulbIcon = Assert.IsType<Avalonia.Controls.Shapes.Path>(((Border)bulb).Child);
             Assert.NotNull(bulbIcon.Data);
-            Assert.NotNull(bulbIcon.Foreground);
+            Assert.NotNull(bulbIcon.Fill);
             Assert.True(bulb.Opacity > 0, "the bulb is fully transparent");
             Assert.InRange(Canvas.GetLeft(bulb), 0, editor.Bounds.Width - 1);
             Assert.InRange(Canvas.GetTop(bulb), 0, Math.Max(1, editor.Bounds.Height) - 1);
