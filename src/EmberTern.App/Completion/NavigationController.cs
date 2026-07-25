@@ -621,8 +621,8 @@ internal sealed class NavigationController
         };
         var card = new Border
         {
-            Background = _editor.FindResource("PanelBrush") as IBrush,
-            BorderBrush = _editor.FindResource("BorderBrush") as IBrush,
+            Background = ThemeBrush("PanelBrush"),
+            BorderBrush = ThemeBrush("BorderBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
             Padding = new Thickness(1),
@@ -753,6 +753,16 @@ internal sealed class NavigationController
         ShowBulb(line);
     }
 
+    // Theme-scoped resources MUST be looked up with the theme variant. Control.FindResource(key) does
+    // not supply one, so every brush in ThemeDictionaries comes back UNSET — which is how the bulb ended
+    // up with a null Foreground: the control had a size, a position and IsEffectivelyVisible=true, and
+    // painted nothing, because SvgIcon strokes its geometry with Foreground. Geometries are NOT
+    // theme-scoped, which is why Data resolved and hid the problem. This is the same lookup
+    // HoverInfoView uses; nothing in this file may use FindResource for a brush again.
+    private IBrush? ThemeBrush(string key)
+        => Application.Current?.Resources.TryGetResource(key, _editor.ActualThemeVariant, out var v) == true
+           && v is IBrush b ? b : null;
+
     private void ShowBulb(int line)
     {
         var overlay = OverlayLayer.GetOverlayLayer(_editor);
@@ -762,10 +772,11 @@ internal sealed class NavigationController
 
         var icon = new Controls.SvgIcon
         {
-            Data = _editor.FindResource("Icon.Lightbulb") as Geometry,
+            Data = Application.Current?.Resources.TryGetResource("Icon.Lightbulb", null, out var g) == true
+                ? g as Geometry : null,
             Width = 13,
             Height = 13,
-            Foreground = _editor.FindResource("SubtleForegroundBrush") as IBrush,
+            Foreground = ThemeBrush("SubtleForegroundBrush"),
         };
         var button = new Border
         {
@@ -774,19 +785,13 @@ internal sealed class NavigationController
             Padding = new Thickness(2),
             CornerRadius = new CornerRadius(3),
             Cursor = HandCursor,
-            Opacity = 0.5,                    // present but easy to ignore — it appeared uninvited
+            Opacity = 1.0,
             [ToolTip.TipProperty] = UiStrings.CodeActionsTooltip,
         };
-        button.PointerEntered += (_, _) =>
-        {
-            button.Opacity = 1.0;
-            icon.Foreground = _editor.FindResource("AccentIconBrush") as IBrush;
-        };
-        button.PointerExited += (_, _) =>
-        {
-            button.Opacity = 0.5;
-            icon.Foreground = _editor.FindResource("SubtleForegroundBrush") as IBrush;
-        };
+        // Discreet at rest (the subtle foreground is the token for "present, not shouting"), accented on
+        // hover so it reads as interactive.
+        button.PointerEntered += (_, _) => icon.Foreground = ThemeBrush("AccentIconBrush");
+        button.PointerExited += (_, _) => icon.Foreground = ThemeBrush("SubtleForegroundBrush");
         // The ONE flow: no separate retrieval, no separate invocation.
         button.PointerPressed += (_, e) =>
         {
@@ -808,6 +813,9 @@ internal sealed class NavigationController
         _bulb = button;
         _bulbLine = line;
 
+        var themed = Application.Current?.Resources.TryGetResource("SubtleForegroundBrush", _editor.ActualThemeVariant, out var tb) == true && tb is IBrush;
+        Diagnostics.BulbTrace.Log(
+            $"BRUSH findResource={(icon.Foreground is null ? "NULL" : icon.Foreground.ToString())} themeAware={themed} theme={_editor.ActualThemeVariant}");
         Diagnostics.BulbTrace.Log(
             $"ShowBulb ADDED left={anchor.X:0.0} top={anchor.Y:0.0} dataNull={(icon.Data is null)} " +
             $"inOverlay={overlay.Children.Contains(button)} parent={button.Parent?.GetType().Name ?? "null"} " +

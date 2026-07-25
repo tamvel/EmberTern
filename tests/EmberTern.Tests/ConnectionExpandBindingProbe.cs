@@ -1405,6 +1405,15 @@ public sealed class ConnectionExpandBindingProbe
             Assert.True(
                 bulb.DesiredSize.Width > 0 && bulb.DesiredSize.Height > 0,
                 "the bulb measures to nothing — it would be invisible");
+
+            // The assertion that was missing, and the one that would have caught the live bug: SvgIcon
+            // STROKES its geometry with Foreground, so a null brush paints nothing while every other
+            // property still looks healthy. Theme-scoped brushes need the theme variant on lookup —
+            // Control.FindResource(key) does not supply one and silently yields UNSET.
+            var bulbIcon = Assert.IsType<EmberTern.App.Controls.SvgIcon>(((Border)bulb).Child);
+            Assert.NotNull(bulbIcon.Data);
+            Assert.NotNull(bulbIcon.Foreground);
+            Assert.True(bulb.Opacity > 0, "the bulb is fully transparent");
             Assert.InRange(Canvas.GetLeft(bulb), 0, editor.Bounds.Width - 1);
             Assert.InRange(Canvas.GetTop(bulb), 0, Math.Max(1, editor.Bounds.Height) - 1);
 
