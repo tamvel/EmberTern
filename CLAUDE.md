@@ -23,7 +23,7 @@ verbatim, in the archive below.
 | **`docs/design/editor-ast-deepening.md`** | **Active implementation guide** for **Etap 6.9 — Structural AST Deepening** (the next foundational work: node inventory, migration contract, milestones B0–B5, debugger considerations, formatter convergence, progress matrix). | When working on the parser/AST/binder deepening. |
 | **`docs/design/editor-stage7-diagnostics.md`** | **Active design/vision** for **Stage 7 (Diagnostics)** — engine, model, categories, pipeline, squiggles/panel/nav, milestones, post-Stage-7 Quick Fixes. Consumes Etap 6.9. | When working on Stage 7. |
 | **`docs/design/editor-language-expansion.md`** | **FULLY DELIVERED design** for the code-writing experience that replaced Stage 8 M2 — both halves shipped + user-approved: **Language Completion** (construct completion by natural prefix, Tab + shown hint, grammar-armed, synchronous) + **Typing Ergonomics** (`begin…end` pairing on Enter, `()`/`[]`/`''` pairing, structural auto-indent; Enter stays normal), separate from IntelliSense. §3 documents the as-built ergonomics (incl. what is deliberately NOT done: paren alignment, `IndentLines`); §5 the arming gate; §9.1 the **one-responsibility-one-owner** rule (vocabulary *and* grammatical position). | When working on `Core.Sql.Language.Constructs`, `Core.Sql.Language.Ergonomics`, or the completion/ergonomics wiring. |
-| **`docs/design/editor-quick-fixes.md`** | **DESIGN — Q0 complete (2026-07-25); nothing implemented.** The self-contained guide for the **Quick Fix stage**: the on-demand `QuickFixEngine` over the unchanged read-only diagnostics pipeline, the shared `CodeAction`/`TextEdit` currency, the ONE `TextEditApplier` (rename migrates onto it), the light-bulb + `Ctrl+.` surfaces, the v1 action set with what is excluded and why, and seams Q0–Q5 with the recipe for adding a fix. **Supersedes `editor-stage7-diagnostics.md` §12 and CLAUDE.md's older holding note** on two points (no `QuickFixes` on `Diagnostic`; hover stays read-only). | When working on Quick Fixes / code actions. |
+| **`docs/design/editor-quick-fixes.md`** | **DESIGN + as-built — Stage Q COMPLETE (Q0–Q5, 2026-07-25), user-confirmed.** The self-contained guide for the **Quick Fix stage**: the on-demand `QuickFixEngine` over the unchanged read-only diagnostics pipeline, the shared `CodeAction`/`TextEdit` currency, the ONE `TextEditApplier` (rename migrates onto it), the light-bulb + `Ctrl+.` surfaces, the v1 action set with what is excluded and why, and seams Q0–Q5 with the recipe for adding a fix. **Supersedes `editor-stage7-diagnostics.md` §12 and CLAUDE.md's older holding note** on two points (no `QuickFixes` on `Diagnostic`; hover stays read-only). | When working on Quick Fixes / code actions. |
 | **`docs/design/firebird-debugger.md`** | **DESIGN v2 — decisions ratified 2026-07-17; the target implementation spec.** Nothing implemented. Feasibility (Firebird has **no** debug API — verified), the Fidelity Law §F, the client-interpreter + `EXECUTE BLOCK` harness, harness declaration rules, frame savepoints, exception control flow, per-session connection + transaction, nested frames/call stack, local routines (no temporary metadata), cursor bridge, UI/UX, panels, reuse map, prerequisites P1/P2 + milestones D1–D14, Fidelity Boundaries, and a live-engine verification log. | When working on the debugger. |
 | **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. **D14 = ANALYZED + DEFERRED** (its STATUS block records the ratified snapshot+savepoint+undo-only architecture if ever revisited). | **Every debugger implementation session — read this + your milestone's brief first.** |
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
@@ -208,8 +208,20 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT WORK — UX Polish Sprint (Debugger & SQL Editor). Seams 0–5 DONE + committed + user-QA'd on the
-  live lab. NEXT SESSION STARTS AT Seam 6a** (the Seam 6 plan was **replaced** after that QA — read the
+- **⭐ CURRENT STATE (2026-07-25) — nothing is in flight; the next stage is the user's call.** Two arcs closed
+  back to back: the **UX Polish Sprint** through **Seam 6b** (6a debugger status → app status bar; 6b
+  `SaveAsync` false success), then the debugger's **Save workflow** was reworked after live QA — Save now
+  compiles the draft and **resumes the session on the new code** with the settings already made, gated on the
+  **launch signature** (object kind + ordered input params, or a trigger's header + referenced NEW/OLD
+  columns) still describing the compiled routine; anything else means a new decision and lands on the launch
+  panel. **Seam 6c (the full Draft-as-session-source model) is NOT built and stays in the backlog by user
+  decision** — the Save→resume loop covers most of what it was for, without 6c's §F boundaries; revisit only
+  if real usage still asks. Then **🏁 Stage Q (Quick Fixes & Code Actions) — COMPLETE, Q0–Q5, user-confirmed**
+  (see the Quick Fix entry below and [docs/history/20-...](docs/history/20-stage-q-quick-fixes.md)).
+  Remaining editor backlog: **Folding**, **Breadcrumbs**, and a future **RefactoringEngine** (a sibling
+  producer feeding the same code-action menu — nothing was built for it in advance).
+- **UX Polish Sprint (Debugger & SQL Editor) — Seams 0–5 DONE + committed + user-QA'd on the live lab; 6a/6b
+  DONE. Historical detail below.** (the Seam 6 plan was **replaced** after that QA — read the
   "SEAM 6 REPLANNED" block below; the original Seam 6 = Quick Fix design doc is **deferred**). Goal: **quality,
   not features** — unify the IDE's look, improve readability, fix regressions. No UI rebuild; presentation-first
   where possible; keep the debugger's D1–D4 responsibility split (view/theme changes, never logic pushed into
@@ -229,9 +241,10 @@ noted.
       session** (no edit-lock at breakpoints). *(Seam 5 as-built is recorded below; its save semantics are
       **superseded by the Seam 6 Draft model** — the buffer stops being a passive draft and becomes the
       session's own source, and Save compiles it in place instead of ending the tab's role.)*
-    - **Quick Fix / Light Bulb (Item 7)** — **Q0 (design) DONE 2026-07-25**, see
-      [editor-quick-fixes.md](docs/design/editor-quick-fixes.md); implementation starts at **Q1**. ⚠ **This
-      holding note was WRONG on two points and the design doc supersedes it:** (1) `Diagnostic.QuickFixes` is
+    - **Quick Fix / Light Bulb (Item 7)** — **🏁 STAGE Q COMPLETE + user-confirmed (Q0–Q5, 2026-07-25).**
+      Guide: [editor-quick-fixes.md](docs/design/editor-quick-fixes.md); narrative:
+      [docs/history/20-...](docs/history/20-stage-q-quick-fixes.md). ⚠ **This holding note was WRONG on two
+      points and the design doc supersedes it:** (1) `Diagnostic.QuickFixes` is
       **not** additive — `Diagnostic` is a `record struct` whose value equality the panel relies on to skip
       rebuilds, and a list member degrades that to reference equality ⇒ fixes are computed **on demand** from
       `(model, diagnostic)`, never stored; (2) the fix list does **not** go on the hover card — §15.1.1's
@@ -239,6 +252,29 @@ noted.
       guarantee, so the light bulb + `Ctrl+.` (one shared menu) are the actionable surfaces. Still true: D3
       satisfies the wiring prerequisite, and the adorner is wired only in `SqlEditorBehavior.Attach` (never
       `AttachReadOnlyHighlighting` — a read-only surface must not offer mutating fixes).
+      **As-built (commits `3a4a6cb` Q0 · `405290f` Q1 · `40e3b20` Q2 · `358e570` Q3 · `8803627` Q4 ·
+      `9e20e2c` Q5 · plus the Q3 QA rounds `156bade`/`a641a43`/`ce70641`/`d0b0d12` and `73380b3`):**
+      pure-Core `QuickFixEngine` computes fixes **on demand** from `(model, diagnostic)` — never stored on
+      `Diagnostic`, whose record-struct value equality the panel needs — over the **unchanged** read-only
+      diagnostics pipeline. Shared currency `CodeAction`/`TextEdit` (`Core.Sql.Language.CodeActions`);
+      **`TextEditApplier` (App) is now the ONE owner of every document mutation** — drift check via
+      `TextEdit.ExpectedOldText`, descending-order apply, one undo unit, one caret rule — and **safe local
+      rename was migrated onto it** (`NavigationRename.Occurrences` gained the binder's per-occurrence text
+      so the shared check compares against the MODEL, not the document with itself). v1 actions: qualify an
+      ambiguous column (ET0005, one per candidate) + **"Did you mean …?"** for ET0001/2/3/4 when **exactly
+      one** candidate is close (`NameSuggestion`, case-insensitive, budget by length, ties ⇒ silence), which
+      **keeps the user's capitalisation** and **preserves the `:`/`@` sigil** (dropping it turns a variable
+      into a COLUMN inside embedded DSQL). Deliberately refused: ET0006/ET0008 and "declare the missing
+      variable" (it would have to invent a type — rule #11). **Four triggers, ONE menu and one selection
+      model** — `Ctrl+.`, the light bulb, a single click, and the Diagnostics panel's "Quick Fix…" — all
+      through `GetActionsAtCaret` → menu → `InvokeCodeAction`; the panel reaches it via an attached property
+      published by the one attach seam (so a read-only DDL preview, never attached, offers nothing).
+      **⚠ Three gotchas came out of the light-bulb investigation and are load-bearing beyond this stage:
+      #250** (never look a BRUSH up without a `ThemeVariant` — `FindResource` returns UNSET and an
+      `SvgIcon` then paints nothing while every observable state looks healthy), **#251** ("added" ≠
+      "paints"; a timer-only trigger is untestable headlessly), **#252** (an editor popup is
+      keyboard-complete on day one — preselection/↑↓/Enter/Esc + single-click-equals-Enter — handled on the
+      TUNNEL, with focus staying in the editor).
   - **Seam 0 — Diagnostics regression → DONE (commit `140547b`).** Root cause: **not a revertible
     regression** — a long-standing gap. `DiagnosticsEngine` (ET0003) never changed; the `:name` path always
     flagged; an unresolved **bare** identifier was never recorded (`SemanticBinder.Psql.BindBareLocal`'s
@@ -412,7 +448,7 @@ noted.
       the Procedure editor is dropped). **Easy Mode stays the classic DDL editor's** — the debugger saves the
       **source text only**.
     - **Seam order (ratified):**
-      **6a — Debugger status → the app Status Bar.** The Save button left no room for the message after
+      **6a — Debugger status → the app Status Bar. ✅ DONE (`0587307`).** The Save button left no room for the message after
       `Break on exception`. Move `DebuggerTabViewModel.StatusText`/`IsFaulted` presentation out of the debugger
       toolbar into the bottom status bar, freeing the toolbar for `Break on exception` + future buttons.
       **NO second mechanism:** the debugger VM is unchanged — `MainWindowViewModel` already exposes
@@ -422,20 +458,20 @@ noted.
       `.error` style. Note the bottom status bar (`MainWindow.axaml`, `Grid.Row=2`) shows connection state
       (`MainWindowViewModel.StatusText`, owned by `UpdateStatusFromConnection`/`SetError`/`ClearError`) — do
       **not** write debugger status into that property; it is a second owner of one field.
-      **6b — `SaveAsync` false success.** `SourceObjectDetailTabViewModel.ExecuteCompileAsync` has TWO silent
+      **6b — `SaveAsync` false success. ✅ DONE (`33d4e88`).** `SourceObjectDetailTabViewModel.ExecuteCompileAsync` has TWO silent
       exits (`if (DdlExecutor is null) return;` and `if (string.IsNullOrWhiteSpace(sql)) return;`) that leave
       `ErrorMessage` null, so the adapter reports **Success = true having compiled nothing**; the same shape
       exists in every other `ISavableObjectEditor`. Make them set `ErrorMessage` so the adapter tells the
       truth. Side effect to accept + state: Compile on empty source stops being a silent no-op. **Keep** the
       Seam-5c defensive check (`tab.UnsavedWork is not null` after a save) as belt and braces.
-      **6c — the big one: rebuild the debugger on the Draft model.** Draft becomes the session source (root
+      **6c — the big one: rebuild the debugger on the Draft model. ⏸ BACKLOG (user decision 2026-07-25 — the Save→compile→resume workflow, commit `27c132d`, covers most of the need without 6c's §F boundaries; revisit only if real usage still asks).** Draft becomes the session source (root
       frame layout from the AST header — generalize the D9 path; `DebugLaunchSpec` built from the draft's
       parse; re-parse the draft on a debounce so step points + breakpoint snapping describe the draft); first
       edit ends the active session; Restart runs the draft; **mandatory live-fidelity proof on the lab**
       (`DebuggerFidelityProbe`: a draft-sourced session steps identically to the same text once compiled —
       §2.1); pre-flight surfaces the new §F boundaries (self-reference, would-not-compile); **Save compiles the
       draft from the debugger and stays in the tab**.
-      **6d — refresh every open tab showing the same object after a successful compile.** An INDEPENDENT
+      **6d — refresh every open tab showing the same object after a successful compile. ⏸ OPEN (an INDEPENDENT pre-existing bug, still unfixed).** An INDEPENDENT
       pre-existing bug, root-caused during this analysis: **nothing refreshes a SIBLING tab.** Each editor
       calls `RefreshAsync()` only after its OWN compile (end of `ExecuteCompileAsync`); `Metadata.RefreshAsync()`
       refreshes the object **tree**, not open tabs' loaded source. That is why a compile elsewhere left the
