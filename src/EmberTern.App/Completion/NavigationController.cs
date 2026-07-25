@@ -725,12 +725,16 @@ internal sealed class NavigationController
     {
         if (_detached || _editor.IsReadOnly)
         {
+            Diagnostics.BulbTrace.Log($"UpdateBulb SKIP detached={_detached} readOnly={_editor.IsReadOnly}");
             HideBulb();
             return;
         }
 
         var doc = _editor.Document;
-        if (doc is null || GetActionsAtCaret(_editor.CaretOffset).Count == 0)
+        int actionCount = doc is null ? -1 : GetActionsAtCaret(_editor.CaretOffset).Count;
+        Diagnostics.BulbTrace.Log(
+            $"UpdateBulb caret={_editor.CaretOffset} actions={actionCount} bulb={(_bulb is null ? "none" : "shown")} bulbLine={_bulbLine}");
+        if (doc is null || actionCount == 0)
         {
             HideBulb();
             return;
@@ -752,6 +756,8 @@ internal sealed class NavigationController
     private void ShowBulb(int line)
     {
         var overlay = OverlayLayer.GetOverlayLayer(_editor);
+        Diagnostics.BulbTrace.Log(
+            $"ShowBulb line={line} overlay={(overlay is null ? "NULL" : $"{overlay.Bounds.Width}x{overlay.Bounds.Height} children={overlay.Children.Count}")}");
         if (overlay is null) return;
 
         var icon = new Controls.SvgIcon
@@ -790,13 +796,36 @@ internal sealed class NavigationController
 
         // Position BEFORE committing: if the geometry is not available yet, nothing has been added to
         // the overlay and no state has been touched, so the next VisualLinesChanged simply tries again.
-        if (!TryGetLineEndAnchor(line, overlay, out var anchor)) return;
+        if (!TryGetLineEndAnchor(line, overlay, out var anchor))
+        {
+            Diagnostics.BulbTrace.Log($"ShowBulb ABORT no anchor (line={line})");
+            return;
+        }
 
         Canvas.SetLeft(button, anchor.X);
         Canvas.SetTop(button, anchor.Y);
         overlay.Children.Add(button);
         _bulb = button;
         _bulbLine = line;
+
+        Diagnostics.BulbTrace.Log(
+            $"ShowBulb ADDED left={anchor.X:0.0} top={anchor.Y:0.0} dataNull={(icon.Data is null)} " +
+            $"inOverlay={overlay.Children.Contains(button)} parent={button.Parent?.GetType().Name ?? "null"} " +
+            $"visible={button.IsVisible} opacity={button.Opacity} zIndex={button.ZIndex}");
+
+        // The settled truth, after layout has run: desired/actual size and whether it is EFFECTIVELY
+        // visible (i.e. the whole ancestor chain is visible and it was arranged with a real size).
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(_bulb, button)) { Diagnostics.BulbTrace.Log("post-layout: bulb replaced/removed"); return; }
+            Diagnostics.BulbTrace.Log(
+                $"post-layout desired={button.DesiredSize.Width:0.0}x{button.DesiredSize.Height:0.0} " +
+                $"bounds={button.Bounds.Width:0.0}x{button.Bounds.Height:0.0} " +
+                $"left={Canvas.GetLeft(button):0.0} top={Canvas.GetTop(button):0.0} " +
+                $"overlay={overlay.Bounds.Width:0.0}x{overlay.Bounds.Height:0.0} " +
+                $"effectivelyVisible={button.IsEffectivelyVisible} opacity={button.Opacity} " +
+                $"iconBounds={(button.Child?.Bounds.Width ?? -1):0.0}x{(button.Child?.Bounds.Height ?? -1):0.0}");
+        }, DispatcherPriority.Background);
     }
 
     private void PositionBulb(int line)
@@ -829,7 +858,12 @@ internal sealed class NavigationController
         var tv = _editor.TextArea.TextView;
         if (tv.VisualLinesValid) return true;
         try { tv.EnsureVisualLines(); }
-        catch (InvalidOperationException) { return false; } // a build is already running mid-Measure
+        catch (InvalidOperationException)
+        {
+            Diagnostics.BulbTrace.Log("TryEnsureVisualLines FALSE (EnsureVisualLines threw — build mid-Measure)");
+            return false; // a build is already running mid-Measure
+        }
+        Diagnostics.BulbTrace.Log($"TryEnsureVisualLines rebuilt -> valid={tv.VisualLinesValid}");
         return tv.VisualLinesValid;
     }
 
@@ -848,7 +882,11 @@ internal sealed class NavigationController
         Rect? last = null;
         var segment = new TextSegment { StartOffset = documentLine.Offset, Length = documentLine.Length };
         foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, segment)) last = rect;
-        if (last is not { } r) return false;
+        if (last is not { } r)
+        {
+            Diagnostics.BulbTrace.Log($"anchor NO RECTS for line={line} (not visible?)");
+            return false;
+        }
 
         // Clamp into the view: a line whose text runs to the right edge would otherwise put the bulb
         // PAST it, where the overlay clips it away — present in every state we track, yet invisible to
@@ -856,13 +894,17 @@ internal sealed class NavigationController
         // a rare case. Sitting flush against the edge is the honest fallback.
         double x = Math.Min(r.Right + BulbGap, Math.Max(0, textView.Bounds.Width - BulbSize));
         var point = textView.TranslatePoint(new Point(x, r.Top), overlay);
+        Diagnostics.BulbTrace.Log(
+            $"anchor rectRight={r.Right:0.0} rectTop={r.Top:0.0} tvWidth={textView.Bounds.Width:0.0} " +
+            $"x={x:0.0} translated={(point is null ? "NULL" : $"{point.Value.X:0.0},{point.Value.Y:0.0}")}");
         if (point is null) return false;
         anchor = point.Value;
         return true;
     }
 
-    private void HideBulb()
+    private void HideBulb([System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
+        if (_bulb is not null) Diagnostics.BulbTrace.Log($"HideBulb (called by {caller})");
         if (_bulb is { } bulb)
         {
             // Remove from the panel that ACTUALLY holds it, not from whatever GetOverlayLayer resolves
