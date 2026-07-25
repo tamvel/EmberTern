@@ -40,4 +40,16 @@ public sealed class ParameterValue
 
     // Canonical invariant-culture string form of the value; null when IsNull.
     public string? Text { get; set; }
+
+    // The declared type this value was entered under (e.g. "INTEGER", "VARCHAR(80)"). It is what makes
+    // restoring a stored value PROVABLE rather than a guess: a value may be re-applied only when this type
+    // classifies to the same input kind as the parameter it would be restored into, so an INTEGER value never
+    // lands in a field that has since become VARCHAR. The raw type text is stored rather than a classification
+    // so the proof is re-derived by whatever the current classifier says — the stored fact stays raw.
+    //
+    // Null for entries written before this was recorded: those cannot be proven and are therefore not
+    // auto-applied (the row stays fresh and the user decides). Purely additive — an older build ignores the
+    // field and a file written by one deserializes here as null, so the settings schema version is deliberately
+    // NOT bumped (a bump would make older builds refuse the whole file).
+    public string? TypeText { get; set; }
 }

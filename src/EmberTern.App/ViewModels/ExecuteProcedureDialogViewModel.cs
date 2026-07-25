@@ -145,10 +145,12 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
     // ─── History serialization (round-trippable invariant strings) ───────────
 
     /// <summary>Snapshots this row for the persistent history — a NULL flag plus a
-    /// canonical invariant-culture string (TIMESTAMP keeps sub-second precision).</summary>
+    /// canonical invariant-culture string (TIMESTAMP keeps sub-second precision), and the
+    /// declared type the value was entered under, which is what lets a later restore prove
+    /// the value still fits (see <see cref="ApplyHistoryValue"/>).</summary>
     internal ParameterValue ToHistoryValue()
     {
-        if (IsNull) return new ParameterValue { Name = Name, IsNull = true, Text = null };
+        if (IsNull) return new ParameterValue { Name = Name, IsNull = true, Text = null, TypeText = TypeText };
         var text = Kind switch
         {
             ExecuteParamKind.Boolean => BoolValue ? "true" : "false",
@@ -160,56 +162,73 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
                     .ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture) ?? string.Empty,
             _ => TextValue,
         };
-        return new ParameterValue { Name = Name, IsNull = false, Text = text };
+        return new ParameterValue { Name = Name, IsNull = false, Text = text, TypeText = TypeText };
     }
 
-    /// <summary>Restores a previously-used value (from the persistent history) into the
-    /// matching typed holder; a NULL entry restores the NULL state. Unparseable values
-    /// are ignored so a schema/type change never crashes the restore.</summary>
-    internal void ApplyHistoryValue(ParameterValue value)
+    /// <summary>Restores a previously-used value into this row — but <b>only when the value can be proven
+    /// still to fit</b>. The stored value carries the type it was entered under; it is applied only if that
+    /// type classifies to the same <see cref="ExecuteParamKind"/> as this row's, so a value entered for an
+    /// <c>INTEGER</c> parameter never lands in one that has since become <c>VARCHAR</c>. No conversion is ever
+    /// attempted: what cannot be proven is left for the user to decide, and the row stays fresh.
+    /// <para>A value stored before the type was recorded (legacy history) cannot be proven and is therefore not
+    /// applied. In practice only entered values are affected — a stored <c>NULL</c> would restore the state the
+    /// row already starts in.</para>
+    /// <para>The row is mutated only once the value has actually materialised: a text that matches the kind but
+    /// does not parse (corrupt history) leaves the row untouched, rather than un-checking NULL over a
+    /// constructor default — which would show a value nobody entered.</para>
+    /// <returns>Whether the value was applied.</returns></summary>
+    internal bool ApplyHistoryValue(ParameterValue value)
     {
+        if (!IsProvablyCompatible(value)) return false;
+
         if (value.IsNull)
         {
             IsNull = true;
-            return;
+            return true;
         }
-        IsNull = false;
+
         var text = value.Text ?? string.Empty;
         switch (Kind)
         {
             case ExecuteParamKind.Boolean:
-                if (bool.TryParse(text, out var b)) BoolValue = b;
+                if (!bool.TryParse(text, out var b)) return false;
+                BoolValue = b;
                 break;
             case ExecuteParamKind.Numeric:
-                if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var d))
-                    NumericValue = d;
+                if (!decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var d)) return false;
+                NumericValue = d;
                 break;
             case ExecuteParamKind.Date:
-                if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dd))
-                    DateValue = dd.Date;
+                if (!DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dd)) return false;
+                DateValue = dd.Date;
                 break;
             case ExecuteParamKind.Timestamp:
-                if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var ts))
-                {
-                    DateValue = ts.Date;
-                    TimeValue = ts.TimeOfDay;
-                    TimeText = FormatTime(ts.TimeOfDay);
-                    HasTimeError = false;
-                }
+                if (!DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var ts)) return false;
+                DateValue = ts.Date;
+                TimeValue = ts.TimeOfDay;
+                TimeText = FormatTime(ts.TimeOfDay);
+                HasTimeError = false;
                 break;
             case ExecuteParamKind.Time:
-                if (TryParseTime(text, out var t))
-                {
-                    TimeValue = t;
-                    TimeText = FormatTime(t);
-                    HasTimeError = false;
-                }
+                if (!TryParseTime(text, out var t)) return false;
+                TimeValue = t;
+                TimeText = FormatTime(t);
+                HasTimeError = false;
                 break;
             default:
                 TextValue = text;
                 break;
         }
+        IsNull = false; // only now — the value exists
+        return true;
     }
+
+    /// <summary>Whether <paramref name="value"/> is provably compatible with this row: it records the type it
+    /// was entered under, and that type classifies to this row's kind. The raw type text is re-classified here
+    /// rather than a stored classification being trusted, so the proof always follows the current classifier.
+    /// A value with no recorded type (legacy history) is never provable.</summary>
+    private bool IsProvablyCompatible(ParameterValue value)
+        => value.TypeText is { Length: > 0 } stored && ClassifyKind(stored) == Kind;
 
     internal static string FormatTime(TimeSpan t) => t.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture);
 

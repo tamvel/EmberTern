@@ -17,6 +17,46 @@ public class ParameterHistoryStoreTests
     private static List<ParameterValue> Set(params (string Name, string? Text)[] values)
         => values.Select(v => new ParameterValue { Name = v.Name, IsNull = v.Text is null, Text = v.Text }).ToList();
 
+    private static List<ParameterValue> TypedSet(params (string Name, string? Text, string? TypeText)[] values)
+        => values
+            .Select(v => new ParameterValue { Name = v.Name, IsNull = v.Text is null, Text = v.Text, TypeText = v.TypeText })
+            .ToList();
+
+    [Fact]
+    public void Record_CarriesTheDeclaredType()
+    {
+        // Dropping the type on the way in would store a value whose compatibility can never again be proven.
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ParameterHistoryStore(dir);
+            store.Record("c1", "Procedure", "SP", TypedSet(("A", "10", "INTEGER")));
+
+            var stored = new ParameterHistoryStore(dir).Get("c1", "Procedure", "SP");
+            Assert.Equal("INTEGER", stored[0].Values[0].TypeText);
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void Record_TreatsTheSameTextUnderADifferentTypeAsANewSet()
+    {
+        // Otherwise the repeat-detection would refresh the old entry's timestamp and keep its stale type, so the
+        // value the user just used could never be proven restorable.
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ParameterHistoryStore(dir);
+            store.Record("c1", "Procedure", "SP", TypedSet(("A", "10", "INTEGER")));
+            store.Record("c1", "Procedure", "SP", TypedSet(("A", "10", "VARCHAR(10)")));
+
+            var stored = new ParameterHistoryStore(dir).Get("c1", "Procedure", "SP");
+            Assert.Equal(2, stored.Count);
+            Assert.Equal("VARCHAR(10)", stored[0].Values[0].TypeText); // newest first
+        }
+        finally { Cleanup(dir); }
+    }
+
     [Fact]
     public void Get_ReturnsEmpty_WhenNothingSaved()
     {

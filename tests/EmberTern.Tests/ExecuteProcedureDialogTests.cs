@@ -147,6 +147,94 @@ public class ExecuteProcedureDialogTests
         Assert.True(target.IsNull);
     }
 
+    // ─── The proof rule: a stored value is restored only when it provably still fits ──────────
+
+    [Fact]
+    public void HistoryValue_RecordsTheTypeItWasEnteredUnder()
+    {
+        var entered = new ExecuteProcedureParamRowViewModel("N", "INTEGER") { IsNull = false, NumericValue = 10m };
+        Assert.Equal("INTEGER", entered.ToHistoryValue().TypeText);
+
+        // A NULL carries it too — the type is what the value was FOR, not what it holds.
+        var nulled = new ExecuteProcedureParamRowViewModel("N", "INTEGER") { IsNull = true };
+        Assert.Equal("INTEGER", nulled.ToHistoryValue().TypeText);
+    }
+
+    [Fact]
+    public void HistoryValue_IsRestored_WhenTheTypeFamilyIsUnchanged()
+    {
+        // INTEGER → BIGINT is the same input kind, so the canonical text means exactly what it did.
+        var stored = new ExecuteProcedureParamRowViewModel("N", "INTEGER") { IsNull = false, NumericValue = 10m }
+            .ToHistoryValue();
+
+        var target = new ExecuteProcedureParamRowViewModel("N", "BIGINT");
+        Assert.True(target.ApplyHistoryValue(stored));
+        Assert.False(target.IsNull);
+        Assert.Equal(10m, target.NumericValue);
+    }
+
+    [Fact]
+    public void HistoryValue_IsNotRestored_WhenTheTypeFamilyChanged()
+    {
+        // INTEGER → VARCHAR would mean converting 10 into "10". The debugger does not convert: the field is
+        // handed back to the user untouched.
+        var stored = new ExecuteProcedureParamRowViewModel("N", "INTEGER") { IsNull = false, NumericValue = 10m }
+            .ToHistoryValue();
+
+        var target = new ExecuteProcedureParamRowViewModel("N", "VARCHAR(10)");
+        Assert.False(target.ApplyHistoryValue(stored));
+        Assert.True(target.IsNull);
+        Assert.Equal(string.Empty, target.TextValue);
+    }
+
+    [Fact]
+    public void HistoryValue_IsNotRestored_WhenTheStoredTypeIsUnknown()
+    {
+        // An entry written before the type was recorded cannot be proven — so it is not applied, whatever it
+        // happens to hold.
+        var legacy = new ParameterValue { Name = "N", IsNull = false, Text = "10", TypeText = null };
+
+        var target = new ExecuteProcedureParamRowViewModel("N", "INTEGER");
+        Assert.False(target.ApplyHistoryValue(legacy));
+        Assert.True(target.IsNull);
+    }
+
+    [Fact]
+    public void HistoryValue_UnparseableText_LeavesTheRowUntouched()
+    {
+        // The kind matches but the text does not parse (corrupt history). Un-checking NULL here would show the
+        // constructor's default as though the user had entered it.
+        var corrupt = new ParameterValue { Name = "N", IsNull = false, Text = "not a number", TypeText = "INTEGER" };
+
+        var target = new ExecuteProcedureParamRowViewModel("N", "INTEGER");
+        Assert.False(target.ApplyHistoryValue(corrupt));
+        Assert.True(target.IsNull);
+    }
+
+    [Fact]
+    public void Dialog_DoesNotAutoApplyHistory_WhenTheParameterWasRetyped()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ParameterHistoryStore(dir);
+            var asInteger = new ExecuteProcedureDialogViewModel(
+                new[] { Param("N", "INTEGER") }, "SP", "c1", "Procedure", store);
+            asInteger.Params[0].IsNull = false;
+            asInteger.Params[0].NumericValue = 10m;
+            asInteger.AcceptCommand.Execute(null);
+
+            // The routine's parameter is now VARCHAR. The set is still offered in the dropdown, but nothing is
+            // auto-applied — the value cannot be proven to fit.
+            var asText = new ExecuteProcedureDialogViewModel(
+                new[] { Param("N", "VARCHAR(10)") }, "SP", "c1", "Procedure", new ParameterHistoryStore(dir));
+            Assert.True(asText.HasHistory);
+            Assert.True(asText.Params[0].IsNull);
+            Assert.Equal(string.Empty, asText.Params[0].TextValue);
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+    }
+
     private static void AssertRoundTrip(string type, Action<ExecuteProcedureParamRowViewModel> set,
         Action<ExecuteProcedureParamRowViewModel> assert)
     {

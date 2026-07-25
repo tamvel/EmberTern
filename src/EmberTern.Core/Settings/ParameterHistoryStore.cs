@@ -86,7 +86,11 @@ public sealed class ParameterHistoryStore
         var stamped = new ParameterSet
         {
             ExecutedAt = DateTime.Now,
-            Values = values.Select(v => new ParameterValue { Name = v.Name, IsNull = v.IsNull, Text = v.Text }).ToList(),
+            // TypeText is carried like every other field: dropping it here would store a value whose
+            // compatibility can never again be proven, which is exactly what the restore rule needs it for.
+            Values = values
+                .Select(v => new ParameterValue { Name = v.Name, IsNull = v.IsNull, Text = v.Text, TypeText = v.TypeText })
+                .ToList(),
         };
 
         if (entry.Executions.Count > 0 && ValuesEqual(entry.Executions[0].Values, stamped.Values))
@@ -116,9 +120,13 @@ public sealed class ParameterHistoryStore
         if (a.Count != b.Count) return false;
         for (int i = 0; i < a.Count; i++)
         {
+            // The type is part of what makes two runs "the same set". The same text entered under a different
+            // type is a DIFFERENT set: treating it as a repeat would refresh the old entry's timestamp and keep
+            // its stale type, so the value the user just used could never be proven restorable again.
             if (!string.Equals(a[i].Name, b[i].Name, StringComparison.OrdinalIgnoreCase)
                 || a[i].IsNull != b[i].IsNull
-                || !string.Equals(a[i].Text, b[i].Text, StringComparison.Ordinal))
+                || !string.Equals(a[i].Text, b[i].Text, StringComparison.Ordinal)
+                || !string.Equals(a[i].TypeText, b[i].TypeText, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
