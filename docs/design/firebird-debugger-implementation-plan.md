@@ -739,8 +739,30 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
   happened). ⚠ **Do not "just remove the gate":** `HarnessBuilder` silently skips a read/write name with no
   declared variable, so a draft-only parameter would go undeclared — visible as *"Column unknown"* in PSQL, but
   in embedded DSQL a bare name is read as a **column** (#247), i.e. a silently wrong value.
-- **Weryfikacja.** VM + pure tests for the C3 rules (shipped); the lab probe above for C3.4's fidelity.
-  Narrative: `docs/history/19-firebird-debugger.md` (last three sections).
+- **Seam 6d — DONE + user-QA-confirmed (`6afef20`). A compiled object refreshes the other tabs showing it.**
+  Not a debugger feature: the object editors had raised `CompiledExistingObject` for a long time with **no
+  subscriber at all**, so the debugger raises the same event after its save and the workspace acts on it once.
+  Wired on `WorkspaceTabs.CollectionChanged` (ONE point, not the ~39 add sites); siblings keyed on
+  **(kind, name)** as `CloseTabsForObject` already does; the reload is each editor's own `RefreshAsync` via a
+  new `WorkspaceTabViewModel.RefreshAsync()` mirroring the `SavableEditor`/`UnsavedWork` dispatch. **Excluded
+  by decision:** a tab with **unsaved work** (reloading clears dirty ⇒ it would destroy edits, rule #11) and
+  **any debugger tab** as a target (reloading resets the source its session was built from). Forced refactor:
+  `CreateDebugger` now takes the routine's real `MetadataObjectKind` (it was hard-coded to `Procedure`), the
+  parameter **required** so the compiler enumerated the call sites. ⚠ `OfferRecompileDependentsAsync` is still
+  **dead code** — this event's intended consumer, never called; reviving it changes Save and was left alone.
+  Gotcha #258.
+- **Weryfikacja.** VM + pure tests for the C3 rules and 6d's selection (shipped); the lab probe above for
+  C3.4's fidelity. Narrative: `docs/history/19-firebird-debugger.md` (last four sections).
+
+---
+
+## 🏁 Stage X is closed (2026-07-25)
+
+Every milestone in §2 is delivered and confirmed except two, both **deferred by decision, not by difficulty**,
+and both with a ratified brief above so neither needs re-analysis if it returns: **D14 (Step Back)** and
+**C3.4** (the Draft model's remaining engine work). The branch `feat/firebird-debugger` was merged to `master`
+at this point. A session opening this plan for anything other than those two is probably in the wrong document —
+start from CLAUDE.md's "Current state".
 
 ---
 

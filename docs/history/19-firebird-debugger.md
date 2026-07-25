@@ -3416,3 +3416,85 @@ identical stops and values. Only then does the header gate come off.
 It is **deferred by user decision** (2026-07-25), and the reason is a good one: after A and B the debugger is
 usable enough that the real question — how often a signature actually changes mid-debugging — is answerable by
 using it rather than by arguing about it. If practice says it hurts, C3.4 returns as its own independent stage.
+
+---
+
+## Seam 6d — a compiled object refreshes the other tabs showing it (2026-07-25, COMPLETE)
+
+The last incoherence, and the smallest: saving a routine from the debugger updated the database but told nothing
+else, so a second tab open on that routine sat on the old text until the next reconnect (reconnect closes every
+tab, which is why reopening always looked fine).
+
+### There was never a cache to invalidate
+
+Worth restating because it is the kind of bug people fix in the wrong layer. The readers read **live**, the
+Metadata lane uses implicit per-command transactions so committed DDL is visible immediately, and the only
+caches in play are columns and per-session package bodies — none of which hold routine source. What was missing
+was a **notification**, and specifically a *subscriber*: the object editors had raised
+`CompiledExistingObject` after every successful compile of an existing object since long before this, and
+**nothing had ever listened to it.** The event compiled, ran, and did nothing, in three view-models, invisibly
+(gotcha #258).
+
+### As built
+
+The debugger raises **the same event, under the same name**, after its own save — it compiles through the same
+Ddl lane as every editor, so it reports it the same way rather than through a path of its own. The subscriber
+they were all missing lives in the class that owns the tabs, and it is wired **once**, on
+`WorkspaceTabs.CollectionChanged`, rather than at the ~39 places that add a tab; a tab kind added later is
+covered without anyone remembering to. The sibling lookup keys on **(kind, name)**, exactly as
+`CloseTabsForObject` and the open/focus dedup already do, so "the tabs for this object" keeps meaning one thing.
+The reload itself is each editor's own existing `RefreshAsync`, reached through a new
+`WorkspaceTabViewModel.RefreshAsync()` that mirrors the `SavableEditor` / `UnsavedWork` per-kind dispatch — the
+third member of one family rather than a new idea.
+
+### Two exclusions, both deliberate
+
+**A tab with unsaved work is left alone.** `RefreshAsync` reloads from the database and clears the dirty state,
+so refreshing a dirty sibling would silently destroy edits the user had not saved. Stale text is a nuisance;
+discarded work is rule #11. That tab keeps its edits and its own Save.
+
+**A debugger tab is never a refresh target.** Reloading it would reset the source its session was built from and
+tear down a live session — the Draft model's business, and out of this seam's scope by construction.
+
+### The refactor 6d forced
+
+A debugger tab hard-coded `ObjectKind = MetadataObjectKind.Procedure`. Harmless while nothing read it — and
+this seam is the thing that started reading it, so a debugged **trigger** or **function** would have matched the
+wrong object or none at all. `CreateDebugger` now takes the real kind, and making the parameter **required**
+rather than optional is what made the compiler enumerate the call sites instead of leaving them quietly wrong.
+
+### Verification
+
+Build 0/0; smoke clean; **user QA on the live app passed** (siblings refresh after a debugger save, dirty tabs
+are untouched, the debugger does not refresh itself, and (kind, name) matching behaves). +7 tests assert the
+**decision** — which tabs get reloaded — because a reload against no connection changes nothing observable, so
+testing the action alone would have passed for the wrong reasons.
+
+### Left alone on purpose
+
+`OfferRecompileDependentsAsync` — the "recompile dependents?" offer — is **still dead code**. It was
+`CompiledExistingObject`'s intended consumer and has never been called; the view subscribes
+`RecompileDependentsRequested`, but nothing raises it. Reviving it would change what Save does, which is outside
+this seam. Recorded here so the next person finds it deliberately parked rather than freshly broken.
+
+---
+
+## 🏁 The Firebird debugger is closed (2026-07-25)
+
+Everything planned is delivered and confirmed on the live lab or the live app: the engine (P1/P2, D1–D9), the
+surfaces it needed (triggers, packages, advanced breakpoints, fast-forward), the experience stage (D15, with
+D15.6 dropped on product judgement and D15.7 left as background), functions as a debug root (standalone and
+packaged), the **Draft model** — a session runs the code the editor shows, and only `Save` writes to the
+database — the **launch-configuration rebuild** under the prove-or-ask rule, and finally **Seam 6d**.
+
+Two items remain, both **deferred by decision rather than by difficulty**, each with a ratified brief so
+neither needs re-analysis if it returns:
+
+- **D14 (Step Back)** — snapshot + per-step savepoint + undo-only; rejected replay; ~5 sessions, High.
+- **C3.4** — root frame layout from the AST header, `TYPE OF` resolved, `RETURNS` in the signature, the §F
+  boundaries in the pre-flight, and the catalog-vs-draft fidelity probe; only then does the header gate come off.
+
+The through-line worth carrying into the next area of EmberTern is the one the whole stage was built on: the
+client owns **control flow**, the server owns **all semantics**, and every place the two cannot be made to agree
+is a **named, surfaced boundary** rather than a quiet approximation. That is what made a debugger possible on an
+engine with no debugging API, and it is why the answer to "why does it do that?" has been findable every time.

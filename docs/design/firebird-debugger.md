@@ -731,6 +731,12 @@ shown is the **full, real** routine source.
 >
 > A draft-sourced session keeps the Fidelity Law but adds boundary **§12.14**. As-built: `docs/history/19-…`
 > ("An edit ends the session" · "Seam B" · "the live QA verdict").
+>
+> **A successful `Save` also refreshes every OTHER tab showing the same routine** (Seam 6d), so the app never
+> holds two views of one object with different text. The debugger raises the same "compiled an existing object"
+> notification the editors do and the workspace acts on it — no debugger-specific path. Two exclusions: a tab
+> with **unsaved work** is left alone (reloading would discard it — rule #11), and a **debugger tab is never a
+> refresh target** (reloading would reset the source its own session was built from).
 
 ### 9.2 Launch — a panel, not a modal
 
