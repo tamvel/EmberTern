@@ -2228,7 +2228,18 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public event Func<ConfirmRequest, Task<bool>>? ConfirmationRequested;
     private Task<bool> RequestConfirmAsync(ConfirmRequest request)
-        => ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
+    {
+        // A Save-and-close / Save-and-disconnect batch is itself shown in a MODAL "Saving changes"
+        // dialog, and every dialog in this app is ShowDialog(MainWindow). An editor that asks for
+        // confirmation mid-batch would therefore open a second modal owned by an already-disabled
+        // window: unreachable, so its SaveAsync never returns and the batch hangs at 0/N with an
+        // empty grid (QA, 2026-07-25). Proceed instead of asking — same reasoning as the
+        // "recompile dependents?" suppression below, and the only confirm reachable from any
+        // SaveAsync is the debugger's "saving ends the debug session", which during a shutdown or
+        // disconnect is moot: the session is being torn down either way (§4.4).
+        if (_bulkSaveInProgress) return Task.FromResult(true);
+        return ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
+    }
 
     // Multi-outcome (N-button) sibling of ConfirmationRequested — Commit / Roll back /
     // Cancel (disconnect) and Cancel / Discard-and-exit (app close). Returns the chosen

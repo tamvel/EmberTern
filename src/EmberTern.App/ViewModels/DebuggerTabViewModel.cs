@@ -42,6 +42,13 @@ public enum DebuggerPhase
 
     /// <summary>The user stopped the session, or preparation/launch failed — the launch panel is shown again.</summary>
     Idle,
+
+    /// <summary>A Save compiled the edit buffer and the server REFUSED it. There is no session (saving ended
+    /// it first), but the tab must keep showing the SOURCE rather than the launch panel: the user's uncompiled
+    /// code is the only thing on screen worth acting on, and the whole point is to fix it and save again.
+    /// Landing in <see cref="Idle"/> here would swap the editor for the parameter form and leave the user with
+    /// no way to correct the code that just failed (QA, 2026-07-25). Left only by a successful save.</summary>
+    SaveFailed,
 }
 
 /// <summary>
@@ -512,6 +519,9 @@ public sealed partial class DebuggerTabViewModel
     /// repaint the renderers (via <c>TextView.Redraw()</c>, never <c>InvalidateVisual()</c> — gotcha #223).</summary>
     public event EventHandler? DebugMarkersChanged;
 
+    // SaveFailed is deliberately NOT here: it is the one session-less phase that must still show the source
+    // editor, so the user can fix the code the compile just rejected (the panels inside the debug layout are
+    // empty by their own empty-states — there is no session to describe).
     public bool IsLaunchPanelVisible => Phase is DebuggerPhase.Preparing or DebuggerPhase.ReadyToLaunch or DebuggerPhase.Idle;
     public bool IsDebugViewVisible => !IsLaunchPanelVisible;
     public bool IsPaused => Phase == DebuggerPhase.Paused;
@@ -2073,6 +2083,13 @@ public sealed partial class DebuggerTabViewModel
             var message = string.Format(
                 CultureInfo.CurrentCulture, UiStrings.DebuggerSaveCompileFailedFormat, ex.Message);
             SetError(message);
+            // Keep the SOURCE on screen. Ending the session above already moved us to Idle, which shows the
+            // launch panel instead of the editor — leaving the user staring at a parameter form with no way
+            // to fix the code the server just rejected. SaveFailed keeps the editor (and this Save button)
+            // in front of them; the buffer is untouched, so they edit and save again. The tab also still
+            // reports unsaved work, so the close guard keeps refusing to close it.
+            Phase = DebuggerPhase.SaveFailed;
+            StatusText = UiStrings.DebuggerStatusSaveFailed;
             return new EditorSaveResult(false, message);
         }
 

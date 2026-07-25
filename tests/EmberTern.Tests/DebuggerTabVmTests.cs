@@ -1657,12 +1657,42 @@ public class DebuggerTabVmTests
         vm.ApplySourceEdit(edited);
         var result = await vm.SaveAsync();
 
-        Assert.True(warned);                        // the user was told, before anything happened
-        Assert.Equal(DebuggerPhase.Idle, vm.Phase);  // session stopped + its transaction closed FIRST
-        Assert.False(result.Success);                // ... then the compile failed (no connection)
+        Assert.True(warned);                         // the user was told, before anything happened
+        Assert.False(result.Success);                // session stopped FIRST, then the compile failed
         Assert.True(vm.ShowErrorBar);                // and the failure is in the shared Error Bar
         Assert.Equal(edited, vm.SourceText);         // the user's text is never discarded on failure
         Assert.True(vm.IsSourceDirty);
+
+        // QA 2026-07-25 — this used to land in Idle, which shows the LAUNCH PANEL: the editor vanished and
+        // the user could not fix the code the server had just rejected. A refused save now keeps the source
+        // on screen, editable, with the work still reported so the close guard keeps refusing to close.
+        Assert.Equal(DebuggerPhase.SaveFailed, vm.Phase);
+        Assert.False(vm.IsLaunchPanelVisible);
+        Assert.True(vm.IsDebugViewVisible);
+        Assert.True(vm.IsSourceEditable);
+        Assert.True(vm.CanSaveSource);               // Save is still armed for the corrected text
+        Assert.NotNull(vm.GetUnsavedWork());
+    }
+
+    [Fact]
+    public async Task Save_ThatFails_WithNoLiveSession_StillKeepsTheSourceOnScreen()
+    {
+        // Same rule from the launch-panel side: a refused save must not leave the tab on the parameter
+        // form. Nothing to stop here, so the phase moves ReadyToLaunch → SaveFailed purely to keep the
+        // code visible.
+        using var service = new FirebirdConnectionService();
+        var vm = Vm(Sql, new FakeExecutor(), out _);
+        vm.DdlExecutor = new FirebirdDdlExecutor(service); // offline ⇒ the compile fails
+        await vm.PrepareAsync();
+        Assert.Equal(DebuggerPhase.ReadyToLaunch, vm.Phase);
+
+        vm.ApplySourceEdit(Sql + "\n-- touched");
+        var result = await vm.SaveAsync();
+
+        Assert.False(result.Success);
+        Assert.Equal(DebuggerPhase.SaveFailed, vm.Phase);
+        Assert.False(vm.IsLaunchPanelVisible);
+        Assert.True(vm.IsSourceEditable);
     }
 
     // ── Seam 5c — the debugger tab participates in the close/disconnect WorkGuard ───────────────────
