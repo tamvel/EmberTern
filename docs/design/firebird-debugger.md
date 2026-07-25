@@ -708,12 +708,29 @@ Philosophy: **a modern IDE debugger, not a DB admin tool.** Consistent with the 
 
 ### 9.1 A separate tab — confirmed
 
-**Debugging is a different activity from editing.** A debug tab is read-only source + runtime state; an editor
-tab is authoring. Conflating them means every editing affordance grows a "but not while debugging" mode — the
-complexity spiral EmberTern avoids.
+**Debugging is a different activity from editing.** A debug tab is its own surface — source + runtime state;
+an ordinary editor tab is authoring. Conflating them means every editing affordance grows a "but not while
+debugging" mode — the complexity spiral EmberTern avoids.
 
 Consequences: **no Easy Mode** (correct — it hides the body, and local routines live in the body); the source
 shown is the **full, real** routine source.
+
+> **⚠ AMENDED BY DELIVERY (2026-07-25) — the source is NOT read-only.** Real use showed the separation was
+> drawn one step too far: fixing what you just watched fail is the debugging loop, and sending the user to
+> another tab to do it is the tax. The tab is now a **normal editor at every phase**, under three rules that
+> keep "different activity" intact without a "not while debugging" mode:
+> 1. **The first change to the text ends the session** (no save, no step, no restart needed) — so a step can
+>    never run code the user is no longer looking at. Ending it is **permanent**; undoing the edit does not
+>    resurrect it.
+> 2. **The editor's current text is the session's source.** `Restart` starts a session on the **draft** — no
+>    compile, no write to the database — so a routine can be experimented on without being modified.
+> 3. **`Save` is the only operation that writes to the database.** It compiles the draft and resumes the
+>    session on the new code. (Making Restart compile was proposed and **rejected**: the debugger never asks
+>    the server to run the compiled routine — the harness never names it — so compiling to restart would write
+>    for no technical reason.)
+>
+> A draft-sourced session keeps the Fidelity Law but adds boundary **§12.14**. As-built: `docs/history/19-…`
+> ("An edit ends the session" · "Seam B" · "the live QA verdict").
 
 ### 9.2 Launch — a panel, not a modal
 
@@ -804,7 +821,11 @@ pure expression**, and the Executed SQL panel (§10.3) records every evaluation 
 - **Set Next Statement** — move the instruction pointer (drag the marker / `Ctrl+Shift+F10`). **Trivial here**
   because control flow is client-side, and powerful. Guard: it cannot un-execute side effects already
   performed (§12 — offer D14's step-back instead when available).
-- Read-only source. Editing is a different activity (§9.1).
+- **Editable source at every phase** (amended 2026-07-25 — see §9.1): the first edit ends the session, the
+  editor's current text is what the next `Restart` runs (no compile, no DB write), and `Save` is the only
+  operation that writes to the database. Breakpoints survive an edit only where their offsets are **provably**
+  still the same statement start (the edit's unchanged prefix, re-checked against the new parse); anything
+  below the edit is dropped rather than guessed at (§0).
 
 ### 9.7 Keyboard (VS-standard — do not invent)
 
@@ -968,6 +989,20 @@ Each is **named, detected where possible, and surfaced**. None is silently appro
     `f` inside `VALUES(…)`, an argument to another expression) steps **over** — descending would force the
     client to evaluate the surrounding expression, becoming a second engine (§F / Contract #3). Step-over stays
     100% faithful (the server evaluates the whole expression). This is an **architectural boundary, not a gap**.
+14. **Draft-sourced session — wherever the SERVER resolves the routine by NAME, it gets the COMPILED version**
+    (new class, 2026-07-25; §9.1's amendment). Since `Restart` runs the editor's current text without
+    compiling it, the client interprets the draft while the database still holds the old routine. The Fidelity
+    Law is unaffected for every ordinary statement — Firebird computes them all, and the harness **never names
+    the routine** — but three shapes cross the line, and **all three are statically detectable from the
+    draft's own AST**: (a) **recursion** — a self-call falls through `ResolveRoutine`'s local and package
+    branches to `ResolveRoutineAsync`, which fetches the *compiled* source, so a step-into would silently
+    descend into old code; (b) **a selectable procedure used inside its own body** — same mechanism, through
+    the cursor path; (c) **a draft that would not compile** — it runs *partially*, because Firebird's PSQL
+    compile-time validation never happened. Surfacing these in the pre-flight is **Seam C's** job, together
+    with the root frame layout coming from the AST header (which also removes the interim gate that today lets
+    a draft run only while its *header* is byte-identical to the compiled one). One accepted regression comes
+    with that layout: a parameter typed **`TYPE OF …`** resolves from the catalog but throws an explained stop
+    from the AST — an explained stop beats a guess, and body locals already behave that way.
 
 ### 12.1 Fast-forward (D13) — the optimisation and its price
 
@@ -1040,6 +1075,10 @@ next. Foundation-first; never big-bang.
   FB5 verified; FB4 unverified (no instance).
 - **§12.8** — `DECFLOAT` / `INT128` / `TIME ZONE` / array round-trip fidelity through the driver. **Blocks
   FB4+ support of D2.**
+- **§9.1 / §12.14 — draft vs catalog equivalence.** A `DebuggerFidelityProbe` case must prove that the same
+  routine, run **from the catalog** and as an **identical draft**, produces identical stops and identical
+  values on the lab. **Blocks the Draft model's Seam C** (Contract #12) — it is the one part of that seam
+  that cannot be cut, whatever the scope re-analysis decides about the rest.
 
 **Design questions still open for review:**
 1. **`F5` = Continue inside the debug tab** (§9.7), against the app-wide `F5` = Execute.

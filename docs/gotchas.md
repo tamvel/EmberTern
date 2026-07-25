@@ -7,12 +7,18 @@
 
 > **CLAUDE.md keeps a short curated subset of the ~20 most load-bearing, cross-cutting
 > entries inline** (the ones almost every session touches). This file is the *complete*
-> catalog (all 189 entries, #1–#202) — search it by keyword whenever a bug "feels
+> catalog (242 entries, #1–#255) — search it by keyword whenever a bug "feels
 > familiar"; it usually is.
 
 > A handful of numbers are intentionally absent (renumbered or merged away in the
 > original document) — the sequence is not perfectly contiguous. That's expected and
 > loses nothing: every surviving number's full text is here.
+> **Numbering is unique — verified 2026-07-25.** The one collision this audit found (two
+> different entries both numbered **238**) was resolved by moving the *uncited* one — the
+> debug-engine fake keyed by `Start` offset, in "Testing, tooling & build discipline" — to
+> **#255**. `#238` keeps its meaning everywhere it is already cited: *a reused `SELECT … INTO`
+> surfaces no local references from the binder*. **When adding an entry, take the next number
+> after the current maximum; never reuse an absent one.**
 
 > Entries explicitly marked **CORRECTED / SUPERSEDED / historical** below describe a
 > mechanism that was later replaced; they're kept for context (and because the pointer
@@ -23,15 +29,18 @@
 
 ## Table of contents
 
+*(Counts + ranges recomputed from the file 2026-07-25; a range is first–last number in that
+section, not a contiguous run.)*
+
 - [Never lose information / correctness-over-convenience](#never-lose-information--correctness-over-convenience) — 13 entries (#37–#194)
-- [Firebird transactions, connections & locking](#firebird-transactions-connections--locking) — 33 entries (#10–#184)
+- [Firebird transactions, connections & locking](#firebird-transactions-connections--locking) — 39 entries (#10–#237)
 - [Firebird catalog, DDL generation & metadata reading](#firebird-catalog-ddl-generation--metadata-reading) — 47 entries (#29–#185)
 - [SQL lexing, parsing, formatting & scanning](#sql-lexing-parsing-formatting--scanning) — 8 entries (#7–#202)
-- [Avalonia UI: controls, XAML binding & templates](#avalonia-ui-controls-xaml-binding--templates) — 55 entries (#1–#201)
+- [Avalonia UI: controls, XAML binding & templates](#avalonia-ui-controls-xaml-binding--templates) — 84 entries (#1–#235)
 - [MVVM / CommunityToolkit patterns](#mvvm--communitytoolkit-patterns) — 4 entries (#11–#187)
 - [Settings, security & persistence](#settings-security--persistence) — 4 entries (#87–#163)
-- [Testing, tooling & build discipline](#testing-tooling--build-discipline) — 1 entries (#67–#67)
-- [General engineering discipline & miscellaneous](#general-engineering-discipline--miscellaneous) — 24 entries (#5–#197)
+- [Testing, tooling & build discipline](#testing-tooling--build-discipline) — 2 entries (#67, #255)
+- [General engineering discipline & miscellaneous](#general-engineering-discipline--miscellaneous) — 41 entries (#5–#254)
 
 ---
 
@@ -702,7 +711,7 @@ every emit path to be individually perfect.**
 
 67. **xUnit2031 — `Assert.Single` z lambdą zamiast `Where().Single()`.** Analyzer xUnit'a flag'uje `Assert.Single(coll.Where(p))` i wymaga `Assert.Single(coll, p)` (predicate overload). Działa identycznie ale generuje lepszy error message przy fail'u (mówi ile elementów spełniało predykat, nie tylko "expected 1 got N"). Razem z `xUnit2029` (`Assert.Empty(coll.Where(p))` → `Assert.DoesNotContain(coll, p)`) trzymaj w pamięci przy pisaniu testów na collection-predicate assertions — IDE pokaże errory ale to brak zwykłych warning'ów.
 
-238. **A debug-engine fake `IDebugExecutor` that keys scripted outcomes by a node's `Start` offset is ambiguous across frames — two PSQL bodies built the same way put their first statement at the same offset, so a cross-frame test can trigger the wrong frame's scripted raise.** The `DebugEngineTests` fake maps outcomes/conditions/routines by `statement.Start` (its only stable identity for an AST node). But each frame interprets an *independent* body parsed in its own coordinate space: `"begin a = 1; end"` and `"begin r = 1; end"` both start their first statement at offset **6** (the shared `begin ` prefix). So `Outcome(Off(calleeSql,"r = 1"), Raised)` also scripts a raise for the *root's* `a = 1` — executing the root leaf picked up the callee's outcome and the propagation test "completed at depth 0" instead of descending. This is a limitation of the test fake, not the engine (the real D2 executor runs a specific AST node, not an offset lookup). **Rule for debugger tests spanning ≥2 frames: keep the frames' scripted offsets disjoint on the *executed* path** — e.g. start the root with the call itself so the callee's raising offset is only ever descended into, never run as a root leaf. *(`DebugEngineTests.Exception_PropagatesToCaller_…`; Stage X / D1 seam b)*
+255. **A debug-engine fake `IDebugExecutor` that keys scripted outcomes by a node's `Start` offset is ambiguous across frames — two PSQL bodies built the same way put their first statement at the same offset, so a cross-frame test can trigger the wrong frame's scripted raise.** The `DebugEngineTests` fake maps outcomes/conditions/routines by `statement.Start` (its only stable identity for an AST node). But each frame interprets an *independent* body parsed in its own coordinate space: `"begin a = 1; end"` and `"begin r = 1; end"` both start their first statement at offset **6** (the shared `begin ` prefix). So `Outcome(Off(calleeSql,"r = 1"), Raised)` also scripts a raise for the *root's* `a = 1` — executing the root leaf picked up the callee's outcome and the propagation test "completed at depth 0" instead of descending. This is a limitation of the test fake, not the engine (the real D2 executor runs a specific AST node, not an offset lookup). **Rule for debugger tests spanning ≥2 frames: keep the frames' scripted offsets disjoint on the *executed* path** — e.g. start the root with the call itself so the callee's raising offset is only ever descended into, never run as a root leaf. *(`DebugEngineTests.Exception_PropagatesToCaller_…`; Stage X / D1 seam b)*
 
 
 ## General engineering discipline & miscellaneous

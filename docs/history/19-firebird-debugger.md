@@ -3056,9 +3056,8 @@ step ends the session on return **without faulting** (driven by a new `FakeExecu
 the engine mid-step — one test double, no parallel implementation); a terminal session keeps its inspection
 state but drops the marker; and Launch is blocked while dirty. Four existing tests were rewritten rather than
 patched, because their premise ("edit while paused, then keep stepping / then save with a warning") is exactly
-what the rule removes. Smoke: the app launches clean. **Live QA on the lab is still owed** (the visual side:
-the toolbar greying out at the first keystroke, the status line, and the Error Bar surviving an edit after a
-fault).
+what the rule removes. Smoke: the app launches clean. **Live QA on the lab: PASSED** — see "Seams A + B — the
+live QA verdict" below.
 
 ### Ratified afterwards (user, on accepting Seam A)
 
@@ -3134,6 +3133,96 @@ above an edit survive while those below are dropped, a **header** edit blocks La
 edit of the same size does not, the pre-flight is re-run against the draft (an `IN AUTONOMOUS TRANSACTION`
 introduced by the edit is reported), and a trigger whose body starts referencing another NEW/OLD column is sent
 back to the launch panel rather than silently reusing the old form. Four Seam-A tests were updated where they
-pinned the interim block Seam B removes. Smoke: the app launches clean. **Live QA on the lab is owed**, and it
-is the interesting one: edit a body, Restart, and confirm the new behaviour runs while the stored procedure is
-unchanged in the database.
+pinned the interim block Seam B removes. Smoke: the app launches clean. **Live QA on the lab: PASSED**,
+including the interesting one — edit a body, Restart, and the new behaviour runs while the stored procedure in
+the database is unchanged. See the verdict below.
+
+---
+
+## Seams A + B — the live QA verdict, and what remains (2026-07-25)
+
+### The verdict
+
+The user ran both seams against the live lab and confirmed the workflow end to end. Verbatim, the four
+things checked and found working:
+
+- **the first edit of the code immediately ends the debugger session** — no save, no step, no restart needed;
+- **the user stays in the editor** (`Phase = Editing`), with the code still on screen, because the code is what
+  they are working on;
+- **executing stale code after an edit is no longer possible** — the whole stepping toolbar goes with the
+  session;
+- **Restart starts a session on the current editor text** (the draft), **without writing the procedure to the
+  database**; the stored procedure is verifiably untouched afterwards, and **Save remains the only operation
+  that writes DDL**.
+
+With that, *"I see code A, the debugger executes code B"* — the report this arc started from — is gone for
+every path a user can take: a step cannot reach the old text (Seam A), and a restart runs the new text
+(Seam B).
+
+### The two decisions this arc ratified, and why they hold
+
+**1. `Save` is the only operation that writes to the database; `Restart` runs the current text without
+saving.** The proposal to make a dirty Restart go through Save → Compile → Launch was cheap and reused an
+existing pipeline — and it was rejected, correctly. The debugger **never asks the server to run the compiled
+routine**: it owns control flow from the AST and executes every statement through an anonymous `EXECUTE BLOCK`
+harness **that never names the routine**. Compiling in order to restart would therefore write to the database
+for no *technical* reason, and it would destroy the thing an interactive debugger is for — experimenting on a
+routine without modifying it. Keeping the two operations distinct is what makes the loop
+`Edit → Restart → Test → Edit → … → Save` possible: everything before `Save` is free of consequence, and
+`Save` is the single, deliberate moment the database changes.
+
+**2. Ending the session is permanent.** Undoing the edit back to byte-identical text does not resurrect the
+session; only a deliberate Restart starts a new one. A session that could flicker back into existence because
+the text happened to match again would be a second, invisible rule about when code and session are "the same",
+which is precisely what this arc removed.
+
+### Why Restart can run a draft at all (the fact that made this possible)
+
+It is worth restating, because it is the load-bearing fact and it is easy to mis-remember as a trick: for a
+**root** frame the catalog is consulted for exactly **one** thing — the routine's **parameter / `RETURNS`
+types** (`ReadProcedureParametersAsync` / `ReadFunctionParametersAsync`; a **trigger** root reads none, its
+NEW/OLD types come from the target *table*). Everything else the session needs — the body, every statement, the
+locals (R3), the sub-routines (R5), the control flow — already comes from the **parsed text**. And the
+replacement for that one dependency is not speculative: D9's `BuildLocalRoutineFrameVariablesAsync` already
+builds a complete frame for a local `DECLARE PROCEDURE`, an object with **no catalog row at all**, from the AST
+header via `ExtractSignature` — live-fidelity-proven one level down. This is also why IBExpert can run edited
+code without saving: the same reason, not a trick.
+
+The **Fidelity Law still holds** for a draft-sourced session — Firebird computes every statement's semantics
+exactly as before. What a draft introduces is a new **class** of §F boundary, not a weakening of the law:
+wherever the *server* resolves the routine **by name**, it gets the **compiled** version while the client
+interprets the draft.
+
+### What remains — Seam C, and nothing else
+
+**Seam C is the only remaining stage of the Draft model.** It is **not started**, and by user directive
+(2026-07-25) the next session **re-analyses its scope before writing any code**: Seams A and B absorbed more
+than the original plan assumed, so C's responsibility has shrunk, and the first task is to check whether it can
+be narrowed further — possibly to little more than the header case.
+
+Its remaining candidate scope, for that analysis to confirm or cut:
+
+- generalise `PsqlDeclarationExtractor.ExtractSignature` to a **top-level** routine header (its own docstring
+  already says it is *"the same shape as a top-level routine header"*);
+- build the **root frame layout from the AST** when the source is a draft — the D9 path applied one level up —
+  which is what **removes Seam B's header interim** (today a draft runs only while its routine header is
+  byte-identical to the compiled one, because the root parameter list still comes from the catalog; a body
+  edit always qualifies, a header edit blocks with a status naming Save);
+- surface the draft-specific §F boundaries in the **pre-flight**;
+- and the part that **cannot** be cut (Contract #12): a **`DebuggerFidelityProbe` case proving that the same
+  routine, run from the catalog and as an identical draft, produces identical stops and identical values** on
+  the live lab.
+
+The §F boundaries for a draft-sourced session are **already verified in code** — inputs to that analysis, not
+things to re-derive. All three are statically detectable from the draft's own AST:
+
+1. **Recursion.** A self-call falls through `ResolveRoutine`'s local and package branches to
+   `ResolveRoutineAsync`, which fetches the **compiled** source — so a step-into would silently descend into
+   the old code.
+2. **A selectable procedure used inside its own body.** Same mechanism, through the cursor path.
+3. **A draft that would not compile.** It runs partially, because Firebird's PSQL compile-time validation never
+   happened.
+
+Plus one accepted regression to disclose: a parameter typed **`TYPE OF …`** resolves from the catalog today but
+throws an explained stop from the AST — accepted, because an explained stop beats a guess (§F), and body locals
+already behave that way.

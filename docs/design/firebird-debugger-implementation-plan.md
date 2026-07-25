@@ -668,6 +668,57 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
 
 ---
 
+### Draft model — "a session runs the code it was started from" *(Seams A / B / C, post-D15)*
+
+> **STATUS (2026-07-25): Seam A ✅ + Seam B ✅ — DONE and user-QA-confirmed on the live lab (commits `aa7f801`,
+> `7a410c7`). Seam C is the ONLY remaining stage, NOT started — and by user directive the session that picks
+> it up RE-ANALYSES its scope BEFORE writing any code.** A and B absorbed more than the original plan
+> assumed, so C's responsibility has shrunk; the first task is to check whether it can be narrowed further,
+> possibly to little beyond the header case.
+
+- **Cel.** Close the coherence gap reported after several days of real use: editing during a session was
+  allowed, but the next step still executed the launched version — *"I see code A, the debugger executes code
+  B"*. Spec §9.1 (amended) + §12.14.
+- **Ratified — do not re-litigate.**
+  1. **The first change to the text ends the session** (IBExpert's rule) — no save, no step, no restart
+     needed; the user stays in the tab, `Phase = Editing`. Ending it is **permanent**: undoing the edit back
+     to byte-identical text must not resurrect it.
+  2. **`Save` is the ONLY operation that writes to the database.** `Restart` starts a session from the
+     **current editor text** without saving. Routing a dirty Restart through Save → Compile → Launch was
+     proposed and **rejected**: the debugger never asks the server to run the compiled routine (the harness
+     never names it), so compiling to restart would write for no technical reason and kill experimenting on a
+     routine without modifying it.
+- **Seam A — DONE (`aa7f801`).** One rule in one place: `ApplySourceEdit` → `OnSourceChanged`, deciding by
+  phase (live ⇒ teardown §4.4 + `Phase = Editing`; `Busy` ⇒ condemn and end in the operation's own tail;
+  terminal ⇒ keep the retained frame inspectable, drop the marker). `DebuggerPhase.SaveFailed` → `Editing`
+  (Contract #16). **Gotcha #253** — never dispose a resource under an in-flight background op; let the op's
+  tail do it, and make every `catch` ask *"was this failure requested?"* first.
+- **Seam B — DONE (`7a410c7`).** `_baseline` = what the DB holds (only dirtiness + Save read it);
+  **`_editBuffer` + its parse = the program** (markers, breakpoint snapping, pre-flight, launch panel,
+  `DebugLaunchSpec`) ⇒ **Restart runs the draft, no compile, no DB write**. Re-parse is **lazy, NOT
+  debounced** (#251). `Restart ≡ Save without the compile` — both go through `ResumeOnCurrentProgramAsync`.
+  Breakpoints survive the loop by two **provable** filters (unchanged prefix; still a step-point start), never
+  a guess (§0). **Gotcha #254** — capture a "before" value where the decision was made (`_panelSignature`),
+  never re-derive it from state that now follows the user's input.
+- **Seam C — NOT started. Candidate scope, to confirm or cut in the re-analysis:** generalise
+  `PsqlDeclarationExtractor.ExtractSignature` to a **top-level** routine header (its docstring already says it
+  is "the same shape"); build the **root frame layout from the AST** when the source is a draft — the D9
+  `BuildLocalRoutineFrameVariablesAsync` path one level up — which **removes Seam B's interim** (a draft runs
+  today only while its routine *header* is byte-identical to the compiled one, because the root parameter list
+  still comes from the catalog); and surface §12.14's boundaries in the pre-flight.
+- **DoD (the part that cannot be cut — Contract #12).** A `DebuggerFidelityProbe` case proving the **same
+  routine, run from the catalog and as an identical draft, produces identical stops + values** on the live
+  lab. Everything else in Seam C is negotiable; this is not.
+- **Ryzyka / boundaries (already verified in code — do not re-derive).** All statically detectable from the
+  draft's AST: **recursion** (a self-call reaches `ResolveRoutineAsync`, which fetches the **compiled**
+  source), a **selectable procedure used in its own body**, and a **draft that would not compile** (runs
+  partially — PSQL compile-time validation never happened). Plus one accepted regression: a parameter typed
+  **`TYPE OF …`** resolves from the catalog but throws an explained stop from the AST.
+- **Weryfikacja.** VM tests for the rules; the lab probe above for fidelity. Narrative:
+  `docs/history/19-firebird-debugger.md` (last three sections).
+
+---
+
 ## 3. Danger zones — do not break these
 
 ### 3.1 The editor architecture
@@ -685,6 +736,7 @@ Legend: **Dep** = depends on · **New** = new types · **Mod** = existing compon
 | **VM naming** | `Diagnostics` already resolves to the `EmberTern.App.Diagnostics` **namespace** inside `MainWindowViewModel` — hence `DiagnosticsPanel`. Expect the same class of collision for debugger VMs. |
 | **Tab-active chain** | New tab-kind chrome gates on the `IsXxxTabActive` computed properties and their `NotifyPropertyChangedFor` chain — not a new event *(#25)*. A command gated on a computed value needs explicit notification on **every** mutation path *(#179/#187)*. |
 | **Theme** | Every colour is a token in **both** dictionaries; consume via `{DynamicResource}`; VMs hold **key strings**, never brushes. Zero hardcoded colours. |
+| **Debugger source = the draft** | The debug tab's editor is **editable at every phase**. `_baseline` is only what the database holds (dirtiness + Save); **`_editBuffer` + its parse is the program** — markers, breakpoint snapping, pre-flight, launch panel and `DebugLaunchSpec` all read it. Do not re-couple a position-bearing feature to the baseline, do not add a second parse (`EnsureProgramCurrent` is the one lazy re-parse — **never a `DispatcherTimer`**, #251), and do not make anything but **Save** write to the database. The first edit ends the session, permanently. *(Spec §9.1 amended / §12.14)* |
 
 ### 3.2 Transactions & connections
 
@@ -731,7 +783,10 @@ stop and raise it — do not work around it.**
 9. **§F outranks features.** Uncertain ⇒ stop and explain. Never a guessed value, never a silent `NULL` —
    that is precisely IBExpert's failure.
 10. **Never modify the user's routine.** Rewriting happens **only** inside a generated harness, **only** by
-    resolved `SymbolReference` span, and **never** written back to the database (**rule #11**).
+    resolved `SymbolReference` span, and **never** written back to the database (**rule #11**). *(Unchanged by
+    the Draft model: the debugger runs the editor's current text without compiling it, and the single path
+    that writes to the database is the user's explicit **Save** — never a step, never a Restart, never the
+    engine.)*
 11. **Verify Firebird behaviour; never infer it.** Every ⚠ in spec §1.4/§14 **blocks its milestone**. Probe
     against the lab (a copy at an ASCII path — `isql` cannot reach the repo path, #149) and **record the
     result in spec §15**.
