@@ -276,17 +276,16 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0–I4 DONE + accepted; I5 delivered, REVIEWED,
-  and ⏳ STILL OPEN on its UX findings.** **After I4 the whole ENGINE is built and live-verified**
-  (`tools/probes/DataImportProbe` vs FB5 `WI-V5.0.3.1683` — **20/20 ALL PASS**); from I5 on the work is the
-  user interface only. Branch **`feat/data-import`** @ **`0c5667e`** (pushed to `origin`; `private` owed at
-  the next etap close), suite **5559 green**, build 0/0, app launches clean.
-  **⏳ I5 — the visual review HAPPENED (2026-07-26), produced U1–U11, and the CLOSING SEAM is delivered
-  (awaiting the user's visual confirmation).** The review is the project's QA rule proving itself: build,
-  5559 green tests and a clean smoke had found none of it, because every finding is about **proportion and
-  space**, not state. All eleven are settled and recorded in [data-import.md §3.8](docs/design/data-import.md);
-  **nine shipped in one seam**, two stay deliberately open (**U4** global density → the app-wide UX sprint
-  below; **U5** responsiveness → re-checked during I6, when Target and Mapping actually occupy space).
+- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0–I5 DONE + accepted. Next: I6.**
+  **After I4 the whole ENGINE is built and live-verified** (`tools/probes/DataImportProbe` vs FB5
+  `WI-V5.0.3.1683` — **20/20 ALL PASS**); from I5 on the work is the user interface only. Branch
+  **`feat/data-import`** (pushed to **both** remotes), suite **5568 green**, build 0/0, app launches clean.
+  **✅ I5 — CLOSED, user-confirmed after two visual reviews that produced U1–U12.** The reviews are the
+  project's QA rule proving itself: build, green tests and a clean smoke had found **none** of it, because
+  every finding is about **proportion and space**, not state. All twelve are settled and recorded in
+  [data-import.md §3.8](docs/design/data-import.md); **ten shipped in one closing seam**, two stay
+  deliberately open (**U4** global density → the app-wide UX sprint below; **U5** responsiveness →
+  re-checked during I6, when Target and Mapping actually occupy space).
   **⭐ The layout was revised and carried into §3.1 in place — the single change that matters is that the
   STAR now belongs to the work, not the configuration.** Until the review the configuration `ScrollViewer`
   was the `*` row and the preview was nailed to 190 px — backwards, and the whole reason the preview was
@@ -301,12 +300,18 @@ noted.
   with double-click collapse and a **persisted** height (U2) · **U11** — the format options now collapse
   themselves once a source reads, unless the user opened them by hand · the ragged-row marker finally
   painted (U8 — it was computed and pinned by a ⭐ test but nothing rendered it, gotcha #233's shape) ·
-  `Ctrl+O` (U10, only shortcuts that have something to drive). ⚠ **Two rules the seam established:**
+  `Ctrl+O` (U10, only shortcuts that have something to drive) · **U12 — a shared settings-group idiom**:
+  new `Border.settings-group` (a recessed card) + `TextBlock.group-header` in `ControlStyles.axaml`, because
+  two captions floating between control rows read as captions, not as groups; the header outweighs
+  `field-label` on purpose (a field caption names one *value*, a group header names a *subject*, and at equal
+  weight they compete). It also removed the **dead** `Border.panel` style — zero consumers app-wide, and a
+  near-identical sibling beside the new one is how the wrong one gets picked later.
+  ⚠ **Two rules the seam established:**
   the panel height lives in `WorkspaceState.ImportPreviewPanelHeight` (global, like `ResultsPanelHeight`,
   because an import tab is deliberately transient) and **must never enter `ImportConfiguration`** — a layout
   preference is not an import decision (§4.8.2), and the reflection guard would otherwise ship a pixel height
   inside saved profiles; and **no module etap touches `Themes/ControlStyles.axaml`** (density = the separate
-  sprint). Suite **5567 green**, build 0/0. **The I6 opening prompt is ready and now says "insert into the
+  sprint). Suite **5568 green**, build 0/0. **The I6 opening prompt is ready and now says "insert into the
   finished frame, don't rebuild it": [data-import-i6-session-prompt.md](docs/design/data-import-i6-session-prompt.md).** A new tool tab (toolbar, beside
   the Script Executor) that imports Clipboard / TXT / CSV / XLSX into an existing or a newly created table.
   **Read [docs/design/data-import.md](docs/design/data-import.md) — its „📍 STAN IMPLEMENTACJI" block is the
@@ -2034,13 +2039,13 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5567 as of 2026-07-26
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5568 as of 2026-07-26
   (`feat/data-import`, I5 closing seam)** — all green in ONE `dotnet test` run (~10s).
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
   a `TextEditor` throw cross-thread from every session after the first (#226).
   **⚠ The intermittent full-suite hang the user keeps hitting is NOT claimed fixed.** It did not reproduce
-  during the 2026-07-26 investigation (5567 green in ~9s, repeatedly, and the probe class alone in 6s), so
+  during the 2026-07-26 investigation (5568 green in ~9s, repeatedly, and the probe class alone in 6s), so
   nothing was restructured on a hypothesis. What that investigation *did* find and fix is a real defect with
   a plausible mechanism: the shared session was held in a `static readonly` field and **never disposed**,
   and Avalonia's own contract says *"Disposing unit test session stops internal dispatcher loop"* — i.e. it

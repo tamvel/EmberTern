@@ -1610,6 +1610,60 @@ public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSession
         }, CancellationToken.None);
     }
 
+    /// <summary>
+    /// The settings-group card is a real, APPLIED style, not just a class name someone typed.
+    /// <para>
+    /// Pinned in a real window because "the style is in the file" and "the border paints" are different
+    /// claims (#251), and because a card that silently resolves to no background is exactly the failure the
+    /// brush-lookup gotcha (#250) produces — everything looks healthy and nothing is drawn. It also pins the
+    /// figure/ground pair the grouping depends on: the card is RECESSED against the panel chrome that hosts
+    /// it, so the two must not resolve to the same brush.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task SettingsGroupCard_IsAnAppliedStyle_AndReadsAgainstItsHost()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var group = new Border();
+            group.Classes.Add("settings-group");
+
+            var header = new TextBlock { Text = "Parsing" };
+            header.Classes.Add("group-header");
+
+            var caption = new TextBlock { Text = "Column separator" };
+            caption.Classes.Add("field-label");
+
+            var host = new Border { Background = null };
+            var window = new Avalonia.Controls.Window
+            {
+                Content = new StackPanel { Children = { host, group, header, caption } },
+            };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // The card is enclosed and filled — the two things that make it read as a group.
+            Assert.Equal(new Avalonia.Thickness(1), group.BorderThickness);
+            Assert.NotNull(group.Background);
+            Assert.NotNull(group.BorderBrush);
+            Assert.Equal(new Avalonia.CornerRadius(3), group.CornerRadius);
+
+            // Recessed against the panel chrome it sits in: same brush would erase the grouping.
+            var panelBrush = window.FindResource("PanelBrush");
+            Assert.NotNull(panelBrush);
+            Assert.NotEqual(panelBrush, group.Background);
+
+            // A group header must outweigh a field caption, or the two compete and neither reads as a title.
+            Assert.Equal(Avalonia.Media.FontWeight.SemiBold, header.FontWeight);
+            Assert.NotEqual(caption.FontWeight, header.FontWeight);
+            Assert.NotEqual(caption.Foreground, header.Foreground);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     // UX Polish Seam 4 (QA) — the SQL Editor's Messages panel stays a log, but a problem entry speaks the
     // one message language: its stripe + colour come from the SAME MessageBanner mapping (no icon — that
     // would widen only the marked rows and break the timestamp alignment). An Info line keeps the normal

@@ -190,11 +190,15 @@
              Fields that are always read together share a ROW (U7): densifying horizontally costs no
              control height, which is what the module is allowed to change. Control heights themselves
              belong to the app-wide UX sprint, not here. -->
-        <Grid ColumnDefinitions="*,20,*" IsVisible="{Binding IsExpanded}">
+        <Grid ColumnDefinitions="*,10,*" IsVisible="{Binding IsExpanded}">
 
-          <!-- ── Parsing ── -->
-          <StackPanel Grid.Column="0" Spacing="5">
-            <TextBlock Text="{x:Static app:UiStrings.ImportParsingHeader}" Classes="field-label" />
+          <!-- ── Parsing: HOW THE FILE IS READ ──
+               The two groups are cards, not captions: one subject per card, so "how the text is
+               read" and "how the values are interpreted" are told apart by looking, not by
+               inferring where one caption stops applying. -->
+          <Border Grid.Column="0" Classes="settings-group">
+          <StackPanel Spacing="5">
+            <TextBlock Text="{x:Static app:UiStrings.ImportParsingHeader}" Classes="group-header" />
 
             <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto"
                   ColumnSpacing="8" RowSpacing="4">
@@ -265,11 +269,13 @@
                        PlaceholderText="{x:Static app:UiStrings.ImportNullTokenPlaceholder}" />
             </StackPanel>
           </StackPanel>
+          </Border>
 
-          <!-- ── Culture: declared, never sniffed (§0.4) ──
+          <!-- ── Culture: HOW THE VALUES ARE INTERPRETED. Declared, never sniffed (§0.4) ──
                Pairs that are read together share a row, so this went from five rows to three. -->
-          <StackPanel Grid.Column="2" Spacing="5">
-            <TextBlock Text="{x:Static app:UiStrings.ImportCultureHeader}" Classes="field-label" />
+          <Border Grid.Column="2" Classes="settings-group">
+          <StackPanel Spacing="5">
+            <TextBlock Text="{x:Static app:UiStrings.ImportCultureHeader}" Classes="group-header" />
 
             <StackPanel Orientation="Horizontal" Spacing="8">
               <TextBlock Text="{x:Static app:UiStrings.ImportDecimalSeparatorLabel}"
@@ -304,6 +310,7 @@
                         DisplayMemberBinding="{Binding Display}" Width="80" FontSize="12" />
             </StackPanel>
           </StackPanel>
+          </Border>
         </Grid>
       </StackPanel>
     </Border>
