@@ -56,7 +56,10 @@ var transactionService = new TransactionService(connectionService);
 var lane = new MetadataLane(connectionService, transactionService);
 var metadataReader = new FirebirdMetadataReader(connectionService, lane);
 var targetReader = new FirebirdImportTargetReader(metadataReader, lane);
-var preparer = new FirebirdImportTargetPreparer(transactionService);
+// ⭐ I7.5: the module's OWN attachment and transaction. `transactionService` stays the CONSOLE's — which makes
+// it the perfect independent witness for what the import did or did not persist.
+var importSession = await connectionService.CreateImportSessionAsync();
+var preparer = new FirebirdImportTargetPreparer(importSession);
 
 Console.WriteLine($"Connected. Server: {connectionService.RequireOpenConnection().ServerVersion}");
 
@@ -151,7 +154,7 @@ Section("A — CSV into an existing table: the report's numbers ARE the table's 
 await ResetAsync();
 {
     var configuration = ConfigurationFor(ImportTransactionMode.Manual);
-    var writer = new FirebirdImportWriter(transactionService, configuration.ErrorPolicy);
+    var writer = new FirebirdImportWriter(importSession, configuration.ErrorPolicy);
 
     var outcome = await ImportPipeline.RunAsync(
         configuration, target, provider, new TextImportSource(Csv(500, 1)), writer, charset);
@@ -161,7 +164,7 @@ await ResetAsync();
     else
         Pass("A1 transaction stays open", "auto-begin, never auto-commit (rule #3)");
 
-    await transactionService.CommitAsync();
+    await importSession.CommitAsync();
 
     var actual = await CountCommittedAsync();
     if (actual == outcome.RowsWritten && actual == 500)
@@ -187,11 +190,11 @@ await SeedAsync(4);
     var emptied = await preparer.EmptyAsync("IMP_TARGET", CancellationToken.None);
 
     var configuration = ConfigurationFor(ImportTransactionMode.Manual);
-    var writer = new FirebirdImportWriter(transactionService, configuration.ErrorPolicy);
+    var writer = new FirebirdImportWriter(importSession, configuration.ErrorPolicy);
     var outcome = await ImportPipeline.RunAsync(
         configuration, target, provider, new TextImportSource(Csv(10, 100)), writer, charset);
 
-    await transactionService.RollbackAsync();
+    await importSession.RollbackAsync();
     var after = await CountCommittedAsync();
 
     if (emptied == before)
@@ -240,15 +243,15 @@ await ResetAsync();
     // open. Chosen so the two numbers are DIFFERENT: a commit interval that merely equalled the batch size
     // would pass even if the writer committed on every flush.
     var configuration = ConfigurationFor(ImportTransactionMode.Batched, commitEvery: 400, batchSize: 200);
-    var inner = new FirebirdImportWriter(transactionService, configuration.ErrorPolicy);
-    var batched = new BatchedCommitImportWriter(inner, transactionService, configuration.CommitEveryRows);
+    var inner = new FirebirdImportWriter(importSession, configuration.ErrorPolicy);
+    var batched = new BatchedCommitImportWriter(inner, importSession, configuration.CommitEveryRows);
 
     var outcome = await ImportPipeline.RunAsync(
         configuration, target, provider, new TextImportSource(Csv(1000, 1)), batched, charset);
 
     // The tail is deliberately left open: whether to keep the last partial batch is the user's decision,
     // taken in front of the report's numbers. Rolling back must therefore lose exactly the tail.
-    await transactionService.RollbackAsync();
+    await importSession.RollbackAsync();
     var after = await CountCommittedAsync();
 
     if (batched.RowsCommitted == 800)
@@ -286,7 +289,38 @@ await ResetAsync();
         Fail("E1 dry run touches nothing", $"table holds {after}, TransactionLeftOpen={outcome.TransactionLeftOpen}");
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════
+Section("F — the decision itself: the import cannot settle the console's work (I7.5)");
+
 await ResetAsync();
+{
+    // The console writes something and leaves it open — the situation that used to entangle the two.
+    if (!transactionService.IsActive) await transactionService.BeginTransactionAsync();
+    await ExecAsync("INSERT INTO IMP_TARGET (ID, CODE, NAME) VALUES (7001, 'CONSOLE', 'console work')");
+
+    var configuration = ConfigurationFor(ImportTransactionMode.Manual);
+    var writer = new FirebirdImportWriter(importSession, configuration.ErrorPolicy);
+    var outcome = await ImportPipeline.RunAsync(
+        configuration, target, provider, new TextImportSource(Csv(20, 8000)), writer, charset);
+
+    if (outcome.RowsWritten == 20)
+        Pass("F1 import runs beside an open console tx", "20 written, neither blocked the other");
+    else
+        Fail("F1 import runs beside an open console tx", $"{outcome.RowsWritten} written");
+
+    // ⭐ THE decision: committing the import must persist the import and NOTHING else.
+    await importSession.CommitAsync();
+    await transactionService.RollbackAsync();
+    var after = await CountCommittedAsync();
+
+    if (after == 20)
+        Pass("F2 import Commit settled ONLY the import", $"{after} rows — the console's row rolled back with it");
+    else
+        Fail("F2 import Commit settled ONLY the import", $"{after} rows, expected 20");
+}
+
+await ResetAsync();
+await importSession.DisposeAsync();
 await connectionService.DisconnectAsync();
 
 Console.WriteLine();
