@@ -17,4 +17,11 @@ public sealed class UserSettings
     // Debugger Watch expressions, one entry per (ConnectionId, ObjectName). See WatchStore
     // (Stage X / D5). Additive — an old settings.dat simply has an empty list.
     public List<DebugWatchEntry> DebugWatches { get; set; } = new();
+
+    // Data Import configurations (etap I1). Today this holds the implicit "last used" entry per
+    // connection, which the import surface restores when it opens; named profiles (etap I11) are more
+    // entries in this same list, so that milestone is UI over an already-exercised store.
+    // Additive — an old settings.dat simply has an empty list, and the container schema version is
+    // deliberately NOT bumped for it (see ImportProfileStore).
+    public List<Import.ImportProfile> ImportProfiles { get; set; } = new();
 }
