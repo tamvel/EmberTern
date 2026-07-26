@@ -238,6 +238,10 @@ internal static class UiStrings
     public const string ImportReadyMoreItemsFormat = "… and {0} more problem(s)";
     public const string ImportReadyShowFewer = "Show fewer";
     public const string ImportReadyExpandTooltip = "Show every finding";
+    /// <summary>A chip is a status light AND a way in — so it says which, rather than leaving the user to
+    /// guess whether it is a filter, a tab, a shortcut or an indicator (§3.2).</summary>
+    public const string ImportReadyChipHintFormat = "Go to {0}";
+    public const string ImportReadyChipFormatHint = "Show or hide the format options";
 
     // Band H, left half — where the rows land. The lane is a constant because it is one: rows always go to
     // the Data lane as the one user working transaction (§4.5).

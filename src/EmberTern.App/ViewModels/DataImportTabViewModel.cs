@@ -594,21 +594,29 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
     /// <summary>A readiness chip was clicked — expand and focus the section that caused it. The advantage
     /// over a wizard: every gap is visible AND reachable in one click (§3.2).</summary>
+    /// <summary>
+    /// A readiness chip (or finding) was clicked — <b>go to the thing it is talking about</b>.
+    /// <para>
+    /// ⭐ One behaviour for all five sections, because a row of controls that each react differently cannot be
+    /// read: the user would have to learn, chip by chip, whether this one is a filter, a tab, a shortcut or a
+    /// status light. So every chip does exactly one thing — put the caret in the control that section owns —
+    /// and the ONE section that has something foldable (Format) additionally <b>toggles</b> it, rather than
+    /// only ever opening it.
+    /// </para>
+    /// <para>
+    /// ⚠ Deliberately NOT touching the "only unmapped" filter any more. Flipping a checkbox the user can see
+    /// but did not click is the kind of surprise that makes a control unreadable — the chip navigates, and
+    /// filtering stays the user's decision.
+    /// </para>
+    /// </summary>
     [RelayCommand]
     private void FocusSection(ImportSection section)
     {
-        // Only the FORMAT chip opens something: the source and target pickers are always live, so those
-        // findings have nothing to expand — they just need the caret put in the picker.
         if (section is ImportSection.Format)
         {
-            Source.IsExpanded = true;
-            _formatOptionsHeldOpen = true;
-        }
-        else if (section is ImportSection.Mapping)
-        {
-            // A mapping finding is about a specific column; showing only the unmapped ones puts the user in
-            // front of exactly the rows the strip is complaining about.
-            Mapping.ShowOnlyUnmapped = true;
+            // Toggle, not open: clicking the same chip twice must undo itself, or the chip is a one-way door.
+            Source.IsExpanded = !Source.IsExpanded;
+            _formatOptionsHeldOpen = Source.IsExpanded;
         }
 
         SectionFocusRequested?.Invoke(this, section);

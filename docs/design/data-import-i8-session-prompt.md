@@ -49,8 +49,14 @@ podważa projekt, oznacza: ZATRZYMAJ ETAP I ZGŁOŚ — nigdy cichy redesign.
   1. ColumnTypeInferencer (Core, czysty) — ⭐ (I0/REK-7) domyślnie skanuje CAŁE źródło, nie próbkę
      (limit bezpieczeństwa 1 M wierszy), bo w realnym pliku 2 z 5 kolumn były typowo mieszane (R19).
      §0.3: przy JAKIEJKOLWIEK niejednoznaczności wygrywa VARCHAR — nigdy „to chyba liczba".
-  2. Siatka typów w sekcji Cel — edytowalna, z ZAWSZE WIDOCZNĄ liczbą przeanalizowanych wierszy
-     w kolumnie „Podstawa". Wynik wnioskowania jest POKAZANY I EDYTOWALNY przed wykonaniem DDL.
+     ⭐ DŁUGOŚĆ VARCHAR WYZNACZANA Z NAJDŁUŻSZEJ NAPOTKANEJ WARTOŚCI (wymaganie użytkownika,
+     przegląd I7) — i to jest drugi powód, dla którego skanujemy CAŁE źródło, a nie próbkę:
+     długość z próbki to obietnica, której plik nie musi dotrzymać, a jej złamanie ujawnia się
+     dopiero jako odrzucony wiersz w środku importu.
+  2. Siatka typów w sekcji Cel — ⭐ EDYTOWALNA, nie tylko pokazana (wymaganie użytkownika, przegląd
+     I7: „samo pokazanie proponowanych typów nie wystarczy"). Z ZAWSZE WIDOCZNĄ liczbą
+     przeanalizowanych wierszy w kolumnie „Podstawa". Korekta typu MUSI być możliwa PRZED
+     wykonaniem CREATE TABLE — po nim jest już za późno, bo DDL jest zatwierdzony (§0.5).
   3. Podgląd DDL — z TEGO SAMEGO generatora co reszta aplikacji
      (FieldDefinition / TableSpec / DdlGenerator.BuildCreateTable — §4.6 mówi wprost: nic nowego).
   4. Wykonanie CREATE TABLE na linii Ddl (FirebirdDdlExecutor), autonomicznie i z auto-commitem,

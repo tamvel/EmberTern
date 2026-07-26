@@ -258,6 +258,15 @@ public sealed class ImportReadinessSectionViewModel
 
     public ImportSection Section { get; }
     public string Title { get; }
+
+    /// <summary>
+    /// What clicking this chip does, in words. The strip is both a status light and a way in (§3.2), and a
+    /// control that is both has to say which — otherwise the user is left guessing whether it is a filter, a
+    /// tab, a shortcut or a status indicator.
+    /// </summary>
+    public string FocusHint => Section == ImportSection.Format
+        ? UiStrings.ImportReadyChipFormatHint
+        : string.Format(CultureInfo.CurrentCulture, UiStrings.ImportReadyChipHintFormat, Title);
     public MessageSeverity Severity { get; }
     public string BrushKey => MessageBanner.BrushKeyFor(Severity);
     public string GeometryKey => MessageBanner.GeometryKeyFor(Severity);

@@ -99,7 +99,7 @@
                Script Executor's `Sequenced` precedent. -->
           <TextBlock Text="{x:Static app:UiStrings.ImportTransactionLabel}" Classes="field-label"
                      VerticalAlignment="Center" Margin="0" />
-          <ComboBox SelectedIndex="{Binding TransactionModeIndex, Mode=TwoWay}" MinWidth="170"
+          <ComboBox x:Name="TransactionModePicker" SelectedIndex="{Binding TransactionModeIndex, Mode=TwoWay}" MinWidth="170"
                     VerticalAlignment="Center" FontSize="12"
                     IsEnabled="{Binding IsConfigurationEnabled}"
                     ToolTip.Tip="{Binding TransactionModeDescription}">
@@ -138,7 +138,10 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:ImportReadinessSectionViewModel">
+                <!-- A chip is a status light AND a way in: it shows the section's state and takes the
+                     user there. One behaviour for all five, so the row can be read rather than learned. -->
                 <Button Classes="flat" Padding="4,2"
+                        ToolTip.Tip="{Binding FocusHint}"
                         Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).FocusSectionCommand}"
                         CommandParameter="{Binding Section}">
                   <StackPanel Orientation="Horizontal" Spacing="5">
@@ -266,7 +269,7 @@
              Fields that are always read together share a ROW (U7): densifying horizontally costs no
              control height, which is what the module is allowed to change. Control heights themselves
              belong to the app-wide UX sprint, not here. -->
-        <Grid ColumnDefinitions="*,10,*" IsVisible="{Binding IsExpanded}">
+        <Grid x:Name="FormatOptionsPane" ColumnDefinitions="*,10,*" IsVisible="{Binding IsExpanded}">
 
           <!-- ── Parsing: HOW THE FILE IS READ ──
                The two groups are cards, not captions: one subject per card, so "how the text is
@@ -403,7 +406,7 @@
           <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportTargetExistingTable}"
                      Classes="field-label" VerticalAlignment="Center" Margin="0" />
 
-          <controls:SearchableComboBox Grid.Column="1"
+          <controls:SearchableComboBox Grid.Column="1" x:Name="TargetPicker"
                                        ItemsSource="{Binding Tables}"
                                        SelectedItem="{Binding SelectedTable, Mode=TwoWay}"
                                        Watermark="{x:Static app:UiStrings.ImportTargetTableWatermark}"
@@ -472,7 +475,7 @@
             </Grid>
 
             <ScrollViewer Grid.Row="1">
-            <ItemsControl ItemsSource="{Binding VisibleRows}">
+            <ItemsControl x:Name="MappingRows" ItemsSource="{Binding VisibleRows}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ImportMappingRowViewModel">
                   <Grid ColumnDefinitions="2*,3*,2*,3*" ColumnSpacing="10" Margin="8,4">
@@ -488,29 +491,35 @@
                     </StackPanel>
 
                     <!-- Source field + the identity unlock, which is the only way a GENERATED ALWAYS
-                         column becomes mappable (R10). -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                      <ComboBox ItemsSource="{Binding Options}"
+                         column becomes mappable (R10).
+                         ⚠ A GRID, not a StackPanel, and the ComboBox carries NO MinWidth: a StackPanel does
+                         not constrain its children, so a picker with a minimum width wider than the column
+                         simply overflowed into the "Target type" column beside it. The star column makes the
+                         picker shrink instead — each column keeps its own space. -->
+                    <Grid Grid.Column="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                      <ComboBox Grid.Column="0"
+                                ItemsSource="{Binding Options}"
                                 SelectedItem="{Binding SelectedOption, Mode=TwoWay}"
                                 DisplayMemberBinding="{Binding Display}"
                                 IsEnabled="{Binding IsPickerEnabled}"
-                                MinWidth="180" FontSize="12" />
-                      <CheckBox Content="{x:Static app:UiStrings.ImportMappingUnlockIdentity}"
+                                HorizontalAlignment="Stretch" FontSize="12" />
+                      <CheckBox Grid.Column="1"
+                                Content="{x:Static app:UiStrings.ImportMappingUnlockIdentity}"
                                 IsChecked="{Binding IsIdentityUnlocked, Mode=TwoWay}"
                                 IsVisible="{Binding NeedsIdentityOverride}"
                                 ToolTip.Tip="{Binding LockReason}"
                                 FontSize="11" VerticalAlignment="Center" />
                       <!-- Origin, in the debugger's ValueOrigin vocabulary: "matched" is quiet because it
                            rests on a provable fact; "assumed" is an ACCENT — worth a look, not an error. -->
-                      <TextBlock Text="{Binding OriginText}" FontSize="11" VerticalAlignment="Center"
-                                 FontStyle="Italic"
+                      <TextBlock Grid.Column="2" Text="{Binding OriginText}" FontSize="11"
+                                 VerticalAlignment="Center" FontStyle="Italic"
                                  Foreground="{DynamicResource SubtleForegroundBrush}"
                                  IsVisible="{Binding IsAutomatic}" />
-                      <TextBlock Text="{Binding OriginText}" FontSize="11" VerticalAlignment="Center"
-                                 FontWeight="SemiBold"
+                      <TextBlock Grid.Column="2" Text="{Binding OriginText}" FontSize="11"
+                                 VerticalAlignment="Center" FontWeight="SemiBold"
                                  Foreground="{DynamicResource AccentBrush}"
                                  IsVisible="{Binding IsAssumed}" />
-                    </StackPanel>
+                    </Grid>
 
                     <TextBlock Grid.Column="2" Text="{Binding TypeText}" FontSize="12"
                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis"

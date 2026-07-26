@@ -67,6 +67,7 @@ public partial class DataImportTabView : UserControl
             _bound.ConfirmRequested -= ConfirmAsync;
             _bound.ExportReportRequested -= ExportReportAsync;
             _bound.PreviewRowRevealRequested -= OnPreviewRowRevealRequested;
+            _bound.SectionFocusRequested -= OnSectionFocusRequested;
         }
 
         _bound = DataContext as DataImportTabViewModel;
@@ -79,6 +80,7 @@ public partial class DataImportTabView : UserControl
         _bound.ConfirmRequested += ConfirmAsync;
         _bound.ExportReportRequested += ExportReportAsync;
         _bound.PreviewRowRevealRequested += OnPreviewRowRevealRequested;
+        _bound.SectionFocusRequested += OnSectionFocusRequested;
 
         RebuildPreviewColumns();
         RebuildConvertedColumns();
@@ -187,6 +189,60 @@ public partial class DataImportTabView : UserControl
         if (!command.CanExecute(null)) return false;
         command.Execute(null);
         return true;
+    }
+
+    // ── The readiness strip's navigation (§3.2) ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Puts the caret in the control the clicked section owns.
+    /// <para>
+    /// ⚠ The VM raised this event from the start and <b>nothing listened</b> — which is why four of the five
+    /// chips appeared to do nothing while Format (whose VM-side expand was visible on its own) appeared to
+    /// work. Exactly gotcha #233's shape: a mechanism that is built, correct and simply never called looks
+    /// from the outside like a broken feature, and the green suite is what hides it.
+    /// </para>
+    /// <para>
+    /// Focus is the whole gesture on purpose. §3.2 makes the strip a navigation aid — "every gap is visible
+    /// AND reachable in one click" — so a chip answers "where do I fix this", and nothing else: it changes no
+    /// setting the user did not ask to change.
+    /// </para>
+    /// </summary>
+    private void OnSectionFocusRequested(object? sender, EmberTern.Core.Import.ImportSection section)
+    {
+        var target = section switch
+        {
+            EmberTern.Core.Import.ImportSection.Source => this.FindControl<TextBox>("SourcePathBox"),
+            EmberTern.Core.Import.ImportSection.Format => FirstFocusable("FormatOptionsPane"),
+            EmberTern.Core.Import.ImportSection.Target => FirstFocusable("TargetPicker"),
+            EmberTern.Core.Import.ImportSection.Mapping => FirstFocusable("MappingRows"),
+            EmberTern.Core.Import.ImportSection.Transaction => this.FindControl<ComboBox>("TransactionModePicker"),
+            _ => null,
+        };
+
+        // Posted, because a chip click that expands a section must let that section be laid out before its
+        // first control can take focus.
+        if (target is not null)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => target.Focus(), Avalonia.Threading.DispatcherPriority.Background);
+        }
+    }
+
+    /// <summary>The first control inside <paramref name="hostName"/> that can actually take focus — a section
+    /// is a container, and "focus the section" only means anything as "focus what the user would type into".</summary>
+    private Control? FirstFocusable(string hostName)
+    {
+        if (this.FindControl<Control>(hostName) is not { } host) return null;
+
+        foreach (var descendant in host.GetVisualDescendants())
+        {
+            if (descendant is Control { Focusable: true, IsEffectivelyEnabled: true, IsEffectivelyVisible: true } control
+                && control is not Panel)
+            {
+                return control;
+            }
+        }
+        return null;
     }
 
     // ── The run's own surfaces ──────────────────────────────────────────────────────────────────────────
