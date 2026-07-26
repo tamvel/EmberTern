@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER VERIFICATION TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Data Import — etap I0 (docs/design/data-import.md §6). Measures the WRITE path against a live engine,
+    so three design claims rest on measurement instead of inference:
+
+      (W) throughput — prepared INSERT + re-bind vs FbBatchCommand vs the naive per-row command; the cost
+          of committing every N rows (risk R7 / the Batched transaction mode).
+      (B) does a BATCH tell us WHICH row failed? Without that, the batch path cannot fill the error report
+          (§3.7) and loses on correctness regardless of speed — the blocking question for R7.
+      (T) is an over-long string an ERROR or a silent truncation? (§0.2 — the answer decides whether the
+          "trim too long values" option is even needed as a guard.)
+      (C) the connection CHARSET question (risk R1): when a value carries a character the connection charset
+          cannot represent, does it fail — and at WHICH layer (client or server) — or is it silently
+          substituted? A silent substitution is a §0 data-corruption vector no server error would report.
+
+    Raw driver only — no Core/Firebird reference: at I0 no production import code exists, and this measures
+    the ENGINE + DRIVER, exactly as Fb3ClosureProbe measures the engine rather than the interpreter.
+
+    Deliberately NOT in EmberTern.slnx (explicit <Project> entries, no globs): it needs a live server and a
+    password, which the hermetic test suite must never need. Creates and DROPS a throwaway scratch database
+    at an ASCII path — it never touches Lab/EmberTern_Lab.fdb.
+
+    How to run: see the header of Program.cs.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.4" />
+  </ItemGroup>
+
+</Project>
