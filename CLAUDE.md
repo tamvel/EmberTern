@@ -29,7 +29,7 @@ verbatim, in the archive below.
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
 | **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next. | **Every Data Import session — read the status block + your etap's row in §6 first.** |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (245 entries, #1–#258), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (246 entries, #1–#259), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -72,35 +72,44 @@ git push origin <branch>
 git push private <branch>
 ```
 
+**Branch hygiene (2026-07-26):** the repo carries only branches that are still needed. `feat/completion-matching`,
+`feat/firebird-debugger`, `feat/save-and-close` and `feat/sql-data-export` were all provably merged into
+`master` and were deleted locally and from **both** remotes. Live branches: **`master`** + the working branch
+**`feat/data-import`**. ⚠ One residue: **`private`'s default branch (HEAD) still points at
+`feat/completion-matching`**, so GitHub refuses to delete it — it stays until the user switches the default
+to `master` in the GitHub repo settings (a repo-settings change, deliberately left to the user).
+
 **⛔ Never change the remote configuration without the user's explicit decision** — not the URLs, not a
 `pushurl`, not a rename. A dual-`pushurl` "one push reaches both" variant was considered and **rejected on
 purpose**: when GitHub is unreachable (no network, VPN, expired key) it makes *every* push report failure,
 including the company one, so a company push would depend on GitHub's availability. Two explicit pushes keep
 failures isolated.
 
-### ⚠ The SSH trap — this WILL bite, and `ssh -T` does not reveal it
+### ✅ SSH — resolved 2026-07-26: git uses the system OpenSSH (durable fix APPLIED)
 
-There are **two independent SSH agents** on this machine and git talks to the wrong one by default:
+The binding configuration from now on is:
+
+```bash
+git config --global core.sshCommand "C:/Windows/System32/OpenSSH/ssh.exe"
+```
+
+**Applied globally on the user's explicit decision (2026-07-26) and verified**: `git push private` and
+`git ls-remote private` both authenticate with **no** `GIT_SSH_COMMAND` prefix. **`GIT_SSH_COMMAND` is no
+longer needed and should not be added to commands** — a plain `git push private <branch>` is the workflow.
+
+**Why it was needed** (keep — it explains the setting and warns against undoing it): there are **two
+independent SSH agents** on this machine, and with `core.sshCommand` unset git talks to the wrong one.
 
 - The key lives in the **Windows OpenSSH agent service** (`ssh-agent`, Automatic). In PowerShell/CMD,
   `ssh` and `ssh-add` resolve to `C:\Windows\System32\OpenSSH\*` and DO see it.
 - **Git for Windows bundles its own ssh** (`C:\Program Files\Git\usr\bin\ssh.exe`), which reads
-  `SSH_AUTH_SOCK` and therefore does **not** see the Windows agent. With `core.sshCommand` unset, git uses
-  that bundled ssh.
+  `SSH_AUTH_SOCK` and therefore does **not** see the Windows agent.
 
-Measured 2026-07-26: `ssh -T git@github.com` in PowerShell → *"Hi tamvel! You've successfully
-authenticated"*, while git's bundled ssh on the same host → **`Permission denied (publickey)`**. So a green
-`ssh -T` proves nothing about whether `git push private` will work.
-
-**Pushing to `private` therefore needs git pointed at the Windows ssh.** Per-invocation, changing nothing
-persistent (what this project has used so far):
-
-```bash
-GIT_SSH_COMMAND="C:/Windows/System32/OpenSSH/ssh.exe" git push private <branch>
-```
-
-A durable fix exists — `git config --global core.sshCommand "C:/Windows/System32/OpenSSH/ssh.exe"` — but it
-is a persistent global git setting, so **it is the user's decision and has not been applied.**
+Measured 2026-07-26 (before the fix): `ssh -T git@github.com` in PowerShell → *"Hi tamvel! You've
+successfully authenticated"*, while git's bundled ssh on the same host → **`Permission denied (publickey)`**.
+So **a green `ssh -T` proves nothing** about whether `git push private` will work — if pushes to `private`
+ever start failing with `Permission denied (publickey)`, check `git config --global --get core.sshCommand`
+FIRST (an unset/overwritten value re-opens exactly this trap).
 
 **After a reboot** the agent forgets the key (it is passphrase-protected). Unlock it once per system session
 **from PowerShell or CMD**, so it lands in the Windows agent:
@@ -266,8 +275,8 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0 + I1 DONE.** Branch **`feat/data-import`**,
-  last commit **`77eb997`**, suite **5345 green**, build 0/0, smoke clean. A new tool tab (toolbar, beside the
+- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0 + I1 + I2 DONE.** Branch **`feat/data-import`**,
+  suite **5476 green**, build 0/0. A new tool tab (toolbar, beside the
   Script Executor) that imports Clipboard / TXT / CSV / XLSX into an existing or a newly created table.
   **Read [docs/design/data-import.md](docs/design/data-import.md) — its „📍 STAN IMPLEMENTACJI" block is the
   handover, and the architecture is 🔒 FROZEN: from etap I1 on it is implementation only, and an
@@ -281,8 +290,20 @@ noted.
   **rows go to the Data lane as the ONE user working transaction, `CREATE TABLE` to the Ddl lane** (gotcha
   #213 — and the UI says out loud that Rollback will not remove that table). Etap I0 measured three
   corrections into the design; the one that generalises beyond this module is that **a character outside the
-  CONNECTION charset is silently written as `?`** (see the spawned platform-wide audit below). **Next: etap
-  I2** (converter + mapping planner + validator + readiness).
+  CONNECTION charset is silently written as `?`** (see the spawned platform-wide audit below).
+  **I2 as-built (Core only, still zero Avalonia / zero `FirebirdSql` / zero UI):** `ImportValueConverter`
+  (strict — a value it cannot be *certain* of is a row error, never a guess) · `ImportRowValidator` +
+  **`ImportCharsetGuard`** (NOT NULL / length / precision+scale / **connection-charset representability with
+  `EncoderExceptionFallback`** — R1's mandatory guard) · `ImportMappingPlanner` (name-proof matching, the
+  sole-remaining-pair rule, `Diagnose`, `Project`) · `ImportReadiness` (the §3.2 strip as a pure function).
+  Two foundations came out of the one-owner rule: **`ImportTargetType`** — the single answer to "what type is
+  this target column", reusing `SqlValueKind` *in the reverse direction* per §4.6, with an Unknown set kept
+  **identical to the export side's** — and **`ImportDiagnostics`** (`IMP0001`–`IMP0027`, codes never messages).
+  ⚠ **`ImportErrorKind` gained three client-side members** (`ValueOutOfRange`, `PrecisionWouldBeLost`,
+  `UnsupportedTargetType`): additive, and forced by I2's own DoD — "zero silent conversions" cannot be met
+  while rounding `1.555` into `NUMERIC(15,2)` has no way to be reported. **No "round it anyway" option was
+  invented** (that is a design decision, and §0.1 defaults to refusal). **Next: etap I3** (pipeline + dry-run;
+  it also owes `DelimitedTextImportProvider`, since `IImportProvider` still has no implementation).
 - **⚠ Spun off from Data Import I0, NOT part of it — a platform-wide defect to audit.** Measured on live FB5:
   binding a string containing a character the **connection** charset cannot represent stores `?` with **no
   error at all**, even when the target column is UTF8 (the connection charset decides, not the column's), and
@@ -2918,7 +2939,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (245 entries, #1–#258), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (246 entries, #1–#259), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a

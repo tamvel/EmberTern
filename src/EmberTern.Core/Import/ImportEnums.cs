@@ -168,6 +168,41 @@ public enum ImportErrorKind
     /// trip, not to substitute for the server.</summary>
     ValueTooLong,
 
+    /// <summary>The value is a valid number but does not fit the target column's declared range — a SMALLINT
+    /// asked to hold 40 000, or a <c>NUMERIC(5,2)</c> asked to hold 12 345.67.
+    /// <para>
+    /// Added in etap I2, and not a nicety: the converter must produce the column's OWN width (a <c>short</c>
+    /// for SMALLINT), so it has to know the value fits before narrowing it — and reporting an out-of-range
+    /// number as <see cref="NotAnInteger"/> would tell the user their data is malformed when it is merely too
+    /// big for the column they picked.
+    /// </para>
+    /// </summary>
+    ValueOutOfRange,
+
+    /// <summary>Writing the value into this column would silently DROP information: more decimal places than
+    /// the column's scale keeps (<c>1.555</c> into <c>NUMERIC(15,2)</c>), or a time-of-day component destined
+    /// for a <c>DATE</c> column, which has no time part.
+    /// <para>
+    /// Added in etap I2 because §0.1/§0.2 leave no alternative — rounding or truncating here is precisely the
+    /// silent conversion the module forbids. Reported so the user can fix the data, widen the column, or map
+    /// somewhere else; there is deliberately NO "just round it" option, because adding one is a design
+    /// decision, not an implementation detail.
+    /// </para>
+    /// </summary>
+    PrecisionWouldBeLost,
+
+    /// <summary>The target column's declared type has no faithful import path in this build (ARRAY, INT128,
+    /// DECFLOAT, a <c>WITH TIME ZONE</c> type, an unusual BLOB sub type), or the source value's own type
+    /// cannot become it (text into a binary BLOB).
+    /// <para>
+    /// Added in etap I2. It mirrors <c>SqlValueKind.Unknown</c>, which the export side already refuses for the
+    /// same types and the same reason: a loud refusal is safe, a guessed value is not. The mapping planner
+    /// blocks such a column up front (<see cref="ImportDiagnosticCode.UnsupportedColumnType"/>), so this kind
+    /// is the converter's backstop rather than the usual path.
+    /// </para>
+    /// </summary>
+    UnsupportedTargetType,
+
     /// <summary>The target column is NOT NULL and has no default, and the value is null/absent.</summary>
     NullNotAllowed,
 
