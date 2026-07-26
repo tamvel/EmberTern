@@ -43,6 +43,88 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 
 ---
 
+## 📍 STAN IMPLEMENTACJI — czytaj to pierwsze (aktualizowane po każdym etapie)
+
+| | |
+|---|---|
+| **Gałąź** | `feat/data-import` (odbita od `master` @ `d474b42`) |
+| **Ostatni commit** | `77eb997` — `feat(data-import): etap I1 — Core models, the one configuration record, its store, and the RFC 4180 reader` |
+| **Etapy zamknięte** | **I0** (sondy + rekomendacje, commit `5e90435`) · **I1** (Core: modele, konfiguracja, magazyn, czytnik) |
+| **Następny etap** | **I2** — `ImportValueConverter` + `ImportMappingPlanner` + `ImportRowValidator` + `ImportReadiness` (§6) |
+| **Testy** | **5345 zielone**, 0 niepowodzeń (I1 dodał +82: 44 czytnik · 20 detektory · 11 obieg konfiguracji · 11 magazyn profili) |
+| **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
+| **Kod w `src/`** | **wyłącznie `EmberTern.Core/Import/**`** + dwie addytywne zmiany w plikach współdzielonych (niżej). Zero Avalonia, zero `FirebirdSql`, zero UI. |
+
+### Co fizycznie istnieje po I1
+
+```
+src/EmberTern.Core/Import/
+    ImportEnums.cs           ImportSourceKind · ImportMode · ImportTransactionMode · ImportErrorPolicy
+                             ImportTargetKind · MappingOrigin · DateFieldOrder · LineEndingMode
+                             ImportErrorKind  ← kindy klienckie i serwerowe, z komentarzem, dlaczego
+                                                niektóre klasy błędów są NIEROZRÓŻNIALNE (I0 §2.6)
+    ImportOptions.cs         DelimitedOptions · SpreadsheetOptions · ImportCultureOptions
+                                                (+ BuildNumberFormat / IsTrueToken / IsFalseToken)
+    ImportConfiguration.cs   ⭐ ImportConfiguration + SourceDescriptor · TargetDescriptor
+                             ImportColumnDefinition · ColumnMapping · ImportBehaviorOptions
+    ImportModels.cs          SourceField · SourceSchema · RawRecord · ImportTarget · ImportRow
+                             ImportRowError · ImportProgress · ImportBatchItemResult
+                             ImportWriteSummary · ImportOutcome
+    ImportContracts.cs       IImportSource · IImportProvider · IImportWriter (+ ImportProviderCapabilities)
+    ImportProfile.cs         ImportProfile (encja trwała)
+    ImportProfileStore.cs    fasada sekcji settings.dat — GetLastUsed / SaveLastUsed / ClearLastUsed
+    Providers/
+        DelimitedTextReader.cs   RFC 4180, strumieniowy (ReadAll / ReadSample)
+        DelimiterDetector.cs     DelimiterProposal + dowody liczbowe
+        EncodingDetector.cs      EncodingProposal + EncodingDetectionBasis + ByteOrderMarkLength
+        FileImportSource.cs      IImportSource nad plikiem (+ ReadDetectionSample)
+        TextImportSource.cs      IImportSource nad string (schowek)
+```
+
+Zmiany w plikach współdzielonych — **obie addytywne, obie zaakceptowane**:
+- `Core/Connections/CharsetCatalog.Resolve` → rozpoznaje `UTF16LE` / `UTF16BE`. Jest już **jedynym**
+  właścicielem odwzorowania „nazwa charsetu → `Encoding`", więc drugie takie odwzorowanie byłoby rozjazdem.
+  Nazwy **nie** weszły do `Supported` (to lista charsetów POŁĄCZENIA, a Firebird takich nie ma).
+- `Core/Settings/UserSettings` → `List<Import.ImportProfile> ImportProfiles`. **Wersja schematu
+  settings.dat celowo NIE podbita** (podbicie uruchamia ochronę przed downgrade'em i starszy build
+  odmówiłby odczytu całego pliku).
+
+### Testy I1 (nie upraszczać ich w kolejnych etapach — decyzja użytkownika)
+
+| Plik | Co pinuje |
+|---|---|
+| `ImportDelimitedReaderTests` (44) | cudzysłowy, podwojone cudzysłowy, separator i łamanie linii w wartości, CR/LF/CRLF + tryby jawne, puste pola, rekordy poszarpane (bez dopełniania), przycinanie tylko poza cudzysłowami, **pominięty pusty wiersz nie przesuwa numeru rekordu** |
+| `ImportConfigurationRoundTripTests` (11) | ⭐ **refleksyjny strażnik**: każda zapisywalna właściwość (rekurencyjnie) musi być ustawiona na wartość niedomyślną **i** przetrwać prawdziwy serializator. Porównanie jest **strukturalne**, bo równość rekordów porównuje `IReadOnlyList` przez referencję i przepuściłaby round trip, który zgubił wszystkie elementy |
+| `ImportDetectorTests` (20) | propozycje separatora i kodowania **wraz z dowodami**; „plik jest czystym ASCII i nie rozróżnia kodowań" jako jawny wynik |
+| `ImportProfileStoreTests` (11) | round trip przez settings.dat, zakres per połączenie, brak klobrowania innych sekcji, **odrzucenie konfiguracji z przyszłej wersji w całości**, brak podbicia wersji schematu |
+
+⚠ **Dwa wyjątki w strażniku refleksyjnym**, oba samo-unieważniające się: `Version` (znacznik schematu —
+fixture udający przyszłą wersję byłby nonsensem, pinowane osobno w `ImportProfileStoreTests`) oraz `Mode`
+(`ImportMode` ma w v1 jeden element, więc nie istnieje wartość niedomyślna) — ten drugi jest **warunkowy**
+i osobny test `ImportMode_StillHasOneMember_OrTheFixtureMustCoverIt` wywala się w dniu, w którym enum
+urośnie. **Wyjątku nie wolno rozszerzać na nową właściwość** — jeśli strażnik protestuje, poprawką jest
+ustawienie tej właściwości w `Fully()`.
+
+### Odstępstwa od dokumentu przyjęte w trakcie implementacji
+
+| Odstępstwo | Powód | Status |
+|---|---|---|
+| `TrimWhitespace` **tylko** w `DelimitedOptions`, mimo że szkic v2 §4.8.2 wymieniał je też w `ImportBehaviorOptions` | przycinanie białych znaków jest własnością *czytania pola tekstowego*, a sekcja Format pokazuje je tam; dwa domy dla jednej decyzji to rozdwojenie, przed którym broni zasada jednego właściciela | ✅ zaakceptowane 2026-07-26; **nie dodawać drugiego pola tylko po to, by zgadzało się ze szkicem — dokument ma odzwierciedlać poprawioną architekturę, nie odwrotnie** |
+| `IImportProvider` dostaje całą `ImportConfiguration`, nie wybrany obiekt opcji | konfiguracja jest jedyną reprezentacją tego, o co poprosił użytkownik (§4.8.1); provider czyta tylko swój blok | ✅ w ramach swobody „sygnatury poglądowe" z §4.3 |
+| `DelimitedTextImportProvider` **nie** powstał w I1 | wiersz I1 w §6 go nie wymienia; pierwszym etapem, który go potrzebuje, jest I3 (pipeline end-to-end na `TextImportSource`) | ℹ️ do zrobienia w I2 lub I3 — **`IImportProvider` nie ma jeszcze ani jednej implementacji**, co reguła #2 toleruje tylko przejściowo |
+
+### Stan dokumentów projektowych
+
+| Dokument | Rola | Stan |
+|---|---|---|
+| `docs/design/data-import.md` (ten) | jedyna architektoniczna prawda modułu | 🔒 **ZAMROŻONY** (v3). Zmiany tylko „w miejscu" i tylko o stan faktyczny |
+| `docs/design/data-import-i0-findings.md` | archiwum dowodowe pomiarów I0 | zamknięty, 8 rekomendacji zaakceptowanych |
+| `tools/probes/DataImportWriteProbe` | sonda ścieżki zapisu | **trzymać do I4**, potem usunąć |
+| `tools/probes/DataImportXlsxProbe` | sonda odczytu `.xlsx` | **trzymać do I9**, potem usunąć |
+| `docs/history/` + `docs/gotchas.md` + CLAUDE.md (pełny wpis) | narracja i katalog gotch | **planowo w I12** (wiersz „Domknięcie" w §6) |
+
+---
+
 ## §0. Prawo nadrzędne modułu — nigdy nie zgub i nigdy nie przekłamaj danych
 
 Reguła architektoniczna #11 EmberTerna („nigdy nie trać informacji / nigdy nie psuj kodu ani metadanych

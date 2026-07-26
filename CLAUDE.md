@@ -27,6 +27,8 @@ verbatim, in the archive below.
 | **`docs/design/firebird-debugger.md`** | **The debugger's behaviour authority (v2, decisions ratified 2026-07-17).** ⚠ *Its "nothing implemented" framing dated from the design phase and was corrected 2026-07-25 — the debugger is built (P1/P2, D1–D13, D15, functions-as-root, the Draft model); sections amended by delivery say so in place (§9.1, §9.3.1, §12.14).* Feasibility (Firebird has **no** debug API — verified), the Fidelity Law §F, the client-interpreter + `EXECUTE BLOCK` harness, harness declaration rules, frame savepoints, exception control flow, per-session connection + transaction, nested frames/call stack, local routines (no temporary metadata), cursor bridge, UI/UX, panels, reuse map, prerequisites P1/P2 + milestones D1–D14, Fidelity Boundaries, and a live-engine verification log. | When working on the debugger. |
 | **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. **D14 = ANALYZED + DEFERRED** (its STATUS block records the ratified snapshot+savepoint+undo-only architecture if ever revisited). | **Every debugger implementation session — read this + your milestone's brief first.** |
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
+| **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next. | **Every Data Import session — read the status block + your etap's row in §6 first.** |
+| **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (245 entries, #1–#258), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -208,7 +210,33 @@ noted.
 
 ## Current state
 
-- **🏁 CURRENT STATE (2026-07-25) — THE FIREBIRD DEBUGGER IS CLOSED.** Everything planned for it is delivered
+- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0 + I1 DONE.** Branch **`feat/data-import`**,
+  last commit **`77eb997`**, suite **5345 green**, build 0/0, smoke clean. A new tool tab (toolbar, beside the
+  Script Executor) that imports Clipboard / TXT / CSV / XLSX into an existing or a newly created table.
+  **Read [docs/design/data-import.md](docs/design/data-import.md) — its „📍 STAN IMPLEMENTACJI" block is the
+  handover, and the architecture is 🔒 FROZEN: from etap I1 on it is implementation only, and an
+  implementation discovery that genuinely undermines the design means STOP THE ETAP AND REPORT, never a quiet
+  redesign.** Shape worth knowing before touching it: **one working surface with collapsible sections, NOT a
+  wizard** (the user runs the same import repeatedly; the gate is a readiness strip modelled on
+  `DebugPreflight`, not Next buttons) · **one pipeline for every source** (a provider yields
+  `SourceSchema` + `RawRecord`; the clipboard is not a second parser) · **`ImportConfiguration` is the single
+  representation of every user decision** — surface state, pipeline input and profile payload are the same
+  record, enforced by a reflection round-trip test that fails the suite when a new setting bypasses it ·
+  **rows go to the Data lane as the ONE user working transaction, `CREATE TABLE` to the Ddl lane** (gotcha
+  #213 — and the UI says out loud that Rollback will not remove that table). Etap I0 measured three
+  corrections into the design; the one that generalises beyond this module is that **a character outside the
+  CONNECTION charset is silently written as `?`** (see the spawned platform-wide audit below). **Next: etap
+  I2** (converter + mapping planner + validator + readiness).
+- **⚠ Spun off from Data Import I0, NOT part of it — a platform-wide defect to audit.** Measured on live FB5:
+  binding a string containing a character the **connection** charset cannot represent stores `?` with **no
+  error at all**, even when the target column is UTF8 (the connection charset decides, not the column's), and
+  `ConnectionProfile.Charset` defaults to `WIN1250`. Triage found it reaches `FirebirdDataEditor` (Table Data
+  inline edit/insert) and `FirebirdQueryExecutor` (Smart SQL Parameters); the **statement-TEXT path
+  (`FirebirdDdlExecutor`) is unmeasured and could silently corrupt user SOURCE CODE — measure it first**.
+  Ratified: a **separate architectural audit**, ONE shared guard (natural home: `CharsetCatalog`, with
+  `EncoderExceptionFallback`, never per-module fixes), plus an entry in `docs/gotchas.md`. Deferred by the
+  user; escalates if the DDL path is confirmed. Evidence: `data-import-i0-findings.md` §2.8.
+- **🏁 PREVIOUS STATE (2026-07-25) — THE FIREBIRD DEBUGGER IS CLOSED.** Everything planned for it is delivered
   and user-QA-confirmed: P1/P2, D1–D13, D15 (D15.6 dropped, D15.7 background), functions-as-root (standalone +
   packaged), the **Draft model** (Seams A + B), the **launch-config rebuild** (C3.1–C3.3b), and **Seam 6d**
   (a compiled object refreshes the other tabs showing it). **Two items stay deliberately deferred, each with a
@@ -1837,7 +1865,8 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **4293, all green in ONE
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5345 as of 2026-07-26
+  (`feat/data-import` @ `77eb997`); the 4293 below was the count when this note was written** — all green in ONE
   `dotnet test` run** (`dotnet test EmberTern.slnx`, ~10s). The two-partition workaround is no longer
   needed: `ConnectionExpandBindingProbe` now uses **one shared `HeadlessUnitTestSession` for the whole
   class** instead of `StartNew` per test — which is what gotcha #94 always prescribed, and is now
