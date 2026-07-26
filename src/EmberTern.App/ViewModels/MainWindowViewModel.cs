@@ -39,6 +39,16 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly ParameterHistoryStore _parameterHistory;
     private readonly WatchStore _watchStore;
     private readonly EmberTern.Core.Import.ImportProfileStore _importProfiles;
+
+    // ⭐ The ONE owner of "does the application hold anything uncommitted". Before I7.5 that question had a
+    // single answer (the console transaction) and the guards asked it directly; Data Import's own
+    // transaction made it a question with several, and the shell must not grow a list of module names to
+    // answer it.
+    private readonly PendingWorkRegistry _pendingWork = new();
+
+    // The import tab is near-singleton, so there is at most one of each of these at a time.
+    private ImportSessionConnection? _importSession;
+    private ImportSessionWork? _importPendingWork;
     private FolderState _folderState = new();
     private readonly FirebirdConnectionService _service;
     // Data lane (connection #1): SQL Editor F5, data preview/edit.
@@ -247,6 +257,9 @@ public partial class MainWindowViewModel : ViewModelBase
         _service.ActiveConnectionChanged += OnActiveConnectionChanged;
         _service.ActiveProfileUpdated += OnActiveProfileUpdated;
         _transactionService.TransactionStateChanged += OnTransactionStateChanged;
+        // The console's transaction is a pending-work source like any other — registered once, here, so the
+        // guards never name it again.
+        _pendingWork.Register(new ConsoleTransactionWork(_transactionService));
         ReloadConnections();
         UpdateStatusFromConnection();
     }
@@ -2115,6 +2128,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 _ = sm.DisposeAsync(); // stop the MON$ poll timer on disconnect (best-effort)
             else if (t.Kind == WorkspaceTabKind.ScriptExecutor && t.ScriptExecutor is { } se)
                 se.Detach(); // unsubscribe from the transaction-state event
+            else if (t.Kind == WorkspaceTabKind.DataImport)
+                ReleaseImportSession(); // the import's attachment must not outlive the profile (I7.5)
             else if (t.Kind == WorkspaceTabKind.Debugger && t.Debugger is { } dbg)
                 _ = dbg.DisposeAsync(); // roll back + close the debug session's attachment (§4.4) — a debug tab is bound to this DB (best-effort)
         }
@@ -2365,15 +2380,12 @@ public partial class MainWindowViewModel : ViewModelBase
         return allSaved;
     }
 
-    private bool AnyTransactionActive => _transactionService.IsActive;
+    // Asked of the registry, never of a named module — that is the whole point of it existing.
+    private bool AnyTransactionActive => _pendingWork.HasWork;
 
     private void AppendActiveTransactionLines(System.Text.StringBuilder sb)
     {
-        if (_transactionService.IsActive)
-        {
-            sb.AppendLine("  • " + string.Format(CultureInfo.CurrentCulture,
-                UiStrings.UnsavedTransactionDataFormat, _transactionService.StatementCount));
-        }
+        foreach (var line in _pendingWork.Describe()) sb.AppendLine("  • " + line);
     }
 
     /// <summary>
@@ -4142,9 +4154,38 @@ public partial class MainWindowViewModel : ViewModelBase
             else if (e.PropertyName == nameof(DataImportTabViewModel.IsBottomPanelCollapsed)) ImportPanelCollapsed = import.IsBottomPanelCollapsed;
         };
 
+        // While the tab lives, its unsettled rows are the application's business. Teardown goes through the
+        // same per-kind dispatch every other tool tab uses (below) — the registry answers "is anything
+        // uncommitted", the dispatch answers "whose resource is this to close".
+        _importSession = importSession;
+        _importPendingWork = new ImportSessionWork(importSession);
+        _pendingWork.Register(_importPendingWork);
+
         var newTab = WorkspaceTabViewModel.CreateDataImport(this, import, _service.ActiveProfile?.Id);
         WorkspaceTabs.Add(newTab);
         SelectTab(newTab);
+    }
+
+    /// <summary>
+    /// Ends the import's session: it stops being a pending-work source and its attachment is closed (which
+    /// rolls back anything unsettled).
+    /// <para>
+    /// ⚠ By the time this runs the decision must already have been taken. The close and disconnect guards ask
+    /// the registry FIRST and offer Commit / Rollback / Cancel; this is the teardown that follows, not a place
+    /// where data is silently discarded.
+    /// </para>
+    /// </summary>
+    private void ReleaseImportSession()
+    {
+        if (_importPendingWork is not null)
+        {
+            _pendingWork.Unregister(_importPendingWork);
+            _importPendingWork = null;
+        }
+
+        var session = _importSession;
+        _importSession = null;
+        if (session is not null) _ = session.DisposeAsync();
     }
 
     // ---- Global Search (metadata names + source bodies) ----
@@ -4821,6 +4862,8 @@ public partial class MainWindowViewModel : ViewModelBase
             se.Detach(); // unsubscribe from the transaction-state event
         else if (tab.Kind == WorkspaceTabKind.Debugger && tab.Debugger is { } dbg)
             _ = dbg.DisposeAsync(); // roll back + close the debug session's attachment (§4.4, best-effort)
+        else if (tab.Kind == WorkspaceTabKind.DataImport)
+            ReleaseImportSession(); // roll back + close the import's own attachment (I7.5)
 
         if (wasSelected && WorkspaceTabs.Count > 0)
         {
@@ -6639,10 +6682,14 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool CanRollbackAll => _transactionService.IsActive || _transactionService.IsError;
 
     [RelayCommand(CanExecute = nameof(CanCommitAll))]
-    private Task CommitAllAsync() => CommitTransactionAsync();
+    // "Commit everything" at disconnect/exit settles every source, not just the console: the user was shown
+    // every line and answered about all of them at once. The TOOLBAR's Commit stays deliberately narrower —
+    // it is the console's button, and making it settle the import would re-create, in the other direction,
+    // exactly the cross-module commit I7.5 removed.
+    private Task CommitAllAsync() => _pendingWork.CommitAllAsync();
 
     [RelayCommand(CanExecute = nameof(CanRollbackAll))]
-    private Task RollbackAllAsync() => RollbackTransactionAsync();
+    private Task RollbackAllAsync() => _pendingWork.RollbackAllAsync();
 
     [RelayCommand]
     private Task CommitAsync() => CommitTransactionAsync();
