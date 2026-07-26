@@ -56,6 +56,62 @@ src\EmberTern.App\bin\Debug\net9.0\EmberTern.exe
 
 Solution file is `.slnx` (not `.sln`) — .NET 10 default. App AssemblyName is `EmberTern`, so avares URIs use `avares://EmberTern/...`. `Directory.Build.props` sets `net10.0`, `Nullable=enable`, `TreatWarningsAsErrors=true` for every project.
 
+## Git remotes & push workflow (user directive, 2026-07-26)
+
+The repository is mirrored to **two** remotes. Both must receive every accepted milestone.
+
+| Remote | URL | Role |
+|---|---|---|
+| `origin` | `https://vm-srv-app-git-02.streamsoft.pl:3000/GGronski/EmberTern.git` | company Gitea (HTTPS, Git Credential Manager) |
+| `private` | `git@github.com:tamvel/EmberTern.git` | the user's personal GitHub (SSH) |
+
+**The rule: after every ACCEPTED etap / milestone, push to both.**
+
+```bash
+git push origin <branch>
+git push private <branch>
+```
+
+**⛔ Never change the remote configuration without the user's explicit decision** — not the URLs, not a
+`pushurl`, not a rename. A dual-`pushurl` "one push reaches both" variant was considered and **rejected on
+purpose**: when GitHub is unreachable (no network, VPN, expired key) it makes *every* push report failure,
+including the company one, so a company push would depend on GitHub's availability. Two explicit pushes keep
+failures isolated.
+
+### ⚠ The SSH trap — this WILL bite, and `ssh -T` does not reveal it
+
+There are **two independent SSH agents** on this machine and git talks to the wrong one by default:
+
+- The key lives in the **Windows OpenSSH agent service** (`ssh-agent`, Automatic). In PowerShell/CMD,
+  `ssh` and `ssh-add` resolve to `C:\Windows\System32\OpenSSH\*` and DO see it.
+- **Git for Windows bundles its own ssh** (`C:\Program Files\Git\usr\bin\ssh.exe`), which reads
+  `SSH_AUTH_SOCK` and therefore does **not** see the Windows agent. With `core.sshCommand` unset, git uses
+  that bundled ssh.
+
+Measured 2026-07-26: `ssh -T git@github.com` in PowerShell → *"Hi tamvel! You've successfully
+authenticated"*, while git's bundled ssh on the same host → **`Permission denied (publickey)`**. So a green
+`ssh -T` proves nothing about whether `git push private` will work.
+
+**Pushing to `private` therefore needs git pointed at the Windows ssh.** Per-invocation, changing nothing
+persistent (what this project has used so far):
+
+```bash
+GIT_SSH_COMMAND="C:/Windows/System32/OpenSSH/ssh.exe" git push private <branch>
+```
+
+A durable fix exists — `git config --global core.sshCommand "C:/Windows/System32/OpenSSH/ssh.exe"` — but it
+is a persistent global git setting, so **it is the user's decision and has not been applied.**
+
+**After a reboot** the agent forgets the key (it is passphrase-protected). Unlock it once per system session
+**from PowerShell or CMD**, so it lands in the Windows agent:
+
+```bash
+ssh-add ~/.ssh/id_ed25519
+```
+
+Running `ssh-add` inside Git Bash targets the *other* agent and will not help git or the Windows tooling.
+Check what is loaded with `ssh-add -l` (PowerShell).
+
 ## Laboratory Database
 
 A single, persistent Firebird lab database for hand-verifying EmberTern behaviour against a real engine — **use it instead of guessing how Firebird behaves.**
