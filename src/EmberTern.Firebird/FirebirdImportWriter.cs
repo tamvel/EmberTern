@@ -27,8 +27,10 @@ namespace EmberTern.Firebird;
 /// flag, not a client-side loop pretending to be one.
 /// </para>
 /// <para>
-/// <b>Transaction discipline (hard rule #3).</b> It runs in THE user's working transaction on the Data lane,
-/// auto-<em>begins</em> one if none is open — exactly as F5 and the inline data editor do — and never commits.
+/// <b>Transaction discipline (hard rule #3).</b> Since I7.5 it runs in <b>the import module's OWN</b>
+/// transaction (<see cref="ImportSessionConnection"/>), not the console's: a Commit here must persist this
+/// import and nothing else, and while the module shared the user's working transaction it could also persist
+/// whatever the SQL Editor had left uncommitted. It auto-<em>begins</em> and never commits.
 /// <see cref="CompleteAsync"/> therefore always reports <c>TransactionLeftOpen: true</c>: the user reviews the
 /// report and then presses Commit or Rollback. (<c>Batched</c> commit-every-N is the coordinator's business in
 /// etap I7, because it is a decision about the user's transaction, not about writing rows.)
@@ -41,7 +43,7 @@ namespace EmberTern.Firebird;
 /// </summary>
 public sealed class FirebirdImportWriter : IImportWriter
 {
-    private readonly TransactionService _transactionService;
+    private readonly ImportSessionConnection _session;
     private readonly ImportErrorPolicy _errorPolicy;
 
     private FbBatchCommand? _batch;
@@ -50,9 +52,9 @@ public sealed class FirebirdImportWriter : IImportWriter
     private long _rowsFailed;
     private string _insertSql = string.Empty;
 
-    public FirebirdImportWriter(TransactionService transactionService, ImportErrorPolicy errorPolicy)
+    public FirebirdImportWriter(ImportSessionConnection session, ImportErrorPolicy errorPolicy)
     {
-        _transactionService = transactionService ?? throw new ArgumentNullException(nameof(transactionService));
+        _session = session ?? throw new ArgumentNullException(nameof(session));
         _errorPolicy = errorPolicy;
     }
 
@@ -76,12 +78,9 @@ public sealed class FirebirdImportWriter : IImportWriter
 
         _insertSql = BuildInsertSql(target, mapping);
 
-        // Auto-BEGIN, never auto-commit (rule #3) — the same path F5 and the inline data editor take, so an
-        // import joins whatever the user already has open instead of opening a second transaction beside it.
-        if (!_transactionService.IsActive)
-        {
-            await _transactionService.BeginTransactionAsync().ConfigureAwait(false);
-        }
+        // Auto-BEGIN, never auto-commit (rule #3) — into the MODULE's own transaction, which is the whole
+        // point of I7.5: nothing this writer does can settle work the import did not perform.
+        await _session.BeginAsync(cancellationToken).ConfigureAwait(false);
 
         cancellationToken.ThrowIfCancellationRequested();
     }
@@ -124,11 +123,11 @@ public sealed class FirebirdImportWriter : IImportWriter
         _queued = 0;
 
         // Capture the lock ONCE — re-evaluating the accessor at Release can leak a semaphore (gotchas #98/#120).
-        var commandLock = _transactionService.CommandLock;
+        var commandLock = _session.CommandLock;
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            batch.Transaction = _transactionService.ActiveTransaction;
+            batch.Transaction = _session.Transaction;
             var results = Interpret(batch.ExecuteNonQuery(), queued);
             return results;
         }
@@ -146,7 +145,6 @@ public sealed class FirebirdImportWriter : IImportWriter
         {
             commandLock.Release();
             await batch.DisposeAsync().ConfigureAwait(false);
-            _transactionService.NotifyStatementExecuted();
         }
     }
 
@@ -173,8 +171,8 @@ public sealed class FirebirdImportWriter : IImportWriter
     {
         if (_batch is not null) return _batch;
 
-        var connection = _transactionService.RequireOpenConnection();
-        _batch = new FbBatchCommand(_insertSql, connection, _transactionService.ActiveTransaction)
+        var connection = _session.Connection;
+        _batch = new FbBatchCommand(_insertSql, connection, _session.Transaction)
         {
             // The measured 1:1 mapping onto the user's chosen policy (I0 §2.3).
             MultiError = MultiErrorFor(_errorPolicy),
@@ -194,6 +192,8 @@ public sealed class FirebirdImportWriter : IImportWriter
             {
                 results[i] = ImportBatchItemResult.Success;
                 _rowsWritten++;
+                // The session tracks what is unsettled, so the close guard can say how much would be lost.
+                _session.CountWritten(1);
                 continue;
             }
 

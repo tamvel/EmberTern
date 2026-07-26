@@ -136,7 +136,9 @@ public enum ImportDiagnosticCode
 
     /// <summary>IMP0021 — the user's working transaction is already open. Blocking, mirroring the Script
     /// Executor's own run block so the application behaves the same way twice.</summary>
-    UserTransactionOpen = 21,
+    // 21 was UserTransactionOpen — removed in I7.5 when Data Import got its own transaction, so what the
+    // console has open stopped being this module's business. The number is not reused: a code is an
+    // identity, and recycling one would make an old report mean something new.
 
     /// <summary>IMP0022 — the target has active BEFORE INSERT triggers, which can overwrite an imported value
     /// (design R6). Never changes what the import does; only makes the result explicable.</summary>

@@ -27,21 +27,19 @@ namespace EmberTern.App.ViewModels;
 /// </summary>
 public sealed class DataImportEnvironment
 {
-    public DataImportEnvironment(
-        Func<bool> isConnected,
-        Func<bool> hasOpenUserTransaction,
-        Func<string> connectionName)
+    public DataImportEnvironment(Func<bool> isConnected, Func<string> connectionName)
     {
         IsConnected = isConnected ?? throw new ArgumentNullException(nameof(isConnected));
-        HasOpenUserTransaction = hasOpenUserTransaction ?? throw new ArgumentNullException(nameof(hasOpenUserTransaction));
         ConnectionName = connectionName ?? throw new ArgumentNullException(nameof(connectionName));
     }
 
     public Func<bool> IsConnected { get; }
 
-    public Func<bool> HasOpenUserTransaction { get; }
-
     public Func<string> ConnectionName { get; }
+
+    // ⚠ There is deliberately no "has the console got a transaction open" here any more. Since I7.5 the module
+    // owns its own transaction, so the SQL Editor's state is none of its business — asking would invite
+    // somebody to act on it again.
 
     /// <summary>
     /// The CONNECTION charset name. ⭐ Not a detail: I0 measured that a character the connection charset cannot
@@ -87,5 +85,5 @@ public sealed class DataImportEnvironment
 
     /// <summary>An environment that knows nothing — the shape a test or a disconnected surface gets.</summary>
     public static DataImportEnvironment Disconnected { get; } =
-        new(() => false, () => false, () => string.Empty);
+        new(() => false, () => string.Empty);
 }

@@ -43,11 +43,10 @@ public class DataImportTabVmTests : IDisposable
 
     private static DataImportTabViewModel Vm(
         bool connected = true,
-        bool transactionOpen = false,
         string connectionName = "LAB",
         ImportTarget? target = null,
         params ImportTarget[] moreTargets)
-        => new(Environment(connected, transactionOpen, connectionName, target, moreTargets))
+        => new(Environment(connected, connectionName, target, moreTargets))
         {
             // The converted preview waits ~150 ms so that changing a separator does not re-read the file on
             // every keystroke. That is a delay, not a decision — zeroing it keeps the suite fast without
@@ -63,7 +62,6 @@ public class DataImportTabVmTests : IDisposable
     /// </summary>
     private static DataImportEnvironment Environment(
         bool connected = true,
-        bool transactionOpen = false,
         string connectionName = "LAB",
         ImportTarget? target = null,
         ImportTarget[]? moreTargets = null)
@@ -72,7 +70,7 @@ public class DataImportTabVmTests : IDisposable
             ? Array.Empty<ImportTarget>()
             : new[] { target }.Concat(moreTargets ?? Array.Empty<ImportTarget>()).ToArray();
 
-        return new DataImportEnvironment(() => connected, () => transactionOpen, () => connectionName)
+        return new DataImportEnvironment(() => connected, () => connectionName)
         {
             ListTablesAsync = all.Length == 0
                 ? null
@@ -291,19 +289,24 @@ public class DataImportTabVmTests : IDisposable
 
     // ── The readiness strip ─────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Environment facts are read as DELEGATES, not snapshotted at open time, so the strip reflects
-    /// the connection and transaction as they are NOW.</summary>
+    /// <summary>
+    /// ⭐ I7.5 reversed this. The module owns its own transaction now, so whatever the SQL Editor has open is
+    /// none of its business: the strip says nothing about it and the run is not blocked by it. The previous
+    /// version of this test asserted the opposite — re-asserting it would re-introduce the very entanglement
+    /// the decision removed.
+    /// </summary>
     [Fact]
-    public async Task AnOpenWorkingTransaction_BlocksTheRun()
+    public async Task AnOpenConsoleTransaction_IsNotTheImportsBusiness()
     {
-        var vm = Vm(transactionOpen: true);
+        var vm = Vm();
         vm.Source.FilePath = WriteFile("in.csv", "A;B\n1;x\n");
         await SettleAsync(vm);
 
-        Assert.False(vm.Readiness.CanRun);
-        var item = vm.Readiness.Items.Single(i => i.Item.Code == ImportDiagnosticCode.UserTransactionOpen);
-        Assert.True(item.IsBlocking);
-        Assert.Equal(ImportSection.Transaction, item.Section);
+        // IMP0021 was UserTransactionOpen. Nothing may raise it, and nothing in the Transaction section may
+        // block while the surface is merely connected.
+        Assert.All(vm.Readiness.Items, i => Assert.NotEqual("IMP0021", i.Code));
+        Assert.DoesNotContain(
+            vm.Readiness.Items, i => i.Section == ImportSection.Transaction && i.IsBlocking);
     }
 
     [Fact]
@@ -479,7 +482,14 @@ public class DataImportTabVmTests : IDisposable
     [Fact]
     public void Readiness_CapsTheSpelledOutFindings_AndSaysHowManyItHid()
     {
-        var vm = Vm(connected: false, transactionOpen: true);
+        // Four findings, deliberately: disconnected + no source + no target give three, and trimming gives the
+        // fourth. I7.5 retired a fifth (the console's transaction), so the cap now needs a real fourth cause
+        // rather than a state the module no longer reports.
+        var vm = Vm(connected: false);
+        vm.ApplyConfiguration(ImportConfiguration.Empty with
+        {
+            Behavior = new ImportBehaviorOptions { TrimTooLongValues = true },
+        });
         var readiness = vm.Readiness;
 
         Assert.True(readiness.Items.Count > ImportReadinessViewModel.CollapsedItemLimit);
@@ -499,7 +509,11 @@ public class DataImportTabVmTests : IDisposable
     [Fact]
     public void Readiness_ExpandsToTheWholeList_InCoresOrder()
     {
-        var vm = Vm(connected: false, transactionOpen: true);
+        var vm = Vm(connected: false);
+        vm.ApplyConfiguration(ImportConfiguration.Empty with
+        {
+            Behavior = new ImportBehaviorOptions { TrimTooLongValues = true },
+        });
         var readiness = vm.Readiness;
 
         Assert.Equal(

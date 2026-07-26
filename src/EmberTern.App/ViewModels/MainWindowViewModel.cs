@@ -4048,7 +4048,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private const double DefaultImportPanelHeight = 190;
 
     [RelayCommand(CanExecute = nameof(CanOpenDataImport))]
-    private void OpenDataImport()
+    private async Task OpenDataImportAsync()
     {
         // Near-singleton per connection, exactly like the Script Executor: the same import is run over and
         // over, so a second tab would be two states for one job.
@@ -4070,12 +4070,27 @@ public partial class MainWindowViewModel : ViewModelBase
         // transaction. Passed as delegates, like the environment facts above, so the VM stays testable
         // without a database and no Firebird type reaches a ViewModel (rule #1).
         var targetReader = new FirebirdImportTargetReader(_metadataReader, _metadataLane);
-        var targetPreparer = new FirebirdImportTargetPreparer(_transactionService);
+
+        // ⭐ I7.5: the module's OWN attachment and OWN transaction, on the same fundament the debugger uses.
+        // It used to write into THE user working transaction, which meant its Commit could also persist
+        // whatever the SQL Editor had left uncommitted — a button must do exactly what it says, so the
+        // possibility was removed rather than warned about (design §4.5 as amended).
+        ImportSessionConnection importSession;
+        try
+        {
+            importSession = await _service.CreateImportSessionAsync().ConfigureAwait(true);
+        }
+        catch (ConnectionFailedException ex)
+        {
+            SetError(ex.Message);
+            return;
+        }
+
+        var targetPreparer = new FirebirdImportTargetPreparer(importSession);
         var connectionId = _service.ActiveProfile?.Id;
 
         var environment = new DataImportEnvironment(
             () => _service.IsConnected,
-            () => _transactionService.IsActive,
             () => _service.ActiveProfile?.Name ?? string.Empty)
         {
             // ⭐ The CONNECTION charset, not the column's: I0 measured that a character it cannot represent is
@@ -4093,15 +4108,15 @@ public partial class MainWindowViewModel : ViewModelBase
             // the decorator — Manual and AutoCommitOnSuccess run through byte-identical code (§4.5).
             CreateWriter = configuration =>
             {
-                var writer = new FirebirdImportWriter(_transactionService, configuration.ErrorPolicy);
+                var writer = new FirebirdImportWriter(importSession, configuration.ErrorPolicy);
                 return configuration.Transaction == EmberTern.Core.Import.ImportTransactionMode.Batched
-                    ? new BatchedCommitImportWriter(writer, _transactionService, configuration.CommitEveryRows)
+                    ? new BatchedCommitImportWriter(writer, importSession, configuration.CommitEveryRows)
                     : writer;
             },
             CountTargetRowsAsync = (table, ct) => targetPreparer.CountRowsAsync(table, ct),
             EmptyTargetAsync = (table, ct) => targetPreparer.EmptyAsync(table, ct),
-            CommitAsync = () => _transactionService.CommitAsync(),
-            RollbackAsync = () => _transactionService.RollbackAsync(),
+            CommitAsync = () => importSession.CommitAsync(),
+            RollbackAsync = () => importSession.RollbackAsync(),
 
             // "Last used" is the implicit profile (§4.8.4) — the same store named profiles will use in I11,
             // which is the whole point: nothing new gets built for them.

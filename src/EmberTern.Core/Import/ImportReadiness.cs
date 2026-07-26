@@ -55,8 +55,6 @@ public sealed record ImportReadinessInput
 
     public bool IsConnected { get; init; } = true;
 
-    /// <summary>True when the user's working transaction is already open (e.g. from the SQL Editor).</summary>
-    public bool HasOpenUserTransaction { get; init; }
 
     /// <summary>Best estimate of how many rows will be written, for the long-transaction warning; <c>null</c>
     /// when unknown, in which case the warning simply is not raised (a guess would be worse than silence).</summary>
@@ -92,10 +90,9 @@ public sealed record ImportReadinessReport(IReadOnlyList<ReadinessItem> Items)
     /// <see cref="CanRun"/>, and deliberately so.
     /// <para>
     /// A dry run reads the file, converts, validates and writes nowhere (<see cref="DryRunImportWriter"/>), so
-    /// the state of the user's working transaction has no bearing on it. Blocking Validate because a
-    /// transaction is open would refuse the one operation that helps most in that situation: checking the file
-    /// while deciding what to do about the transaction. Everything else still blocks — without a readable
-    /// source, a known target and a mapping there is nothing to validate.
+    /// nothing in the Transaction section bears on it — it needs no connection of its own and settles nothing.
+    /// Everything else still blocks: without a readable source, a known target and a mapping there is nothing
+    /// to validate.
     /// </para>
     /// <para>
     /// The rule lives here rather than in the surface because "what does this report permit" is this record's
@@ -177,15 +174,13 @@ public static class ImportReadiness
         ImportConfiguration configuration,
         SourceSchema? schema,
         ImportTarget? target,
-        bool isConnected,
-        bool hasOpenUserTransaction)
+        bool isConnected)
         => Evaluate(new ImportReadinessInput
         {
             Configuration = configuration,
             Schema = schema,
             Target = target,
             IsConnected = isConnected,
-            HasOpenUserTransaction = hasOpenUserTransaction,
         });
 
     /// <summary>Evaluates the whole strip.</summary>
@@ -220,13 +215,14 @@ public static class ImportReadiness
                 ImportDiagnosticCode.NotConnected, ImportSeverity.Error, true, ImportSection.Transaction));
         }
 
-        if (input.HasOpenUserTransaction)
-        {
-            // Mirrors the Script Executor's own run block, deliberately: the application should behave the
-            // same way when it is in the same situation.
-            items.Add(new ReadinessItem(
-                ImportDiagnosticCode.UserTransactionOpen, ImportSeverity.Error, true, ImportSection.Transaction));
-        }
+        // ⭐ I7.5: an open CONSOLE transaction is no longer reported at all — not as a block, not as a warning.
+        // The import owns its own transaction now (§4.5 as amended), so what the SQL Editor happens to have
+        // open is simply none of this module's business, and saying anything about it would be noise the user
+        // cannot act on.
+        //
+        // It also dissolves a contradiction the design carried since I2: §3.2 listed an open working
+        // transaction as BLOCKING while §4.5 had the writer auto-begin and join one. Both cannot be true. With
+        // an independent transaction neither is needed.
     }
 
     /// <summary>Returns true when the source is usable, so later checks can stay quiet instead of piling

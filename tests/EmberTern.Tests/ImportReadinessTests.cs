@@ -84,17 +84,20 @@ public class ImportReadinessTests
         Assert.True(Item(report, ImportDiagnosticCode.NotConnected).IsBlocking);
     }
 
-    /// <summary>Mirrors the Script Executor's own run block on purpose: the application should behave the same
-    /// way when it is in the same situation.</summary>
+    /// <summary>
+    /// ⭐ I7.5: the console's transaction is not reported at all — not as a block, not as a warning. The import
+    /// owns its own, so the SQL Editor's state cannot make it unready, and mentioning it would be noise the
+    /// user cannot act on. This also dissolved the contradiction the design carried since I2: §3.2 called an
+    /// open working transaction BLOCKING while §4.5 had the writer join one. Both could not be true.
+    /// </summary>
     [Fact]
-    public void AnOpenWorkingTransaction_Blocks()
+    public void TheConsolesTransaction_IsNotReported()
     {
-        var report = ImportReadiness.Evaluate(Input() with { HasOpenUserTransaction = true });
+        var report = ImportReadiness.Evaluate(Input());
 
-        Assert.False(report.CanRun);
-        var item = Item(report, ImportDiagnosticCode.UserTransactionOpen);
-        Assert.True(item.IsBlocking);
-        Assert.Equal(ImportSection.Transaction, item.Section);
+        // IMP0021 was UserTransactionOpen; the code is retired and never reused.
+        Assert.All(report.Items, i => Assert.NotEqual("IMP0021", i.CodeText));
+        Assert.DoesNotContain(report.Blocking, i => i.Section == ImportSection.Transaction);
     }
 
     // ── Source ──────────────────────────────────────────────────────────────────────────────────────────
@@ -357,9 +360,9 @@ public class ImportReadinessTests
             Target = TargetDescriptor.Existing(""),
             Mapping = Array.Empty<ColumnMapping>(),
         };
-        var report = ImportReadiness.Evaluate(Input(configuration) with { HasOpenUserTransaction = true });
+        var report = ImportReadiness.Evaluate(Input(configuration) with { IsConnected = false });
 
-        Assert.True(Has(report, ImportDiagnosticCode.UserTransactionOpen));
+        Assert.True(Has(report, ImportDiagnosticCode.NotConnected));
         Assert.True(Has(report, ImportDiagnosticCode.NoTarget));
         Assert.True(report.Blocking.Count() >= 2);
     }
@@ -367,7 +370,7 @@ public class ImportReadinessTests
     [Fact]
     public void SectionProjection_TellsTheStripWhatToPaint()
     {
-        var report = ImportReadiness.Evaluate(Input(target: Target("TR_A")) with { HasOpenUserTransaction = true });
+        var report = ImportReadiness.Evaluate(Input(target: Target("TR_A")) with { IsConnected = false });
 
         Assert.Equal(ImportSeverity.Warning, report.SeverityFor(ImportSection.Target));
         Assert.Equal(ImportSeverity.Error, report.SeverityFor(ImportSection.Transaction));

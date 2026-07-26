@@ -1166,7 +1166,6 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             SourceReadable = _sourceReadable,
             Target = _target,
             IsConnected = _environment.IsConnected(),
-            HasOpenUserTransaction = _environment.HasOpenUserTransaction(),
         };
 
         Readiness.Update(ImportReadiness.Evaluate(input), PreviewRows.Count);

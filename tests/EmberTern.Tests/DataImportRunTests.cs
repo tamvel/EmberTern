@@ -118,7 +118,6 @@ public class DataImportRunTests : IDisposable
     private async Task<(DataImportTabViewModel Vm, FakeWriter Writer)> RunnableVmAsync(
         string csv = "KOD;NAZWA\nA1;Widget\nA2;Gadget\n",
         FakeWriter? writer = null,
-        bool transactionOpen = false,
         Func<string, Task<bool>>? confirm = null,
         List<string>? emptied = null,
         List<string>? transactionActions = null,
@@ -129,7 +128,7 @@ public class DataImportRunTests : IDisposable
         var target = LabTarget();
         var made = writer ?? new FakeWriter();
 
-        var environment = new DataImportEnvironment(() => true, () => transactionOpen, () => "LAB")
+        var environment = new DataImportEnvironment(() => true, () => "LAB")
         {
             ListTablesAsync = _ => Task.FromResult<IReadOnlyList<string>>(new[] { target.TableName }),
             ReadTargetAsync = (_, _) => Task.FromResult<ImportTarget?>(target),
@@ -206,7 +205,7 @@ public class DataImportRunTests : IDisposable
             new[] { new ColumnSpec("WARTOSC", "NUMERIC(15,2)") },
             Array.Empty<string>());
 
-        var environment = new DataImportEnvironment(() => true, () => false, () => "LAB")
+        var environment = new DataImportEnvironment(() => true, () => "LAB")
         {
             ListTablesAsync = _ => Task.FromResult<IReadOnlyList<string>>(new[] { target.TableName }),
             ReadTargetAsync = (_, _) => Task.FromResult<ImportTarget?>(target),
@@ -233,17 +232,19 @@ public class DataImportRunTests : IDisposable
     // ── The two gates (§3.2) ────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// ⭐ The ratified split: an open working transaction blocks the IMPORT but not the VALIDATION. A dry run
-    /// writes nowhere, so refusing it there would deny the one operation that helps most while the user is
-    /// deciding what to do about the transaction. The rule lives in Core's report; the surface only reads it.
+    /// ⭐ I7.5 replaced the test that used to live here. It pinned "an open console transaction blocks the
+    /// import but not the validation" — a split that only existed because the module wrote into the console's
+    /// transaction. It owns its own now, so the console's state does not reach this surface at all, and both
+    /// commands are available on their own merits.
     /// </summary>
     [Fact]
-    public async Task OpenTransaction_BlocksImportButNotValidate()
+    public async Task TheConsolesTransaction_DoesNotReachThisSurface()
     {
-        var (vm, _) = await RunnableVmAsync(transactionOpen: true);
+        var (vm, _) = await RunnableVmAsync();
 
-        Assert.False(vm.CanImport);
+        Assert.True(vm.CanImport);
         Assert.True(vm.CanValidate);
+        Assert.All(vm.Readiness.Items, i => Assert.NotEqual("IMP0021", i.Code));
     }
 
     /// <summary>A surface with no writer behind it refuses to run — it does not throw.</summary>
@@ -251,7 +252,7 @@ public class DataImportRunTests : IDisposable
     public async Task WithoutAWriter_ImportIsRefused()
     {
         var target = LabTarget();
-        var environment = new DataImportEnvironment(() => true, () => false, () => "LAB")
+        var environment = new DataImportEnvironment(() => true, () => "LAB")
         {
             ListTablesAsync = _ => Task.FromResult<IReadOnlyList<string>>(new[] { target.TableName }),
             ReadTargetAsync = (_, _) => Task.FromResult<ImportTarget?>(target),

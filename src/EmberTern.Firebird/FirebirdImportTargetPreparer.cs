@@ -9,26 +9,27 @@ namespace EmberTern.Firebird;
 /// The two things an import does to the target table <b>around</b> the rows: counting what is already there, and
 /// emptying it first.
 /// <para>
-/// Both run on the <b>Data lane, inside THE user's working transaction</b> (design §4.5). That is the whole
-/// reason they are not on <c>FirebirdImportTargetReader</c>, which is a Metadata-lane reader: emptying a table is
-/// data, not schema, so it must be rolled back together with the import — and the count that justifies it must
-/// be read by the transaction that is going to do the deleting, or it would be answering about a different world
-/// than the one the user is about to change.
+/// Both run inside <b>the import module's OWN working transaction</b> (<see cref="ImportSessionConnection"/> —
+/// design §4.5 as amended in I7.5). That is the whole reason they are not on
+/// <c>FirebirdImportTargetReader</c>, which is a Metadata-lane reader: emptying a table is data, not schema, so
+/// it must be rolled back together with the import — and the count that justifies it must be read by the
+/// transaction that is going to do the deleting, or it would be answering about a different world than the one
+/// the user is about to change.
 /// </para>
 /// <para>
-/// Mechanically it is <c>FirebirdDataEditor</c>'s pattern, unchanged: auto-begin the working transaction (never
-/// auto-commit — rule #3), hold the Data lane's <c>CommandLock</c> for the round trip with the accessor captured
-/// into a local first (gotchas #98 / #120), and tick the statement counter afterwards so the transaction bar
-/// reflects that this transaction now has work in it.
+/// Mechanically it is <c>FirebirdDataEditor</c>'s pattern: auto-begin (never auto-commit — rule #3) and hold
+/// the session's <c>CommandLock</c> for the round trip, captured into a local first (gotchas #98 / #120).
+/// It no longer ticks the console's statement counter — that counter describes the SQL Editor's transaction,
+/// and this is a different one.
 /// </para>
 /// </summary>
 public sealed class FirebirdImportTargetPreparer
 {
-    private readonly TransactionService _transactionService;
+    private readonly ImportSessionConnection _session;
 
-    public FirebirdImportTargetPreparer(TransactionService transactionService)
+    public FirebirdImportTargetPreparer(ImportSessionConnection session)
     {
-        _transactionService = transactionService ?? throw new ArgumentNullException(nameof(transactionService));
+        _session = session ?? throw new ArgumentNullException(nameof(session));
     }
 
     /// <summary>
@@ -74,13 +75,10 @@ public sealed class FirebirdImportTargetPreparer
     private async Task<long> ExecuteAsync(
         string sql, Func<FbCommand, Task<long>> run, bool countsAsWork, CancellationToken cancellationToken)
     {
-        if (!_transactionService.IsActive)
-        {
-            await _transactionService.BeginTransactionAsync().ConfigureAwait(false);
-        }
+        await _session.BeginAsync(cancellationToken).ConfigureAwait(false);
 
-        var connection = _transactionService.RequireOpenConnection();
-        var commandLock = _transactionService.CommandLock;
+        var connection = _session.Connection;
+        var commandLock = _session.CommandLock;
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         long result;
@@ -89,7 +87,7 @@ public sealed class FirebirdImportTargetPreparer
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = sql;
             cmd.CommandTimeout = 0;
-            cmd.Transaction = _transactionService.ActiveTransaction;
+            cmd.Transaction = _session.Transaction;
             result = await run(cmd).ConfigureAwait(false);
         }
         finally
@@ -97,10 +95,10 @@ public sealed class FirebirdImportTargetPreparer
             commandLock.Release();
         }
 
-        // Ticked after the release, so the transaction-bar update does not sit behind the lock. Only a statement
-        // that CHANGED something counts: a COUNT(*) leaves the transaction with nothing to commit, and claiming
-        // otherwise would light the "this transaction has work in it" marker over an empty transaction.
-        if (countsAsWork) _transactionService.NotifyStatementExecuted();
+        // Counted after the release, so the bookkeeping does not sit behind the lock. Only a statement that
+        // CHANGED something counts: a COUNT(*) leaves the transaction with nothing to settle, and claiming
+        // otherwise would make the close guard warn about an empty transaction.
+        if (countsAsWork) _session.CountWritten(result);
         return result;
     }
 

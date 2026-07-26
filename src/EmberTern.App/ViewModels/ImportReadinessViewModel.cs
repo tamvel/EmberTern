@@ -90,7 +90,6 @@ public sealed class ImportReadinessItemViewModel
             ImportDiagnosticCode.PairingAssumed => Format(UiStrings.ImportReadyPairingAssumedFormat, subject),
 
             ImportDiagnosticCode.NotConnected => UiStrings.ImportReadyNotConnected,
-            ImportDiagnosticCode.UserTransactionOpen => UiStrings.ImportReadyUserTransactionOpen,
             ImportDiagnosticCode.BatchedIsNotAtomic => Count(UiStrings.ImportReadyBatchedNotAtomicFormat, count),
             ImportDiagnosticCode.TrimmingEnabled => UiStrings.ImportReadyTrimmingEnabled,
             ImportDiagnosticCode.LongTransactionRisk => Count(UiStrings.ImportReadyLongTransactionFormat, count),

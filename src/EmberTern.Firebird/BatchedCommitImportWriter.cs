@@ -42,16 +42,16 @@ namespace EmberTern.Firebird;
 public sealed class BatchedCommitImportWriter : IImportWriter, IPartiallyCommittedImportWriter
 {
     private readonly IImportWriter _inner;
-    private readonly TransactionService _transactionService;
+    private readonly ImportSessionConnection _session;
     private readonly long _commitEveryRows;
 
     private long _acceptedSinceCommit;
 
     public BatchedCommitImportWriter(
-        IImportWriter inner, TransactionService transactionService, int commitEveryRows)
+        IImportWriter inner, ImportSessionConnection session, int commitEveryRows)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-        _transactionService = transactionService ?? throw new ArgumentNullException(nameof(transactionService));
+        _session = session ?? throw new ArgumentNullException(nameof(session));
         _commitEveryRows = Math.Max(1, commitEveryRows);
     }
 
@@ -93,15 +93,15 @@ public sealed class BatchedCommitImportWriter : IImportWriter, IPartiallyCommitt
 
     private async Task CommitAsync()
     {
-        if (!_transactionService.IsActive) return;
+        if (!_session.IsActive) return;
 
         RowsCommitted += _acceptedSinceCommit;
         _acceptedSinceCommit = 0;
 
-        await _transactionService.CommitAsync().ConfigureAwait(false);
+        await _session.CommitAsync().ConfigureAwait(false);
 
         // Re-open immediately so the next row does not have to discover there is no transaction. The auto-begin
         // in the inner writer only runs once, before the first row.
-        await _transactionService.BeginTransactionAsync().ConfigureAwait(false);
+        await _session.BeginAsync().ConfigureAwait(false);
     }
 }
