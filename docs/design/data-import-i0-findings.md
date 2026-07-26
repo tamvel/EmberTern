@@ -142,7 +142,18 @@ mniejszy niż szum — i to jest wystarczająca odpowiedź.
 |---|---|---|---|
 | `NOT NULL` | 23000 | 335544347 | `[335544347, 0, 0, 335544347]` |
 | PK duplikat | 23000 | 335544665 | `[335544665, 0, 0, 335545072, 0, 335544665]` |
-| UNIQUE duplikat | 23000 | **335544665** | `[335544665, 0, 0, 335545072, 0, 335544665]` |
+| UNIQUE duplikat (**ograniczenie**) | 23000 | **335544665** | `[335544665, 0, 0, 335545072, 0, 335544665]` |
+| ⭐ UNIQUE duplikat (**samodzielny `CREATE UNIQUE INDEX`**) — **DOMIAR I4, 2026-07-26** | 23000 | **335544349** | `[335544349, 0, 335545072, 0, 335544349]` |
+
+> ⭐ **Uzupełnienie zmierzone w I4 (2026-07-26) — I0 nie było błędne, było niekompletne.** I0 sprawdziło
+> klucz główny i **ograniczenie** `UNIQUE` i słusznie stwierdziło, że są nierozróżnialne. Nie sprawdziło
+> natomiast **indeksu unikalnego założonego osobno** (`CREATE UNIQUE INDEX`), który wiedzie **innym kodem**
+> — `335544349` (`isc_no_dup`, *„attempt to store duplicate value … in unique index"*). Do czasu tego pomiaru
+> import raportował duplikat na takim indeksie jako ogólny `ServerError`. Oba przypadki mapują się na
+> `ImportErrorKind.ServerUniqueViolation` — dla użytkownika to jedno zdarzenie („ta wartość już tam jest"),
+> a to, który mechanizm je wymusił, nie jest informacją, do czego raport mógłby jej użyć.
+> **To jest dokładnie powód, dla którego DoD etapu I4 wymaga przebiegu na żywym silniku, a nie zaufania
+> wcześniejszemu pomiarowi.**
 | CHECK | 23000 | 335544558 | `[335544558, 0, 0, 335544842, 0, 335544558]` |
 | FK — brak rodzica | 23000 | 335544466 | `[335544466, 0, 0, 335544838, 335545072, 0, 335544466]` |
 | **tekst za długi** | 22000 | **335544321** | `[335544321, **335544914**, 335545033, **10, 16**, 335544321]` |

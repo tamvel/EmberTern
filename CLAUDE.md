@@ -29,7 +29,7 @@ verbatim, in the archive below.
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
 | **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next. | **Every Data Import session — read the status block + your etap's row in §6 first.** |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (246 entries, #1–#259), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (247 entries, #1–#260), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -275,11 +275,11 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0 + I1 + I2 + I3 DONE. ⭐ After I3 the module is
-  functionally complete with NO database and NO UI** — read → map → convert → validate → batch → report runs
-  end-to-end on `TextImportSource` + `DryRunImportWriter`; what remains is wiring Firebird (I4) and the surface
-  (I5–I7). Branch **`feat/data-import`**, suite **5515 green**, build 0/0. A new tool tab (toolbar, beside the
-  Script Executor) that imports Clipboard / TXT / CSV / XLSX into an existing or a newly created table.
+- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0–I4 DONE. ⭐ After I4 the whole ENGINE is built
+  and live-verified** (`tools/probes/DataImportProbe` vs FB5 `WI-V5.0.3.1683` — **20/20 ALL PASS**); from I5 on
+  the work is the user interface only. Branch **`feat/data-import`**, suite **5537 green**, build 0/0. A new
+  tool tab (toolbar, beside the Script Executor) that imports Clipboard / TXT / CSV / XLSX into an existing or
+  a newly created table.
   **Read [docs/design/data-import.md](docs/design/data-import.md) — its „📍 STAN IMPLEMENTACJI" block is the
   handover, and the architecture is 🔒 FROZEN: from etap I1 on it is implementation only, and an
   implementation discovery that genuinely undermines the design means STOP THE ETAP AND REPORT, never a quiet
@@ -318,8 +318,23 @@ noted.
   `RowsFailed` count rows that actually succeeded. Two behaviours worth knowing: the tail flush runs on an
   **uncancelled** token so rows the writer already accepted stay attributable (§0.6, the gotcha-#253
   discipline), and the pipeline **refuses to start** rather than guessing when the mapping names a column the
-  target does not have. **Next: etap I4** (Firebird writer with `FbBatchCommand` + target reader + live
-  verification on the FB5 lab).
+  target does not have.
+  **I4 as-built (the first import code that touches a database):** `FirebirdImportWriter` (`FbBatchCommand`;
+  **`MultiError` maps 1:1 onto `ImportErrorPolicy`** so the policy is enforced by the server round trip rather
+  than re-implemented client-side; `OVERRIDING SYSTEM VALUE` for a mapped ALWAYS identity; `CommandLock` per
+  batch; Data lane, the user's working transaction, **auto-begin and never auto-commit**) ·
+  `FirebirdImportTargetReader` (a thin adapter — columns come from the existing
+  `FirebirdMetadataReader.ListColumnsAsync`, the codebase's one owner of that question; the only thing it adds
+  is the BEFORE INSERT trigger list, decoded through the shared `DecodeTriggerHeader` because
+  `RDB$TRIGGER_TYPE` is bit-encoded) · **`FirebirdImportErrorMapper` — the GDS-vector classifier.**
+  ⚠ **Two live findings worth carrying forward.** (1) **A standalone `CREATE UNIQUE INDEX` violation leads
+  with GDS `335544349`, NOT the `335544665` a PK/UNIQUE *constraint* reports** — I0 measured only the
+  constraint form, so until the live run the import reported a duplicate key as a generic `ServerError`
+  (gotcha #260; the I0 findings table is corrected in place). (2) **The client guards now fire first for
+  NOT NULL, length and numeric range**, so those server branches are only reachable through a trigger — which
+  is why the lab gained `IMP_SRV` and its `IMP_SRV_BI` trigger, the only way to exercise the
+  `335544321` three-way split against a real engine. **Next: etap I5** (App: the tab, the A–H frame,
+  collapsible sections, the readiness strip, and the Source & format section).
 - **⚠ Spun off from Data Import I0, NOT part of it — a platform-wide defect to audit.** Measured on live FB5:
   binding a string containing a character the **connection** charset cannot represent stores `?` with **no
   error at all**, even when the target column is UTF8 (the connection charset decides, not the column's), and
@@ -2955,7 +2970,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (246 entries, #1–#259), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (247 entries, #1–#260), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a

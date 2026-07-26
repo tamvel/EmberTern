@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER VERIFICATION TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Data Import — etap I4 (docs/design/data-import.md §6). Proves the WRITE path against a live FB5 engine.
+
+    ⭐ It differs from DataImportWriteProbe (etap I0) in the one way that matters: I0 measured the ENGINE and
+    the DRIVER with raw ADO.NET, because no production import code existed yet. This probe runs the REAL
+    production stack — ImportPipeline -> FirebirdImportWriter -> FirebirdImportErrorMapper — so what it proves
+    is not "Firebird behaves like this" but "OUR CODE behaves like Firebird told us it would". Two questions
+    the user asked for explicitly:
+
+      (E) does every failure class map to the right ImportErrorKind, from the GDS VECTOR rather than
+          ErrorCode — and does the report name the right SOURCE row?
+      (B) does FbBatchCommand behave as I0 measured, in particular the 1:1 error indexing and the
+          MultiError <-> ImportErrorPolicy mapping?
+
+    Runs against Lab/EmberTern_Lab.fdb (the IMP_* zoo added in I4). It only touches IMP_* tables and cleans
+    them out before each case, so the debugger/metadata zoo is never disturbed.
+
+    Deliberately NOT in EmberTern.slnx: it needs a live server and a password, which the hermetic test suite
+    must never need.
+
+    How to run: see the header of Program.cs (an XML comment cannot carry the double dash the CLI needs).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- The probe is a scratch tool; a warning here must not block a verification run. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
+  </ItemGroup>
+
+</Project>
