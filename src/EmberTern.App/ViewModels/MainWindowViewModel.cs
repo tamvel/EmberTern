@@ -4025,6 +4025,23 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public event Func<Task<string?>>? ImportClipboardReadRequested;
 
+    /// <summary>
+    /// Remembered height + collapse state of the Data Import bottom panel, held here because the import tab
+    /// is transient: the view that owns the splitter may be gone by the time the workspace is saved, so the
+    /// value cannot live on it. <see cref="MainWindow"/> reads and seeds these exactly as it does
+    /// <c>ResultsPanelHeight</c>; an import tab picks them up when it opens and writes them back as the user
+    /// drags.
+    /// <para>
+    /// Deliberately NOT part of <c>ImportConfiguration</c> — a panel height is a layout preference, not a
+    /// decision about an import (§4.8.2).
+    /// </para>
+    /// </summary>
+    public double ImportPanelHeight { get; set; } = DefaultImportPanelHeight;
+
+    public bool ImportPanelCollapsed { get; set; }
+
+    private const double DefaultImportPanelHeight = 190;
+
     [RelayCommand(CanExecute = nameof(CanOpenDataImport))]
     private void OpenDataImport()
     {
@@ -4041,14 +4058,27 @@ public partial class MainWindowViewModel : ViewModelBase
 
         // The environment facts readiness needs are read as DELEGATES rather than snapshotted, so the strip
         // reflects the connection and transaction as they are now — not as they were when the tab opened.
+        // The connection name is read the same way, for the same reason: it is what band H states about
+        // where the rows are going.
         var import = new DataImportTabViewModel(
             () => _service.IsConnected,
-            () => _transactionService.IsActive);
+            () => _transactionService.IsActive,
+            () => _service.ActiveProfile?.Name ?? string.Empty);
 
         if (ImportFilePickRequested is not null)
             import.FilePickRequested += () => ImportFilePickRequested.Invoke();
         if (ImportClipboardReadRequested is not null)
             import.ClipboardReadRequested += () => ImportClipboardReadRequested.Invoke();
+
+        // Hand the tab the remembered panel layout, and follow it back as the user drags. The tab is
+        // near-singleton and transient, so this VM is where the value outlives it.
+        import.BottomPanelHeight = ImportPanelHeight;
+        import.IsBottomPanelCollapsed = ImportPanelCollapsed;
+        import.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DataImportTabViewModel.BottomPanelHeight)) ImportPanelHeight = import.BottomPanelHeight;
+            else if (e.PropertyName == nameof(DataImportTabViewModel.IsBottomPanelCollapsed)) ImportPanelCollapsed = import.IsBottomPanelCollapsed;
+        };
 
         var newTab = WorkspaceTabViewModel.CreateDataImport(this, import, _service.ActiveProfile?.Id);
         WorkspaceTabs.Add(newTab);

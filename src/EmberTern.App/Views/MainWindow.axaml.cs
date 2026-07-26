@@ -406,6 +406,11 @@ public partial class MainWindow : Window
         }
         state.ResultsPanelHeight = _resultsHeight;
         state.ResultsMaximized = _resultsMaximized;
+        // Data Import's bottom panel. The remembered values live on the VM (the import tab is
+        // transient, so the view they belong to may already be gone at close) — read them, don't
+        // reach into a control.
+        state.ImportPreviewPanelHeight = _currentVm.ImportPanelHeight;
+        state.ImportPreviewPanelCollapsed = _currentVm.ImportPanelCollapsed;
         try
         {
             _workspaceStore?.Save(state);
@@ -1367,6 +1372,14 @@ public partial class MainWindow : Window
         var height = s?.ResultsPanelHeight ?? DefaultResultsHeight;
         if (height < MinResultsHeight) height = MinResultsHeight;
         _resultsHeight = height;
+
+        // Data Import's bottom panel — seeded onto the VM, which hands it to an import tab whenever
+        // one is opened (the tab itself is never restored; only this preference is).
+        if (_currentVm is not null && s is not null)
+        {
+            _currentVm.ImportPanelHeight = s.ImportPreviewPanelHeight;
+            _currentVm.ImportPanelCollapsed = s.ImportPreviewPanelCollapsed;
+        }
 
         if (s?.SidebarCollapsed == true)
         {

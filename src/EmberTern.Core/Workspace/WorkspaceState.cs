@@ -137,4 +137,16 @@ public sealed class WorkspaceState
     // Selected bottom-panel tab in the SQL editor (0 = Results, 1 = Messages,
     // 2 = Output). Global UI preference; the last-viewed tab at close.
     public int BottomPanelTabIndex { get; set; }
+
+    // Data Import's bottom panel (Source preview / Errors / Report). Global layout
+    // preference restored exactly like ResultsPanelHeight — and it HAS to be global:
+    // the import tab is deliberately transient (skipped by SnapshotCurrentTabs), so a
+    // per-tab home would have nothing to be restored into.
+    //
+    // Note the boundary this deliberately respects: a panel height is a layout
+    // preference, NOT a decision about an import, so it must never travel inside
+    // ImportConfiguration (§4.8.2). Putting it there would make the reflection guard
+    // demand that saved import profiles carry a pixel height.
+    public double ImportPreviewPanelHeight { get; set; } = 190;
+    public bool ImportPreviewPanelCollapsed { get; set; }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Controls;
 using EmberTern.Core.Import;
 
@@ -122,15 +123,31 @@ public sealed class ImportReadinessItemViewModel
 /// </summary>
 public sealed partial class ImportReadinessViewModel : ViewModelBase
 {
+    /// <summary>
+    /// How many findings the strip shows before it stops growing (U6).
+    /// <para>
+    /// ⭐ The reason there is a ceiling at all: an uncapped list takes the most vertical space at exactly the
+    /// moment the user has the most to fix, i.e. when they most need to see the data they are fixing it
+    /// against. The <b>chips</b> keep §3.2's promise — every section's state is visible at once, in one line,
+    /// by colour — so the cap costs no information, only immediacy of the wording, and one click restores
+    /// that too.
+    /// </para>
+    /// </summary>
+    public const int CollapsedItemLimit = 3;
+
     public ImportReadinessViewModel()
     {
         Items = new ObservableCollection<ImportReadinessItemViewModel>();
+        VisibleItems = new ObservableCollection<ImportReadinessItemViewModel>();
         Sections = new ObservableCollection<ImportReadinessSectionViewModel>();
         Update(ImportReadinessReport.Empty, 0);
     }
 
     /// <summary>Every finding, in the order Core produced them.</summary>
     public ObservableCollection<ImportReadinessItemViewModel> Items { get; }
+
+    /// <summary>What the strip actually renders — <see cref="Items"/> when expanded, its head when not.</summary>
+    public ObservableCollection<ImportReadinessItemViewModel> VisibleItems { get; }
 
     /// <summary>One chip per section — the compact ✓/⚠/✖ row the user reads first.</summary>
     public ObservableCollection<ImportReadinessSectionViewModel> Sections { get; }
@@ -143,6 +160,24 @@ public sealed partial class ImportReadinessViewModel : ViewModelBase
 
     /// <summary>True when there is at least one finding worth listing under the chips.</summary>
     [ObservableProperty] private bool _hasItems;
+
+    /// <summary>True while the full list is shown instead of its capped head.</summary>
+    [ObservableProperty] private bool _isExpanded;
+
+    /// <summary>"… and 2 more problems" — the line that admits the list was cut. Empty when nothing is hidden.</summary>
+    [ObservableProperty] private string _moreText = string.Empty;
+
+    /// <summary>True when there is anything the cap is currently hiding.</summary>
+    [ObservableProperty] private bool _hasHiddenItems;
+
+    /// <summary>Show the whole list, or fold it back to the cap. The state survives a refresh so the strip
+    /// does not snap shut under a user who opened it and is reading it.</summary>
+    [RelayCommand]
+    private void ToggleExpanded()
+    {
+        IsExpanded = !IsExpanded;
+        PublishVisibleItems();
+    }
 
     public void Update(ImportReadinessReport report, long rowsKnown)
     {
@@ -159,11 +194,35 @@ public sealed partial class ImportReadinessViewModel : ViewModelBase
 
         CanRun = report.CanRun;
         HasItems = Items.Count > 0;
+        PublishVisibleItems();
+
         Summary = CanRun
             ? (rowsKnown > 0
                 ? string.Format(CultureInfo.CurrentCulture, UiStrings.ImportReadySummaryWithRowsFormat, rowsKnown)
                 : UiStrings.ImportReadySummary)
             : UiStrings.ImportReadyBlocked;
+    }
+
+    /// <summary>
+    /// Projects <see cref="Items"/> onto <see cref="VisibleItems"/> under the cap.
+    /// <para>
+    /// The findings keep Core's order, so the ones that survive the cut are the ones Core put first — the cap
+    /// never re-ranks anything, because a second ordering here is exactly how a strip and a report start
+    /// disagreeing about which problem matters most.
+    /// </para>
+    /// </summary>
+    private void PublishVisibleItems()
+    {
+        var limit = IsExpanded ? Items.Count : Math.Min(CollapsedItemLimit, Items.Count);
+
+        VisibleItems.Clear();
+        for (var i = 0; i < limit; i++) VisibleItems.Add(Items[i]);
+
+        var hidden = Items.Count - limit;
+        HasHiddenItems = hidden > 0 || (IsExpanded && Items.Count > CollapsedItemLimit);
+        MoreText = hidden > 0
+            ? string.Format(CultureInfo.CurrentCulture, UiStrings.ImportReadyMoreItemsFormat, hidden)
+            : (IsExpanded ? UiStrings.ImportReadyShowFewer : string.Empty);
     }
 
     private static readonly ImportSection[] AllSections =

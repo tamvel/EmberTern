@@ -69,6 +69,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     private readonly IImportProvider _delimitedProvider = new DelimitedTextImportProvider();
     private readonly Func<bool> _isConnected;
     private readonly Func<bool> _hasOpenUserTransaction;
+    private readonly Func<string> _connectionName;
 
     private ImportConfiguration _configuration = ImportConfiguration.Empty;
     private SourceSchema? _schema;
@@ -76,10 +77,21 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     private bool _sourceReadable = true;
     private CancellationTokenSource? _recalculation;
 
-    public DataImportTabViewModel(Func<bool> isConnected, Func<bool> hasOpenUserTransaction)
+    /// <summary>
+    /// True once the user has expanded the format options by hand, which suspends auto-collapse (U11) until
+    /// they collapse them again. An automat that closes a panel the user just opened is worse than no automat
+    /// at all (§2.2 point 2).
+    /// </summary>
+    private bool _formatOptionsHeldOpen;
+
+    public DataImportTabViewModel(
+        Func<bool> isConnected,
+        Func<bool> hasOpenUserTransaction,
+        Func<string> connectionName)
     {
         _isConnected = isConnected ?? throw new ArgumentNullException(nameof(isConnected));
         _hasOpenUserTransaction = hasOpenUserTransaction ?? throw new ArgumentNullException(nameof(hasOpenUserTransaction));
+        _connectionName = connectionName ?? throw new ArgumentNullException(nameof(connectionName));
 
         Source = new ImportSourceSectionViewModel();
         Source.Changed += (_, _) => QueueRecalculate();
@@ -130,20 +142,36 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
     [ObservableProperty] private string _surfaceStatus = string.Empty;
 
+    /// <summary>Where the rows are going: the active connection and the lane that carries them (U9).</summary>
+    [ObservableProperty] private string _destinationStatus = string.Empty;
+
     /// <summary>True while a source read is in flight.</summary>
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>Bottom panel collapse state (§3.1 band G).</summary>
     [ObservableProperty] private bool _isBottomPanelCollapsed;
 
+    /// <summary>
+    /// Remembered height of the bottom panel, in pixels. It lives on the VM rather than in the view because
+    /// the import tab is transient — the view is gone before the workspace is written — and it is persisted
+    /// globally (<c>WorkspaceState.ImportPreviewPanelHeight</c>), the way the SQL editor's results panel is.
+    /// </summary>
+    [ObservableProperty] private double _bottomPanelHeight = 190;
+
     [RelayCommand]
     private void ToggleBottomPanel() => IsBottomPanelCollapsed = !IsBottomPanelCollapsed;
 
-    /// <summary>Manual expand/collapse of the Source section. A manual toggle always wins over the automatic
-    /// "expand the first incomplete section" — an automat that fights the user is worse than none
-    /// (§2.2 point 2).</summary>
+    /// <summary>
+    /// Manual expand/collapse of the format options. A manual toggle always wins over any automatic
+    /// collapsing — an automat that fights the user is worse than none (§2.2 point 2) — so opening them by
+    /// hand pins them open until they are closed again.
+    /// </summary>
     [RelayCommand]
-    private void ToggleSourceSection() => Source.IsExpanded = !Source.IsExpanded;
+    private void ToggleFormatOptions()
+    {
+        Source.IsExpanded = !Source.IsExpanded;
+        _formatOptionsHeldOpen = Source.IsExpanded;
+    }
 
     // ── Source commands ─────────────────────────────────────────────────────────────────────────────────
 
@@ -174,8 +202,32 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     [RelayCommand]
     private void FocusSection(ImportSection section)
     {
-        if (section is ImportSection.Source or ImportSection.Format) Source.IsExpanded = true;
+        // Only the FORMAT chip opens the options: the source picker is always live, so a Source finding has
+        // nothing to expand — it just needs the caret put in the picker.
+        if (section is ImportSection.Format)
+        {
+            Source.IsExpanded = true;
+            _formatOptionsHeldOpen = true;
+        }
+
         SectionFocusRequested?.Invoke(this, section);
+    }
+
+    /// <summary>
+    /// ⭐ U11 — the format options collapse themselves once they are settled, which is what makes the repeat
+    /// import cheap (§2.2): the picker stays live, so the next file is one click and <c>F5</c>, and the
+    /// options the user set months ago do not occupy the surface for the rest of the session.
+    /// <para>
+    /// Deliberately conservative about when it may act: only after a source has actually been read (fields
+    /// exist), and never when the user has opened the options by hand.
+    /// </para>
+    /// </summary>
+    private void AutoCollapseFormatOptionsIfSettled()
+    {
+        if (_formatOptionsHeldOpen) return;
+        if (_schema is null || _schema.Fields.Count == 0) return;
+
+        Source.IsExpanded = false;
     }
 
     // ── The one translation point (§4.8.6) ──────────────────────────────────────────────────────────────
@@ -282,6 +334,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             _sourceReadable = true;
             SetStatus(string.Empty, MessageSeverity.Info);
             await LoadPreviewAsync(source, configuration, schema, cancellationToken).ConfigureAwait(true);
+            if (!cancellationToken.IsCancellationRequested) AutoCollapseFormatOptionsIfSettled();
         }
         catch (OperationCanceledException)
         {
@@ -444,6 +497,8 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
     private void UpdateSurfaceStatus()
     {
+        UpdateDestinationStatus();
+
         if (_schema is null || _schema.Fields.Count == 0)
         {
             SurfaceStatus = UiStrings.ImportSurfaceStatusNoSource;
@@ -456,6 +511,29 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             _schema.Fields.Count,
             PreviewRows.Count,
             PreviewRows.Count >= SourcePreviewRows ? UiStrings.ImportSurfaceStatusMore : string.Empty);
+    }
+
+    /// <summary>
+    /// ⭐ Band H's left half — <b>where the rows are going and on which connection lane</b> (U9). It used to
+    /// sit in a header band that otherwise only repeated the tab's own title; moved here because this is the
+    /// line that answers "where does this land", and in I7 the transaction mode joins it.
+    /// <para>
+    /// The lane is a constant on purpose: rows always go to the <b>Data</b> lane as the ONE user working
+    /// transaction (§4.5). Saying so out loud is the point — a module that writes to a database should not
+    /// make the user guess which transaction it joins.
+    /// </para>
+    /// </summary>
+    private void UpdateDestinationStatus()
+    {
+        var connection = _connectionName();
+
+        DestinationStatus = connection.Length == 0
+            ? UiStrings.ImportDestinationNotConnected
+            : string.Format(
+                CultureInfo.CurrentCulture,
+                UiStrings.ImportDestinationFormat,
+                connection,
+                UiStrings.ImportDestinationDataLane);
     }
 
     private void UpdateFileFacts()

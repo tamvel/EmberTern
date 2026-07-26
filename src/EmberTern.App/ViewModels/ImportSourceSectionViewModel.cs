@@ -136,10 +136,11 @@ public sealed partial class ImportSourceSectionViewModel : ViewModelBase
     {
         get
         {
-            var parts = new List<string>(5);
-            parts.Add(UseFile
-                ? (FileDisplayName.Length > 0 ? FileDisplayName : UiStrings.ImportSourceNoFile)
-                : UiStrings.ImportSourceClipboard);
+            // ⭐ The file is deliberately NOT in here any more (U1, 2026-07-26). It used to lead the summary
+            // because the whole section collapsed behind it; now the picker itself stays on screen, so
+            // repeating the name would state twice what is already visible once. What is left is exactly the
+            // part that folds away: how the text is read.
+            var parts = new List<string>(4);
 
             if (UseFile) parts.Add(Encoding.Display);
             parts.Add(string.Format(CultureInfo.CurrentCulture, UiStrings.ImportSummaryDelimiterFormat, Delimiter.Display));

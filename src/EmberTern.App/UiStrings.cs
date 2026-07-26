@@ -133,7 +133,18 @@ internal static class UiStrings
     public const string ImportSectionTransaction = "Transaction";
 
     // Source & format section.
-    public const string ImportSourceHeader = "SOURCE AND FORMAT";
+    //
+    // ⭐ The section splits by HOW OFTEN a decision changes, not by what it is about (U1/U5, ratified
+    // 2026-07-26). The file (or clipboard) changes on every single run; the separator, encoding and date
+    // format are set once and then survive for months. So the picker stays live at all times and only these
+    // options fold away — otherwise the commonest action in the module (point at the next file) would cost
+    // an expand and a collapse, and §1.2's promise that a repeat import is one F5 would be false.
+    public const string ImportSourceHeader = "SOURCE";
+    // Deliberately not "Format": that word also reads as "which format is this file", i.e. the source kind,
+    // which is decided by the picker beside it. And not "Import parameters" either — the transaction mode and
+    // the error policy are import parameters too, and they live in the command bar.
+    public const string ImportFormatOptionsHeader = "Format options";
+    public const string ImportFormatOptionsTooltip = "Separator, encoding, dates and number formats";
     public const string ImportSourceFile = "File";
     public const string ImportSourceClipboard = "Clipboard";
     public const string ImportSourceNoFile = "no file chosen";
@@ -221,12 +232,32 @@ internal static class UiStrings
     public const string ImportReadyNotRepresentableFormat =
         "{0} sampled value(s) carry characters this connection's charset cannot store — connect in UTF8 to keep them.";
 
+    // The readiness strip's ceiling (U6). The chips carry §3.2's "every gap at once"; this only caps how
+    // many findings are spelled out, so the strip cannot take the whole surface exactly when there is most
+    // to fix.
+    public const string ImportReadyMoreItemsFormat = "… and {0} more problem(s)";
+    public const string ImportReadyShowFewer = "Show fewer";
+    public const string ImportReadyExpandTooltip = "Show every finding";
+
+    // Band H, left half — where the rows land. The lane is a constant because it is one: rows always go to
+    // the Data lane as the one user working transaction (§4.5).
+    public const string ImportDestinationFormat = "{0} · {1} lane";
+    public const string ImportDestinationDataLane = "Data";
+    public const string ImportDestinationNotConnected = "Not connected";
+
+    // The work area's empty state. Every area on this surface names the NEXT STEP rather than reporting an
+    // absence (§9.4) — "no data" tells the user something they can already see.
+    public const string ImportWorkAreaEmpty =
+        "Choose a target table to map its columns. The mapping grid and the converted preview appear here.";
+
     // Bottom panel + surface status.
     public const string ImportSourcePreviewTab = "Source preview";
     public const string ImportSourcePreviewEmpty = "Choose a file or paste from the clipboard.";
     public const string ImportSourcePreviewRaggedTooltip =
         "This record has a different number of fields than the header — usually a wrong column separator.";
     public const string ImportRowNumberColumn = "#";
+    /// <summary>Gutter marker for a record whose field count disagrees with the rest of the file (§3.6).</summary>
+    public const string ImportRaggedMarker = "⚠";
     public const string ImportSurfaceStatusNoSource = "No source yet.";
     public const string ImportSurfaceStatusFormat = "{0} fields · {1:N0} rows previewed{2}";
     public const string ImportSurfaceStatusMore = "+";

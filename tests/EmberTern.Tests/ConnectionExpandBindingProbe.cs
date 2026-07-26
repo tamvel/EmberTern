@@ -35,26 +35,46 @@ namespace EmberTern.Tests;
 // Style binding in MainWindow.axaml. NOT a behavioural assertion to keep green
 // forever — it's an instrument. It builds the REAL MainWindow (real compiled
 // bindings, real styles) so the binding under test is the production one.
-public sealed class ConnectionExpandBindingProbe
+/// <summary>
+/// Owns the ONE headless session for the whole test process, and — unlike the <c>static readonly</c> field it
+/// replaces — actually <b>disposes</b> it.
+/// <para>
+/// ⭐ Why the ownership matters, beyond tidiness. Avalonia's own contract for this type is: <i>"Disposing unit
+/// test session stops internal dispatcher loop."</i> A session that is never disposed therefore leaves a
+/// dispatcher loop spinning on its own thread for the rest of the process — after every test has finished.
+/// As an <c>IClassFixture</c>, xunit creates it before the class's first test and disposes it after the last,
+/// so the loop's lifetime is bounded by the tests that need it.
+/// </para>
+/// <para>
+/// It stays ONE session (gotcha #94/#226), which is the load-bearing part: a session owns a UI thread, and
+/// AvaloniaEdit builds its caret/editing <c>KeyBinding</c>s as STATIC lists created on whichever thread first
+/// constructs a <c>TextEditor</c>. With a session per test, every later test's <c>TextArea</c> shares those
+/// instances across threads, so any real KeyDown into an editor dies with "The calling thread cannot access
+/// this object because a different thread owns it" — regardless of how the key is injected.
+/// </para>
+/// </summary>
+public sealed class HeadlessSessionFixture : IDisposable
 {
-    // ONE headless session for the whole class (gotcha #94). This is not a tidy-up: a session owns a UI
-    // thread, and AvaloniaEdit builds its caret/editing KeyBindings as STATIC lists created on whichever
-    // thread first constructs a TextEditor. With a session per test, every later test's TextArea shares
-    // those KeyBinding instances across threads, so any real KeyDown into an editor dies with
-    // "The calling thread cannot access this object because a different thread owns it" — regardless of how
-    // the key is injected. One session keeps every test on one thread, which is also what the gotcha has
-    // always said to do.
-    private static readonly HeadlessUnitTestSession SharedSession =
-        HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+    public HeadlessUnitTestSession Session { get; } = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
 
-    private readonly ITestOutputHelper _out;
-
-    public ConnectionExpandBindingProbe(ITestOutputHelper output) => _out = output;
+    public void Dispose() => Session.Dispose();
 
     private static class HeadlessAppEntry
     {
         public static AppBuilder BuildAvaloniaApp()
             => AppBuilder.Configure<global::EmberTern.App.App>().UseHeadless(new AvaloniaHeadlessPlatformOptions());
+    }
+}
+
+public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSessionFixture>
+{
+    private readonly HeadlessUnitTestSession SharedSession;
+    private readonly ITestOutputHelper _out;
+
+    public ConnectionExpandBindingProbe(HeadlessSessionFixture fixture, ITestOutputHelper output)
+    {
+        SharedSession = fixture.Session;
+        _out = output;
     }
 
     // Flat sidebar (migration): the real MainWindow hosts the single-VSP ListBox

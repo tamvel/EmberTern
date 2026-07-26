@@ -2,8 +2,9 @@
 
 **Status: 🔒 PROJEKT ZAMROŻONY (2026-07-26). Etapy I0 + I1 + I2 + I3 + I4 + I5 wykonane; I0–I4 zaakceptowane.**
 Następny krok: **etap I6** (App: sekcja Cel + panel Mapowanie) z §6.
-**I5 to pierwszy etap, w którym coś widać na ekranie — i zgodnie z regułą QA projektu jest zgłoszony jako
-„implementacja gotowa — oczekuje wizualnego potwierdzenia użytkownika", nie jako zamknięty.**
+**I5 przeszedł przegląd wzrokowy użytkownika 2026-07-26: funkcjonalnie działa, ale przegląd zwrócił pięć
+uwag UX (U1–U5, §3.8).** Etap pozostaje **otwarty do czasu rozstrzygnięcia U1–U3**; U4 (gęstość globalna)
+jest osobnym zadaniem architektonicznym poza modułem, U5 to analiza należna przed I6/I7.
 Szczegóły — blok „📍 STAN IMPLEMENTACJI" niżej.
 
 > ### 🔒 DOKUMENT ZAMROŻONY — obowiązuje od 2026-07-26 (po akceptacji wyników I0)
@@ -49,16 +50,28 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 
 | | |
 |---|---|
-| **Gałąź** | `feat/data-import` (odbita od `master` @ `d474b42`) |
-| **Ostatni commit** | etap I5 — zakładka, rama powierzchni, pasek gotowości, sekcja Źródło i format |
+| **Gałąź** | `feat/data-import` (odbita od `master` @ `d474b42`); **wypchnięta na `origin`**, `private` do dosłania przy najbliższym zamknięciu etapu. Żywe gałęzie repozytorium: `master` + `feat/data-import` |
+| **Ostatni commit** | szew domykający I5 — rewizja układu powierzchni + U1/U2/U3/U6/U7/U8/U9/U10/U11 (poprzedni: `0c5667e`, etap I5) |
 | **Etapy zamknięte** | **I0** (sondy, `5e90435`) · **I1** (modele, konfiguracja, magazyn, czytnik, `77eb997`) · **I2** (konwersja, mapowanie, walidacja, gotowość, `392850f`) · **I3** (pipeline + dry-run + provider, `434daeb`) · **I4** (Firebird + weryfikacja na żywym FB5, `3b31a4d`) |
-| **⏳ Oczekuje potwierdzenia** | **I5** — implementacja gotowa, build i testy zielone, aplikacja startuje czysto; **wygląd w obu paletach nie został zweryfikowany wzrokowo** (reguła QA projektu: bez tego nie mówimy „zrobione") |
-| **Następny etap** | **I6** — App: sekcja Cel (istniejąca tabela) + panel Mapowanie, przeliczanie łańcuchowe z anulowaniem (§6) |
-| **Testy** | **5559 zielonych**, 0 niepowodzeń (I5 dodał +22; wszystkich testów importu jest teraz **296**) |
+| **⏳ I5 — szew domykający dostarczony, czeka na wizualne potwierdzenie** | Przegląd wzrokowy odbył się 2026-07-26 i dał 5 uwag (U1–U5) + 5 propozycji z autoprzeglądu (U6–U10) + U11. **Wszystkie rozstrzygnięte; 9 z nich dostarczonych w szwie** (§3.8). Układ powierzchni **zrewidowany i wniesiony w miejsce do §3.1** — gwiazdka przeniesiona z konfiguracji na powierzchnię roboczą, pas A usunięty, kafelki pionowe z zawsze żywym pickerem. **Otwarte świadomie: U4** (gęstość globalna → osobny sprint UX po module) i **U5** (weryfikacja przy I6) |
+| **Następny etap** | **I6** — App: sekcja Cel (istniejąca tabela) + panel Mapowanie, przeliczanie łańcuchowe z anulowaniem (§6). Rama jest gotowa: pas E2 i wiersz `*` czekają, więc I6 **wstawia**, a nie przebudowuje |
+| **Testy** | **5567 zielonych**, 0 niepowodzeń (szew dodał +8; wszystkich testów importu jest teraz **304**) |
 | **Weryfikacja na żywo** | `tools/probes/DataImportProbe` przeciwko FB5 `WI-V5.0.3.1683` — **20/20 ALL PASS** (klasyfikacja błędów + atrybucja wiersza, zachowanie paczek, obowiązki writera, charset) |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
 | **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **cztery VM-y i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
 | **⭐ Kamień milowy** | **Po I4 cały silnik jest gotowy i zweryfikowany na żywym silniku.** Od I5 pracujemy wyłącznie nad interfejsem — pipeline, writer i mapowanie błędów są zamknięte. |
+
+### Zakres pozostały modułu (stan po I5)
+
+| Etap | Co zostało | Blokady / zależności |
+|---|---|---|
+| **I6** | sekcja **Cel** (istniejąca tabela) + panel **Mapowanie** + przeliczanie łańcuchowe z anulowaniem | ⚠ dokłada dwa obszary do pionu, który już jest ciasny (U1/U5) — **najpierw decyzja o układzie** |
+| **I7** | **Podgląd po konwersji** + `Waliduj` + tryby transakcji + `Importuj`/F5 + postęp + raport + Commit/Rollback + eksport raportu + „ostatnio użyta" konfiguracja | pas **B** (pasek poleceń) powstaje dopiero tutaj — dziś nie istnieje, bo nie miałby czym sterować; **koniec MVP** |
+| **I8** | nowa tabela: `ColumnTypeInferencer` (skan całego źródła, R19), edytowalna siatka typów, podgląd DDL, wykonanie na linii Ddl, `DROP` przy niepowodzeniu | rozbudowuje sekcję Cel z I6 |
+| **I9** | XLSX + `EmberTern.Export.Office` → `EmberTern.Office`; `XlsxImportProvider` (7 wytycznych); rozgałęzienie sekcji Format po `Capabilities` | zamyka `DataImportXlsxProbe` |
+| **I10** | schowek (App czyta, Core parsuje) + `XlsImportProvider` (BIFF8, nowa zależność) | — |
+| **I11** | **nazwane profile (UI)** — selektor, „Zapisz jako…", zmiana nazwy, usuwanie | ⭐ **dowód projektu**: jeżeli wymaga zmiany choćby jednego modelu, §4.8 zostało po drodze naruszone |
+| **I12** | domknięcie: `docs/history/`, `docs/gotchas.md`, CLAUDE.md, audyt UI w obu paletach + **1366×768**, pomiar na 1 M wierszy | audyt UI wchłania to, co zostanie z U1–U10 |
 
 ### Co fizycznie istnieje po I5
 
@@ -181,8 +194,10 @@ Zmiany w plikach współdzielonych — **obie addytywne, obie zaakceptowane**:
 | `DataImportTabVmTests` | ⭐⭐ **`Configuration_SurvivesABuildApplyRoundTrip`** — obietnica §4.8.6 na poziomie App: ustawienie dodane prosto do VM-a sekcji byłoby niewidoczne dla profilu, a defekt wyszedłby dopiero w I11 jako „przebuduj powierzchnię"; ten test wywala się pierwszy · ⭐ **sekcje, których jeszcze nie ma, są przepuszczane** (starszy build nie okrada profilu nowszego) · ⭐ **wiersz odstający od WIĘKSZOŚCI jest oznaczany, nie od najszerszego** · detekcja wpisuje wartość ZADEKLAROWANĄ i publikuje dowód; wyłączona — nie rusza niczego · brak pliku i arkusz to **odmowa z powodem**, nie wyjątek i nie cisza · fakty środowiska czytane jako DELEGATY (pasek pokazuje stan teraz, nie z chwili otwarcia) · ⭐ **każdy kod diagnostyczny ma zdanie** (inaczej słownik Core wycieka do użytkownika) · każdy chip ma rozwiązywalny klucz pędzla i geometrii (#250) |
 
 ⚠ **Reguła QA projektu:** build 0/0, 5559 zielonych i czysty start aplikacji **nie wystarczają**, żeby nazwać
-etap UI zrobionym. I5 czeka na wizualne potwierdzenie w **obu paletach** (§9 checklista) — dopiero wtedy
-zamykamy.
+etap UI zrobionym — i I5 jest tego dowodem. Przegląd wzrokowy **odbył się 2026-07-26** i znalazł pięć rzeczy,
+których żaden z 296 testów importu nie mógł znaleźć, bo wszystkie dotyczą **proporcji i przestrzeni**, a nie
+stanu: sekcja parametrów zjada pion, dolny panel nie ma splittera, nagłówek pasa A jest zbędny, globalne
+kontrolki są za wysokie, a na Full HD formularz nie mieści się w pionie. **Zapisane jako U1–U5 w §3.8.**
 
 ### Testy I4 (nie upraszczać ich w kolejnych etapach — decyzja użytkownika)
 
@@ -430,38 +445,79 @@ wrócić.
 
 ### 3.1. Układ całości
 
+> ⭐ **Układ zrewidowany 2026-07-26 po pierwszym przeglądzie działającego I5** (§3.8). Rysunek niżej to stan
+> obowiązujący; poprzedni — z pasem A i sekcjami Źródło \| Cel **obok siebie** — jest opisany na końcu tej
+> sekcji razem z powodem odejścia od niego. Zmiana dotyczy wyłącznie rozmieszczenia i proporcji: modele,
+> pipeline, `ImportConfiguration` i podział warstw są nietknięte.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│ ⭳ Import danych                                          SZKOLENIE.FDB · linia Data      │  A
+│ ⚠ <MessageBanner Classes="docked"> — tylko gdy jest komunikat                            │  C
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
 │ [⭳ Importuj (F5)] [✓ Waliduj] [■]  │ Transakcja [Ręczna ▾]  Błędy [Zatrzymaj ▾] │ 00:00 │  B
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
-│ ⚠ <MessageBanner Classes="docked"> — tylko gdy jest komunikat                            │  C
+│ Gotowość: ✓Źródło ✓Format ⚠Cel ⚠Mapowanie ✓Transakcja      (max 3 treści + „…i kolejne") │  D
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
-│ Gotowość:  ✓ Źródło   ✓ Format   ✓ Cel   ⚠ Mapowanie 3/4   ✓ Transakcja                 │  D
-├──────────────────────────────────────────┬──────────────────────────────────────────────┤
-│ ▾ ŹRÓDŁO I FORMAT                        │ ▾ CEL                                        │  E
-│   … (patrz §3.3)                         │   … (patrz §3.4)                             │
-├──────────────────────────────────────────┴──────────────────────────────────────────────┤
+│ (•) Plik [ C:\…\lista.csv            ] [📂] ( ) Schowek   │ ▸ Opcje formatu               │  E1
+│ 2,4 MB · 2026-07-24 14:02 · WIN1250 · ";" · DMY                                          │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│ (•) Istniejąca [🔍 XXX_TMP_IMPORT ▾] ( ) Nowa                                            │  E2
+│ 4 kolumny · 0 rekordów · klucz główny: brak · triggery BEFORE INSERT: brak                │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
 │ MAPOWANIE (siatka)              ║ splitter ║              PODGLĄD PO KONWERSJI (siatka)  │  F
-│ … (patrz §3.5)                                                    … (patrz §3.6)         │
-├─────────────────────────────────────────────────────────────────────────────────────────┤
+│ … (patrz §3.5)                                                    … (patrz §3.6)         │  ★
+├══════════════════════════ GridSplitter (przeciągalny) ══════════════════════════════════┤
 │ Podgląd źródła │ Błędy (2) │ Raport                        (bottom-tab, zwijany)         │  G
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
-│ 1 240 wierszy · 3/4 kolumn zmapowanych · transakcja: ręczna · gotowe do importu          │  H
+│ SZKOLENIE · linia Data │ 1 240 wierszy · 3/4 kolumn zmapowanych · transakcja: ręczna     │  H
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-| Pas | Zawartość | Ponowne użycie |
-|---|---|---|
-| **A** | Nagłówek zakładki: ikona + nazwa + aktywne połączenie i linia | wzorzec zakładek narzędziowych |
-| **B** | Pasek poleceń: `Importuj` (`Classes="primary"`), `Waliduj`, `Anuluj` (widoczny tylko w trakcie), tryb transakcji, polityka błędów, `ExecutionTimer` **dokowany po prawej** (nie przesuwa przycisków — wzorzec ze Script Executora) | `Button.primary` / `Button.icon`, `SvgIcon`, `ExecutionTimer` |
-| **C** | Jedyna powierzchnia komunikatów | `Controls/MessageBanner`, `Classes="docked"` |
-| **D** | **Pasek gotowości** — patrz §3.2 | koncepcja `DebugPreflight` + mapowanie `Severity`→brush z `MessageBanner` |
-| **E** | Dwie zwijalne sekcje konfiguracyjne obok siebie: Źródło i format \| Cel | wzorzec „Advanced disclosure" z panelu uruchomienia debuggera (chevron + tytuł, stan w VM, bez `Expander`) |
-| **F** | Główna powierzchnia pracy: mapowanie ↔ podgląd, rozdzielone `GridSplitter` | wzorzec siatek + `GridLayoutBehavior` + `GridProfile` |
-| **G** | Dolny `TabControl`, zwijany podwójnym kliknięciem paska zakładek | `TabItem.bottom-tab`, mechanizm zwijania z debuggera/SQL Editora (**uwaga: gotcha #240 — pełna renormalizacja obu wierszy przy każdym przełączeniu**) |
-| **H** | Pasek stanu powierzchni: liczby, nigdy przymiotniki | — |
+| Pas | Zawartość | Wiersz | Ponowne użycie |
+|---|---|---|---|
+| **A** | ~~Nagłówek zakładki~~ — **USUNIĘTY** (U3). Żaden inny moduł EmberTerna go nie ma, a tytuł niesie zakładka. Jedyny fakt, który miał nieść *ponad* tytuł — połączenie i linia — przeniesiony do pasa **H** | — | — |
+| **B** | Pasek poleceń: `Importuj` (`Classes="primary"`), `Waliduj`, `Anuluj` (widoczny tylko w trakcie), tryb transakcji, polityka błędów, `ExecutionTimer` **dokowany po prawej** (nie przesuwa przycisków — wzorzec ze Script Executora) | `Auto` | `Button.primary` / `Button.icon`, `SvgIcon`, `ExecutionTimer` |
+| **C** | Jedyna powierzchnia komunikatów | `Auto` | `Controls/MessageBanner`, `Classes="docked"` |
+| **D** | **Pasek gotowości** — patrz §3.2. Chipy zawsze; treści **z sufitem** (U6) | `Auto` | koncepcja `DebugPreflight` + mapowanie `Severity`→brush z `MessageBanner` |
+| **E1** | **Kafelek ŹRÓDŁO** — picker **zawsze żywy**, zwija się wyłącznie „Opcje formatu" (§3.3) | `Auto` | idiom „chevron + tytuł, bez `Expander`" z panelu uruchomienia debuggera |
+| **E2** | **Kafelek CEL** — picker tabeli zawsze żywy, pod nim linia faktów (§3.4) | `Auto` | `SearchableComboBox` |
+| **F** | **Główna powierzchnia pracy: mapowanie ↔ podgląd**, rozdzielone `GridSplitter` | ⭐ **`*`** | wzorzec siatek + `GridLayoutBehavior` + `GridProfile` |
+| **G** | Dolny `TabControl` + **własny `GridSplitter`**, zwijany podwójnym kliknięciem paska zakładek, **wysokość zapamiętywana trwale** (U2) | `Auto` \| px | `TabItem.bottom-tab`, mechanizm zwijania z debuggera/SQL Editora (**gotcha #240 — pełna renormalizacja obu wierszy przy każdym przełączeniu**) |
+| **H** | **Gdzie wiersze lądują** (połączenie + linia), potem liczby. Nigdy przymiotniki | `Auto` | — |
+
+**⭐ Reguła układu, z której wynika reszta: gwiazdka należy do PRACY, nie do konfiguracji.** Do przeglądu I5
+wierszem `*` był `ScrollViewer` z konfiguracją, a podgląd miał przybite 190 px — odwrotnie, i to była
+przyczyna „podglądu praktycznie nie widać". Konfiguracja ma naturalny rozmiar i się zwija; mapowanie i
+podgląd to miejsce, w którym użytkownik spędza sesję, więc dostają wszystko, co zostanie.
+
+**Odejście od pierwotnej makiety — powód, nie erratum.** Wersja v2 stawiała **Źródło i format \| Cel obok
+siebie** i zwijała każdą sekcję do jednej linii podsumowania. Nie była błędna: obok siebie wysokość dwóch
+rozwiniętych sekcji to **max**, nie suma, i to był świadomy zysk. Praktyka pokazała jednak dwie rzeczy,
+których makieta nie mogła przewidzieć, bo widać je dopiero na działającym interfejsie:
+
+1. **Stan „obie sekcje rozwinięte" jest wyjątkiem, nie regułą.** Praca jest sekwencyjna — wskazuję plik,
+   sekcja się domyka, *dopiero potem* wybieram tabelę. Układ obok siebie optymalizował więc stan rzadki,
+   płacąc **porządkiem czytania**, który jest stały; a §1.2 wymienia „kolejność źródło → format → cel →
+   mapowanie → podgląd, czytaną **z góry na dół**" jako jedną z dwóch rzeczy, które świadomie zachowaliśmy
+   z kreatora. Pion przywraca ją wprost.
+2. **Sekcja Źródło mieszała dwie skrajnie różne częstotliwości zmian.** Ścieżka pliku zmienia się **przy
+   każdym uruchomieniu**; separator, kodowanie i format daty — po pierwszym ustawieniu praktycznie nigdy.
+   Zwinięcie ich razem znaczyło, że wskazanie kolejnego pliku kosztuje rozwinięcie sekcji i zwinięcie jej
+   z powrotem — czyli łamie obietnicę z §1.2, że **powtarzalny import kosztuje jedno `F5`**.
+
+Stąd podział kafelka nie na „sekcję i podsumowanie", lecz na **tożsamość (zawsze żywą)** i **szczegóły
+(zwijane)**. To samo dotyczy Celu: zmiana tabeli nie wymaga rozwijania formularza.
+
+**Zero nowych kolorów** poza ewentualnym jednym tokenem dla „kolumna niezmapowana" — najpierw sprawdzić,
+czy `SubtleForegroundBrush` + kursywa nie wystarczą (wystarczyły w debuggerze dla `Restored`).
+**Jedna nowa ikona** `Icon.Import` — kanoniczny `.svg` w `Assets/Icons/Actions/` + geometria w
+`IconGeometries.axaml`, zgodnie z regułą systemu ikon D15.2. *(`Icon.Download` to strzałka pobierania —
+semantycznie inna; do rozstrzygnięcia przy makiecie ikon.)*
+
+⚠ **Czego ta rewizja NIE robi:** nie dotyka `Themes/ControlStyles.axaml` i nie zmienia wysokości ani jednej
+kontrolki. Gęstość kontrolek to osobny **sprint UX całego EmberTerna po zamknięciu modułu** (§3.8/U4).
+Granica obowiązująca w module: *wysokość `ComboBoxa`* to sprint, *to, że dwa `ComboBoxy` stoją jeden pod
+drugim zamiast obok siebie* to ten moduł.
 
 **Zero nowych kolorów** poza ewentualnym jednym tokenem dla „kolumna niezmapowana" — najpierw sprawdzić,
 czy `SubtleForegroundBrush` + kursywa nie wystarczą (wystarczyły w debuggerze dla `Restored`).
@@ -660,6 +716,92 @@ Błędy (2)                                    [Eksportuj raport…] [Kopiuj]
   → CSV/XLSX/schowek za darmo, bez ani jednej nowej linii serializacji.
 - Po zakończeniu **konfiguracja pozostaje na miejscu** — kolejny plik tego samego kształtu to zmiana
   ścieżki i `F5`. Nie ma przycisku „Nowy import", bo nie ma z czego wychodzić.
+
+### 3.8. ⏳ Uwagi z przeglądu wzrokowego I5 (2026-07-26) — OTWARTE, czekają na decyzję
+
+> **Status: WSZYSTKIE PUNKTY ROZSTRZYGNIĘTE 2026-07-26; U1/U2/U3/U6/U7/U8/U9/U10/U11 DOSTARCZONE w szwie
+> domykającym I5.** Punkty **U1–U5** pochodzą z przeglądu użytkownika, **U6–U10** z zamówionego przy tej
+> samej okazji autoprzeglądu UX, **U11** wyszło przy projektowaniu układu. Żaden nie zmienił architektury
+> modułu — wszystkie dotyczą proporcji, przestrzeni i tego, w którym pasie mieszka dana informacja;
+> `ImportConfiguration`, pipeline i podział warstw są nietknięte. Rewizja układu jest wniesiona **w miejscu**
+> do §3.1 (z powodem odejścia od makiety v2), a tabela niżej zostaje jako zapis, **co** zgłoszono i **jak**
+> to rozstrzygnięto.
+>
+> **Otwarte zostają dwa punkty i oba są świadomie poza tym szwem: U4** (gęstość globalna → sprint UX całego
+> EmberTerna po zamknięciu modułu) i **U5** (responsywność układu I6/I7 → weryfikowana przy I6, gdy sekcja
+> Cel i panel Mapowanie faktycznie zajmą miejsce).
+
+#### Uwagi użytkownika
+
+| # | Uwaga | Stan faktyczny w kodzie | Zakres |
+|---|---|---|---|
+| **U1** | **Sekcja parametrów zajmuje za dużo pionu** — podgląd źródła praktycznie nie jest widoczny, przestrzeń robocza znika natychmiast | Rozwinięta sekcja *Źródło i format* to ~14 wierszy kontrolek w dwóch kolumnach (`Parsowanie` ~6 wierszy + 2 dodatkowe siatki, `Kultura danych` 5 wierszy). Kolumny są **niezbalansowane**: lewa jest wyraźnie wyższa, prawa kończy się pustką, a wysokość całości bierze się z wyższej | moduł |
+| **U2** | **Dolny panel nie ma splittera** — ma zachowywać się jak dolne panele SQL Editora i Debuggera: przeciąganie wysokości, pełne zwijanie, **zapamiętywanie ostatniej wysokości** | Pas G ma dziś `Height="190"` na sztywno, wiersz `Grid.Row=4` jest `Auto`, `GridSplitter` **nie istnieje**, a zwijanie to sam `IsVisible`. Dodatkowo §3.1 obiecuje zwijanie **podwójnym kliknięciem paska zakładek** — też niezbudowane | moduł |
+| **U3** | **Nagłówek „Data Import" (pas A) jest zbędny** — żaden inny moduł EmberTerna go nie ma, tytuł zakładki wystarcza, pion do odzyskania | Pas A pokazuje **wyłącznie** ikonę + tytuł. Uwaga trafia w sedno podwójnie: §3.1 przewidywał w tym pasie także **aktywne połączenie i linię** („SZKOLENIE.FDB · linia Data") — zbudowana została redundantna połowa, informacyjna nie | moduł |
+| **U4** | **Gęstość interfejsu całej aplikacji** — globalny styl daje za wysokie `TextBox` / `ComboBox` / `CheckBox` / `Button`, za duże odstępy pionowe i wysokości wierszy formularzy. **Nie rozwiązywać lokalnie** | Potwierdzone w kodzie: `ControlStyles.axaml` **nie ma ani jednego stylu domyślnego** dla `TextBox`, `ComboBox`, `CheckBox`, `RadioButton`, `NumericUpDown` ani gołego `Button` — wszystkie siedzą na wartościach FluentTheme (`MinHeight` 32 px). Zagęszczone są tylko `DataGridRow`/`DataGridCell` i `TabItem`, i to **doraźnie, po jednym**. Czyli precedens istnieje, brakuje uogólnienia | ⛔ **BACKLOG — poza modułem.** Decyzja użytkownika 2026-07-26: osobny **sprint UX całego EmberTerna po zamknięciu Data Import**, projektowany z oglądu wszystkich modułów naraz. **Nie implementować niczego globalnego w etapach importu** |
+| **U5** | **Responsywność** — na Full HD część formularza już nie mieści się w pionie; przeanalizować układ I5–I7 pod kątem wykorzystania przestrzeni i **zaproponować zmiany przed implementacją**, jeśli praktyka pokazuje lepsze rozwiązanie niż projekt | Realne: I6 dokłada sekcję **Cel** i panel **Mapowanie**, I7 pas **B** i panel **Podgląd po konwersji** — czyli do pionu, który już jest ciasny, dochodzą cztery obszary. R13 w §7 przewidywał to ryzyko dla 1366×768; przegląd pokazał, że dotyczy już 1920×1080 | moduł, przed I6 |
+
+#### Propozycje z autoprzeglądu UX (nie zamawiane przez uwagi wyżej)
+
+| # | Obserwacja | Propozycja |
+|---|---|---|
+| **U6** | **Pasek gotowości nie ma sufitu.** §3.2 gwarantuje zwinięcie do jednej linii, gdy wszystko jest zielone — ale przypadek odwrotny (wiele braków) rośnie bez ograniczenia: każdy wynik to własny zawijany wiersz, więc pas potrafi zająć ponad 100 px **na stałe nad** powierzchnią roboczą, i to dokładnie wtedy, gdy użytkownik najbardziej potrzebuje widzieć dane | **Chipy zostają zawsze** (to one realizują ratyfikowaną przewagę „wszystkie braki naraz" — kolorem, w jednej linii), a **lista treści dostaje limit** (np. 2–3 pozycje + „…i 2 dalsze") rozwijany kliknięciem. ⚠ To dotyka obietnicy z §3.2, więc **wymaga jawnej zgody**, nie jest kosmetyką |
+| **U7** | **Kolumny `Parsowanie` \| `Kultura danych` są niezbalansowane i marnują szerokość.** Wszystkie pola mają stałe szerokości 70–160 px, a kolumna zajmuje 50% powierzchni — przy 1920 px to ~900 px na kontrolkę szeroką na 110 px. Pion rośnie, poziom stoi pusty | Zagęścić **poziomo, nie pionowo**: pary pól, które zawsze czyta się razem (`Separator dziesiętny` + `Separator tysięcy`, `Format daty` + `Sep. daty` + `Sep. czasu`), postawić w jednym wierszu. Kultura schodzi z 5 wierszy do 2–3, Parsowanie analogicznie. **Zero zmian w VM** — to sam XAML |
+| **U8** | **Wiersz poszarpany nie jest oznaczony, choć jest wyliczony.** `ImportSourceRecordRowViewModel.IsRagged` istnieje, jest pinowane testem (i to jednym z ⭐ — „większość, nie najszerszy"), ale **nic go nie maluje**: kolumny podglądu buduje code-behind, marker w gutterze z §3.6 nie powstał | Domknąć sygnał albo świadomie go odłożyć **z datą**. Dziś to dokładnie kształt z gotchy #233 — rzecz przetestowana i niewywoływana wygląda potem jak regresja, a zielony zestaw testów to ukrywa. §3.6 stawia ten marker jako powód, dla którego źle dobrany separator „widać bez czytania" |
+| **U9** | **Pas H (status powierzchni) i pas A niosą razem mniej, niż powinny.** Pas A pokazuje tytuł, którego użytkownik nie potrzebuje; pas H to jedna linia tekstu, a §3.1 chciał w pasie A **połączenia i linii transakcyjnej** — faktu, który w module piszącym do bazy jest istotny | Przy usuwaniu pasa A (U3) **przenieść połączenie + linię do pasa H**, obok liczb. Pas H i tak jest miejscem, gdzie w I7 stanie tryb transakcji — jedna linia u dołu odpowiada wtedy na „gdzie to wchodzi i w jakiej transakcji" |
+| **U10** | **Skróty z §9.2 nie istnieją**, w tym te, które **mogłyby** działać już dziś: `Ctrl+O` (wybór pliku) i podwójne kliknięcie paska zakładek. Reszta (`F5`, `Ctrl+F5`, `Esc`, `F6`, `Ctrl+1..4`) słusznie czeka na polecenia, których jeszcze nie ma | Dołożyć **tylko te, które mają czym sterować** (`Ctrl+O`, podwójne kliknięcie), resztę zostawić do I7. Skrót do polecenia, którego nie ma, byłby martwym wpięciem — ta sama zasada, dla której I5 nie zbudował pasa B |
+
+#### Kolejność prac — ⭐ ROZSTRZYGNIĘTA PRZEZ UŻYTKOWNIKA 2026-07-26
+
+> **Decyzja: najpierw kończymy moduł Data Import, dopiero potem osobny sprint UX całego EmberTerna.**
+> Zasada „jedno zadanie na raz" obowiązująca w projekcie od początku — przy okazji jednego modułu nie
+> zaczynamy przebudowy całej aplikacji, bo zakres przestaje być czytelny i nie da się ocenić postępu.
+> **To odwraca kolejność, którą wcześniej rekomendowałem („najpierw gęstość globalna"); rekomendacja jest
+> nieaktualna i nie należy do niej wracać.**
+
+1. **U4 nie jest zadaniem tego modułu i NIE jest teraz realizowane.** Ląduje w **backlogu projektu** jako
+   przyszły **sprint UX całego EmberTerna**, świadomie zaplanowany **po zamknięciu modułu**: sens tego
+   sprintu polega na obejrzeniu wszystkich powierzchni **naraz** (SQL Editor, Debugger, Activity Monitor,
+   Session Manager, Script Executor, Data Import i pozostałe) i zaprojektowaniu globalnego stylu kontrolek
+   na tej podstawie — a nie na wywnioskowaniu go z jednego formularza. **Żadnych zmian w
+   `Themes/ControlStyles.axaml` w ramach etapów importu.**
+2. **W module poprawiamy wyłącznie to, co NIE wynika z globalnego stylu** — układ, proporcje, ergonomię
+   i braki funkcjonalne powierzchni: **U1 (część układowa), U2, U3, U5, U7, U9, U10** (U6 i U8 — patrz
+   niżej, czekają na osobną decyzję). Rozróżnienie jest ostre i warto je trzymać: *wysokość pojedynczego
+   `ComboBoxa`* to sprint UX, *to, że dwa `ComboBoxy` stoją jeden pod drugim zamiast obok siebie* to ten
+   moduł.
+3. **U2, U3, U9, U10 tworzą jeden „szew domykający I5"** — są od siebie niezależne i żaden nie czeka na
+   nic z zewnątrz.
+4. **U5 rozstrzyga się przed I6**, bo dotyczy tego, gdzie w ogóle staną panele Cel i Mapowanie.
+5. ⚠ **Konsekwencja przyjęta świadomie:** dostrajając układ modułu przed sprintem UX, dostrajamy go
+   względem obecnych, za wysokich kontrolek — po sprincie sekcja Źródło i format odzyska jeszcze ~100 px
+   i proporcje warto będzie obejrzeć ponownie. **Audyt UI w I12 i tak obejmuje obie palety oraz
+   1366×768**, więc jest naturalnym miejscem tej powtórki.
+
+#### Co dostarczył szew domykający I5 (2026-07-26)
+
+| # | Rozstrzygnięcie | Jak zrealizowane |
+|---|---|---|
+| **U1 / U7** | zagęszczać **poziomo**, nigdy przez wysokość kontrolek | pary pól czytane razem dzielą wiersz (Kultura: 5 wierszy → 3; Parsowanie: cudzysłów+koniec linii, nagłówek+zakres wierszy, przycinanie+NULL); **zero zmian w `ControlStyles.axaml`** |
+| **U2** | splitter + pełne zwijanie + **trwała** wysokość | `GridSplitter` + `ApplyBottomPanel` jako JEDYNY punkt renormalizacji **obu** wierszy (#240); podwójne kliknięcie paska; wysokość i stan zwinięcia w `WorkspaceState.ImportPreviewPanelHeight/Collapsed` — globalnie, jak `ResultsPanelHeight`, **nigdy w `ImportConfiguration`** (§4.8.2) |
+| **U3 / U9** | pas A znika, jego fakt idzie do pasa H | pas H: `DestinationStatus` (połączenie + **linia Data**, czytane delegatem) │ liczby |
+| **U6** | pasek gotowości dostaje sufit | `VisibleItems` = `Items` przycięte do `CollapsedItemLimit = 3` + „…i kolejne N" z rozwijaniem; **chipy zawsze wszystkie**; kolejność Core'a nietknięta (żadnego drugiego rankingu) |
+| **U8** | marker wiersza poszarpanego domknięty **teraz** | kolumna numeru wiersza w podglądzie źródła niesie `⚠` + tooltip dla `IsRagged`; sygnał przestał być martwy (#233) |
+| **U10** | tylko skróty, które mają czym sterować | `Ctrl+O` (wybór pliku) + podwójne kliknięcie paska zakładek; `F5`/`Ctrl+F5`/`Esc` czekają na polecenia z I7 |
+| **U11** | ⭐ auto-zwijanie „Opcji formatu" po ustaleniu się źródła | zwija się **dopiero po udanym odczycie** (są pola) i **nigdy**, gdy użytkownik rozwinął je ręcznie (`_formatOptionsHeldOpen`) |
+
+**Skutek liczbowy** (szacunek z układu, nie pomiar na uruchomionej aplikacji; 1920×1080, ~880 px na
+zakładkę): w stanie ustalonym pas E to ~80 px zamiast ~470, a wiersz `*` — czyli przyszłe Mapowanie i
+Podgląd — dostaje **~500–540 px**, gdzie dotąd nie miał ani jednego (podgląd źródła był przybity do 190 px).
+
+⚠ **Jedna rzecz w U2 wymaga rozstrzygnięcia projektowego, nie tylko zgody.** „Zapamiętywanie ostatniej
+wysokości" ma w aplikacji **dwa** precedensy, nie jeden: Debugger pamięta wysokość **w obrębie sesji**
+(pole `_bottomHeight` w widoku), a SQL Editor **trwale** (`WorkspaceState.ResultsPanelHeight`). Zakładka
+importu jest **nietrwała** (świadomie pominięta w `SnapshotCurrentTabs`), więc trwała wysokość nie ma gdzie
+zamieszkać per zakładka — musiałaby być ustawieniem **globalnym** obok `ResultsPanelHeight`.
+**I nie wolno jej włożyć do `ImportConfiguration`**: to preferencja układu, a nie decyzja użytkownika o
+imporcie — §4.8.2 wyznacza tę granicę, a strażnik refleksyjny z §4.8.6 i tak zażądałby wtedy, żeby
+wysokość panelu jeździła w profilu importu.
 
 ---
 
@@ -1143,8 +1285,8 @@ zielonymi testami, czystym smoke testem i commitem.
 | **I2** ✅ **DOSTARCZONY** | Core: konwersja + mapowanie + walidacja + gotowość | `ImportValueConverter` (ścisły, §0), `ImportMappingPlanner` (auto + reguła pary + diagnostyka `IMP*`), `ImportRowValidator` (+ `ImportCharsetGuard`), **`ImportReadiness`**, oraz dwa fundamenty wynikające z zasady jednego właściciela: `ImportTargetType` (§4.6) i `ImportDiagnostics` (katalog `IMP0001–IMP0027`). | Testy: każdy typ Firebirda × wartość poprawna/niejednoznaczna/błędna; pełna macierz gotowości (blokujące vs ostrzegawcze). Zero cichych konwersji. **Spełnione** — +131 testów, w tym pin odtwarzający samą cichą korupcję charsetu. |
 | **I3** ✅ **DOSTARCZONY** | Core: pipeline + dry-run | `ImportPipeline` (wejście: `ImportConfiguration`), `DryRunImportWriter`, `ImportOutcome`, postęp, anulowanie, obie polityki błędów — oraz zaległy z I1 `DelimitedTextImportProvider` (bez niego nie ma end-to-endu na `TextImportSource`). | Testy end-to-end na `TextImportSource` + dry-run. **Pełna funkcjonalność bez bazy i bez UI.** **Spełnione** — +39 testów, w tym pin, że raport nazywa wiersz źródłowy, a nie indeks paczki. |
 | **I4** ✅ **DOSTARCZONY** | Firebird: writer + odczyt celu + **weryfikacja na żywo** | `FirebirdImportWriter` — **`FbBatchCommand`, paczki po 500, `MultiError` ustawiany z `ImportErrorPolicy` (I0 §2.3)**, `OVERRIDING SYSTEM VALUE`, `CommandLock` per paczka; `FirebirdImportTargetReader` (kolumny + triggery BEFORE INSERT); mapowanie `FbException` → `ImportErrorKind` **na PARZE kodów GDS, nie na `ErrorCode`** (I0/REK-3: `string truncation` / `numeric overflow` / `transliteration` mają identyczny `ErrorCode` 335544321 i SQLSTATE 22000 — rozróżnia je dopiero **drugi** element wektora: 335544914 / 335544916 / 335544565; wektor obcięcia niesie limit i rzeczywistą długość jako liczby → wprost do raportu; **PK i UNIQUE są nierozróżnialne** (oba 335544665) ⇒ raportujemy „naruszenie unikalności", bez udawania precyzji). **Zero parsowania tekstu komunikatu.** | Import 10 k wierszy do tabeli laboratoryjnej — **liczby zgadzają się z `SELECT COUNT(*)`**; `NOT NULL`, PK/UNIQUE, CHECK, FK, za długi tekst, przekroczenie zakresu, transliteracja, znak spoza charsetu połączenia — **każdy daje właściwy `ImportErrorKind` i właściwy numer wiersza źródłowego**. Przypadki bierzemy z `tools/probes/DataImportWriteProbe` (fazy B/E/C), po czym sonda idzie do usunięcia. |
-| **I5** ⏳ **DOSTARCZONY, czeka na wizualne potwierdzenie** | App: zakładka + rama powierzchni + sekcja Źródło i format | `WorkspaceTabKind.DataImport`, `Icon.Import`, przycisk toolbara (D6), near-singleton, dopisanie do listy pomijanej w `SnapshotCurrentTabs`, rama (pasy A–H), zwijalne sekcje, **pasek gotowości**, sekcja Źródło i format z dolną zakładką „Podgląd źródła". | Powierzchnia otwiera plik, pokazuje surowe rekordy i gotowość. Obie palety motywu. |
-| **I6** | App: sekcja Cel (istniejąca tabela) + panel Mapowanie | Wybór tabeli, siatka mapowania, diagnostyka, blokady kolumn systemowych, przeliczanie łańcuchowe z anulowaniem (§4.7). | Mapowanie ręczne i automatyczne działa; niezgodności widoczne przed importem. |
+| **I5** ⏳ **DOSTARCZONY, przegląd odbyty — otwarty na U1–U3 (§3.8)** | App: zakładka + rama powierzchni + sekcja Źródło i format | `WorkspaceTabKind.DataImport`, `Icon.Import`, przycisk toolbara (D6), near-singleton, dopisanie do listy pomijanej w `SnapshotCurrentTabs`, rama (pasy A–H), zwijalne sekcje, **pasek gotowości**, sekcja Źródło i format z dolną zakładką „Podgląd źródła". | Powierzchnia otwiera plik, pokazuje surowe rekordy i gotowość. Obie palety motywu. |
+| **I6** ⬅ **NASTĘPNY** | App: sekcja Cel (istniejąca tabela) + panel Mapowanie | Wybór tabeli, siatka mapowania, diagnostyka, blokady kolumn systemowych, przeliczanie łańcuchowe z anulowaniem (§4.7). ⚠ **Bramka wstępna: §3.8/U5** — sekcja Cel i panel Mapowanie wchodzą w pion, który po przeglądzie I5 uznano za zbyt ciasny; układ przedstawiamy do akceptacji **przed** pierwszą linią kodu. | Mapowanie ręczne i automatyczne działa; niezgodności widoczne przed importem. |
 | **I7** | App: Podgląd + uruchomienie + raport — **pierwszy pełny przebieg** | Podgląd po konwersji (ciągły), `Waliduj`, tryby transakcji, `Importuj`/`F5`, postęp, anulowanie, raport, Commit/Rollback, eksport raportu, **zapis i przywracanie „ostatnio użytej" konfiguracji**. | **Import CSV → istniejąca tabela działa end-to-end na żywej bazie; druga sesja startuje z przywróconą konfiguracją.** Pierwszy etap z realną wartością dla użytkownika. |
 | **I8** | Nowa tabela | `ColumnTypeInferencer` — **(I0/REK-7) domyślnie skanuje CAŁE źródło**, nie próbkę (limit bezpieczeństwa 1 M wierszy), bo w realnym pliku 2 z 5 kolumn były typowo mieszane (R19); siatka typów w sekcji Cel z **zawsze widoczną liczbą przeanalizowanych wierszy** w kolumnie „Podstawa"; podgląd DDL; wykonanie na linii Ddl; ostrzeżenie o nieodwracalności; opcja `DROP` przy niepowodzeniu. | Import do nieistniejącej tabeli działa; typy zachowawcze i edytowalne; DDL z tego samego generatora; **kolumna mieszana ląduje jako `VARCHAR`, nie jako `INTEGER` z bombą zegarową**. |
 | **I9** | XLSX + zmiana nazwy projektu (D1) | `EmberTern.Export.Office` → **`EmberTern.Office`**; `XlsxImportProvider`; rozgałęzienie sekcji Format po `Capabilities`. **(I0/REK-6) Siedem wiążących wytycznych providera:** (1) **wyłącznie `OpenXmlReader` (SAX)** — DOM bierze 77× więcej pamięci (R8); (2) wartości umieszczane **po `CellReference`** — brakująca komórka środkowa jest NIEOBECNA, nie pusta, więc czytnik pozycyjny przesunąłby resztę wiersza o kolumnę (§0.1); (3) numer wiersza źródłowego **z `Row.RowIndex`** — puste wiersze są nieobecne, własny licznik skłamałby w raporcie (§0.6); (4) data = liczba + `numFmtId` daty (R3); (5) `SharedStringTable` czytana raz — Excel zapisuje teksty jako shared strings (rozmiar ∝ liczbie RÓŻNYCH tekstów); (6) `SheetDimension` **tylko jako wskazówka** postępu (bywa nieobecny); (7) formuła → wartość zbuforowana, a **komórka błędu → błąd wiersza** (+ opcja `ExcelErrorCellsAsNull`, R20). | Import plików z załączonych zrzutów daje identyczne dane. Eksport XLSX bez regresji. Pierwszy realny plik **z datami** obejrzany (luka pomiarowa R3). Po zamknięciu I9 `tools/probes/DataImportXlsxProbe` idzie do usunięcia. |

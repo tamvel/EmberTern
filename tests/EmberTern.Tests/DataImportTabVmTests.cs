@@ -1,7 +1,9 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using EmberTern.App;
 using EmberTern.App.Controls;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Import;
@@ -37,8 +39,9 @@ public class DataImportTabVmTests : IDisposable
         return path;
     }
 
-    private static DataImportTabViewModel Vm(bool connected = true, bool transactionOpen = false)
-        => new(() => connected, () => transactionOpen);
+    private static DataImportTabViewModel Vm(
+        bool connected = true, bool transactionOpen = false, string connectionName = "LAB")
+        => new(() => connected, () => transactionOpen, () => connectionName);
 
     private static async Task SettleAsync(DataImportTabViewModel vm)
     {
@@ -335,9 +338,16 @@ public class DataImportTabVmTests : IDisposable
         Assert.True(vm.IsBottomPanelCollapsed);
     }
 
-    /// <summary>The collapsed summary is what makes a repeat import readable at a glance (§2.2 point 1).</summary>
+    /// <summary>
+    /// The collapsed summary describes only what actually folded away — how the text is read.
+    /// <para>
+    /// ⭐ The file name is deliberately absent (U1): the picker stays live at all times now, so repeating the
+    /// name here would state twice what is already on screen once. If someone "restores" it, this fails and
+    /// says why.
+    /// </para>
+    /// </summary>
     [Fact]
-    public async Task TheCollapsedSummary_NamesTheFileTheEncodingAndTheSeparator()
+    public async Task TheCollapsedSummary_DescribesTheFormat_NotTheFileTheUserCanAlreadySee()
     {
         var vm = Vm();
         vm.Source.AutoDetectDelimiter = false;
@@ -346,8 +356,152 @@ public class DataImportTabVmTests : IDisposable
         await SettleAsync(vm);
 
         var summary = vm.Source.SummaryText;
-        Assert.Contains("fantomy.csv", summary, StringComparison.Ordinal);
         Assert.Contains("WIN1250", summary, StringComparison.Ordinal);
         Assert.Contains(";", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("fantomy.csv", summary, StringComparison.Ordinal);
+    }
+
+    // ── U11: the format options settle themselves ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐ What makes a repeat import cheap (§2.2 / §1.2): once a source has actually been read, the options
+    /// that produced it fold away on their own. The picker stays live, so the next file costs one click.
+    /// </summary>
+    [Fact]
+    public async Task FormatOptions_CollapseThemselves_OnceASourceHasBeenRead()
+    {
+        var vm = Vm();
+        vm.Source.IsExpanded = true;
+
+        vm.Source.FilePath = WriteFile("in.csv", "A;B\n1;x\n2;y\n");
+        await SettleAsync(vm);
+
+        Assert.False(vm.Source.IsExpanded);
+    }
+
+    /// <summary>
+    /// ⭐ …but an automat that closes a panel the user just opened is worse than no automat at all
+    /// (§2.2 point 2). A manual expand pins it open across later reads.
+    /// </summary>
+    [Fact]
+    public async Task FormatOptions_OpenedByHand_SurviveTheNextRead()
+    {
+        var vm = Vm();
+
+        // The options start EXPANDED (first use — §3.3), so reaching the "user opened them by hand" state
+        // means closing them first. Toggling straight from the default would be testing the opposite case.
+        vm.ToggleFormatOptionsCommand.Execute(null);
+        Assert.False(vm.Source.IsExpanded);
+
+        vm.ToggleFormatOptionsCommand.Execute(null);
+        Assert.True(vm.Source.IsExpanded);
+
+        vm.Source.FilePath = WriteFile("in.csv", "A;B\n1;x\n");
+        await SettleAsync(vm);
+
+        Assert.True(vm.Source.IsExpanded);
+    }
+
+    /// <summary>Nothing readable yet means nothing settled — the options must not fold on an empty surface,
+    /// which is exactly when the user needs them.</summary>
+    [Fact]
+    public async Task FormatOptions_StayOpen_WhileThereIsNothingToRead()
+    {
+        var vm = Vm();
+        vm.Source.IsExpanded = true;
+
+        vm.Source.FilePath = Path.Combine(_dir, "does-not-exist.csv");
+        await SettleAsync(vm);
+
+        Assert.True(vm.Source.IsExpanded);
+    }
+
+    // ── U6: the readiness strip has a ceiling ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐ The strip must not take the most space at the moment the user has the most to fix. The chips still
+    /// carry §3.2's "every gap at once" — this only caps how many findings are spelled out.
+    /// </summary>
+    [Fact]
+    public void Readiness_CapsTheSpelledOutFindings_AndSaysHowManyItHid()
+    {
+        var vm = Vm(connected: false, transactionOpen: true);
+        var readiness = vm.Readiness;
+
+        Assert.True(readiness.Items.Count > ImportReadinessViewModel.CollapsedItemLimit);
+        Assert.Equal(ImportReadinessViewModel.CollapsedItemLimit, readiness.VisibleItems.Count);
+        Assert.True(readiness.HasHiddenItems);
+        Assert.Contains(
+            (readiness.Items.Count - ImportReadinessViewModel.CollapsedItemLimit).ToString(CultureInfo.CurrentCulture),
+            readiness.MoreText,
+            StringComparison.Ordinal);
+
+        // Every chip stays, whatever the cap did — that is the half that keeps the §3.2 promise.
+        Assert.Equal(5, readiness.Sections.Count);
+    }
+
+    /// <summary>Expanding gives the whole list back, and the cap never re-orders anything: the survivors are
+    /// Core's own first findings, so the strip and a report cannot disagree about what matters most.</summary>
+    [Fact]
+    public void Readiness_ExpandsToTheWholeList_InCoresOrder()
+    {
+        var vm = Vm(connected: false, transactionOpen: true);
+        var readiness = vm.Readiness;
+
+        Assert.Equal(
+            readiness.Items.Take(ImportReadinessViewModel.CollapsedItemLimit).Select(i => i.Code),
+            readiness.VisibleItems.Select(i => i.Code));
+
+        readiness.ToggleExpandedCommand.Execute(null);
+
+        Assert.Equal(readiness.Items.Count, readiness.VisibleItems.Count);
+        Assert.Equal(readiness.Items.Select(i => i.Code), readiness.VisibleItems.Select(i => i.Code));
+    }
+
+    // ── U9: band H says where the rows land ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐ The fact the removed header band was supposed to carry. The lane is stated out loud because a module
+    /// that writes to a database must not make the user guess which transaction it joins (§4.5).
+    /// </summary>
+    [Fact]
+    public void BandH_NamesTheConnectionAndTheLane()
+    {
+        var vm = Vm(connectionName: "SZKOLENIE");
+
+        Assert.Contains("SZKOLENIE", vm.DestinationStatus, StringComparison.Ordinal);
+        Assert.Contains(UiStrings.ImportDestinationDataLane, vm.DestinationStatus, StringComparison.Ordinal);
+    }
+
+    /// <summary>Read as a DELEGATE, not snapshotted — the line states where things stand now.</summary>
+    [Fact]
+    public void BandH_SaysSoWhenThereIsNoConnection()
+    {
+        var vm = Vm(connected: false, connectionName: "");
+
+        Assert.Equal(UiStrings.ImportDestinationNotConnected, vm.DestinationStatus);
+    }
+
+    // ── U2: the bottom panel's remembered height ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The height lives on the VM because the import tab is transient — a value remembered inside the view
+    /// would be gone before the workspace is written. <c>MainWindow</c> persists it globally, like the SQL
+    /// editor's results panel.
+    /// </summary>
+    [Fact]
+    public void BottomPanelHeight_IsCarriedByTheViewModel()
+    {
+        var vm = Vm();
+        var seen = 0;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DataImportTabViewModel.BottomPanelHeight)) seen++;
+        };
+
+        vm.BottomPanelHeight = 260;
+
+        Assert.Equal(260, vm.BottomPanelHeight);
+        Assert.Equal(1, seen);
     }
 }

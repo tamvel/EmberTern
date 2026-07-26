@@ -27,9 +27,10 @@ verbatim, in the archive below.
 | **`docs/design/firebird-debugger.md`** | **The debugger's behaviour authority (v2, decisions ratified 2026-07-17).** ⚠ *Its "nothing implemented" framing dated from the design phase and was corrected 2026-07-25 — the debugger is built (P1/P2, D1–D13, D15, functions-as-root, the Draft model); sections amended by delivery say so in place (§9.1, §9.3.1, §12.14).* Feasibility (Firebird has **no** debug API — verified), the Fidelity Law §F, the client-interpreter + `EXECUTE BLOCK` harness, harness declaration rules, frame savepoints, exception control flow, per-session connection + transaction, nested frames/call stack, local routines (no temporary metadata), cursor bridge, UI/UX, panels, reuse map, prerequisites P1/P2 + milestones D1–D14, Fidelity Boundaries, and a live-engine verification log. | When working on the debugger. |
 | **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. **D14 = ANALYZED + DEFERRED** (its STATUS block records the ratified snapshot+savepoint+undo-only architecture if ever revisited). | **Every debugger implementation session — read this + your milestone's brief first.** |
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
-| **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next. | **Every Data Import session — read the status block + your etap's row in §6 first.** |
+| **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next, and the remaining-scope table for I6–I12. **§3.8 holds the OPEN UX findings from the I5 review (U1–U10) — read it before touching the surface's layout.** | **Every Data Import session — read the status block + §3.8 + your etap's row in §6 first.** |
+| **`docs/design/data-import-i6-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I6** implementation session (scope, binding rules, DoD, and the §3.8 gate that must clear before any code). Replace it with the I7 equivalent once I6 closes. | When starting etap I6. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (247 entries, #1–#260), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (248 entries, #1–#261), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -275,11 +276,38 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0–I4 DONE + accepted; I5 delivered and ⏳ AWAITING
-  THE USER'S VISUAL CONFIRMATION** (project QA rule: build + tests + smoke are not enough to call a UI etap
-  done). **After I4 the whole ENGINE is built and live-verified** (`tools/probes/DataImportProbe` vs FB5
-  `WI-V5.0.3.1683` — **20/20 ALL PASS**); from I5 on the work is the user interface only. Branch
-  **`feat/data-import`**, suite **5559 green**, build 0/0, app launches clean. A new tool tab (toolbar, beside
+- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0–I4 DONE + accepted; I5 delivered, REVIEWED,
+  and ⏳ STILL OPEN on its UX findings.** **After I4 the whole ENGINE is built and live-verified**
+  (`tools/probes/DataImportProbe` vs FB5 `WI-V5.0.3.1683` — **20/20 ALL PASS**); from I5 on the work is the
+  user interface only. Branch **`feat/data-import`** @ **`0c5667e`** (pushed to `origin`; `private` owed at
+  the next etap close), suite **5559 green**, build 0/0, app launches clean.
+  **⏳ I5 — the visual review HAPPENED (2026-07-26), produced U1–U11, and the CLOSING SEAM is delivered
+  (awaiting the user's visual confirmation).** The review is the project's QA rule proving itself: build,
+  5559 green tests and a clean smoke had found none of it, because every finding is about **proportion and
+  space**, not state. All eleven are settled and recorded in [data-import.md §3.8](docs/design/data-import.md);
+  **nine shipped in one seam**, two stay deliberately open (**U4** global density → the app-wide UX sprint
+  below; **U5** responsiveness → re-checked during I6, when Target and Mapping actually occupy space).
+  **⭐ The layout was revised and carried into §3.1 in place — the single change that matters is that the
+  STAR now belongs to the work, not the configuration.** Until the review the configuration `ScrollViewer`
+  was the `*` row and the preview was nailed to 190 px — backwards, and the whole reason the preview was
+  "practically invisible"; the work area now takes everything left (~500–540 px where it had none). With it:
+  band A **deleted** (no other module carries a header; the one fact it was meant to add — connection + lane
+  — moved to band H) · sections became **stacked one-row tiles, not side-by-side panels**, restoring the
+  top-down reading order §1.2 names as one of the two things kept from the wizard · and each tile splits by
+  **how often a decision changes**, so the file/table picker stays live at all times and only "Format
+  options" folds — side-by-side had optimised the *rare* state (both expanded) at the cost of the *constant*
+  one, and folding the picker away would have broken §1.2's promise that a repeat import is one `F5`.
+  Also: readiness findings capped at 3 + "…and N more" with the chips always intact (U6) · a `GridSplitter`
+  with double-click collapse and a **persisted** height (U2) · **U11** — the format options now collapse
+  themselves once a source reads, unless the user opened them by hand · the ragged-row marker finally
+  painted (U8 — it was computed and pinned by a ⭐ test but nothing rendered it, gotcha #233's shape) ·
+  `Ctrl+O` (U10, only shortcuts that have something to drive). ⚠ **Two rules the seam established:**
+  the panel height lives in `WorkspaceState.ImportPreviewPanelHeight` (global, like `ResultsPanelHeight`,
+  because an import tab is deliberately transient) and **must never enter `ImportConfiguration`** — a layout
+  preference is not an import decision (§4.8.2), and the reflection guard would otherwise ship a pixel height
+  inside saved profiles; and **no module etap touches `Themes/ControlStyles.axaml`** (density = the separate
+  sprint). Suite **5567 green**, build 0/0. **The I6 opening prompt is ready and now says "insert into the
+  finished frame, don't rebuild it": [data-import-i6-session-prompt.md](docs/design/data-import-i6-session-prompt.md).** A new tool tab (toolbar, beside
   the Script Executor) that imports Clipboard / TXT / CSV / XLSX into an existing or a newly created table.
   **Read [docs/design/data-import.md](docs/design/data-import.md) — its „📍 STAN IMPLEMENTACJI" block is the
   handover, and the architecture is 🔒 FROZEN: from etap I1 on it is implementation only, and an
@@ -349,7 +377,25 @@ noted.
   decoded, so the reverse would be a guess resting on a guess), and the source preview's "ragged row" marker
   compares against the **majority** field count, not the schema's — the schema reports the WIDEST record so
   every column stays mappable, and marking against that inverts the signal (one row with an extra field would
-  flag all the good ones). **Next: etap I6** (the Target section + the Mapping panel).
+  flag all the good ones). **Next: etap I6** (the Target section + the Mapping panel) — **gated on §3.8
+  being settled first.**
+- **📋 BACKLOG (do NOT start) — GLOBAL UI DENSITY / an EmberTern-wide UX sprint.** Raised by the user during
+  the Data Import I5 review (2026-07-26) and, in the same breath, **deliberately scheduled for AFTER the
+  Data Import module closes**. The finding: EmberTern's ordinary form controls are too tall app-wide —
+  `TextBox`, `ComboBox`, `CheckBox`, `Button`, vertical spacing, form row heights — and it must **not** be
+  patched per module. **Confirmed in code:** `Themes/ControlStyles.axaml` has **no implicit style at all**
+  for `TextBox` / `ComboBox` / `CheckBox` / `RadioButton` / `NumericUpDown` / bare `Button`, so every one
+  sits on FluentTheme's defaults (`MinHeight` 32 px); density was only ever applied **ad hoc, one control at
+  a time** (`DataGridCell` FontSize 11 + tight padding, `DataGridRow` and `TabItem` `MinHeight="0"`). The
+  precedent and the intent exist; the generalisation does not. **⭐ The user's ratified sequencing, which
+  reverses my earlier "density first" recommendation — do not re-propose it:** one task at a time; finish
+  Data Import to the accepted architecture first, then run a dedicated UX sprint that looks at **every**
+  surface at once (SQL Editor, Debugger, Activity Monitor, Session Manager, Script Executor, Data Import and
+  the rest) and designs the new global control style from that whole view — not extrapolated from one form.
+  Mixing the two makes the scope unreadable and the progress unmeasurable. **Until then: zero changes to
+  `Themes/ControlStyles.axaml` from a module etap.** A module may still fix what does *not* come from the
+  global style — layout, proportion, ergonomics (a control's height is the sprint; two controls stacked
+  instead of side by side is the module).
 - **⚠ Spun off from Data Import I0, NOT part of it — a platform-wide defect to audit.** Measured on live FB5:
   binding a string containing a character the **connection** charset cannot represent stores `?` with **no
   error at all**, even when the target column is UTF8 (the connection charset decides, not the column's), and
@@ -1988,17 +2034,23 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5345 as of 2026-07-26
-  (`feat/data-import` @ `77eb997`); the 4293 below was the count when this note was written** — all green in ONE
-  `dotnet test` run** (`dotnet test EmberTern.slnx`, ~10s). The two-partition workaround is no longer
-  needed: `ConnectionExpandBindingProbe` now uses **one shared `HeadlessUnitTestSession` for the whole
-  class** instead of `StartNew` per test — which is what gotcha #94 always prescribed, and is now
-  **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into a `TextEditor`
-  throw cross-thread from every session after the first (gotcha #226). It also cut that class from 16s to
-  5s. *(The old "intermittently hangs alongside the rest of the suite" caveat is **not** claimed fixed —
-  the hang simply does not reproduce now, for the author or the user, across repeated full runs; if it
-  returns, investigate then with concrete evidence rather than pre-emptively re-splitting.)* Smoke: clean
-  (app launches).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5567 as of 2026-07-26
+  (`feat/data-import`, I5 closing seam)** — all green in ONE `dotnet test` run (~10s).
+  `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
+  prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
+  a `TextEditor` throw cross-thread from every session after the first (#226).
+  **⚠ The intermittent full-suite hang the user keeps hitting is NOT claimed fixed.** It did not reproduce
+  during the 2026-07-26 investigation (5567 green in ~9s, repeatedly, and the probe class alone in 6s), so
+  nothing was restructured on a hypothesis. What that investigation *did* find and fix is a real defect with
+  a plausible mechanism: the shared session was held in a `static readonly` field and **never disposed**,
+  and Avalonia's own contract says *"Disposing unit test session stops internal dispatcher loop"* — i.e. it
+  left a thread spinning a dispatcher loop after the last test. Ownership moved to an `IClassFixture`
+  (`HeadlessSessionFixture`), still ONE session (gotcha #261). **When it next hangs, do not re-run and hope
+  — run the instrument**, which turns an infinite wait into a two-minute named failure:
+  ```bash
+  dotnet test EmberTern.slnx --blame-hang --blame-hang-timeout 120s
+  ```
+  Smoke: clean (app launches).
 - **Script Executor — Dev Mode integration DONE (2026-07-16; impl, awaits user visual confirmation).**
   The Script Executor no longer ignores Developer Mode. An **all-DDL script under auto-commit** begins
   its transaction with the Dev Mode-aware DDL wait policy (`FirebirdDdlExecutor.BuildDdlTransactionOptions`
@@ -2985,7 +3037,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (247 entries, #1–#260), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (248 entries, #1–#261), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a
