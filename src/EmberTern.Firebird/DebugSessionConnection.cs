@@ -44,15 +44,20 @@ public enum DebugIsolation
 public sealed class DebugSessionConnection : IAsyncDisposable
 {
     private readonly FirebirdConnectionService _owner;
-    private readonly SemaphoreSlim _commandLock = new(1, 1);
-    private FbConnection? _connection;
-    private FbTransaction? _transaction;
+
+    // ⭐ I7.5: the attachment, the transaction, the command lock and the teardown all moved into the shared
+    // FirebirdSessionConnection, which Data Import now uses too. This type HOLDS one rather than being one, so
+    // every member below stays byte-identical to what the debugger has always exposed — its tests and
+    // DebuggerFidelityProbe remain an untouched regression proof of a closed subsystem.
+    private readonly FirebirdSessionConnection _session;
     private bool _disposed;
 
     internal DebugSessionConnection(FbConnection connection, DebugIsolation isolation, FirebirdConnectionService owner)
     {
-        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        _session = new FirebirdSessionConnection(
+            connection ?? throw new ArgumentNullException(nameof(connection)),
+            BuildDebugTransactionOptions(isolation));
         Isolation = isolation;
     }
 
@@ -60,148 +65,56 @@ public sealed class DebugSessionConnection : IAsyncDisposable
     public DebugIsolation Isolation { get; }
 
     /// <summary>The session's dedicated attachment.</summary>
-    public FbConnection Connection =>
-        _connection ?? throw new ObjectDisposedException(nameof(DebugSessionConnection));
+    public FbConnection Connection => _session.Connection;
 
     /// <summary>The session's own transaction (null before <see cref="BeginAsync"/> / after settle).</summary>
-    public FbTransaction? Transaction => _transaction;
+    public FbTransaction? Transaction => _session.Transaction;
 
     /// <summary>True while the session's transaction is open.</summary>
-    public bool IsActive => _transaction is not null;
+    public bool IsActive => _session.IsActive;
 
     // The session connection's own command lock — a reader/executor (seam c) captures it ONCE per wire
     // operation and binds its command to Transaction. A session connection never flips lanes, so there is
     // exactly one lock (no lane-resolving accessor hazard, #98/#120).
-    internal SemaphoreSlim CommandLock => _commandLock;
+    internal SemaphoreSlim CommandLock => _session.CommandLock;
 
     // Begins the session transaction with the explicit debug TPB (§4.2). Called by the factory
     // (FirebirdConnectionService.CreateDebugSessionAsync) right after the attachment opens.
-    internal async Task BeginAsync(CancellationToken cancellationToken = default)
-    {
-        if (_transaction is not null)
-        {
-            return;
-        }
-        var connection = Connection;
-        await _commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            _transaction = (FbTransaction)await connection
-                .BeginTransactionAsync(BuildDebugTransactionOptions(Isolation), cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            _commandLock.Release();
-        }
-    }
+    internal Task BeginAsync(CancellationToken cancellationToken = default)
+        => _session.BeginAsync(cancellationToken);
 
     /// <summary>Sets a SAVEPOINT on entry to a simulated frame (spec §4.5). Named by the frame's
     /// <c>SavepointName</c> (<c>ET_DBG_FRAME_{id}</c>).</summary>
     public Task SetSavepointAsync(string name, CancellationToken cancellationToken = default)
-        => ExecuteNonQueryLockedAsync(SavepointStatement(SavepointOp.Set, name), cancellationToken);
+        => _session.ExecuteNonQueryLockedAsync(SavepointStatement(SavepointOp.Set, name), cancellationToken);
 
     /// <summary>Releases a frame's savepoint on its NORMAL exit (spec §4.5).</summary>
     public Task ReleaseSavepointAsync(string name, CancellationToken cancellationToken = default)
-        => ExecuteNonQueryLockedAsync(SavepointStatement(SavepointOp.Release, name), cancellationToken);
+        => _session.ExecuteNonQueryLockedAsync(SavepointStatement(SavepointOp.Release, name), cancellationToken);
 
     /// <summary>Rolls the transaction back to a frame's savepoint on its UNHANDLED exit (spec §4.5) — the
     /// simulated frame's side effects are undone atomically, as a real call's would be.</summary>
     public Task RollbackToSavepointAsync(string name, CancellationToken cancellationToken = default)
-        => ExecuteNonQueryLockedAsync(SavepointStatement(SavepointOp.RollbackTo, name), cancellationToken);
+        => _session.ExecuteNonQueryLockedAsync(SavepointStatement(SavepointOp.RollbackTo, name), cancellationToken);
 
     /// <summary>Commits the debug transaction — the rare, explicit <c>Commit debug transaction</c> case
     /// (spec §4.4); the default at session end is <see cref="RollbackAsync"/>.</summary>
-    public async Task CommitAsync(CancellationToken cancellationToken = default)
-    {
-        if (_transaction is null)
-        {
-            return;
-        }
-        var tx = _transaction;
-        await _commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
-            _transaction = null;
-        }
-        finally
-        {
-            if (_transaction is null)
-            {
-                await tx.DisposeAsync().ConfigureAwait(false);
-            }
-            _commandLock.Release();
-        }
-    }
+    public Task CommitAsync(CancellationToken cancellationToken = default)
+        => _session.CommitAsync(cancellationToken);
 
     /// <summary>Rolls the debug transaction back — the default contract of a debug run (spec §4.4).</summary>
-    public async Task RollbackAsync(CancellationToken cancellationToken = default)
-    {
-        if (_transaction is null)
-        {
-            return;
-        }
-        var tx = _transaction;
-        _transaction = null;
-        await _commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            // best-effort rollback — a gone connection is handled gracefully
-        }
-        finally
-        {
-            await tx.DisposeAsync().ConfigureAwait(false);
-            _commandLock.Release();
-        }
-    }
+    public Task RollbackAsync(CancellationToken cancellationToken = default)
+        => _session.RollbackAsync(cancellationToken);
 
     /// <summary>Ends the session: rolls back any open transaction (§4.4 default) and disposes the
     /// attachment, then deregisters from the connection service. Idempotent.</summary>
     public async ValueTask DisposeAsync()
     {
-        if (_disposed)
-        {
-            return;
-        }
+        if (_disposed) return;
         _disposed = true;
 
-        await RollbackAsync().ConfigureAwait(false);
-        var connection = _connection;
-        _connection = null;
-        if (connection is not null)
-        {
-            try { await connection.CloseAsync().ConfigureAwait(false); } catch { /* best-effort */ }
-            await connection.DisposeAsync().ConfigureAwait(false);
-        }
-        _owner.RemoveDebugSession(this);
-        _commandLock.Dispose();
-    }
-
-    // Runs one non-query on the session connection + transaction, serialized on the session's command lock
-    // (captured once, #98/#120). Used by the savepoint operations; seam (c) uses CommandLock + Transaction
-    // directly for the harness.
-    private async Task ExecuteNonQueryLockedAsync(string sql, CancellationToken cancellationToken)
-    {
-        var connection = Connection;
-        var tx = _transaction ?? throw new InvalidOperationException("The debug transaction is not open.");
-        await _commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
-            cmd.CommandTimeout = 0;
-            cmd.Transaction = tx;
-            await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _commandLock.Release();
-        }
+        await _session.DisposeAsync().ConfigureAwait(false);
+        _owner.RemoveSession(this);
     }
 
     // ── Pure helpers (unit-testable without a live server) ────────────────────────────────────────
