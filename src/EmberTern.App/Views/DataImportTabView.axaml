@@ -93,6 +93,42 @@
             <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}" />
           </Button>
 
+          <!-- ⭐ Commit / Rollback live HERE, in the top command bar beside Import and Validate.
+               Every main action in EmberTern is taken from the top toolbar, and after an import the
+               transaction decision IS a main action — it was previously only in the Report tab, where it
+               read as a footnote while a red "transaction is open" line read as a failure. They appear only
+               once THIS module's run has left a transaction open, so the buttons never offer to commit work
+               the import did not do. -->
+          <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}"
+                  IsVisible="{Binding Report.TransactionLeftOpen}" />
+
+          <TextBlock Text="{x:Static app:UiStrings.ImportTransactionOpenMarker}"
+                     VerticalAlignment="Center" FontSize="12"
+                     Foreground="{DynamicResource WarningBrush}"
+                     ToolTip.Tip="{x:Static app:UiStrings.ImportTransactionOpenMarkerTooltip}"
+                     IsVisible="{Binding Report.TransactionLeftOpen}" />
+
+          <Button Classes="flat" Command="{Binding CommitCommand}"
+                  IsVisible="{Binding Report.TransactionLeftOpen}"
+                  IsEnabled="{Binding !IsRunning}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportCommitTooltip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
+                                Foreground="{DynamicResource SuccessIconBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportCommit}" />
+            </StackPanel>
+          </Button>
+          <Button Classes="flat" Command="{Binding RollbackCommand}"
+                  IsVisible="{Binding Report.TransactionLeftOpen}"
+                  IsEnabled="{Binding !IsRunning}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportRollbackTooltip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <controls:SvgIcon Data="{StaticResource Icon.Undo}" Width="14" Height="14"
+                                Foreground="{DynamicResource DangerIconBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportRollback}" />
+            </StackPanel>
+          </Button>
+
           <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
           <!-- The mode carries its consequence as a tooltip, where the decision is taken (§0.5) — the
@@ -702,31 +738,11 @@
                          IsVisible="{Binding HasNote}" />
 
               <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
-                <!-- ⭐ Commit / Rollback live HERE, not only in the global transaction bar: the decision is
-                     taken where the numbers are (§3.7). -->
-                <Button Classes="flat" FontSize="12"
-                        IsVisible="{Binding TransactionLeftOpen}"
-                        ToolTip.Tip="{x:Static app:UiStrings.ImportCommitTooltip}"
-                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).CommitCommand}">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
-                                      Foreground="{DynamicResource SuccessIconBrush}" />
-                    <TextBlock Text="{x:Static app:UiStrings.ImportCommit}" />
-                  </StackPanel>
-                </Button>
-                <Button Classes="flat" FontSize="12"
-                        IsVisible="{Binding TransactionLeftOpen}"
-                        ToolTip.Tip="{x:Static app:UiStrings.ImportRollbackTooltip}"
-                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).RollbackCommand}">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <controls:SvgIcon Data="{StaticResource Icon.Undo}" Width="14" Height="14"
-                                      Foreground="{DynamicResource DangerIconBrush}" />
-                    <TextBlock Text="{x:Static app:UiStrings.ImportRollback}" />
-                  </StackPanel>
-                </Button>
-
-                <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}"
-                        IsVisible="{Binding TransactionLeftOpen}" />
+                <!-- ⚠ Commit / Rollback are NOT here any more. They moved to the top command bar after the
+                     I7 review: in EmberTern every main action is taken from the toolbar, and hiding the
+                     transaction decision at the bottom of the window made a successful import read as a
+                     failure — the only thing in view was a red "a working transaction is open" line. The
+                     Report tab reports; the toolbar acts. -->
 
                 <!-- Export goes through the SHARED export framework — CSV / XLSX / clipboard for free,
                      without one line of new serialization (§4.6). -->

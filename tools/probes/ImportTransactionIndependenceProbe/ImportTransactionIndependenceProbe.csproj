@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER VERIFICATION TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    ANALYSIS GATE, not a feature. It answers ONE question the user asked before any code is written:
+    can EmberTern hold TWO independent working transactions against the same database at the same time,
+    so that Data Import stops sharing the SQL Editor's transaction?
+
+    The project's own rule is "verify Firebird behaviour, never infer it" — three long-standing
+    architectural beliefs were falsified by ~30 lines of probe (#213, #214, #215). This measures:
+
+      (1) one attachment, two transactions  -> what does the DRIVER do?
+      (2) two attachments, two transactions -> genuinely independent commit/rollback?
+      (3) isolation                         -> is uncommitted work in A invisible to B?
+      (4) concurrent writes, different rows  -> does B block?
+      (5) concurrent writes, the SAME row    -> what does B get, and how fast?  (the real cost)
+
+    Runs against Lab/EmberTern_Lab.fdb and only touches IMP_TARGET, which it empties before and after.
+
+    Deliberately NOT in EmberTern.slnx: it needs a live server and a password.
+
+    How to run: see the header of Program.cs.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
+  </ItemGroup>
+
+</Project>

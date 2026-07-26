@@ -388,6 +388,12 @@ internal static class UiStrings
     public const string ImportCommitTooltip = "Commit the rows this import wrote";
     public const string ImportRollback = "Rollback";
     public const string ImportRollbackTooltip = "Roll back everything this import wrote";
+    /// <summary>Toolbar marker: the import left a transaction open and the decision is pending. Amber, not
+    /// red — a pending decision is not a failure, and after a clean import the red readiness line was being
+    /// read as "the import did not work".</summary>
+    public const string ImportTransactionOpenMarker = "● transaction open";
+    public const string ImportTransactionOpenMarkerTooltip =
+        "This import's rows are written but not persisted. Commit keeps them, Rollback discards them.";
     public const string ImportCommitted = "Committed.";
     public const string ImportRolledBack = "Rolled back.";
     public const string ImportRestoredLastConfiguration = "restored the last configuration";

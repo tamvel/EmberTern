@@ -214,7 +214,7 @@ public partial class DataImportTabView : UserControl
             EmberTern.Core.Import.ImportSection.Source => this.FindControl<TextBox>("SourcePathBox"),
             EmberTern.Core.Import.ImportSection.Format => FirstFocusable("FormatOptionsPane"),
             EmberTern.Core.Import.ImportSection.Target => FirstFocusable("TargetPicker"),
-            EmberTern.Core.Import.ImportSection.Mapping => FirstFocusable("MappingRows"),
+            EmberTern.Core.Import.ImportSection.Mapping => MappingRowNeedingAttention(),
             EmberTern.Core.Import.ImportSection.Transaction => this.FindControl<ComboBox>("TransactionModePicker"),
             _ => null,
         };
@@ -226,6 +226,36 @@ public partial class DataImportTabView : UserControl
             Avalonia.Threading.Dispatcher.UIThread.Post(
                 () => target.Focus(), Avalonia.Threading.DispatcherPriority.Background);
         }
+    }
+
+    /// <summary>
+    /// The picker of the mapping row that actually needs a decision — scrolled into view on the way.
+    /// <para>
+    /// ⭐ "Go to the Mapping section" is useless when the section is a forty-row grid and the problem is on
+    /// row 31. The chip exists because the strip said something is wrong there, so it lands on the row the
+    /// strip meant. Which row that is, is the panel's decision (<c>FirstRowNeedingAttention</c>) — the view
+    /// only knows how to reach it.
+    /// </para>
+    /// </summary>
+    private Control? MappingRowNeedingAttention()
+    {
+        if (_bound is null) return null;
+        if (this.FindControl<ItemsControl>("MappingRows") is not { } list) return null;
+
+        var row = _bound.Mapping.FirstRowNeedingAttention();
+        if (row is null) return null;
+
+        // A row hidden by the "only unmapped" filter has no container, so nothing could be focused. Ask for
+        // the container, and fall back to the first focusable control rather than doing nothing at all.
+        if (list.ContainerFromItem(row) is not Control container) return FirstFocusable("MappingRows");
+
+        container.BringIntoView();
+
+        foreach (var descendant in container.GetVisualDescendants())
+        {
+            if (descendant is ComboBox { IsEffectivelyEnabled: true } picker) return picker;
+        }
+        return container;
     }
 
     /// <summary>The first control inside <paramref name="hostName"/> that can actually take focus — a section

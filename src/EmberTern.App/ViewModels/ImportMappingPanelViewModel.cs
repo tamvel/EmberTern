@@ -307,6 +307,32 @@ public sealed partial class ImportMappingPanelViewModel : ViewModelBase
     }
 
     /// <summary>The grid as the ONE record sees it (§4.8.6).</summary>
+    /// <summary>
+    /// The row the readiness strip is complaining about — what the Mapping chip should take the user to.
+    /// <para>
+    /// Ordered by how badly the row needs a decision: a <b>required</b> column with nothing mapped BLOCKS the
+    /// import, so it comes first; then anything the planner flagged; then merely unmapped. Rows the user can
+    /// do nothing about (computed, unsupported) are skipped — sending someone to a locked control is worse
+    /// than sending them nowhere.
+    /// </para>
+    /// </summary>
+    public ImportMappingRowViewModel? FirstRowNeedingAttention()
+    {
+        ImportMappingRowViewModel? flagged = null;
+        ImportMappingRowViewModel? unmapped = null;
+
+        foreach (var row in Rows)
+        {
+            if (!row.IsPickerEnabled) continue;
+
+            if (row.IsRequired && !row.IsMapped) return row;
+            if (flagged is null && row.HasDiagnostic) flagged = row;
+            if (unmapped is null && !row.IsMapped) unmapped = row;
+        }
+
+        return flagged ?? unmapped;
+    }
+
     public IReadOnlyList<ColumnMapping> BuildMapping()
         => Rows.Select(r => r.ToMapping()).ToList();
 
