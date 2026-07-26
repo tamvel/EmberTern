@@ -51,7 +51,7 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | | |
 |---|---|
 | **Gałąź** | `feat/data-import` (odbita od `master` @ `d474b42`); **wypchnięta na `origin`**, `private` do dosłania przy najbliższym zamknięciu etapu. Żywe gałęzie repozytorium: `master` + `feat/data-import` |
-| **Ostatni commit** | szew domykający I5 — rewizja układu powierzchni + U1/U2/U3/U6/U7/U8/U9/U10/U11 (poprzedni: `0c5667e`, etap I5) |
+| **Ostatni commit** | **`95ae39e`** — szew domykający I5: rewizja układu powierzchni + U1/U2/U3/U6/U7/U8/U9/U10/U11 (poprzedni: `0c5667e`, etap I5) |
 | **Etapy zamknięte** | **I0** (sondy, `5e90435`) · **I1** (modele, konfiguracja, magazyn, czytnik, `77eb997`) · **I2** (konwersja, mapowanie, walidacja, gotowość, `392850f`) · **I3** (pipeline + dry-run + provider, `434daeb`) · **I4** (Firebird + weryfikacja na żywym FB5, `3b31a4d`) |
 | **⏳ I5 — szew domykający dostarczony, czeka na wizualne potwierdzenie** | Przegląd wzrokowy odbył się 2026-07-26 i dał 5 uwag (U1–U5) + 5 propozycji z autoprzeglądu (U6–U10) + U11. **Wszystkie rozstrzygnięte; 9 z nich dostarczonych w szwie** (§3.8). Układ powierzchni **zrewidowany i wniesiony w miejsce do §3.1** — gwiazdka przeniesiona z konfiguracji na powierzchnię roboczą, pas A usunięty, kafelki pionowe z zawsze żywym pickerem. **Otwarte świadomie: U4** (gęstość globalna → osobny sprint UX po module) i **U5** (weryfikacja przy I6) |
 | **Następny etap** | **I6** — App: sekcja Cel (istniejąca tabela) + panel Mapowanie, przeliczanie łańcuchowe z anulowaniem (§6). Rama jest gotowa: pas E2 i wiersz `*` czekają, więc I6 **wstawia**, a nie przebudowuje |

@@ -18,7 +18,7 @@ implementacja. Odkrycie, które naprawdę podważa projekt, oznacza: ZATRZYMAJ E
 nigdy cichy redesign.
 
 Stan wejściowy:
-  gałąź feat/data-import, ostatni commit = szew domykający I5, 5567 testów zielonych, build 0/0.
+  gałąź feat/data-import, ostatni commit 95ae39e (szew domykający I5), 5567 testów zielonych, build 0/0.
   Po I4 cały silnik jest gotowy i zweryfikowany na żywym FB5 — I6 to praca wyłącznie w App.
 
 ✅ Układ powierzchni jest już rozstrzygnięty i zbudowany (§3.1 po rewizji + §3.8). I6 WSTAWIA się
@@ -64,7 +64,7 @@ Wiążące zasady tego etapu:
     do bazy.
 
 Definition of Done:
-  build 0/0 · pełny zestaw testów zielony (baza 5559) · aplikacja startuje czysto ·
+  build 0/0 · pełny zestaw testów zielony (baza 5567) · aplikacja startuje czysto ·
   mapowanie ręczne i automatyczne działa na żywej bazie laboratoryjnej ·
   niezgodności widoczne PRZED importem · commit na feat/data-import ·
   push na origin ORAZ private · aktualizacja bloku „📍 STAN IMPLEMENTACJI" w data-import.md.
