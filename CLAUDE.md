@@ -276,7 +276,11 @@ noted.
 
 ## Current state
 
-- **⭐ I7.5 DONE (2026-07-26) — DATA IMPORT HAS ITS OWN WORKING TRANSACTION. Ratified amendment to
+- **🏁 DATA IMPORT MVP IS COMPLETE — I0–I7.5 CLOSED AND USER-ACCEPTED (2026-07-26). Next: I8 (new table),
+  then I9 XLSX · I10 XLS · I11 named profiles · I12 close-out. Start I8 from
+  [data-import-i8-session-prompt.md](docs/design/data-import-i8-session-prompt.md) in a FRESH session (one
+  etap = one session).**
+- **⭐ I7.5 — DATA IMPORT HAS ITS OWN WORKING TRANSACTION (accepted). Ratified amendment to
   design §4.5, the module's "most important decision".** The deciding argument was not UX: while the import
   wrote into THE one user working transaction, its **Commit also persisted whatever the SQL Editor had left
   uncommitted**. A button must do exactly what it says (rule #11 / §0.5), so the possibility was removed
@@ -303,10 +307,9 @@ noted.
   console leaves a row uncommitted, import commits, console rolls back, only the import survives.
   Commits `4bf6cf8` (A) · `019e7f8` (B) · `8766787` (C) · `bb28805` (D).
 
-- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE. 🏁 I7 IS DELIVERED, SO THE MVP IS COMPLETE:
+- **✅ I7 — CLOSED AND ACCEPTED (2026-07-26). The MVP surface:
   CSV/TXT → an existing table now imports end-to-end, with validation, a report, the transaction decision
-  and a remembered configuration. Awaiting the user's visual confirmation in BOTH palettes; next etap is
-  I8 (new table).** Branch `feat/data-import`, suite **5607 green** (+24), build 0/0, app launches clean.
+  and a remembered configuration. Confirmed by the user in both palettes.** Branch `feat/data-import`, suite **5607 green** (+24), build 0/0, app launches clean.
   **Live-verified:** new `tools/probes/DataImportRunProbe` vs FB5 `WI-V5.0.3.1683` — **11/11 ALL PASS**
   (the report's numbers equal `SELECT COUNT(*)`; Rollback undoes the "empty first" DELETE together with the
   rows; the count behind that confirmation is read inside the user's own transaction; `Batched` really does
