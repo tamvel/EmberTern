@@ -148,3 +148,19 @@ public interface IImportWriter
     /// finalizing the transaction is the caller's decision (hard rule #3).</summary>
     Task<ImportWriteSummary> CompleteAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// A writer that has already committed some of the rows it wrote — implemented only by
+/// <see cref="ImportTransactionMode.Batched"/>'s commit-every-N decorator.
+/// <para>
+/// It exists so the report can state the one thing §0.5 will not let the module leave unsaid: <b>a Rollback
+/// cannot take those rows back</b>. Asking through a small interface rather than adding the count to
+/// <see cref="ImportWriteSummary"/> keeps the fact where it is true — every other writer commits nothing, and a
+/// number that is always zero on three of four paths invites being read as meaningful.
+/// </para>
+/// </summary>
+public interface IPartiallyCommittedImportWriter
+{
+    /// <summary>Rows already committed and therefore beyond a Rollback's reach.</summary>
+    long RowsCommitted { get; }
+}

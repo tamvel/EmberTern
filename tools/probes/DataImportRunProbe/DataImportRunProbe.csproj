@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER VERIFICATION TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Data Import — etap I7 (docs/design/data-import.md §6). Proves the RUN path against a live FB5 engine:
+    the whole CSV -> existing table journey the surface performs, plus the two collaborators I7 added on the
+    database side.
+
+    What it answers, and why each question needed a real server:
+
+      (A) Does a CSV import into an existing table land the rows the report claims?  The DoD's starred item:
+          the numbers in the report must equal SELECT COUNT(*). Nothing but a real engine can settle that.
+      (B) Does Rollback take the whole import back — INCLUDING the "empty the table first" DELETE?  §4.5/D5
+          puts the DELETE in the SAME working transaction precisely so it is rollbackable; that is a claim
+          about Firebird, not about our code.
+      (C) Does FirebirdImportTargetPreparer read the count the transaction that will do the deleting sees?
+      (D) Does BatchedCommitImportWriter really commit every N rows — and does a later Rollback therefore
+          fail to take those rows back?  §0.5 makes the module state that out loud, so it had better be true.
+
+    Runs against Lab/EmberTern_Lab.fdb and only touches IMP_TARGET, which it empties before each case, so the
+    debugger/metadata zoo is never disturbed.
+
+    Deliberately NOT in EmberTern.slnx: it needs a live server and a password, which the hermetic test suite
+    must never need.
+
+    How to run: see the header of Program.cs (an XML comment cannot carry the double dash the CLI needs).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- The probe is a scratch tool; a warning here must not block a verification run. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
+  </ItemGroup>
+
+</Project>

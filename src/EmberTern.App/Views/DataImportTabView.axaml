@@ -42,7 +42,83 @@
                             Message="{Binding StatusMessage}"
                             IsVisible="{Binding HasStatusMessage}" />
 
-    <!-- ══ Band B — command bar. Reserved for I7 (Import / Validate / transaction / error policy). ══ -->
+    <!-- ══ Band B — command bar (§3.1) ══════════════════════════════════════════════════════════
+         The timer is DOCKED RIGHT, outside the button panel, so a running import never shifts the
+         buttons under the pointer — the Script Executor's pattern, reused rather than re-invented. -->
+    <Border Grid.Row="1" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
+      <DockPanel LastChildFill="True">
+
+        <TextBlock DockPanel.Dock="Right" Text="{Binding Timer.ElapsedDisplay}" FontSize="11"
+                   FontFamily="Consolas,Menlo,monospace" Margin="8,0,4,0" VerticalAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   IsVisible="{Binding Timer.IsRunning}" />
+
+        <!-- The live counters sit beside the timer, so "what is happening" reads as one thing. -->
+        <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressText}" FontSize="12"
+                   Margin="8,0" VerticalAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   IsVisible="{Binding IsRunning}" />
+        <!-- Indeterminate when the row count is unknown: a streaming import cannot know it without reading
+             the file twice, and inventing a percentage would be a number that is not true. -->
+        <ProgressBar DockPanel.Dock="Right" Width="140" Height="6" VerticalAlignment="Center"
+                     Minimum="0" Maximum="100" Value="{Binding ProgressPercent}"
+                     IsIndeterminate="{Binding IsProgressIndeterminate}"
+                     IsVisible="{Binding IsRunning}" />
+
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+
+          <Button Classes="primary" Command="{Binding ImportCommand}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportRunTooltip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <controls:SvgIcon Data="{StaticResource Icon.Import}" Width="14" Height="14"
+                                Foreground="{DynamicResource OnAccentBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportRun}" />
+            </StackPanel>
+          </Button>
+
+          <Button Classes="flat" Command="{Binding ValidateCommand}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportValidateTooltip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
+                                Foreground="{DynamicResource SuccessIconBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportValidate}" />
+            </StackPanel>
+          </Button>
+
+          <!-- Only visible while there is something to cancel: a permanently disabled Stop teaches nothing. -->
+          <Button Classes="icon" Command="{Binding CancelRunCommand}"
+                  IsVisible="{Binding IsRunning}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportCancelTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}" />
+          </Button>
+
+          <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+
+          <!-- The mode carries its consequence as a tooltip, where the decision is taken (§0.5) — the
+               Script Executor's `Sequenced` precedent. -->
+          <TextBlock Text="{x:Static app:UiStrings.ImportTransactionLabel}" Classes="field-label"
+                     VerticalAlignment="Center" Margin="0" />
+          <ComboBox SelectedIndex="{Binding TransactionModeIndex, Mode=TwoWay}" MinWidth="170"
+                    VerticalAlignment="Center" FontSize="12"
+                    IsEnabled="{Binding IsConfigurationEnabled}"
+                    ToolTip.Tip="{Binding TransactionModeDescription}">
+            <ComboBoxItem Content="{x:Static app:UiStrings.ImportTransactionManual}" />
+            <ComboBoxItem Content="{x:Static app:UiStrings.ImportTransactionAutoCommit}" />
+            <ComboBoxItem Content="{x:Static app:UiStrings.ImportTransactionBatched}" />
+          </ComboBox>
+
+          <TextBlock Text="{x:Static app:UiStrings.ImportErrorPolicyLabel}" Classes="field-label"
+                     VerticalAlignment="Center" Margin="0" />
+          <ComboBox SelectedIndex="{Binding ErrorPolicyIndex, Mode=TwoWay}" MinWidth="180"
+                    VerticalAlignment="Center" FontSize="12"
+                    IsEnabled="{Binding IsConfigurationEnabled}">
+            <ComboBoxItem Content="{x:Static app:UiStrings.ImportErrorPolicyStop}" />
+            <ComboBoxItem Content="{x:Static app:UiStrings.ImportErrorPolicySkip}" />
+          </ComboBox>
+        </StackPanel>
+      </DockPanel>
+    </Border>
 
     <!-- ══ Band D — readiness strip: every gap at once, each one clickable to its cause ══════════ -->
     <Border Grid.Row="2" Background="{DynamicResource PanelBrush}"
@@ -347,9 +423,12 @@
     </Border>
 
     <!-- ══ Band F — the work area: Mapping | Preview after conversion. THE STAR ROW. ════════════
-         I6 delivers the mapping half; the converted preview joins it in I7 on the other side of a
-         splitter. The empty state names the next step rather than saying "no data" (§9.4). -->
-    <Grid Grid.Row="5" Margin="12,8" DataContext="{Binding Mapping}" x:DataType="vm:ImportMappingPanelViewModel">
+         Two halves of one job, split by a draggable splitter: the mapping decides which field feeds
+         which column, and the preview shows what that decision produces. The empty state names the
+         next step rather than saying "no data" (§9.4). -->
+    <Grid Grid.Row="5" ColumnDefinitions="*,4,*">
+
+    <Grid Grid.Column="0" Margin="12,8" DataContext="{Binding Mapping}" x:DataType="vm:ImportMappingPanelViewModel">
 
       <TextBlock Text="{x:Static app:UiStrings.ImportMappingEmpty}"
                  Classes="subtle" FontSize="12" MaxWidth="560"
@@ -471,6 +550,44 @@
       </Grid>
     </Grid>
 
+    <GridSplitter Grid.Column="1" ResizeDirection="Columns" Width="4"
+                  VerticalAlignment="Stretch" Background="{DynamicResource BorderBrush}" />
+
+    <!-- ══ The converted preview (§3.6) — "exactly what reaches the database" ═════════════════
+         Filled by the REAL pipeline (bounded provider + a writer that keeps rows instead of sending
+         them), which is the only way that claim can be true.
+         ⛔ The shared filter panel and the aggregation bar are deliberately NOT wired: a filter here
+            would suggest it changes what gets imported. Filtering before import is its own planned
+            feature (§9.5) — a boundary, not an oversight. -->
+    <Grid Grid.Column="2" Margin="12,8" RowDefinitions="Auto,*"
+          DataContext="{Binding ConvertedPreview}" x:DataType="vm:ImportConvertedPreviewViewModel">
+
+      <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,0,0,6">
+        <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportPreviewTitle}"
+                   Classes="field-label" VerticalAlignment="Center" Margin="0" />
+        <TextBlock Grid.Column="1" Text="{Binding Headline}" Classes="subtle" FontSize="12"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+      </Grid>
+
+      <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportPreviewEmpty}"
+                 Classes="subtle" FontSize="12" MaxWidth="420" TextWrapping="Wrap"
+                 HorizontalAlignment="Center" VerticalAlignment="Top"
+                 IsVisible="{Binding !HasRows}" />
+
+      <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+              IsVisible="{Binding HasRows}">
+        <DataGrid x:Name="ConvertedPreviewGrid"
+                  ItemsSource="{Binding Rows}"
+                  IsReadOnly="True"
+                  AutoGenerateColumns="False"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="All"
+                  CanUserSortColumns="False"
+                  FontSize="12" />
+      </Border>
+    </Grid>
+    </Grid>
+
     <!-- ══ The bottom panel's splitter (U2) ═════════════════════════════════════════════════════
          Always visible while the surface is — deliberately NOT bound to !IsBottomPanelCollapsed, which is
          the state its own double-click toggles; binding a splitter's visibility to what it toggles is
@@ -479,43 +596,162 @@
                   ResizeDirection="Rows" HorizontalAlignment="Stretch"
                   Background="{DynamicResource BorderBrush}" />
 
-    <!-- ══ Band G — bottom tabs. Collapse renormalizes BOTH grid rows (gotcha #240). ═════════════ -->
-    <Border Grid.Row="7" Background="{DynamicResource PanelBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-      <Grid RowDefinitions="Auto,*">
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Background="{DynamicResource ElevatedPanelBrush}"
-              x:Name="BottomTabStrip" DoubleTapped="OnBottomPanelDoubleTapped">
-          <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportSourcePreviewTab}"
-                     Margin="12,6" FontSize="12" FontWeight="SemiBold" />
-          <!-- Same idiom as the debugger's bottom panel: ONE button, both chevrons in a Panel. -->
-          <Button Grid.Column="1" Classes="icon" Margin="0,2,6,2"
-                  ToolTip.Tip="{x:Static app:UiStrings.ImportBottomPanelToggleTooltip}"
-                  Command="{Binding ToggleBottomPanelCommand}">
-            <Panel>
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="14" Height="14"
-                                Foreground="{DynamicResource SubtleForegroundBrush}"
-                                IsVisible="{Binding !IsBottomPanelCollapsed}" />
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="14" Height="14"
-                                Foreground="{DynamicResource SubtleForegroundBrush}"
-                                IsVisible="{Binding IsBottomPanelCollapsed}" />
-            </Panel>
-          </Button>
-        </Grid>
+    <!-- ══ Band G — bottom tabs. Collapse renormalizes BOTH grid rows (gotcha #240). ═════════════
+         Three tabs, one question each: what the file HOLDS (raw records), what the CURRENT settings
+         would reject (found without running anything), and what a run actually DID. The Errors tab
+         carries its count — a tab that hides how much it has to say has to be opened to find out.
+         The chevron overlays the strip and the tab CONTENTS carry the collapse binding, exactly as in
+         the debugger, so a collapsed panel measures down to the strip alone. -->
+    <Border Grid.Row="7" ClipToBounds="True" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+            DoubleTapped="OnBottomPanelDoubleTapped">
+      <Grid>
+        <Button Classes="icon" ZIndex="1"
+                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,6,0"
+                ToolTip.Tip="{x:Static app:UiStrings.ImportBottomPanelToggleTooltip}"
+                Command="{Binding ToggleBottomPanelCommand}">
+          <Panel>
+            <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="14" Height="14"
+                              Foreground="{DynamicResource SubtleForegroundBrush}"
+                              IsVisible="{Binding !IsBottomPanelCollapsed}" />
+            <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="14" Height="14"
+                              Foreground="{DynamicResource SubtleForegroundBrush}"
+                              IsVisible="{Binding IsBottomPanelCollapsed}" />
+          </Panel>
+        </Button>
 
-        <Grid Grid.Row="1" IsVisible="{Binding !IsBottomPanelCollapsed}">
-          <TextBlock Text="{x:Static app:UiStrings.ImportSourcePreviewEmpty}"
-                     Classes="subtle" Margin="12,10" FontSize="12"
-                     IsVisible="{Binding !PreviewRows.Count}" />
-          <DataGrid x:Name="SourcePreviewGrid"
-                    ItemsSource="{Binding PreviewRows}"
-                    IsVisible="{Binding PreviewRows.Count}"
-                    IsReadOnly="True"
-                    AutoGenerateColumns="False"
-                    HeadersVisibility="Column"
-                    GridLinesVisibility="All"
-                    CanUserSortColumns="False"
-                    FontSize="12" />
-        </Grid>
+        <TabControl x:Name="BottomTabs" Padding="0">
+
+          <!-- ── Source preview: the provider's own records, before anything was converted ── -->
+          <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ImportSourcePreviewTab}">
+          <Grid IsVisible="{Binding !IsBottomPanelCollapsed}">
+            <TextBlock Text="{x:Static app:UiStrings.ImportSourcePreviewEmpty}"
+                       Classes="subtle" Margin="12,10" FontSize="12"
+                       IsVisible="{Binding !PreviewRows.Count}" />
+            <DataGrid x:Name="SourcePreviewGrid"
+                      ItemsSource="{Binding PreviewRows}"
+                      IsVisible="{Binding PreviewRows.Count}"
+                      IsReadOnly="True"
+                      AutoGenerateColumns="False"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="All"
+                      CanUserSortColumns="False"
+                      FontSize="12" />
+          </Grid>
+          </TabItem>
+
+          <!-- ── Errors: what the CURRENT settings would reject, found without running anything ──
+               Same row type and same four columns as the report's list — one problem reads the same
+               wherever it is shown. -->
+          <TabItem Classes="bottom-tab" Header="{Binding ConvertedPreview.ProblemsTabHeader}">
+          <Grid IsVisible="{Binding !IsBottomPanelCollapsed}">
+            <TextBlock Text="{x:Static app:UiStrings.ImportErrorsEmpty}"
+                       Classes="subtle" Margin="12,10" FontSize="12"
+                       IsVisible="{Binding !ConvertedPreview.HasProblems}" />
+            <DataGrid ItemsSource="{Binding ConvertedPreview.Problems}"
+                      IsVisible="{Binding ConvertedPreview.HasProblems}"
+                      IsReadOnly="True" AutoGenerateColumns="False" HeadersVisibility="Column"
+                      GridLinesVisibility="All" CanUserSortColumns="False" FontSize="12"
+                      DoubleTapped="OnProblemDoubleTapped">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnRow}"
+                                    Binding="{Binding SourceRowNumber}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnColumn}"
+                                    Binding="{Binding ColumnName}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnValue}"
+                                    Binding="{Binding RawValue}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnReason}"
+                                    Binding="{Binding Reason}" IsReadOnly="True" Width="*" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+          </TabItem>
+
+          <!-- ── Report: what a run DID, and the transaction decision beside the numbers (§3.7) ── -->
+          <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ImportReportTab}">
+          <Panel IsVisible="{Binding !IsBottomPanelCollapsed}">
+          <Grid RowDefinitions="Auto,*"
+                DataContext="{Binding Report}" x:DataType="vm:ImportRunReportViewModel">
+
+            <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.ImportReportEmpty}"
+                       Classes="subtle" Margin="12,10" FontSize="12"
+                       IsVisible="{Binding !HasReport}" />
+
+            <StackPanel Grid.Row="0" Spacing="4" Margin="12,8" IsVisible="{Binding HasReport}">
+              <!-- The headline carries the severity colour through the shared MessageBanner table, so the
+                   report describes a state the same way every other surface does (§9.3). -->
+              <TextBlock Text="{Binding Headline}" FontSize="12" TextWrapping="Wrap">
+                <TextBlock.Foreground>
+                  <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                    <Binding Path="SeverityBrushKey" />
+                    <Binding ElementName="ImportRoot" Path="ActualThemeVariant" />
+                  </MultiBinding>
+                </TextBlock.Foreground>
+              </TextBlock>
+
+              <TextBlock Text="{Binding Note}" Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                         IsVisible="{Binding HasNote}" />
+
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+                <!-- ⭐ Commit / Rollback live HERE, not only in the global transaction bar: the decision is
+                     taken where the numbers are (§3.7). -->
+                <Button Classes="flat" FontSize="12"
+                        IsVisible="{Binding TransactionLeftOpen}"
+                        ToolTip.Tip="{x:Static app:UiStrings.ImportCommitTooltip}"
+                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).CommitCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
+                                      Foreground="{DynamicResource SuccessIconBrush}" />
+                    <TextBlock Text="{x:Static app:UiStrings.ImportCommit}" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="flat" FontSize="12"
+                        IsVisible="{Binding TransactionLeftOpen}"
+                        ToolTip.Tip="{x:Static app:UiStrings.ImportRollbackTooltip}"
+                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).RollbackCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <controls:SvgIcon Data="{StaticResource Icon.Undo}" Width="14" Height="14"
+                                      Foreground="{DynamicResource DangerIconBrush}" />
+                    <TextBlock Text="{x:Static app:UiStrings.ImportRollback}" />
+                  </StackPanel>
+                </Button>
+
+                <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}"
+                        IsVisible="{Binding TransactionLeftOpen}" />
+
+                <!-- Export goes through the SHARED export framework — CSV / XLSX / clipboard for free,
+                     without one line of new serialization (§4.6). -->
+                <Button Classes="flat" FontSize="12"
+                        Content="{x:Static app:UiStrings.ImportReportExport}"
+                        IsEnabled="{Binding HasProblems}"
+                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).ExportReportCommand}" />
+                <Button Classes="flat" FontSize="12"
+                        Content="{x:Static app:UiStrings.ImportReportCopy}"
+                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).CopyReportCommand}" />
+              </StackPanel>
+            </StackPanel>
+
+            <DataGrid Grid.Row="1" ItemsSource="{Binding Problems}"
+                      IsVisible="{Binding HasProblems}"
+                      IsReadOnly="True" AutoGenerateColumns="False" HeadersVisibility="Column"
+                      GridLinesVisibility="All" CanUserSortColumns="False" FontSize="12"
+                      ToolTip.Tip="{x:Static app:UiStrings.ImportReportRevealTooltip}"
+                      DoubleTapped="OnProblemDoubleTapped">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnRow}"
+                                    Binding="{Binding SourceRowNumber}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnColumn}"
+                                    Binding="{Binding ColumnName}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnValue}"
+                                    Binding="{Binding RawValue}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnReason}"
+                                    Binding="{Binding Reason}" IsReadOnly="True" Width="*" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+          </Panel>
+          </TabItem>
+        </TabControl>
       </Grid>
     </Border>
 
@@ -528,6 +764,19 @@
         <TextBlock Text="│" FontSize="12" Foreground="{DynamicResource BorderBrush}" />
         <TextBlock Text="{Binding SurfaceStatus}" FontSize="12"
                    Foreground="{DynamicResource SubtleForegroundBrush}" />
+
+        <!-- The quiet restore note (§4.8.4): an automatic restore the user cannot see is a configuration
+             they did not choose, so it says so — and offers to forget it in one click. -->
+        <TextBlock Text="│" FontSize="12" Foreground="{DynamicResource BorderBrush}"
+                   IsVisible="{Binding RestoredLastConfiguration}" />
+        <TextBlock Text="{x:Static app:UiStrings.ImportRestoredLastConfiguration}" FontSize="12"
+                   FontStyle="Italic" VerticalAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   IsVisible="{Binding RestoredLastConfiguration}" />
+        <Button Classes="flat" Padding="4,0" FontSize="11" VerticalAlignment="Center"
+                Content="{x:Static app:UiStrings.ImportForgetLastConfiguration}"
+                IsVisible="{Binding RestoredLastConfiguration}"
+                Command="{Binding ForgetLastConfigurationCommand}" />
       </StackPanel>
     </Border>
   </Grid>

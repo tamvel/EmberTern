@@ -38,6 +38,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FolderStore _folderStore;
     private readonly ParameterHistoryStore _parameterHistory;
     private readonly WatchStore _watchStore;
+    private readonly EmberTern.Core.Import.ImportProfileStore _importProfiles;
     private FolderState _folderState = new();
     private readonly FirebirdConnectionService _service;
     // Data lane (connection #1): SQL Editor F5, data preview/edit.
@@ -154,6 +155,10 @@ public partial class MainWindowViewModel : ViewModelBase
             System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
         // Same shared settings.dat — debugger Watch expressions persist per routine (Stage X / D5).
         _watchStore = new WatchStore(
+            System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
+        // Same shared settings.dat — the Data Import module's implicit "last used" configuration (§4.8.4), which
+        // is the same store its named profiles will use in I11.
+        _importProfiles = new EmberTern.Core.Import.ImportProfileStore(
             System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
         _folderState = _folderStore.Load();
         _service = service;
@@ -4065,22 +4070,52 @@ public partial class MainWindowViewModel : ViewModelBase
         // transaction. Passed as delegates, like the environment facts above, so the VM stays testable
         // without a database and no Firebird type reaches a ViewModel (rule #1).
         var targetReader = new FirebirdImportTargetReader(_metadataReader, _metadataLane);
+        var targetPreparer = new FirebirdImportTargetPreparer(_transactionService);
+        var connectionId = _service.ActiveProfile?.Id;
 
-        var import = new DataImportTabViewModel(
+        var environment = new DataImportEnvironment(
             () => _service.IsConnected,
             () => _transactionService.IsActive,
-            () => _service.ActiveProfile?.Name ?? string.Empty,
-            async ct =>
+            () => _service.ActiveProfile?.Name ?? string.Empty)
+        {
+            // ⭐ The CONNECTION charset, not the column's: I0 measured that a character it cannot represent is
+            // stored as '?' with no error at all, even into a UTF8 column (design R1).
+            ConnectionCharset = () => _service.ActiveProfile?.Charset ?? string.Empty,
+
+            ListTablesAsync = async ct =>
             {
                 var tables = await _metadataReader.ListAsync(MetadataObjectKind.Table, ct).ConfigureAwait(false);
                 return tables.Select(t => t.Name).ToList();
             },
-            (table, ct) => targetReader.ReadTargetAsync(table, ct));
+            ReadTargetAsync = (table, ct) => targetReader.ReadTargetAsync(table, ct),
+
+            // Batched is the only mode that finishes a transaction on its own, so it is the only one that gets
+            // the decorator — Manual and AutoCommitOnSuccess run through byte-identical code (§4.5).
+            CreateWriter = configuration =>
+            {
+                var writer = new FirebirdImportWriter(_transactionService, configuration.ErrorPolicy);
+                return configuration.Transaction == EmberTern.Core.Import.ImportTransactionMode.Batched
+                    ? new BatchedCommitImportWriter(writer, _transactionService, configuration.CommitEveryRows)
+                    : writer;
+            },
+            CountTargetRowsAsync = (table, ct) => targetPreparer.CountRowsAsync(table, ct),
+            EmptyTargetAsync = (table, ct) => targetPreparer.EmptyAsync(table, ct),
+            CommitAsync = () => _transactionService.CommitAsync(),
+            RollbackAsync = () => _transactionService.RollbackAsync(),
+
+            // "Last used" is the implicit profile (§4.8.4) — the same store named profiles will use in I11,
+            // which is the whole point: nothing new gets built for them.
+            LoadLastUsed = () => _importProfiles.GetLastUsed(connectionId),
+            SaveLastUsed = configuration => _importProfiles.SaveLastUsed(connectionId, configuration),
+        };
+
+        var import = new DataImportTabViewModel(environment);
 
         if (ImportFilePickRequested is not null)
             import.FilePickRequested += () => ImportFilePickRequested.Invoke();
         if (ImportClipboardReadRequested is not null)
             import.ClipboardReadRequested += () => ImportClipboardReadRequested.Invoke();
+        import.CopyToClipboardRequested += text => ClipboardWriteRequested?.Invoke(text);
 
         // Hand the tab the remembered panel layout, and follow it back as the user drags. The tab is
         // near-singleton and transient, so this VM is where the value outlives it.

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Threading;
@@ -67,16 +68,10 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     public const int SourcePreviewRows = 200;
 
     private readonly IImportProvider _delimitedProvider = new DelimitedTextImportProvider();
-    private readonly Func<bool> _isConnected;
-    private readonly Func<bool> _hasOpenUserTransaction;
-    private readonly Func<string> _connectionName;
 
-    /// <summary>Reads the table list from the METADATA lane. A delegate, not a service reference, for the same
-    /// reason the environment facts are: it keeps the VM testable without a database, and keeps every Firebird
-    /// type out of App's ViewModels.</summary>
-    private readonly Func<CancellationToken, Task<IReadOnlyList<string>>>? _listTablesAsync;
-
-    private readonly Func<string, CancellationToken, Task<ImportTarget?>>? _readTargetAsync;
+    /// <summary>Everything outside this surface, as delegates — so the VM stays testable without a database and
+    /// no Firebird or Avalonia type reaches a ViewModel (rule #1).</summary>
+    private readonly DataImportEnvironment _environment;
 
     private ImportConfiguration _configuration = ImportConfiguration.Empty;
     private SourceSchema? _schema;
@@ -93,18 +88,9 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// </summary>
     private bool _formatOptionsHeldOpen;
 
-    public DataImportTabViewModel(
-        Func<bool> isConnected,
-        Func<bool> hasOpenUserTransaction,
-        Func<string> connectionName,
-        Func<CancellationToken, Task<IReadOnlyList<string>>>? listTablesAsync = null,
-        Func<string, CancellationToken, Task<ImportTarget?>>? readTargetAsync = null)
+    public DataImportTabViewModel(DataImportEnvironment environment)
     {
-        _isConnected = isConnected ?? throw new ArgumentNullException(nameof(isConnected));
-        _hasOpenUserTransaction = hasOpenUserTransaction ?? throw new ArgumentNullException(nameof(hasOpenUserTransaction));
-        _connectionName = connectionName ?? throw new ArgumentNullException(nameof(connectionName));
-        _listTablesAsync = listTablesAsync;
-        _readTargetAsync = readTargetAsync;
+        _environment = environment ?? throw new ArgumentNullException(nameof(environment));
 
         Source = new ImportSourceSectionViewModel();
         Source.Changed += (_, _) => QueueRecalculate();
@@ -117,10 +103,26 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         Mapping.StrategyRequested += (_, strategy) => ApplyMappingStrategy(strategy);
 
         Readiness = new ImportReadinessViewModel();
+        ConvertedPreview = new ImportConvertedPreviewViewModel();
+        Report = new ImportRunReportViewModel();
+        Timer = new ExecutionTimer();
         PreviewRows = new ObservableCollection<ImportSourceRecordRowViewModel>();
         PreviewFields = new ObservableCollection<SourceField>();
 
-        Recalculate();
+        // ⭐ "Last used" (§4.8.4). Restoring is the SAME path a named profile will take in I11 — the whole point
+        // of §4.8.1 is that there is nothing else to build for it. It goes through ApplyConfiguration, so the
+        // world is re-read and anything that no longer fits shows up in the readiness strip rather than being
+        // silently applied (§0.7 / §4.8.5).
+        var restored = _environment.LoadLastUsed?.Invoke();
+        if (restored is not null)
+        {
+            RestoredLastConfiguration = true;
+            ApplyConfiguration(restored);
+        }
+        else
+        {
+            Recalculate();
+        }
     }
 
     /// <summary>The Source and format section.</summary>
@@ -134,6 +136,21 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
     /// <summary>The readiness strip (§3.2).</summary>
     public ImportReadinessViewModel Readiness { get; }
+
+    /// <summary>The converted preview (§3.6) — the values as they would reach the database.</summary>
+    public ImportConvertedPreviewViewModel ConvertedPreview { get; }
+
+    /// <summary>What the last run did (§3.7).</summary>
+    public ImportRunReportViewModel Report { get; }
+
+    /// <summary>The shared live elapsed indicator, docked right in the command bar so it never shifts the
+    /// buttons — the Script Executor's pattern.</summary>
+    public ExecutionTimer Timer { get; }
+
+    /// <summary>True when the surface opened with the previous configuration restored (§4.8.4). The status line
+    /// says so quietly, with a way to forget it — an automatic restore the user cannot see is a configuration
+    /// they did not choose.</summary>
+    [ObservableProperty] private bool _restoredLastConfiguration;
 
     /// <summary>Raw records as the provider produced them — the "Source preview" bottom tab.</summary>
     public ObservableCollection<ImportSourceRecordRowViewModel> PreviewRows { get; }
@@ -153,6 +170,25 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
     /// <summary>Asks the view to expand and focus a section (a readiness chip was clicked).</summary>
     public event EventHandler<ImportSection>? SectionFocusRequested;
+
+    /// <summary>
+    /// Asks the user to confirm an action that destroys data, returning their answer. The view owns the dialog;
+    /// the VM owns the question (rule #1).
+    /// <para>
+    /// Used for exactly one thing: "empty the table first" is about to delete N rows. §0 gives every place the
+    /// module would otherwise guess two options — ask, or refuse with a reason — and this is the ask.
+    /// </para>
+    /// </summary>
+    public event Func<string, Task<bool>>? ConfirmRequested;
+
+    /// <summary>Asks the view to open the shared export dialog over the report's problem list.</summary>
+    public event Func<IReadOnlyList<ImportProblemRowViewModel>, Task>? ExportReportRequested;
+
+    /// <summary>Asks the view to put text on the clipboard.</summary>
+    public event Action<string>? CopyToClipboardRequested;
+
+    /// <summary>Asks the converted-preview grid to scroll to a row (a problem row was double-clicked).</summary>
+    public event EventHandler<int>? PreviewRowRevealRequested;
 
     // ── Band C: the one message surface ─────────────────────────────────────────────────────────────────
 
@@ -197,6 +233,339 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     {
         Source.IsExpanded = !Source.IsExpanded;
         _formatOptionsHeldOpen = Source.IsExpanded;
+    }
+
+    // ══ Band B — the command bar (§3.1) ═════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// What happens to the user's working transaction (§4.5). <c>Manual</c> is the default and always will be:
+    /// the module never finishes a transaction the user did not ask it to (rule #3).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TransactionModeDescription))]
+    private ImportTransactionMode _transactionMode = ImportTransactionMode.Manual;
+
+    partial void OnTransactionModeChanged(ImportTransactionMode value)
+    {
+        OnPropertyChanged(nameof(TransactionModeIndex));
+        OnCommandBarEdited();
+    }
+
+    /// <summary>Plain-language consequence of the selected mode, shown where the mode is picked — the Script
+    /// Executor's <c>Sequenced</c> precedent: non-atomicity is disclosed where the decision is taken, never
+    /// discovered in the report (§0.5).</summary>
+    public string TransactionModeDescription => TransactionMode switch
+    {
+        ImportTransactionMode.AutoCommitOnSuccess => UiStrings.ImportTransactionAutoCommitDescription,
+        ImportTransactionMode.Batched => string.Format(
+            CultureInfo.CurrentCulture, UiStrings.ImportTransactionBatchedDescriptionFormat, _configuration.CommitEveryRows),
+        _ => UiStrings.ImportTransactionManualDescription,
+    };
+
+    [ObservableProperty] private ImportErrorPolicy _errorPolicy = ImportErrorPolicy.StopOnFirstError;
+
+    partial void OnErrorPolicyChanged(ImportErrorPolicy value)
+    {
+        OnPropertyChanged(nameof(ErrorPolicyIndex));
+        OnCommandBarEdited();
+    }
+
+    /// <summary>A command-bar decision is still a decision: it goes into the ONE record and re-evaluates
+    /// readiness, but it moves nothing upstream — the source has not changed, so re-reading it would be work
+    /// nobody asked for.</summary>
+    private void OnCommandBarEdited()
+    {
+        if (_suspendCommandBarNotification) return;
+
+        _configuration = BuildConfiguration();
+        PublishReadiness();
+    }
+
+    private bool _suspendCommandBarNotification;
+
+    /// <summary>True while an import or a validation is on the wire.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsConfigurationEnabled))]
+    [NotifyCanExecuteChangedFor(nameof(ImportCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ValidateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CancelRunCommand))]
+    private bool _isRunning;
+
+    /// <summary>
+    /// Configuration is <b>read-only</b> during a run, not hidden and not greyed into illegibility (§3.7): it is
+    /// the thing that explains what is happening.
+    /// </summary>
+    public bool IsConfigurationEnabled => !IsRunning;
+
+    /// <summary>Live progress line: rows read / total-if-known, written, failed.</summary>
+    [ObservableProperty] private string _progressText = string.Empty;
+
+    /// <summary>0–100 while a total is known. A streaming import cannot know its row count without reading the
+    /// file twice, so when it is unknown the bar runs indeterminate rather than inventing a percentage.</summary>
+    [ObservableProperty] private double _progressPercent;
+
+    [ObservableProperty] private bool _isProgressIndeterminate = true;
+
+    /// <summary>
+    /// ComboBox index ⇄ <see cref="ImportTransactionMode"/>. The index is presentation; the mode is the
+    /// decision, and it lives in the ONE record (§4.8.6). Mirrors the Script Executor's mode picker.
+    /// </summary>
+    public int TransactionModeIndex
+    {
+        get => TransactionMode switch
+        {
+            ImportTransactionMode.AutoCommitOnSuccess => 1,
+            ImportTransactionMode.Batched => 2,
+            _ => 0,
+        };
+        set => TransactionMode = value switch
+        {
+            1 => ImportTransactionMode.AutoCommitOnSuccess,
+            2 => ImportTransactionMode.Batched,
+            _ => ImportTransactionMode.Manual,
+        };
+    }
+
+    public int ErrorPolicyIndex
+    {
+        get => ErrorPolicy == ImportErrorPolicy.SkipInvalidRows ? 1 : 0;
+        set => ErrorPolicy = value == 1 ? ImportErrorPolicy.SkipInvalidRows : ImportErrorPolicy.StopOnFirstError;
+    }
+
+    public bool CanImport => !IsRunning && Readiness.CanRun && _environment.CreateWriter is not null;
+
+    /// <summary>Validate needs no transaction — it writes nowhere — so its gate is Core's weaker
+    /// <c>CanValidate</c> rather than a second opinion computed here.</summary>
+    public bool CanValidate => !IsRunning && Readiness.CanValidate;
+
+    [RelayCommand(CanExecute = nameof(CanImport))]
+    private Task ImportAsync() => RunAsync(validation: false);
+
+    [RelayCommand(CanExecute = nameof(CanValidate))]
+    private Task ValidateAsync() => RunAsync(validation: true);
+
+    [RelayCommand(CanExecute = nameof(IsRunning))]
+    private void CancelRun() => _run?.Cancel();
+
+    private CancellationTokenSource? _run;
+
+    /// <summary>
+    /// ⭐ <b>ONE run.</b> Import and Validate differ by the writer and by nothing else — the same discipline
+    /// <c>ImportPipeline</c> itself is built on, one level up. There is no second path for a dry run to drift
+    /// away from, which is what makes "Validate says it is fine" mean something.
+    /// </summary>
+    private async Task RunAsync(bool validation)
+    {
+        if (IsRunning) return;
+
+        var configuration = BuildConfiguration();
+        _configuration = configuration;
+
+        var target = _target;
+        var source = TryCreateSource(configuration);
+        if (target is null || source is null) return;
+
+        // §0.5 — "empty the table first" destroys data, so the confirmation carries the NUMBER, read by the very
+        // transaction that is about to do the deleting. A real import only; a validation writes nothing and must
+        // not delete anything either.
+        var emptyFirst = !validation && configuration.Behavior.EmptyTargetBeforeImport;
+        if (emptyFirst && !await ConfirmEmptyAsync(target.TableName).ConfigureAwait(true)) return;
+
+        var writer = validation
+            ? new DryRunImportWriter()
+            : _environment.CreateWriter?.Invoke(configuration);
+        if (writer is null) return;
+
+        // Recorded at START, not at the end: a run the user cancels or that fails still says what they asked
+        // for, and that is the configuration worth coming back to. One owner of persistence (§4.8.6).
+        if (!validation) _environment.SaveLastUsed?.Invoke(configuration);
+
+        _run?.Dispose();
+        _run = new CancellationTokenSource();
+        var token = _run.Token;
+
+        IsRunning = true;
+        Report.Clear();
+        SetStatus(string.Empty, MessageSeverity.Info);
+        Timer.Start();
+        var clock = Stopwatch.StartNew();
+
+        var progress = new Progress<ImportProgress>(ShowProgress);
+
+        try
+        {
+            if (emptyFirst && _environment.EmptyTargetAsync is not null)
+            {
+                await _environment.EmptyTargetAsync(target.TableName, token).ConfigureAwait(true);
+            }
+
+            var outcome = await Task.Run(
+                () => ImportPipeline.RunAsync(
+                    configuration, target, _delimitedProvider, source, writer,
+                    ImportCharsetGuard.Strict(_environment.ConnectionCharset?.Invoke()),
+                    progress, token),
+                token).ConfigureAwait(true);
+
+            clock.Stop();
+            Report.Publish(outcome, validation, clock.Elapsed, RowsCommittedBy(writer));
+            await FinishTransactionIfRequestedAsync(configuration, outcome, validation).ConfigureAwait(true);
+            ReportReady?.Invoke(this, EventArgs.Empty);
+        }
+        catch (OperationCanceledException)
+        {
+            // A cancel is the user's decision, never a fault — reporting it as one would be the fabricated
+            // failure gotcha #253 is about. Rows already written stay in the open transaction, and the pipeline's
+            // own outcome would have said so; here the run did not get that far.
+            clock.Stop();
+            SetStatus(UiStrings.ImportRunCancelled, MessageSeverity.Warning);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException
+                                      or UnauthorizedAccessException or NotSupportedException)
+        {
+            clock.Stop();
+            SetStatus(ex.Message, MessageSeverity.Error);
+        }
+        finally
+        {
+            Timer.Stop();
+            IsRunning = false;
+            ProgressText = string.Empty;
+            ProgressPercent = 0;
+            IsProgressIndeterminate = true;
+            PublishReadiness();
+        }
+    }
+
+    /// <summary>Raised when a run finished and the report has something to show, so the view can bring the
+    /// Report tab forward (§3.7).</summary>
+    public event EventHandler? ReportReady;
+
+    private async Task<bool> ConfirmEmptyAsync(string tableName)
+    {
+        if (ConfirmRequested is null) return true;
+
+        long? rows = null;
+        if (_environment.CountTargetRowsAsync is not null)
+        {
+            try
+            {
+                rows = await _environment.CountTargetRowsAsync(tableName, CancellationToken.None).ConfigureAwait(true);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+            {
+                // A count we could not take is not a reason to skip the question — only a reason to ask it
+                // without the number.
+                SetStatus(ex.Message, MessageSeverity.Warning);
+            }
+        }
+
+        var question = rows is { } count
+            ? string.Format(CultureInfo.CurrentCulture, UiStrings.ImportConfirmEmptyCountFormat, count, tableName)
+            : string.Format(CultureInfo.CurrentCulture, UiStrings.ImportConfirmEmptyFormat, tableName);
+
+        return await ConfirmRequested.Invoke(question).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// <c>AutoCommitOnSuccess</c> means exactly that — success, with nothing rejected and nothing cancelled.
+    /// Anything else leaves the decision with the user, in front of the report's numbers.
+    /// </summary>
+    private async Task FinishTransactionIfRequestedAsync(
+        ImportConfiguration configuration, ImportOutcome outcome, bool validation)
+    {
+        if (validation || !outcome.TransactionLeftOpen) return;
+        if (configuration.Transaction != ImportTransactionMode.AutoCommitOnSuccess) return;
+        if (outcome.Cancelled || outcome.RowsFailed > 0) return;
+
+        await CommitAsync().ConfigureAwait(true);
+    }
+
+    private static long RowsCommittedBy(IImportWriter writer)
+        => writer is IPartiallyCommittedImportWriter partial ? partial.RowsCommitted : 0;
+
+    private void ShowProgress(ImportProgress progress)
+    {
+        ProgressText = string.Format(
+            CultureInfo.CurrentCulture,
+            UiStrings.ImportProgressFormat,
+            progress.RowsRead, progress.RowsWritten, progress.RowsFailed);
+
+        var total = _schema?.EstimatedRows;
+        IsProgressIndeterminate = total is not > 0;
+        ProgressPercent = IsProgressIndeterminate ? 0 : Math.Min(100d, progress.RowsRead * 100d / total!.Value);
+    }
+
+    // ── The transaction decision, taken where the numbers are (§3.7) ────────────────────────────────────
+
+    public bool CanFinishTransaction => !IsRunning && Report.TransactionLeftOpen;
+
+    [RelayCommand]
+    private async Task CommitAsync()
+    {
+        if (_environment.CommitAsync is null) return;
+
+        try
+        {
+            await _environment.CommitAsync().ConfigureAwait(true);
+            Report.TransactionLeftOpen = false;
+            SetStatus(UiStrings.ImportCommitted, MessageSeverity.Success);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        {
+            SetStatus(ex.Message, MessageSeverity.Error);
+        }
+        finally
+        {
+            PublishReadiness();
+        }
+    }
+
+    [RelayCommand]
+    private async Task RollbackAsync()
+    {
+        if (_environment.RollbackAsync is null) return;
+
+        try
+        {
+            await _environment.RollbackAsync().ConfigureAwait(true);
+            Report.TransactionLeftOpen = false;
+            SetStatus(UiStrings.ImportRolledBack, MessageSeverity.Success);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        {
+            SetStatus(ex.Message, MessageSeverity.Error);
+        }
+        finally
+        {
+            PublishReadiness();
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportReportAsync()
+    {
+        if (ExportReportRequested is null || Report.Problems.Count == 0) return;
+        await ExportReportRequested.Invoke(Report.Problems).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private void CopyReport() => CopyToClipboardRequested?.Invoke(Report.ToClipboardText());
+
+    /// <summary>Double-clicking a problem takes the user to that row in the converted preview (§3.7) — the
+    /// report names a row, and the surface can show it.</summary>
+    [RelayCommand]
+    private void RevealProblem(ImportProblemRowViewModel? problem)
+    {
+        if (problem is null) return;
+        PreviewRowRevealRequested?.Invoke(this, problem.SourceRowNumber);
+    }
+
+    /// <summary>Forgets the restored configuration — the „Wyczyść" beside the quiet restore note (§4.8.4).</summary>
+    [RelayCommand]
+    private void ForgetLastConfiguration()
+    {
+        RestoredLastConfiguration = false;
+        ApplyConfiguration(ImportConfiguration.Empty);
     }
 
     // ── Source commands ─────────────────────────────────────────────────────────────────────────────────
@@ -267,9 +636,9 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// <summary>
     /// Assembles the current UI state into the ONE record.
     /// <para>
-    /// Sections that do not exist yet (Target, Mapping, Behavior — etaps I6/I7) pass their part through from
-    /// the held configuration unchanged, so a restored profile keeps decisions this build cannot yet edit
-    /// rather than silently dropping them.
+    /// Sections that do not exist yet (a NEW table's columns — etap I8) pass their part through from the held
+    /// configuration unchanged, so a restored profile keeps decisions this build cannot yet edit rather than
+    /// silently dropping them.
     /// </para>
     /// </summary>
     public ImportConfiguration BuildConfiguration()
@@ -290,6 +659,11 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             // restored profile keeps its pairing until the target it refers to has actually been read.
             Mapping = Mapping.Rows.Count > 0 ? Mapping.BuildMapping() : _configuration.Mapping,
             Behavior = Target.BuildBehavior(_configuration.Behavior),
+            // The command bar's two decisions. They belong to the record like every other one — a transaction
+            // mode that lived only on the toolbar would be missing from a saved profile, which is precisely the
+            // omission the reflection round-trip guard exists to catch (§4.8.6).
+            Transaction = TransactionMode,
+            ErrorPolicy = ErrorPolicy,
         };
     }
 
@@ -299,6 +673,20 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         Source.Apply(_configuration);
         Target.Apply(_configuration);
+
+        // Suspended while this VM writes to itself — without it, applying a configuration would restart the very
+        // chain that is about to run. The same guard the section VMs use, for the same reason.
+        _suspendCommandBarNotification = true;
+        try
+        {
+            TransactionMode = _configuration.Transaction;
+            ErrorPolicy = _configuration.ErrorPolicy;
+        }
+        finally
+        {
+            _suspendCommandBarNotification = false;
+        }
+
         Recalculate();
     }
 
@@ -326,8 +714,12 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
     /// <summary>
     /// The chain of §4.7, in the one order that is not a guess resting on a guess: <b>source → target →
-    /// mapping → readiness</b>. Each link consumes what the previous one established, and every link is
-    /// cancellable, so a newer edit supersedes the whole tail rather than racing it.
+    /// mapping → readiness → converted preview</b>. Each link consumes what the previous one established, and
+    /// every link is cancellable, so a newer edit supersedes the whole tail rather than racing it.
+    /// <para>
+    /// The preview comes last because it is the most expensive link and the only one that needs all the others
+    /// to have settled: it is a real (bounded) import, so it needs a source, a target and a mapping.
+    /// </para>
     /// </summary>
     private async Task RunChainAsync(CancellationToken cancellationToken)
     {
@@ -342,17 +734,115 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
         PlanMapping();
         PublishReadiness();
+
+        await RefreshConvertedPreviewAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// How long the surface waits before re-converting the preview. §3.6 asks for ~150 ms so that changing the
+    /// decimal separator is felt immediately without re-reading the file on every keystroke.
+    /// <para>
+    /// It is a delay on the chain's own cancellable token, not a timer: a newer edit cancels it like every other
+    /// link, and the whole thing stays awaitable from a test. A <c>DispatcherTimer</c> here would re-introduce a
+    /// path no headless test can reach (gotcha #251).
+    /// </para>
+    /// </summary>
+    internal TimeSpan PreviewDebounce { get; set; } = TimeSpan.FromMilliseconds(150);
+
+    /// <summary>
+    /// ⭐ Runs the ONE import, bounded, into a writer that keeps the rows instead of sending them.
+    /// <para>
+    /// This is the whole of §3.6's promise that the grid shows "exactly what will reach the database": the
+    /// values come from the same converter, validator, mapping and culture a real run would use, because they
+    /// come from a real run. There is deliberately no "convert for display" routine to drift away from it.
+    /// </para>
+    /// </summary>
+    private async Task RefreshConvertedPreviewAsync(CancellationToken cancellationToken)
+    {
+        var configuration = _configuration;
+        var target = _target;
+        var source = TryCreateSource(configuration);
+
+        var columns = new List<string>();
+        foreach (var mapping in configuration.MappedColumns()) columns.Add(mapping.TargetColumnName);
+
+        if (target is null || source is null || columns.Count == 0)
+        {
+            ConvertedPreview.Clear();
+            return;
+        }
+
+        try
+        {
+            if (PreviewDebounce > TimeSpan.Zero)
+            {
+                await Task.Delay(PreviewDebounce, cancellationToken).ConfigureAwait(true);
+            }
+
+            ConvertedPreview.IsBusy = true;
+
+            var writer = new PreviewImportWriter(ImportConvertedPreviewViewModel.MaxRows);
+            var provider = new BoundedImportProvider(_delimitedProvider, ImportConvertedPreviewViewModel.MaxRows);
+
+            var outcome = await Task.Run(
+                () => ImportPipeline.RunAsync(
+                    configuration, target, provider, source, writer,
+                    ImportCharsetGuard.Strict(_environment.ConnectionCharset?.Invoke()),
+                    progress: null, cancellationToken),
+                cancellationToken).ConfigureAwait(true);
+
+            if (cancellationToken.IsCancellationRequested) return;
+
+            ConvertedPreview.Publish(columns, writer.Rows, outcome, RawValuesForRow);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer edit — not a failure, and nothing to report.
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException
+                                      or UnauthorizedAccessException or NotSupportedException)
+        {
+            ConvertedPreview.Clear();
+            SetStatus(ex.Message, MessageSeverity.Error);
+        }
+        finally
+        {
+            if (!cancellationToken.IsCancellationRequested) ConvertedPreview.IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// The RAW values of one source row, projected into mapped-column order — what a failed row shows.
+    /// <para>
+    /// Reuses the records the source preview already read (they are the same bounded head of the same file) and
+    /// <see cref="ImportMappingPlanner.Project"/>, the one owner of "which field feeds which column". Reading
+    /// the file a third time, or re-deriving the projection here, would be a second answer to a settled
+    /// question.
+    /// </para>
+    /// </summary>
+    private object?[]? RawValuesForRow(int sourceRowNumber)
+    {
+        foreach (var row in PreviewRows)
+        {
+            if (row.SourceRowNumber != sourceRowNumber) continue;
+
+            var mapped = new List<ColumnMapping>();
+            foreach (var mapping in _configuration.MappedColumns()) mapped.Add(mapping);
+
+            return ImportMappingPlanner.Project(new RawRecord(sourceRowNumber, row.Values), mapped);
+        }
+        return null;
     }
 
     /// <summary>Loads the table list once per tab. The list is a fact about the database, not a user decision,
     /// so re-reading it on every keystroke would be work nobody asked for.</summary>
     private async Task EnsureTablesLoadedAsync(CancellationToken cancellationToken)
     {
-        if (_tablesLoaded || _listTablesAsync is null || !_isConnected()) return;
+        if (_tablesLoaded || _environment.ListTablesAsync is null || !_environment.IsConnected()) return;
 
         try
         {
-            var tables = await _listTablesAsync(cancellationToken).ConfigureAwait(true);
+            var tables = await _environment.ListTablesAsync(cancellationToken).ConfigureAwait(true);
             if (cancellationToken.IsCancellationRequested) return;
 
             Target.ShowTables(tables);
@@ -377,7 +867,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     {
         var tableName = _configuration.Target.TableName;
 
-        if (_readTargetAsync is null || string.IsNullOrWhiteSpace(tableName))
+        if (_environment.ReadTargetAsync is null || string.IsNullOrWhiteSpace(tableName))
         {
             _target = null;
             Target.ShowFacts(null);
@@ -387,7 +877,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         Target.IsBusy = true;
         try
         {
-            _target = await _readTargetAsync(tableName, cancellationToken).ConfigureAwait(true);
+            _target = await _environment.ReadTargetAsync(tableName, cancellationToken).ConfigureAwait(true);
             if (cancellationToken.IsCancellationRequested) return;
 
             Target.ShowFacts(_target);
@@ -667,12 +1157,21 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             SourceExists = _sourceExists,
             SourceReadable = _sourceReadable,
             Target = _target,
-            IsConnected = _isConnected(),
-            HasOpenUserTransaction = _hasOpenUserTransaction(),
+            IsConnected = _environment.IsConnected(),
+            HasOpenUserTransaction = _environment.HasOpenUserTransaction(),
         };
 
         Readiness.Update(ImportReadiness.Evaluate(input), PreviewRows.Count);
         UpdateSurfaceStatus();
+
+        // The run buttons are gated on the strip, so every republication has to re-ask them. This is the one
+        // place readiness changes, which is why it is the one place that says so (gotcha #179 — computing the
+        // value correctly is not enough if nothing tells the binding to re-query it).
+        OnPropertyChanged(nameof(CanImport));
+        OnPropertyChanged(nameof(CanValidate));
+        OnPropertyChanged(nameof(CanFinishTransaction));
+        ImportCommand.NotifyCanExecuteChanged();
+        ValidateCommand.NotifyCanExecuteChanged();
     }
 
     private void UpdateSurfaceStatus()
@@ -705,15 +1204,16 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// </summary>
     private void UpdateDestinationStatus()
     {
-        var connection = _connectionName();
+        var connection = _environment.ConnectionName();
 
         DestinationStatus = connection.Length == 0
             ? UiStrings.ImportDestinationNotConnected
             : string.Format(
                 CultureInfo.CurrentCulture,
-                UiStrings.ImportDestinationFormat,
+                UiStrings.ImportDestinationWithModeFormat,
                 connection,
-                UiStrings.ImportDestinationDataLane);
+                UiStrings.ImportDestinationDataLane,
+                DescribeTransactionMode(TransactionMode));
     }
 
     private void UpdateFileFacts()
@@ -773,6 +1273,15 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         StatusMessage = message;
         StatusSeverity = severity;
     }
+
+    /// <summary>The transaction mode in one word, for band H — the line that says where the rows land and what
+    /// then happens to them.</summary>
+    internal static string DescribeTransactionMode(ImportTransactionMode mode) => mode switch
+    {
+        ImportTransactionMode.AutoCommitOnSuccess => UiStrings.ImportTransactionAutoCommit,
+        ImportTransactionMode.Batched => UiStrings.ImportTransactionBatched,
+        _ => UiStrings.ImportTransactionManual,
+    };
 
     /// <summary>Extension → source kind. The picker shows the resolved kind, so an automatic decision is
     /// visible and overridable rather than silent.</summary>

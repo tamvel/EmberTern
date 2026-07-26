@@ -242,6 +242,9 @@ internal static class UiStrings
     // Band H, left half — where the rows land. The lane is a constant because it is one: rows always go to
     // the Data lane as the one user working transaction (§4.5).
     public const string ImportDestinationFormat = "{0} · {1} lane";
+    /// <summary>Band H once the command bar exists: where the rows land, on which lane, and what then happens
+    /// to the transaction (§3.1).</summary>
+    public const string ImportDestinationWithModeFormat = "{0} · {1} lane · transaction: {2}";
     public const string ImportDestinationDataLane = "Data";
     public const string ImportDestinationNotConnected = "Not connected";
 
@@ -306,6 +309,110 @@ internal static class UiStrings
     public const string ImportSurfaceStatusFormat = "{0} fields · {1:N0} rows previewed{2}";
     public const string ImportSurfaceStatusMore = "+";
     public const string ImportBottomPanelToggleTooltip = "Collapse / expand the bottom panel";
+
+    // ---- Data Import, etap I7: the command bar (§3.1 band B), the run, and the report (§3.7) ----
+
+    public const string ImportRun = "Import";
+    public const string ImportRunTooltip = "Read the source and write the rows into the target table · F5";
+    public const string ImportValidate = "Validate";
+    public const string ImportValidateTooltip =
+        "Run everything except the write — same pipeline, same conversion, same checks · Ctrl+F5";
+    public const string ImportCancel = "Cancel";
+    public const string ImportCancelTooltip = "Stop after the current batch · Esc";
+    public const string ImportRunCancelled = "Cancelled. Rows already written stay in the open transaction.";
+
+    public const string ImportTransactionLabel = "Transaction";
+    public const string ImportTransactionManual = "Manual";
+    public const string ImportTransactionAutoCommit = "Commit on success";
+    public const string ImportTransactionBatched = "Batched";
+    public const string ImportTransactionManualDescription =
+        "The transaction stays open. You commit or roll back after reading the report.";
+    public const string ImportTransactionAutoCommitDescription =
+        "Commits automatically when every row went in and nothing was cancelled; otherwise it stays open for you.";
+    public const string ImportTransactionBatchedDescriptionFormat =
+        "Commits every {0:N0} rows — NOT atomic: a later failure cannot roll back what was already committed.";
+
+    public const string ImportErrorPolicyLabel = "Errors";
+    public const string ImportErrorPolicyStop = "Stop at the first";
+    public const string ImportErrorPolicySkip = "Skip the row and continue";
+
+    public const string ImportProgressFormat = "{0:N0} read · {1:N0} written · {2:N0} failed";
+
+    public const string ImportConfirmEmptyFormat =
+        "Empty table {0} before importing? The DELETE runs in the same transaction, so Rollback takes it back too.";
+    public const string ImportConfirmEmptyCountFormat =
+        "This deletes {0:N0} row(s) from {1} before importing. The DELETE runs in the same transaction, so Rollback takes it back too.";
+
+    // The converted preview (§3.6).
+    public const string ImportPreviewTitle = "Preview after conversion";
+    public const string ImportPreviewHeadlineFormat = "{0:N0} row(s) after conversion — this is what reaches the database.";
+    public const string ImportPreviewHeadlineProblemsFormat =
+        "{0:N0} row(s) after conversion — {1:N0} would be rejected. Failed rows show their RAW values.";
+    public const string ImportPreviewEmpty =
+        "Choose a source and a target table, and map at least one column — the converted rows appear here.";
+    public const string ImportPreviewFailedTooltip = "This row would be rejected; the values shown are the raw ones.";
+
+    // The Errors / Report bottom tabs (§3.1 band G).
+    public const string ImportErrorsTab = "Errors";
+    public const string ImportErrorsTabCountFormat = "Errors ({0})";
+    public const string ImportErrorsEmpty = "Nothing in the previewed rows would be rejected.";
+    public const string ImportReportTab = "Report";
+    public const string ImportReportEmpty = "Run an import or a validation — what happened appears here.";
+    public const string ImportReportExport = "Export report…";
+    public const string ImportReportCopy = "Copy";
+    public const string ImportReportColumnRow = "Row";
+    public const string ImportReportColumnColumn = "Column";
+    public const string ImportReportColumnValue = "Value";
+    public const string ImportReportColumnReason = "Reason";
+    public const string ImportReportRevealTooltip = "Double-click to show this row in the converted preview";
+
+    public const string ImportReportImportedFormat =
+        "Imported {0:N0} of {1:N0} row(s). {2:N0} rejected. Time {3}.";
+    public const string ImportReportCancelledFormat =
+        "Cancelled — {0:N0} of {1:N0} row(s) written. {2:N0} rejected. Time {3}.";
+    public const string ImportReportValidatedFormat =
+        "Validated {0:N0} of {1:N0} row(s). {2:N0} would be rejected. Nothing was written. Time {3}.";
+    public const string ImportReportValidatedCancelledFormat =
+        "Validation cancelled — {0:N0} of {1:N0} row(s) checked. {2:N0} would be rejected. Time {3}.";
+    /// <summary>§0.6: an open transaction is never described as a finished import.</summary>
+    public const string ImportReportTransactionOpen = "Transaction OPEN — commit or roll back.";
+    public const string ImportReportRowsCommittedFormat =
+        "{0:N0} row(s) already committed — Rollback cannot take those back.";
+    public const string ImportReportShortenedFormat = "{0:N0} value(s) were shortened to fit.";
+    public const string ImportReportListTruncatedFormat = "The list stops at {0:N0} entries; the counts are exact.";
+    public const string ImportCommit = "Commit";
+    public const string ImportCommitTooltip = "Commit the rows this import wrote";
+    public const string ImportRollback = "Rollback";
+    public const string ImportRollbackTooltip = "Roll back everything this import wrote";
+    public const string ImportCommitted = "Committed.";
+    public const string ImportRolledBack = "Rolled back.";
+    public const string ImportRestoredLastConfiguration = "restored the last configuration";
+    public const string ImportForgetLastConfiguration = "Clear";
+
+    // ---- Data Import: ImportErrorKind → one sentence. The ONE table (rule #6). ----
+
+    public const string ImportErrorNotAnInteger = "Not a whole number.";
+    public const string ImportErrorNotANumber = "Not a number under the declared decimal separator.";
+    public const string ImportErrorNotADateTime = "Not a date/time under the declared field order.";
+    public const string ImportErrorNotABoolean = "Neither a true nor a false token.";
+    public const string ImportErrorValueTooLong = "Longer than the target column.";
+    public const string ImportErrorValueTooLongMeasuredFormat = "Too long: {0} characters, limit {1}.";
+    public const string ImportErrorValueOutOfRange = "Outside the target column's range.";
+    public const string ImportErrorPrecisionWouldBeLost = "Writing it would drop decimal places or a time part.";
+    public const string ImportErrorUnsupportedTargetType = "The target column's type cannot be imported.";
+    public const string ImportErrorNullNotAllowed = "The column is NOT NULL and has no default.";
+    public const string ImportErrorNotRepresentable =
+        "A character the connection charset cannot represent — it would be stored as '?'.";
+    public const string ImportErrorSourceErrorValue = "The source cell holds an error value.";
+    public const string ImportErrorServerNullViolation = "The server rejected a NULL.";
+    public const string ImportErrorServerUniqueViolation = "Unique-key violation.";
+    public const string ImportErrorServerCheckViolation = "CHECK constraint violated.";
+    public const string ImportErrorServerForeignKeyViolation = "Foreign key: the referenced row does not exist.";
+    public const string ImportErrorServerStringTruncation = "The server refused the value as too long.";
+    public const string ImportErrorServerNumericOverflow = "Numeric overflow on the server.";
+    public const string ImportErrorServerTransliteration = "The server could not transliterate the value.";
+    public const string ImportErrorServerError = "The server refused the row.";
+
     public const string ScriptRun = "Run";
     public const string ScriptRunTooltip = "Run the whole script in one transaction · F5";
     public const string ScriptStopTooltip = "Stop after the current statement";

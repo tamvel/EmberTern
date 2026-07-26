@@ -1,7 +1,8 @@
 # Data Import — dokument projektowy modułu importu danych
 
-**Status: 🔒 PROJEKT ZAMROŻONY (2026-07-26). Etapy I0–I6 wykonane i zaakceptowane.**
-Następny krok: **etap I7** (Podgląd po konwersji, uruchomienie, raport — koniec MVP) z §6.
+**Status: 🔒 PROJEKT ZAMROŻONY (2026-07-26). Etapy I0–I6 wykonane i zaakceptowane; ⭐ I7 DOSTARCZONY —
+MVP KOMPLETNY, oczekuje potwierdzenia wzrokowego użytkownika w obu paletach.**
+Następny krok: **etap I8** (nowa tabela) z §6.
 **I5 przeszedł dwa przeglądy wzrokowe użytkownika (2026-07-26) i został ZAMKNIĘTY** po szwie domykającym,
 który dostarczył 10 z 12 uwag UX (U1–U12, §3.8) i **zrewidował układ powierzchni — §3.1 opisuje stan
 obowiązujący**. Poza modułem świadomie zostają: **U4** (gęstość kontrolek → osobny sprint UX całego
@@ -52,23 +53,57 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | | |
 |---|---|
 | **Gałąź** | `feat/data-import` (odbita od `master` @ `d474b42`); **wypchnięta na `origin`**, `private` do dosłania przy najbliższym zamknięciu etapu. Żywe gałęzie repozytorium: `master` + `feat/data-import` |
-| **Ostatni commit** | **`95ae39e`** — szew domykający I5: rewizja układu powierzchni + U1/U2/U3/U6/U7/U8/U9/U10/U11 (poprzedni: `0c5667e`, etap I5) |
-| **Etapy zamknięte** | **I0** (sondy, `5e90435`) · **I1** (modele, konfiguracja, magazyn, czytnik, `77eb997`) · **I2** (konwersja, mapowanie, walidacja, gotowość, `392850f`) · **I3** (pipeline + dry-run + provider, `434daeb`) · **I4** (Firebird + weryfikacja na żywym FB5, `3b31a4d`) |
+| **Ostatni commit** | etap **I7** (poprzedni: `d530fb5` — domknięcie I6) |
+| **Etapy zamknięte** | **I0** (sondy, `5e90435`) · **I1** (modele, konfiguracja, magazyn, czytnik, `77eb997`) · **I2** (konwersja, mapowanie, walidacja, gotowość, `392850f`) · **I3** (pipeline + dry-run + provider, `434daeb`) · **I4** (Firebird + weryfikacja na żywym FB5, `3b31a4d`) · **I5** (`0c5667e` + szew `95ae39e`) · **I6** (`4f2de74`) |
 | **✅ I5 — ZAMKNIĘTY (2026-07-26)** | Przegląd wzrokowy dał 5 uwag (U1–U5) + 5 propozycji z autoprzeglądu (U6–U10) + U11 + U12 z drugiego oglądu. **Wszystkie rozstrzygnięte; 10 dostarczonych w szwie domykającym** (§3.8). Układ **zrewidowany i wniesiony w miejsce do §3.1** — gwiazdka na powierzchni roboczej, pas A usunięty, kafelki pionowe z zawsze żywym pickerem, grupy ustawień jako karty. **Układ zaakceptowany przez użytkownika.** Otwarte świadomie: **U4** (gęstość globalna → sprint UX po module) i **U5** (weryfikacja przy I6) |
 | **✅ I6 — ZAMKNIĘTY (2026-07-26)** | Sekcja **Cel** (istniejąca tabela) + panel **Mapowanie** + łańcuch przeliczeń rozszerzony o cel i mapowanie. Potwierdzony wzrokowo przez użytkownika; odstępstwo o `COUNT(*)`, nazwy triggerów, orientacja „cel → źródło" i reguły identity — **zaakceptowane bez zmian** |
-| **Następny etap** | **I7** — Podgląd po konwersji + `Waliduj` + tryby transakcji + `Importuj`/F5 + postęp + raport + Commit/Rollback + „ostatnio użyta" konfiguracja. **Koniec MVP** |
-| **Testy** | **5583 zielonych**, 0 niepowodzeń (I6 dodał +15; wszystkich testów importu jest teraz **319**) |
-| **Weryfikacja na żywo** | `tools/probes/DataImportProbe` przeciwko FB5 `WI-V5.0.3.1683` — **20/20 ALL PASS** (klasyfikacja błędów + atrybucja wiersza, zachowanie paczek, obowiązki writera, charset) |
+| **⭐ I7 — DOSTARCZONY (2026-07-26), oczekuje potwierdzenia wzrokowego** | Podgląd po konwersji + pasek poleceń (`Importuj`/F5, `Waliduj`/Ctrl+F5, `Anuluj`/Esc, tryb transakcji, polityka błędów, `ExecutionTimer`) + uruchomienie z postępem i anulowaniem + zakładki **Błędy** i **Raport** + Commit/Rollback w raporcie + eksport raportu przez istniejący framework + „ostatnio użyta" konfiguracja + domknięta zaległość I6 (liczba rekordów przy „opróżnij tabelę"). **KONIEC MVP** |
+| **Następny etap** | **I8** — nowa tabela (`ColumnTypeInferencer`, siatka typów, podgląd DDL, wykonanie na linii Ddl) |
+| **Testy** | **5607 zielonych**, 0 niepowodzeń (I7 dodał +24; wszystkich testów importu jest teraz **343**) |
+| **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7) przeciwko FB5 `WI-V5.0.3.1683` — **11/11 ALL PASS**: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, licznik czytany w transakcji użytkownika, `Batched` faktycznie zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
 | **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **cztery VM-y i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
-| **⭐ Kamień milowy** | **Po I4 cały silnik jest gotowy i zweryfikowany na żywym silniku.** Od I5 pracujemy wyłącznie nad interfejsem — pipeline, writer i mapowanie błędów są zamknięte. |
+| **⭐ Kamień milowy** | **MVP (I0–I7) DOSTARCZONE: CSV/TXT → istniejąca tabela działa end-to-end**, z walidacją, raportem, decyzją transakcyjną i pamięcią ostatniej konfiguracji. Wszystko dalej (I8–I12) jest przyrostowe. |
 
-### Zakres pozostały modułu (stan po I5)
+### ⭐ I7 as-built — trzy rzeczy warte zapamiętania
+
+1. **PODGLĄD PO KONWERSJI TO PRAWDZIWY IMPORT, nie jego imitacja.** §3.6 obiecuje, że siatka pokazuje
+   „dokładnie to, co trafi do bazy" — i ta obietnica jest prawdziwa wyłącznie dlatego, że wypełnia ją
+   `ImportPipeline`: ten sam konwerter, walidator, mapowanie i kultura. Powstały do tego **dwa dodatki w Core,
+   oba addytywne**: `BoundedImportProvider` (dekorator ograniczający ODCZYT — bo podgląd nie może czytać
+   miliona wierszy, żeby pokazać sto) i `PreviewImportWriter` (writer, który wiersze **zatrzymuje** zamiast
+   wysyłać). To ta sama dyscyplina, co „Waliduj to inny argument, nie inny tryb", tylko piętro wyżej:
+   **inny provider i inny writer, ten sam jeden import.** Prywatna procedura „przekonwertuj na potrzeby
+   wyświetlenia" byłaby drugą ścieżką, a druga ścieżka się rozjeżdża — i nikt by tego nie zauważył.
+   ⚠ **Wiersz z błędem pokazuje wartości SUROWE i to nie jest półśrodek:** pipeline zatrzymuje wiersz na
+   pierwszej złej wartości, więc taki wiersz **nie ma** wartości przekonwertowanych — a surowe są dokładnie
+   tym, co użytkownik ma poprawić.
+2. **`CanValidate` jest słabsze od `CanRun` — i to decyzja, nie niedopatrzenie.** Otwarta transakcja robocza
+   blokuje **import**, ale nie **walidację**: dry-run nie pisze nigdzie, więc zablokowanie go odmawiałoby
+   jedynej operacji, która pomaga *właśnie wtedy*, gdy użytkownik zastanawia się, co zrobić z transakcją.
+   Reguła mieszka w Core (`ImportReadinessReport.CanValidate`) — „co ten raport dopuszcza" to pytanie tego
+   rekordu; rozstrzyganie go w widoku byłoby drugą opinią o gotowości.
+3. **`Batched`: `CommitEveryRows` jest PODŁOGĄ, nie dokładną wielokrotnością — zmierzone na żywo.** Commit
+   może paść wyłącznie na granicy paczki (`BatchedCommitImportWriter` jest dekoratorem, a nie zmianą w
+   `FirebirdImportWriter`, żeby `Manual` i `AutoCommitOnSuccess` biegły bajt w bajt tym samym kodem), więc
+   ląduje na **pierwszej granicy paczki na N lub za N**. Przy zmierzonych wartościach domyślnych (paczka 500,
+   commit 10 000) trafia dokładnie w 10 000; interwał commitu **mniejszy** od paczki daje jeden commit na
+   paczkę. Alternatywą byłoby skrócenie paczki — a I0 zmierzył, że to właśnie rozmiar paczki kosztuje
+   przepustowość, podczas gdy częstotliwość commitu jest niemal darmowa. Wygrywa paczka, ugina się commit,
+   i jest to powiedziane wprost, bo to liczba, względem której czytany będzie raport.
+
+Dodatkowo: `DataImportEnvironment` zastąpił pięć pozycyjnych delegatów **jednym nazwanym pakietem** —
+I7 dokłada sześciu współpracowników, a jedenaście pozycyjnych argumentów w miejscu wywołania to miejsce, w
+którym dwa da się zamienić i nic nie zaprotestuje. Nowe w `EmberTern.Firebird`:
+`FirebirdImportTargetPreparer` (`COUNT(*)` + `DELETE FROM` na linii **Data**, w transakcji użytkownika — bo
+opróżnienie tabeli to dane, nie schemat) i wspomniany `BatchedCommitImportWriter`.
+
+### Zakres pozostały modułu (stan po I7)
 
 | Etap | Co zostało | Blokady / zależności |
 |---|---|---|
 | ~~**I6**~~ ✅ | sekcja **Cel** (istniejąca tabela) + panel **Mapowanie** + przeliczanie łańcuchowe z anulowaniem | dostarczone; układ rozstrzygnięty przed implementacją, więc I6 wstawił się w gotową ramę |
-| **I7** | **Podgląd po konwersji** + `Waliduj` + tryby transakcji + `Importuj`/F5 + postęp + raport + Commit/Rollback + eksport raportu + „ostatnio użyta" konfiguracja | pas **B** (pasek poleceń) powstaje dopiero tutaj — dziś nie istnieje, bo nie miałby czym sterować; **koniec MVP** |
+| ~~**I7**~~ ✅ | Dostarczone — patrz „I7 as-built" wyżej | pas **B** powstał tutaj, razem z zakładkami Błędy/Raport; **KONIEC MVP** |
 | **I8** | nowa tabela: `ColumnTypeInferencer` (skan całego źródła, R19), edytowalna siatka typów, podgląd DDL, wykonanie na linii Ddl, `DROP` przy niepowodzeniu | rozbudowuje sekcję Cel z I6 |
 | **I9** | XLSX + `EmberTern.Export.Office` → `EmberTern.Office`; `XlsxImportProvider` (7 wytycznych); rozgałęzienie sekcji Format po `Capabilities` | zamyka `DataImportXlsxProbe` |
 | **I10** | schowek (App czyta, Core parsuje) + `XlsImportProvider` (BIFF8, nowa zależność) | — |
@@ -1299,7 +1334,7 @@ zielonymi testami, czystym smoke testem i commitem.
 | **I4** ✅ **DOSTARCZONY** | Firebird: writer + odczyt celu + **weryfikacja na żywo** | `FirebirdImportWriter` — **`FbBatchCommand`, paczki po 500, `MultiError` ustawiany z `ImportErrorPolicy` (I0 §2.3)**, `OVERRIDING SYSTEM VALUE`, `CommandLock` per paczka; `FirebirdImportTargetReader` (kolumny + triggery BEFORE INSERT); mapowanie `FbException` → `ImportErrorKind` **na PARZE kodów GDS, nie na `ErrorCode`** (I0/REK-3: `string truncation` / `numeric overflow` / `transliteration` mają identyczny `ErrorCode` 335544321 i SQLSTATE 22000 — rozróżnia je dopiero **drugi** element wektora: 335544914 / 335544916 / 335544565; wektor obcięcia niesie limit i rzeczywistą długość jako liczby → wprost do raportu; **PK i UNIQUE są nierozróżnialne** (oba 335544665) ⇒ raportujemy „naruszenie unikalności", bez udawania precyzji). **Zero parsowania tekstu komunikatu.** | Import 10 k wierszy do tabeli laboratoryjnej — **liczby zgadzają się z `SELECT COUNT(*)`**; `NOT NULL`, PK/UNIQUE, CHECK, FK, za długi tekst, przekroczenie zakresu, transliteracja, znak spoza charsetu połączenia — **każdy daje właściwy `ImportErrorKind` i właściwy numer wiersza źródłowego**. Przypadki bierzemy z `tools/probes/DataImportWriteProbe` (fazy B/E/C), po czym sonda idzie do usunięcia. |
 | **I5** ✅ **ZAMKNIĘTY** (etap + szew domykający, §3.8) | App: zakładka + rama powierzchni + sekcja Źródło i format | `WorkspaceTabKind.DataImport`, `Icon.Import`, przycisk toolbara (D6), near-singleton, dopisanie do listy pomijanej w `SnapshotCurrentTabs`, rama (pasy A–H), zwijalne sekcje, **pasek gotowości**, sekcja Źródło i format z dolną zakładką „Podgląd źródła". | Powierzchnia otwiera plik, pokazuje surowe rekordy i gotowość. Obie palety motywu. |
 | **I6** ✅ **ZAMKNIĘTY** | App: sekcja Cel (istniejąca tabela) + panel Mapowanie | Wybór tabeli (`SearchableComboBox`, lista z linii **Metadata**), linia faktów (kolumny · klucz główny · **nazwane** triggery BEFORE INSERT), „opróżnij tabelę przed importem"; siatka mapowania **cel → źródło** z auto-dopasowaniem z `ImportMappingPlanner`, diagnostyką per kolumna, blokadami kolumn systemowych **z powodem**, pochodzeniem w słowniku `ValueOrigin`, listą pól nieużywanych, „Dopasuj po pozycji" / „Wyczyść" / „Tylko niezmapowane"; łańcuch §4.7 rozszerzony: **źródło → cel → mapowanie → gotowość**, anulowalny. | Mapowanie ręczne i automatyczne działa; niezgodności widoczne przed importem. |
-| **I7** | App: Podgląd + uruchomienie + raport — **pierwszy pełny przebieg** | Podgląd po konwersji (ciągły), `Waliduj`, tryby transakcji, `Importuj`/`F5`, postęp, anulowanie, raport, Commit/Rollback, eksport raportu, **zapis i przywracanie „ostatnio użytej" konfiguracji**. | **Import CSV → istniejąca tabela działa end-to-end na żywej bazie; druga sesja startuje z przywróconą konfiguracją.** Pierwszy etap z realną wartością dla użytkownika. |
+| **I7** ✅ **DOSTARCZONY** | App: Podgląd + uruchomienie + raport — **pierwszy pełny przebieg** | Podgląd po konwersji (ciągły), `Waliduj`, tryby transakcji, `Importuj`/`F5`, postęp, anulowanie, raport, Commit/Rollback, eksport raportu, **zapis i przywracanie „ostatnio użytej" konfiguracji**. | **Import CSV → istniejąca tabela działa end-to-end na żywej bazie; druga sesja startuje z przywróconą konfiguracją.** Pierwszy etap z realną wartością dla użytkownika. **Spełnione** — +24 testy (5607 zielonych) oraz `tools/probes/DataImportRunProbe` **11/11 ALL PASS** na żywym FB5 (raport == `SELECT COUNT(*)`). |
 | **I8** | Nowa tabela | `ColumnTypeInferencer` — **(I0/REK-7) domyślnie skanuje CAŁE źródło**, nie próbkę (limit bezpieczeństwa 1 M wierszy), bo w realnym pliku 2 z 5 kolumn były typowo mieszane (R19); siatka typów w sekcji Cel z **zawsze widoczną liczbą przeanalizowanych wierszy** w kolumnie „Podstawa"; podgląd DDL; wykonanie na linii Ddl; ostrzeżenie o nieodwracalności; opcja `DROP` przy niepowodzeniu. | Import do nieistniejącej tabeli działa; typy zachowawcze i edytowalne; DDL z tego samego generatora; **kolumna mieszana ląduje jako `VARCHAR`, nie jako `INTEGER` z bombą zegarową**. |
 | **I9** | XLSX + zmiana nazwy projektu (D1) | `EmberTern.Export.Office` → **`EmberTern.Office`**; `XlsxImportProvider`; rozgałęzienie sekcji Format po `Capabilities`. **(I0/REK-6) Siedem wiążących wytycznych providera:** (1) **wyłącznie `OpenXmlReader` (SAX)** — DOM bierze 77× więcej pamięci (R8); (2) wartości umieszczane **po `CellReference`** — brakująca komórka środkowa jest NIEOBECNA, nie pusta, więc czytnik pozycyjny przesunąłby resztę wiersza o kolumnę (§0.1); (3) numer wiersza źródłowego **z `Row.RowIndex`** — puste wiersze są nieobecne, własny licznik skłamałby w raporcie (§0.6); (4) data = liczba + `numFmtId` daty (R3); (5) `SharedStringTable` czytana raz — Excel zapisuje teksty jako shared strings (rozmiar ∝ liczbie RÓŻNYCH tekstów); (6) `SheetDimension` **tylko jako wskazówka** postępu (bywa nieobecny); (7) formuła → wartość zbuforowana, a **komórka błędu → błąd wiersza** (+ opcja `ExcelErrorCellsAsNull`, R20). | Import plików z załączonych zrzutów daje identyczne dane. Eksport XLSX bez regresji. Pierwszy realny plik **z datami** obejrzany (luka pomiarowa R3). Po zamknięciu I9 `tools/probes/DataImportXlsxProbe` idzie do usunięcia. |
 | **I10** | Schowek + XLS | Schowek (App czyta, Core parsuje — zero nowego parsera). `XlsImportProvider` + zależność NuGet (D2). | Wklejenie z Excela importuje się bez zapisywania pliku. |

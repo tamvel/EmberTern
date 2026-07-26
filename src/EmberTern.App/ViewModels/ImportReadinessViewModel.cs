@@ -155,6 +155,11 @@ public sealed partial class ImportReadinessViewModel : ViewModelBase
     /// <summary>True when nothing blocks the run.</summary>
     [ObservableProperty] private bool _canRun;
 
+    /// <summary>True when nothing blocks "Validate" — weaker than <see cref="CanRun"/>, because a dry run writes
+    /// nowhere and therefore does not care about the working transaction. Both values come straight from Core's
+    /// report; the strip never decides either of them.</summary>
+    [ObservableProperty] private bool _canValidate;
+
     /// <summary>The "✓ Ready to import — N rows" line shown when everything is green.</summary>
     [ObservableProperty] private string _summary = string.Empty;
 
@@ -193,6 +198,7 @@ public sealed partial class ImportReadinessViewModel : ViewModelBase
         }
 
         CanRun = report.CanRun;
+        CanValidate = report.CanValidate;
         HasItems = Items.Count > 0;
         PublishVisibleItems();
 

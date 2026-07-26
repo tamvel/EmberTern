@@ -87,6 +87,33 @@ public sealed record ImportReadinessReport(IReadOnlyList<ReadinessItem> Items)
         }
     }
 
+    /// <summary>
+    /// True when nothing blocks <b>"Validate"</b> — which is a strictly weaker condition than
+    /// <see cref="CanRun"/>, and deliberately so.
+    /// <para>
+    /// A dry run reads the file, converts, validates and writes nowhere (<see cref="DryRunImportWriter"/>), so
+    /// the state of the user's working transaction has no bearing on it. Blocking Validate because a
+    /// transaction is open would refuse the one operation that helps most in that situation: checking the file
+    /// while deciding what to do about the transaction. Everything else still blocks — without a readable
+    /// source, a known target and a mapping there is nothing to validate.
+    /// </para>
+    /// <para>
+    /// The rule lives here rather than in the surface because "what does this report permit" is this record's
+    /// question; a view deciding it would be a second opinion on readiness.
+    /// </para>
+    /// </summary>
+    public bool CanValidate
+    {
+        get
+        {
+            foreach (var item in Items)
+            {
+                if (item.IsBlocking && item.Section != ImportSection.Transaction) return false;
+            }
+            return true;
+        }
+    }
+
     /// <summary>The blocking items, in the order they were found.</summary>
     public IEnumerable<ReadinessItem> Blocking
     {

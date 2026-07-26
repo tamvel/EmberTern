@@ -28,7 +28,7 @@ verbatim, in the archive below.
 | **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. **D14 = ANALYZED + DEFERRED** (its STATUS block records the ratified snapshot+savepoint+undo-only architecture if ever revisited). | **Every debugger implementation session — read this + your milestone's brief first.** |
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
 | **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next, and the remaining-scope table for I6–I12. **§3.8 holds the OPEN UX findings from the I5 review (U1–U10) — read it before touching the surface's layout.** | **Every Data Import session — read the status block + §3.8 + your etap's row in §6 first.** |
-| **`docs/design/data-import-i7-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I7** implementation session — the last etap of the MVP. Carries the input state, what the engine already provides (so I7 *runs* it rather than rewriting it), the scope, the binding decisions (transaction model, §0.5/§0.6, one-record), the standing "no global UI work" rule, and the DoD incl. the live end-to-end run. Replace it with the I8 equivalent once I7 closes. | When starting etap I7. |
+| **`docs/design/data-import-i8-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I8** implementation session — the first etap after the MVP (a table that does not exist yet). Carries the input state, what the engine already provides (so I8 *uses* it rather than rewriting it), the scope, the binding decisions (gotcha #213 and the §0.5 consequence that Rollback will not remove the created table, the lane split, conservative type inference), the standing "no global UI work" rule, and the DoD incl. the live end-to-end run. Replace it with the I9 equivalent once I8 closes. | When starting etap I8. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (248 entries, #1–#261), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
@@ -276,15 +276,40 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0–I6 DONE + user-accepted. Next: I7 — the
-  converted preview, the command bar, the run, the report, "last used" config: THE END OF THE MVP.**
-  Start it from **[data-import-i7-session-prompt.md](docs/design/data-import-i7-session-prompt.md)** in a
-  fresh session (the project's "one etap = one session" rule; I6 ran in the previous session as a
-  deliberate, user-granted exception, not a change to the rule). ⚠ **I7 does not write engine code — it
-  runs the engine that has been live-verified since I4** and shows the result; the pipeline, both writers,
-  the error mapper and readiness are all done. The frame is waiting too: `Grid.Row=1` is reserved for the
-  command bar, `Grid.Row=5` is the star row that gains the converted preview beside the mapping grid, and
-  the bottom panel gains "Errors" and "Report" as further tabs.
+- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE. 🏁 I7 IS DELIVERED, SO THE MVP IS COMPLETE:
+  CSV/TXT → an existing table now imports end-to-end, with validation, a report, the transaction decision
+  and a remembered configuration. Awaiting the user's visual confirmation in BOTH palettes; next etap is
+  I8 (new table).** Branch `feat/data-import`, suite **5607 green** (+24), build 0/0, app launches clean.
+  **Live-verified:** new `tools/probes/DataImportRunProbe` vs FB5 `WI-V5.0.3.1683` — **11/11 ALL PASS**
+  (the report's numbers equal `SELECT COUNT(*)`; Rollback undoes the "empty first" DELETE together with the
+  rows; the count behind that confirmation is read inside the user's own transaction; `Batched` really does
+  commit every N and a later Rollback really cannot take those rows back; a dry run touches nothing).
+  **⭐ Three things worth carrying forward.**
+  (1) **The converted preview IS the real import, not an imitation of it.** §3.6 promises the grid shows
+  "exactly what reaches the database", and that is only true because `ImportPipeline` fills it — same
+  converter, validator, mapping and culture. Two additive Core pieces make that possible:
+  **`BoundedImportProvider`** (a decorator bounding the READ, so a preview never reads a million rows to show
+  a hundred) and **`PreviewImportWriter`** (a writer that KEEPS rows instead of sending them). Same discipline
+  as "Validate is another argument, not another mode", one level up: **a different provider and a different
+  writer, the same one import.** ⚠ A failed row shows its **RAW** values and that is not a half-measure — the
+  pipeline stops a row at its first bad value, so such a row *has* no converted values, and the raw text is
+  exactly what the user must fix.
+  (2) **`CanValidate` is deliberately weaker than `CanRun`.** An open working transaction blocks the IMPORT
+  but not the VALIDATION: a dry run writes nowhere, so refusing it would deny the one operation that helps
+  most while the user is deciding what to do about that transaction. The rule lives in Core
+  (`ImportReadinessReport.CanValidate`) — "what does this report permit" is that record's question, and a view
+  deciding it would be a second opinion on readiness.
+  (3) **`Batched`: `CommitEveryRows` is a FLOOR, not an exact multiple — measured live.** A commit can only
+  land on a flush boundary (`BatchedCommitImportWriter` is a **decorator**, not a change to
+  `FirebirdImportWriter`, so `Manual` and `AutoCommitOnSuccess` run byte-identical code), i.e. at the first
+  batch boundary **at or past** N. With the I0-measured defaults (batch 500, commit 10 000) it lands exactly
+  on 10 000; a commit interval *smaller* than the batch size yields one commit per batch. Shrinking the batch
+  to match was rejected — I0 measured batch size as the thing that costs throughput while commit frequency is
+  nearly free. Stated out loud because it is the number the report will be read against.
+  Also new: **`DataImportEnvironment`** replaced five positional delegates with one named bundle (I7 adds six
+  collaborators, and eleven positional arguments is where two get swapped silently), and
+  **`FirebirdImportTargetPreparer`** (`COUNT(*)` + `DELETE FROM` on the **Data** lane inside the user's
+  transaction — emptying a table is data, not schema, so it must roll back with the import).
   **I6 as-built — the Target section + the Mapping panel, and it *inserted into* the frame the I5 closing
   seam left rather than restructuring it.** New `ImportTargetSectionViewModel` (table picker fed from the
   **Metadata** lane, a facts line that **names** the BEFORE INSERT triggers rather than counting them — a

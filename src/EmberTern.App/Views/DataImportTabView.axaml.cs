@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
@@ -9,7 +11,9 @@ using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.VisualTree;
+using EmberTern.App.Export;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Export;
 
 namespace EmberTern.App.Views;
 
@@ -58,6 +62,11 @@ public partial class DataImportTabView : UserControl
         {
             _bound.PreviewSchemaChanged -= OnPreviewSchemaChanged;
             _bound.PropertyChanged -= OnViewModelPropertyChanged;
+            _bound.ConvertedPreview.SchemaChanged -= OnConvertedSchemaChanged;
+            _bound.ReportReady -= OnReportReady;
+            _bound.ConfirmRequested -= ConfirmAsync;
+            _bound.ExportReportRequested -= ExportReportAsync;
+            _bound.PreviewRowRevealRequested -= OnPreviewRowRevealRequested;
         }
 
         _bound = DataContext as DataImportTabViewModel;
@@ -65,7 +74,14 @@ public partial class DataImportTabView : UserControl
 
         _bound.PreviewSchemaChanged += OnPreviewSchemaChanged;
         _bound.PropertyChanged += OnViewModelPropertyChanged;
+        _bound.ConvertedPreview.SchemaChanged += OnConvertedSchemaChanged;
+        _bound.ReportReady += OnReportReady;
+        _bound.ConfirmRequested += ConfirmAsync;
+        _bound.ExportReportRequested += ExportReportAsync;
+        _bound.PreviewRowRevealRequested += OnPreviewRowRevealRequested;
+
         RebuildPreviewColumns();
+        RebuildConvertedColumns();
         ApplyBottomPanel();
     }
 
@@ -127,20 +143,188 @@ public partial class DataImportTabView : UserControl
     // ── Keyboard (§9.2) ─────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Only the shortcuts that have something to drive exist yet: <c>Ctrl+O</c> picks a file. <c>F5</c>,
-    /// <c>Ctrl+F5</c> and <c>Esc</c> wait for the commands they would invoke (etap I7) — a shortcut bound to
-    /// a command that does not exist is a dead wiring, the same reason the command bar was not built in I5.
+    /// <c>F5</c> imports, <c>Ctrl+F5</c> validates, <c>Esc</c> cancels a run, <c>Ctrl+O</c> picks a file.
+    /// <para>
+    /// Every one of them goes through the very command the button does — the shortcut is a second trigger, never
+    /// a second path — and each is guarded by that command's own <c>CanExecute</c>, so a shortcut can never do
+    /// what the disabled button refuses to.
+    /// </para>
     /// </summary>
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        if (e.Key == Key.O && e.KeyModifiers.HasFlag(KeyModifiers.Control) && _bound is not null)
+        if (_bound is null)
         {
-            _bound.BrowseCommand.Execute(null);
-            e.Handled = true;
+            base.OnKeyDown(e);
             return;
         }
 
+        switch (e.Key)
+        {
+            case Key.F5 when e.KeyModifiers.HasFlag(KeyModifiers.Control):
+                if (Invoke(_bound.ValidateCommand)) e.Handled = true;
+                return;
+
+            case Key.F5:
+                if (Invoke(_bound.ImportCommand)) e.Handled = true;
+                return;
+
+            // Esc only when there is a run to stop; otherwise it stays the ordinary "dismiss" key.
+            case Key.Escape:
+                if (Invoke(_bound.CancelRunCommand)) e.Handled = true;
+                return;
+
+            case Key.O when e.KeyModifiers.HasFlag(KeyModifiers.Control):
+                _bound.BrowseCommand.Execute(null);
+                e.Handled = true;
+                return;
+        }
+
         base.OnKeyDown(e);
+    }
+
+    private static bool Invoke(System.Windows.Input.ICommand command)
+    {
+        if (!command.CanExecute(null)) return false;
+        command.Execute(null);
+        return true;
+    }
+
+    // ── The run's own surfaces ──────────────────────────────────────────────────────────────────────────
+
+    private const int ReportTabIndex = 2;
+
+    /// <summary>A finished run brings its own tab forward (§3.7) — the answer arrives where the user is
+    /// looking, instead of behind a tab they have to think to open.</summary>
+    private void OnReportReady(object? sender, EventArgs e)
+    {
+        if (this.FindControl<TabControl>("BottomTabs") is { } tabs) tabs.SelectedIndex = ReportTabIndex;
+        if (_bound is not null) _bound.IsBottomPanelCollapsed = false;
+    }
+
+    /// <summary>The one destructive confirmation this module asks (§0): emptying the target table.</summary>
+    private async Task<bool> ConfirmAsync(string message)
+    {
+        var dialog = new ConfirmDialog
+        {
+            DataContext = new ConfirmDialogViewModel(new ConfirmRequest
+            {
+                Title = UiStrings.ImportTargetEmptyFirst,
+                Message = message,
+                ConfirmLabel = UiStrings.ImportRun,
+                IsDestructive = true,
+            }),
+        };
+
+        return TopLevel.GetTopLevel(this) is Window owner && await dialog.ShowDialog<bool>(owner);
+    }
+
+    /// <summary>
+    /// Hands the problem list to the SHARED export framework (§4.6) — CSV / TXT / XLSX / clipboard for free,
+    /// without one line of new serialization. <c>RowBufferExportSource</c> is the existing adapter for a grid
+    /// whose rows are already in memory; the error list is exactly that.
+    /// </summary>
+    private async Task ExportReportAsync(IReadOnlyList<ImportProblemRowViewModel> problems)
+    {
+        var columns = new[]
+        {
+            new ExportColumn(UiStrings.ImportReportColumnRow, typeof(int)),
+            new ExportColumn(UiStrings.ImportReportColumnColumn, typeof(string)),
+            new ExportColumn(UiStrings.ImportReportColumnValue, typeof(string)),
+            new ExportColumn(UiStrings.ImportReportColumnReason, typeof(string)),
+        };
+
+        var rows = new List<object?[]>(problems.Count);
+        foreach (var problem in problems)
+        {
+            rows.Add(new object?[] { problem.SourceRowNumber, problem.ColumnName, problem.RawValue, problem.Reason });
+        }
+
+        var source = new RowBufferExportSource(columns, rows, rows, null, "import-report");
+        await ExportDialog.LaunchAsync(this, source, ExportScope.AllRows);
+    }
+
+    /// <summary>Double-clicking a problem shows that row in the converted preview — the report names a row, so
+    /// the surface can take the user to it.</summary>
+    private void OnProblemDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is DataGrid { SelectedItem: ImportProblemRowViewModel problem })
+        {
+            _bound?.RevealProblemCommand.Execute(problem);
+            e.Handled = true;
+        }
+    }
+
+    private void OnPreviewRowRevealRequested(object? sender, int sourceRowNumber)
+    {
+        if (_bound is null) return;
+        if (this.FindControl<DataGrid>("ConvertedPreviewGrid") is not { } grid) return;
+
+        foreach (var row in _bound.ConvertedPreview.Rows)
+        {
+            if (row.SourceRowNumber != sourceRowNumber) continue;
+
+            grid.SelectedItem = row;
+            grid.ScrollIntoView(row, null);
+            return;
+        }
+    }
+
+    // ── Converted-preview columns ───────────────────────────────────────────────────────────────────────
+
+    private void OnConvertedSchemaChanged(object? sender, EventArgs e) => RebuildConvertedColumns();
+
+    /// <summary>
+    /// Rebuilds the converted grid to match the mapped columns.
+    /// <para>
+    /// The row number comes first and carries the failure marker, because the row it names is the one the user
+    /// has to find in their file. A failed row shows its RAW values — it has no converted ones, by construction
+    /// (the pipeline stops the row at its first bad value) — and the tooltip says so rather than leaving the
+    /// grid to imply the raw text is what would be written.
+    /// </para>
+    /// </summary>
+    private void RebuildConvertedColumns()
+    {
+        if (this.FindControl<DataGrid>("ConvertedPreviewGrid") is not { } grid || _bound is null) return;
+
+        grid.Columns.Clear();
+        grid.Columns.Add(new DataGridTemplateColumn
+        {
+            Header = UiStrings.ImportRowNumberColumn,
+            IsReadOnly = true,
+            CellTemplate = new FuncDataTemplate<ImportConvertedRowViewModel>((_, _) =>
+            {
+                var panel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 4 };
+
+                var marker = new TextBlock
+                {
+                    Text = UiStrings.ImportRaggedMarker,
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    [!TextBlock.IsVisibleProperty] = new Binding(nameof(ImportConvertedRowViewModel.IsFailed)),
+                    [!TextBlock.ForegroundProperty] = new DynamicResourceExtension("ErrorBrush"),
+                };
+                ToolTip.SetTip(marker, UiStrings.ImportPreviewFailedTooltip);
+
+                var number = new TextBlock
+                {
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    [!TextBlock.TextProperty] = new Binding(nameof(ImportConvertedRowViewModel.SourceRowNumber)),
+                };
+
+                panel.Children.Add(marker);
+                panel.Children.Add(number);
+                return panel;
+            }, supportsRecycling: true),
+        });
+
+        for (var i = 0; i < _bound.ConvertedPreview.Columns.Count; i++)
+        {
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = _bound.ConvertedPreview.Columns[i],
+                Binding = new Binding($"Values[{i.ToString(CultureInfo.InvariantCulture)}]"),
+                IsReadOnly = true,
+            });
+        }
     }
 
     // ── Source preview columns ──────────────────────────────────────────────────────────────────────────

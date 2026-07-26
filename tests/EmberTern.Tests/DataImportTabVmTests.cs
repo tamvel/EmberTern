@@ -47,22 +47,41 @@ public class DataImportTabVmTests : IDisposable
         string connectionName = "LAB",
         ImportTarget? target = null,
         params ImportTarget[] moreTargets)
+        => new(Environment(connected, transactionOpen, connectionName, target, moreTargets))
+        {
+            // The converted preview waits ~150 ms so that changing a separator does not re-read the file on
+            // every keystroke. That is a delay, not a decision — zeroing it keeps the suite fast without
+            // changing a single thing the tests are actually about.
+            PreviewDebounce = TimeSpan.Zero,
+        };
+
+    /// <summary>
+    /// The surface's whole outside world, as delegates (etap I7 replaced five positional ones with this bundle).
+    /// The run-time collaborators are left unset here on purpose: a test that needs a writer, a commit or a
+    /// profile store supplies its own, so every other test keeps proving that a surface with nothing behind it
+    /// refuses to run rather than throwing.
+    /// </summary>
+    private static DataImportEnvironment Environment(
+        bool connected = true,
+        bool transactionOpen = false,
+        string connectionName = "LAB",
+        ImportTarget? target = null,
+        ImportTarget[]? moreTargets = null)
     {
         var all = target is null
             ? Array.Empty<ImportTarget>()
-            : new[] { target }.Concat(moreTargets).ToArray();
+            : new[] { target }.Concat(moreTargets ?? Array.Empty<ImportTarget>()).ToArray();
 
-        return new DataImportTabViewModel(
-            () => connected,
-            () => transactionOpen,
-            () => connectionName,
-            all.Length == 0
+        return new DataImportEnvironment(() => connected, () => transactionOpen, () => connectionName)
+        {
+            ListTablesAsync = all.Length == 0
                 ? null
                 : _ => Task.FromResult<IReadOnlyList<string>>(all.Select(t => t.TableName).ToList()),
-            all.Length == 0
+            ReadTargetAsync = all.Length == 0
                 ? null
                 : (name, _) => Task.FromResult(
-                    all.FirstOrDefault(t => string.Equals(t.TableName, name, StringComparison.OrdinalIgnoreCase))));
+                    all.FirstOrDefault(t => string.Equals(t.TableName, name, StringComparison.OrdinalIgnoreCase))),
+        };
     }
 
     /// <summary>A small target table: a required column, an optional one, a COMPUTED one and an identity
@@ -825,4 +844,5 @@ public class DataImportTabVmTests : IDisposable
         Assert.All(vm.Mapping.VisibleRows, r => Assert.False(r.IsMapped));
         Assert.Equal(before, vm.CurrentConfiguration.Mapping.Count);
     }
+
 }
