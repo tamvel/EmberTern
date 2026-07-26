@@ -250,6 +250,50 @@ internal static class UiStrings
     public const string ImportWorkAreaEmpty =
         "Choose a target table to map its columns. The mapping grid and the converted preview appear here.";
 
+    // ---- Data Import, etap I6: the Target tile (§3.4) and the Mapping panel (§3.5) ----
+
+    public const string ImportTargetExistingTable = "Existing table";
+    public const string ImportTargetTableWatermark = "Choose a table…";
+    public const string ImportTargetFilterWatermark = "Type to filter…";
+    public const string ImportTargetColumnsFormat = "{0} columns";
+    public const string ImportTargetNoPrimaryKey = "primary key: none";
+    public const string ImportTargetPrimaryKeyFormat = "primary key: {0}";
+    // Triggers are NAMED, not counted: a count says something is there, the names say what will rewrite the
+    // values on the way in (R6).
+    public const string ImportTargetNoBeforeInsertTriggers = "BEFORE INSERT triggers: none";
+    public const string ImportTargetBeforeInsertTriggersFormat = "BEFORE INSERT triggers: {0}";
+    public const string ImportTargetEmptyFirst = "Empty the table before importing";
+    public const string ImportTargetEmptyFirstTooltip =
+        "DELETE FROM in the SAME transaction as the rows — a rollback takes the deletion with it.";
+
+    // Mapping panel.
+    public const string ImportMappingHeadlineFormat = "Mapped {0} of {1} columns.";
+    public const string ImportMappingMatchByPosition = "Match by position";
+    public const string ImportMappingMatchByPositionTooltip =
+        "Pair column 1 with field 1, and so on — for a source whose names say nothing";
+    public const string ImportMappingClear = "Clear";
+    public const string ImportMappingOnlyUnmapped = "Only unmapped";
+    public const string ImportMappingDoNotImport = "— do not import —";
+    public const string ImportMappingFieldLabelFormat = "{0}  {1}";
+    public const string ImportMappingUnusedFieldsFormat = "Source fields nobody uses: {0}";
+    public const string ImportMappingColumnTarget = "Target column";
+    public const string ImportMappingColumnSource = "Source field";
+    public const string ImportMappingColumnType = "Target type";
+    public const string ImportMappingColumnNote = "Note";
+    public const string ImportMappingEmpty =
+        "Choose a target table above — its columns will appear here, already matched by name where the names agree.";
+
+    // Why a column's picker is disabled. A blocked control that does not say why is a UX defect (§9.1.3).
+    public const string ImportMappingLockedComputed = "COMPUTED BY — Firebird rejects an INSERT naming it.";
+    public const string ImportMappingLockedUnsupportedFormat = "Type {0} is not supported by the import.";
+    public const string ImportMappingLockedIdentity =
+        "Identity GENERATED ALWAYS — tick to override it; the INSERT then carries OVERRIDING SYSTEM VALUE.";
+    public const string ImportMappingUnlockIdentity = "override";
+
+    // Mapping origin (§9.3 — the debugger's ValueOrigin vocabulary, reused rather than reinvented).
+    public const string ImportMappingOriginMatched = "matched";
+    public const string ImportMappingOriginAssumed = "assumed";
+
     // Bottom panel + surface status.
     public const string ImportSourcePreviewTab = "Source preview";
     public const string ImportSourcePreviewEmpty = "Choose a file or paste from the clipboard.";

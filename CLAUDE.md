@@ -276,10 +276,28 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0–I5 DONE + accepted. Next: I6.**
+- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0–I5 DONE + accepted; ⏳ I6 DELIVERED,
+  awaiting visual confirmation. Next: I7 (end of MVP).**
+  **I6 as-built — the Target section + the Mapping panel, and it *inserted into* the frame the I5 closing
+  seam left rather than restructuring it.** New `ImportTargetSectionViewModel` (table picker fed from the
+  **Metadata** lane, a facts line that **names** the BEFORE INSERT triggers rather than counting them — a
+  count says something is there, the names say what will rewrite the values, R6 — and "empty the table
+  first", off by default because it destroys data) and `ImportMappingPanelViewModel` + `…RowViewModel`
+  (orientation **target → source**, because the target column is the side with requirements and the source
+  field is the choice). The chain of §4.7 is now **source → target → mapping → readiness**, one cancellable
+  sequence. ⚠ **Three things worth carrying forward.** (1) **A locked column is shown WITH its reason, never
+  hidden** — a missing row is a question the user cannot even ask; the sentence comes from the ONE
+  code→text table the readiness strip uses, so a column's note and the strip cannot drift. (2) **The
+  sole-remaining-pair rule can reach an identity `GENERATED ALWAYS` column, and that is Core's ratified
+  behaviour, not a bug**: `IsMappable` does not exclude identity and `Diagnose` then raises `IMP0007`
+  ("an accent, not a fault — but never silent"), with the writer emitting `OVERRIDING SYSTEM VALUE` (I4). The
+  UI lock governs a user reaching for that column *by hand*; when the planner paired it, the row shows
+  unlocked and marked "assumed". **No Core change was made.** (3) **A defect caught by its own test:** the
+  first cut cleared the record's `Mapping` whenever the target was null — so a restored profile lost its
+  pairing merely because the target had not been read back yet. The grid clears; **the record never does**.
   **After I4 the whole ENGINE is built and live-verified** (`tools/probes/DataImportProbe` vs FB5
   `WI-V5.0.3.1683` — **20/20 ALL PASS**); from I5 on the work is the user interface only. Branch
-  **`feat/data-import`** (pushed to **both** remotes), suite **5568 green**, build 0/0, app launches clean.
+  **`feat/data-import`** (pushed to **both** remotes), suite **5583 green**, build 0/0, app launches clean.
   **✅ I5 — CLOSED, user-confirmed after two visual reviews that produced U1–U12.** The reviews are the
   project's QA rule proving itself: build, green tests and a clean smoke had found **none** of it, because
   every finding is about **proportion and space**, not state. All twelve are settled and recorded in
@@ -311,8 +329,8 @@ noted.
   because an import tab is deliberately transient) and **must never enter `ImportConfiguration`** — a layout
   preference is not an import decision (§4.8.2), and the reflection guard would otherwise ship a pixel height
   inside saved profiles; and **no module etap touches `Themes/ControlStyles.axaml`** (density = the separate
-  sprint). Suite **5568 green**, build 0/0. **The I6 opening prompt is ready and now says "insert into the
-  finished frame, don't rebuild it": [data-import-i6-session-prompt.md](docs/design/data-import-i6-session-prompt.md).** A new tool tab (toolbar, beside
+  sprint). Suite **5568 green** at that point, build 0/0. **The I6 opening prompt said "insert into the
+  finished frame, don't rebuild it" — and that is what it did.** A new tool tab (toolbar, beside
   the Script Executor) that imports Clipboard / TXT / CSV / XLSX into an existing or a newly created table.
   **Read [docs/design/data-import.md](docs/design/data-import.md) — its „📍 STAN IMPLEMENTACJI" block is the
   handover, and the architecture is 🔒 FROZEN: from etap I1 on it is implementation only, and an
@@ -2041,8 +2059,8 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5568 as of 2026-07-26
-  (`feat/data-import`, I5 closing seam)** — all green in ONE `dotnet test` run (~10s).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5583 as of 2026-07-26
+  (`feat/data-import`, etap I6)** — all green in ONE `dotnet test` run (~10s).
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
   a `TextEditor` throw cross-thread from every session after the first (#226).

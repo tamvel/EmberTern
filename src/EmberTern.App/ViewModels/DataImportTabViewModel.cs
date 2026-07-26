@@ -71,10 +71,19 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     private readonly Func<bool> _hasOpenUserTransaction;
     private readonly Func<string> _connectionName;
 
+    /// <summary>Reads the table list from the METADATA lane. A delegate, not a service reference, for the same
+    /// reason the environment facts are: it keeps the VM testable without a database, and keeps every Firebird
+    /// type out of App's ViewModels.</summary>
+    private readonly Func<CancellationToken, Task<IReadOnlyList<string>>>? _listTablesAsync;
+
+    private readonly Func<string, CancellationToken, Task<ImportTarget?>>? _readTargetAsync;
+
     private ImportConfiguration _configuration = ImportConfiguration.Empty;
     private SourceSchema? _schema;
+    private ImportTarget? _target;
     private bool _sourceExists = true;
     private bool _sourceReadable = true;
+    private bool _tablesLoaded;
     private CancellationTokenSource? _recalculation;
 
     /// <summary>
@@ -87,14 +96,25 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     public DataImportTabViewModel(
         Func<bool> isConnected,
         Func<bool> hasOpenUserTransaction,
-        Func<string> connectionName)
+        Func<string> connectionName,
+        Func<CancellationToken, Task<IReadOnlyList<string>>>? listTablesAsync = null,
+        Func<string, CancellationToken, Task<ImportTarget?>>? readTargetAsync = null)
     {
         _isConnected = isConnected ?? throw new ArgumentNullException(nameof(isConnected));
         _hasOpenUserTransaction = hasOpenUserTransaction ?? throw new ArgumentNullException(nameof(hasOpenUserTransaction));
         _connectionName = connectionName ?? throw new ArgumentNullException(nameof(connectionName));
+        _listTablesAsync = listTablesAsync;
+        _readTargetAsync = readTargetAsync;
 
         Source = new ImportSourceSectionViewModel();
         Source.Changed += (_, _) => QueueRecalculate();
+
+        Target = new ImportTargetSectionViewModel();
+        Target.Changed += (_, _) => QueueRecalculate();
+
+        Mapping = new ImportMappingPanelViewModel();
+        Mapping.Changed += (_, _) => OnMappingEdited();
+        Mapping.StrategyRequested += (_, strategy) => ApplyMappingStrategy(strategy);
 
         Readiness = new ImportReadinessViewModel();
         PreviewRows = new ObservableCollection<ImportSourceRecordRowViewModel>();
@@ -105,6 +125,12 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
     /// <summary>The Source and format section.</summary>
     public ImportSourceSectionViewModel Source { get; }
+
+    /// <summary>The Target section (§3.4) — existing table; the new-table variant is etap I8.</summary>
+    public ImportTargetSectionViewModel Target { get; }
+
+    /// <summary>The Mapping panel (§3.5).</summary>
+    public ImportMappingPanelViewModel Mapping { get; }
 
     /// <summary>The readiness strip (§3.2).</summary>
     public ImportReadinessViewModel Readiness { get; }
@@ -202,12 +228,18 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     [RelayCommand]
     private void FocusSection(ImportSection section)
     {
-        // Only the FORMAT chip opens the options: the source picker is always live, so a Source finding has
-        // nothing to expand — it just needs the caret put in the picker.
+        // Only the FORMAT chip opens something: the source and target pickers are always live, so those
+        // findings have nothing to expand — they just need the caret put in the picker.
         if (section is ImportSection.Format)
         {
             Source.IsExpanded = true;
             _formatOptionsHeldOpen = true;
+        }
+        else if (section is ImportSection.Mapping)
+        {
+            // A mapping finding is about a specific column; showing only the unmapped ones puts the user in
+            // front of exactly the rows the strip is complaining about.
+            Mapping.ShowOnlyUnmapped = true;
         }
 
         SectionFocusRequested?.Invoke(this, section);
@@ -253,6 +285,11 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             Delimited = isSpreadsheet ? null : Source.BuildDelimited(),
             Spreadsheet = isSpreadsheet ? _configuration.Spreadsheet ?? new SpreadsheetOptions() : null,
             Culture = Source.BuildCulture(),
+            Target = Target.BuildTarget(_configuration.Target),
+            // The grid is authoritative once it has rows; before that the held mapping passes through, so a
+            // restored profile keeps its pairing until the target it refers to has actually been read.
+            Mapping = Mapping.Rows.Count > 0 ? Mapping.BuildMapping() : _configuration.Mapping,
+            Behavior = Target.BuildBehavior(_configuration.Behavior),
         };
     }
 
@@ -261,6 +298,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     {
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         Source.Apply(_configuration);
+        Target.Apply(_configuration);
         Recalculate();
     }
 
@@ -283,7 +321,152 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         _recalculation = cts;
 
         UpdateFileFacts();
-        PendingRecalculation = ReadSourceAsync(cts.Token);
+        PendingRecalculation = RunChainAsync(cts.Token);
+    }
+
+    /// <summary>
+    /// The chain of §4.7, in the one order that is not a guess resting on a guess: <b>source → target →
+    /// mapping → readiness</b>. Each link consumes what the previous one established, and every link is
+    /// cancellable, so a newer edit supersedes the whole tail rather than racing it.
+    /// </summary>
+    private async Task RunChainAsync(CancellationToken cancellationToken)
+    {
+        await EnsureTablesLoadedAsync(cancellationToken).ConfigureAwait(true);
+        if (cancellationToken.IsCancellationRequested) return;
+
+        await ReadSourceAsync(cancellationToken).ConfigureAwait(true);
+        if (cancellationToken.IsCancellationRequested) return;
+
+        await ReadTargetAsync(cancellationToken).ConfigureAwait(true);
+        if (cancellationToken.IsCancellationRequested) return;
+
+        PlanMapping();
+        PublishReadiness();
+    }
+
+    /// <summary>Loads the table list once per tab. The list is a fact about the database, not a user decision,
+    /// so re-reading it on every keystroke would be work nobody asked for.</summary>
+    private async Task EnsureTablesLoadedAsync(CancellationToken cancellationToken)
+    {
+        if (_tablesLoaded || _listTablesAsync is null || !_isConnected()) return;
+
+        try
+        {
+            var tables = await _listTablesAsync(cancellationToken).ConfigureAwait(true);
+            if (cancellationToken.IsCancellationRequested) return;
+
+            Target.ShowTables(tables);
+            _tablesLoaded = true;
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded — not a failure.
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        {
+            SetStatus(ex.Message, MessageSeverity.Error);
+        }
+    }
+
+    /// <summary>
+    /// Reads the chosen table's columns and BEFORE INSERT triggers. Refusing with a reason is §0-compliant;
+    /// pretending a table exists is not, so a target that cannot be read becomes a null target and readiness
+    /// says so.
+    /// </summary>
+    private async Task ReadTargetAsync(CancellationToken cancellationToken)
+    {
+        var tableName = _configuration.Target.TableName;
+
+        if (_readTargetAsync is null || string.IsNullOrWhiteSpace(tableName))
+        {
+            _target = null;
+            Target.ShowFacts(null);
+            return;
+        }
+
+        Target.IsBusy = true;
+        try
+        {
+            _target = await _readTargetAsync(tableName, cancellationToken).ConfigureAwait(true);
+            if (cancellationToken.IsCancellationRequested) return;
+
+            Target.ShowFacts(_target);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        {
+            _target = null;
+            Target.ShowFacts(null);
+            SetStatus(ex.Message, MessageSeverity.Error);
+        }
+        finally
+        {
+            if (!cancellationToken.IsCancellationRequested) Target.IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Re-plans the mapping through <see cref="ImportMappingPlanner"/> — the ONE owner of "which field feeds
+    /// which column". The previous mapping is handed in so everything provably still correct survives; a
+    /// changed TARGET hands in nothing, because a different table is a different identity (§4.7).
+    /// </summary>
+    private void PlanMapping()
+    {
+        if (_target is null || _schema is null)
+        {
+            // ⚠ Clear the GRID, never the record. There is nothing to show without both sides, but the held
+            // mapping is a set of user decisions: dropping it here would mean a restored profile loses its
+            // pairing merely because the target has not been read back yet — the "an older build quietly
+            // robbed the profile" defect §4.8.6 exists to prevent. Re-choosing the same table restores it.
+            Mapping.Update(null, _schema, ImportMappingPlan.Empty);
+            return;
+        }
+
+        var previous = string.Equals(_mappedTable, _target.TableName, StringComparison.OrdinalIgnoreCase)
+            ? _configuration.Mapping
+            : null;
+
+        var plan = ImportMappingPlanner.Plan(_target, _schema, previous);
+        _mappedTable = _target.TableName;
+
+        Mapping.Update(_target, _schema, plan);
+        _configuration = _configuration with { Mapping = Mapping.BuildMapping() };
+    }
+
+    /// <summary>The table the current grid belongs to — the fact that decides whether a previous mapping may
+    /// be carried over at all.</summary>
+    private string? _mappedTable;
+
+    /// <summary>A grid edit changes the record and the readiness, but nothing upstream: the source has not
+    /// moved, so re-reading it would be work the user did not ask for.</summary>
+    private void OnMappingEdited()
+    {
+        _configuration = BuildConfiguration();
+        PublishReadiness();
+    }
+
+    /// <summary>Re-plans with a different strategy, then adopts the result into the existing rows so the grid
+    /// does not jump under the user.</summary>
+    private void ApplyMappingStrategy(ImportMappingStrategy strategy)
+    {
+        if (_target is null) return;
+
+        var plan = strategy switch
+        {
+            ImportMappingStrategy.ByPosition when _schema is not null
+                => ImportMappingPlanner.MatchByPosition(_target, _schema),
+            ImportMappingStrategy.Clear => ImportMappingPlanner.Clear(_target),
+            _ => null,
+        };
+
+        if (plan is null) return;
+
+        Mapping.AdoptPlan(plan);
+        _configuration = BuildConfiguration();
+        PublishReadiness();
     }
 
     /// <summary>
@@ -304,8 +487,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             _schema = null;
             _sourceReadable = true;   // nothing to read is not "unreadable"
-            PublishReadiness();
-            return;
+            return;                   // the chain still runs on — a target can be chosen before a file is
         }
 
         IsBusy = true;
@@ -351,8 +533,6 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             if (!cancellationToken.IsCancellationRequested) IsBusy = false;
         }
-
-        if (!cancellationToken.IsCancellationRequested) PublishReadiness();
     }
 
     private async Task LoadPreviewAsync(
@@ -486,7 +666,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             Schema = _schema,
             SourceExists = _sourceExists,
             SourceReadable = _sourceReadable,
-            Target = null,   // the Target section arrives in I6; until then "no target" is the honest answer
+            Target = _target,
             IsConnected = _isConnected(),
             HasOpenUserTransaction = _hasOpenUserTransaction(),
         };

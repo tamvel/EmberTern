@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -7,6 +8,7 @@ using EmberTern.App;
 using EmberTern.App.Controls;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Import;
+using EmberTern.Core.Metadata;
 using Xunit;
 
 namespace EmberTern.Tests;
@@ -40,8 +42,41 @@ public class DataImportTabVmTests : IDisposable
     }
 
     private static DataImportTabViewModel Vm(
-        bool connected = true, bool transactionOpen = false, string connectionName = "LAB")
-        => new(() => connected, () => transactionOpen, () => connectionName);
+        bool connected = true,
+        bool transactionOpen = false,
+        string connectionName = "LAB",
+        ImportTarget? target = null,
+        params ImportTarget[] moreTargets)
+    {
+        var all = target is null
+            ? Array.Empty<ImportTarget>()
+            : new[] { target }.Concat(moreTargets).ToArray();
+
+        return new DataImportTabViewModel(
+            () => connected,
+            () => transactionOpen,
+            () => connectionName,
+            all.Length == 0
+                ? null
+                : _ => Task.FromResult<IReadOnlyList<string>>(all.Select(t => t.TableName).ToList()),
+            all.Length == 0
+                ? null
+                : (name, _) => Task.FromResult(
+                    all.FirstOrDefault(t => string.Equals(t.TableName, name, StringComparison.OrdinalIgnoreCase))));
+    }
+
+    /// <summary>A small target table: a required column, an optional one, a COMPUTED one and an identity
+    /// ALWAYS — one of each kind the mapping grid has to treat differently.</summary>
+    private static ImportTarget LabTarget() => new(
+        "IMP_LAB",
+        new[]
+        {
+            new ColumnSpec("ID", "INTEGER") { Identity = IdentityKind.Always },
+            new ColumnSpec("KOD", "VARCHAR(20)", NotNull: true),
+            new ColumnSpec("NAZWA", "VARCHAR(100)"),
+            new ColumnSpec("SUMA", "NUMERIC(15,2)") { IsComputed = true },
+        },
+        Array.Empty<string>());
 
     private static async Task SettleAsync(DataImportTabViewModel vm)
     {
@@ -503,5 +538,291 @@ public class DataImportTabVmTests : IDisposable
 
         Assert.Equal(260, vm.BottomPanelHeight);
         Assert.Equal(1, seen);
+    }
+
+    // ── Etap I6: Target + Mapping ───────────────────────────────────────────────────────────────────────
+
+    private async Task<DataImportTabViewModel> MappedVmAsync(string csv = "KOD;NAZWA\nA1;Widget\n")
+    {
+        var target = LabTarget();
+        var vm = Vm(target: target);
+        await SettleAsync(vm);
+
+        vm.Source.FilePath = WriteFile("in.csv", csv);
+        await SettleAsync(vm);
+
+        vm.Target.SelectedTable = target.TableName;
+        await SettleAsync(vm);
+        return vm;
+    }
+
+    /// <summary>
+    /// ⭐ The grid is a projection of the TABLE, not of what happens to be mappable: a column that can never
+    /// be written is shown WITH its reason rather than quietly missing (§3.5). A missing row is a question
+    /// the user cannot even ask.
+    /// </summary>
+    [Fact]
+    public async Task Mapping_ShowsEveryTargetColumn_IncludingTheOnesThatCanNeverBeWritten()
+    {
+        var vm = await MappedVmAsync();
+
+        Assert.Equal(4, vm.Mapping.Rows.Count);
+
+        var computed = vm.Mapping.Rows.Single(r => r.TargetColumnName == "SUMA");
+        Assert.True(computed.NeverWritable);
+        Assert.False(computed.IsPickerEnabled);
+        Assert.NotEmpty(computed.LockReason);
+    }
+
+    /// <summary>Auto-matching is the planner's answer, merely rendered here — a second matching rule in the
+    /// VM is exactly how the grid and the readiness strip start telling the user different things.</summary>
+    [Fact]
+    public async Task Mapping_MatchesByName_AndMarksTheOriginAsAutomatic()
+    {
+        var vm = await MappedVmAsync();
+
+        var kod = vm.Mapping.Rows.Single(r => r.TargetColumnName == "KOD");
+        Assert.True(kod.IsMapped);
+        Assert.True(kod.IsAutomatic);
+        Assert.Equal("KOD", kod.SelectedOption.Field!.Name);
+    }
+
+    /// <summary>
+    /// ⭐ Identity GENERATED ALWAYS is writable only after a deliberate unlock (R10). Firebird refuses an
+    /// INSERT naming it without OVERRIDING SYSTEM VALUE, so supplying that silently would decide on the
+    /// user's behalf that the server's identity should be overwritten.
+    /// </summary>
+    [Fact]
+    public async Task Mapping_LocksIdentityAlways_UntilItIsExplicitlyUnlocked()
+    {
+        var vm = await MappedVmAsync();
+        var id = vm.Mapping.Rows.Single(r => r.TargetColumnName == "ID");
+
+        Assert.True(id.NeedsIdentityOverride);
+        Assert.False(id.IsPickerEnabled);
+
+        id.IsIdentityUnlocked = true;
+        Assert.True(id.IsPickerEnabled);
+    }
+
+    /// <summary>A user's decision outranks the planner, and the marker must never describe a value the user
+    /// has since replaced (the debugger's ValueOrigin rule, C3).</summary>
+    [Fact]
+    public async Task Mapping_AManualEdit_ClearsTheAutomaticOrigin_AndReachesTheRecord()
+    {
+        var vm = await MappedVmAsync();
+        var nazwa = vm.Mapping.Rows.Single(r => r.TargetColumnName == "NAZWA");
+
+        nazwa.SelectedOption = nazwa.Options.Single(o => o.Field?.Name == "KOD");
+
+        Assert.False(nazwa.IsAutomatic);
+        Assert.False(nazwa.IsAssumed);
+
+        var mapping = vm.CurrentConfiguration.Mapping.Single(m => m.TargetColumnName == "NAZWA");
+        Assert.Equal("KOD", mapping.SourceFieldName);
+        Assert.Equal(MappingOrigin.Manual, mapping.Origin);
+    }
+
+    /// <summary>"Do not import" is a DECISION, not an absence — it has to survive into the record as a skip
+    /// so a re-read cannot quietly re-map the column.</summary>
+    [Fact]
+    public async Task Mapping_ChoosingDoNotImport_IsRecordedAsASkip()
+    {
+        var vm = await MappedVmAsync();
+        var kod = vm.Mapping.Rows.Single(r => r.TargetColumnName == "KOD");
+
+        kod.SelectedOption = kod.Options[0];   // "— do not import —"
+
+        var mapping = vm.CurrentConfiguration.Mapping.Single(m => m.TargetColumnName == "KOD");
+        Assert.True(mapping.IsSkipped);
+        Assert.False(mapping.IsMapped);
+    }
+
+    /// <summary>Clearing goes through the planner too — the panel never invents a mapping state of its own.</summary>
+    [Fact]
+    public async Task Mapping_ClearAndMatchByPosition_GoThroughThePlanner()
+    {
+        var vm = await MappedVmAsync();
+
+        vm.Mapping.ClearMappingCommand.Execute(null);
+        Assert.All(vm.Mapping.Rows, r => Assert.False(r.IsMapped));
+
+        vm.Mapping.MatchByPositionCommand.Execute(null);
+        Assert.Contains(vm.Mapping.Rows, r => r.IsMapped);
+    }
+
+    /// <summary>
+    /// The list of fields nobody consumes is how "I forgot a column" becomes visible BEFORE the import
+    /// rather than after it (§3.5).
+    /// <para>
+    /// ⚠ TWO spare fields on purpose. With exactly one unmatched column and one unused field, Core's
+    /// sole-remaining-pair rule fires and there is nothing left over — correct behaviour, but it would make
+    /// this test pass or fail for the wrong reason.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Mapping_NamesTheSourceFieldsNobodyUses()
+    {
+        var vm = await MappedVmAsync("KOD;NAZWA;SPARE1;SPARE2\nA1;Widget;x;y\n");
+
+        Assert.True(vm.Mapping.HasUnusedFields);
+        Assert.Contains("SPARE1", vm.Mapping.UnusedFieldsText, StringComparison.Ordinal);
+        Assert.Contains("SPARE2", vm.Mapping.UnusedFieldsText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ⭐ The sole-remaining-pair rule reaches an identity ALWAYS column too — and that is deliberate, not an
+    /// oversight: Core treats such a column as mappable and raises <c>IMP0007</c> when it maps one, so the
+    /// INSERT will carry <c>OVERRIDING SYSTEM VALUE</c> and the user is told. The row unlocks itself in that
+    /// case because the decision has already been made and stated; what stays locked is the user reaching for
+    /// it by hand out of nowhere.
+    /// </summary>
+    [Fact]
+    public async Task Mapping_ThePairRuleMayReachAnIdentityColumn_AndSaysSo()
+    {
+        var vm = await MappedVmAsync("KOD;NAZWA;NIEUZYWANE\nA1;Widget;7\n");
+
+        var id = vm.Mapping.Rows.Single(r => r.TargetColumnName == "ID");
+        Assert.True(id.IsMapped);
+        Assert.True(id.IsAssumed);
+        Assert.True(id.IsIdentityUnlocked);
+        Assert.False(vm.Mapping.HasUnusedFields);
+    }
+
+    /// <summary>
+    /// ⭐ Choosing a DIFFERENT table must not carry the old pairing over: a different table is a different
+    /// identity, and silently re-pointing a mapping at columns that merely happen to share a name is the
+    /// class of defect §0.1 exists to forbid.
+    /// </summary>
+    [Fact]
+    public async Task Mapping_IsNotCarriedAcrossADifferentTable()
+    {
+        var other = new ImportTarget(
+            "IMP_OTHER",
+            new[] { new ColumnSpec("KOD", "VARCHAR(20)") },
+            Array.Empty<string>());
+
+        var vm = Vm(target: LabTarget(), moreTargets: other);
+        await SettleAsync(vm);
+        vm.Source.FilePath = WriteFile("in.csv", "KOD;NAZWA\nA1;Widget\n");
+        await SettleAsync(vm);
+
+        vm.Target.SelectedTable = "IMP_LAB";
+        await SettleAsync(vm);
+        Assert.Contains(vm.Mapping.Rows, r => r.TargetColumnName == "NAZWA" && r.IsMapped);
+
+        vm.Target.SelectedTable = "IMP_OTHER";
+        await SettleAsync(vm);
+
+        // The grid is the other table's, and nothing from the first one survived into the record.
+        Assert.Single(vm.Mapping.Rows);
+        Assert.DoesNotContain(vm.CurrentConfiguration.Mapping, m => m.TargetColumnName == "NAZWA");
+    }
+
+    /// <summary>
+    /// ⚠ Clearing the TARGET clears the grid but must NOT clear the record's mapping: those are user
+    /// decisions, and dropping them because the target has not been read back yet is the "an older build
+    /// quietly robbed the profile" defect. Re-choosing the same table brings the pairing back.
+    /// </summary>
+    [Fact]
+    public async Task Mapping_SurvivesTheTargetBeingClearedAndReChosen()
+    {
+        var vm = await MappedVmAsync();
+        Assert.Contains(vm.CurrentConfiguration.Mapping, m => m.TargetColumnName == "KOD" && m.IsMapped);
+
+        vm.Target.SelectedTable = null;
+        await SettleAsync(vm);
+        Assert.Empty(vm.Mapping.Rows);
+        Assert.Contains(vm.CurrentConfiguration.Mapping, m => m.TargetColumnName == "KOD" && m.IsMapped);
+
+        vm.Target.SelectedTable = "IMP_LAB";
+        await SettleAsync(vm);
+        Assert.Contains(vm.Mapping.Rows, r => r.TargetColumnName == "KOD" && r.IsMapped);
+    }
+
+    /// <summary>The target tile states the facts that decide whether an import behaves as expected — and the
+    /// triggers are NAMED, because a count says something is there while the names say what will rewrite the
+    /// values on the way in (R6).</summary>
+    [Fact]
+    public async Task Target_StatesColumnsPrimaryKeyAndBeforeInsertTriggers()
+    {
+        var target = new ImportTarget(
+            "IMP_TRIG",
+            new[] { new ColumnSpec("ID", "INTEGER") { IsPrimaryKey = true } },
+            new[] { "IMP_TRIG_BI" });
+
+        var vm = Vm(target: target);
+        await SettleAsync(vm);
+        vm.Target.SelectedTable = target.TableName;
+        await SettleAsync(vm);
+
+        Assert.Contains("ID", vm.Target.FactsText, StringComparison.Ordinal);
+        Assert.Contains("IMP_TRIG_BI", vm.Target.FactsText, StringComparison.Ordinal);
+    }
+
+    /// <summary>The target and the emptying option are user decisions, so they must travel in the ONE record
+    /// (§4.8.6) — the reflection guard covers the Core half, this covers the App half.</summary>
+    [Fact]
+    public async Task Target_ReachesTheOneRecord()
+    {
+        var vm = await MappedVmAsync();
+        vm.Target.EmptyBeforeImport = true;
+        await SettleAsync(vm);
+
+        var configuration = vm.BuildConfiguration();
+        Assert.Equal("IMP_LAB", configuration.Target.TableName);
+        Assert.Equal(ImportTargetKind.ExistingTable, configuration.Target.Kind);
+        Assert.True(configuration.Behavior.EmptyTargetBeforeImport);
+    }
+
+    /// <summary>
+    /// ⭐ A build this old cannot edit a NEW-table target (that is etap I8), so it must pass one through
+    /// untouched rather than degrade it to an existing-table target — the same "an older build must not rob
+    /// a newer profile" promise the section pass-through already makes.
+    /// </summary>
+    [Fact]
+    public void Target_PassesANewTableConfigurationThrough()
+    {
+        var vm = Vm();
+        var newTable = TargetDescriptor.New(
+            "IMP_NEW",
+            new[] { new ImportColumnDefinition { Name = "A", BasicType = "VARCHAR", Size = 20 } });
+
+        vm.ApplyConfiguration(ImportConfiguration.Empty with { Target = newTable });
+
+        var configuration = vm.BuildConfiguration();
+        Assert.Equal(ImportTargetKind.NewTable, configuration.Target.Kind);
+        Assert.Equal("IMP_NEW", configuration.Target.TableName);
+        Assert.Single(configuration.Target.NewTableColumns);
+    }
+
+    /// <summary>Readiness stops saying "no target" the moment there is one — the strip reads the same target
+    /// the grid does, because there is only one.</summary>
+    [Fact]
+    public async Task Readiness_SeesTheChosenTarget()
+    {
+        var vm = Vm(target: LabTarget());
+        await SettleAsync(vm);
+        Assert.Contains(vm.Readiness.Items, i => i.Item.Code == ImportDiagnosticCode.NoTarget);
+
+        vm.Target.SelectedTable = "IMP_LAB";
+        await SettleAsync(vm);
+
+        Assert.DoesNotContain(vm.Readiness.Items, i => i.Item.Code == ImportDiagnosticCode.NoTarget);
+    }
+
+    /// <summary>The "only unmapped" filter is a view over the same rows — it must never drop a row from the
+    /// record, only from the display.</summary>
+    [Fact]
+    public async Task Mapping_OnlyUnmappedFilter_HidesRowsWithoutChangingTheRecord()
+    {
+        var vm = await MappedVmAsync();
+        var before = vm.CurrentConfiguration.Mapping.Count;
+
+        vm.Mapping.ShowOnlyUnmapped = true;
+
+        Assert.True(vm.Mapping.VisibleRows.Count < vm.Mapping.Rows.Count);
+        Assert.All(vm.Mapping.VisibleRows, r => Assert.False(r.IsMapped));
+        Assert.Equal(before, vm.CurrentConfiguration.Mapping.Count);
     }
 }

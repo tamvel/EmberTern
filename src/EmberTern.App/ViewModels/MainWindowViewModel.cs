@@ -4060,10 +4060,22 @@ public partial class MainWindowViewModel : ViewModelBase
         // reflects the connection and transaction as they are now — not as they were when the tab opened.
         // The connection name is read the same way, for the same reason: it is what band H states about
         // where the rows are going.
+        // The table list and the target's shape are read on the METADATA lane (read-only, implicit
+        // per-command transactions) — nothing about choosing a target may touch the user's working
+        // transaction. Passed as delegates, like the environment facts above, so the VM stays testable
+        // without a database and no Firebird type reaches a ViewModel (rule #1).
+        var targetReader = new FirebirdImportTargetReader(_metadataReader, _metadataLane);
+
         var import = new DataImportTabViewModel(
             () => _service.IsConnected,
             () => _transactionService.IsActive,
-            () => _service.ActiveProfile?.Name ?? string.Empty);
+            () => _service.ActiveProfile?.Name ?? string.Empty,
+            async ct =>
+            {
+                var tables = await _metadataReader.ListAsync(MetadataObjectKind.Table, ct).ConfigureAwait(false);
+                return tables.Select(t => t.Name).ToList();
+            },
+            (table, ct) => targetReader.ReadTargetAsync(table, ct));
 
         if (ImportFilePickRequested is not null)
             import.FilePickRequested += () => ImportFilePickRequested.Invoke();
