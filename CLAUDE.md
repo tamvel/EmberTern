@@ -397,10 +397,12 @@ noted.
   Data Import to the accepted architecture first, then run a dedicated UX sprint that looks at **every**
   surface at once (SQL Editor, Debugger, Activity Monitor, Session Manager, Script Executor, Data Import and
   the rest) and designs the new global control style from that whole view — not extrapolated from one form.
-  Mixing the two makes the scope unreadable and the progress unmeasurable. **Until then: zero changes to
-  `Themes/ControlStyles.axaml` from a module etap.** A module may still fix what does *not* come from the
-  global style — layout, proportion, ergonomics (a control's height is the sprint; two controls stacked
-  instead of side by side is the module).
+  Mixing the two makes the scope unreadable and the progress unmeasurable. **⛔ Standing instruction (user,
+  2026-07-26, on closing I5): from here on a module etap delivers the module — do NOT initiate global UI
+  changes or style refactors.** Avalonia control rebuilds, density, styles and responsiveness all wait for
+  the sprint. A **small remark about one specific screen** (the kind that produced `Border.settings-group`)
+  may still be fixed in passing; anything that would touch the app as a whole may not. The working line:
+  *a control's height* is the sprint, *two controls stacked instead of side by side* is the module.
 - **⚠ Spun off from Data Import I0, NOT part of it — a platform-wide defect to audit.** Measured on live FB5:
   binding a string containing a character the **connection** charset cannot represent stores `?` with **no
   error at all**, even when the target column is UTF8 (the connection charset decides, not the column's), and
