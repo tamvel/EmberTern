@@ -1,0 +1,351 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="clr-namespace:EmberTern.App"
+             xmlns:controls="clr-namespace:EmberTern.App.Controls"
+             xmlns:vm="clr-namespace:EmberTern.App.ViewModels"
+             
+             x:Name="ImportRoot"
+             x:Class="EmberTern.App.Views.DataImportTabView"
+             x:DataType="vm:DataImportTabViewModel"
+             Background="{DynamicResource BackgroundBrush}">
+
+  <!--
+    Data Import — ONE working surface with collapsible sections, deliberately NOT a wizard (decision D7).
+    The bands are §3.1's A-H:
+      A header · B command bar · C the one message surface · D readiness strip
+      E configuration sections · F mapping <-> preview · G bottom tabs · H surface status
+    Etap I5 delivers A, C, D, E(Source and format), G(Source preview) and H. The command bar, the target
+    section and the mapping/preview panels arrive with the features that give them something to do — an
+    enabled-looking control with nothing behind it would be a lie the readiness strip could not correct.
+  -->
+
+
+    
+    
+
+
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+
+    <!-- ══ Band A — header ══════════════════════════════════════════════════════════════════════ -->
+    <Border Grid.Row="0" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,8">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <controls:SvgIcon Data="{StaticResource Icon.Import}" Width="18" Height="18"
+                          VerticalAlignment="Center"
+                          Foreground="{DynamicResource AccentIconBrush}" />
+        <TextBlock Text="{x:Static app:UiStrings.DataImportTabTitle}"
+                   FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+      </StackPanel>
+    </Border>
+
+    <!-- ══ Band C — the ONE message surface. Never a locally-coloured TextBlock (§9.1 point 5). ══ -->
+    <controls:MessageBanner Grid.Row="1"
+                            Classes="docked"
+                            Severity="{Binding StatusSeverity}"
+                            Message="{Binding StatusMessage}"
+                            IsVisible="{Binding HasStatusMessage}" />
+
+    <!-- ══ Band D — readiness strip: every gap at once, each one clickable to its cause ══════════ -->
+    <Border Grid.Row="2" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
+      <StackPanel Spacing="6">
+
+        <!-- The chips: one per section, ✓ when the section has nothing to say. -->
+        <StackPanel Orientation="Horizontal" Spacing="14">
+          <TextBlock Text="{x:Static app:UiStrings.ImportReadinessHeader}"
+                     Classes="field-label" VerticalAlignment="Center" />
+          <ItemsControl ItemsSource="{Binding Readiness.Sections}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="14" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ImportReadinessSectionViewModel">
+                <Button Classes="flat" Padding="4,2"
+                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).FocusSectionCommand}"
+                        CommandParameter="{Binding Section}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <!-- A brush is looked up WITH the theme variant, never without: a variant-less lookup
+                         returns UNSET and the icon then paints nothing while every state looks healthy
+                         (gotcha #250). -->
+                    <controls:SvgIcon Width="13" Height="13" VerticalAlignment="Center"
+                                      Data="{Binding GeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
+                      <controls:SvgIcon.Foreground>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="BrushKey" />
+                          <Binding ElementName="ImportRoot" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </controls:SvgIcon.Foreground>
+                    </controls:SvgIcon>
+                    <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- The findings themselves. When everything is green the strip collapses to one line (§3.2). -->
+        <TextBlock Text="{Binding Readiness.Summary}" Classes="subtle" FontSize="12"
+                   IsVisible="{Binding !Readiness.HasItems}" />
+
+        <ItemsControl ItemsSource="{Binding Readiness.Items}" IsVisible="{Binding Readiness.HasItems}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ImportReadinessItemViewModel">
+              <Button Classes="flat" Padding="2,1" HorizontalAlignment="Left"
+                      ToolTip.Tip="{Binding Code}"
+                      Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).FocusSectionCommand}"
+                      CommandParameter="{Binding Section}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <controls:SvgIcon Width="13" Height="13" VerticalAlignment="Top" Margin="0,2,0,0"
+                                    Data="{Binding GeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
+                    <controls:SvgIcon.Foreground>
+                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                        <Binding Path="BrushKey" />
+                        <Binding ElementName="ImportRoot" Path="ActualThemeVariant" />
+                      </MultiBinding>
+                    </controls:SvgIcon.Foreground>
+                  </controls:SvgIcon>
+                  <!-- The message carries the severity colour too, exactly as MessageBanner does — the
+                       whole point of the shared map is that a finding reads the same wherever it shows. -->
+                  <TextBlock Text="{Binding Message}" FontSize="12" TextWrapping="Wrap" MaxWidth="900">
+                    <TextBlock.Foreground>
+                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                        <Binding Path="BrushKey" />
+                        <Binding ElementName="ImportRoot" Path="ActualThemeVariant" />
+                      </MultiBinding>
+                    </TextBlock.Foreground>
+                  </TextBlock>
+                </StackPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+
+    <!-- ══ Band E — configuration sections ══════════════════════════════════════════════════════ -->
+    <ScrollViewer Grid.Row="3" Padding="12,10">
+      <StackPanel Spacing="10">
+
+        <!-- ── SOURCE AND FORMAT (§3.3) ─────────────────────────────────────────────────────────
+             Collapses to a one-line summary once configured, so a repeat import is read at a glance
+             instead of navigated (§2.2 point 1). -->
+        <Border Background="{DynamicResource PanelBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                Padding="10,8">
+          <StackPanel Spacing="8" DataContext="{Binding Source}" x:DataType="vm:ImportSourceSectionViewModel">
+
+            <!-- Disclosure header — the debugger launch panel's idiom (chevron + title, no Expander). -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Button Grid.Column="0" Classes="flat" Padding="2,2"
+                      Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).ToggleSourceSectionCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                  <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="15" Height="15"
+                                    VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+                  <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="15" Height="15"
+                                    VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
+                  <TextBlock Text="{x:Static app:UiStrings.ImportSourceHeader}"
+                             FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+
+              <TextBlock Grid.Column="1" Text="{Binding SummaryText}" Classes="subtle" FontSize="12"
+                         Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                         IsVisible="{Binding !IsExpanded}" />
+            </Grid>
+
+            <StackPanel Spacing="10" IsVisible="{Binding IsExpanded}">
+
+              <!-- Where the data comes from. -->
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+                <RadioButton Grid.Row="0" Grid.Column="0" GroupName="ImportSourceKind"
+                             Content="{x:Static app:UiStrings.ImportSourceFile}"
+                             IsChecked="{Binding UseFile, Mode=TwoWay}" VerticalAlignment="Center" />
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding FilePath, Mode=TwoWay}"
+                         IsEnabled="{Binding UseFile}" FontSize="12" />
+                <Button Grid.Row="0" Grid.Column="2" Classes="icon"
+                        IsEnabled="{Binding UseFile}"
+                        ToolTip.Tip="{x:Static app:UiStrings.ImportSourceBrowseTooltip}"
+                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).BrowseCommand}">
+                  <controls:SvgIcon Data="{StaticResource Icon.Folder}"
+                                    Foreground="{DynamicResource AccentIconBrush}" />
+                </Button>
+                <RadioButton Grid.Row="0" Grid.Column="3" GroupName="ImportSourceKind"
+                             Content="{x:Static app:UiStrings.ImportSourceClipboard}"
+                             IsChecked="{Binding !UseFile}" VerticalAlignment="Center"
+                             Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).UseClipboardCommand}" />
+
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FileFacts}"
+                           Classes="subtle" FontSize="11" IsVisible="{Binding UseFile}" />
+              </Grid>
+
+              <!-- Parsing | Culture, side by side (§3.3). -->
+              <Grid ColumnDefinitions="*,20,*">
+
+                <!-- ── Parsing ── -->
+                <StackPanel Grid.Column="0" Spacing="6">
+                  <TextBlock Text="{x:Static app:UiStrings.ImportParsingHeader}" Classes="field-label" />
+
+                  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                        ColumnSpacing="8" RowSpacing="5">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static app:UiStrings.ImportDelimiterLabel}"
+                               Classes="field-label" VerticalAlignment="Center" />
+                    <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                      <ComboBox ItemsSource="{Binding DelimiterOptions}" SelectedItem="{Binding Delimiter, Mode=TwoWay}"
+                                DisplayMemberBinding="{Binding Display}" Width="110" FontSize="12" />
+                      <CheckBox Content="{x:Static app:UiStrings.ImportAutoDetectLabel}"
+                                IsChecked="{Binding AutoDetectDelimiter, Mode=TwoWay}" FontSize="11"
+                                VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <!-- The evidence behind the proposal — an automat that explains itself earns trust. -->
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DelimiterEvidence}"
+                               Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                               IsVisible="{Binding DelimiterEvidence, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static app:UiStrings.ImportEncodingLabel}"
+                               Classes="field-label" VerticalAlignment="Center" />
+                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                      <ComboBox ItemsSource="{Binding EncodingOptions}" SelectedItem="{Binding Encoding, Mode=TwoWay}"
+                                DisplayMemberBinding="{Binding Display}" Width="110" FontSize="12" />
+                      <CheckBox Content="{x:Static app:UiStrings.ImportAutoDetectLabel}"
+                                IsChecked="{Binding AutoDetectEncoding, Mode=TwoWay}" FontSize="11"
+                                VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding EncodingEvidence}"
+                               Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                               IsVisible="{Binding EncodingEvidence, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="{x:Static app:UiStrings.ImportQuoteLabel}"
+                               Classes="field-label" VerticalAlignment="Center" />
+                    <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                      <ComboBox ItemsSource="{Binding QuoteOptions}" SelectedItem="{Binding Quote, Mode=TwoWay}"
+                                DisplayMemberBinding="{Binding Display}" Width="70" FontSize="12" />
+                      <TextBlock Text="{x:Static app:UiStrings.ImportLineEndingLabel}" Classes="field-label"
+                                 VerticalAlignment="Center" />
+                      <ComboBox ItemsSource="{Binding LineEndingOptions}" SelectedItem="{Binding LineEnding, Mode=TwoWay}"
+                                DisplayMemberBinding="{Binding Display}" Width="90" FontSize="12" />
+                    </StackPanel>
+
+                    <CheckBox Grid.Row="5" Grid.Column="1"
+                              Content="{x:Static app:UiStrings.ImportHasHeaderLabel}"
+                              IsChecked="{Binding HasHeader, Mode=TwoWay}" FontSize="12" />
+                  </Grid>
+
+                  <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
+                    <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportFirstDataRowLabel}"
+                               Classes="field-label" VerticalAlignment="Center" />
+                    <NumericUpDown Grid.Column="1" Value="{Binding FirstDataRow, Mode=TwoWay}"
+                                   Minimum="1" Increment="1" Width="90" FontSize="12" FormatString="0" />
+                    <TextBlock Grid.Column="2" Text="{x:Static app:UiStrings.ImportLastRowLabel}"
+                               Classes="field-label" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="3" Text="{Binding LastRowText, Mode=TwoWay}" Width="110"
+                             HorizontalAlignment="Left" FontSize="12"
+                             PlaceholderText="{x:Static app:UiStrings.ImportLastRowPlaceholder}" />
+                  </Grid>
+
+                  <StackPanel Orientation="Horizontal" Spacing="12">
+                    <CheckBox Content="{x:Static app:UiStrings.ImportTrimWhitespaceLabel}"
+                              IsChecked="{Binding TrimWhitespace, Mode=TwoWay}" FontSize="12" />
+                    <TextBlock Text="{x:Static app:UiStrings.ImportNullTokenLabel}" Classes="field-label"
+                               VerticalAlignment="Center" />
+                    <TextBox Text="{Binding NullToken, Mode=TwoWay}" Width="120" FontSize="12"
+                             PlaceholderText="{x:Static app:UiStrings.ImportNullTokenPlaceholder}" />
+                  </StackPanel>
+                </StackPanel>
+
+                <!-- ── Culture: declared, never sniffed (§0.4) ── -->
+                <StackPanel Grid.Column="2" Spacing="6">
+                  <TextBlock Text="{x:Static app:UiStrings.ImportCultureHeader}" Classes="field-label" />
+
+                  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                        ColumnSpacing="8" RowSpacing="5">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static app:UiStrings.ImportDecimalSeparatorLabel}"
+                               Classes="field-label" VerticalAlignment="Center" />
+                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding DecimalSeparatorOptions}"
+                              SelectedItem="{Binding DecimalSeparator, Mode=TwoWay}"
+                              DisplayMemberBinding="{Binding Display}" Width="110" HorizontalAlignment="Left"
+                              FontSize="12" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static app:UiStrings.ImportThousandsSeparatorLabel}"
+                               Classes="field-label" VerticalAlignment="Center" />
+                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding ThousandsSeparatorOptions}"
+                              SelectedItem="{Binding ThousandsSeparator, Mode=TwoWay}"
+                              DisplayMemberBinding="{Binding Display}" Width="110" HorizontalAlignment="Left"
+                              FontSize="12" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static app:UiStrings.ImportDateOrderLabel}"
+                               Classes="field-label" VerticalAlignment="Center" />
+                    <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding DateOrderOptions}"
+                              SelectedItem="{Binding DateOrder, Mode=TwoWay}"
+                              DisplayMemberBinding="{Binding Display}" Width="160" HorizontalAlignment="Left"
+                              FontSize="12" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="{x:Static app:UiStrings.ImportDateSeparatorLabel}"
+                               Classes="field-label" VerticalAlignment="Center" />
+                    <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding DateSeparatorOptions}"
+                              SelectedItem="{Binding DateSeparator, Mode=TwoWay}"
+                              DisplayMemberBinding="{Binding Display}" Width="110" HorizontalAlignment="Left"
+                              FontSize="12" />
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="{x:Static app:UiStrings.ImportTimeSeparatorLabel}"
+                               Classes="field-label" VerticalAlignment="Center" />
+                    <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding TimeSeparatorOptions}"
+                              SelectedItem="{Binding TimeSeparator, Mode=TwoWay}"
+                              DisplayMemberBinding="{Binding Display}" Width="110" HorizontalAlignment="Left"
+                              FontSize="12" />
+                  </Grid>
+                </StackPanel>
+              </Grid>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- ══ Band G — bottom tabs. Collapse renormalizes BOTH grid rows (gotcha #240). ═════════════ -->
+    <Grid Grid.Row="4">
+      <Border Background="{DynamicResource PanelBrush}"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+        <Grid RowDefinitions="Auto,Auto">
+          <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Background="{DynamicResource ElevatedPanelBrush}">
+            <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportSourcePreviewTab}"
+                       Margin="12,6" FontSize="12" FontWeight="SemiBold" />
+            <Button Grid.Column="1" Classes="icon" Margin="0,2,6,2"
+                    ToolTip.Tip="{x:Static app:UiStrings.ImportBottomPanelToggleTooltip}"
+                    Command="{Binding ToggleBottomPanelCommand}">
+              <controls:SvgIcon Width="14" Height="14"
+                                Data="{StaticResource Icon.ChevronDown}"
+                                Foreground="{DynamicResource SubtleForegroundBrush}" />
+            </Button>
+          </Grid>
+
+          <Grid Grid.Row="1" Height="190" IsVisible="{Binding !IsBottomPanelCollapsed}">
+            <TextBlock Text="{x:Static app:UiStrings.ImportSourcePreviewEmpty}"
+                       Classes="subtle" Margin="12,10" FontSize="12"
+                       IsVisible="{Binding !PreviewRows.Count}" />
+            <DataGrid x:Name="SourcePreviewGrid"
+                      ItemsSource="{Binding PreviewRows}"
+                      IsVisible="{Binding PreviewRows.Count}"
+                      IsReadOnly="True"
+                      AutoGenerateColumns="False"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="All"
+                      CanUserSortColumns="False"
+                      FontSize="12" />
+          </Grid>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <!-- ══ Band H — surface status: numbers, never adjectives (§9.1 point 4) ════════════════════ -->
+    <Border Grid.Row="5" Background="{DynamicResource ElevatedPanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="12,4">
+      <TextBlock Text="{Binding SurfaceStatus}" FontSize="12"
+                 Foreground="{DynamicResource SubtleForegroundBrush}" />
+    </Border>
+  </Grid>
+</UserControl>

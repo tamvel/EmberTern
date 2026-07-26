@@ -1,9 +1,10 @@
 # Data Import — dokument projektowy modułu importu danych
 
-**Status: 🔒 PROJEKT ZAMROŻONY (2026-07-26). Etapy I0 + I1 + I2 + I3 + I4 wykonane; I0–I3 zaakceptowane.**
-Następny krok: **etap I5** (App: zakładka + rama powierzchni + sekcja Źródło i format) z §6.
-**Po I4 cały silnik — z Firebirdem — jest zweryfikowany na żywej bazie (sonda: 20/20 ALL PASS).**
-Od I5 pracujemy już wyłącznie nad interfejsem. Szczegóły — blok „📍 STAN IMPLEMENTACJI" niżej.
+**Status: 🔒 PROJEKT ZAMROŻONY (2026-07-26). Etapy I0 + I1 + I2 + I3 + I4 + I5 wykonane; I0–I4 zaakceptowane.**
+Następny krok: **etap I6** (App: sekcja Cel + panel Mapowanie) z §6.
+**I5 to pierwszy etap, w którym coś widać na ekranie — i zgodnie z regułą QA projektu jest zgłoszony jako
+„implementacja gotowa — oczekuje wizualnego potwierdzenia użytkownika", nie jako zamknięty.**
+Szczegóły — blok „📍 STAN IMPLEMENTACJI" niżej.
 
 > ### 🔒 DOKUMENT ZAMROŻONY — obowiązuje od 2026-07-26 (po akceptacji wyników I0)
 >
@@ -49,18 +50,43 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | | |
 |---|---|
 | **Gałąź** | `feat/data-import` (odbita od `master` @ `d474b42`) |
-| **Ostatni commit** | etap I4 — writer Firebirda, odczyt celu, mapowanie błędów, weryfikacja na żywo |
-| **Etapy zamknięte** | **I0** (sondy, `5e90435`) · **I1** (modele, konfiguracja, magazyn, czytnik, `77eb997`) · **I2** (konwersja, mapowanie, walidacja, gotowość, `392850f`) · **I3** (pipeline + dry-run + provider, `434daeb`) · **I4** (Firebird + weryfikacja na żywym FB5) |
-| **Następny etap** | **I5** — App: `WorkspaceTabKind.DataImport`, `Icon.Import`, przycisk toolbara (D6), rama pasów A–H, zwijalne sekcje, **pasek gotowości**, sekcja Źródło i format (§6) |
-| **Testy** | **5537 zielonych**, 0 niepowodzeń (I4 dodał +22; wszystkich testów importu jest teraz **274**) |
+| **Ostatni commit** | etap I5 — zakładka, rama powierzchni, pasek gotowości, sekcja Źródło i format |
+| **Etapy zamknięte** | **I0** (sondy, `5e90435`) · **I1** (modele, konfiguracja, magazyn, czytnik, `77eb997`) · **I2** (konwersja, mapowanie, walidacja, gotowość, `392850f`) · **I3** (pipeline + dry-run + provider, `434daeb`) · **I4** (Firebird + weryfikacja na żywym FB5, `3b31a4d`) |
+| **⏳ Oczekuje potwierdzenia** | **I5** — implementacja gotowa, build i testy zielone, aplikacja startuje czysto; **wygląd w obu paletach nie został zweryfikowany wzrokowo** (reguła QA projektu: bez tego nie mówimy „zrobione") |
+| **Następny etap** | **I6** — App: sekcja Cel (istniejąca tabela) + panel Mapowanie, przeliczanie łańcuchowe z anulowaniem (§6) |
+| **Testy** | **5559 zielonych**, 0 niepowodzeń (I5 dodał +22; wszystkich testów importu jest teraz **296**) |
 | **Weryfikacja na żywo** | `tools/probes/DataImportProbe` przeciwko FB5 `WI-V5.0.3.1683` — **20/20 ALL PASS** (klasyfikacja błędów + atrybucja wiersza, zachowanie paczek, obowiązki writera, charset) |
-| **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) |
-| **Kod w `src/`** | `EmberTern.Core/Import/**` (bez zmian) **+ trzy nowe pliki w `EmberTern.Firebird`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
+| **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
+| **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **cztery VM-y i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
 | **⭐ Kamień milowy** | **Po I4 cały silnik jest gotowy i zweryfikowany na żywym silniku.** Od I5 pracujemy wyłącznie nad interfejsem — pipeline, writer i mapowanie błędów są zamknięte. |
 
-### Co fizycznie istnieje po I4
+### Co fizycznie istnieje po I5
 
 ```
+src/EmberTern.App/               ⭐ I5 — pierwszy kod, który widać na ekranie
+    ViewModels/
+        DataImportTabViewModel.cs        ⭐ koordynator: JEDYNY właściciel ImportConfiguration.
+                             Para BuildConfiguration/ApplyConfiguration to jedyny punkt tłumaczenia
+                             „stan UI ⇄ rekord" (§4.8.6) — sekcje, których jeszcze nie ma (Cel,
+                             Mapowanie, Behavior), są PRZEPUSZCZANE bez zmian, więc profil z
+                             nowszego builda nie zostanie po cichu okrojony przez starszy.
+                             Łańcuch przeliczeń §4.7: leniwy, anulowalny (CTS), kolejność
+                             wykrywania KODOWANIE→SEPARATOR (separator szuka się w tekście, który
+                             ktoś już zdekodował — inaczej byłaby to zgadywanka na zgadywance)
+        ImportSourceSectionViewModel.cs  sekcja Źródło i format; NIE posiada konfiguracji, tylko
+                             produkuje i czyta swój wycinek. `SuspendChangeNotifications` — bez
+                             tego propozycja detektora restartowałaby łańcuch, który ją wywołał
+        ImportReadinessViewModel.cs      pasek gotowości: czysta PROJEKCJA Core'owego
+                             `ImportReadiness` — zero własnych decyzji. Kod→zdanie w jednym
+                             miejscu (reguła #6); severity mapowane na wspólną tablicę
+                             `MessageBanner.BrushKeyFor/GeometryKeyFor` (§9.3), więc pasek i
+                             banner nie mogą opisać tej samej rzeczy inaczej
+    Views/DataImportTabView.axaml(.cs)   pasy A–H z §3.1 (I5 dostarcza A, C, D, E, G, H);
+                             code-behind buduje wyłącznie dynamiczne kolumny podglądu
+    Assets/Icons/Actions/import.svg      ⭐ nowa ikona: strzałka wchodząca W TABELĘ. Świadomie NIE
+                             `Icon.Download` (taca = „pobierz plik na dysk") — ten moduł wkłada
+                             wiersze do TABELI, więc glif rymuje się z `Icon.Table`
+
 src/EmberTern.Firebird/          ⭐ I4 — pierwszy kod modułu dotykający bazy
     FirebirdImportErrorMapper.cs ⭐ FbException → ImportErrorKind **z WEKTORA GDS, nigdy z tekstu**.
                              Klasy jednoznaczne rozstrzyga kod WIODĄCY (skan całego wektora
@@ -147,6 +173,16 @@ Zmiany w plikach współdzielonych — **obie addytywne, obie zaakceptowane**:
 - `Core/Settings/UserSettings` → `List<Import.ImportProfile> ImportProfiles`. **Wersja schematu
   settings.dat celowo NIE podbita** (podbicie uruchamia ochronę przed downgrade'em i starszy build
   odmówiłby odczytu całego pliku).
+
+### Testy I5 (nie upraszczać ich w kolejnych etapach — decyzja użytkownika)
+
+| Plik | Co pinuje |
+|---|---|
+| `DataImportTabVmTests` | ⭐⭐ **`Configuration_SurvivesABuildApplyRoundTrip`** — obietnica §4.8.6 na poziomie App: ustawienie dodane prosto do VM-a sekcji byłoby niewidoczne dla profilu, a defekt wyszedłby dopiero w I11 jako „przebuduj powierzchnię"; ten test wywala się pierwszy · ⭐ **sekcje, których jeszcze nie ma, są przepuszczane** (starszy build nie okrada profilu nowszego) · ⭐ **wiersz odstający od WIĘKSZOŚCI jest oznaczany, nie od najszerszego** · detekcja wpisuje wartość ZADEKLAROWANĄ i publikuje dowód; wyłączona — nie rusza niczego · brak pliku i arkusz to **odmowa z powodem**, nie wyjątek i nie cisza · fakty środowiska czytane jako DELEGATY (pasek pokazuje stan teraz, nie z chwili otwarcia) · ⭐ **każdy kod diagnostyczny ma zdanie** (inaczej słownik Core wycieka do użytkownika) · każdy chip ma rozwiązywalny klucz pędzla i geometrii (#250) |
+
+⚠ **Reguła QA projektu:** build 0/0, 5559 zielonych i czysty start aplikacji **nie wystarczają**, żeby nazwać
+etap UI zrobionym. I5 czeka na wizualne potwierdzenie w **obu paletach** (§9 checklista) — dopiero wtedy
+zamykamy.
 
 ### Testy I4 (nie upraszczać ich w kolejnych etapach — decyzja użytkownika)
 
@@ -1107,7 +1143,7 @@ zielonymi testami, czystym smoke testem i commitem.
 | **I2** ✅ **DOSTARCZONY** | Core: konwersja + mapowanie + walidacja + gotowość | `ImportValueConverter` (ścisły, §0), `ImportMappingPlanner` (auto + reguła pary + diagnostyka `IMP*`), `ImportRowValidator` (+ `ImportCharsetGuard`), **`ImportReadiness`**, oraz dwa fundamenty wynikające z zasady jednego właściciela: `ImportTargetType` (§4.6) i `ImportDiagnostics` (katalog `IMP0001–IMP0027`). | Testy: każdy typ Firebirda × wartość poprawna/niejednoznaczna/błędna; pełna macierz gotowości (blokujące vs ostrzegawcze). Zero cichych konwersji. **Spełnione** — +131 testów, w tym pin odtwarzający samą cichą korupcję charsetu. |
 | **I3** ✅ **DOSTARCZONY** | Core: pipeline + dry-run | `ImportPipeline` (wejście: `ImportConfiguration`), `DryRunImportWriter`, `ImportOutcome`, postęp, anulowanie, obie polityki błędów — oraz zaległy z I1 `DelimitedTextImportProvider` (bez niego nie ma end-to-endu na `TextImportSource`). | Testy end-to-end na `TextImportSource` + dry-run. **Pełna funkcjonalność bez bazy i bez UI.** **Spełnione** — +39 testów, w tym pin, że raport nazywa wiersz źródłowy, a nie indeks paczki. |
 | **I4** ✅ **DOSTARCZONY** | Firebird: writer + odczyt celu + **weryfikacja na żywo** | `FirebirdImportWriter` — **`FbBatchCommand`, paczki po 500, `MultiError` ustawiany z `ImportErrorPolicy` (I0 §2.3)**, `OVERRIDING SYSTEM VALUE`, `CommandLock` per paczka; `FirebirdImportTargetReader` (kolumny + triggery BEFORE INSERT); mapowanie `FbException` → `ImportErrorKind` **na PARZE kodów GDS, nie na `ErrorCode`** (I0/REK-3: `string truncation` / `numeric overflow` / `transliteration` mają identyczny `ErrorCode` 335544321 i SQLSTATE 22000 — rozróżnia je dopiero **drugi** element wektora: 335544914 / 335544916 / 335544565; wektor obcięcia niesie limit i rzeczywistą długość jako liczby → wprost do raportu; **PK i UNIQUE są nierozróżnialne** (oba 335544665) ⇒ raportujemy „naruszenie unikalności", bez udawania precyzji). **Zero parsowania tekstu komunikatu.** | Import 10 k wierszy do tabeli laboratoryjnej — **liczby zgadzają się z `SELECT COUNT(*)`**; `NOT NULL`, PK/UNIQUE, CHECK, FK, za długi tekst, przekroczenie zakresu, transliteracja, znak spoza charsetu połączenia — **każdy daje właściwy `ImportErrorKind` i właściwy numer wiersza źródłowego**. Przypadki bierzemy z `tools/probes/DataImportWriteProbe` (fazy B/E/C), po czym sonda idzie do usunięcia. |
-| **I5** | App: zakładka + rama powierzchni + sekcja Źródło i format | `WorkspaceTabKind.DataImport`, `Icon.Import`, przycisk toolbara (D6), near-singleton, dopisanie do listy pomijanej w `SnapshotCurrentTabs`, rama (pasy A–H), zwijalne sekcje, **pasek gotowości**, sekcja Źródło i format z dolną zakładką „Podgląd źródła". | Powierzchnia otwiera plik, pokazuje surowe rekordy i gotowość. Obie palety motywu. |
+| **I5** ⏳ **DOSTARCZONY, czeka na wizualne potwierdzenie** | App: zakładka + rama powierzchni + sekcja Źródło i format | `WorkspaceTabKind.DataImport`, `Icon.Import`, przycisk toolbara (D6), near-singleton, dopisanie do listy pomijanej w `SnapshotCurrentTabs`, rama (pasy A–H), zwijalne sekcje, **pasek gotowości**, sekcja Źródło i format z dolną zakładką „Podgląd źródła". | Powierzchnia otwiera plik, pokazuje surowe rekordy i gotowość. Obie palety motywu. |
 | **I6** | App: sekcja Cel (istniejąca tabela) + panel Mapowanie | Wybór tabeli, siatka mapowania, diagnostyka, blokady kolumn systemowych, przeliczanie łańcuchowe z anulowaniem (§4.7). | Mapowanie ręczne i automatyczne działa; niezgodności widoczne przed importem. |
 | **I7** | App: Podgląd + uruchomienie + raport — **pierwszy pełny przebieg** | Podgląd po konwersji (ciągły), `Waliduj`, tryby transakcji, `Importuj`/`F5`, postęp, anulowanie, raport, Commit/Rollback, eksport raportu, **zapis i przywracanie „ostatnio użytej" konfiguracji**. | **Import CSV → istniejąca tabela działa end-to-end na żywej bazie; druga sesja startuje z przywróconą konfiguracją.** Pierwszy etap z realną wartością dla użytkownika. |
 | **I8** | Nowa tabela | `ColumnTypeInferencer` — **(I0/REK-7) domyślnie skanuje CAŁE źródło**, nie próbkę (limit bezpieczeństwa 1 M wierszy), bo w realnym pliku 2 z 5 kolumn były typowo mieszane (R19); siatka typów w sekcji Cel z **zawsze widoczną liczbą przeanalizowanych wierszy** w kolumnie „Podstawa"; podgląd DDL; wykonanie na linii Ddl; ostrzeżenie o nieodwracalności; opcja `DROP` przy niepowodzeniu. | Import do nieistniejącej tabeli działa; typy zachowawcze i edytowalne; DDL z tego samego generatora; **kolumna mieszana ląduje jako `VARCHAR`, nie jako `INTEGER` z bombą zegarową**. |

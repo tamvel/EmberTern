@@ -118,6 +118,119 @@ internal static class UiStrings
     // ─── Script Executor ──────────────────────────────────────────────────────
     public const string ScriptExecutorTabTitle = "Script Executor";
     public const string ToolbarScriptExecutorTooltip = "Script Executor (migrations & multi-object DDL)";
+
+    // ---- Data Import (etap I5: the tab, the frame, the readiness strip, Source & format) ----
+    // Core returns codes only (rule #6); every sentence the module shows lives here.
+
+    public const string DataImportTabTitle = "Data Import";
+    public const string ToolbarDataImportTooltip = "Import data (clipboard, TXT, CSV, XLSX) into a table";
+
+    // Section titles — also the readiness strip's chip labels.
+    public const string ImportSectionSource = "Source";
+    public const string ImportSectionFormat = "Format";
+    public const string ImportSectionTarget = "Target";
+    public const string ImportSectionMapping = "Mapping";
+    public const string ImportSectionTransaction = "Transaction";
+
+    // Source & format section.
+    public const string ImportSourceHeader = "SOURCE AND FORMAT";
+    public const string ImportSourceFile = "File";
+    public const string ImportSourceClipboard = "Clipboard";
+    public const string ImportSourceNoFile = "no file chosen";
+    public const string ImportSourceBrowseTooltip = "Choose a file…";
+    public const string ImportSourceUseClipboardTooltip = "Use the clipboard contents as the source";
+    public const string ImportParsingHeader = "Parsing";
+    public const string ImportCultureHeader = "Data culture";
+    public const string ImportDelimiterLabel = "Column separator";
+    public const string ImportQuoteLabel = "Text qualifier";
+    public const string ImportEncodingLabel = "Encoding";
+    public const string ImportLineEndingLabel = "Line ending";
+    public const string ImportAutoDetectLabel = "detect automatically";
+    public const string ImportHasHeaderLabel = "First record holds column names";
+    public const string ImportFirstDataRowLabel = "First data row";
+    public const string ImportLastRowLabel = "Last row";
+    // Never "2147483647" — an implementation detail in the UI is what §8 point 7 criticises.
+    public const string ImportLastRowPlaceholder = "(to the end)";
+    public const string ImportTrimWhitespaceLabel = "Trim whitespace around values";
+    public const string ImportNullTokenLabel = "NULL value";
+    public const string ImportNullTokenPlaceholder = "(empty field)";
+    public const string ImportDecimalSeparatorLabel = "Decimal separator";
+    public const string ImportThousandsSeparatorLabel = "Thousands separator";
+    public const string ImportDateOrderLabel = "Date format";
+    public const string ImportDateSeparatorLabel = "Date separator";
+    public const string ImportTimeSeparatorLabel = "Time separator";
+    public const string ImportDelimiterTab = "Tab";
+    public const string ImportSeparatorNone = "(none)";
+    public const string ImportSeparatorSpace = "space";
+    public const string ImportLineEndingAuto = "auto";
+    public const string ImportChangeButton = "Change";
+
+    // Detection evidence — an automatic decision that explains itself builds trust; a silent one does not.
+    public const string ImportDelimiterEvidenceFormat = "{0}/{1} records have the same field count ({2} fields)";
+    public const string ImportEncodingEvidenceBom = "byte-order mark";
+    public const string ImportEncodingEvidenceAscii = "pure ASCII — the file does not distinguish encodings";
+    public const string ImportEncodingEvidenceHeuristic = "no BOM → heuristic over the file's bytes";
+
+    public const string ImportSummaryDelimiterFormat = "\"{0}\"";
+    public const string ImportSummaryNoHeader = "no header";
+    public const string ImportFileFactsFormat = "{0:N1} KB · {1:g}";
+    public const string ImportFileMissing = "file not found";
+    public const string ImportFormatNotYetSupportedFormat =
+        "{0} files are not supported yet — this build imports delimited text (CSV / TXT / clipboard). Spreadsheet support arrives in a later etap.";
+
+    // Readiness strip.
+    public const string ImportReadinessHeader = "Ready:";
+    public const string ImportReadySummary = "Ready to import";
+    public const string ImportReadySummaryWithRowsFormat = "Ready to import — {0:N0} rows previewed";
+    public const string ImportReadyBlocked = "Not ready yet";
+
+    public const string ImportReadyNoSource = "No source chosen — pick a file or paste from the clipboard.";
+    public const string ImportReadySourceMissingFormat = "The file is gone: {0}";
+    public const string ImportReadySourceUnreadable = "The source could not be read.";
+    public const string ImportReadySourceHasNoFields = "The source has no fields yet.";
+    public const string ImportReadySourceOptionsMismatch = "The format settings do not match this kind of source.";
+    public const string ImportReadyNoTarget = "No target table chosen.";
+    public const string ImportReadyTargetNotFoundFormat = "Table {0} is not in this database.";
+    public const string ImportReadyNewTableHasNoColumns = "The new table has no columns defined.";
+    public const string ImportReadyNewTableWillBeCommittedFormat =
+        "Table {0} will be created and COMMITTED before any row is written — a rollback will not remove it.";
+    public const string ImportReadyBeforeInsertTriggersFormat =
+        "{0} BEFORE INSERT trigger(s) on the target can overwrite imported values.";
+    public const string ImportReadyTargetWillBeEmptiedFormat = "{0} will be emptied before the import.";
+    public const string ImportReadyNothingMapped = "No column is mapped — there is nothing to import.";
+    public const string ImportReadyRequiredColumnNotMappedFormat =
+        "Column {0} is NOT NULL with no default and is unmapped — every row would fail.";
+    public const string ImportReadyUnsupportedColumnTypeFormat = "Column {0} has a type this build cannot write.";
+    public const string ImportReadyColumnsNotMappedFormat = "{0} target column(s) not mapped.";
+    public const string ImportReadyFieldsUnusedFormat = "{0} source field(s) unused.";
+    public const string ImportReadyAmbiguousNameFormat = "Two source fields match column {0} — pick one.";
+    public const string ImportReadyMappingDroppedFormat = "Field {0} no longer exists; its mapping was dropped.";
+    public const string ImportReadyColumnNotWritableFormat = "Column {0} is computed and can never be written.";
+    public const string ImportReadyIdentityOverrideFormat =
+        "Column {0} is GENERATED ALWAYS — the INSERT will carry OVERRIDING SYSTEM VALUE.";
+    public const string ImportReadyPairingAssumedFormat = "Column {0} was paired by position — worth a look.";
+    public const string ImportReadyNotConnected = "Not connected.";
+    public const string ImportReadyUserTransactionOpen =
+        "A working transaction is open — commit or roll it back before importing.";
+    public const string ImportReadyBatchedNotAtomicFormat =
+        "Batched mode is NOT atomic: it commits every {0:N0} rows, and a committed batch stays applied.";
+    public const string ImportReadyTrimmingEnabled =
+        "Value trimming is on — over-long values will be SHORTENED, and every one is reported.";
+    public const string ImportReadyLongTransactionFormat =
+        "About {0:N0} rows in one transaction — it will stay open for a while. Consider Batched mode.";
+    public const string ImportReadyNotRepresentableFormat =
+        "{0} sampled value(s) carry characters this connection's charset cannot store — connect in UTF8 to keep them.";
+
+    // Bottom panel + surface status.
+    public const string ImportSourcePreviewTab = "Source preview";
+    public const string ImportSourcePreviewEmpty = "Choose a file or paste from the clipboard.";
+    public const string ImportSourcePreviewRaggedTooltip =
+        "This record has a different number of fields than the header — usually a wrong column separator.";
+    public const string ImportRowNumberColumn = "#";
+    public const string ImportSurfaceStatusNoSource = "No source yet.";
+    public const string ImportSurfaceStatusFormat = "{0} fields · {1:N0} rows previewed{2}";
+    public const string ImportSurfaceStatusMore = "+";
+    public const string ImportBottomPanelToggleTooltip = "Collapse / expand the bottom panel";
     public const string ScriptRun = "Run";
     public const string ScriptRunTooltip = "Run the whole script in one transaction · F5";
     public const string ScriptStopTooltip = "Stop after the current statement";

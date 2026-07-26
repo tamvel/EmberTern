@@ -275,11 +275,12 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0–I4 DONE. ⭐ After I4 the whole ENGINE is built
-  and live-verified** (`tools/probes/DataImportProbe` vs FB5 `WI-V5.0.3.1683` — **20/20 ALL PASS**); from I5 on
-  the work is the user interface only. Branch **`feat/data-import`**, suite **5537 green**, build 0/0. A new
-  tool tab (toolbar, beside the Script Executor) that imports Clipboard / TXT / CSV / XLSX into an existing or
-  a newly created table.
+- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0–I4 DONE + accepted; I5 delivered and ⏳ AWAITING
+  THE USER'S VISUAL CONFIRMATION** (project QA rule: build + tests + smoke are not enough to call a UI etap
+  done). **After I4 the whole ENGINE is built and live-verified** (`tools/probes/DataImportProbe` vs FB5
+  `WI-V5.0.3.1683` — **20/20 ALL PASS**); from I5 on the work is the user interface only. Branch
+  **`feat/data-import`**, suite **5559 green**, build 0/0, app launches clean. A new tool tab (toolbar, beside
+  the Script Executor) that imports Clipboard / TXT / CSV / XLSX into an existing or a newly created table.
   **Read [docs/design/data-import.md](docs/design/data-import.md) — its „📍 STAN IMPLEMENTACJI" block is the
   handover, and the architecture is 🔒 FROZEN: from etap I1 on it is implementation only, and an
   implementation discovery that genuinely undermines the design means STOP THE ETAP AND REPORT, never a quiet
@@ -333,8 +334,22 @@ noted.
   (gotcha #260; the I0 findings table is corrected in place). (2) **The client guards now fire first for
   NOT NULL, length and numeric range**, so those server branches are only reachable through a trigger — which
   is why the lab gained `IMP_SRV` and its `IMP_SRV_BI` trigger, the only way to exercise the
-  `335544321` three-way split against a real engine. **Next: etap I5** (App: the tab, the A–H frame,
-  collapsible sections, the readiness strip, and the Source & format section).
+  `335544321` three-way split against a real engine.
+  **I5 as-built (the first import code you can see):** `WorkspaceTabKind.DataImport` + a new **`Icon.Import`**
+  (an arrow descending INTO a table grid — deliberately not `Icon.Download`, whose tray means "fetch a file to
+  disk"; canonical `.svg` + geometry per the D15.2 icon rule) + a toolbar button beside the Script Executor,
+  near-singleton, **added to the `SnapshotCurrentTabs` skip list** (omitting it would not merely fail to
+  restore the tab — it would fall through and be captured as a `Ddl` tab, the exact bug the Debugger tab had).
+  `DataImportTabViewModel` is the **single owner of `ImportConfiguration`**; `BuildConfiguration`/
+  `ApplyConfiguration` is the only UI⇄record translation point (§4.8.6), and sections that do not exist yet
+  are **passed through unchanged** so a newer build's profile is not quietly degraded by an older one. The
+  readiness strip is a **pure projection** of Core's `ImportReadiness` that maps severity through the shared
+  `MessageBanner.BrushKeyFor/GeometryKeyFor` table (§9.3) — no second brush map. ⚠ **Two things worth
+  carrying:** detection order is **encoding → delimiter** (a delimiter is looked for in text something already
+  decoded, so the reverse would be a guess resting on a guess), and the source preview's "ragged row" marker
+  compares against the **majority** field count, not the schema's — the schema reports the WIDEST record so
+  every column stays mappable, and marking against that inverts the signal (one row with an extra field would
+  flag all the good ones). **Next: etap I6** (the Target section + the Mapping panel).
 - **⚠ Spun off from Data Import I0, NOT part of it — a platform-wide defect to audit.** Measured on live FB5:
   binding a string containing a character the **connection** charset cannot represent stores `?` with **no
   error at all**, even when the target column is UTF8 (the connection charset decides, not the column's), and

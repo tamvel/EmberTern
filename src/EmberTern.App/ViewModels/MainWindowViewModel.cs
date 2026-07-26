@@ -336,6 +336,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveGlobalSearch))]
     [NotifyPropertyChangedFor(nameof(IsScriptExecutorTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveScriptExecutor))]
+    [NotifyPropertyChangedFor(nameof(IsDataImportTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveDataImport))]
     [NotifyPropertyChangedFor(nameof(IsDebuggerTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveDebugger))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
@@ -431,6 +433,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsScriptExecutorTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ScriptExecutor };
     public ScriptExecutorTabViewModel? ActiveScriptExecutor
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ScriptExecutor } t ? t.ScriptExecutor : null;
+
+    public bool IsDataImportTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.DataImport };
+    public DataImportTabViewModel? ActiveDataImport
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.DataImport } t ? t.DataImport : null;
 
     public bool IsGlobalSearchTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GlobalSearch };
     public GlobalSearchTabViewModel? ActiveGlobalSearch
@@ -1647,7 +1653,11 @@ public partial class MainWindowViewModel : ViewModelBase
             // Live tools + transient sessions are never persisted. A Debugger tab is a
             // transient debug session (rolled back on close), not a document — it must not
             // be captured (else an empty tab is "restored" on the next launch of the app).
-            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch or WorkspaceTabKind.ScriptExecutor or WorkspaceTabKind.Debugger) continue;
+            // Live-tool tabs are session-transient and are never persisted. Data Import belongs here for the
+            // same reason the Script Executor does — and omitting it would not merely fail to restore the tab,
+            // it would fall through and be captured as a Ddl tab, so the next launch would "restore" an empty
+            // one (the exact bug the Debugger tab had).
+            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch or WorkspaceTabKind.ScriptExecutor or WorkspaceTabKind.DataImport or WorkspaceTabKind.Debugger) continue;
 
             if (tab.Kind == WorkspaceTabKind.Query)
             {
@@ -4001,6 +4011,46 @@ public partial class MainWindowViewModel : ViewModelBase
         script.CopyToClipboardRequested += text => ClipboardWriteRequested?.Invoke(text);
 
         var newTab = WorkspaceTabViewModel.CreateScriptExecutor(this, script, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(newTab);
+        SelectTab(newTab);
+    }
+
+    // ---- Data Import (clipboard / TXT / CSV / XLSX into a table) ----
+
+    public bool CanOpenDataImport => _service.IsConnected;
+
+    /// <summary>The view supplies the file picker and the clipboard read — the VM never touches an Avalonia
+    /// dialog or clipboard type (rule #1). Mirrors <see cref="GlobalSearchRequested"/>.</summary>
+    public event Func<Task<string?>>? ImportFilePickRequested;
+
+    public event Func<Task<string?>>? ImportClipboardReadRequested;
+
+    [RelayCommand(CanExecute = nameof(CanOpenDataImport))]
+    private void OpenDataImport()
+    {
+        // Near-singleton per connection, exactly like the Script Executor: the same import is run over and
+        // over, so a second tab would be two states for one job.
+        foreach (var tab in WorkspaceTabs)
+        {
+            if (tab.Kind == WorkspaceTabKind.DataImport)
+            {
+                SelectTab(tab);
+                return;
+            }
+        }
+
+        // The environment facts readiness needs are read as DELEGATES rather than snapshotted, so the strip
+        // reflects the connection and transaction as they are now — not as they were when the tab opened.
+        var import = new DataImportTabViewModel(
+            () => _service.IsConnected,
+            () => _transactionService.IsActive);
+
+        if (ImportFilePickRequested is not null)
+            import.FilePickRequested += () => ImportFilePickRequested.Invoke();
+        if (ImportClipboardReadRequested is not null)
+            import.ClipboardReadRequested += () => ImportClipboardReadRequested.Invoke();
+
+        var newTab = WorkspaceTabViewModel.CreateDataImport(this, import, _service.ActiveProfile?.Id);
         WorkspaceTabs.Add(newTab);
         SelectTab(newTab);
     }
@@ -6702,6 +6752,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OpenGlobalSearchCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanOpenScriptExecutor));
         OpenScriptExecutorCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanOpenDataImport));
+        OpenDataImportCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

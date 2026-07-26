@@ -208,6 +208,14 @@
             <controls:SvgIcon Data="{StaticResource Icon.FileText}"
                               Foreground="{DynamicResource AccentBrush}" />
           </Button>
+          <!-- Data Import: clipboard / TXT / CSV / XLSX into a table. Sits beside the Script Executor
+               because it is its peer — a tools tab, near-singleton, active only while connected (D6). -->
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarDataImportTooltip}"
+                  Command="{Binding OpenDataImportCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.Import}"
+                              Foreground="{DynamicResource AccentBrush}" />
+          </Button>
           <!-- Export DDL of the active object to a portable .sql file. Contextual: the
                separator + button hide together unless a DDL-bearing object tab is active. -->
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}"
@@ -1177,6 +1185,9 @@
               <views:ScriptExecutorTabView x:Name="ScriptExecutorView"
                                            DataContext="{Binding ActiveScriptExecutor}"
                                            IsVisible="{Binding DataContext.IsScriptExecutorTabActive, ElementName=RootWindow}" />
+              <views:DataImportTabView x:Name="DataImportView"
+                                       DataContext="{Binding ActiveDataImport}"
+                                       IsVisible="{Binding DataContext.IsDataImportTabActive, ElementName=RootWindow}" />
               <views:DebuggerTabView x:Name="DebuggerView"
                                      DataContext="{Binding ActiveDebugger}"
                                      IsVisible="{Binding DataContext.IsDebuggerTabActive, ElementName=RootWindow}" />

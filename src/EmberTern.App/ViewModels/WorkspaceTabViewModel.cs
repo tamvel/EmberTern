@@ -25,6 +25,7 @@ public enum WorkspaceTabKind
     SessionManager,
     GlobalSearch,
     ScriptExecutor,
+    DataImport,
     Debugger,
 }
 
@@ -327,6 +328,25 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ScriptExecutor = script,
         };
 
+    // Data Import is a tools tab, the Script Executor's exact peer (design §1.1): opened from the toolbar,
+    // near-singleton per connection, not persisted. A configured-but-not-run surface is NOT unsaved work —
+    // there is nothing to save to the database, and the configuration itself is kept as "last used" — so the
+    // tab closes without a prompt (§2.3).
+    public static WorkspaceTabViewModel CreateDataImport(
+        MainWindowViewModel owner, DataImportTabViewModel dataImport, string? connectionProfileId)
+        => new(owner)
+        {
+            Kind = WorkspaceTabKind.DataImport,
+            BaseTitle = UiStrings.DataImportTabTitle,
+            IsClosable = true,
+            ObjectName = string.Empty,
+            ConnectionProfileId = connectionProfileId,
+            Icon = string.Empty,
+            IconResourceKey = "AccentBrush",
+            IconGeometryKey = "Icon.Import",
+            DataImport = dataImport,
+        };
+
     // The Firebird debugger tab (Stage X / D4) — one per launched routine (NOT a singleton; the same
     // procedure may be debugged in two tabs = two sessions). Opened from the sidebar "Debug" action; not
     // persisted (a debug session is transient). The read-only routine source lives in the child VM.
@@ -382,6 +402,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     public SessionManagerTabViewModel? SessionManager { get; private init; }
     public GlobalSearchTabViewModel? GlobalSearch { get; private init; }
     public ScriptExecutorTabViewModel? ScriptExecutor { get; private init; }
+    public DataImportTabViewModel? DataImport { get; private init; }
     public DebuggerTabViewModel? Debugger { get; private init; }
 
     [ObservableProperty]
