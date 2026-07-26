@@ -276,6 +276,33 @@ noted.
 
 ## Current state
 
+- **⭐ I7.5 DONE (2026-07-26) — DATA IMPORT HAS ITS OWN WORKING TRANSACTION. Ratified amendment to
+  design §4.5, the module's "most important decision".** The deciding argument was not UX: while the import
+  wrote into THE one user working transaction, its **Commit also persisted whatever the SQL Editor had left
+  uncommitted**. A button must do exactly what it says (rule #11 / §0.5), so the possibility was removed
+  rather than warned about. **Measured first** (`tools/probes/ImportTransactionIndependenceProbe`, FB5, 8/8):
+  the driver refuses a second transaction on one `FbConnection`, but **two attachments give two fully
+  independent transactions** — so "another independent transaction" means "another attachment", exactly as the
+  debugger has done since D2. **Accepted cost:** a `SELECT` in the SQL Editor will NOT see imported rows before
+  the import commits, and a same-row collision now fails immediately (SQLSTATE 40001 in ~28 ms under NOWAIT).
+  **As-built, three things worth carrying.** (1) **`FirebirdSessionConnection` was extracted from
+  `DebugSessionConnection` by COMPOSITION** — the debugger *holds* one instead of being one, so its public
+  surface is byte-identical and its tests + `DebuggerFidelityProbe` stay an untouched regression proof of a
+  closed subsystem. `ImportSessionConnection` joins on the same fundament. (2) **`ImportReadiness` stopped
+  reporting the console's transaction at all** (IMP0021 retired, number never reused) — which dissolved a
+  contradiction the design had carried since I2: §3.2 called an open working transaction BLOCKING while §4.5
+  had the writer join one. (3) ⭐ **`PendingWorkRegistry` is the ONE owner of "does the application hold
+  anything uncommitted".** The close/disconnect guards used to ask `_transactionService.IsActive` directly;
+  with a second transaction that would have become a list of module names in the shell, and the module nobody
+  remembers to add is the one that loses data. It is *not* an abstraction built for the future — the app
+  already had this exact shape for editor work (`IUnsavedWorkSource`), and it ships with two real sources.
+  **Deliberately NOT merged with editor work** (Save/Discard vs Commit/Rollback are different verbs), and the
+  **debugger deliberately does not register** (spec §4.4 discards a debug run's writes by contract). ⚠ The
+  **toolbar's** Commit stays the console's alone — making it settle the import would re-create the
+  cross-module commit in the other direction. Live proof: `DataImportRunProbe` **13/13 ALL PASS**, case F —
+  console leaves a row uncommitted, import commits, console rolls back, only the import survives.
+  Commits `4bf6cf8` (A) · `019e7f8` (B) · `8766787` (C) · `bb28805` (D).
+
 - **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE. 🏁 I7 IS DELIVERED, SO THE MVP IS COMPLETE:
   CSV/TXT → an existing table now imports end-to-end, with validation, a report, the transaction decision
   and a remembered configuration. Awaiting the user's visual confirmation in BOTH palettes; next etap is

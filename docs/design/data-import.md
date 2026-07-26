@@ -58,6 +58,7 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | **✅ I5 — ZAMKNIĘTY (2026-07-26)** | Przegląd wzrokowy dał 5 uwag (U1–U5) + 5 propozycji z autoprzeglądu (U6–U10) + U11 + U12 z drugiego oglądu. **Wszystkie rozstrzygnięte; 10 dostarczonych w szwie domykającym** (§3.8). Układ **zrewidowany i wniesiony w miejsce do §3.1** — gwiazdka na powierzchni roboczej, pas A usunięty, kafelki pionowe z zawsze żywym pickerem, grupy ustawień jako karty. **Układ zaakceptowany przez użytkownika.** Otwarte świadomie: **U4** (gęstość globalna → sprint UX po module) i **U5** (weryfikacja przy I6) |
 | **✅ I6 — ZAMKNIĘTY (2026-07-26)** | Sekcja **Cel** (istniejąca tabela) + panel **Mapowanie** + łańcuch przeliczeń rozszerzony o cel i mapowanie. Potwierdzony wzrokowo przez użytkownika; odstępstwo o `COUNT(*)`, nazwy triggerów, orientacja „cel → źródło" i reguły identity — **zaakceptowane bez zmian** |
 | **⭐ I7 — DOSTARCZONY (2026-07-26), oczekuje potwierdzenia wzrokowego** | Podgląd po konwersji + pasek poleceń (`Importuj`/F5, `Waliduj`/Ctrl+F5, `Anuluj`/Esc, tryb transakcji, polityka błędów, `ExecutionTimer`) + uruchomienie z postępem i anulowaniem + zakładki **Błędy** i **Raport** + Commit/Rollback w raporcie + eksport raportu przez istniejący framework + „ostatnio użyta" konfiguracja + domknięta zaległość I6 (liczba rekordów przy „opróżnij tabelę"). **KONIEC MVP** |
+| **⭐ I7.5 — DOSTARCZONY (2026-07-26)** | Data Import ma **własną transakcję na własnym przyłączeniu** (amendment §4.5): wspólny `FirebirdSessionConnection` wydzielony z Debuggera przez kompozycję, `ImportSessionConnection`, `PendingWorkRegistry` jako **jedyny właściciel** pytania o niezatwierdzoną pracę. Sonda **13/13 ALL PASS** |
 | **Następny etap** | **I8** — nowa tabela (`ColumnTypeInferencer`, siatka typów, podgląd DDL, wykonanie na linii Ddl) |
 | **Testy** | **5607 zielonych**, 0 niepowodzeń (I7 dodał +24; wszystkich testów importu jest teraz **343**) |
 | **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7) przeciwko FB5 `WI-V5.0.3.1683` — **11/11 ALL PASS**: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, licznik czytany w transakcji użytkownika, `Batched` faktycznie zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego |
@@ -1024,8 +1025,35 @@ Cechy, które są celem, nie skutkiem ubocznym:
 |---|---|---|---|
 | Lista tabel, kolumny celu, triggery | **Metadata** | niejawna, per-komenda | Linia Metadata jest read-only i nie posiada transakcji. |
 | `CREATE TABLE` (nowa tabela) | **Ddl** | autonomiczna, auto-commit, WAIT (Developer Mode) | **Gotcha #213: transakcja nie może użyć obiektu, którego DDL nie zatwierdziła.** Utworzenie tabeli i wstawienie do niej danych w jednej transakcji jest w Firebirdzie niemożliwe. Linia Ddl już to rozwiązuje (Compile edytorów obiektów) — zero nowego mechanizmu. |
-| `DELETE FROM` (opróżnij przed importem, D5) | **Data** | transakcja robocza użytkownika | To dane, nie schemat — musi być wycofywalne razem z importem. |
-| `INSERT` wierszy | **Data** | **JEDNA transakcja robocza użytkownika** (auto-begin, nigdy auto-commit) | Reguła #3 + gotcha #89. Import to operacja użytkownika, tak jak F5 i Script Executor. |
+| `DELETE FROM` (opróżnij przed importem, D5) | **własna sesja modułu** | ta sama transakcja co wiersze | To dane, nie schemat — musi być wycofywalne razem z importem. |
+| `INSERT` wierszy | **własna sesja modułu** | **WŁASNA transakcja Data Import** (auto-begin, nigdy auto-commit) | ⭐ **ZMIENIONE w I7.5 — patrz amendment niżej.** Reguła #3 nadal obowiązuje; zmienia się tylko to, CZYJA jest ta transakcja. |
+
+> ### ⭐ AMENDMENT I7.5 (2026-07-26) — Data Import ma WŁASNĄ transakcję roboczą
+>
+> **Ratyfikowane przez użytkownika po przeglądzie I7 i po pomiarach.** Pierwotnie moduł pisał do JEDNEJ
+> transakcji roboczej użytkownika — tej samej, z której korzysta SQL Editor. Rozumowanie („import to operacja
+> użytkownika jak F5") było spójne dla konsoli, ale miało konsekwencję, której nikt nie zamierzył:
+> **przycisk `Commit` w imporcie zatwierdzał także pracę zostawioną niezatwierdzoną w SQL Editorze.**
+> Przycisk musi robić dokładnie to, co komunikuje (reguła #11 / §0.5), więc możliwość została **usunięta**,
+> a nie opatrzona ostrzeżeniem.
+>
+> **Zmierzone przed decyzją** (`tools/probes/ImportTransactionIndependenceProbe`, FB5, 8/8 PASS): sterownik
+> odmawia drugiej transakcji na jednym `FbConnection`, ale **dwa przyłączenia dają dwie w pełni niezależne
+> transakcje** — zatwierdzane i wycofywane osobno, wzajemnie niewidoczne przed commitem. „Druga niezależna
+> transakcja" znaczy więc „drugie przyłączenie", dokładnie jak w Debuggerze.
+>
+> **Cena, przyjęta świadomie:** `SELECT` w SQL Editorze **nie zobaczy** zaimportowanych wierszy przed
+> commitem, a kolizja na tym samym wierszu kończy się natychmiastowym błędem (zmierzone: SQLSTATE 40001
+> w ~28 ms pod NOWAIT) zamiast cichego współdzielenia.
+>
+> **Skutki uboczne:** `ImportReadiness` przestał w ogóle raportować transakcję konsoli (kod `IMP0021`
+> wycofany, numer nieużywany ponownie) — co rozwiązało sprzeczność, którą projekt niósł od I2: §3.2 nazywał
+> otwartą transakcję roboczą **blokującą**, podczas gdy §4.5 kazał writerowi do niej **dołączać**. Oba nie
+> mogły być prawdą naraz. Gwardie zamknięcia i rozłączenia pytają teraz **jednego właściciela**
+> (`PendingWorkRegistry`), a nie wymieniają modułów po nazwie.
+>
+> Dowód na żywo: `tools/probes/DataImportRunProbe` przypadek **F** — konsola zostawia wiersz niezatwierdzony,
+> import commituje, konsola wycofuje, zostaje **tylko import**.
 
 **Konsekwencja, którą trzeba powiedzieć wprost (§0.5):** przy celu „nowa tabela" `Rollback` **nie usunie
 tabeli**. Dlatego sekcja Cel pokazuje ostrzeżenie i oferuje jawny checkbox „usuń tabelę, jeśli import się
