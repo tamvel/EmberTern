@@ -275,8 +275,10 @@ noted.
 
 ## Current state
 
-- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0 + I1 + I2 DONE.** Branch **`feat/data-import`**,
-  suite **5476 green**, build 0/0. A new tool tab (toolbar, beside the
+- **⭐ CURRENT WORK (2026-07-26) — DATA IMPORT MODULE, etaps I0 + I1 + I2 + I3 DONE. ⭐ After I3 the module is
+  functionally complete with NO database and NO UI** — read → map → convert → validate → batch → report runs
+  end-to-end on `TextImportSource` + `DryRunImportWriter`; what remains is wiring Firebird (I4) and the surface
+  (I5–I7). Branch **`feat/data-import`**, suite **5515 green**, build 0/0. A new tool tab (toolbar, beside the
   Script Executor) that imports Clipboard / TXT / CSV / XLSX into an existing or a newly created table.
   **Read [docs/design/data-import.md](docs/design/data-import.md) — its „📍 STAN IMPLEMENTACJI" block is the
   handover, and the architecture is 🔒 FROZEN: from etap I1 on it is implementation only, and an
@@ -302,8 +304,22 @@ noted.
   ⚠ **`ImportErrorKind` gained three client-side members** (`ValueOutOfRange`, `PrecisionWouldBeLost`,
   `UnsupportedTargetType`): additive, and forced by I2's own DoD — "zero silent conversions" cannot be met
   while rounding `1.555` into `NUMERIC(15,2)` has no way to be reported. **No "round it anyway" option was
-  invented** (that is a design decision, and §0.1 defaults to refusal). **Next: etap I3** (pipeline + dry-run;
-  it also owes `DelimitedTextImportProvider`, since `IImportProvider` still has no implementation).
+  invented** (that is a design decision, and §0.1 defaults to refusal).
+  **I3 as-built:** `ImportPipeline` — the ONE import, which knows neither what it is reading (a provider made
+  the `RawRecord`s) nor whether it is writing (**"Validate" is `DryRunImportWriter` passed as an argument, not
+  a second mode**, so a dry run cannot drift from the real thing — there is no second path to drift). It owns
+  the **"batch index → source row number" window** (decision D9): a batched write reports failures by position
+  in the batch, and the report must name the row the user can find in their file, so the translation happens
+  once, here, and nothing downstream ever sees a batch index. Plus `DryRunImportWriter` (a product feature, not
+  a test double) and the owed `DelimitedTextImportProvider` (CSV / TXT / **clipboard** — one provider, three
+  origins; it resolves the NULL token, which is a property of reading a text field). ⚠ **`ImportOutcome` gained
+  `Warnings`/`WarningsTruncated`** (init-only ⇒ additive): §0.2 requires every SHORTENED row in the report, and
+  such a row is neither an error (it went in) nor silence (data was lost) — folding it into `Errors` would make
+  `RowsFailed` count rows that actually succeeded. Two behaviours worth knowing: the tail flush runs on an
+  **uncancelled** token so rows the writer already accepted stay attributable (§0.6, the gotcha-#253
+  discipline), and the pipeline **refuses to start** rather than guessing when the mapping names a column the
+  target does not have. **Next: etap I4** (Firebird writer with `FbBatchCommand` + target reader + live
+  verification on the FB5 lab).
 - **⚠ Spun off from Data Import I0, NOT part of it — a platform-wide defect to audit.** Measured on live FB5:
   binding a string containing a character the **connection** charset cannot represent stores `?` with **no
   error at all**, even when the target column is UTF8 (the connection charset decides, not the column's), and

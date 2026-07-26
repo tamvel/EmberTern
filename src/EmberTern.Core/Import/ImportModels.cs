@@ -205,8 +205,28 @@ public sealed record ImportOutcome(
     bool Cancelled,
     string? CreatedTable)
 {
+    /// <summary>
+    /// Rows that were WRITTEN but had a value shortened to fit, each carrying its ORIGINAL value.
+    /// <para>
+    /// §0.2 permits trimming only as an explicit choice, and only if every shortened row is still reported —
+    /// so these are not errors (the row went in) and not silence (data was lost). They are their own list
+    /// precisely so the report cannot fold them into either, and so <see cref="RowsFailed"/> never counts a row
+    /// that actually succeeded.
+    /// </para>
+    /// <para>
+    /// Their <see cref="ImportRowError.Kind"/> is <see cref="ImportErrorKind.ValueTooLong"/>, the same kind a
+    /// REFUSED over-long value carries: the cause is identical, and which list the entry is in says what was
+    /// done about it. Added in etap I3.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<ImportRowError> Warnings { get; init; } = Array.Empty<ImportRowError>();
+
+    /// <summary>True when more warnings occurred than were kept.</summary>
+    public bool WarningsTruncated { get; init; }
+
     /// <summary>Cap on retained errors. A million-row import of a malformed file must not become a
-    /// million-entry list in memory; the counters stay exact regardless.</summary>
+    /// million-entry list in memory; the counters stay exact regardless. Applies to
+    /// <see cref="Warnings"/> too.</summary>
     public const int MaxCollectedErrors = 1_000;
 
     public static ImportOutcome Nothing { get; } =

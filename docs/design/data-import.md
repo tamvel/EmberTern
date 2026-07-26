@@ -1,7 +1,9 @@
 # Data Import — dokument projektowy modułu importu danych
 
-**Status: 🔒 PROJEKT ZAMROŻONY (2026-07-26). Etapy I0 + I1 + I2 wykonane i zaakceptowane.**
-Następny krok: **etap I3** (Core: pipeline + dry-run) z §6. Szczegóły — blok „📍 STAN IMPLEMENTACJI" niżej.
+**Status: 🔒 PROJEKT ZAMROŻONY (2026-07-26). Etapy I0 + I1 + I2 + I3 wykonane; I0–I2 zaakceptowane.**
+Następny krok: **etap I4** (Firebird: writer + odczyt celu + weryfikacja na żywo) z §6.
+**Po I3 moduł ma pełną funkcjonalność bez bazy i bez UI** — `Waliduj` działa end-to-end.
+Szczegóły — blok „📍 STAN IMPLEMENTACJI" niżej.
 
 > ### 🔒 DOKUMENT ZAMROŻONY — obowiązuje od 2026-07-26 (po akceptacji wyników I0)
 >
@@ -47,17 +49,35 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | | |
 |---|---|
 | **Gałąź** | `feat/data-import` (odbita od `master` @ `d474b42`) |
-| **Ostatni commit** | etap I2 — konwersja, mapowanie, walidacja, gotowość |
-| **Etapy zamknięte** | **I0** (sondy + rekomendacje, `5e90435`) · **I1** (Core: modele, konfiguracja, magazyn, czytnik, `77eb997`) · **I2** (Core: konwersja, mapowanie, walidacja, gotowość) |
-| **Następny etap** | **I3** — `ImportPipeline` + `DryRunImportWriter` + postęp + anulowanie + obie polityki błędów (§6) |
-| **Testy** | **5476 zielonych**, 0 niepowodzeń (I2 dodał +131; wszystkich testów importu jest teraz **213**) |
+| **Ostatni commit** | etap I3 — pipeline, dry-run, provider tekstowy |
+| **Etapy zamknięte** | **I0** (sondy, `5e90435`) · **I1** (modele, konfiguracja, magazyn, czytnik, `77eb997`) · **I2** (konwersja, mapowanie, walidacja, gotowość, `392850f`) · **I3** (pipeline + dry-run + provider) |
+| **Następny etap** | **I4** — `FirebirdImportWriter` (`FbBatchCommand`, paczki po 500, `MultiError` z polityki błędów) + `FirebirdImportTargetReader` + **weryfikacja na żywym FB5** (§6) |
+| **Testy** | **5515 zielonych**, 0 niepowodzeń (I3 dodał +39; wszystkich testów importu jest teraz **252**) |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) |
 | **Kod w `src/`** | **wyłącznie `EmberTern.Core/Import/**`** + dwie addytywne zmiany w plikach współdzielonych (niżej). Zero Avalonia, zero `FirebirdSql`, zero UI. |
+| **⭐ Kamień milowy** | **Po I3 moduł jest kompletny funkcjonalnie bez bazy i bez UI.** Cała ścieżka odczyt → mapowanie → konwersja → walidacja → paczki → raport działa end-to-end na `TextImportSource` + `DryRunImportWriter`. Zostaje podłączenie Firebirda (I4) i powierzchni (I5–I7). |
 
-### Co fizycznie istnieje po I2
+### Co fizycznie istnieje po I3
 
 ```
 src/EmberTern.Core/Import/
+    ── I3 ──────────────────────────────────────────────────────────────────────────────────────
+    ImportPipeline.cs        ⭐ JEDEN import: kroki 1–7 z §4.4. Nie wie, CO czyta (provider) ani
+                             CZY pisze (writer) — „Waliduj" to inny argument, nie inny tryb, więc
+                             nie ma drugiej ścieżki, która mogłaby się rozjechać.
+                             ⭐ Właściciel okna „indeks w paczce → numer wiersza źródłowego" (D9):
+                             raport nigdy nie widzi indeksu paczki. Obie polityki błędów, dławiony
+                             postęp, anulowanie. NIE kończy transakcji (reguła #3) i NIE tworzy
+                             tabeli (linia Ddl, przed przebiegiem — #213)
+    DryRunImportWriter.cs    druga produkcyjna implementacja IImportWriter — **funkcja produktu
+                             („Waliduj"), nie atrapa testowa**; to ona sprawia, że I1–I3 dają pełną
+                             funkcjonalność bez bazy
+    Providers/
+        DelimitedTextImportProvider.cs   CSV / TXT / **schowek** — jeden provider, trzy pochodzenia
+                             tekstu (§1.5). Rozstrzyga tu token NULL (własność *czytania* pola
+                             tekstowego); nie konwertuje niczego więcej. Szerokość schematu = NAJSZERSZY
+                             rekord próbki, nie nagłówek — kolumna, której nagłówek nie nazwał, i tak
+                             musi być mapowalna
     ── I2 ──────────────────────────────────────────────────────────────────────────────────────
     ImportTargetType.cs      ⭐ JEDYNY właściciel pytania „jakiego typu jest ta kolumna docelowa":
                              sformatowany typ z katalogu → SqlValueKind + Size/Scale/BlobSubType +
@@ -107,6 +127,13 @@ Zmiany w plikach współdzielonych — **obie addytywne, obie zaakceptowane**:
   settings.dat celowo NIE podbita** (podbicie uruchamia ochronę przed downgrade'em i starszy build
   odmówiłby odczytu całego pliku).
 
+### Testy I3 (nie upraszczać ich w kolejnych etapach — decyzja użytkownika)
+
+| Plik | Co pinuje |
+|---|---|
+| `ImportPipelineTests` | ⭐⭐ **`BatchFailure_IsReportedAgainstTheSourceRow_NotTheBatchIndex`** — writer wywala pozycję 1 **drugiej** paczki, co przy nagłówku i paczce po 2 odpowiada wierszowi źródłowemu **5**; pipeline przepuszczający indeks powiedziałby „wiersz 1" i wysłał użytkownika pod zły wiersz pliku (fixture celowo trzyma obie liczby różne, żeby test nie przeszedł przypadkiem) · ⭐ **dry-run i prawdziwy writer dają identyczny wynik** (inaczej „Waliduj mówi OK" przestaje coś znaczyć) · obcięty wynik paczki (`MultiError=false`) **nie zmyśla werdyktów dla wierszy, których nie spróbowano** · ⭐ **wartość przycięta to OSTRZEŻENIE z oryginałem, nie błąd** i nie zawyża `RowsFailed` · ⭐ **anulowanie nie porzuca wierszy już przyjętych** (ogonowy flush na nieanulowanym tokenie) · limit listy błędów przy dokładnych licznikach · R1 przez cały pipeline · odmowa startu przy pustym mapowaniu i przy mapowaniu na nieistniejącą kolumnę |
+| `ImportDelimitedProviderTests` | schemat z nagłówka i bez (etykiety pozycyjne + `HasRealName=false`); ⭐ **szerokość z najszerszego rekordu, nie z nagłówka**; nagłówek pomijany **oknem wierszy, nie przypadkiem szczególnym** (linie bannerowe nad nagłówkiem działają); pole wielolinijkowe to JEDEN rekord, więc numeracja raportu zostaje numeracją pliku; token NULL domyślny i zadeklarowany (bez rozróżniania wielkości liter); strumieniowość i anulowanie; **brak zmyślonej liczby wierszy** |
+
 ### Testy I2 (nie upraszczać ich w kolejnych etapach — decyzja użytkownika)
 
 | Plik | Co pinuje |
@@ -138,7 +165,11 @@ ustawienie tej właściwości w `Fully()`.
 |---|---|---|
 | `TrimWhitespace` **tylko** w `DelimitedOptions`, mimo że szkic v2 §4.8.2 wymieniał je też w `ImportBehaviorOptions` | przycinanie białych znaków jest własnością *czytania pola tekstowego*, a sekcja Format pokazuje je tam; dwa domy dla jednej decyzji to rozdwojenie, przed którym broni zasada jednego właściciela | ✅ zaakceptowane 2026-07-26; **nie dodawać drugiego pola tylko po to, by zgadzało się ze szkicem — dokument ma odzwierciedlać poprawioną architekturę, nie odwrotnie** |
 | `IImportProvider` dostaje całą `ImportConfiguration`, nie wybrany obiekt opcji | konfiguracja jest jedyną reprezentacją tego, o co poprosił użytkownik (§4.8.1); provider czyta tylko swój blok | ✅ w ramach swobody „sygnatury poglądowe" z §4.3 |
-| `DelimitedTextImportProvider` **nie** powstał w I1 | wiersz I1 w §6 go nie wymienia; pierwszym etapem, który go potrzebuje, jest I3 (pipeline end-to-end na `TextImportSource`) | ⏭ **przeniesione do I3** — I2 to wyłącznie logika czysta (konwersja/mapowanie/walidacja/gotowość), żaden jej element providera nie potrzebuje. **`IImportProvider` nadal nie ma ani jednej implementacji**, co reguła #2 toleruje tylko przejściowo |
+| `DelimitedTextImportProvider` **nie** powstał w I1 | wiersz I1 w §6 go nie wymienia; pierwszym etapem, który go potrzebuje, jest I3 (pipeline end-to-end na `TextImportSource`) | ✅ **dostarczony w I3.** Reguła #2 jest teraz spełniona dla dwóch z trzech portów: `IImportSource` (plik + tekst) i `IImportWriter` (dry-run + Firebird w I4). `IImportProvider` ma jedną implementację do czasu `XlsxImportProvider` (I9) — przejściowo, zgodnie z §4.3 |
+| **I3: `ImportOutcome` +`Warnings` / +`WarningsTruncated`** (właściwości `init`, nie parametry pozycyjne ⇒ zero zmian w istniejących wywołaniach) | §0.2 wymaga, żeby **każdy skrócony wiersz trafił do raportu z oryginalną wartością**, a taki wiersz nie jest ani błędem (wszedł), ani ciszą (dane przepadły). Wrzucenie go do `Errors` zawyżałoby `RowsFailed` o wiersze, którym się udało — czyli raport by kłamał (§0.6) | ✅ addytywne; zgłoszone jako as-built 2026-07-26. Kind pozostaje `ValueTooLong` — przyczyna jest ta sama, a to, **na której liście** wpis leży, mówi, co z nią zrobiono (odmowa vs skrócenie); nowy kind byłby czwartym w dwa etapy bez zysku informacyjnego |
+| **I3: `ImportPipeline.RunAsync` bierze `target` i `connectionEncoding`** ponad szkic z §4.4 | `ImportTarget` to **fakt odczytany ze świata**, więc z definicji nie leży w konfiguracji (§4.8.2), a bez charsetu połączenia walidacja R1 nie ma czym się posłużyć. §4.3 nazywa sygnatury „poglądowymi" | ✅ w ramach swobody z §4.3 |
+| **I3: `RunAsync` jest `static`** | pipeline nie trzyma stanu między przebiegami (cały stan przebiegu jest lokalny), a §4.3 wymienia go wśród „zwykłych klas", nie portów. Forma wywołania zgadza się ze szkicem `ImportPipeline.RunAsync(...)` z §4.4 | ✅ |
+| **I3: `CreatedTable` zwracane jako `null`** | tworzenie tabeli dzieje się na **linii Ddl, przed** przebiegiem (§4.5 / #213), więc pipeline nie ma o nim wiedzy. Koordynator uzupełnia je przez `outcome with { CreatedTable = … }` | ℹ️ do podłączenia w I7/I8 |
 | **I2: `ImportErrorKind` +3 kindy klienckie** — `ValueOutOfRange`, `PrecisionWouldBeLost`, `UnsupportedTargetType` | DoD etapu I2 brzmi „**zero cichych konwersji**", a bez nich nie da się go spełnić: liczba poprawna, lecz za duża dla kolumny, zaokrąglenie `1,555` → `1,56` w `NUMERIC(15,2)` i kolumna typu, którego nie umiemy zapisać, nie miały czym być zaraportowane. Zgłoszenie ich jako `NotAnInteger` byłoby **przekłamaniem powodu**. Addytywne: żaden port, przepływ, model ani decyzja się nie zmieniają | ✅ zaakceptowane 2026-07-26 (zgłoszone jako as-built, nie jako zmiana projektu). **Świadomie NIE dodano opcji „zaokrąglij mimo to"** — to byłaby decyzja projektowa, a §0.1 domyślnie nakazuje odmowę |
 | **I2: `ImportTargetType` jako osobna klasa**, choć §4.2 jej nie wymienia | §4.6 nakazuje użyć `SqlValueKind` „w drugą stronę" i nie tworzyć drugiego modelu typu. Pytanie „ile znaków ma `VARCHAR(20)`" zadają **cztery** komponenty (konwerter, walidator, planer, gotowość); cztery niezależne wyprowadzenia to dokładnie sposób, w jaki kontrola długości i ostrzeżenie o długości zaczynają mówić użytkownikowi co innego | ✅ zaakceptowane 2026-07-26 — to realizacja „Single Source of Truth" z §1.4, nie nowy byt architektoniczny |
 | **I2: `ImportRowValidator` dostaje `ImportBehaviorOptions` + `Encoding`**, a nie tylko `(value, ColumnSpec)` | przycinanie (`TrimTooLongValues`) i charset połączenia to **wejścia** walidacji wymienione wprost w §4.4 krok 4; §4.3 nazywa sygnatury „poglądowymi" | ✅ w ramach swobody z §4.3 |
@@ -1039,7 +1070,7 @@ zielonymi testami, czystym smoke testem i commitem.
 | **I0** | **Sondy pomiarowe + dokument rekomendacji** *(blokujący, bez kodu produkcyjnego)* | **(a) Sondy.** FB5: przygotowany `INSERT` w pętli vs `FbBatchCommand` (jeśli sterownik go ma) — **zmierzyć, nie wywnioskować**; zachowanie przy błędzie wiersza w środku paczki (czy wiadomo, KTÓRY wiersz padł); koszt commitu co N + próg opłacalności; koszt `CommandLock` per paczka. `.xlsx`: daty jako liczby seryjne (`numFmtId`), shared strings vs inline, puste komórki, wykrywanie ostatniego wiersza, **czy `DocumentFormat.OpenXml` czyta strumieniowo bez materializacji arkusza**. Charset: wstawienie znaku spoza WIN1250 — jaki błąd i **na którym etapie** (klient czy serwer), bo od tego zależy, czy walidacja R1 jest wykonalna lokalnie. **(b) Dokument rekomendacji** `docs/design/data-import-i0-findings.md`: wyniki + jawne stwierdzenie, czy pomiary wymagają zmiany projektu. | Sondy jako **jednorazowe** projekty w `tools/probes/` (poza solution, jak `Fb3ClosureProbe`), uruchomione na bazie laboratoryjnej. Wyniki w §11 (log pomiarów) **oraz** w dokumencie rekomendacji. **Zero kodu produkcyjnego, zero zmian w `src/`.** Werdykt „architektura bez zmian" ⇒ zamrożenie (patrz blok na początku dokumentu); werdykt „wymaga zmiany" ⇒ akceptacja użytkownika przed I1. |
 | **I1** ✅ **DOSTARCZONY** | Core: modele + **konfiguracja + magazyn** + czytnik tekstu | `ImportModels`, `ImportOptions`, `ImportEnums`, `ImportContracts`, **`ImportConfiguration`, `ImportProfile`, `ImportProfileStore`**, `DelimitedTextReader` (RFC4180: cudzysłowy, escapowane cudzysłowy, pola wielolinijkowe, CRLF/LF/CR), `DelimiterDetector`, `EncodingDetector`, `FileImportSource`, `TextImportSource`. **`ColumnMapping` z identyfikacją po nazwie (§4.8.5).** | Testy czytnika (≥25 przypadków brzegowych) + **`ImportConfigurationRoundTripTests` wraz z testem refleksyjnym** + `ImportProfileStoreTests`. Zero UI. |
 | **I2** ✅ **DOSTARCZONY** | Core: konwersja + mapowanie + walidacja + gotowość | `ImportValueConverter` (ścisły, §0), `ImportMappingPlanner` (auto + reguła pary + diagnostyka `IMP*`), `ImportRowValidator` (+ `ImportCharsetGuard`), **`ImportReadiness`**, oraz dwa fundamenty wynikające z zasady jednego właściciela: `ImportTargetType` (§4.6) i `ImportDiagnostics` (katalog `IMP0001–IMP0027`). | Testy: każdy typ Firebirda × wartość poprawna/niejednoznaczna/błędna; pełna macierz gotowości (blokujące vs ostrzegawcze). Zero cichych konwersji. **Spełnione** — +131 testów, w tym pin odtwarzający samą cichą korupcję charsetu. |
-| **I3** | Core: pipeline + dry-run | `ImportPipeline` (wejście: `ImportConfiguration`), `DryRunImportWriter`, `ImportOutcome`, postęp, anulowanie, obie polityki błędów. | Testy end-to-end na `TextImportSource` + dry-run. **Pełna funkcjonalność bez bazy i bez UI.** |
+| **I3** ✅ **DOSTARCZONY** | Core: pipeline + dry-run | `ImportPipeline` (wejście: `ImportConfiguration`), `DryRunImportWriter`, `ImportOutcome`, postęp, anulowanie, obie polityki błędów — oraz zaległy z I1 `DelimitedTextImportProvider` (bez niego nie ma end-to-endu na `TextImportSource`). | Testy end-to-end na `TextImportSource` + dry-run. **Pełna funkcjonalność bez bazy i bez UI.** **Spełnione** — +39 testów, w tym pin, że raport nazywa wiersz źródłowy, a nie indeks paczki. |
 | **I4** | Firebird: writer + odczyt celu + **weryfikacja na żywo** | `FirebirdImportWriter` — **`FbBatchCommand`, paczki po 500, `MultiError` ustawiany z `ImportErrorPolicy` (I0 §2.3)**, `OVERRIDING SYSTEM VALUE`, `CommandLock` per paczka; `FirebirdImportTargetReader` (kolumny + triggery BEFORE INSERT); mapowanie `FbException` → `ImportErrorKind` **na PARZE kodów GDS, nie na `ErrorCode`** (I0/REK-3: `string truncation` / `numeric overflow` / `transliteration` mają identyczny `ErrorCode` 335544321 i SQLSTATE 22000 — rozróżnia je dopiero **drugi** element wektora: 335544914 / 335544916 / 335544565; wektor obcięcia niesie limit i rzeczywistą długość jako liczby → wprost do raportu; **PK i UNIQUE są nierozróżnialne** (oba 335544665) ⇒ raportujemy „naruszenie unikalności", bez udawania precyzji). **Zero parsowania tekstu komunikatu.** | Import 10 k wierszy do tabeli laboratoryjnej — **liczby zgadzają się z `SELECT COUNT(*)`**; `NOT NULL`, PK/UNIQUE, CHECK, FK, za długi tekst, przekroczenie zakresu, transliteracja, znak spoza charsetu połączenia — **każdy daje właściwy `ImportErrorKind` i właściwy numer wiersza źródłowego**. Przypadki bierzemy z `tools/probes/DataImportWriteProbe` (fazy B/E/C), po czym sonda idzie do usunięcia. |
 | **I5** | App: zakładka + rama powierzchni + sekcja Źródło i format | `WorkspaceTabKind.DataImport`, `Icon.Import`, przycisk toolbara (D6), near-singleton, dopisanie do listy pomijanej w `SnapshotCurrentTabs`, rama (pasy A–H), zwijalne sekcje, **pasek gotowości**, sekcja Źródło i format z dolną zakładką „Podgląd źródła". | Powierzchnia otwiera plik, pokazuje surowe rekordy i gotowość. Obie palety motywu. |
 | **I6** | App: sekcja Cel (istniejąca tabela) + panel Mapowanie | Wybór tabeli, siatka mapowania, diagnostyka, blokady kolumn systemowych, przeliczanie łańcuchowe z anulowaniem (§4.7). | Mapowanie ręczne i automatyczne działa; niezgodności widoczne przed importem. |
