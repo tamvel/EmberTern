@@ -64,6 +64,25 @@ public sealed class ImportSourceRecordRowViewModel
 }
 
 /// <summary>
+/// What the Target section is currently about — which control a readiness chip aimed at Target should land on.
+/// <para>
+/// It is the ViewModel's decision because it follows the variant the user chose, and a view that worked it out
+/// again would be a second opinion about which half of the section is live.
+/// </para>
+/// </summary>
+public enum ImportTargetFocus
+{
+    /// <summary>The existing-table picker.</summary>
+    ExistingTablePicker,
+
+    /// <summary>The new table's name box — nothing downstream means anything until it is filled.</summary>
+    NewTableName,
+
+    /// <summary>The inferred-column grid: the name is settled, so the decisions left are the types.</summary>
+    NewTableColumns,
+}
+
+/// <summary>
 /// One named profile in the command bar's selector (etap I11).
 /// <para>
 /// ⭐ A projection, never the stored object. The store's <c>ImportProfile</c> is a mutable class it does
@@ -1356,19 +1375,40 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// but did not click is the kind of surprise that makes a control unreadable — the chip navigates, and
     /// filtering stays the user's decision.
     /// </para>
+    /// <para>
+    /// ⭐ <b>Every chip must do something the user can SEE, or the row cannot be read.</b> Two of the five used
+    /// to do nothing at all in ordinary states — Target resolved to the existing-table picker, which is DISABLED
+    /// whenever the new-table variant is chosen, and Mapping resolved to "the row needing attention", which is
+    /// null once everything is mapped. A disabled or absent control cannot take focus, so the click was
+    /// swallowed. The rule now holds for all five: <b>make the section reachable, then hand focus to the control
+    /// that section is currently ABOUT</b> — which depends on the section's own state, not on whether it has a
+    /// problem. A green chip navigates exactly like a red one.
+    /// </para>
     /// </summary>
     [RelayCommand]
     private void FocusSection(ImportSection section)
     {
+        // Only Format is foldable, and only it toggles — clicking the same chip twice must undo itself, or the
+        // chip is a one-way door. The others are always on screen, so "expand" is a no-op for them by nature
+        // rather than by omission.
         if (section is ImportSection.Format)
         {
-            // Toggle, not open: clicking the same chip twice must undo itself, or the chip is a one-way door.
             Source.IsExpanded = !Source.IsExpanded;
             _formatOptionsHeldOpen = Source.IsExpanded;
         }
 
         SectionFocusRequested?.Invoke(this, section);
     }
+
+    /// <summary>
+    /// Which control the Target section is currently about — the VM's answer, because it depends on which
+    /// variant the user chose and the view must not hold a second opinion about that.
+    /// </summary>
+    public ImportTargetFocus TargetFocus => Target.IsNewTable
+        ? (string.IsNullOrWhiteSpace(Target.NewTableName)
+            ? ImportTargetFocus.NewTableName
+            : ImportTargetFocus.NewTableColumns)
+        : ImportTargetFocus.ExistingTablePicker;
 
     /// <summary>
     /// ⭐ U11 — the format options collapse themselves once they are settled, which is what makes the repeat

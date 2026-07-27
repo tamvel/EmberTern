@@ -227,24 +227,60 @@ public partial class DataImportTabView : UserControl
     /// </summary>
     private void OnSectionFocusRequested(object? sender, EmberTern.Core.Import.ImportSection section)
     {
-        var target = section switch
-        {
-            EmberTern.Core.Import.ImportSection.Source => this.FindControl<TextBox>("SourcePathBox"),
-            EmberTern.Core.Import.ImportSection.Format => FirstFocusable("FormatOptionsPane"),
-            EmberTern.Core.Import.ImportSection.Target => FirstFocusable("TargetPicker"),
-            EmberTern.Core.Import.ImportSection.Mapping => MappingRowNeedingAttention(),
-            EmberTern.Core.Import.ImportSection.Transaction => this.FindControl<ComboBox>("TransactionModePicker"),
-            _ => null,
-        };
+        var target = ResolveSectionTarget(section);
+        if (target is null) return;
 
         // Posted, because a chip click that expands a section must let that section be laid out before its
-        // first control can take focus.
-        if (target is not null)
-        {
-            Avalonia.Threading.Dispatcher.UIThread.Post(
-                () => target.Focus(), Avalonia.Threading.DispatcherPriority.Background);
-        }
+        // first control can take focus — and before it can be scrolled to.
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () =>
+            {
+                // Scroll BEFORE focusing. Focus alone moves nothing when the control is off screen, which is
+                // most of why the Mapping chip felt like it did nothing on a long column list.
+                target.BringIntoView();
+                target.Focus();
+            },
+            Avalonia.Threading.DispatcherPriority.Background);
     }
+
+    /// <summary>
+    /// The control a section's chip lands on — <b>one rule, and it never resolves to nothing.</b>
+    /// <para>
+    /// ⚠ This is where two chips used to die silently. <b>Target</b> resolved to the existing-table picker,
+    /// which Avalonia reports as not-effectively-enabled whenever the new-table variant is selected, so
+    /// <c>FirstFocusable</c> returned null and the click was swallowed; <b>Mapping</b> resolved to "the row
+    /// needing attention", which is null the moment everything is mapped — i.e. it worked only while something
+    /// was wrong. Both now ask what the section is currently ABOUT and fall back through the section's own
+    /// container, so a green chip navigates exactly like a red one.
+    /// </para>
+    /// </summary>
+    private Control? ResolveSectionTarget(EmberTern.Core.Import.ImportSection section) => section switch
+    {
+        EmberTern.Core.Import.ImportSection.Source =>
+            this.FindControl<TextBox>("SourcePathBox") ?? FirstFocusable("SourceTile"),
+
+        EmberTern.Core.Import.ImportSection.Format =>
+            FirstFocusable("FormatOptionsPane") ?? FirstFocusable("SourceTile"),
+
+        // The variant the user chose decides — asked of the VM, which owns that decision.
+        EmberTern.Core.Import.ImportSection.Target => _bound?.TargetFocus switch
+        {
+            ImportTargetFocus.NewTableName => this.FindControl<TextBox>("NewTableNameBox"),
+            ImportTargetFocus.NewTableColumns =>
+                FirstFocusable("NewTableColumnRows") ?? this.FindControl<TextBox>("NewTableNameBox"),
+            _ => FirstFocusable("TargetPicker"),
+        } ?? FirstFocusable("TargetTile"),
+
+        // The row that needs a decision if there is one, otherwise simply the first row — "take me to the
+        // mapping" has to mean something even when the mapping is fine.
+        EmberTern.Core.Import.ImportSection.Mapping =>
+            MappingRowNeedingAttention() ?? FirstFocusable("MappingRows") ?? FirstFocusable("MappingPanel"),
+
+        EmberTern.Core.Import.ImportSection.Transaction =>
+            this.FindControl<ComboBox>("TransactionModePicker"),
+
+        _ => null,
+    };
 
     /// <summary>
     /// The picker of the mapping row that actually needs a decision — scrolled into view on the way.

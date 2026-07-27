@@ -296,12 +296,11 @@ internal static class UiStrings
     public const string ImportTargetNewTable = "New table";
     public const string ImportTargetNewTableWatermark = "Name for the new table…";
 
-    // ⚠ §0.5 / gotcha #213 — the module's most important honest sentence. A Firebird transaction cannot use an
-    // object whose DDL it has not committed, so the CREATE is committed on the Ddl lane BEFORE the first row,
-    // and a rollback of the import cannot take the table with it. Said where the decision is made, exactly as
-    // the Script Executor's Sequenced mode discloses its own non-atomicity.
-    public const string ImportNewTableCommittedWarning =
-        "The table is created and COMMITTED before the import starts — rolling the import back will not remove it.";
+    // ⚠ §0.5 / gotcha #213 — the module's most important honest sentence ("the CREATE is committed before the
+    // first row, so a rollback cannot take the table with it") is NOT here any more. It lives in exactly one
+    // place: Core's IMP0018, rendered by the readiness strip, which additionally names the table. There used to
+    // be a second copy as a banner under the type grid, and saying one fact twice on one screen is how a warning
+    // stops being read. If it ever needs to be louder, make the strip louder — do not add a second sentence.
     public const string ImportNewTableDropOnFailure = "Drop the table if the import fails";
     public const string ImportNewTableDropOnFailureTooltip =
         "On failure: roll back the imported rows, then DROP the table on the DDL connection. You are asked first.";
@@ -442,6 +441,7 @@ internal static class UiStrings
         "This deletes {0:N0} row(s) from {1} before importing. The DELETE runs in the same transaction, so Rollback takes it back too.";
 
     // The converted preview (§3.6).
+    public const string ImportMappingTitle = "Mapping";
     public const string ImportPreviewTitle = "Preview after conversion";
     public const string ImportPreviewHeadlineFormat = "{0:N0} row(s) after conversion — this is what reaches the database.";
     public const string ImportPreviewHeadlineProblemsFormat =

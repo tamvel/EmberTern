@@ -319,7 +319,7 @@
          One row in the settled state: the picker is ALWAYS live, only the format options fold. -->
     <Border Grid.Row="3" Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
-      <StackPanel Spacing="5" DataContext="{Binding Source}" x:DataType="vm:ImportSourceSectionViewModel">
+      <StackPanel x:Name="SourceTile" Spacing="5" DataContext="{Binding Source}" x:DataType="vm:ImportSourceSectionViewModel">
 
         <!-- The always-live row. -->
         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
@@ -529,16 +529,25 @@
          why the type grid is height-capped and scrolls rather than growing without limit. -->
     <Border Grid.Row="4" Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
-      <StackPanel Spacing="5" DataContext="{Binding Target}" x:DataType="vm:ImportTargetSectionViewModel">
+      <StackPanel x:Name="TargetTile" Spacing="5" DataContext="{Binding Target}" x:DataType="vm:ImportTargetSectionViewModel">
 
-        <!-- ── Existing table ─────────────────────────────────────────────────────────────────── -->
-        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-          <RadioButton Grid.Column="0" GroupName="ImportTargetKind"
+        <!-- ── The target CHOICE: two variants, ONE grid ─────────────────────────────────────────
+             ⭐ One grid rather than two stacked ones, because the two radios are a single choice and have
+             to read as one. Sharing the column definitions is what does it: the radio column sizes to the
+             wider of the two labels, so both inputs start at the SAME x — as two separate grids they each
+             measured their own label and the inputs sat a few pixels apart, which is what made the pair
+             look ragged and unrelated. The facts line moved out from BETWEEN them (it was splitting the
+             choice in half and spending a row on it) to below the pair, where it belongs to the answer
+             rather than to the question. -->
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" RowDefinitions="Auto,Auto"
+              ColumnSpacing="8" RowSpacing="3">
+
+          <RadioButton Grid.Row="0" Grid.Column="0" GroupName="ImportTargetKind"
                        Content="{x:Static app:UiStrings.ImportTargetExistingTable}"
                        IsChecked="{Binding IsExistingTable, Mode=TwoWay}"
                        VerticalAlignment="Center" FontSize="12" />
 
-          <controls:SearchableComboBox Grid.Column="1" x:Name="TargetPicker"
+          <controls:SearchableComboBox Grid.Row="0" Grid.Column="1" x:Name="TargetPicker"
                                        ItemsSource="{Binding Tables}"
                                        SelectedItem="{Binding SelectedTable, Mode=TwoWay}"
                                        IsEnabled="{Binding IsExistingTable}"
@@ -546,42 +555,40 @@
                                        FilterWatermark="{x:Static app:UiStrings.ImportTargetFilterWatermark}"
                                        HorizontalAlignment="Left" MinWidth="360" />
 
-          <CheckBox Grid.Column="2" VerticalAlignment="Center"
+          <CheckBox Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="2" VerticalAlignment="Center"
                     Content="{x:Static app:UiStrings.ImportTargetEmptyFirst}"
                     ToolTip.Tip="{x:Static app:UiStrings.ImportTargetEmptyFirstTooltip}"
                     IsVisible="{Binding IsExistingTable}"
                     IsChecked="{Binding EmptyBeforeImport, Mode=TwoWay}" FontSize="12" />
-        </Grid>
 
-        <TextBlock Text="{Binding FactsText}" Classes="subtle" FontSize="11"
-                   TextTrimming="CharacterEllipsis"
-                   IsVisible="{Binding FactsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-
-        <!-- ── New table (etap I8) ────────────────────────────────────────────────────────────── -->
-        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
-          <RadioButton Grid.Column="0" GroupName="ImportTargetKind"
+          <RadioButton Grid.Row="1" Grid.Column="0" GroupName="ImportTargetKind"
                        Content="{x:Static app:UiStrings.ImportTargetNewTable}"
                        IsChecked="{Binding IsNewTable, Mode=TwoWay}"
                        VerticalAlignment="Center" FontSize="12" />
 
-          <TextBox Grid.Column="1" Text="{Binding NewTableName, Mode=TwoWay}"
+          <TextBox Grid.Row="1" Grid.Column="1" x:Name="NewTableNameBox"
+                   Text="{Binding NewTableName, Mode=TwoWay}"
                    IsEnabled="{Binding IsNewTable}"
                    PlaceholderText="{x:Static app:UiStrings.ImportTargetNewTableWatermark}"
                    HorizontalAlignment="Left" MinWidth="360" FontSize="12" />
 
           <!-- ⚠ §0.5: the CREATE is committed before the first row (gotcha #213), so this is the only
                way to undo it — and it is off by default, like every option that destroys something. -->
-          <CheckBox Grid.Column="2" VerticalAlignment="Center"
+          <CheckBox Grid.Row="1" Grid.Column="2" VerticalAlignment="Center"
                     Content="{x:Static app:UiStrings.ImportNewTableDropOnFailure}"
                     ToolTip.Tip="{x:Static app:UiStrings.ImportNewTableDropOnFailureTooltip}"
                     IsVisible="{Binding IsNewTable}"
                     IsChecked="{Binding DropTableOnFailure, Mode=TwoWay}" FontSize="12" />
 
-          <Button Grid.Column="3" Classes="flat" FontSize="12"
+          <Button Grid.Row="1" Grid.Column="3" Classes="flat" FontSize="12"
                   IsVisible="{Binding IsNewTable}"
                   Command="{Binding ToggleDdlCommand}"
                   Content="{Binding DdlToggleText}" />
         </Grid>
+
+        <TextBlock Text="{Binding FactsText}" Classes="subtle" FontSize="11"
+                   TextTrimming="CharacterEllipsis"
+                   IsVisible="{Binding FactsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
         <StackPanel Spacing="4" IsVisible="{Binding IsNewTable}">
 
@@ -601,7 +608,7 @@
                   IsVisible="{Binding HasNewColumns}">
             <Grid RowDefinitions="Auto,*">
 
-              <Grid Grid.Row="0" ColumnDefinitions="3*,2*,60,60,50,4*" ColumnSpacing="8" Margin="8,5"
+              <Grid Grid.Row="0" ColumnDefinitions="3*,2*,60,60,50,3*" ColumnSpacing="8" Margin="8,5"
                     Background="{DynamicResource ElevatedPanelBrush}">
                 <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportNewTableColumnName}"
                            Classes="field-label" Margin="0" />
@@ -618,10 +625,10 @@
               </Grid>
 
               <ScrollViewer Grid.Row="1" MaxHeight="170">
-                <ItemsControl ItemsSource="{Binding NewColumns}">
+                <ItemsControl x:Name="NewTableColumnRows" ItemsSource="{Binding NewColumns}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ImportNewTableColumnRowViewModel">
-                      <Grid ColumnDefinitions="3*,2*,60,60,50,4*" ColumnSpacing="8" Margin="8,3">
+                      <Grid ColumnDefinitions="3*,2*,60,60,50,3*" ColumnSpacing="8" Margin="8,3">
 
                         <TextBox Grid.Column="0" Text="{Binding Name, Mode=TwoWay}" FontSize="12" />
 
@@ -643,9 +650,16 @@
 
                         <!-- ⭐ "Basis" answers "where did that type come from" — and for a mixed column
                              (R19, the measured norm) it names the value and the row that decided it, so
-                             the user can check their own file rather than take our word (§0.6). -->
+                             the user can check their own file rather than take our word (§0.6).
+                             ⚠ One line, trimmed, with the full sentence on hover: wrapping made a long
+                             basis two or three lines tall, which set the height of its whole row and let
+                             the explanation dominate the grid it was only annotating. Trimming changes
+                             nothing about what is available — the text is one hover away, and §0.6 is
+                             about the evidence being reachable, not about it being the widest thing on
+                             screen. -->
                         <TextBlock Grid.Column="5" Text="{Binding Basis}" FontSize="11"
-                                   VerticalAlignment="Center" TextWrapping="Wrap"
+                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding Basis}"
                                    Foreground="{DynamicResource SubtleForegroundBrush}" />
                       </Grid>
                     </DataTemplate>
@@ -655,13 +669,11 @@
             </Grid>
           </Border>
 
-          <!-- ⚠ THE sentence of this etap. It stands beside the decision that causes it, not in the
-               report afterwards — the same honesty the Script Executor's Sequenced mode applies to its
-               own non-atomicity (§0.5). -->
-          <controls:MessageBanner Classes="docked"
-                                  Severity="Warning"
-                                  Message="{x:Static app:UiStrings.ImportNewTableCommittedWarning}"
-                                  IsVisible="{Binding HasNewColumns}" />
+          <!-- ⚠ §0.5's sentence — "this CREATE is committed and a rollback will not remove it" — used to be
+               repeated HERE as a second banner. It is gone, not because the warning stopped mattering but
+               because it was being said twice on one screen: the readiness strip already carries it as
+               IMP0018, from Core, and additionally NAMES the table. Two statements of one fact train the
+               user to read neither. The remaining one is the strip's. -->
 
           <!-- The exact statement that will run — from the same call the run itself makes, so this is a
                preview of the real thing rather than an illustration of it. -->
@@ -682,7 +694,7 @@
          next step rather than saying "no data" (§9.4). -->
     <Grid Grid.Row="5" ColumnDefinitions="*,4,*">
 
-    <Grid Grid.Column="0" Margin="12,8" DataContext="{Binding Mapping}" x:DataType="vm:ImportMappingPanelViewModel">
+    <Grid Grid.Column="0" x:Name="MappingPanel" Margin="12,8" DataContext="{Binding Mapping}" x:DataType="vm:ImportMappingPanelViewModel">
 
       <TextBlock Text="{x:Static app:UiStrings.ImportMappingEmpty}"
                  Classes="subtle" FontSize="12" MaxWidth="560"
@@ -691,18 +703,25 @@
 
       <Grid RowDefinitions="Auto,*,Auto" IsVisible="{Binding HasTarget}">
 
-        <!-- Headline + the two re-plan strategies + the filter. -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,6">
-          <TextBlock Grid.Column="0" Text="{Binding Headline}" Classes="subtle" FontSize="12"
-                     VerticalAlignment="Center" />
-          <Button Grid.Column="1" Classes="flat" FontSize="12"
+        <!-- Title + headline + the two re-plan strategies + the filter.
+             ⭐ The TITLE is new and it is why this row changed shape: the preview half already had one and
+             this half had only its dynamic headline, so the work area read as one undivided surface with a
+             status line floating in it. Both halves now name themselves the same way, with the same weight
+             (the shared `group-header`), and the dynamic count stays subtle beside the name — a title says
+             what the region IS, a headline says how it is doing. -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,6">
+          <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportMappingTitle}"
+                     Classes="group-header" VerticalAlignment="Center" Margin="0" />
+          <TextBlock Grid.Column="1" Text="{Binding Headline}" Classes="subtle" FontSize="12"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Button Grid.Column="2" Classes="flat" FontSize="12"
                   Content="{x:Static app:UiStrings.ImportMappingMatchByPosition}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportMappingMatchByPositionTooltip}"
                   Command="{Binding MatchByPositionCommand}" />
-          <Button Grid.Column="2" Classes="flat" FontSize="12"
+          <Button Grid.Column="3" Classes="flat" FontSize="12"
                   Content="{x:Static app:UiStrings.ImportMappingClear}"
                   Command="{Binding ClearMappingCommand}" />
-          <CheckBox Grid.Column="3" VerticalAlignment="Center" FontSize="12"
+          <CheckBox Grid.Column="4" VerticalAlignment="Center" FontSize="12"
                     Content="{x:Static app:UiStrings.ImportMappingOnlyUnmapped}"
                     IsChecked="{Binding ShowOnlyUnmapped, Mode=TwoWay}" />
         </Grid>
@@ -824,7 +843,7 @@
 
       <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,0,0,6">
         <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportPreviewTitle}"
-                   Classes="field-label" VerticalAlignment="Center" Margin="0" />
+                   Classes="group-header" VerticalAlignment="Center" Margin="0" />
         <TextBlock Grid.Column="1" Text="{Binding Headline}" Classes="subtle" FontSize="12"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
       </Grid>

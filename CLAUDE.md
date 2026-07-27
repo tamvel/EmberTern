@@ -281,7 +281,7 @@ noted.
 ## Current state
 
 - **✅ DATA IMPORT I11 — NAMED PROFILES DELIVERED + REVIEW SEAM (2026-07-27), awaits the user's re-check in both
-  palettes. Next: I12 close-out.** Branch `feat/data-import`, suite **5842 green** (+41), build 0/0, smoke clean.
+  palettes. Next: I12 close-out.** Branch `feat/data-import`, suite **5846 green** (+45), build 0/0, smoke clean.
   **🔁 The visual review found the selector was a ONE-WAY DOOR** — you could enter a profile but not leave it,
   neither keeping your decisions nor starting over. Two additions, and they are deliberately **two different
   actions, not one**: a standing **„(no profile)" row** at the head of the list **detaches and keeps every
@@ -297,6 +297,36 @@ noted.
   are now the same code** (`ResetToDefaults`); "Clear" had its own copy and, as a side effect of the merge,
   finally detaches the profile too. ⚠ **`HasProfiles` was deleted** — it was bound to nothing in XAML and read
   only by tests, the same discipline that kept `MarkUsed` out of this etap.
+  **🔁 A second, full UI review then produced five ergonomics findings — and ⭐⭐ two of them were a DEFECT, not
+  a matter of taste.** The user reported the `Target`, `Mapping` and `Transaction` readiness chips as *"feeling
+  like dummies"*. Two genuinely did nothing in ordinary states: **Target** resolved to the existing-table picker,
+  which Avalonia reports as not-effectively-enabled whenever the new-table variant is chosen, so
+  `FirstFocusable` returned null and the click was swallowed; **Mapping** resolved to "the row needing
+  attention", which is null once everything is mapped — so it worked *only while something was wrong*. **One
+  rule now holds for all five: make the section reachable, then focus the control that section currently IS
+  ABOUT** — a green chip navigates exactly like a red one — with `BringIntoView()` **before** `Focus()` (focus
+  alone scrolls nothing, which was the other half of the dead feeling on a long column list) and a fallback
+  chain that cannot resolve to null. ⭐ **"What is the Target section about" is a VM decision
+  (`ImportTargetFocus`)**, because it follows the chosen variant and a view computing it again would be a second
+  opinion about which half of the section is live: unnamed new table → the name box, named → the type grid,
+  where the remaining decisions are. Four tests pin it; the missing answer was the whole defect. The findings
+  under the chips share the same command, so they were fixed by the same change — and since every
+  `ReadinessItem` carries a section and all five sections now lead somewhere, none had to be demoted to plain
+  text.
+  **⭐ One duplicated warning removed.** §0.5's sentence ("the table is created and COMMITTED before the first
+  row") stood twice on one screen — as Core's `IMP0018` in the readiness strip *and* as a banner under the type
+  grid. The **banner** went: the strip says the same thing, comes from Core and additionally **names the table**,
+  and one fact said twice trains the user to read neither. ⚠ Accepted risk, stated: the strip caps at three
+  findings, so `IMP0018` can fall under "…and N more" — if that bites, the fix is to make the **strip** louder,
+  never to add a second sentence.
+  **⭐ `Existing table` / `New table` became ONE grid.** They were two stacked grids, so each measured its own
+  radio label and the two inputs started at different x; the facts line sat *between* them, splitting one choice
+  in half. Now two rows sharing column definitions — inputs aligned, facts line moved below the pair where it
+  belongs to the answer rather than the question — which is the user's own sketch, one row shorter than before.
+  Also: **`Basis` is single-line + ellipsis + full text on hover** (wrapping set the whole row's height and let
+  the annotation dominate the grid it annotates; §0.6 is about the evidence being *reachable*), and the
+  **Mapping panel gained a title** to match the Preview half that already had one, both promoted to the shared
+  `group-header` — reused, not a new style, and `ControlStyles.axaml` was not touched.
   **Separation accepted, with an asymmetry that is the point:** the divider between the profile group and the
   execution group went to a 12 px margin while the one further right stays at 4 — they are not peers, because a
   profile is superordinate to the whole import configuration whereas the other divider only separates settings
@@ -2415,8 +2445,8 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5842 as of 2026-07-27
-  (`feat/data-import`, after I11 named profiles + its review seam)** — green in two partitions (5802 + the
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5846 as of 2026-07-27
+  (`feat/data-import`, after I11 named profiles + its two review seams)** — green in two partitions (5806 + the
   40-test `ConnectionExpandBindingProbe`), ~16s.
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into

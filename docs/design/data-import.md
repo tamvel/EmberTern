@@ -67,8 +67,9 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | **🏁 SZEW ERGONOMICZNY PO I10 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-27)** | Trzy uwagi użytkownika z przeglądu I10, potraktowane jako domknięcie I10, **nie** jako nowy etap: schowek jako **źródło żywe**, przycisk **Odśwież**, i wymóg, żeby ponowny odczyt przechodził **tym samym łańcuchem** co pierwszy. **Potwierdzone przez użytkownika: bez uwag.** Wprost zaakceptowany kierunek architektoniczny — *„najważniejsze, że nie powstała druga ścieżka odświeżania, tylko wszystko przechodzi przez jeden łańcuch z różnymi powodami uruchomienia (Decision / Refresh)"*. `Ctrl+R` zostaje, **`F5` świadomie NIE dodane** (decyzja użytkownika — `F5` to Import). Szczegóły w bloku „⭐ Szew ergonomiczny po I10" |
 | **✅ I11 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | Nazwane profile. ⭐⭐ **Rachunek §4.8 się zgodził: ANI JEDEN model nie został zmieniony i pipeline nie został tknięty.** `ImportConfiguration`, `ImportProfile`, `ImportPipeline`, konwerter, walidator, planer mapowania i writer — bez jednej linii różnicy. Wczytanie profilu to `ApplyConfiguration` i **nic więcej**, więc profil niezgodny ze światem melduje się w pasku gotowości (IMP0011 / IMP0016), a nie wyjątkiem. Selektor wszedł w **zarezerwowane** miejsce paska B — układ toolbara nie został przebudowany. Szczegóły w bloku „⭐ I11 as-built" |
 | **🔁 I11 — SZEW PO PRZEGLĄDZIE (2026-07-27)** | Dwie uwagi użytkownika z oglądu UI, obie zasadne, obie o **wyjściu** z profilu: (1) nie dało się wrócić do pracy **bez** profilu — doszła stała pozycja **„(no profile)"** na czele listy, która **odłącza i ZOSTAWIA decyzje**; (2) nie było jak wyczyścić powierzchni — doszedł przycisk **`Reset`**, który przywraca domyślne **i** odłącza profil. To są świadomie **dwie różne akcje**, nie jedna. Plus trzecia uwaga: **wyraźniejsze oddzielenie** grupy profili od grupy wykonania. Szczegóły w bloku „⭐ I11 as-built" |
+| **🔁 I11 — DRUGI PRZEGLĄD (2026-07-27)** | Pięć uwag o ergonomii powierzchni, wszystkie w granicach modułu. ⭐ Dwie okazały się **defektem, nie kwestią gustu**: chipy `Target` i `Mapping` naprawdę nic nie robiły w zwyczajnych stanach, bo celowały w kontrolkę wyłączoną albo w wiersz, którego nie ma. Poza tym: usunięte zdublowane ostrzeżenie §0.5, `Existing/New table` w jednej siatce ze wspólnymi kolumnami, kolumna `Basis` przycięta z podpowiedzią, tytuł panelu Mapowanie. Szczegóły w bloku „⭐ Drugi przegląd I11" |
 | **Następny etap** | **I12** — domknięcie modułu (dokumentacja, audyt UI w obu paletach, pomiar na 1 M wierszy) |
-| **Testy** | **5842 zielonych**, 0 niepowodzeń (I11 dodał **+41**: 16 do magazynu, 25 w nowym `DataImportProfileTests`, w tym +7 z szwu po przeglądzie; szew po I10 dodał +16; I10 +22). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
+| **Testy** | **5846 zielonych**, 0 niepowodzeń (I11 dodał **+45**: 16 do magazynu, 25 w nowym `DataImportProfileTests`, 4 na `ImportTargetFocus` z drugiego przeglądu; szew po I10 dodał +16; I10 +22). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
 | **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **G z I8** + **H z I9** + **I z I10**) przeciwko FB5 `WI-V5.0.3.1683` — **33/33 ALL PASS**; sekcja I dokłada: detektor proponuje TAB dla wklejenia z Excela (3/3 rekordy zgodne co do 5 pól), wklejenie importuje się **bez pliku na dysku**, `.xls` → tabela istniejąca i → tabela nowa, `#N/A` z BIFF odrzucone przez kolumnę VARCHAR, data z `.xls` wraca z bazy tym samym dniem (2026-05-14), oraz **prawdziwy skoroszyt napisany przez Excela** (`Nadgodziny2.xls`: 3 arkusze, 20 pól, 1073 wiersze, ostatni numer 1074). Wcześniejsze: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, Rollback cofa wiersze i NIE cofa tabeli — **oraz (I9): arkusz → tabela istniejąca, arkusz → tabela nowa, prawdziwa komórka daty typuje się na `DATE` i wraca z bazy tym samym dniem (2026-04-03), a `#N/A` zostaje odrzucone przez kolumnę VARCHAR** |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
 | **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **pięć VM-ów i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
@@ -127,6 +128,56 @@ ten etap ma orzec, że jej nie ruszył** — a to jest jedyny produkt I11. Konse
 selektora nie obiecuje wymiany plikami. Gałąź `ConnectionId == null` w `ListNamed` **zostaje**, bo to nullowalne
 pole zapisanego rekordu — profil, którego żadne zapytanie nie zwraca, jest danymi nieosiągalnymi, nie brakującą
 funkcją.
+
+#### ⭐ Drugi przegląd I11 — ergonomia powierzchni (2026-07-27)
+
+Pięć uwag z pełnego oglądu UI, wszystkie w granicach modułu, żadna w Core i żadna w globalnych stylach.
+
+**1 + 2. Chipy paska Ready i klikalne komunikaty — to był DEFEKT, nie kwestia gustu.** Użytkownik napisał, że
+`Target`, `Mapping` i `Transaction` „sprawiają wrażenie atrap". Sprawiały, bo dwa z nich **naprawdę nic nie
+robiły** w zwyczajnych stanach:
+
+- **Target** celował w `TargetPicker` (lista istniejących tabel), a ta jest **wyłączona**, kiedy wybrany jest
+  wariant „nowa tabela". `FirstFocusable` pomija kontrolki nieaktywne, więc zwracał `null` i kliknięcie znikało.
+- **Mapping** celował w „wiersz wymagający uwagi", czyli `null`, gdy wszystko jest zmapowane — chip działał
+  **wyłącznie wtedy, gdy coś było nie tak**.
+
+Reguła jest teraz jedna dla wszystkich pięciu: **udostępnij sekcję, potem oddaj fokus kontrolce, o której ta
+sekcja aktualnie JEST** — niezależnie od tego, czy ma problem. Zielony chip nawiguje tak samo jak czerwony.
+Doszło też `BringIntoView()` **przed** `Focus()`: sam fokus niczego nie przewija, co było drugą połową wrażenia
+martwoty przy długiej liście kolumn. Każda gałąź ma zejście awaryjne na kontener sekcji, więc rozstrzygnięcie
+nie może już dać `null`.
+
+⭐ **„O czym jest sekcja Cel" to decyzja ViewModelu, nie widoku** (`ImportTargetFocus`): zależy od wybranego
+wariantu, a widok, który liczyłby to po swojemu, byłby drugą opinią o tym, która połowa sekcji żyje. Pusta nazwa
+nowej tabeli ⇒ pole nazwy; nazwa ustalona ⇒ siatka typów, bo tam są decyzje, które zostały. Zapinowane czterema
+testami — brak tej odpowiedzi był źródłem całego defektu.
+
+Komunikaty pod chipami używają **tej samej** komendy, więc naprawa objęła je automatycznie. Każde `ReadinessItem`
+ma sekcję, a każda z pięciu sekcji prowadzi teraz gdzieś konkretnie — więc wszystkie zostają klikalne; nie ma
+komunikatu „bez dokąd", który trzeba by zamienić w zwykły tekst.
+
+**3. Zdublowane ostrzeżenie — jedno zostało.** Zdanie §0.5 („tabela powstaje i jest ZATWIERDZANA przed pierwszym
+wierszem") stało w dwóch miejscach jednego ekranu: jako `IMP0018` w pasku gotowości i jako banner pod siatką
+typów. Usunięty został **banner**, bo pasek mówi to samo, pochodzi z Core i dodatkowo **nazywa tabelę**. Dwa
+sformułowania jednego faktu uczą nie czytać żadnego. ⚠ Świadome ryzyko: pasek przycina listę do trzech pozycji,
+więc `IMP0018` może trafić pod „…i N więcej" — gdyby to okazało się realne w praktyce, poprawką jest wzmocnienie
+**paska**, nigdy dodanie drugiego zdania.
+
+**4. Existing / New table — jedna siatka zamiast dwóch.** Oba warianty leżały w osobnych `Grid`ach, więc każdy
+mierzył szerokość kolumny po **własnej** etykiecie i pola wejściowe zaczynały się w różnych miejscach; między
+nimi stała jeszcze linia faktów, dzieląc jeden wybór na pół. Teraz to jedna siatka o dwóch wierszach i wspólnych
+kolumnach — pola startują w tym samym `x`, a linia faktów zeszła **pod** parę, gdzie należy do odpowiedzi, nie do
+pytania. Dokładnie układ ze szkicu użytkownika, o jeden wiersz niższy niż wcześniej.
+
+**5. Drobiazgi.** Kolumna **Basis** jest jednoliniowa z przycięciem i pełnym tekstem w podpowiedzi: zawijanie
+ustawiało wysokość całego wiersza i pozwalało objaśnieniu zdominować siatkę, którą tylko opisuje (§0.6 mówi o
+**dostępności** dowodu, nie o tym, że ma być najszerszy na ekranie). Panel **Mapowanie** dostał tytuł — połowa
+„Podgląd" już go miała, więc obszar roboczy czytał się jako jedna nierozdzielona powierzchnia z pływającą linią
+statusu; oba tytuły mają teraz tę samą wagę (współdzielony `group-header`, użyty ponownie, nie nowy styl), a
+dynamiczny licznik został przy nich jako tekst poboczny. Warstw informacji jest o jedną mniej — dzięki punktowi 3.
+
+---
 
 #### ⭐ Szew po przeglądzie I11 — wyjście z profilu (2026-07-27)
 

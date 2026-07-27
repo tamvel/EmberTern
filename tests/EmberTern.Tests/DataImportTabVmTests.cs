@@ -1388,4 +1388,69 @@ public class DataImportTabVmTests : IDisposable
         Assert.Equal("VARCHAR(30)", vm.Target.NewColumns.Single(c => c.Name == "ILOSC").TypeText);
         Assert.Equal(2, vm.PreviewRows.Count);
     }
+
+    // ── Readiness chips: where a section's chip lands ───────────────────────────────────────────────────
+    //
+    // ⭐ The chips were reported as feeling dead, and the cause was here rather than in the view's plumbing:
+    // "which control is this section about" had no answer, so the view guessed one that is disabled in half
+    // the states (the existing-table picker) and focus silently went nowhere. The answer is a VM decision —
+    // it follows the variant the user chose — so it is pinned as one.
+
+    [Fact]
+    public async Task TargetFocus_IsTheExistingTablePicker_WhenImportingIntoAnExistingTable()
+    {
+        var vm = Vm(target: LabTarget());
+        await SettleAsync(vm);
+
+        Assert.Equal(ImportTargetFocus.ExistingTablePicker, vm.TargetFocus);
+    }
+
+    /// <summary>A new table with no name yet: nothing downstream means anything until it is named, so that is
+    /// where the chip lands.</summary>
+    [Fact]
+    public async Task TargetFocus_IsTheNameBox_WhenANewTableHasNoNameYet()
+    {
+        var vm = Vm(target: LabTarget());
+        await SettleAsync(vm);
+
+        vm.Target.IsNewTable = true;
+        await SettleAsync(vm);
+
+        Assert.Equal(ImportTargetFocus.NewTableName, vm.TargetFocus);
+    }
+
+    /// <summary>⭐ Once it is named, the decisions left are the TYPES — so the chip lands on the grid, not back
+    /// on a name the user has already settled. This is the state the old resolution could not reach at all: it
+    /// aimed at the existing-table picker, which is disabled here, and therefore did nothing.</summary>
+    [Fact]
+    public async Task TargetFocus_IsTheColumnGrid_OnceTheNewTableIsNamed()
+    {
+        var vm = Vm(target: LabTarget());
+        await SettleAsync(vm);
+
+        vm.Source.FilePath = WriteFile("focus.csv", "KOD;ILOSC\nA1;1\n");
+        vm.Target.IsNewTable = true;
+        vm.Target.NewTableName = "IMP_FOCUS";
+        await SettleAsync(vm);
+
+        Assert.Equal(ImportTargetFocus.NewTableColumns, vm.TargetFocus);
+    }
+
+    /// <summary>Switching back hands the section to the picker again — the answer follows the live variant, it
+    /// is not latched at the moment a variant was first chosen.</summary>
+    [Fact]
+    public async Task TargetFocus_FollowsTheVariant_BothWays()
+    {
+        var vm = Vm(target: LabTarget());
+        await SettleAsync(vm);
+
+        vm.Target.IsNewTable = true;
+        vm.Target.NewTableName = "IMP_FOCUS";
+        await SettleAsync(vm);
+        Assert.NotEqual(ImportTargetFocus.ExistingTablePicker, vm.TargetFocus);
+
+        vm.Target.IsExistingTable = true;
+        await SettleAsync(vm);
+        Assert.Equal(ImportTargetFocus.ExistingTablePicker, vm.TargetFocus);
+    }
 }
