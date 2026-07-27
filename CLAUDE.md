@@ -30,7 +30,7 @@ verbatim, in the archive below.
 | **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next, and the remaining-scope table for I6–I12. **§3.8 holds the OPEN UX findings from the I5 review (U1–U10) — read it before touching the surface's layout.** | **Every Data Import session — read the status block + §3.8 + your etap's row in §6 first.** |
 | **`docs/design/data-import-i9-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I9** implementation session — the first etap that adds a new SOURCE (`.xlsx`), and therefore **the first real test of the "one pipeline for every source" pillar**: if adding a provider requires touching anything below `IImportProvider`, that is a stop-and-report. Carries the input state, the reuse inventory, REK-6's seven binding provider guidelines (all measured, incl. SAX-not-DOM at 77× memory and "place values by `CellReference`, never positionally"), the standing "no global UI work" rule, and the DoD incl. the live run and the owed **first real file with dates** (an explicit I0 measurement gap). Replace it with the I10 equivalent once I9 closes. | When starting etap I9. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (250 entries, #1–#263), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (252 entries, #1–#265), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -276,9 +276,33 @@ noted.
 
 ## Current state
 
+- **🔴 I8 REVIEW FOUND A CRASH — FIXED 2026-07-27, and its two lessons generalise well past this module
+  (gotchas #264 / #265).** Symptom: new table → Validate passes → **Import closes the whole application**.
+  Diagnosed in a minute from `%TEMP%\EmberTern-debug.log`, which the app's own `AppDomain.UnhandledException`
+  hook fills with the full stack trace — **read that log first when a crash is reported, before re-reading any
+  code.** Two independent defects, both mine, both pinned:
+  **(1) Hiding a control does not retract the decision it carries.** "Empty the table before importing" is
+  meaningless for a table about to be created and its checkbox is hidden in that variant — but `BuildBehavior`
+  still copied the value, so a tick made on the existing-table variant (or, more likely, arriving inside the
+  **restored "last used" configuration**, where the user never saw it) left `true` in the record and the run
+  read a row count from a table that did not exist yet. Fixed in the ONE place that turns UI state into the
+  record; the tick itself is deliberately not cleared, so switching back finds it where it was left.
+  **(2) ⭐ `AsyncRelayCommand` rethrows a faulted command on the dispatcher, so an unhandled exception in a
+  `[RelayCommand]` does not produce a bad report — it terminates the process.** The catch clauses were
+  allow-lists of exception TYPES, and this VM reaches the world only through `DataImportEnvironment`'s
+  delegates precisely so no Firebird type reaches a ViewModel (rule #1) — **that erasure cuts both ways: a
+  component that talks to the world through delegates cannot enumerate the exceptions the world throws.** It
+  could not even *name* `DdlExecutionException` without breaking its own layering. Now caught **by POSITION
+  (this is the boundary), not by TYPE**, with `OperationCanceledException` kept separate and above (#253), at
+  all 12 delegate seams, the other async commands, and the fire-and-forget recalculation chain (whose escapes
+  became `UnobservedTaskException`). ⚠ This also hid a second, unreported crash: **any refused `CREATE TABLE`
+  would have closed the app too**, since `DdlExecutionException` was on no list either.
+  **Proof the guards work:** both fixes were temporarily reverted and the two new tests duly failed. The
+  regression test throws a type nobody would put on an allow-list, from **every collaborator in turn**, so it
+  fails the day anyone narrows a catch again.
 - **✅ I8 — NEW TABLE: DELIVERED 2026-07-27, awaits the user's visual confirmation in both palettes.
-  Next: I9 XLSX · I10 XLS · I11 named profiles · I12 close-out.** Branch `feat/data-import`, suite **5693
-  green** (+86), build 0/0, app launches clean. **Live-verified:** `tools/probes/DataImportRunProbe` gained
+  Next: I9 XLSX · I10 XLS · I11 named profiles · I12 close-out.** Branch `feat/data-import`, suite **5704
+  green** (+97), build 0/0, app launches clean. **Live-verified:** `tools/probes/DataImportRunProbe` gained
   section **G** and runs **20/20 ALL PASS** against FB5 `WI-V5.0.3.1683`.
   **⭐ Four things worth carrying forward.**
   (1) ⭐⭐ **`ColumnTypeInferencer` owns no parser.** Every "could this value be a number / a date / a
@@ -2153,7 +2177,7 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5693 as of 2026-07-27
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5704 as of 2026-07-27
   (`feat/data-import`, etap I8)** — all green in ONE `dotnet test` run (~8s).
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
@@ -2957,7 +2981,7 @@ Before considering any UI task done, verify:
 
 ## Live gotchas — load-bearing subset
 
-The **complete** catalog (250 entries, organized thematically) lives in
+The **complete** catalog (252 entries, organized thematically) lives in
 **[`docs/gotchas.md`](docs/gotchas.md)**. Below are the ~20 that are load-bearing across almost
 *any* future session — the rest are searchable there by keyword the moment a bug "feels
 familiar". Each line is a one-sentence summary; follow the `#N` reference into `docs/gotchas.md`
@@ -3156,7 +3180,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (250 entries, #1–#263), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (252 entries, #1–#265), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a

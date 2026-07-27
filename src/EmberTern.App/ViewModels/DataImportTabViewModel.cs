@@ -339,10 +339,64 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     public bool CanValidate => !IsRunning && Readiness.CanValidate;
 
     [RelayCommand(CanExecute = nameof(CanImport))]
-    private Task ImportAsync() => RunAsync(validation: false);
+    private Task ImportAsync() => RunGuardedAsync(validation: false);
 
     [RelayCommand(CanExecute = nameof(CanValidate))]
-    private Task ValidateAsync() => RunAsync(validation: true);
+    private Task ValidateAsync() => RunGuardedAsync(validation: true);
+
+    /// <summary>
+    /// ⭐ <b>The command boundary — the last place a failure can stop, and therefore the place that guarantees
+    /// an import can never take the application down with it.</b>
+    /// <para>
+    /// This is not belt-and-braces around code that already handles its errors; it is load-bearing, and it is
+    /// here because of a specific, measured defect. <c>AsyncRelayCommand</c> rethrows a faulted command's
+    /// exception <b>on the dispatcher</b>, where nothing is left to catch it — so any exception this module
+    /// fails to handle does not produce a bad report, it terminates the process.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>Why a catch-all rather than a list of expected types.</b> This VM reaches the world exclusively
+    /// through <see cref="DataImportEnvironment"/>'s delegates, precisely so no Firebird type reaches a
+    /// ViewModel (rule #1). That erasure cuts both ways: <b>a component that talks to the world through
+    /// delegates cannot enumerate the exceptions the world throws.</b> An allow-list here is unknowable by
+    /// construction, and it duly failed — <c>FbException</c> and <c>DdlExecutionException</c>, the two most
+    /// likely failures in a database module, were on none of them.
+    /// </para>
+    /// <para>
+    /// A cancellation is let through untouched: it is the user's decision, not a fault, and
+    /// <see cref="RunAsync"/> already reports it as such (gotcha #253).
+    /// </para>
+    /// </summary>
+    private async Task RunGuardedAsync(bool validation)
+    {
+        try
+        {
+            await RunAsync(validation).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // Already reported where it happened; nothing here to add.
+        }
+        catch (Exception ex)
+        {
+            ReportUnexpected(ex);
+        }
+    }
+
+    /// <summary>
+    /// The ONE way this surface reports a failure it did not anticipate: as a message the user can read and
+    /// copy, on the shared banner, with the run left in a clean state.
+    /// </summary>
+    private void ReportUnexpected(Exception ex)
+    {
+        Timer.Stop();
+        IsRunning = false;
+        ProgressText = string.Empty;
+        ProgressPercent = 0;
+        IsProgressIndeterminate = true;
+
+        SetStatus(ex.Message, MessageSeverity.Error);
+        PublishReadiness();
+    }
 
     [RelayCommand(CanExecute = nameof(IsRunning))]
     private void CancelRun() => _run?.Cancel();
@@ -442,9 +496,12 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             SetStatus(UiStrings.ImportRunCancelled, MessageSeverity.Warning);
             await DropCreatedTableIfFailedAsync(configuration, createdTable, failed: true).ConfigureAwait(true);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException
-                                      or UnauthorizedAccessException or NotSupportedException)
+        catch (Exception ex)
         {
+            // Everything that is not a cancellation is a failure of the RUN, and the run is the thing that
+            // knows a created table may now need undoing. The type is deliberately not narrowed: the writer,
+            // the target and the transaction all arrive as delegates, so their exceptions are not this VM's to
+            // enumerate (see RunGuardedAsync).
             clock.Stop();
             SetStatus(ex.Message, MessageSeverity.Error);
             await DropCreatedTableIfFailedAsync(configuration, createdTable, failed: true).ConfigureAwait(true);
@@ -496,10 +553,13 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
             return tableName;
         }
-        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or ArgumentException)
+        catch (Exception ex)
         {
             // Nothing has been written yet, so refusing here costs the user nothing — which is exactly why the
             // CREATE goes first rather than somewhere in the middle.
+            // ⚠ Not narrowed by type on purpose: the executor reaches this VM as a delegate, and what it
+            // actually throws (DdlExecutionException) is a Firebird type a ViewModel may not name (rule #1).
+            // An allow-list here would have turned every refused CREATE into a closed application.
             SetStatus(
                 string.Format(CultureInfo.CurrentCulture, UiStrings.ImportCreateTableFailedFormat, tableName, ex.Message),
                 MessageSeverity.Error);
@@ -517,8 +577,10 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             return await _environment.ReadTargetAsync(tableName, CancellationToken.None).ConfigureAwait(true);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        catch (Exception ex)
         {
+            // Degrading to the projection is fine — it describes the table we just asked for. Failing the whole
+            // run because the catalog read stumbled would not be.
             SetStatus(ex.Message, MessageSeverity.Warning);
             return null;
         }
@@ -569,8 +631,10 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
                 string.Format(CultureInfo.CurrentCulture, UiStrings.ImportDroppedTableFormat, createdTable),
                 MessageSeverity.Success);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        catch (Exception ex)
         {
+            // The table stays, and the status says so. Throwing out of a clean-up that runs during another
+            // failure's unwind would replace one problem the user can read with a window that is simply gone.
             SetStatus(
                 string.Format(CultureInfo.CurrentCulture, UiStrings.ImportDropTableFailedFormat, createdTable, ex.Message),
                 MessageSeverity.Error);
@@ -592,10 +656,12 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             {
                 rows = await _environment.CountTargetRowsAsync(tableName, CancellationToken.None).ConfigureAwait(true);
             }
-            catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+            catch (Exception ex)
             {
                 // A count we could not take is not a reason to skip the question — only a reason to ask it
-                // without the number.
+                // without the number. ⚠ This is the line the I8 crash came out of: the target did not exist
+                // yet, the engine said so with an FbException, and an allow-list that did not name that type
+                // let the exception escape the command and take the process down.
                 SetStatus(ex.Message, MessageSeverity.Warning);
             }
         }
@@ -651,7 +717,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             Report.TransactionLeftOpen = false;
             SetStatus(UiStrings.ImportCommitted, MessageSeverity.Success);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        catch (Exception ex)
         {
             SetStatus(ex.Message, MessageSeverity.Error);
         }
@@ -672,7 +738,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             Report.TransactionLeftOpen = false;
             SetStatus(UiStrings.ImportRolledBack, MessageSeverity.Success);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        catch (Exception ex)
         {
             SetStatus(ex.Message, MessageSeverity.Error);
         }
@@ -686,7 +752,15 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     private async Task ExportReportAsync()
     {
         if (ExportReportRequested is null || Report.Problems.Count == 0) return;
-        await ExportReportRequested.Invoke(Report.Problems).ConfigureAwait(true);
+
+        try
+        {
+            await ExportReportRequested.Invoke(Report.Problems).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            ReportUnexpected(ex);
+        }
     }
 
     [RelayCommand]
@@ -716,11 +790,18 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     {
         if (FilePickRequested is null) return;
 
-        var path = await FilePickRequested.Invoke().ConfigureAwait(true);
-        if (string.IsNullOrWhiteSpace(path)) return;
+        try
+        {
+            var path = await FilePickRequested.Invoke().ConfigureAwait(true);
+            if (string.IsNullOrWhiteSpace(path)) return;
 
-        Source.UseFile = true;
-        Source.FilePath = path;   // raises Changed → recalculation
+            Source.UseFile = true;
+            Source.FilePath = path;   // raises Changed → recalculation
+        }
+        catch (Exception ex)
+        {
+            ReportUnexpected(ex);
+        }
     }
 
     [RelayCommand]
@@ -728,9 +809,16 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     {
         if (ClipboardReadRequested is null) return;
 
-        var text = await ClipboardReadRequested.Invoke().ConfigureAwait(true);
-        Source.ClipboardText = text ?? string.Empty;
-        Source.UseFile = false;
+        try
+        {
+            var text = await ClipboardReadRequested.Invoke().ConfigureAwait(true);
+            Source.ClipboardText = text ?? string.Empty;
+            Source.UseFile = false;
+        }
+        catch (Exception ex)
+        {
+            ReportUnexpected(ex);
+        }
     }
 
     /// <summary>A readiness chip was clicked — expand and focus the section that caused it. The advantage
@@ -864,7 +952,30 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         _recalculation = cts;
 
         UpdateFileFacts();
-        PendingRecalculation = RunChainAsync(cts.Token);
+        PendingRecalculation = RunGuardedChainAsync(cts.Token);
+    }
+
+    /// <summary>
+    /// The chain's own boundary. Every link already degrades in place, but the chain is started
+    /// <b>fire-and-forget</b> — nobody awaits <see cref="PendingRecalculation"/> outside the tests — so an
+    /// exception escaping it would become an <c>UnobservedTaskException</c> and be rethrown by the finalizer
+    /// thread. Recalculating is background work the user did not ask for by name; it must never be able to
+    /// close the window.
+    /// </summary>
+    private async Task RunGuardedChainAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RunChainAsync(cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer edit — the normal way a chain ends.
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, MessageSeverity.Error);
+        }
     }
 
     /// <summary>
@@ -957,8 +1068,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             // Superseded by a newer edit — not a failure, and nothing to report.
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException
-                                      or UnauthorizedAccessException or NotSupportedException)
+        catch (Exception ex)
         {
             ConvertedPreview.Clear();
             SetStatus(ex.Message, MessageSeverity.Error);
@@ -1067,7 +1177,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             // Superseded by a newer edit — not a failure, and nothing to report (gotcha #253).
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        catch (Exception ex)
         {
             SetStatus(ex.Message, MessageSeverity.Error);
         }
@@ -1124,7 +1234,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             // Superseded — not a failure.
         }
-        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        catch (Exception ex)
         {
             SetStatus(ex.Message, MessageSeverity.Error);
         }
@@ -1176,7 +1286,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             return;
         }
-        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        catch (Exception ex)
         {
             _target = null;
             Target.ShowFacts(null);
@@ -1303,7 +1413,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             // Superseded by a newer change — not a failure, and nothing to report.
             return;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        catch (Exception ex)
         {
             _schema = null;
             _sourceReadable = false;

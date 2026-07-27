@@ -60,12 +60,40 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | **✅ I7 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-26)** | Podgląd po konwersji + pasek poleceń (`Importuj`/F5, `Waliduj`/Ctrl+F5, `Anuluj`/Esc, tryb transakcji, polityka błędów, `ExecutionTimer`) + uruchomienie z postępem i anulowaniem + zakładki **Błędy** i **Raport** + Commit/Rollback w raporcie + eksport raportu przez istniejący framework + „ostatnio użyta" konfiguracja + domknięta zaległość I6 (liczba rekordów przy „opróżnij tabelę"). **KONIEC MVP** |
 | **✅ I7.5 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-26)** | Data Import ma **własną transakcję na własnym przyłączeniu** (amendment §4.5): wspólny `FirebirdSessionConnection` wydzielony z Debuggera przez kompozycję, `ImportSessionConnection`, `PendingWorkRegistry` jako **jedyny właściciel** pytania o niezatwierdzoną pracę. Sonda **13/13 ALL PASS** |
 | **✅ I8 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | Nowa tabela: `ColumnTypeInferencer` (skan CAŁEGO źródła), `ImportNewTable` (jedyny właściciel „definicja → SQL"), edytowalna siatka typów z kolumną „Podstawa", podgląd DDL, `CREATE` na linii **Ddl** przed pierwszym wierszem, `DROP` przy niepowodzeniu, `IMP0028` |
+| **🔴 I8 — POPRAWKA PO PRZEGLĄDZIE (2026-07-27): „Importuj" na nowej tabeli ZAMYKAŁO APLIKACJĘ** | Zgłoszone przez użytkownika; **dwa niezależne defekty, oba w I8**, oba naprawione i zapinowane. Szczegóły w bloku niżej |
 | **Następny etap** | **I9** — XLSX (`EmberTern.Export.Office` → `EmberTern.Office`, `XlsxImportProvider`, 7 wytycznych z REK-6) |
-| **Testy** | **5693 zielone**, 0 niepowodzeń (I8 dodał **+86**; wszystkich testów importu jest teraz **429**) |
+| **Testy** | **5704 zielone**, 0 niepowodzeń (I8 dodał **+97**, w tym **+11 regresyjnych po awarii z przeglądu**; wszystkich testów importu jest teraz **440**) |
 | **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **sekcja G z I8**) przeciwko FB5 `WI-V5.0.3.1683` — **20/20 ALL PASS**: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, **kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, a Rollback cofa wiersze i NIE cofa tabeli** |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
 | **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **pięć VM-ów i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
 | **⭐ Kamień milowy** | **MVP (I0–I7) DOSTARCZONE: CSV/TXT → istniejąca tabela działa end-to-end**, z walidacją, raportem, decyzją transakcyjną i pamięcią ostatniej konfiguracji. **I8 dokłada drugi wariant celu — tabelę, której jeszcze nie ma.** Wszystko dalej (I9–I12) jest przyrostowe. |
+
+### 🔴 I8 — awaria znaleziona w przeglądzie i jej dwie przyczyny (2026-07-27)
+
+**Objaw:** nowa tabela → „Waliduj" przechodzi → „Importuj" → **aplikacja natychmiast się zamyka.**
+**Diagnoza zajęła minutę, bo aplikacja loguje własne awarie**: `AppDomain.UnhandledException` zapisuje pełny
+ślad stosu do `%TEMP%\EmberTern-debug.log`. Tam stało wprost: `FbException` SQLSTATE **-204 „Table unknown
+XXX_GG_TMP_IMPORT_FANTOM"`, rzucone przez `FirebirdImportTargetPreparer.CountRowsAsync`, wywołane z
+`ConfirmEmptyAsync`. **Zawsze czytaj ten log jako pierwszy** — nie zaczynaj od ponownego czytania kodu.
+
+**⭐ To, że Waliduj przechodziło, a Importuj się wywalało, było samo w sobie wskazówką:** `emptyFirst` to
+`!validation && …`, więc feralna ścieżka istniała wyłącznie w prawdziwym przebiegu.
+
+| # | Defekt | Dlaczego powstał | Poprawka |
+|---|---|---|---|
+| **1** | **„Opróżnij tabelę przed importem" było WŁĄCZONE dla nowej tabeli.** Przebieg pytał o `COUNT(*)` z tabeli, której jeszcze nie ma — bo `CREATE` leci dopiero po potwierdzeniu | Widok **ukrywa** ten checkbox w wariancie „nowa tabela", ale `BuildBehavior` kopiowało wartość bezwarunkowo. **Ukrycie kontrolki nie wycofuje decyzji, którą ona niesie.** Wartość mogła też przyjść z **przywróconej konfiguracji „ostatnio użytej"** — wtedy użytkownik nigdy jej nie widział | `BuildBehavior` → `EmptyTargetBeforeImport = !IsNewTable && EmptyBeforeImport`. Poprawka **w jedynym miejscu tłumaczącym stan UI na rekord** (§4.8.6); strażnik u konsumenta byłby drugą opinią o tym, czyja to decyzja. Sam „ptaszek" **nie jest kasowany** — powrót do wariantu istniejącej tabeli zastaje go tam, gdzie użytkownik go zostawił |
+| **2** | **Wyjątek wyszedł z komendy i zabił proces.** `AsyncRelayCommand` rzuca błąd nieudanej komendy **na dispatcherze**, gdzie nie ma już czego go złapać — więc nieobsłużony wyjątek nie daje złego raportu, tylko kończy aplikację | Klauzule `catch` były **białymi listami TYPÓW** (`InvalidOperationException or TimeoutException …`). ⭐ A ten VM sięga po świat **wyłącznie przez delegaty** z `DataImportEnvironment`, właśnie po to, by żaden typ Firebirda nie dotarł do ViewModelu (reguła #1) — i to wymazanie działa w obie strony: **komponent rozmawiający ze światem przez delegaty nie może wyliczyć wyjątków, które świat rzuca.** Moduł nie mógł nawet *nazwać* `DdlExecutionException` bez złamania własnych warstw | Nowa granica `RunGuardedAsync` + `ReportUnexpected` — łapanie **po POZYCJI (to jest granica), nie po TYPIE**. `OperationCanceledException` osobno i wyżej (anulowanie to decyzja, nie usterka — #253). Rozszerzone na wszystkie 12 styków z delegatami, na pozostałe komendy async oraz na **łańcuch przeliczeń**, który jest *fire-and-forget* i zamieniał ucieczkę w `UnobservedTaskException` |
+
+⚠ **Defekt 2 krył jeszcze jedną, niezauważoną awarię:** `FirebirdDdlExecutor` rzuca `DdlExecutionException`,
+którego nie było na żadnej liście — więc **każdy odrzucony `CREATE TABLE` również zamknąłby aplikację**,
+zanim ktokolwiek zobaczyłby komunikat serwera. Znalezione przy okazji, nie przez zgłoszenie.
+
+**Testy regresyjne (+11) i dowód, że działają:** obie poprawki zostały **tymczasowo wycofane**, a testy
+`ANewTable_NeverCarriesEmptyTheTableFirst_EvenIfItWasTickedEarlier` i
+`NoCollaboratorCanTakeTheApplicationDown(failing: "count")` **wywaliły się** — po czym poprawki wróciły.
+Test rzuca typ, którego nikt nigdy nie wpisałby na białą listę, **z każdego współpracownika po kolei**
+(create · read · count · write · commit · rollback · drop · tables), więc wywali się w dniu, w którym ktoś
+znów zawęzi którykolwiek `catch`. Gotchy **#264** i **#265**.
 
 ### ⭐ I8 as-built — cztery rzeczy warte zapamiętania
 

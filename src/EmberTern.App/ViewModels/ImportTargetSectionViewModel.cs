@@ -257,10 +257,27 @@ public sealed partial class ImportTargetSectionViewModel : ViewModelBase
         return TargetDescriptor.New(NewTableName.Trim(), BuildNewColumns());
     }
 
+    /// <summary>
+    /// Produces the behaviour slice.
+    /// <para>
+    /// ⚠ <b>"Empty the table first" is emitted only for an EXISTING table, and that is a correctness rule, not
+    /// tidiness.</b> A table this import is about to create cannot have rows in it, so the option has no meaning
+    /// there — and the surface hides its checkbox in that variant. But <b>hiding a control does not retract the
+    /// decision it carries</b>: a user who ticked the box on the existing-table variant and then switched to
+    /// "new table" left <c>true</c> sitting in the record, invisible, and the run then tried to
+    /// <c>SELECT COUNT(*)</c> from a table that did not exist yet. The two facts live in this VM, so the
+    /// reconciliation belongs here, in the ONE place that turns them into the record (§4.8.6).
+    /// </para>
+    /// <para>
+    /// <see cref="EmptyBeforeImport"/> itself is deliberately NOT cleared: switching back to an existing table
+    /// should find the tick where the user left it. What the record must not carry is a decision that does not
+    /// apply.
+    /// </para>
+    /// </summary>
     public ImportBehaviorOptions BuildBehavior(ImportBehaviorOptions current)
         => current with
         {
-            EmptyTargetBeforeImport = EmptyBeforeImport,
+            EmptyTargetBeforeImport = !IsNewTable && EmptyBeforeImport,
             DropTableOnFailure = DropTableOnFailure,
         };
 

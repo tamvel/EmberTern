@@ -69,10 +69,13 @@ public class DataImportNewTableTests : IDisposable
         private readonly int _failAt;
         private int _sinceFlush;
 
-        public FakeWriter(Ledger ledger, int failAt = -1)
+        private readonly Exception? _throwOnBegin;
+
+        public FakeWriter(Ledger ledger, int failAt = -1, Exception? throwOnBegin = null)
         {
             _ledger = ledger;
             _failAt = failAt;
+            _throwOnBegin = throwOnBegin;
         }
 
         public List<ImportRow> Rows { get; } = new();
@@ -80,6 +83,8 @@ public class DataImportNewTableTests : IDisposable
 
         public Task BeginAsync(ImportTarget target, IReadOnlyList<ColumnMapping> mapping, CancellationToken ct)
         {
+            if (_throwOnBegin is not null) throw _throwOnBegin;
+
             Target = target;
             _ledger.Steps.Add("begin");
             return Task.CompletedTask;
@@ -115,6 +120,16 @@ public class DataImportNewTableTests : IDisposable
     /// A surface aimed at a NEW table: a source, the new-table variant, a name, and whatever the test needs.
     /// The catalog holds one unrelated table, so "the name is free" is a fact rather than an absence of data.
     /// </summary>
+    /// <summary>
+    /// An exception type nobody would ever put on an allow-list of "expected" failures — which is the point.
+    /// The real crash came through <c>FbException</c>, a Firebird type a ViewModel may not even name (rule #1);
+    /// this stands in for it and for every other type the delegates might one day throw.
+    /// </summary>
+    private sealed class ProbeFailure : Exception
+    {
+        public ProbeFailure(string where) : base($"boom in {where}") { }
+    }
+
     private async Task<(DataImportTabViewModel Vm, FakeWriter Writer, Ledger Ledger)> NewTableVmAsync(
         string csv = "KOD;ILOSC\nA1;5\nA2;12\n",
         string name = "IMP_NEW",
@@ -122,25 +137,41 @@ public class DataImportNewTableTests : IDisposable
         bool ddlFails = false,
         Func<string, Task<bool>>? confirm = null,
         List<string>? transactionActions = null,
-        ImportTarget? existing = null)
+        ImportTarget? existing = null,
+        List<string>? counted = null,
+        string? throwFrom = null)
     {
         var ledger = new Ledger();
-        var writer = new FakeWriter(ledger, failAt);
+        var writer = new FakeWriter(ledger, failAt, throwFrom == "write" ? new ProbeFailure("write") : null);
         var created = new List<ImportTarget>();
         if (existing is not null) created.Add(existing);
 
+        void FailIf(string stage)
+        {
+            if (throwFrom == stage) throw new ProbeFailure(stage);
+        }
+
         var environment = new DataImportEnvironment(() => true, () => "LAB")
         {
-            ListTablesAsync = _ => Task.FromResult<IReadOnlyList<string>>(
-                (existing is null ? new[] { "SOMETHING_ELSE" } : new[] { "SOMETHING_ELSE", existing.TableName }).ToList()),
+            ListTablesAsync = _ =>
+            {
+                FailIf("tables");
+                return Task.FromResult<IReadOnlyList<string>>(
+                    (existing is null ? new[] { "SOMETHING_ELSE" } : new[] { "SOMETHING_ELSE", existing.TableName }).ToList());
+            },
 
             // The catalog answers only for tables that exist. A new one appears here once its CREATE has run —
             // which is what lets a test prove the writer works against the CATALOG, not the projection.
-            ReadTargetAsync = (table, _) => Task.FromResult(
-                created.FirstOrDefault(t => string.Equals(t.TableName, table, StringComparison.OrdinalIgnoreCase))),
+            ReadTargetAsync = (table, _) =>
+            {
+                FailIf("read");
+                return Task.FromResult(
+                    created.FirstOrDefault(t => string.Equals(t.TableName, table, StringComparison.OrdinalIgnoreCase)));
+            },
 
             CreateTableAsync = (sql, _) =>
             {
+                FailIf("create");
                 if (ddlFails) throw new InvalidOperationException("Token unknown - line 1");
 
                 ledger.Ddl.Add(sql);
@@ -157,11 +188,27 @@ public class DataImportNewTableTests : IDisposable
                     Array.Empty<string>()));
                 return Task.CompletedTask;
             },
-            DropTableAsync = (sql, _) => { ledger.Ddl.Add(sql); ledger.Steps.Add("drop"); return Task.CompletedTask; },
+            DropTableAsync = (sql, _) =>
+            {
+                FailIf("drop");
+                ledger.Ddl.Add(sql);
+                ledger.Steps.Add("drop");
+                return Task.CompletedTask;
+            },
 
             CreateWriter = _ => writer,
-            CommitAsync = () => { transactionActions?.Add("commit"); return Task.CompletedTask; },
-            RollbackAsync = () => { transactionActions?.Add("rollback"); return Task.CompletedTask; },
+
+            // The count behind the "empty the table first" confirmation — the very call that crashed I8.
+            CountTargetRowsAsync = (table, _) =>
+            {
+                counted?.Add(table);
+                FailIf("count");
+                return Task.FromResult(3L);
+            },
+            EmptyTargetAsync = (table, _) => { ledger.Steps.Add("empty"); return Task.FromResult(3L); },
+
+            CommitAsync = () => { FailIf("commit"); transactionActions?.Add("commit"); return Task.CompletedTask; },
+            RollbackAsync = () => { FailIf("rollback"); transactionActions?.Add("rollback"); return Task.CompletedTask; },
         };
 
         var vm = new DataImportTabViewModel(environment) { PreviewDebounce = TimeSpan.Zero };
@@ -478,6 +525,118 @@ public class DataImportNewTableTests : IDisposable
 
         Assert.False(vm.BuildConfiguration().Behavior.DropTableOnFailure);
         Assert.DoesNotContain("drop", ledger.Steps);
+    }
+
+    // ══ THE I8 CRASH — the two defects behind it, each pinned separately ════════════════════════════════
+    //
+    // Reported after the I8 review: create a new table, Validate passes, press Import — and the whole
+    // application closes. The log named it exactly: SELECT COUNT(*) against a table that did not exist yet,
+    // FbException -204, escaping the command and taking the process down.
+
+    /// <summary>
+    /// ⭐⭐ <b>Defect 1 — hiding a control does not retract the decision it carries.</b>
+    /// <para>
+    /// "Empty the table before importing" is meaningless for a table the import is about to CREATE, and the
+    /// surface hides its checkbox in that variant. But the VALUE stayed in the record: a user who ticked the
+    /// box on the existing-table variant and then switched to "new table" left <c>true</c> sitting there,
+    /// invisible — and the run then read a row count from a table that did not exist.
+    /// </para>
+    /// <para>
+    /// The tick itself is deliberately NOT cleared, so switching back finds it where it was left. What the
+    /// record must not carry is a decision that does not apply.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task ANewTable_NeverCarriesEmptyTheTableFirst_EvenIfItWasTickedEarlier()
+    {
+        var (vm, _, _) = await NewTableVmAsync();
+
+        // Exactly the user's path: tick it on the existing-table variant, then switch.
+        vm.Target.IsExistingTable = true;
+        vm.Target.EmptyBeforeImport = true;
+        await SettleAsync(vm);
+        Assert.True(vm.BuildConfiguration().Behavior.EmptyTargetBeforeImport);
+
+        vm.Target.IsNewTable = true;
+        await SettleAsync(vm);
+
+        Assert.False(vm.BuildConfiguration().Behavior.EmptyTargetBeforeImport);
+
+        // ...and the tick survives for the variant it belongs to.
+        vm.Target.IsExistingTable = true;
+        await SettleAsync(vm);
+        Assert.True(vm.Target.EmptyBeforeImport);
+    }
+
+    /// <summary>The consequence, end to end: the run never asks a table that does not exist how many rows it
+    /// has. This is the exact call that produced the crash.</summary>
+    [Fact]
+    public async Task ANewTableRun_NeverCountsRowsInATableThatDoesNotExistYet()
+    {
+        var counted = new List<string>();
+        var (vm, _, _) = await NewTableVmAsync(counted: counted);
+
+        vm.Target.EmptyBeforeImport = true;
+        await SettleAsync(vm);
+
+        await vm.ImportCommand.ExecuteAsync(null);
+
+        Assert.Empty(counted);
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>Defect 2 — an import must never be able to close the application.</b>
+    /// <para>
+    /// <c>AsyncRelayCommand</c> rethrows a faulted command's exception on the dispatcher, where nothing is left
+    /// to catch it, so an unhandled exception here does not produce a bad report — it ends the process. The
+    /// catch clauses were allow-lists of exception TYPES, and this VM reaches the world only through delegates,
+    /// which means the types are not knowable here by construction. They duly missed the two most likely
+    /// failures a database module has.
+    /// </para>
+    /// <para>
+    /// The test throws a type nobody would ever put on such a list, from every collaborator in turn. It fails
+    /// the moment anyone narrows one of those catches again.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("create")]
+    [InlineData("read")]
+    [InlineData("count")]
+    [InlineData("write")]
+    [InlineData("commit")]
+    [InlineData("rollback")]
+    [InlineData("drop")]
+    [InlineData("tables")]
+    public async Task NoCollaboratorCanTakeTheApplicationDown(string failing)
+    {
+        var (vm, _, _) = await NewTableVmAsync(throwFrom: failing, confirm: _ => Task.FromResult(true));
+
+        vm.Target.DropTableOnFailure = true;
+        if (failing == "count") vm.Target.EmptyBeforeImport = true;
+        await SettleAsync(vm);
+
+        // The assertion is the absence of an escape: an unhandled exception here fails the test exactly as it
+        // would have closed the application.
+        await vm.ImportCommand.ExecuteAsync(null);
+        await vm.ValidateCommand.ExecuteAsync(null);
+        await vm.CommitCommand.ExecuteAsync(null);
+        await vm.RollbackCommand.ExecuteAsync(null);
+
+        Assert.False(vm.IsRunning);
+    }
+
+    /// <summary>And the failure is not merely survived — it is REPORTED. A run that dies quietly is only
+    /// marginally better than one that closes the window (§9.1: a refusal always carries its reason).</summary>
+    [Fact]
+    public async Task AFailingCollaborator_LeavesAMessageTheUserCanRead()
+    {
+        var (vm, _, _) = await NewTableVmAsync(throwFrom: "create");
+
+        await vm.ImportCommand.ExecuteAsync(null);
+
+        Assert.True(vm.HasStatusMessage);
+        Assert.Equal(EmberTern.App.Controls.MessageSeverity.Error, vm.StatusSeverity);
+        Assert.Contains("boom", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     // ── Switching between the two variants ──────────────────────────────────────────────────────────────
