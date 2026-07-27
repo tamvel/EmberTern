@@ -280,8 +280,14 @@ noted.
 
 ## Current state
 
-- **✅ DATA IMPORT I11 — NAMED PROFILES DELIVERED + REVIEW SEAM (2026-07-27), awaits the user's re-check in both
-  palettes. Next: I12 close-out.** Branch `feat/data-import`, suite **5846 green** (+45), build 0/0, smoke clean.
+- **🏁 DATA IMPORT I11 — CLOSED AND USER-ACCEPTED (2026-07-27). Next: I12, the module's close-out.** Branch
+  `feat/data-import`, suite **5846 green** (+45), build 0/0, smoke clean. Accepted after two review rounds, with
+  the user noting that not everything looks the way they will ultimately want it.
+  **⛔ STANDING DIRECTIVE FROM THE CLOSE: do NOT return to Data Import cosmetics.** The remaining wishes are
+  *purely* UX and belong to the planned **app-wide UX sprint** (Avalonia control replacement, density,
+  behavioural consistency) — the same sprint U4/U5 already wait in. Come back to this module **only for a real
+  functional defect**. ⚠ This is the one-task-at-a-time rule paying off in the other direction: the module was
+  carried to its frozen design without letting a cross-cutting UI concern reopen it.
   **🔁 The visual review found the selector was a ONE-WAY DOOR** — you could enter a profile but not leave it,
   neither keeping your decisions nor starting over. Two additions, and they are deliberately **two different
   actions, not one**: a standing **„(no profile)" row** at the head of the list **detaches and keeps every
@@ -313,6 +319,13 @@ noted.
   under the chips share the same command, so they were fixed by the same change — and since every
   `ReadinessItem` carries a section and all five sections now lead somewhere, none had to be demoted to plain
   text.
+  **⚠ Gotcha #273 came out of this and generalises well past the module:** a navigation affordance that resolves
+  its target by "first focusable control" silently does nothing wherever that control is disabled, and a
+  resolution allowed to return null turns a working feature into a dead one with **no failing signal at all** —
+  nothing throws, every property is healthy, the suite stays green. Three rules: a user-facing resolution must
+  not be able to produce nothing (fall back to the container); `Focus()` scrolls nothing, so pair it with
+  `BringIntoView()`; and "which control is this section about" is a **ViewModel** decision whenever it depends
+  on state the VM owns.
   **⭐ One duplicated warning removed.** §0.5's sentence ("the table is created and COMMITTED before the first
   row") stood twice on one screen — as Core's `IMP0018` in the readiness strip *and* as a banner under the type
   grid. The **banner** went: the strip says the same thing, comes from Core and additionally **names the table**,
