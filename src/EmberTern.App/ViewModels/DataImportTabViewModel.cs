@@ -83,9 +83,37 @@ public sealed class ImportProfileRowViewModel
         Configuration = profile.Configuration;
     }
 
+    private ImportProfileRowViewModel()
+    {
+        Id = string.Empty;
+        Name = string.Empty;
+        IsNone = true;
+        IsReadable = true;
+        Configuration = ImportConfiguration.Empty;
+    }
+
+    /// <summary>
+    /// ⭐ The standing „(no profile)" row — <b>working without one is a state, so it has to be a choice.</b>
+    /// <para>
+    /// Without it a selector is a one-way door: once a profile is picked there is no way to say "these decisions
+    /// are mine now, not that profile's". Selecting it therefore <b>detaches and keeps the decisions</b> — it is
+    /// not a reset. A row that quietly cleared the surface would be destroying work the user did not ask to
+    /// destroy (rule #11), and it is also why the row is named "no profile" rather than "default configuration":
+    /// the latter would promise defaults it does not restore. Clearing is <c>Reset</c>'s job, and Reset says so.
+    /// </para>
+    /// <para>
+    /// A singleton because it is immutable and carries no identity of its own; the selector compares by
+    /// reference, and one shared instance keeps that stable across a reload.
+    /// </para>
+    /// </summary>
+    public static ImportProfileRowViewModel None { get; } = new();
+
     public string Id { get; }
 
     public string Name { get; }
+
+    /// <summary>True for the standing „(no profile)" row rather than a stored profile.</summary>
+    public bool IsNone { get; }
 
     /// <summary>Saved without a connection — it arrived from a file and is offered everywhere (§4.8.3).</summary>
     public bool IsPortable { get; }
@@ -99,9 +127,11 @@ public sealed class ImportProfileRowViewModel
 
     /// <summary>What the selector shows. A profile this build cannot read says so in the list itself, because
     /// that is the moment the user is choosing.</summary>
-    public string Display => IsReadable
-        ? (IsPortable ? Name + UiStrings.ImportProfilePortableSuffix : Name)
-        : Name + UiStrings.ImportProfileUnreadableSuffix;
+    public string Display => IsNone
+        ? UiStrings.ImportProfileNone
+        : IsReadable
+            ? (IsPortable ? Name + UiStrings.ImportProfilePortableSuffix : Name)
+            : Name + UiStrings.ImportProfileUnreadableSuffix;
 }
 
 /// <summary>
@@ -354,10 +384,18 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     partial void OnSelectedProfileChanged(ImportProfileRowViewModel? value)
     {
         if (_suspendProfileSelection || value is null) return;
+
+        if (value.IsNone)
+        {
+            // Detach, and say plainly that nothing was thrown away — the whole ambiguity of a „(no profile)"
+            // entry is whether it also clears the surface, and the answer is visible the moment it is picked.
+            RestoredLastConfiguration = false;
+            SetStatus(UiStrings.ImportProfileDetached, MessageSeverity.Info);
+            return;
+        }
+
         LoadProfile(value);
     }
-
-    public bool HasProfiles => Profiles.Count > 0;
 
     /// <summary>
     /// ⭐ Says out loud which profiles the selector is showing.
@@ -545,32 +583,112 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         }
     }
 
-    private bool HasSelectedProfile => SelectedProfile is not null;
+    private bool HasSelectedProfile => SelectedProfile is { IsNone: false };
 
-    /// <summary>Re-reads the list and restores a selection by id — identity is the id, so a rename never loses
-    /// the user's place.</summary>
+    /// <summary>
+    /// ⭐ Starts over: every decision back to its default, and no profile attached.
+    /// <para>
+    /// Distinct from picking „(no profile)", which only detaches. This is the other half of the same need —
+    /// "let me begin again" — and it is the one that discards work, so it asks first whenever there is work to
+    /// discard. It does not pretend to detect whether the surface was modified (that needs a comparison the
+    /// record cannot give); it asks the answerable question instead: <b>is anything on the surface at all?</b>
+    /// </para>
+    /// </summary>
+    [RelayCommand]
+    private async Task ResetConfigurationAsync()
+    {
+        try
+        {
+            if (SurfaceHoldsWork && ConfirmRequested is not null)
+            {
+                var confirmed = await ConfirmRequested.Invoke(new ConfirmRequest
+                {
+                    Title = UiStrings.ImportResetTitle,
+                    Message = UiStrings.ImportResetQuestion,
+                    ConfirmLabel = UiStrings.ImportResetConfirm,
+                    IsDestructive = true,
+                }).ConfigureAwait(true);
+
+                if (!confirmed) return;
+            }
+
+            ResetToDefaults();
+            SetStatus(UiStrings.ImportResetDone, MessageSeverity.Info);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            ReportUnexpected(ex);
+        }
+    }
+
+    /// <summary>
+    /// The ONE way the surface goes back to nothing — used by Reset and by the „Clear" beside the restore note,
+    /// which used to carry its own copy of these three lines. Two ways to empty a surface would eventually empty
+    /// different amounts of it.
+    /// </summary>
+    private void ResetToDefaults()
+    {
+        RestoredLastConfiguration = false;
+        SelectProfileSilently(ImportProfileRowViewModel.None);
+        ApplyConfiguration(ImportConfiguration.Empty);
+    }
+
+    /// <summary>
+    /// True when the surface holds anything a reset would throw away.
+    /// <para>
+    /// Deliberately a question about EMPTINESS, not about modification. "Has this been changed since it was
+    /// loaded" would need a canonical comparison of two <c>ImportConfiguration</c>s, and a record compares its
+    /// list members by reference — the mapping is a new instance after every recalculation, so such a check
+    /// would answer "changed" immediately and always. This one is cheap and never wrong about what it claims.
+    /// </para>
+    /// </summary>
+    private bool SurfaceHoldsWork =>
+        !string.IsNullOrWhiteSpace(Source.FilePath)
+        || !Source.UseFile
+        || !string.IsNullOrWhiteSpace(Target.SelectedTable)
+        || !string.IsNullOrWhiteSpace(Target.NewTableName)
+        || SelectedProfile is { IsNone: false };
+
+    /// <summary>Moves the selection without letting it mean "the user picked this" — the guard the save,
+    /// delete and reset paths all need, in one place.</summary>
+    private void SelectProfileSilently(ImportProfileRowViewModel? row)
+    {
+        _suspendProfileSelection = true;
+        try { SelectedProfile = row; }
+        finally { _suspendProfileSelection = false; }
+    }
+
+    /// <summary>
+    /// Re-reads the list and restores a selection by id — identity is the id, so a rename never loses the
+    /// user's place. The standing „(no profile)" row leads the list and is the fallback whenever there is
+    /// nothing to select, so the selector is never empty and detaching is always one click away.
+    /// </summary>
     private void ReloadProfiles(string? selectId)
     {
         _suspendProfileSelection = true;
         try
         {
             Profiles.Clear();
+            Profiles.Add(ImportProfileRowViewModel.None);
 
             foreach (var profile in _environment.ListProfiles?.Invoke() ?? Array.Empty<ImportProfile>())
             {
                 Profiles.Add(new ImportProfileRowViewModel(profile));
             }
 
-            SelectedProfile = selectId is null
-                ? null
-                : Profiles.FirstOrDefault(p => string.Equals(p.Id, selectId, StringComparison.Ordinal));
+            SelectedProfile =
+                (selectId is null
+                    ? null
+                    : Profiles.FirstOrDefault(p => string.Equals(p.Id, selectId, StringComparison.Ordinal)))
+                ?? ImportProfileRowViewModel.None;
         }
         finally
         {
             _suspendProfileSelection = false;
         }
-
-        OnPropertyChanged(nameof(HasProfiles));
     }
 
     private ImportProfileRowViewModel? FindProfileByName(string name)
@@ -586,7 +704,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// word the user would have typed anyway.</summary>
     private string SuggestedProfileName()
     {
-        if (SelectedProfile is { } row) return row.Name;
+        if (SelectedProfile is { IsNone: false } row) return row.Name;
 
         var table = _configuration.Target.TableName;
         return string.IsNullOrWhiteSpace(table) ? string.Empty : table;
@@ -1154,13 +1272,10 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         PreviewRowRevealRequested?.Invoke(this, problem.SourceRowNumber);
     }
 
-    /// <summary>Forgets the restored configuration — the „Wyczyść" beside the quiet restore note (§4.8.4).</summary>
+    /// <summary>Forgets the restored configuration — the „Clear" beside the quiet restore note (§4.8.4). It is
+    /// the same act as Reset, so it is the same code; it simply appears where a restore is being announced.</summary>
     [RelayCommand]
-    private void ForgetLastConfiguration()
-    {
-        RestoredLastConfiguration = false;
-        ApplyConfiguration(ImportConfiguration.Empty);
-    }
+    private void ForgetLastConfiguration() => ResetToDefaults();
 
     // ── Source commands ─────────────────────────────────────────────────────────────────────────────────
 

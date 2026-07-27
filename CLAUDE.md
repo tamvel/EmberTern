@@ -280,8 +280,27 @@ noted.
 
 ## Current state
 
-- **✅ DATA IMPORT I11 — NAMED PROFILES DELIVERED (2026-07-27), awaits the user's visual confirmation in both
-  palettes. Next: I12 close-out.** Branch `feat/data-import`, suite **5835 green** (+34), build 0/0, smoke clean.
+- **✅ DATA IMPORT I11 — NAMED PROFILES DELIVERED + REVIEW SEAM (2026-07-27), awaits the user's re-check in both
+  palettes. Next: I12 close-out.** Branch `feat/data-import`, suite **5842 green** (+41), build 0/0, smoke clean.
+  **🔁 The visual review found the selector was a ONE-WAY DOOR** — you could enter a profile but not leave it,
+  neither keeping your decisions nor starting over. Two additions, and they are deliberately **two different
+  actions, not one**: a standing **„(no profile)" row** at the head of the list **detaches and keeps every
+  decision**, while a **`Reset`** button **restores the defaults and detaches**. Collapsing them would mean the
+  selector silently destroyed work nobody asked it to destroy (rule #11) — which is also why the row is named
+  "(no profile)" and **not** "default configuration": that name would promise defaults it does not restore.
+  Picking it says so on the message bar, because "will this also clear my work?" is the only question it raises.
+  **⭐ `Reset` asks about EMPTINESS, not modification.** "Has anything changed since it loaded" needs a canonical
+  comparison of two `ImportConfiguration`s, and a record compares its list members by reference — the mapping is
+  a new instance after every recalculation, so that check would answer "changed" always. So it asks the
+  answerable question — *is anything on the surface at all* — and on an empty surface it asks nothing, because a
+  dialog with no stakes only teaches people to dismiss dialogs. **`Reset` and the „Clear" beside the restore note
+  are now the same code** (`ResetToDefaults`); "Clear" had its own copy and, as a side effect of the merge,
+  finally detaches the profile too. ⚠ **`HasProfiles` was deleted** — it was bound to nothing in XAML and read
+  only by tests, the same discipline that kept `MarkUsed` out of this etap.
+  **Separation accepted, with an asymmetry that is the point:** the divider between the profile group and the
+  execution group went to a 12 px margin while the one further right stays at 4 — they are not peers, because a
+  profile is superordinate to the whole import configuration whereas the other divider only separates settings
+  *within* execution.
   **⭐⭐ I11 was the design's own audit, not a feature — and §4.8's account balanced.** §6 named the disproof
   ("if named profiles require changing even one model or rebuilding a UI section, §4.8 was violated along the
   way"). **Not one model changed:** `ImportConfiguration`, `ImportProfile`, `ImportPipeline`, the converter, the
@@ -2396,9 +2415,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5835 as of 2026-07-27
-  (`feat/data-import`, after I11 named profiles)** — green in two partitions (5795 + the 40-test
-  `ConnectionExpandBindingProbe`), ~23s.
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5842 as of 2026-07-27
+  (`feat/data-import`, after I11 named profiles + its review seam)** — green in two partitions (5802 + the
+  40-test `ConnectionExpandBindingProbe`), ~16s.
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
   a `TextEditor` throw cross-thread from every session after the first (#226).

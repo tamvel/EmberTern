@@ -114,6 +114,10 @@ public class DataImportProfileTests : IDisposable
     private static Func<ConfirmRequest, Task<bool>> Answers(bool yes)
         => _ => Task.FromResult(yes);
 
+    /// <summary>The SAVED profiles — the list without the standing „(no profile)” row that always leads it.</summary>
+    private static IReadOnlyList<ImportProfileRowViewModel> Saved(DataImportTabViewModel vm)
+        => vm.Profiles.Where(p => !p.IsNone).ToList();
+
     /// <summary>Drives a surface to a complete, runnable import: a real file, a real target, a real mapping.</summary>
     private async Task<DataImportTabViewModel> ConfiguredVmAsync(
         string? path = null,
@@ -171,9 +175,10 @@ public class DataImportProfileTests : IDisposable
 
         await vm.SaveProfileAsCommand.ExecuteAsync(null);
 
-        Assert.True(vm.HasProfiles);
         Assert.Equal("Nightly orders", vm.SelectedProfile!.Name);
-        Assert.Equal("Nightly orders", Assert.Single(vm.Profiles).Name);
+        Assert.Equal(
+            new[] { "(no profile)", "Nightly orders" },
+            vm.Profiles.Select(p => p.Display).ToArray());
     }
 
     [Fact]
@@ -184,7 +189,7 @@ public class DataImportProfileTests : IDisposable
         await vm.SaveProfileAsCommand.ExecuteAsync(null);
 
         Assert.Empty(Store().ListNamed(Connection));
-        Assert.Empty(vm.Profiles);
+        Assert.Empty(Saved(vm));
     }
 
     /// <summary>Overwriting a saved profile destroys the decisions that were in it, so it is asked about — the
@@ -251,9 +256,9 @@ public class DataImportProfileTests : IDisposable
         // A new surface — it opens knowing nothing but what the store holds.
         var second = Vm();
         await SettleAsync(second);
-        Assert.Null(second.SelectedProfile);
+        Assert.True(second.SelectedProfile!.IsNone);
 
-        second.SelectedProfile = Assert.Single(second.Profiles);
+        second.SelectedProfile = Assert.Single(Saved(second));
         await SettleAsync(second);
 
         Assert.Equal(path, second.Source.FilePath);
@@ -282,7 +287,7 @@ public class DataImportProfileTests : IDisposable
         await SettleAsync(second);
         Assert.Equal(string.Empty, second.Source.FilePath);
 
-        second.SelectedProfile = second.Profiles[0];
+        second.SelectedProfile = Saved(second)[0];
         await SettleAsync(second);
 
         Assert.NotEqual(string.Empty, second.Source.FilePath);
@@ -311,7 +316,7 @@ public class DataImportProfileTests : IDisposable
 
         var second = Vm();
         await SettleAsync(second);
-        second.SelectedProfile = second.Profiles[0];
+        second.SelectedProfile = Saved(second)[0];
         await SettleAsync(second);
 
         Assert.Contains(second.Readiness.Items, i => i.Item.Code == ImportDiagnosticCode.SourceMissing);
@@ -331,7 +336,7 @@ public class DataImportProfileTests : IDisposable
         // The same store, a database that no longer has ORDERS.
         var second = Vm(tables: new ImportTarget("INVOICES", new[] { new ColumnSpec("ID", "INTEGER") }, Array.Empty<string>()));
         await SettleAsync(second);
-        second.SelectedProfile = second.Profiles[0];
+        second.SelectedProfile = Saved(second)[0];
         await SettleAsync(second);
 
         Assert.Contains(second.Readiness.Items, i => i.Item.Code == ImportDiagnosticCode.TargetNotFound);
@@ -366,7 +371,7 @@ public class DataImportProfileTests : IDisposable
 
         var second = Vm();
         await SettleAsync(second);
-        second.SelectedProfile = second.Profiles[0];
+        second.SelectedProfile = Saved(second)[0];
         await SettleAsync(second);
 
         var mapping = second.BuildConfiguration().Mapping;
@@ -393,7 +398,7 @@ public class DataImportProfileTests : IDisposable
         var vm = Vm();
         await SettleAsync(vm);
 
-        var row = Assert.Single(vm.Profiles);
+        var row = Assert.Single(Saved(vm));
         Assert.False(row.IsReadable);
         Assert.Contains("newer", row.Display, StringComparison.OrdinalIgnoreCase);
 
@@ -462,8 +467,8 @@ public class DataImportProfileTests : IDisposable
         await vm.DeleteProfileCommand.ExecuteAsync(null);
 
         Assert.Empty(Store().ListNamed(Connection));
-        Assert.Empty(vm.Profiles);
-        Assert.Null(vm.SelectedProfile);
+        Assert.Empty(Saved(vm));
+        Assert.True(vm.SelectedProfile!.IsNone);
         Assert.Equal(path, vm.Source.FilePath);
         Assert.Equal("ORDERS", vm.Target.SelectedTable);
     }
@@ -482,6 +487,134 @@ public class DataImportProfileTests : IDisposable
 
         Assert.True(vm.RenameProfileCommand.CanExecute(null));
         Assert.True(vm.DeleteProfileCommand.CanExecute(null));
+    }
+
+    // ── Working without a profile, and starting over ────────────────────────────────────────────────────
+    //
+    // ⭐ Two needs the first cut missed, both reported from the live surface: once a profile was picked there was
+    // no way back to "no profile", and no way to clear the surface at all. They are deliberately DIFFERENT
+    // actions — see the pair of tests below. Collapsing them would mean the selector silently discarded work.
+
+    [Fact]
+    public async Task TheList_AlwaysOffersWorkingWithoutAProfile()
+    {
+        var vm = Vm();
+        await SettleAsync(vm);
+
+        Assert.True(vm.Profiles[0].IsNone);
+        Assert.Equal("(no profile)", vm.Profiles[0].Display);
+        Assert.True(vm.SelectedProfile!.IsNone);
+
+        // And it stays first once real profiles exist.
+        Store().SaveNamed(Connection, "Orders", ImportConfiguration.Empty);
+        var second = Vm();
+        await SettleAsync(second);
+        Assert.True(second.Profiles[0].IsNone);
+    }
+
+    /// <summary>
+    /// ⭐ Picking „(no profile)" DETACHES and keeps every decision. It is not a reset, and it must not be one:
+    /// throwing away the user's configuration because they stopped associating it with a saved profile is rule
+    /// #11 exactly. That is also why the row is not called "default configuration".
+    /// </summary>
+    [Fact]
+    public async Task SelectingNoProfile_Detaches_ButKeepsTheDecisions()
+    {
+        var vm = await ConfiguredVmAsync(answerName: Answers("Orders"));
+        await vm.SaveProfileAsCommand.ExecuteAsync(null);
+        var path = vm.Source.FilePath;
+
+        vm.SelectedProfile = ImportProfileRowViewModel.None;
+        await SettleAsync(vm);
+
+        Assert.True(vm.SelectedProfile!.IsNone);
+        Assert.Equal(path, vm.Source.FilePath);
+        Assert.Equal("ORDERS", vm.Target.SelectedTable);
+        // The saved profile is untouched — detaching is about this surface, not about the store.
+        Assert.Single(Store().ListNamed(Connection));
+        // And it says so, because "does this also clear my work" is the one question the row raises.
+        Assert.Contains("unchanged", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SelectingNoProfile_LeavesRenameAndDeleteWithNothingToActOn()
+    {
+        var vm = await ConfiguredVmAsync(answerName: Answers("Orders"));
+        await vm.SaveProfileAsCommand.ExecuteAsync(null);
+        Assert.True(vm.DeleteProfileCommand.CanExecute(null));
+
+        vm.SelectedProfile = ImportProfileRowViewModel.None;
+
+        Assert.False(vm.RenameProfileCommand.CanExecute(null));
+        Assert.False(vm.DeleteProfileCommand.CanExecute(null));
+    }
+
+    /// <summary>⭐ Reset is the other half: it clears every decision AND detaches, which is what „start a new
+    /// configuration" has to mean.</summary>
+    [Fact]
+    public async Task Reset_ClearsEveryDecision_AndDetaches()
+    {
+        var vm = await ConfiguredVmAsync(answerName: Answers("Orders"), answerConfirm: Answers(true));
+        await vm.SaveProfileAsCommand.ExecuteAsync(null);
+
+        await vm.ResetConfigurationCommand.ExecuteAsync(null);
+        await SettleAsync(vm);
+
+        Assert.Equal(string.Empty, vm.Source.FilePath);
+        Assert.True(string.IsNullOrEmpty(vm.Target.SelectedTable));
+        Assert.True(vm.SelectedProfile!.IsNone);
+        Assert.False(vm.RestoredLastConfiguration);
+
+        // The saved profile survives — Reset clears the surface, not the store.
+        Assert.Single(Store().ListNamed(Connection));
+    }
+
+    /// <summary>Reset discards work, so it asks — the same rule every destructive step in this module follows
+    /// (§0).</summary>
+    [Fact]
+    public async Task Reset_AsksFirst_AndChangesNothingWhenDeclined()
+    {
+        var vm = await ConfiguredVmAsync(answerConfirm: Answers(false));
+        var path = vm.Source.FilePath;
+
+        await vm.ResetConfigurationCommand.ExecuteAsync(null);
+        await SettleAsync(vm);
+
+        Assert.Equal(path, vm.Source.FilePath);
+        Assert.Equal("ORDERS", vm.Target.SelectedTable);
+    }
+
+    /// <summary>
+    /// ⚠ …but only when there is something to lose. The question asked is about EMPTINESS, not modification —
+    /// "has this changed since it loaded" would need a comparison the record cannot give (its list members
+    /// compare by reference), so it would answer "changed" always. Asking to clear an already-empty surface
+    /// would be a dialog that teaches the user to dismiss dialogs.
+    /// </summary>
+    [Fact]
+    public async Task Reset_DoesNotAsk_WhenThereIsNothingToLose()
+    {
+        var asked = 0;
+        var vm = Vm(answerConfirm: _ => { asked++; return Task.FromResult(true); });
+        await SettleAsync(vm);
+
+        await vm.ResetConfigurationCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, asked);
+    }
+
+    /// <summary>The „Clear" beside the restore note and the Reset button are the same act, so they are the same
+    /// code — two ways to empty a surface would eventually empty different amounts of it.</summary>
+    [Fact]
+    public async Task ForgettingTheRestoredConfiguration_AlsoDetachesTheProfile()
+    {
+        var vm = await ConfiguredVmAsync(answerName: Answers("Orders"));
+        await vm.SaveProfileAsCommand.ExecuteAsync(null);
+
+        vm.ForgetLastConfigurationCommand.Execute(null);
+        await SettleAsync(vm);
+
+        Assert.Equal(string.Empty, vm.Source.FilePath);
+        Assert.True(vm.SelectedProfile!.IsNone);
     }
 
     // ── The surface says what the list contains ─────────────────────────────────────────────────────────
@@ -509,8 +642,9 @@ public class DataImportProfileTests : IDisposable
         };
         await SettleAsync(vm);
 
-        Assert.Empty(vm.Profiles);
-        Assert.False(vm.HasProfiles);
+        // The standing „(no profile)" row is still there — working without one is always available, even when
+        // there is nowhere to save one.
+        Assert.True(Assert.Single(vm.Profiles).IsNone);
         Assert.False(vm.RenameProfileCommand.CanExecute(null));
     }
 }

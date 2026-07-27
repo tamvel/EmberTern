@@ -66,8 +66,9 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | **✅ I10 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | Schowek + `.xls` (BIFF8). ⭐ **Filar utrzymał się po raz drugi, tym razem pod większym obciążeniem — bo doszła NOWA ZALEŻNOŚĆ NuGet, a mimo to pipeline, konwerter, walidator, mapowanie i writer znów nie zostały tknięte.** Schowek okazał się już zbudowany (I5 dał przełącznik i pole, `MainWindow` czytanie ze schowka) — etap dołożył mu wyłącznie dowody. Szczegóły w bloku „⭐ I10 as-built" |
 | **🏁 SZEW ERGONOMICZNY PO I10 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-27)** | Trzy uwagi użytkownika z przeglądu I10, potraktowane jako domknięcie I10, **nie** jako nowy etap: schowek jako **źródło żywe**, przycisk **Odśwież**, i wymóg, żeby ponowny odczyt przechodził **tym samym łańcuchem** co pierwszy. **Potwierdzone przez użytkownika: bez uwag.** Wprost zaakceptowany kierunek architektoniczny — *„najważniejsze, że nie powstała druga ścieżka odświeżania, tylko wszystko przechodzi przez jeden łańcuch z różnymi powodami uruchomienia (Decision / Refresh)"*. `Ctrl+R` zostaje, **`F5` świadomie NIE dodane** (decyzja użytkownika — `F5` to Import). Szczegóły w bloku „⭐ Szew ergonomiczny po I10" |
 | **✅ I11 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | Nazwane profile. ⭐⭐ **Rachunek §4.8 się zgodził: ANI JEDEN model nie został zmieniony i pipeline nie został tknięty.** `ImportConfiguration`, `ImportProfile`, `ImportPipeline`, konwerter, walidator, planer mapowania i writer — bez jednej linii różnicy. Wczytanie profilu to `ApplyConfiguration` i **nic więcej**, więc profil niezgodny ze światem melduje się w pasku gotowości (IMP0011 / IMP0016), a nie wyjątkiem. Selektor wszedł w **zarezerwowane** miejsce paska B — układ toolbara nie został przebudowany. Szczegóły w bloku „⭐ I11 as-built" |
+| **🔁 I11 — SZEW PO PRZEGLĄDZIE (2026-07-27)** | Dwie uwagi użytkownika z oglądu UI, obie zasadne, obie o **wyjściu** z profilu: (1) nie dało się wrócić do pracy **bez** profilu — doszła stała pozycja **„(no profile)"** na czele listy, która **odłącza i ZOSTAWIA decyzje**; (2) nie było jak wyczyścić powierzchni — doszedł przycisk **`Reset`**, który przywraca domyślne **i** odłącza profil. To są świadomie **dwie różne akcje**, nie jedna. Plus trzecia uwaga: **wyraźniejsze oddzielenie** grupy profili od grupy wykonania. Szczegóły w bloku „⭐ I11 as-built" |
 | **Następny etap** | **I12** — domknięcie modułu (dokumentacja, audyt UI w obu paletach, pomiar na 1 M wierszy) |
-| **Testy** | **5835 zielonych**, 0 niepowodzeń (I11 dodał **+34**: 16 do magazynu, 18 w nowym `DataImportProfileTests`; szew po I10 dodał +16; I10 +22). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
+| **Testy** | **5842 zielonych**, 0 niepowodzeń (I11 dodał **+41**: 16 do magazynu, 25 w nowym `DataImportProfileTests`, w tym +7 z szwu po przeglądzie; szew po I10 dodał +16; I10 +22). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
 | **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **G z I8** + **H z I9** + **I z I10**) przeciwko FB5 `WI-V5.0.3.1683` — **33/33 ALL PASS**; sekcja I dokłada: detektor proponuje TAB dla wklejenia z Excela (3/3 rekordy zgodne co do 5 pól), wklejenie importuje się **bez pliku na dysku**, `.xls` → tabela istniejąca i → tabela nowa, `#N/A` z BIFF odrzucone przez kolumnę VARCHAR, data z `.xls` wraca z bazy tym samym dniem (2026-05-14), oraz **prawdziwy skoroszyt napisany przez Excela** (`Nadgodziny2.xls`: 3 arkusze, 20 pól, 1073 wiersze, ostatni numer 1074). Wcześniejsze: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, Rollback cofa wiersze i NIE cofa tabeli — **oraz (I9): arkusz → tabela istniejąca, arkusz → tabela nowa, prawdziwa komórka daty typuje się na `DATE` i wraca z bazy tym samym dniem (2026-04-03), a `#N/A` zostaje odrzucone przez kolumnę VARCHAR** |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
 | **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **pięć VM-ów i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
@@ -126,6 +127,47 @@ ten etap ma orzec, że jej nie ruszył** — a to jest jedyny produkt I11. Konse
 selektora nie obiecuje wymiany plikami. Gałąź `ConnectionId == null` w `ListNamed` **zostaje**, bo to nullowalne
 pole zapisanego rekordu — profil, którego żadne zapytanie nie zwraca, jest danymi nieosiągalnymi, nie brakującą
 funkcją.
+
+#### ⭐ Szew po przeglądzie I11 — wyjście z profilu (2026-07-27)
+
+Przegląd wzrokowy dał dwie uwagi i obie mówiły o tym samym braku z dwóch stron: **selektor był drogą w jedną
+stronę.** Dało się wejść w profil, nie dało się z niego wyjść — ani zostając przy swoich decyzjach, ani
+zaczynając od zera. Zwięźle: zbudowałem wybieranie, a nie zbudowałem *nie-wybierania*.
+
+**⭐⭐ To są dwie RÓŻNE akcje i połączenie ich byłoby błędem, nie uproszczeniem.**
+
+| | „(no profile)" — pozycja na liście | `Reset` — przycisk |
+|---|---|---|
+| Profil | odłączony | odłączony |
+| Decyzje na powierzchni | **zostają nietknięte** | **wyczyszczone do domyślnych** |
+| Pyta? | nie — nic nie niszczy | tak, gdy jest co stracić |
+
+Gdyby pozycja na liście czyściła powierzchnię, wybranie jej niszczyłoby pracę, o której zniszczenie nikt nie
+prosił — reguła #11 wprost. Dlatego pozycja nazywa się **„(no profile)", a nie „domyślna konfiguracja"**:
+druga nazwa obiecywałaby przywrócenie domyślnych, którego ta pozycja nie robi. Przywracanie domyślnych ma swój
+przycisk i swoją nazwę. Wybranie pozycji mówi to zresztą na pasku komunikatów — *„decyzje na powierzchni są
+niezmienione"* — bo „czy to też wyczyści moją pracę" jest jedynym pytaniem, jakie ta pozycja rodzi.
+
+**⭐ `Reset` pyta o EMPTINESS, nie o modyfikację.** „Czy coś się zmieniło od wczytania" wymagałoby kanonicznego
+porównania dwóch `ImportConfiguration`, a rekord porównuje listy po referencji — mapowanie jest nową instancją
+po każdym przeliczeniu, więc taki test odpowiadałby „zmienione" zawsze i natychmiast. Pytanie zadawane jest
+więc odpowiadalne: **czy na powierzchni cokolwiek stoi** (źródło, schowek, tabela docelowa, nazwa nowej tabeli
+albo wybrany profil). Na pustej powierzchni `Reset` nie pyta o nic — okno dialogowe bez treści uczy tylko
+odruchowego klikania „OK".
+
+⭐ **`Reset` i „Wyczyść" przy nocie o przywróceniu to teraz TEN SAM kod** (`ResetToDefaults`). „Wyczyść" miało
+własną kopię tych samych trzech linii; dwa sposoby opróżnienia powierzchni prędzej czy później opróżniałyby jej
+różną ilość. Przy okazji „Wyczyść" zaczęło poprawnie odłączać profil, czego wcześniej nie robiło.
+
+⚠ **Usunięte, bo nie miało konsumenta:** właściwość `HasProfiles`. Powstała w pierwszym podejściu i nie była
+związana z niczym w XAML-u — czytały ją wyłącznie testy. To ta sama dyscyplina, dla której w tym etapie nie
+powstało `MarkUsed`.
+
+**Trzecia uwaga — separacja wizualna — przyjęta i uzasadniona asymetrią.** Pasek ma teraz dwie kreski, ale nie
+są równorzędne: ta między grupą profili a grupą wykonania dostała margines **12 px** zamiast 4, bo dzieli
+**dwie różne rzeczy** (zarządzanie konfiguracją vs jej uruchomienie), podczas gdy druga dzieli tylko ustawienia
+*wewnątrz* grupy wykonania. Profil jest nadrzędny wobec całej konfiguracji importu, więc jego granica ma
+czytać się jako mocniejsza z dwóch.
 
 ⚠ **Poprawka przy okazji, w granicach modułu:** wspólne potwierdzenie destrukcyjne (`ConfirmRequested`) niosło
 tylko treść, a widok dokładał **stały** nagłówek „Opróżnij tabelę przed importem" i **stały** przycisk

@@ -81,7 +81,6 @@
           <ComboBox x:Name="ProfilePicker" MinWidth="170" VerticalAlignment="Center" FontSize="12"
                     ItemsSource="{Binding Profiles}"
                     SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
-                    PlaceholderText="{x:Static app:UiStrings.ImportProfilePlaceholder}"
                     IsEnabled="{Binding IsConfigurationEnabled}"
                     ToolTip.Tip="{Binding ProfileScopeNote}">
             <ComboBox.ItemTemplate>
@@ -109,7 +108,20 @@
                               Foreground="{DynamicResource DangerIconBrush}" />
           </Button>
 
-          <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+          <!-- Reset belongs on THIS side of the divider: it is about the configuration as a whole and it
+               detaches the profile, so it is part of managing profiles, not of running an import. Labelled
+               rather than icon-only because the user's report was that they could not find a way to do it —
+               an unlabelled glyph would not have fixed that. -->
+          <Button Classes="flat" Command="{Binding ResetConfigurationCommand}"
+                  IsEnabled="{Binding IsConfigurationEnabled}"
+                  Content="{x:Static app:UiStrings.ImportReset}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportResetTooltip}" />
+
+          <!-- ⭐ The bar's PRINCIPAL boundary: managing the configuration on the left, running it on the right.
+               Deliberately wider than the separator further right (which only divides settings WITHIN the
+               execution group), because these two groups are not peers — a profile is superordinate to the whole
+               import configuration, so its break should read as the stronger of the two. -->
+          <Border Width="1" Margin="12,2" Background="{DynamicResource BorderBrush}" />
 
           <Button Classes="primary" Command="{Binding ImportCommand}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportRunTooltip}">

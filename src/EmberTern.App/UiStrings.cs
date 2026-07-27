@@ -497,7 +497,11 @@ internal static class UiStrings
     // ---- Data Import: named profiles (etap I11) ----
 
     public const string ImportProfileLabel = "Profile";
-    public const string ImportProfilePlaceholder = "(none)";
+    /// <summary>The standing first row. ⚠ Named for what it IS — no profile attached — and deliberately NOT
+    /// „default configuration", which would promise defaults it does not restore. Restoring them is Reset.</summary>
+    public const string ImportProfileNone = "(no profile)";
+    public const string ImportProfileDetached =
+        "Working without a profile. The decisions on the surface are unchanged — use Reset to clear them.";
     /// <summary>Says which profiles the selector holds. A restriction the user cannot see is indistinguishable
     /// from a profile that has gone missing (§4.8.3).</summary>
     public const string ImportProfileScopeFormat =
@@ -538,6 +542,18 @@ internal static class UiStrings
         "data is touched.";
     public const string ImportProfileDeleteConfirm = "Delete";
     public const string ImportProfileDeletedFormat = "Deleted profile {0}.";
+
+    /// <summary>Start again: every decision back to its default, and no profile attached. The counterpart to
+    /// „(no profile)", which only detaches.</summary>
+    public const string ImportReset = "Reset";
+    public const string ImportResetTooltip =
+        "Start a new configuration — clears every decision, restores the defaults and detaches from the profile";
+    public const string ImportResetTitle = "Start a new configuration";
+    public const string ImportResetQuestion =
+        "Clear every decision on this surface and start again? Saved profiles are not affected, and no data " +
+        "is touched.";
+    public const string ImportResetConfirm = "Start again";
+    public const string ImportResetDone = "New configuration — defaults restored, no profile attached.";
 
     // ---- Data Import: ImportErrorKind → one sentence. The ONE table (rule #6). ----
 
