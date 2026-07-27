@@ -11,6 +11,18 @@
          decision in the module. ExcelDataReader is MIT and forward-only, which is what design R8 requires:
          measured over a 60 000-row BIFF sheet the heap stayed FLAT at 26.7 MB from row 15 000 to row 60 000. -->
     <PackageReference Include="ExcelDataReader" Version="3.7.0" />
+    <!-- SECURITY OVERRIDE, not a feature dependency. DocumentFormat.OpenXml 3.1.0 pulls
+         System.IO.Packaging 8.0.0 transitively, which carries two High advisories —
+         CVE-2024-43483 (hash flooding) and CVE-2024-43484 (algorithmic complexity), both
+         denial of service ON HOSTILE INPUT, both fixed in 8.0.1. This project READS user
+         .xlsx files since etap I9 (XlsxImportProvider), so "hostile input" is the ordinary
+         use case, not a hypothetical: an untrusted workbook reaches the OPC package reader.
+         A direct reference is how NuGet lets a leaf project win over a transitive pin; the
+         9.0.x line matches the target framework (net9.0) and the app's other Microsoft
+         runtime package (System.Security.Cryptography.ProtectedData). Raise this with the
+         framework, and re-run the vulnerable-transitive package scan (see docs/gotchas.md
+         #278) whenever DocumentFormat.OpenXml moves. -->
+    <PackageReference Include="System.IO.Packaging" Version="9.0.18" />
   </ItemGroup>
 
   <ItemGroup>

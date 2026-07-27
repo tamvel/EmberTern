@@ -754,13 +754,14 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
         return null;
     }
 
+    protected override Task<string> ReadDefinitionAsync(CancellationToken cancellationToken)
+        => DdlReader!.FetchFunctionSourceAsync(
+            new MetadataObject(FunctionName, MetadataObjectKind.Function), cancellationToken);
+
     protected override async Task LoadCoreAsync(CancellationToken cancellationToken)
     {
-        await SafeLoadAsync(async () =>
-        {
-            SourceText = await DdlReader!.FetchFunctionSourceAsync(
-                new MetadataObject(FunctionName, MetadataObjectKind.Function), cancellationToken).ConfigureAwait(true);
-        });
+        // Reads the source AND arms the change-safety gate with it — one act (see LoadDefinitionAsync).
+        await SafeLoadAsync(() => LoadDefinitionAsync(cancellationToken));
 
         await SafeLoadAsync(async () =>
         {

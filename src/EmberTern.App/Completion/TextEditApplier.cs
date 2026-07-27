@@ -5,18 +5,41 @@ using EmberTern.Core.Sql.Language.CodeActions;
 namespace EmberTern.App.Completion;
 
 /// <summary>
-/// <b>The one owner of every change EmberTern makes to a user document.</b> Quick Fixes, safe local
-/// rename, and every future code action go through here — there is deliberately no second path that
-/// writes to a <see cref="TextDocument"/> on the user's behalf.
+/// <b>The one owner of every ASSISTED edit — every change EmberTern computes from the semantic model and
+/// applies on the user's behalf.</b> Quick Fixes, safe local rename, and every future code action go through
+/// here; there is deliberately no second path that applies a model-derived edit to a
+/// <see cref="TextDocument"/>.
 /// <para>
-/// This is infrastructure, not a Quick Fix helper. It exists because mutating code the user did not
-/// type is the single most dangerous thing this application does (Architecture rule #11), and that risk
-/// is worth concentrating in one reviewable place rather than re-deriving per feature. Design:
+/// This is infrastructure, not a Quick Fix helper. It exists because mutating code the user did not type is
+/// the single most dangerous thing this application does (Architecture rule #11), and that risk is worth
+/// concentrating in one reviewable place rather than re-deriving per feature. Design:
 /// <see href="../../docs/design/editor-quick-fixes.md">editor-quick-fixes.md</see> §2.2/§6.
 /// </para>
-/// <para><b>All or nothing.</b> Every edit is validated before a single character is written; any
-/// problem refuses the whole set and leaves the document untouched. There is no partial application and
-/// no "best effort".</para>
+/// <para><b>All or nothing.</b> Every edit is validated before a single character is written; any problem
+/// refuses the whole set and leaves the document untouched. There is no partial application and no
+/// "best effort".</para>
+/// <para>
+/// ⚠ <b>What "the one owner" does and does not claim.</b> This summary used to read "the one owner of every
+/// change EmberTern makes to a user document … no second path that writes to a TextDocument", and that was
+/// simply false (audit A-04): the formatter, the context menu's Format/Comment, language expansion, typing
+/// ergonomics, auto-indent, completion insertion and snippet drop all call <c>Document.Replace</c> or
+/// <c>Document.Insert</c> directly.
+/// </para>
+/// <para>
+/// The distinction that makes those safe, and that this class actually owns, is the <b>drift window</b>. An
+/// assisted edit is computed from a <c>SemanticModel</c> at one moment and applied at another — the user may
+/// have typed in between, so its offsets are a claim about the past that has to be re-checked
+/// (<see cref="TextEdit.ExpectedOldText"/>). The direct callers have no such window: each is the synchronous
+/// response to the keystroke or command that produced it, computed and applied in the same turn, against
+/// offsets that cannot have moved. They are also individually reversible by one Ctrl+Z, and the formatter
+/// carries its own §0 lexeme-preservation invariant.
+/// </para>
+/// <para>
+/// So the rule is not "everything goes through here" but "<b>anything with a drift window goes through
+/// here</b>". That boundary is enforced, not merely documented: <c>DocumentMutationContractTests</c> pins the
+/// exact set of files allowed to call <c>Document.Replace</c>/<c>Insert</c> directly, so a new feature cannot
+/// quietly add a path that skips the drift check.
+/// </para>
 /// </summary>
 internal static class TextEditApplier
 {

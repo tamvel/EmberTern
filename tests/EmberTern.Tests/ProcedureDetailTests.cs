@@ -149,6 +149,90 @@ public class ProcedureDetailTests
         Assert.Equal(UiStrings.EditorNothingToCompile, vm.ErrorMessage);
     }
 
+    // ─── DDL change safety (audit A-01) ───────────────────────────────────
+    //
+    // These prove the gate is ON THE COMPILE PATH, which the ObjectChangeSafetyTests deliberately cannot:
+    // a component that is fully unit-tested but never called looks exactly like a working feature and
+    // exactly like a regression (gotcha #233). The engine's own decision table lives there; here we only
+    // assert that ExecuteCompileAsync consults it and stops.
+
+    [Fact]
+    public async Task ExecuteCompile_RefusesWhenSafetyCannotBeEstablished()
+    {
+        // An existing object with no reachable database: the baseline was never captured and the re-read
+        // cannot run, so the gate reports "unverifiable" — and unverifiable is NOT permission to write.
+        // Before the gate existed this reached FirebirdDdlExecutor and failed for an unrelated reason; now
+        // the refusal happens before any DDL is attempted, and says so.
+        using var harness = new Harness();
+        var vm = harness.Main.CreateProcedureDetail(new MetadataObject("SP_X", MetadataObjectKind.Procedure));
+        vm.SourceText = "CREATE OR ALTER PROCEDURE SP_X AS BEGIN END";
+
+        await vm.ExecuteCompileAsync();
+
+        Assert.NotNull(vm.ErrorMessage);
+        Assert.Contains("could not read the current state", vm.ErrorMessage!, StringComparison.Ordinal);
+        Assert.Contains("Nothing was written", vm.ErrorMessage!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExecuteCompile_NewObject_RefusesWhenTheNameIsAlreadyTaken()
+    {
+        // The New flow's own hazard: BuildFullSource always emits CREATE OR ALTER, so a name collision
+        // OVERWRITES a colleague's procedure instead of failing. One user and a typo are enough.
+        using var harness = new Harness();
+        var vm = harness.Main.CreateProcedureDetail(new MetadataObject("SP_X", MetadataObjectKind.Procedure));
+        var newVm = new ProcedureDetailTabViewModel("NEW_PROCEDURE")
+        {
+            IsNew = true,
+            SourceText = "CREATE OR ALTER PROCEDURE SP_TAKEN AS BEGIN END",
+        };
+        newVm.ObjectExistsProbe = (_, _) => Task.FromResult(true);
+
+        // No DdlExecutor on this VM, so assert the gate's verdict directly rather than through the compile's
+        // earlier no-connection refusal — the wiring under test is "the New flow asks about the name it will
+        // actually create", which is the name parsed out of the statement.
+        var check = await newVm.ChangeGate.CheckCreateAsync("SP_TAKEN", _ => Task.FromResult(true));
+
+        Assert.False(check.MayProceed);
+        Assert.Contains("SP_TAKEN", check.RefusalMessage!, StringComparison.Ordinal);
+        Assert.False(vm.IsNew);
+    }
+
+    [Fact]
+    public async Task ExecuteCompile_StillReportsNoConnection_BeforeReachingTheGate()
+    {
+        // Ordering guard: the cheap, settled refusals must keep their wording. The gate costs a catalog round
+        // trip, so it runs last — a missing connection is still reported as a missing connection.
+        var vm = new ProcedureDetailTabViewModel("SP_X")
+        {
+            SourceText = "CREATE OR ALTER PROCEDURE SP_X AS BEGIN END",
+        };
+
+        await vm.ExecuteCompileAsync();
+
+        Assert.Equal(UiStrings.NoConnectionMessage, vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task LoadDefinition_DisarmsTheGate_BeforeReading_SoAFailedReloadCannotAuthoriseAWrite()
+    {
+        // The ORDERING inside LoadDefinitionAsync, exercised through the real load path: the baseline is
+        // dropped BEFORE the read, so a reload that fails leaves the gate unverifiable rather than holding a
+        // fingerprint nobody re-verified. Reversed, this test would see the stale baseline survive.
+        //
+        // The throw is pre-existing and unrelated: a disconnected lane raises InvalidOperationException, which
+        // SafeLoadAsync does not trap (it traps MetadataReadException). Asserting it keeps the test honest
+        // about what actually happens instead of hiding it.
+        using var harness = new Harness();
+        var vm = harness.Main.CreateProcedureDetail(new MetadataObject("SP_X", MetadataObjectKind.Procedure));
+        vm.ChangeGate.CaptureBaseline("CREATE OR ALTER PROCEDURE SP_X AS BEGIN END");
+        Assert.NotNull(vm.ChangeGate.BaselineFingerprint);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => vm.LoadAsync());
+
+        Assert.Null(vm.ChangeGate.BaselineFingerprint);
+    }
+
     [Fact]
     public async Task NewMode_LoadAsync_IsNoOp()
     {

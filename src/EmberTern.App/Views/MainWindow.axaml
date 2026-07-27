@@ -36,7 +36,12 @@
     <KeyBinding Gesture="Alt+F" Command="{Binding FormatSqlCommand}" />
   </Window.KeyBindings>
 
-  <Grid RowDefinitions="36,*,28">
+  <!-- Rows: titlebar | settings-health banner (Auto ⇒ zero height when healthy) | body | status bar.
+       The banner row exists because a settings.dat this build cannot read makes EVERY store silently stop
+       persisting (ApplicationSettingsStore.Save refuses rather than destroy data it cannot see — audit A-03),
+       and a user who is not told that would reasonably assume their work is being saved. It is deliberately
+       NOT the status bar: that line is rewritten on the next connection change, and this must not scroll away. -->
+  <Grid RowDefinitions="36,Auto,*,28">
 
     <!-- Custom titlebar: brand + active connection + connection toolbar + theme + window controls -->
     <Border Grid.Row="0"
@@ -319,10 +324,22 @@
       </Grid>
     </Border>
 
+    <!-- Settings health (audit A-03). The shared MessageBanner, docked, per the reuse rule: a host sets only
+         Severity / Message / IsVisible / Classes — never its own Background, BorderBrush or BorderThickness,
+         which would outrank the shared style. Dismissible, because a user who has read it and chosen to work
+         on unsaved settings should not be nagged for the rest of the session. -->
+    <controls:MessageBanner Grid.Row="1"
+                            Classes="docked"
+                            Severity="Warning"
+                            Message="{Binding SettingsHealthMessage}"
+                            IsVisible="{Binding ShowSettingsHealthWarning}"
+                            ShowDismiss="True"
+                            DismissCommand="{Binding DismissSettingsHealthWarningCommand}" />
+
     <!-- Main 3-zone body: sidebar | splitter | workspace+bottom.
          SidebarColumn width + the collapsed state persist in WorkspaceState; the
          native GridSplitter drives live resize within MinWidth/MaxWidth (220..600). -->
-    <Grid Grid.Row="1" x:Name="MainBodyGrid">
+    <Grid Grid.Row="2" x:Name="MainBodyGrid">
       <Grid.ColumnDefinitions>
         <!-- SidebarColumn: reached in code-behind via MainBodyGrid.ColumnDefinitions[0]
              (x:Name isn't supported on Grid definitions in Avalonia). -->
@@ -1612,7 +1629,7 @@
     </Grid>
 
     <!-- Status bar -->
-    <Border Grid.Row="2"
+    <Border Grid.Row="3"
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0">

@@ -820,13 +820,14 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         return sig.Success ? sig.Name : null;
     }
 
+    protected override Task<string> ReadDefinitionAsync(CancellationToken cancellationToken)
+        => DdlReader!.FetchProcedureSourceAsync(
+            new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken);
+
     protected override async Task LoadCoreAsync(CancellationToken cancellationToken)
     {
-        await SafeLoadAsync(async () =>
-        {
-            SourceText = await DdlReader!.FetchProcedureSourceAsync(
-                new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken).ConfigureAwait(true);
-        });
+        // Reads the source AND arms the change-safety gate with it — one act (see LoadDefinitionAsync).
+        await SafeLoadAsync(() => LoadDefinitionAsync(cancellationToken));
 
         await SafeLoadAsync(async () =>
         {

@@ -53,6 +53,60 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
     private readonly FirebirdDdlExecutor? _ddlExecutor;
     private Task? _loadTask;
 
+    // ─── Change safety ────────────────────────────────────────────────────
+    //
+    // Compile writes CREATE OR ALTER PACKAGE (header) and then the body — a whole-object replacement of both
+    // halves, so the buffer may descend from a definition another session has since replaced.
+    private readonly ObjectChangeGate _changeGate = new();
+
+    /// <summary>The change-safety gate guarding this tab's compile. Exposed for tests.</summary>
+    internal ObjectChangeGate ChangeGate => _changeGate;
+
+    /// <summary>Owner-supplied "is this name already taken?" probe for the New-package flow. The New body
+    /// template is a <c>CREATE OR ALTER PACKAGE</c>, so a name collision would overwrite rather than fail.</summary>
+    internal Func<string, CancellationToken, Task<bool>>? ObjectExistsProbe { get; set; }
+
+    /// <summary>
+    /// The package's definition as ONE comparable artifact. A package is two stored sources that are compiled
+    /// together, so change safety has to be judged over both: a colleague who altered only the body must be
+    /// detected just as surely as one who altered the header.
+    /// <para>The separator is not cosmetic — concatenating the halves directly would let a change that moves
+    /// text across the header/body boundary produce an unchanged combined string.</para>
+    /// </summary>
+    private static string ComposeDefinition(string? header, string? body)
+        => (header ?? string.Empty) + "\n/*-- package body --*/\n" + (body ?? string.Empty);
+
+    /// <summary>Reads both halves as the database holds them now — the ONE read that answers "has it changed
+    /// since?", composed exactly as the baseline was.</summary>
+    private async Task<string> ReadDefinitionAsync(CancellationToken cancellationToken)
+    {
+        var obj = new MetadataObject(PackageName, MetadataObjectKind.Package);
+        var header = await _ddlReader!.FetchPackageHeaderSourceAsync(obj, cancellationToken).ConfigureAwait(true);
+        var body = await _ddlReader!.FetchPackageBodySourceAsync(obj, cancellationToken).ConfigureAwait(true);
+        return ComposeDefinition(header, body);
+    }
+
+    /// <summary>Mirrors <c>SourceObjectDetailTabViewModel.CheckChangeSafetyAsync</c>: an existing package is
+    /// checked by re-reading it, a new one by looking its name up.</summary>
+    private Task<ObjectChangeCheck> CheckChangeSafetyAsync(string headerSql, CancellationToken cancellationToken)
+    {
+        if (!IsNew)
+        {
+            return _changeGate.CheckOverwriteAsync(
+                PackageName, async ct => await ReadDefinitionAsync(ct).ConfigureAwait(true), cancellationToken);
+        }
+
+        // The name that will ACTUALLY be created, read off the header statement about to run.
+        var targetName = TryParsePackageName(headerSql);
+        if (string.IsNullOrWhiteSpace(targetName)) return Task.FromResult(ObjectChangeCheck.Allowed);
+
+        var probe = ObjectExistsProbe;
+        return _changeGate.CheckCreateAsync(
+            targetName,
+            probe is null ? null : ct => probe(targetName, ct),
+            cancellationToken);
+    }
+
     public PackageDetailTabViewModel(string packageName)
         : this(packageName, null, null, null)
     {
@@ -431,6 +485,16 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
             return;
         }
 
+        // ⭐ CHANGE SAFETY — see ObjectChangeGate. Checked once, before the header goes out, because the
+        // header/body pair is one logical write: refusing between the two would leave the package half
+        // replaced, which is worse than either outcome.
+        var safety = await CheckChangeSafetyAsync(header, cancellationToken).ConfigureAwait(true);
+        if (!safety.MayProceed)
+        {
+            ErrorMessage = safety.RefusalMessage;
+            return;
+        }
+
         ErrorMessage = null;
         try
         {
@@ -579,15 +643,32 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
         {
             var obj = new MetadataObject(PackageName, MetadataObjectKind.Package);
 
+            // Change-safety baseline. Dropped first, so a re-read that fails leaves the gate unverifiable
+            // rather than holding a stale baseline that would authorise an overwrite.
+            _changeGate.Forget();
+            string? loadedHeader = null;
+            string? loadedBody = null;
+
             await SafeLoadAsync(async () =>
             {
-                HeaderSource = await _ddlReader.FetchPackageHeaderSourceAsync(obj, cancellationToken).ConfigureAwait(true);
+                loadedHeader = await _ddlReader.FetchPackageHeaderSourceAsync(obj, cancellationToken).ConfigureAwait(true);
+                HeaderSource = loadedHeader;
             });
 
             await SafeLoadAsync(async () =>
             {
-                BodySource = await _ddlReader.FetchPackageBodySourceAsync(obj, cancellationToken).ConfigureAwait(true);
+                loadedBody = await _ddlReader.FetchPackageBodySourceAsync(obj, cancellationToken).ConfigureAwait(true);
+                BodySource = loadedBody;
             });
+
+            // A package IS its header and its body together — Compile writes both — so the gate is armed only
+            // when BOTH were read. The two steps above stay independently failure-trapped (a body-read failure
+            // must not blank the header the user can see), which is exactly why the baseline is taken from the
+            // raw reads rather than from the editable properties: those can still hold a previous load's text.
+            if (loadedHeader is not null && loadedBody is not null)
+            {
+                _changeGate.CaptureBaseline(ComposeDefinition(loadedHeader, loadedBody));
+            }
 
             await SafeLoadAsync(async () =>
             {

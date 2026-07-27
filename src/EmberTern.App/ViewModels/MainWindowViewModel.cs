@@ -171,6 +171,10 @@ public partial class MainWindowViewModel : ViewModelBase
         _importProfiles = new EmberTern.Core.Import.ImportProfileStore(
             System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
         _folderState = _folderStore.Load();
+        // Settings health (audit A-03). Read ONCE, here, because the answer is a property of the file on disk
+        // at startup and does not change while we run — and because it must be read BEFORE anything in this
+        // session writes, so what the user is told reflects the file they actually arrived with.
+        CaptureSettingsHealth(store);
         _service = service;
         _transactionService = transactionService;
         // Catalog reads run on the read-only metadata attachment with implicit per-command
@@ -1012,11 +1016,25 @@ public partial class MainWindowViewModel : ViewModelBase
     public string MetadataTransactionProfileTooltip
         => string.Format(UiStrings.TransactionProfileMetadataChipTooltipFormat, TransactionProfileCatalog.LabelFor(MetadataProfile));
 
-    private Core.Connections.TransactionProfile DataProfile
-        => _service.ActiveProfile?.DataTransactionProfile ?? Core.Connections.TransactionProfile.ReadCommitted;
+    // ⚠ The chips report the ENFORCED profile, not the persisted one (audit A-09).
+    //
+    // TransactionService.ResolveActiveProfile() hard-returns ReadCommitted and says why: the per-connection TPB
+    // profile is not user-configurable, and a stored legacy value — table stability, which locks whole tables —
+    // must never silently make the SQL console WAIT or block other sessions. The enum and the persisted fields
+    // are vestigial, pending their own removal pass.
+    //
+    // These properties used to read ConnectionProfile.DataTransactionProfile / MetadataTransactionProfile, i.e.
+    // the persisted value. That was harmless only by luck: both default to ReadCommitted, so the display
+    // happened to agree with reality. But Migrate_1_2 copies a v1 file's single TransactionProfile straight into
+    // DataTransactionProfile — so a user upgrading from v1 with "Table Stability" saw a chip claiming Table
+    // Stability while every transaction ran Read Committed. A status chip whose whole job is to tell the user
+    // how their transactions behave must not be able to lie about it; reading the enforced value makes that
+    // structural rather than coincidental, and it will keep being true when the vestigial fields are deleted.
+    private static Core.Connections.TransactionProfile DataProfile
+        => TransactionService.EnforcedProfile;
 
-    private Core.Connections.TransactionProfile MetadataProfile
-        => _service.ActiveProfile?.MetadataTransactionProfile ?? Core.Connections.TransactionProfile.ReadCommitted;
+    private static Core.Connections.TransactionProfile MetadataProfile
+        => TransactionService.EnforcedProfile;
 
     // Title-bar "DEV MODE" badge: shown only when the active connection has Developer
     // Mode on (DDL waits for in-use objects instead of failing fast).
@@ -2646,6 +2664,21 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    // ─── New-object change safety ────────────────────────────────────────────────────────────────
+    //
+    // The five editors below author their object as CREATE OR ALTER (Procedure/Function/Trigger from the
+    // DDL generator, View when the user writes one, Package from its header template), which means a New
+    // tab whose name happens to match an existing object OVERWRITES that object instead of failing — no
+    // concurrency required, one user and a name collision are enough. ObjectChangeGate refuses that write;
+    // this is where it gets the ability to find out, asking the catalog through the SAME authority the
+    // object tree uses (FirebirdMetadataReader.ExistsAsync, deliberately built over ListAsync so the gate
+    // and the tree cannot disagree about what exists).
+    //
+    // One helper, so all five New flows ask the question identically. Left unwired the gate reports
+    // "unverifiable" and refuses — the safe direction, but it means every New flow must pass this.
+    private Func<string, CancellationToken, Task<bool>> ObjectExistsProbeFor(MetadataObjectKind kind)
+        => (name, ct) => _metadataReader.ExistsAsync(kind, name, ct);
+
     public bool CanCreateView => _service.IsConnected;
 
     // New View: opens a View Detail tab in IsNew mode with the SQL tab seeded
@@ -2662,6 +2695,7 @@ public partial class MainWindowViewModel : ViewModelBase
             SourceText = ViewDetailTabViewModel.NewViewTemplate,
         };
         detail.OpenObjectRequested += OnOpenDdlRequested;
+        detail.ObjectExistsProbe = ObjectExistsProbeFor(MetadataObjectKind.View);
         detail.ViewCreated += name => OnViewCreated(detail, name);
         // Start in Easy mode (approved target design): SourceText (the template) is
         // already set, so the toggle parses it into the editable name + column list +
@@ -2820,6 +2854,7 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
+        detail.ObjectExistsProbe = ObjectExistsProbeFor(MetadataObjectKind.Package);
         detail.PackageCreated += name => OnPackageCreated(detail, name);
         // Seeding the templates marked the VM dirty; a brand-new untouched tab must
         // not prompt on close — clear it so only real edits flip it back.
@@ -2920,6 +2955,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.RunExecuteRequested = RunProcedureExecuteAsync;
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadProcedureListsAsync(detail);
+        detail.ObjectExistsProbe = ObjectExistsProbeFor(MetadataObjectKind.Procedure);
         detail.ObjectCreated += name => OnProcedureCreated(detail, name);
         // Start in Easy mode (approved target design): the template SourceText is parsed
         // into the editable name + Input/Output params + Variables/Cursors/Subprograms +
@@ -2981,6 +3017,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.FiresInsert = true;
         detail.ExecutableBody = "BEGIN\nEND";
         detail.EasyMode = true;
+        detail.ObjectExistsProbe = ObjectExistsProbeFor(MetadataObjectKind.Trigger);
         detail.ObjectCreated += name => OnTriggerCreated(detail, name);
         // Seeding marked the VM dirty; a brand-new untouched tab must not prompt on close.
         detail.ClearDirty();
@@ -3031,6 +3068,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.RunExecuteRequested = RunFunctionExecuteAsync;
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadFunctionListsAsync(detail);
+        detail.ObjectExistsProbe = ObjectExistsProbeFor(MetadataObjectKind.Function);
         detail.ObjectCreated += name => OnFunctionCreated(detail, name);
         detail.EasyMode = true;
         // Seeding marked the VM dirty; a brand-new untouched tab must not prompt on close.
@@ -7105,6 +7143,55 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (Dispatcher.UIThread.CheckAccess()) Apply();
         else Dispatcher.UIThread.Post(Apply);
+    }
+
+    // ─── Settings health (audit A-03) ────────────────────────────────────────────────────────────
+    //
+    // When settings.dat cannot be read, ApplicationSettingsStore.Save REFUSES for the rest of the session
+    // rather than replace data it cannot see. That is the right behaviour and it loses nothing — but it is
+    // invisible, and invisible is not honest: the user would go on arranging grids, saving queries and adding
+    // connections, and none of it would persist. So the one thing this layer owes them is to say so.
+    //
+    // Warning, not Error: nothing is broken and nothing was lost. Something is being PREVENTED, and the file
+    // in question is most likely perfectly good data belonging to another Windows account.
+
+    [ObservableProperty]
+    private string _settingsHealthMessage = string.Empty;
+
+    /// <summary>True while the settings-health banner should be up — i.e. the file needs attention and the user
+    /// has not dismissed the notice.</summary>
+    [ObservableProperty]
+    private bool _showSettingsHealthWarning;
+
+    /// <summary>Dismisses the notice for this session. It does not resolve anything, and deliberately does not
+    /// pretend to: saving stays refused. It exists so a user who has read the message and decided to carry on
+    /// is not nagged.</summary>
+    [RelayCommand]
+    private void DismissSettingsHealthWarning() => ShowSettingsHealthWarning = false;
+
+    private void CaptureSettingsHealth(ConnectionProfileStore store)
+    {
+        Core.Settings.SettingsLoadResult health;
+        try
+        {
+            health = store.CheckSettingsHealth();
+        }
+        catch (Exception)
+        {
+            // Reading the health must never be the thing that stops the app from starting. Staying silent here
+            // is acceptable in a way that staying silent about a KNOWN-bad file is not: we have no finding to
+            // report, only a failure to look.
+            return;
+        }
+
+        if (!health.NeedsAttention) return;
+
+        SettingsHealthMessage = string.Format(
+            CultureInfo.CurrentCulture,
+            UiStrings.SettingsUnreadableWarningFormat,
+            store.FilePath,
+            health.Diagnostic ?? string.Empty);
+        ShowSettingsHealthWarning = true;
     }
 
     private void UpdateStatusFromConnection()

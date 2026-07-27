@@ -841,9 +841,10 @@ internal static class UiStrings
     public const string DialogFieldDialect = "Dialect";
     public const string DialogFieldClientLibrary = "Client library (fbclient.dll)";
     public const string DialogFieldClientLibraryHint = "Leave empty to use the default. Set when connecting to a Firebird version different from the default client (e.g. Firebird 3 server while Firebird 5 client is on PATH).";
-    public const string DialogFieldTransactionProfile = "Transaction profile";
-    public const string DialogFieldDataTransactionProfile = "Data transaction profile";
-    public const string DialogFieldMetadataTransactionProfile = "Metadata transaction profile";
+    // (Removed 2026-07-27, audit A-09: DialogFieldTransactionProfile + its Data/Metadata pair were three
+    // captions for a connection-dialog field that no longer exists. The TPB profile is not user-configurable —
+    // TransactionService.EnforcedProfile is a constant, deliberately — so a label offering to configure it
+    // described a control nothing could honour. They were defined and never referenced.)
     public const string DialogTestConnection = "Test connection";
     public const string DialogSave = "Save";
     public const string DialogCancel = "Cancel";
@@ -987,6 +988,39 @@ internal static class UiStrings
     // was written when nothing was, and discards it. NoConnectionMessage above covers the no-DDL-executor
     // case; this one covers "the buffer holds nothing to compile".
     public const string EditorNothingToCompile = "There is nothing to compile.";
+    // ─── Change-safety refusals (ObjectChangeGate) ──────────────────────────────────────────────
+    // Every object editor compiles by REPLACING a whole object (CREATE OR ALTER … AS <entire body>), so a
+    // compile can discard work the editor never saw. These three sentences are the whole user-facing
+    // vocabulary of that gate; {0} = the object's name.
+    //
+    // Each one names the effect first, then the ONE next step. "Revert" and the SQL Editor are both
+    // existing features, deliberately: the escape hatch for a deliberate overwrite already exists (run the
+    // statement yourself, where the console makes it unmistakably your decision), which is why the gate
+    // ships with no force-overwrite button of its own.
+    public const string ObjectChangedInDatabaseFormat =
+        "{0} was changed in the database after this tab opened it, so compiling now would discard that newer " +
+        "version. Nothing was written. Use Revert to load the current definition, then re-apply your changes " +
+        "— or run your statement in the SQL Editor if you mean to overwrite it.";
+    public const string ObjectAlreadyExistsFormat =
+        "{0} already exists. This editor creates objects with CREATE OR ALTER, which would overwrite it " +
+        "rather than fail. Nothing was written. Choose a different name, or close this tab and open the " +
+        "existing object to edit it.";
+    public const string ObjectChangeUnverifiableFormat =
+        "EmberTern could not read the current state of {0}, so it cannot confirm that compiling would not " +
+        "overwrite newer work. Nothing was written. Check the connection and try again.";
+    // Fallback label when the object has no name yet — the message must still read as a sentence.
+    public const string ObjectChangeUnnamedObject = "This object";
+    // ─── Settings health (audit A-03) ───────────────────────────────────────────────────────────
+    // Shown when settings.dat exists but this build cannot read it. Saving is refused for the whole session so
+    // the unreadable file is never replaced, which means nothing the user does will persist — and that has to
+    // be said out loud, with the path (so they can back it up or move it) and the reason (so they can tell a
+    // wrong-machine DPAPI file, which is intact, from a damaged one).
+    // {0} = full path to settings.dat, {1} = the load diagnostic.
+    public const string SettingsUnreadableWarningFormat =
+        "Your settings file could not be read, so EmberTern will not save settings this session — connections, " +
+        "saved queries, workspace and grid layouts will not persist. Nothing has been lost and the existing " +
+        "file has been left untouched: it is most often readable on the Windows account or machine that wrote " +
+        "it. File: {0} — {1}";
     // The code-action light bulb (Stage Q / Q3) — a discreet affordance for the same menu Ctrl+. opens.
     public const string CodeActionsTooltip = "Show code actions · Ctrl+.";
     // Shown at the foot of the diagnostic hover when fixes exist there. Information only — the hover

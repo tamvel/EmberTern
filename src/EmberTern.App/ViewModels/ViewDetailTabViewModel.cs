@@ -55,6 +55,50 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
     private readonly FirebirdDdlExecutor? _ddlExecutor;
     private Task? _loadTask;
 
+    // ─── Change safety ────────────────────────────────────────────────────
+    //
+    // A view compiles by REPLACING its whole definition (CREATE OR ALTER VIEW … AS <entire query>), so the
+    // same hazard as the routine editors applies: the buffer may descend from a definition another session
+    // has since replaced. This VM is deliberately NOT on SourceObjectDetailTabViewModel (a view has no PSQL
+    // body, params or variables — a different family), so it carries its own gate rather than the family
+    // being widened to share one.
+    private readonly ObjectChangeGate _changeGate = new();
+
+    /// <summary>The change-safety gate guarding this tab's compile. Exposed for tests.</summary>
+    internal ObjectChangeGate ChangeGate => _changeGate;
+
+    /// <summary>Owner-supplied "is this name already taken?" probe for the New-view flow. See the identically
+    /// named member on <see cref="SourceObjectDetailTabViewModel"/> for why it is a plain name lookup.</summary>
+    internal Func<string, CancellationToken, Task<bool>>? ObjectExistsProbe { get; set; }
+
+    /// <summary>Reads the view's definition as the database holds it now — the ONE read that both populates
+    /// the editor and answers "has it changed since?".</summary>
+    private Task<string> ReadDefinitionAsync(CancellationToken cancellationToken)
+        => _ddlReader!.FetchViewSourceAsync(
+            new MetadataObject(ViewName, MetadataObjectKind.View), cancellationToken);
+
+    /// <summary>Mirrors <c>SourceObjectDetailTabViewModel.CheckChangeSafetyAsync</c>: an existing view is
+    /// checked by re-reading it, a new one by looking its name up.</summary>
+    private Task<ObjectChangeCheck> CheckChangeSafetyAsync(string sql, CancellationToken cancellationToken)
+    {
+        if (!IsNew)
+        {
+            return _changeGate.CheckOverwriteAsync(
+                ViewName, async ct => await ReadDefinitionAsync(ct).ConfigureAwait(true), cancellationToken);
+        }
+
+        // The name that will ACTUALLY be created, read off the statement about to run — so a name typed
+        // straight into Source mode is checked too, not just the Easy-mode field.
+        var targetName = TryParseViewName(sql);
+        if (string.IsNullOrWhiteSpace(targetName)) return Task.FromResult(ObjectChangeCheck.Allowed);
+
+        var probe = ObjectExistsProbe;
+        return _changeGate.CheckCreateAsync(
+            targetName,
+            probe is null ? null : ct => probe(targetName, ct),
+            cancellationToken);
+    }
+
     public ViewDetailTabViewModel(string viewName)
         : this(viewName, null, null, null)
     {
@@ -683,11 +727,14 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
     public bool CanCompile => _ddlExecutor is not null;
 
     /// <summary>
-    /// Executes the SQL-tab source (CREATE OR ALTER VIEW for an existing view,
-    /// CREATE VIEW for a new one) in the user's working transaction — Rollback
-    /// undoes, Commit persists, consistent with all other DDL in the app. On
-    /// success an existing view fully refreshes itself (#2); a new view raises
-    /// <see cref="ViewCreated"/> for the owner to reopen.
+    /// Executes the SQL-tab source (CREATE OR ALTER VIEW for an existing view, CREATE VIEW for a new one) on
+    /// the dedicated DDL attachment — autonomous and AUTO-COMMITTED, like all other object-editor DDL. On
+    /// success an existing view fully refreshes itself (#2); a new view raises <see cref="ViewCreated"/> for
+    /// the owner to reopen.
+    /// <para>⚠ This used to say the compile ran "in the user's working transaction — Rollback undoes, Commit
+    /// persists". That has not been true since DDL moved to its own WAIT-bounded attachment (gotcha #214,
+    /// which superseded #122): there is no Rollback here, which is exactly why the change-safety gate below
+    /// has to refuse BEFORE the write rather than reconsider after it.</para>
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanCompile))]
     private Task Compile() => ExecuteCompileAsync();
@@ -708,6 +755,16 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
         if (string.IsNullOrWhiteSpace(sql))
         {
             ErrorMessage = UiStrings.EditorNothingToCompile;
+            return;
+        }
+
+        // ⭐ CHANGE SAFETY — see ObjectChangeGate. Last check before anything is written, because
+        // ExecuteAsync auto-commits and there is no "after" in which to reconsider. A refusal sets
+        // ErrorMessage and returns, so SaveAsync reports save-failed and the WorkGuard keeps the buffer.
+        var safety = await CheckChangeSafetyAsync(sql, cancellationToken).ConfigureAwait(true);
+        if (!safety.MayProceed)
+        {
+            ErrorMessage = safety.RefusalMessage;
             return;
         }
 
@@ -847,8 +904,12 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
         {
             await SafeLoadAsync(async () =>
             {
-                SourceText = await _ddlReader.FetchViewSourceAsync(
-                    new MetadataObject(ViewName, MetadataObjectKind.View), cancellationToken).ConfigureAwait(true);
+                // Drop the change-safety baseline BEFORE the read: a re-read that fails must leave the gate
+                // unverifiable, never holding a stale baseline that would authorise overwriting a definition
+                // nobody has looked at.
+                _changeGate.Forget();
+                SourceText = await ReadDefinitionAsync(cancellationToken).ConfigureAwait(true);
+                _changeGate.CaptureBaseline(SourceText);
                 // If the user is in Easy mode (e.g. after a Compile→Refresh), re-derive
                 // the structured model from the freshly loaded source.
                 if (EasyMode) SyncEasyModelFromSource(SourceText);

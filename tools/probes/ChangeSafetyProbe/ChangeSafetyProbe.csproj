@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER MEASUREMENT TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Verifies the two live-engine claims the DDL change-safety gate (audit A-01, ObjectChangeSafety) rests on.
+    Both are the kind of claim CLAUDE.md forbids inferring, because being wrong about either is expensive in
+    opposite directions:
+
+      (1) THE RECONSTRUCTION IS DETERMINISTIC. Reading the same unchanged object twice must produce a
+          byte-identical definition. If it does not, every single Compile would report a false conflict and
+          the gate would make the product unusable — a worse outcome than the hazard it prevents.
+
+      (2) A REAL CHANGE IS DETECTED. After another session alters the object, the fingerprint must differ —
+          for a body change AND for a signature-only change, since the fingerprint is taken over the
+          reconstructed CREATE OR ALTER (which carries both) rather than over the stored body blob alone.
+
+    It also checks the existence primitive the New-object flow depends on
+    (FirebirdMetadataReader.ExistsAsync), including the trap that motivated it: the DDL reconstruction does
+    NOT return nothing for a missing routine — it synthesizes a stub — so existence cannot be read off it.
+
+    Creates and drops its OWN scratch database at an ASCII path (gotcha #149). The lab is never touched.
+
+    How to run: see the header of Program.cs.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
+  </ItemGroup>
+
+</Project>

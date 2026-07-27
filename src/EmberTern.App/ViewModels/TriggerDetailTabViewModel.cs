@@ -320,13 +320,14 @@ public partial class TriggerDetailTabViewModel : SourceObjectDetailTabViewModel
         return null;
     }
 
+    protected override Task<string> ReadDefinitionAsync(CancellationToken cancellationToken)
+        => DdlReader!.FetchTriggerSourceAsync(
+            new MetadataObject(TriggerName, MetadataObjectKind.Trigger), cancellationToken);
+
     protected override async Task LoadCoreAsync(CancellationToken cancellationToken)
     {
-        await SafeLoadAsync(async () =>
-        {
-            SourceText = await DdlReader!.FetchTriggerSourceAsync(
-                new MetadataObject(TriggerName, MetadataObjectKind.Trigger), cancellationToken).ConfigureAwait(true);
-        });
+        // Reads the source AND arms the change-safety gate with it — one act (see LoadDefinitionAsync).
+        await SafeLoadAsync(() => LoadDefinitionAsync(cancellationToken));
 
         await SafeLoadAsync(async () =>
         {

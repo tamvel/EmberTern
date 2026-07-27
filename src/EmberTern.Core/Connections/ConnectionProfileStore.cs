@@ -52,6 +52,15 @@ public sealed class ConnectionProfileStore
     // pair — DPAPI keys are OS-managed).
     public SecretProtector Protector => _settings.Protector;
 
+    /// <summary>
+    /// Whether <c>settings.dat</c> is readable, and what is wrong when it is not (audit A-03).
+    /// <para>Exposed here because this facade is the one the App constructs and holds, and because the App has
+    /// an obligation this layer cannot discharge: when the file cannot be read, EVERY store silently stops
+    /// persisting — <see cref="ApplicationSettingsStore.Save"/> refuses rather than destroy data it cannot
+    /// see — and a user who is not told that would reasonably believe their work is being saved.</para>
+    /// </summary>
+    public SettingsLoadResult CheckSettingsHealth() => _settings.LoadWithStatus();
+
     public IReadOnlyList<ConnectionProfile> LoadAll()
         => _settings.Load()?.Connections ?? new List<ConnectionProfile>();
 

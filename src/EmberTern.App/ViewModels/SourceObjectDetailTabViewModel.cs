@@ -40,6 +40,27 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
     protected readonly FirebirdDdlExecutor? DdlExecutor;
     private Task? _loadTask;
 
+    // ─── Change safety ────────────────────────────────────────────────────
+    //
+    // This editor compiles by REPLACING the whole routine (CREATE OR ALTER … AS <entire body>), so its
+    // buffer can only be written safely while the database still holds the definition the buffer descends
+    // from. The gate below is what makes that a checked fact instead of an assumption; see ObjectChangeGate.
+    private readonly ObjectChangeGate _changeGate = new();
+
+    /// <summary>The change-safety gate guarding this tab's compile. Exposed for tests.</summary>
+    internal ObjectChangeGate ChangeGate => _changeGate;
+
+    /// <summary>
+    /// Owner-supplied "is this name already taken?" probe, used ONLY by the New-object flow — where the
+    /// generated statement is <c>CREATE OR ALTER</c> too, so a name collision would overwrite a colleague's
+    /// object rather than fail. Wired at the single construction point for each kind (which is where the
+    /// object kind is already known, so this stays a plain name lookup and the editor never grows a
+    /// per-kind switch).
+    /// <para>Null means the check cannot run, which the gate reports as unverifiable — deliberately NOT as
+    /// "the name is free".</para>
+    /// </summary>
+    internal Func<string, CancellationToken, Task<bool>>? ObjectExistsProbe { get; set; }
+
     protected SourceObjectDetailTabViewModel(
         FirebirdTableDetailReader? reader,
         FirebirdDdlReader? ddlReader,
@@ -518,6 +539,22 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
             return;
         }
 
+        // ⭐ CHANGE SAFETY — the last thing checked before anything is written.
+        //
+        // Placed here, after every cheap refusal, for two reasons: it costs a catalog round trip, and the
+        // earlier refusals have their own settled wording that tests pin. Placed BEFORE ExecuteAsync because
+        // that call auto-commits — there is no "after" in which to reconsider.
+        //
+        // A refusal sets ErrorMessage and returns, so it travels the same route as a failed compile: the
+        // banner shows it, and SaveAsync's adapter reads "there is an error" as save-failed, which is what
+        // stops the save-and-close WorkGuard from discarding the buffer it could not write.
+        var safety = await CheckChangeSafetyAsync(sql, cancellationToken).ConfigureAwait(true);
+        if (!safety.MayProceed)
+        {
+            ErrorMessage = safety.RefusalMessage;
+            return;
+        }
+
         ErrorMessage = null;
         try
         {
@@ -542,6 +579,45 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
 
         await RefreshAsync(cancellationToken).ConfigureAwait(true);
         CompiledExistingObject?.Invoke();
+    }
+
+    /// <summary>
+    /// Asks the gate whether <paramref name="sql"/> may be written. Two different questions, because the two
+    /// flows rest on different evidence:
+    /// <list type="bullet">
+    ///   <item><b>Existing object</b> — is the database still holding the definition this tab loaded? Answered
+    ///   by re-reading it through the same <see cref="ReadDefinitionAsync"/> that produced the baseline.</item>
+    ///   <item><b>New object</b> — is the chosen name free? The name is taken from the statement about to run
+    ///   (<see cref="TryParseName"/>), not from the editable field, so the check is against the name that will
+    ///   ACTUALLY be created — including a name typed directly into Source mode.</item>
+    /// </list>
+    /// </summary>
+    private Task<ObjectChangeCheck> CheckChangeSafetyAsync(string sql, CancellationToken cancellationToken)
+    {
+        if (!IsNew)
+        {
+            // The lambda (rather than a method group) is only nullability plumbing: Task<string> does not
+            // convert to the gate's Task<string?> delegate, and the gate must accept null to represent
+            // "nothing was read".
+            return _changeGate.CheckOverwriteAsync(
+                ObjectDisplayName, async ct => await ReadDefinitionAsync(ct).ConfigureAwait(true), cancellationToken);
+        }
+
+        var targetName = TryParseName(sql);
+        if (string.IsNullOrWhiteSpace(targetName))
+        {
+            // The statement's name could not be read, so there is nothing to look up. The generator produced
+            // this text from the editor's own model, so this is a shape we do not recognise rather than a
+            // hazard we detected — and the server still refuses a genuinely malformed CREATE. Let it through
+            // rather than blocking a legitimate create on our own parsing limits.
+            return Task.FromResult(ObjectChangeCheck.Allowed);
+        }
+
+        var probe = ObjectExistsProbe;
+        return _changeGate.CheckCreateAsync(
+            targetName,
+            probe is null ? null : ct => probe(targetName, ct),
+            cancellationToken);
     }
 
     // ─── ISavableObjectEditor (Save-and-close / Save-and-disconnect WorkGuard) ──
@@ -678,6 +754,31 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
     /// <summary>The per-object load steps (source, header/params, body, dependencies,
     /// DDL, description). Wrapped by <see cref="LoadAsync"/> (suppression + dirty reset).</summary>
     protected abstract Task LoadCoreAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads this object's definition as the database holds it right now — the ONE read that both populates
+    /// the editor and answers "has it changed since?". Each subclass supplies its own catalog reconstruction
+    /// (<c>FetchProcedureSourceAsync</c> and friends) for its canonical name.
+    /// <para>It must be the same read on both paths. A baseline taken over one artifact and compared against
+    /// another would report a conflict on every compile.</para>
+    /// </summary>
+    protected abstract Task<string> ReadDefinitionAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The load step that reads the definition into <see cref="SourceText"/> AND captures the change-safety
+    /// baseline. Subclasses call this as their first <see cref="LoadCoreAsync"/> step instead of fetching the
+    /// source themselves, so loading and arming the gate are literally one act and cannot drift apart.
+    /// <para>The baseline is dropped BEFORE the read: a re-read that fails must leave the gate unverifiable,
+    /// never holding a stale baseline that would authorise overwriting a definition nobody has looked at.
+    /// (<see cref="SafeLoadAsync"/> traps the read failure, so this returns having captured nothing.)</para>
+    /// </summary>
+    protected async Task LoadDefinitionAsync(CancellationToken cancellationToken)
+    {
+        _changeGate.Forget();
+        var definition = await ReadDefinitionAsync(cancellationToken).ConfigureAwait(true);
+        SourceText = definition;
+        _changeGate.CaptureBaseline(definition);
+    }
 
     /// <summary>Optional Easy-mode pre-compile validation — returns an error message to
     /// block Compile, or null to proceed. Default: no extra validation.</summary>

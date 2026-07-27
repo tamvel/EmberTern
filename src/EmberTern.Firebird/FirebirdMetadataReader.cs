@@ -147,6 +147,44 @@ public sealed class FirebirdMetadataReader
         }
     }
 
+    /// <summary>
+    /// Whether an object of <paramref name="kind"/> already answers to <paramref name="name"/> — the
+    /// existence check behind the New-object change-safety gate
+    /// (<see cref="EmberTern.Core.Metadata.ObjectChangeSafety.EvaluateCreate"/>). Every object editor
+    /// generates <c>CREATE OR ALTER</c>, so without this a New tab whose name collides with an existing
+    /// object silently overwrites it instead of failing.
+    /// <para><b>Deliberately implemented over <see cref="ListAsync"/> rather than as its own
+    /// <c>SELECT … WHERE RDB$…_NAME = ?</c>.</b> "Does this name exist" must mean exactly what the object
+    /// tree means by it, and that meaning is not trivial: it carries the per-kind table choice, the
+    /// <c>SYSTEM_FLAG</c> predicate, the client-side system-name filter, and the FB3+ exclusion of packaged
+    /// routines so a packaged namesake is not mistaken for a standalone one. A second query would be a
+    /// second definition of existence, free to drift from the first — and a gate that disagrees with the
+    /// tree about what exists is worse than no gate. The cost is one name list per New-object compile: a
+    /// deliberate, infrequent action, and the same read the tree already performs when a category is
+    /// expanded.</para>
+    /// <para>Name comparison is case-insensitive because Firebird folds unquoted identifiers to upper case
+    /// and every name-entry field in the app already coerces to upper (gotcha #141); a quoted,
+    /// case-sensitive name still matches itself.</para>
+    /// </summary>
+    /// <exception cref="MetadataReadException">The catalog could not be read — propagated, never swallowed
+    /// into a <c>false</c>. The caller must be able to tell "the name is free" from "I could not find
+    /// out", because only the first permits a write.</exception>
+    public async Task<bool> ExistsAsync(
+        MetadataObjectKind kind,
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+
+        var target = name.Trim();
+        var objects = await ListAsync(kind, cancellationToken).ConfigureAwait(false);
+        foreach (var o in objects)
+        {
+            if (string.Equals(o.Name, target, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
+
     // COUNT(*) mirror of SqlFor — same table + same SYSTEM_FLAG predicate, no ORDER BY,
     // no TRIM. The only place a server COUNT could diverge from the displayed list is
     // Domain: RDB$FIELDS holds one anonymous RDB$xxx backing-domain per inline column

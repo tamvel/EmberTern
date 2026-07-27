@@ -95,6 +95,49 @@ public sealed partial class DebuggerTabViewModel
     // beyond this offset leaves the routine HEADER byte-identical — which is what lets a draft-sourced session
     // still take its parameter list from the catalog (see CanRunCurrentProgram).
     private int _baselineBodyStart;
+
+    // ─── Change safety ────────────────────────────────────────────────────
+    //
+    // Save writes CREATE OR ALTER from the edit buffer, so it is a whole-object replacement with exactly the
+    // hazard the object editors have: the buffer descends from a definition another session may have replaced
+    // while the user was debugging — and a debugging session is long, which makes this the likeliest place of
+    // all to hit it.
+    //
+    // ⚠ Distinct from _baseline, and the difference is load-bearing. _baseline answers "is the buffer dirty",
+    // and after a successful Save it becomes the text we SENT. The gate must instead hold what the database
+    // RETURNS when read — a reconstruction whose layout is generally not the user's typing. Capturing the sent
+    // text here would make every second Save look like somebody else's change.
+    private readonly ObjectChangeGate _changeGate = new();
+
+    /// <summary>The change-safety gate guarding this tab's Save. Exposed for tests.</summary>
+    internal ObjectChangeGate ChangeGate => _changeGate;
+
+    /// <summary>
+    /// Re-reads the routine through the same provider that armed the gate, and re-arms it. Called after a
+    /// successful Save, because at that moment the database holds something new and the old fingerprint would
+    /// refuse the user's very next Save.
+    /// <para>A failed re-read leaves the gate disarmed rather than stale: the next Save then reports that it
+    /// could not verify, which is the honest answer and still refuses to overwrite.</para>
+    /// </summary>
+    private async Task CaptureChangeBaselineAsync(CancellationToken cancellationToken)
+    {
+        _changeGate.Forget();
+        try
+        {
+            var current = await _sourceProvider(cancellationToken).ConfigureAwait(true);
+            _changeGate.CaptureBaseline(current);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // Disarmed, deliberately. The save itself already succeeded; only the NEXT one is affected, and it
+            // will say so rather than guess.
+        }
+    }
+
     private BlockStatement? _body;
     private SemanticModel? _model;
     private IReadOnlyList<IExecutableStatement> _stepPoints = Array.Empty<IExecutableStatement>();
@@ -872,6 +915,10 @@ public sealed partial class DebuggerTabViewModel
         }
 
         AdoptBaseline(source); // what the database holds == the buffer == the program; the tab opens clean
+        // Change-safety baseline (see ObjectChangeGate). Taken from THIS read, not from _baseline, because
+        // the two diverge: after a successful Save _baseline becomes the text we sent, whereas the gate must
+        // hold what the database RETURNS — see CaptureChangeBaselineAsync.
+        _changeGate.CaptureBaseline(source);
 
         var ddl = RootDdl;
         // A relation trigger launches with NEW/OLD context editors instead of parameters (§8.1); a procedure/
@@ -2365,6 +2412,23 @@ public sealed partial class DebuggerTabViewModel
         var sql = _editBuffer;
         if (string.IsNullOrWhiteSpace(sql)) return new EditorSaveResult(false, UiStrings.EditorNothingToCompile);
 
+        // ⭐ CHANGE SAFETY — see ObjectChangeGate. Deliberately checked HERE, before the session-ending
+        // confirmation below: a refusal must cost the user nothing, and refusing after tearing the session down
+        // would have destroyed a debugging session for a write that never happened.
+        var safety = await _changeGate
+            .CheckOverwriteAsync(RoutineName, _sourceProvider, cancellationToken)
+            .ConfigureAwait(true);
+        if (!safety.MayProceed)
+        {
+            SetError(safety.RefusalMessage!);
+            // Editing keeps the editor — and this Save button — in front of the user with the buffer intact,
+            // exactly as a rejected compile does. The tab still reports unsaved work, so the close guard keeps
+            // protecting the code we refused to write.
+            Phase = DebuggerPhase.Editing;
+            StatusText = UiStrings.DebuggerStatusSaveFailed;
+            return new EditorSaveResult(false, safety.RefusalMessage);
+        }
+
         // A live session was compiled from the OLD code — saving invalidates it, so say so before doing it.
         // (Near-unreachable since an edit ends the session by itself: saving needs a dirty buffer, and the edit
         // that made it dirty already ended it. Kept for the one window that remains — a Ctrl+S landing while a
@@ -2411,6 +2475,11 @@ public sealed partial class DebuggerTabViewModel
         // The compile succeeded, so the database now holds the buffer: it becomes the new baseline. The program
         // does not change here — it was already this text — so the re-parse is a no-op the buffer has paid for.
         AdoptBaseline(sql);
+
+        // Re-arm change safety from a fresh READ, not from `sql`. The database now holds our body, but reading
+        // it back yields the catalog reconstruction rather than the user's typing — so fingerprinting `sql`
+        // here would make the next Save look like somebody else's change (see CaptureChangeBaselineAsync).
+        await CaptureChangeBaselineAsync(cancellationToken).ConfigureAwait(true);
 
         // Seam 6d — the same notification every object editor raises after compiling an existing object, under
         // the same name, so the owner refreshes the other tabs showing this routine through the one path

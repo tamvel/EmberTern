@@ -31,7 +31,8 @@ verbatim, in the archive below.
 | **`docs/history/21-data-import.md`** | The Data Import module’s **narrative** — etap by etap, why each decision went the way it did, the I12 close-out (1 M-row measurement, the UI audit, the last defect) and the closing table of what stays OPEN with a reason for each. Written in I12, when ~520 lines of it moved out of CLAUDE.md. | On demand — when you need the backstory on an import behaviour. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (264 entries, #1–#277), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (268 entries, #1–#281), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -56,7 +57,7 @@ dotnet test  EmberTern.slnx
 src\EmberTern.App\bin\Debug\net9.0\EmberTern.exe
 ```
 
-Solution file is `.slnx` (not `.sln`) — .NET 10 default. App AssemblyName is `EmberTern`, so avares URIs use `avares://EmberTern/...`. `Directory.Build.props` sets `net10.0`, `Nullable=enable`, `TreatWarningsAsErrors=true` for every project.
+Solution file is `.slnx` (not `.sln`) — .NET 10 default. App AssemblyName is `EmberTern`, so avares URIs use `avares://EmberTern/...`. `Directory.Build.props` sets **`net9.0`** (corrected 2026-07-27 — this line claimed `net10.0`; the real target framework is and has been `net9.0`), `Nullable=enable`, `TreatWarningsAsErrors=true` for every project. ⚠ `TreatWarningsAsErrors` also escalates NuGet's `NU1902`/`NU1903`, so a **direct** `PackageReference` with a known advisory **fails the build** — a de-facto SCA gate for direct dependencies (transitive ones are only reported by an explicit scan; gotcha #278).
 
 ## Git remotes & push workflow (user directive, 2026-07-26)
 
@@ -168,7 +169,7 @@ of each project's role, not a complete file listing):
 
 ```
 EmberTern.slnx
-Directory.Build.props        # net10.0, Nullable=enable, TreatWarningsAsErrors=true
+Directory.Build.props        # net9.0, Nullable=enable, TreatWarningsAsErrors=true
 src/
   EmberTern.Core/            # zero Avalonia dependencies, zero FirebirdSql dependency
     Connections/ Diagnostics/ Export/ Metadata/ Performance/ Query/ Scripting/
@@ -220,6 +221,11 @@ noted.
   → autonomous auto-commit), Source⇄Easy mode for Procedure/Function/Trigger/View, a Revert/
   Discard button with confirmation on every editor, native per-kind workspace persistence.
   *(history: 03, 04, 07, 09)*
+- **DDL change safety** — a compile cannot overwrite an object definition EmberTern cannot prove is the one
+  the editor loaded, and a New-object compile cannot overwrite an existing object whose name it reuses. One
+  pure-Core verdict (`ObjectChangeSafety`) behind one App gate (`ObjectChangeGate`), on the five
+  whole-object-replacement editors + the debugger's Save. Refuses rather than guesses; no force-overwrite
+  (the SQL Editor is the deliberate escape hatch). *(history: 22)*
 - **Transactions & connection lanes** — THREE `FbConnection`s per profile, one responsibility each
   (rewritten 2026-07-14, history 15): **Data** carries everything the user runs by hand (SQL Editor
   F5 — queries *and* DDL — table-data edits, Execute Procedure, Script Executor) and holds **THE one
@@ -282,6 +288,70 @@ noted.
 
 ## Current state
 
+- **🛡 ARCHITECTURE HARDENING / PRODUCT SAFETY SPRINT — COMPLETE (2026-07-27).** Build 0/0, suite **5900
+  green** (from 5856), smoke clean, `tools/probes/ChangeSafetyProbe` 19/19 on FB5. Narrative +
+  audit-by-audit verdicts: **[docs/history/22-architecture-hardening-sprint.md](docs/history/22-architecture-hardening-sprint.md)**.
+  Driven by an external audit (`docs/audits/embertern-full-audit-2026-07-26.md`) that the user explicitly
+  said **not to trust**; every finding was re-verified against the code first. Five things landed:
+  - **⭐ DDL CHANGE SAFETY — the big one.** A compile can no longer overwrite an object definition EmberTern
+    cannot prove is the one the editor loaded. `ObjectChangeSafety` (Core, pure) renders the verdict —
+    `Safe` / `ChangedInDatabase` / `AlreadyExists` / `Unverifiable`, where **`Unverifiable` is not
+    permission** (rule #11) — and `ObjectChangeGate` (App) holds one baseline per tab, calls back into the
+    caller's own reader, and owns the ONE verdict→message mapping. Wired into the **five whole-object-
+    replacement** surfaces (Procedure/Function/Trigger/View/Package) **+ the debugger's Save**; checked LAST
+    in compile (it costs a round trip) but BEFORE `ExecuteAsync` (which auto-commits), and in the debugger
+    BEFORE the session-ending confirm (a refusal must cost nothing). **No force-overwrite in v1, by
+    decision** — the escape hatch already exists (run it in the SQL Editor, where it is unmistakably the
+    user's call) and every refusal message says so.
+    **⚠ Scope is a decision, not an oversight:** Domain/Exception/Index/Generator are **diff-based** (only
+    what the user edited is emitted) and their New flow is `CREATE …`, not `CREATE OR ALTER`, so the server
+    itself rejects a duplicate; Table Detail emits incremental `ALTER TABLE`. Those are out.
+    **⚠ The audit missed the likelier failure: New-object templates are `CREATE OR ALTER`**, so typing an
+    existing name silently overwrote that object — one user and a typo, no concurrency needed. Hence
+    `FirebirdMetadataReader.ExistsAsync`, built over **the same `ListAsync` the tree uses** (a second
+    existence query would be a second definition of existence, free to drift).
+    **⚠ Three facts that cost design time — do not re-derive them.** (1) Firebird has **no** change counter
+    or timestamp for a routine, so re-read-and-compare is the only available mechanism. (2) The DDL
+    reconstruction **synthesizes a stub** for a missing routine (106 chars, measured) ⇒ it can never answer
+    "does this exist" — but it *is* the right thing to fingerprint, because it carries parameters as well as
+    body and so catches a **signature-only** change. (3) The debugger's Draft `_baseline` becomes the text
+    SENT after a save, so change safety must re-READ to re-baseline or every second Save phantom-conflicts.
+    Gotchas **#279 / #281**.
+  - **⭐ SETTINGS LOAD HEALTH — a confirmed P0 by impact.** `Load()` returned `null` for a missing file AND
+    an undecryptable one; all 8 facades do `Load() ?? new()` then `Save()`; and the save guard explicitly
+    allowed replacing a file it could not decrypt. So on a copied Windows profile a **grid-column resize
+    destroyed the connection profiles and passwords.** Now `SettingsLoadStatus`
+    (`Missing`/`Loaded`/`Unreadable`/`Corrupt`/`FutureVersion`) + **`Save` refuses** over anything not fully
+    understood, classified by *cause* (an undecryptable file is usually intact data belonging to another
+    account). Escape hatch `SaveOverUnreadableFile` renames the old file aside, timestamped; nothing calls it
+    automatically. `AtomicWrite` also keeps `settings.dat.bak`. **The App SAYS so** — a docked shared
+    `MessageBanner` on MainWindow (new `Auto` row; body/status bar moved to rows 2/3), `Warning` not `Error`,
+    dismissible — because refusing quietly makes safe behaviour indistinguishable from working. The
+    regression test was **run against the pre-fix code and seen to fail**. Gotcha **#280**.
+  - **Document-mutation contract corrected + pinned.** `TextEditApplier`'s "one owner of every change" claim
+    was false (13 files call `Document.Replace`/`Insert` directly) but none is dangerous — each is
+    synchronous with the keystroke that produced it. The real contract is **anything with a DRIFT WINDOW**
+    (computed from the model, applied later) goes through it; `DocumentMutationContractTests` now pins the
+    allowed set with a reason per file + guards against stale/unexplained entries. Verified by planting a
+    violation. **The audit's proposed `UserTypingEdit`/`AssistedCodeEdit` split was declined** — a large
+    refactor for no behavioural gain.
+  - **Dependencies patched.** `System.IO.Packaging` 8.0.0 → **9.0.18** (2× High DoS on hostile input) in
+    `EmberTern.Office`, flowing to App. ⚠ The audit's mitigation *"we export, we don't import XLSX"* was
+    **stale** — since I9 the module READS untrusted `.xlsx`, so the exposure is ordinary use. Test-only
+    `SixLabors.ImageSharp` → **2.1.11** (2.1.10 fixes only one of its two advisories) and
+    `System.Security.Cryptography.Xml` → 8.0.4. All five projects now scan clean.
+  - **A status chip that could lie.** The transaction-profile chips read the *persisted* profile while
+    `TransactionService` hard-enforces `ReadCommitted`; a v1-migrated file could make the UI claim "Table
+    Stability" for Read Committed transactions. They now read the new `TransactionService.EnforcedProfile`;
+    3 dead `UiStrings` constants removed.
+  **⚠ REJECTED / DEFERRED, each with a reason — do not re-litigate from the audit text.** **A-02** (debugger
+  side effects) is **not a defect**: `DebugPreflight` already detects `IN AUTONOMOUS TRANSACTION` / `GEN_ID` /
+  `NEXT VALUE FOR` and not blocking is ratified + documented (spec §4.6 "disclosed, not hidden") — making it
+  blocking is a **product policy decision**, the audit's own open question #2. **A-07** (import pipeline skips
+  `CompleteAsync` on a non-cancellation exception) is **real but P2**: the App catches everything, reports it
+  and drops a created table, so the user gets a message + a rollbackable transaction — and fixing it changes a
+  **frozen** module's public contract against the standing "do not return to Data Import" directive. **A-08**
+  (split the large ViewModels) declined — file size is not a defect. **A-06** historical.
 - **🏁 DATA IMPORT — CLOSED, USER-ACCEPTED AND MERGED TO `master` (2026-07-27).** Suite **5856 green**
   (5815 + the 41-test `ConnectionExpandBindingProbe`), build 0/0, smoke clean. **Full narrative:
   [docs/history/21-data-import.md](docs/history/21-data-import.md)** — the etap-by-etap record lives there,
@@ -2039,9 +2109,17 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5856 as of 2026-07-27
-  (`master`, after the Data Import module closed and merged)** — green in two partitions (5815 + the
-  41-test `ConnectionExpandBindingProbe`), ~14s.
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5900 as of 2026-07-27
+  (`master`, after the Architecture Hardening sprint; 5856 before it)** — green in ~11 s, and green in the
+  two documented partitions (**5859 + 41**).
+  **⚠ 2026-07-27, hardening sprint — the hang REPRODUCED A SECOND TIME, and named the SAME test.** Four
+  consecutive full runs this session finished green in one pass; the fifth hung, and `--blame-hang` reported
+  the only test not `Completed="True"` as **`ConnectionExpandBindingProbe.CompletionRow_HighlightsMatchedPrefix`**
+  — the identical name the I9 session's instrument produced. That is now **two independent observations
+  agreeing**, which is materially stronger evidence than either alone and the right starting point for whoever
+  takes the infrastructure task. It is **not** caused by this sprint: nothing here touched the completion
+  probe, the headless session, or the editor; the same commit ran green four times before it and green in both
+  partitions after it. Dump + sequence file under `tests/EmberTern.Tests/TestResults/`.
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
   a `TextEditor` throw cross-thread from every session after the first (#226).

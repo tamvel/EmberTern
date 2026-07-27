@@ -120,7 +120,17 @@ public sealed class TransactionService : IDisposable
     //     left open for the SQL Editor's next F5 to inherit (BeginTransactionAsync early-returns on
     //     an active transaction, so a left-open script tx WOULD otherwise become the console's).
     // The console itself never passes options and is therefore unchanged: still always NOWAIT.
-    private static TransactionProfile ResolveActiveProfile() => TransactionProfile.ReadCommitted;
+    private static TransactionProfile ResolveActiveProfile() => EnforcedProfile;
+
+    /// <summary>
+    /// The profile the user transaction ACTUALLY runs under, always — see the note above for why it is a
+    /// constant rather than a setting.
+    /// <para>Public so the status-bar chips can report what is enforced instead of what happens to be persisted
+    /// on the connection profile (audit A-09). Those are not the same thing: a settings file migrated from v1
+    /// carries the old single profile forward into <c>DataTransactionProfile</c>, so displaying the stored value
+    /// let the UI claim "Table Stability" while every transaction ran Read Committed.</para>
+    /// </summary>
+    public static TransactionProfile EnforcedProfile => TransactionProfile.ReadCommitted;
 
     // Maps each IBExpert-style profile to its TPB. Internal + static so a unit
     // test can pin every mapping without a live Firebird. Access-mode note:

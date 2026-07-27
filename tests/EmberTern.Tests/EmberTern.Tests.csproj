@@ -13,6 +13,21 @@
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="Avalonia.Headless" Version="12.0.3" />
+    <!-- SECURITY OVERRIDES for NPOI's transitive pins. Neither ships (this project is
+         IsPackable=false and nothing in src/ references NPOI), so the product is not exposed
+         either way; they are raised so the vulnerable-transitive scan is GREEN across the whole
+         solution and a future CI gate has no pre-existing failures to be waived past. Both stay
+         inside NPOI's own major line, so its API surface is unaffected:
+         SixLabors.ImageSharp 2.1.9 to 2.1.11 (GHSA-2cmq-823j-5qj8 out-of-bounds write in the GIF
+         decoder, and GHSA-rxmq-m78w-7wmc / CVE-2025-54575, whose 2.x fix is 2.1.11 — 2.1.10 is
+         NOT enough) and System.Security.Cryptography.Xml 8.0.2 to 8.0.4 (seven advisories, denial
+         of service in XML encryption).
+         ⚠ Worth knowing: promoting these to DIRECT references also puts them under NuGet's NU1902
+         and TreatWarningsAsErrors=true, so from now on a newly-disclosed advisory against either
+         one FAILS THE BUILD rather than being a scan footnote. That is the desired behaviour; it
+         is also why the version must be the genuinely patched one and not merely a newer one. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.11" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="8.0.4" />
   </ItemGroup>
 
   <ItemGroup>

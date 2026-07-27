@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -17,9 +18,20 @@ namespace EmberTern.Core.Settings;
 //
 // Whole-file encryption is the deliberate design: nothing inside (passwords, SQL,
 // folder layout) is readable without the protector. The flip side — a settings.dat
-// that can't be decrypted (e.g. copied to another Windows account/machine) loses ALL
-// settings, not just passwords. Load degrades to null in that case and never
-// overwrites the unreadable file (it may decrypt fine on the right machine).
+// that can't be decrypted (e.g. copied to another Windows account/machine) makes ALL
+// settings unreadable, not just the passwords.
+//
+// ⚠ THAT FLIP SIDE WAS A DATA-LOSS BUG until 2026-07-27 (audit A-03), and this comment
+// used to assert the opposite: that Load "never overwrites the unreadable file". Load
+// indeed never wrote — but SAVE did. Load returned null for an unreadable file exactly
+// as it does for a fresh install, every section facade answers null with
+// `?? new ApplicationSettings()` and then saves, and ExistingFileIsFromFuture
+// deliberately allowed replacing a file it could not decrypt. So one grid-column resize
+// destroyed the connection profiles, passwords, saved queries, workspace and watches.
+//
+// The fix is a distinction, not a workaround: SettingsLoadStatus separates "there is
+// nothing here" from "there is something here I cannot read", and Save REFUSES in the
+// second case. See LoadWithStatus and ExistingFileBlocksSave.
 public sealed class ApplicationSettingsStore
 {
     // Bump when the aggregate shape changes in a way older readers must notice.
@@ -79,18 +91,33 @@ public sealed class ApplicationSettingsStore
     // Null after a normal save.
     public string? LastSaveDiagnostic { get; private set; }
 
-    // Returns the persisted settings, or null when there is nothing usable to load:
-    // the file is missing (and no legacy files to migrate), empty, corrupt, or can't be
-    // decrypted. Callers (the section facades) treat null as "no saved state" and start
-    // from defaults. A null return never overwrites whatever is on disk.
-    public ApplicationSettings? Load()
+    /// <summary>
+    /// Returns the persisted settings, or null when there is nothing usable to load. Retained as the
+    /// convenience every section facade uses — it deliberately keeps the old signature so none of them had to
+    /// change.
+    /// <para><b>Callers that decide whether to WRITE must not use this.</b> Null here still conflates "nothing
+    /// saved yet" with "there is a file I cannot read", and acting on that conflation is audit A-03. What makes
+    /// the facades safe is not this method but <see cref="Save"/>, which now refuses over an unreadable file.
+    /// Anything that needs to tell the two apart asks <see cref="LoadWithStatus"/>.</para>
+    /// </summary>
+    public ApplicationSettings? Load() => LoadWithStatus().Settings;
+
+    /// <summary>
+    /// Reads <c>settings.dat</c> and reports WHAT HAPPENED, not merely whether it worked — see
+    /// <see cref="SettingsLoadStatus"/> for why that distinction is a data-safety feature rather than a
+    /// diagnostic nicety.
+    /// <para>Never writes, except on the one path that is safe by construction: a missing file with legacy
+    /// files beside it, which is a migration onto empty ground.</para>
+    /// </summary>
+    public SettingsLoadResult LoadWithStatus()
     {
         LastLoadDiagnostic = null;
 
         if (!File.Exists(_filePath))
         {
             // First run on this build (or a fresh install). Pull in any legacy files.
-            return MigrateFromLegacy();
+            var migrated = MigrateFromLegacy();
+            return migrated is null ? SettingsLoadResult.Missing() : SettingsLoadResult.Loaded(migrated);
         }
 
         try
@@ -98,7 +125,9 @@ public sealed class ApplicationSettingsStore
             var raw = File.ReadAllText(_filePath);
             if (string.IsNullOrWhiteSpace(raw))
             {
-                return null;
+                // An empty file holds no user data, so replacing it destroys nothing — Missing, not Corrupt.
+                // (A zero-length settings.dat is what a disk-full or killed-mid-write leaves behind.)
+                return SettingsLoadResult.Missing();
             }
 
             string payload;
@@ -114,7 +143,7 @@ public sealed class ApplicationSettingsStore
                         $"settings.dat container version {header.ContainerVersion} is newer than supported " +
                         $"{SettingsFileContainer.CurrentContainerVersion}; refusing to read or overwrite " +
                         "(written by a newer EmberTern build).";
-                    return null;
+                    return SettingsLoadResult.Future(LastLoadDiagnostic);
                 }
 
                 scheme = header.EncryptionScheme;
@@ -137,14 +166,17 @@ public sealed class ApplicationSettingsStore
                 LastLoadDiagnostic =
                     $"settings.dat uses encryption scheme '{scheme}' which this build cannot handle; " +
                     "refusing to read or overwrite (likely written by a newer EmberTern build).";
-                return null;
+                return SettingsLoadResult.Future(LastLoadDiagnostic);
             }
 
             var json = protector.Unprotect(payload);
             var settings = JsonSerializer.Deserialize<ApplicationSettings>(json, JsonOptions);
             if (settings is null)
             {
-                return null;
+                // Valid JSON that deserialized to nothing — a literal "null" payload. The file holds no
+                // settings, but it also is not what this build writes, so it is not safe to assume it is junk.
+                LastLoadDiagnostic = "settings.dat decrypted but contained no settings.";
+                return SettingsLoadResult.Corrupt(LastLoadDiagnostic);
             }
 
             // DOWNGRADE PROTECTION (data axis): the payload decrypted fine but its data
@@ -156,31 +188,43 @@ public sealed class ApplicationSettingsStore
                     $"settings.dat schema version {settings.SchemaVersion} is newer than supported " +
                     $"{CurrentSchemaVersion}; refusing to migrate or overwrite " +
                     "(written by a newer EmberTern build).";
-                return null;
+                return SettingsLoadResult.Future(LastLoadDiagnostic);
             }
 
             MigrateToCurrentVersion(settings);
-            return settings;
+            return SettingsLoadResult.Loaded(settings);
         }
-        // Corrupt JSON, partial write, locked file, or an undecryptable blob (DPAPI from
-        // another account/machine). Degrade to "no saved state" rather than crash — and
-        // crucially, do not save over the file: it may be valid on the right machine.
-        catch (JsonException)
+        // Every failure below leaves a file on disk that this build could not interpret. Each degrades to "no
+        // settings in memory" rather than crashing — but NONE of them is permission to write: Save consults
+        // ExistingFileBlocksSave, which reaches the same conclusion from the same file.
+        //
+        // The classification is deliberately by CAUSE, because the causes have different prognoses. Damaged
+        // content is unlikely to fix itself; an undecryptable blob very often decrypts perfectly on the machine
+        // that wrote it, so replacing it destroys recoverable data.
+        catch (JsonException ex)
         {
-            return null;
+            LastLoadDiagnostic = $"settings.dat could not be parsed: {ex.Message}";
+            return SettingsLoadResult.Corrupt(LastLoadDiagnostic);
         }
-        catch (IOException)
+        catch (IOException ex)
         {
-            return null;
+            // Locked or unreadable right now (another process, a network path). Emphatically not junk.
+            LastLoadDiagnostic = $"settings.dat could not be read: {ex.Message}";
+            return SettingsLoadResult.Unreadable(LastLoadDiagnostic);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return null;
+            LastLoadDiagnostic = $"settings.dat could not be read: {ex.Message}";
+            return SettingsLoadResult.Unreadable(LastLoadDiagnostic);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // SecretProtector.Unprotect can throw arbitrary crypto/format exceptions.
-            return null;
+            // SecretProtector.Unprotect throws arbitrary crypto/format exceptions. This is the DPAPI case —
+            // the one that motivated the whole distinction, and the one where the file is most likely intact.
+            LastLoadDiagnostic =
+                $"settings.dat could not be decrypted: {ex.Message}. This usually means the file was written " +
+                "by a different Windows account or on a different machine; it is intact and will decrypt there.";
+            return SettingsLoadResult.Unreadable(LastLoadDiagnostic);
         }
     }
 
@@ -203,15 +247,27 @@ public sealed class ApplicationSettingsStore
         return null;
     }
 
+    /// <summary>
+    /// Persists the whole aggregate — or refuses, leaving the file untouched and the reason in
+    /// <see cref="LastSaveDiagnostic"/>.
+    /// <para><b>Refusal is the feature.</b> Every section facade reaches this through
+    /// <c>Load() ?? new ApplicationSettings()</c>, so if the file on disk cannot be read, the settings being
+    /// saved are DEFAULTS standing in for data still sitting in that file. Writing them would destroy
+    /// connection profiles, passwords, saved queries, workspace and watches — and the writes that trigger it
+    /// are ones the user never thinks of as writes (a grid column resized, a procedure run, the app closed).
+    /// Silence is deliberate here: this is not the layer that talks to people, and refusing quietly loses
+    /// nothing, whereas writing quietly loses everything. The App tells the user, using
+    /// <see cref="LoadWithStatus"/>.</para>
+    /// <para>The escape hatch, for a genuinely damaged file, is <see cref="SaveOverUnreadableFile"/> — an
+    /// explicit decision that preserves the old bytes first.</para>
+    /// </summary>
     public void Save(ApplicationSettings settings)
     {
         LastSaveDiagnostic = null;
 
-        // DOWNGRADE PROTECTION: never clobber a settings.dat that a newer build wrote.
-        // The in-memory change is dropped (the older build can't represent the newer
-        // data anyway); the newer file survives so the user loses nothing on next launch
-        // of the newer build.
-        if (ExistingFileIsFromFuture(out var diagnostic))
+        // Never clobber a settings.dat this build could not interpret — whether because a NEWER build wrote it
+        // (downgrade protection) or because it could not be decrypted or parsed (audit A-03).
+        if (ExistingFileBlocksSave(out var diagnostic))
         {
             LastSaveDiagnostic = diagnostic;
             return;
@@ -225,12 +281,48 @@ public sealed class ApplicationSettingsStore
         AtomicWrite(_filePath, container);
     }
 
-    // True only when the file already on disk was written by a NEWER build than this one
-    // (newer container layout, an encryption scheme we can't read, or a newer data
-    // SchemaVersion). Corrupt / undecryptable-but-known-scheme files are NOT treated as
-    // future — they are safe to replace, matching the prior overwrite behaviour (we never
-    // want to strand the user forever on a genuinely broken file).
-    private bool ExistingFileIsFromFuture(out string diagnostic)
+    /// <summary>
+    /// Writes fresh settings over a file this build cannot interpret, <b>after preserving the old bytes</b>
+    /// beside it. The deliberate escape hatch from <see cref="Save"/>'s refusal — and the only way past it.
+    /// <para>Nothing calls this automatically, and nothing should: the whole point of the refusal is that a
+    /// human decides. It exists so the refusal is a stop rather than a dead end. The old file is renamed, never
+    /// deleted, because "cannot read it" is not "it is worthless" — an undecryptable settings.dat is usually
+    /// perfectly good data belonging to another Windows account.</para>
+    /// </summary>
+    /// <returns>The path the previous file was preserved at, or null when there was no file to preserve.</returns>
+    public string? SaveOverUnreadableFile(ApplicationSettings settings)
+    {
+        LastSaveDiagnostic = null;
+        string? preservedAt = null;
+
+        if (File.Exists(_filePath))
+        {
+            // Timestamped, so a second attempt cannot overwrite the first rescue copy.
+            var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            preservedAt = _filePath + ".unreadable-" + stamp;
+            File.Move(_filePath, preservedAt, overwrite: true);
+        }
+
+        settings.SchemaVersion = CurrentSchemaVersion;
+        var json = JsonSerializer.Serialize(settings, JsonOptions);
+        var payload = _protector.Protect(json);
+        var container = SettingsFileContainer.Wrap(
+            SettingsFileContainer.CurrentContainerVersion, _protector.Scheme, payload);
+        AtomicWrite(_filePath, container);
+
+        return preservedAt;
+    }
+
+    // True whenever the file already on disk holds something this build did not fully understand, in which case
+    // the settings about to be written are defaults standing in for data we cannot see.
+    //
+    // ⚠ This method used to be ExistingFileIsFromFuture, and answered only the DOWNGRADE half: a newer
+    // container layout, an unknown encryption scheme, or a newer data SchemaVersion. Corrupt and undecryptable
+    // files were explicitly allowed through, with the reasoning "never strand the user forever on a genuinely
+    // broken file". That reasoning had the trade-off backwards — being stranded is recoverable and visible,
+    // whereas the overwrite it permitted was silent and final (audit A-03). SaveOverUnreadableFile is the
+    // answer to being stranded; permitting the overwrite never was.
+    private bool ExistingFileBlocksSave(out string diagnostic)
     {
         diagnostic = string.Empty;
         if (!File.Exists(_filePath))
@@ -243,15 +335,19 @@ public sealed class ApplicationSettingsStore
         {
             raw = File.ReadAllText(_filePath);
         }
-        catch (IOException)
+        catch (IOException ex)
         {
-            return false;
+            // We cannot even read it, so we certainly cannot judge it safe to destroy.
+            diagnostic = $"Refusing to overwrite settings.dat: it could not be read ({ex.Message}).";
+            return true;
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return false;
+            diagnostic = $"Refusing to overwrite settings.dat: it could not be read ({ex.Message}).";
+            return true;
         }
 
+        // An empty file holds no user data — replacing it destroys nothing.
         if (string.IsNullOrWhiteSpace(raw))
         {
             return false;
@@ -288,18 +384,30 @@ public sealed class ApplicationSettingsStore
         {
             var json = protector.Unprotect(payload);
             var existing = JsonSerializer.Deserialize<ApplicationSettings>(json, JsonOptions);
-            if (existing is not null && existing.SchemaVersion > CurrentSchemaVersion)
+            if (existing is null)
+            {
+                diagnostic = "Refusing to overwrite settings.dat: it decrypted but contained no settings.";
+                return true;
+            }
+            if (existing.SchemaVersion > CurrentSchemaVersion)
             {
                 diagnostic = $"Refusing to overwrite settings.dat: schema version {existing.SchemaVersion} " +
                              $"is newer than supported {CurrentSchemaVersion}.";
                 return true;
             }
         }
-        catch (Exception)
+        catch (JsonException ex)
         {
-            // Corrupt / undecryptable with a known scheme → not a future file; allow the
-            // replace (consistent with prior behaviour; never strand on a broken file).
-            return false;
+            diagnostic = $"Refusing to overwrite settings.dat: it could not be parsed ({ex.Message}).";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // THE audit A-03 case. Overwhelmingly a DPAPI mismatch — the file is intact and belongs to another
+            // Windows account or machine, so it is exactly the file most worth not destroying.
+            diagnostic = $"Refusing to overwrite settings.dat: it could not be decrypted ({ex.Message}). " +
+                         "The existing file may be valid for a different Windows account or machine.";
+            return true;
         }
 
         return false;
@@ -558,6 +666,12 @@ public sealed class ApplicationSettingsStore
     // Write via a temp file in the same directory, then atomically swap it in. Avoids a
     // torn settings.dat if the process dies mid-write (the old file stays intact until
     // the replace succeeds).
+    //
+    // The swap now keeps the PREVIOUS file as settings.dat.bak — File.Replace does this in the same atomic
+    // operation, so it costs one filename and no extra I/O. It is a secondary net, not the A-03 fix: it holds
+    // one generation only, and Save is frequent enough that a second write would roll a bad value through it.
+    // ExistingFileBlocksSave is what actually prevents the bad write; this is what makes an ordinary
+    // "I saved something I didn't mean to" recoverable by hand.
     private static void AtomicWrite(string path, string content)
     {
         var directory = Path.GetDirectoryName(path)!;
@@ -567,7 +681,7 @@ public sealed class ApplicationSettingsStore
 
         if (File.Exists(path))
         {
-            File.Replace(tempPath, path, destinationBackupFileName: null);
+            File.Replace(tempPath, path, destinationBackupFileName: path + ".bak");
         }
         else
         {
