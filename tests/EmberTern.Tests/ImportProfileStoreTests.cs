@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using EmberTern.Core.Import;
 using EmberTern.Core.Settings;
 using Xunit;
@@ -231,6 +232,309 @@ public class ImportProfileStoreTests
             Assert.Equal(string.Empty, profile.Name);
             Assert.Equal("c1", profile.ConnectionId);
             Assert.NotEqual(default, profile.LastUsedUtc);
+        }
+        finally { Cleanup(dir); }
+    }
+
+    // ── Named profiles (etap I11) ───────────────────────────────────────────────────────────────────────
+    //
+    // ⭐ Read these against the implicit-profile tests above: the fixtures are the same, the file is the same
+    // and the list is the same. That is the etap's whole claim — a named profile is a row that has a name.
+
+    [Fact]
+    public void SaveNamed_ThenList_RoundTripsAcrossInstances()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            new ImportProfileStore(dir).SaveNamed("c1", "Nightly orders", Sample("ORDERS", '|'));
+
+            var listed = Assert.Single(new ImportProfileStore(dir).ListNamed("c1"));
+
+            Assert.Equal("Nightly orders", listed.Name);
+            Assert.Equal("ORDERS", listed.Configuration.Target.TableName);
+            Assert.Equal('|', listed.Configuration.Delimited!.Delimiter);
+            // The identity R16 depends on has to survive here exactly as it does for the implicit entry.
+            Assert.Equal("Order id", listed.Configuration.Mapping[0].SourceFieldName);
+        }
+        finally { Cleanup(dir); }
+    }
+
+    /// <summary>The implicit "last used" entry and a named profile share one list and must not disturb each
+    /// other — the named list never shows the nameless row, and saving one does not overwrite the other.</summary>
+    [Fact]
+    public void NamedAndImplicit_CoexistWithoutSeeingEachOther()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            store.SaveLastUsed("c1", Sample("IMPLICIT"));
+            store.SaveNamed("c1", "Named", Sample("NAMED"));
+
+            Assert.Equal("IMPLICIT", store.GetLastUsed("c1")!.Target.TableName);
+            var named = Assert.Single(store.ListNamed("c1"));
+            Assert.Equal("NAMED", named.Configuration.Target.TableName);
+
+            var settings = new ApplicationSettingsStore(dir).Load();
+            Assert.Equal(2, settings!.UserSettings.ImportProfiles.Count);
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void SaveNamed_ReplacesTheSameName_RatherThanAddingASecondRow()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            store.SaveNamed("c1", "Orders", Sample("FIRST"));
+            store.SaveNamed("c1", "Orders", Sample("SECOND"));
+
+            var only = Assert.Single(store.ListNamed("c1"));
+            Assert.Equal("SECOND", only.Configuration.Target.TableName);
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void NamedProfiles_AreScopedToTheirConnection_AndConnectionlessOnesAreOfferedEverywhere()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            store.SaveNamed("c1", "Only on c1", Sample());
+            store.SaveNamed(null, "Shared", Sample());
+
+            // ⭐ The scope rule the selector states on screen: this connection's, plus the portable ones. A
+            // profile names a TABLE, so one made against another database is a promise this one may not keep.
+            Assert.Equal(
+                new[] { "Only on c1", "Shared" },
+                store.ListNamed("c1").Select(p => p.Name).ToArray());
+
+            Assert.Equal(new[] { "Shared" }, store.ListNamed("c2").Select(p => p.Name).ToArray());
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void ListNamed_IsOrderedByName()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            store.SaveNamed("c1", "Zebra", Sample());
+            store.SaveNamed("c1", "alpha", Sample());
+            store.SaveNamed("c1", "Mango", Sample());
+
+            Assert.Equal(
+                new[] { "alpha", "Mango", "Zebra" },
+                store.ListNamed("c1").Select(p => p.Name).ToArray());
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void Rename_KeepsTheIdentity_SoNothingIsOrphaned()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            var saved = store.SaveNamed("c1", "Old name", Sample("ORDERS"));
+
+            Assert.True(store.Rename(saved.Id, "New name"));
+
+            var reloaded = Assert.Single(new ImportProfileStore(dir).ListNamed("c1"));
+            Assert.Equal("New name", reloaded.Name);
+            Assert.Equal(saved.Id, reloaded.Id);
+            Assert.Equal("ORDERS", reloaded.Configuration.Target.TableName);
+        }
+        finally { Cleanup(dir); }
+    }
+
+    /// <summary>A refused rename is REPORTED, never resolved by picking some other name — the surface tells the
+    /// user, and the profile keeps the name it had.</summary>
+    [Fact]
+    public void Rename_RefusesADuplicate_AndChangesNothing()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            store.SaveNamed("c1", "Taken", Sample());
+            var mine = store.SaveNamed("c1", "Mine", Sample());
+
+            Assert.False(store.Rename(mine.Id, "taken"));
+
+            Assert.Equal(
+                new[] { "Mine", "Taken" },
+                new ImportProfileStore(dir).ListNamed("c1").Select(p => p.Name).ToArray());
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void Rename_ToItsOwnNameInADifferentCase_IsAllowed()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            var mine = store.SaveNamed("c1", "orders", Sample());
+
+            Assert.True(store.Rename(mine.Id, "ORDERS"));
+            Assert.Equal("ORDERS", Assert.Single(store.ListNamed("c1")).Name);
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void Delete_RemovesOnlyThatProfile()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            var doomed = store.SaveNamed("c1", "Doomed", Sample());
+            store.SaveNamed("c1", "Keeper", Sample());
+            store.SaveLastUsed("c1", Sample("IMPLICIT"));
+
+            Assert.True(store.Delete(doomed.Id));
+
+            Assert.Equal("Keeper", Assert.Single(store.ListNamed("c1")).Name);
+            // Deleting a named profile must not disturb the implicit entry sharing the list.
+            Assert.Equal("IMPLICIT", store.GetLastUsed("c1")!.Target.TableName);
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void Delete_CannotReachTheImplicitEntry()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            store.SaveLastUsed("c1", Sample());
+
+            var implicitId = new ApplicationSettingsStore(dir).Load()!.UserSettings.ImportProfiles[0].Id;
+
+            Assert.False(store.Delete(implicitId));
+            Assert.NotNull(store.GetLastUsed("c1"));
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void NameExists_IsCaseInsensitive_AndIgnoresTheProfileBeingRenamed()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            var mine = store.SaveNamed("c1", "Orders", Sample());
+
+            Assert.True(store.NameExists("c1", "orders"));
+            Assert.False(store.NameExists("c1", "orders", exceptId: mine.Id));
+            Assert.False(store.NameExists("c2", "orders"));
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void SaveNamed_TrimsTheName_AndRefusesABlankOne()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+
+            Assert.Equal("Orders", store.SaveNamed("c1", "  Orders  ", Sample()).Name);
+            Assert.Throws<ArgumentException>(() => store.SaveNamed("c1", "   ", Sample()));
+        }
+        finally { Cleanup(dir); }
+    }
+
+    /// <summary>
+    /// ⭐ A profile from a newer build is LISTED and marked unreadable, not hidden and not half-applied.
+    /// <para>
+    /// Both halves matter. Half-applying is §0.7 outright; hiding is subtler and just as bad — the user would
+    /// see a profile they saved simply cease to exist, which reads as data loss.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void AProfileFromTheFuture_IsListedButNotReadable()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            store.SaveNamed("c1", "From tomorrow", Sample() with { Version = ImportConfiguration.CurrentVersion + 1 });
+            store.SaveNamed("c1", "From today", Sample());
+
+            var listed = new ImportProfileStore(dir).ListNamed("c1");
+
+            Assert.Equal(2, listed.Count);
+            Assert.False(ImportProfileStore.IsReadable(listed.Single(p => p.Name == "From tomorrow")));
+            Assert.True(ImportProfileStore.IsReadable(listed.Single(p => p.Name == "From today")));
+        }
+        finally { Cleanup(dir); }
+    }
+
+    /// <summary>The same predicate governs the implicit restore, which is why they cannot disagree about what
+    /// "too new" means.</summary>
+    [Fact]
+    public void GetLastUsed_RefusesAConfigurationFromTheFuture()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            store.SaveLastUsed("c1", Sample() with { Version = ImportConfiguration.CurrentVersion + 1 });
+
+            Assert.Null(store.GetLastUsed("c1"));
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
+    public void GetById_FindsANamedProfile_AndNeverTheImplicitOne()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ImportProfileStore(dir);
+            var named = store.SaveNamed("c1", "Named", Sample());
+            store.SaveLastUsed("c1", Sample());
+
+            var implicitId = new ApplicationSettingsStore(dir).Load()!
+                .UserSettings.ImportProfiles.Single(p => p.IsImplicit).Id;
+
+            Assert.Equal("Named", store.GetById(named.Id)!.Name);
+            Assert.Null(store.GetById(implicitId));
+            Assert.Null(store.GetById("nope"));
+        }
+        finally { Cleanup(dir); }
+    }
+
+    /// <summary>Named profiles are additive to the same section, so the container version stays where it is —
+    /// bumping it would trip the downgrade protection and an older build would refuse the WHOLE file.</summary>
+    [Fact]
+    public void NamedProfiles_DoNotBumpTheSettingsSchemaVersion()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            new ImportProfileStore(dir).SaveNamed("c1", "Orders", Sample());
+
+            var settings = new ApplicationSettingsStore(dir).Load();
+
+            Assert.Equal(ApplicationSettingsStore.CurrentSchemaVersion, settings!.SchemaVersion);
+            Assert.Equal(2, ApplicationSettingsStore.CurrentSchemaVersion);
         }
         finally { Cleanup(dir); }
     }

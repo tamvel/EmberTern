@@ -65,6 +65,7 @@ public partial class DataImportTabView : UserControl
             _bound.ConvertedPreview.SchemaChanged -= OnConvertedSchemaChanged;
             _bound.ReportReady -= OnReportReady;
             _bound.ConfirmRequested -= ConfirmAsync;
+            _bound.TextRequested -= AskForTextAsync;
             _bound.ExportReportRequested -= ExportReportAsync;
             _bound.PreviewRowRevealRequested -= OnPreviewRowRevealRequested;
             _bound.SectionFocusRequested -= OnSectionFocusRequested;
@@ -78,6 +79,7 @@ public partial class DataImportTabView : UserControl
         _bound.ConvertedPreview.SchemaChanged += OnConvertedSchemaChanged;
         _bound.ReportReady += OnReportReady;
         _bound.ConfirmRequested += ConfirmAsync;
+        _bound.TextRequested += AskForTextAsync;
         _bound.ExportReportRequested += ExportReportAsync;
         _bound.PreviewRowRevealRequested += OnPreviewRowRevealRequested;
         _bound.SectionFocusRequested += OnSectionFocusRequested;
@@ -303,22 +305,25 @@ public partial class DataImportTabView : UserControl
         if (_bound is not null) _bound.IsBottomPanelCollapsed = false;
     }
 
-    /// <summary>The one destructive confirmation this module asks (§0): emptying the target table.</summary>
-    private async Task<bool> ConfirmAsync(string message)
+    /// <summary>
+    /// Every destructive confirmation this module asks (§0): emptying the target, dropping a created table,
+    /// overwriting a profile, deleting one.
+    /// <para>
+    /// ⚠ The whole question now comes from the VM. The heading and the button used to be hard-coded here to
+    /// „Empty the table before importing" / „Import", so the drop-a-created-table question was already being
+    /// asked under the name of a different action — and profiles would have made a third and a fourth. The view
+    /// shows the question; it does not word it.
+    /// </para>
+    /// </summary>
+    private async Task<bool> ConfirmAsync(ConfirmRequest request)
     {
-        var dialog = new ConfirmDialog
-        {
-            DataContext = new ConfirmDialogViewModel(new ConfirmRequest
-            {
-                Title = UiStrings.ImportTargetEmptyFirst,
-                Message = message,
-                ConfirmLabel = UiStrings.ImportRun,
-                IsDestructive = true,
-            }),
-        };
+        var dialog = new ConfirmDialog { DataContext = new ConfirmDialogViewModel(request) };
 
         return TopLevel.GetTopLevel(this) is Window owner && await dialog.ShowDialog<bool>(owner);
     }
+
+    /// <summary>Asks for one line of text (a profile name) through the shared prompt.</summary>
+    private Task<string?> AskForTextAsync(TextPromptRequest request) => TextPromptDialog.AskAsync(this, request);
 
     /// <summary>
     /// Hands the problem list to the SHARED export framework (§4.6) — CSV / TXT / XLSX / clipboard for free,

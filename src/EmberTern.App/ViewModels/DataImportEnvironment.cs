@@ -131,6 +131,27 @@ public sealed class DataImportEnvironment
     /// owner of persistence), never by a section VM.</summary>
     public Action<ImportConfiguration>? SaveLastUsed { get; init; }
 
+    // ── Named profiles (etap I11) ───────────────────────────────────────────────────────────────────────
+    //
+    // ⭐ Delegates, like every other collaborator, and for the same two reasons: the surface stays testable with
+    // no settings file behind it, and the CONNECTION IDENTITY a profile is scoped by never reaches the VM. Which
+    // database this is, is not a decision about how to read a file (§4.8.2) — so the surface asks "my profiles"
+    // and someone else knows which ones those are.
+
+    /// <summary>The named profiles usable on this connection, ordered by name. A profile too new for this build
+    /// is included and reports itself unreadable — hiding it would look like a deletion (§4.8.3).</summary>
+    public Func<IReadOnlyList<ImportProfile>>? ListProfiles { get; init; }
+
+    /// <summary>Stores the configuration under a name, replacing a same-named profile. The surface asks about the
+    /// overwrite first; this just performs it.</summary>
+    public Func<string, ImportConfiguration, ImportProfile>? SaveProfile { get; init; }
+
+    /// <summary>Renames by id. <c>false</c> when the name is already taken — never silently resolved.</summary>
+    public Func<string, string, bool>? RenameProfile { get; init; }
+
+    /// <summary>Deletes by id. Destructive, so the surface confirms first.</summary>
+    public Func<string, bool>? DeleteProfile { get; init; }
+
     /// <summary>An environment that knows nothing — the shape a test or a disconnected surface gets.</summary>
     public static DataImportEnvironment Disconnected { get; } =
         new(() => false, () => string.Empty);

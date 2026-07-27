@@ -28,7 +28,7 @@ verbatim, in the archive below.
 | **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. **D14 = ANALYZED + DEFERRED** (its STATUS block records the ratified snapshot+savepoint+undo-only architecture if ever revisited). | **Every debugger implementation session — read this + your milestone's brief first.** |
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
 | **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next, and the remaining-scope table for I6–I12. **§3.8 holds the OPEN UX findings from the I5 review (U1–U10) — read it before touching the surface's layout.** | **Every Data Import session — read the status block + §3.8 + your etap's row in §6 first.** |
-| **`docs/design/data-import-i11-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I11** implementation session (named import profiles). Each etap's prompt replaces the previous one, so this file is the only live prompt; it carries the input state, the reuse inventory, the standing "no global UI work" rule and the DoD. **I11 is unlike every etap before it: it adds no capability, it CHECKS one.** §4.8 claimed named profiles are a consequence of the model rather than a feature to be built, and named the disproof — "if named profiles require changing even one model or rebuilding a UI section, §4.8 was violated along the way". So the session's unusual duty is that needing to touch the models or the pipeline is a **result to report**, not an obstacle to work around. | When starting etap I11. |
+| **`docs/design/data-import-i12-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I12** session — the module's close-out (documentation, a UI audit in both palettes, a 1 M-row performance measurement). Each etap's prompt replaces the previous one, so this file is the only live prompt. ⚠ I12 **closes** the module: it adds no capability at all, and anything that looks like new functionality belongs to a later stage, not here. | When starting etap I12. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (259 entries, #1–#272), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
@@ -280,8 +280,49 @@ noted.
 
 ## Current state
 
-- **🏁 DATA IMPORT — POST-I10 ERGONOMICS SEAM CLOSED AND USER-ACCEPTED (2026-07-27).
-  Next: I11 named profiles · I12 close-out.** Three review findings from I10, scoped by the user as **closing
+- **✅ DATA IMPORT I11 — NAMED PROFILES DELIVERED (2026-07-27), awaits the user's visual confirmation in both
+  palettes. Next: I12 close-out.** Branch `feat/data-import`, suite **5835 green** (+34), build 0/0, smoke clean.
+  **⭐⭐ I11 was the design's own audit, not a feature — and §4.8's account balanced.** §6 named the disproof
+  ("if named profiles require changing even one model or rebuilding a UI section, §4.8 was violated along the
+  way"). **Not one model changed:** `ImportConfiguration`, `ImportProfile`, `ImportPipeline`, the converter, the
+  validator, the mapping planner and the writer are byte-identical, the `settings.dat` container version is
+  untouched, and the selector went into the slot §4.8.4 **reserved in the MVP** — the toolbar was not rearranged.
+  **⭐ The one place that had to be written was the one place I1 said would be.** `ImportProfileStore` gained
+  named-entry operations (`ListNamed`/`GetById`/`SaveNamed`/`NameExists`/`Rename`/`Delete`/`IsReadable`); its own
+  I1 comment reserved them for I11 precisely because methods nothing calls are indistinguishable from a
+  regression (gotcha #233). A named profile is a row of the list that already existed and happens to have a
+  `Name` — `IsImplicit` still means exactly what it meant. ⚠ Worth recording: the session prompt listed
+  `ImportProfileStore` among the "stop and report" items, while §4.8.4 calls the named-profile UI *"purely a view
+  over the existing store"*. Resolved in favour of the design document — the MODELS are `ImportConfiguration` and
+  `ImportProfile`, and those are untouched — and reported explicitly, as the etap requires.
+  **⭐⭐ A profile that no longer fits the world needed ZERO lines of profile code.** Loading one is
+  `ApplyConfiguration(profile.Configuration)` and nothing else — the same call the restored "last used"
+  configuration has taken since I7 — so the chain re-reads the source, re-reads the target from the catalog and
+  re-plans through `ImportMappingPlanner`. A deleted file therefore surfaces as **IMP0011**, a dropped table as
+  **IMP0016**, and a source whose fields moved is **re-planned by name, never restored by position** (the §4.8.5
+  point 1 defect). None of that is conditional code; it falls out of there being no second load path. Three tests
+  pin it. ⚠ The last of them needed **two** spare source fields: with exactly one unmatched column and one unused
+  field the planner's sole-remaining-pair rule fires by design (IMP0008, "assumed") — correct behaviour that
+  would have hidden what the test was about. **A fixture that lets a documented rule fire is not a product bug.**
+  **⭐ A profile from a newer build is LISTED and refused, not hidden** — hiding it reads to the user as a
+  deletion, and half-applying it is §0.7 outright; `ImportProfileStore.IsReadable` is the ONE predicate, shared
+  with the implicit restore so the list and the loader cannot disagree about "too new". **⭐ The selector's scope
+  is said on screen:** this connection's profiles plus any tied to none; one saved on another connection is not
+  offered, because it names a table this database may not have — and a restriction the user cannot see is
+  indistinguishable from a profile that vanished.
+  ⚠ **Deliberately NOT built, and stated rather than quietly dropped: `.json` export/import** (optional in §6,
+  absent from the DoD). It needs a new Core serializer plus two view seams — it would *enlarge the surface this
+  etap exists to certify as untouched*. The scope note was reworded so it promises no such exchange.
+  ⚠ **Also deliberately not built: a "modified" marker on the selected profile.** It needs a canonical comparison
+  of two `ImportConfiguration`s, and a record compares its list members (mapping, boolean tokens) by reference —
+  the mapping is a fresh instance after every recalculation, so the marker would light up the instant a profile
+  loaded. Building that comparison would be the model change this etap proves was unnecessary.
+  ⚠ **Fixed in passing, inside the module:** the shared destructive confirmation carried only a message while the
+  view supplied a **fixed** title ("Empty the table before importing") and a **fixed** button ("Import") — so the
+  "drop the table this import created?" question was already being asked under another action's name. The event
+  now carries the whole `ConfirmRequest`. New shared `TextPromptDialog` (mirrors `ConfirmDialog`'s
+  request/VM/close idiom) because the app's only name prompt, `NewFolderDialog`, is folder-worded throughout.
+- **🏁 DATA IMPORT — POST-I10 ERGONOMICS SEAM CLOSED AND USER-ACCEPTED (2026-07-27).** Three review findings from I10, scoped by the user as **closing
   I10, not a new etap**: the clipboard as a **live source**, a **Refresh** button, and the requirement that a
   re-read go through **the same chain** as the first read. Confirmed with no findings, and the architectural
   direction endorsed explicitly — *"the important thing is that no second refresh path appeared; everything goes
@@ -2355,9 +2396,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5801 as of 2026-07-27
-  (`feat/data-import`, after the post-I10 ergonomics seam)** — green in two partitions (5761 + the 40-test
-  `ConnectionExpandBindingProbe`), ~12s.
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5835 as of 2026-07-27
+  (`feat/data-import`, after I11 named profiles)** — green in two partitions (5795 + the 40-test
+  `ConnectionExpandBindingProbe`), ~23s.
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
   a `TextEditor` throw cross-thread from every session after the first (#226).

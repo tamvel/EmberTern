@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -60,6 +61,47 @@ public sealed class ImportSourceRecordRowViewModel
     public bool IsRagged { get; internal set; }
 
     public object? ValueAt(int index) => index >= 0 && index < Values.Length ? Values[index] : null;
+}
+
+/// <summary>
+/// One named profile in the command bar's selector (etap I11).
+/// <para>
+/// ⭐ A projection, never the stored object. The store's <c>ImportProfile</c> is a mutable class it does
+/// read-modify-write on; handing that instance to a view would give the selector a way to edit the file's
+/// contents by binding. So a row carries the three things the selector needs — an identity, a label and whether
+/// this build can honour it — and every change goes back through the store.
+/// </para>
+/// </summary>
+public sealed class ImportProfileRowViewModel
+{
+    public ImportProfileRowViewModel(ImportProfile profile)
+    {
+        Id = profile.Id;
+        Name = profile.Name;
+        IsPortable = profile.ConnectionId is null;
+        IsReadable = ImportProfileStore.IsReadable(profile);
+        Configuration = profile.Configuration;
+    }
+
+    public string Id { get; }
+
+    public string Name { get; }
+
+    /// <summary>Saved without a connection — it arrived from a file and is offered everywhere (§4.8.3).</summary>
+    public bool IsPortable { get; }
+
+    /// <summary>False when the profile was written by a newer build. It is still LISTED — hiding it would look
+    /// like a deletion — but loading it is refused with a reason rather than applied in part (§0.7).</summary>
+    public bool IsReadable { get; }
+
+    /// <summary>The decisions. Read only to be applied; never edited here.</summary>
+    public ImportConfiguration Configuration { get; }
+
+    /// <summary>What the selector shows. A profile this build cannot read says so in the list itself, because
+    /// that is the moment the user is choosing.</summary>
+    public string Display => IsReadable
+        ? (IsPortable ? Name + UiStrings.ImportProfilePortableSuffix : Name)
+        : Name + UiStrings.ImportProfileUnreadableSuffix;
 }
 
 /// <summary>
@@ -144,6 +186,11 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         PreviewRows = new ObservableCollection<ImportSourceRecordRowViewModel>();
         PreviewFields = new ObservableCollection<SourceField>();
 
+        // The named profiles are read before anything is restored: the selector has to be able to show what is
+        // stored even when the surface opens on the implicit "last used" entry rather than on one of them.
+        Profiles = new ObservableCollection<ImportProfileRowViewModel>();
+        ReloadProfiles(null);
+
         // ⭐ "Last used" (§4.8.4). Restoring is the SAME path a named profile will take in I11 — the whole point
         // of §4.8.1 is that there is nothing else to build for it. It goes through ApplyConfiguration, so the
         // world is re-read and anything that no longer fits shows up in the readiness strip rather than being
@@ -206,11 +253,23 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// Asks the user to confirm an action that destroys data, returning their answer. The view owns the dialog;
     /// the VM owns the question (rule #1).
     /// <para>
-    /// Used for exactly one thing: "empty the table first" is about to delete N rows. §0 gives every place the
-    /// module would otherwise guess two options — ask, or refuse with a reason — and this is the ask.
+    /// Every destructive step this module can take goes through it: emptying the target, dropping a table the
+    /// run created, overwriting a saved profile, deleting one. §0 gives every place the module would otherwise
+    /// guess two options — ask, or refuse with a reason — and this is the ask.
+    /// </para>
+    /// <para>
+    /// ⚠ It carries the whole <see cref="ConfirmRequest"/>, so each question brings its own heading and its own
+    /// verb. It used to carry only the message, and the view supplied one fixed heading and one fixed button —
+    /// so the "drop the table this import created?" question was already appearing under the words "Empty the
+    /// table before importing", above a button labelled "Import". A shared confirmation that names the wrong
+    /// action is worse than no heading, and profiles would have made a third and a fourth.
     /// </para>
     /// </summary>
-    public event Func<string, Task<bool>>? ConfirmRequested;
+    public event Func<ConfirmRequest, Task<bool>>? ConfirmRequested;
+
+    /// <summary>Asks the user for one line of text (a profile name), returning it trimmed or <c>null</c> when
+    /// they cancelled. The view owns the dialog; the VM owns the question (rule #1).</summary>
+    public event Func<TextPromptRequest, Task<string?>>? TextRequested;
 
     /// <summary>Asks the view to open the shared export dialog over the report's problem list.</summary>
     public event Func<IReadOnlyList<ImportProblemRowViewModel>, Task>? ExportReportRequested;
@@ -267,6 +326,271 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     }
 
     // ══ Band B — the command bar (§3.1) ═════════════════════════════════════════════════════════════════
+
+    // ── Named profiles — the slot §4.8.4 reserved (etap I11) ────────────────────────────────────────────
+    //
+    // ⭐⭐ There is nothing here but a list, a selection and three verbs. That is the whole point of the etap:
+    // §4.8.1 made the surface's state and a profile's payload THE SAME RECORD, so "load a profile" is
+    // ApplyConfiguration and "save one" is BuildConfiguration. No mapper, no second representation, and — most
+    // importantly — no separate loading path that could interpret a stored decision differently from the way an
+    // edit does.
+
+    /// <summary>The named profiles offered on this connection (§4.8.3 scope), ordered by name.</summary>
+    public ObservableCollection<ImportProfileRowViewModel> Profiles { get; }
+
+    /// <summary>
+    /// The profile whose decisions were loaded. Selecting one <b>is</b> loading it — a picker that needed a
+    /// second "Load" click would make the selection mean nothing on its own.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RenameProfileCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteProfileCommand))]
+    private ImportProfileRowViewModel? _selectedProfile;
+
+    /// <summary>Set while this VM writes the selection itself, so re-selecting after a save does not re-load
+    /// what is already on the surface. The same guard shape the command-bar and section VMs use.</summary>
+    private bool _suspendProfileSelection;
+
+    partial void OnSelectedProfileChanged(ImportProfileRowViewModel? value)
+    {
+        if (_suspendProfileSelection || value is null) return;
+        LoadProfile(value);
+    }
+
+    public bool HasProfiles => Profiles.Count > 0;
+
+    /// <summary>
+    /// ⭐ Says out loud which profiles the selector is showing.
+    /// <para>
+    /// A profile names a TABLE, so one made against another database is a promise this connection may not be
+    /// able to keep — the list therefore holds this connection's profiles plus the portable ones that came from
+    /// a file. That is a real restriction, and a restriction the user cannot see is indistinguishable from a
+    /// profile that has gone missing.
+    /// </para>
+    /// </summary>
+    public string ProfileScopeNote => string.Format(
+        CultureInfo.CurrentCulture, UiStrings.ImportProfileScopeFormat, _environment.ConnectionName());
+
+    /// <summary>
+    /// Loads a profile — <b>through the one path</b>.
+    /// <para>
+    /// ⭐ <see cref="ApplyConfiguration"/> and nothing else, which is what §4.8.5 demands: the same call the
+    /// restored "last used" configuration takes, ending in the same recalculation chain, so the source is read
+    /// again, the target is read again from the catalog and <c>ImportMappingPlanner</c> re-plans under the
+    /// proof-preserving rule. A profile that no longer fits the world therefore shows up as findings in the
+    /// readiness strip — a missing file is IMP0011, a table that is gone is IMP0016 — instead of being applied
+    /// in silence. <b>There is deliberately no mapping logic here to drift from the manual path.</b>
+    /// </para>
+    /// </summary>
+    private void LoadProfile(ImportProfileRowViewModel row)
+    {
+        if (!row.IsReadable)
+        {
+            // Never in part (§0.7). The row stays selected so the user can see which one was refused.
+            SetStatus(
+                string.Format(CultureInfo.CurrentCulture, UiStrings.ImportProfileUnreadableFormat, row.Name),
+                MessageSeverity.Warning);
+            return;
+        }
+
+        // The quiet "restored the last configuration" note is about the implicit entry. Once the user has chosen
+        // a profile by name it would be describing something that is no longer on the surface.
+        RestoredLastConfiguration = false;
+
+        ApplyConfiguration(row.Configuration);
+
+        SetStatus(
+            string.Format(CultureInfo.CurrentCulture, UiStrings.ImportProfileLoadedFormat, row.Name),
+            MessageSeverity.Info);
+    }
+
+    /// <summary>
+    /// Saves the surface's current decisions under a name. The record it stores is <see cref="BuildConfiguration"/>
+    /// — the very same one <c>Importuj</c> would hand to the pipeline, so a profile cannot describe an import
+    /// different from the one the user is looking at.
+    /// </summary>
+    [RelayCommand]
+    private async Task SaveProfileAsAsync()
+    {
+        if (_environment.SaveProfile is null || TextRequested is null) return;
+
+        try
+        {
+            var name = await TextRequested.Invoke(new TextPromptRequest
+            {
+                Title = UiStrings.ImportProfileSaveAsTitle,
+                Label = UiStrings.ImportProfileNameLabel,
+                InitialText = SuggestedProfileName(),
+                ConfirmLabel = UiStrings.ImportProfileSaveConfirm,
+                CancelLabel = UiStrings.DialogCancel,
+            }).ConfigureAwait(true);
+
+            if (string.IsNullOrWhiteSpace(name)) return;
+
+            // The duplicate check reads the list the selector is already showing — the same names, no second
+            // round trip, and no second opinion about what "already exists" means.
+            if (FindProfileByName(name) is not null && ConfirmRequested is not null)
+            {
+                var overwrite = await ConfirmRequested.Invoke(new ConfirmRequest
+                {
+                    Title = UiStrings.ImportProfileOverwriteTitle,
+                    Message = string.Format(
+                        CultureInfo.CurrentCulture, UiStrings.ImportProfileOverwriteFormat, name),
+                    ConfirmLabel = UiStrings.ImportProfileOverwriteConfirm,
+                    IsDestructive = true,
+                }).ConfigureAwait(true);
+
+                if (!overwrite) return;
+            }
+
+            var saved = _environment.SaveProfile.Invoke(name, BuildConfiguration());
+            ReloadProfiles(saved.Id);
+
+            SetStatus(
+                string.Format(CultureInfo.CurrentCulture, UiStrings.ImportProfileSavedFormat, saved.Name),
+                MessageSeverity.Success);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            // By POSITION, not by type — this command reaches the world through delegates and therefore cannot
+            // enumerate what the world throws (gotchas #264 / #265). An unhandled escape here would not produce a
+            // bad report, it would close the application.
+            ReportUnexpected(ex);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelectedProfile))]
+    private async Task RenameProfileAsync()
+    {
+        if (_environment.RenameProfile is null || TextRequested is null) return;
+        if (SelectedProfile is not { } row) return;
+
+        try
+        {
+            var name = await TextRequested.Invoke(new TextPromptRequest
+            {
+                Title = UiStrings.ImportProfileRenameTitle,
+                Label = UiStrings.ImportProfileNameLabel,
+                InitialText = row.Name,
+                ConfirmLabel = UiStrings.ImportProfileRenameConfirm,
+                CancelLabel = UiStrings.DialogCancel,
+            }).ConfigureAwait(true);
+
+            if (string.IsNullOrWhiteSpace(name)) return;
+            if (string.Equals(name, row.Name, StringComparison.CurrentCulture)) return;
+
+            if (!_environment.RenameProfile.Invoke(row.Id, name))
+            {
+                // The store never picks a different name on the user's behalf, so the refusal is reported as
+                // one — the profile keeps the name it had.
+                SetStatus(
+                    string.Format(CultureInfo.CurrentCulture, UiStrings.ImportProfileNameTakenFormat, name),
+                    MessageSeverity.Warning);
+                return;
+            }
+
+            ReloadProfiles(row.Id);
+            SetStatus(
+                string.Format(CultureInfo.CurrentCulture, UiStrings.ImportProfileRenamedFormat, name),
+                MessageSeverity.Success);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            ReportUnexpected(ex);
+        }
+    }
+
+    /// <summary>Deletes the selected profile. Destructive, so it asks first — the same rule "empty the table"
+    /// follows (§0).</summary>
+    [RelayCommand(CanExecute = nameof(HasSelectedProfile))]
+    private async Task DeleteProfileAsync()
+    {
+        if (_environment.DeleteProfile is null || ConfirmRequested is null) return;
+        if (SelectedProfile is not { } row) return;
+
+        try
+        {
+            var confirmed = await ConfirmRequested.Invoke(new ConfirmRequest
+            {
+                Title = UiStrings.ImportProfileDeleteTitle,
+                Message = string.Format(
+                    CultureInfo.CurrentCulture, UiStrings.ImportProfileDeleteFormat, row.Name),
+                ConfirmLabel = UiStrings.ImportProfileDeleteConfirm,
+                IsDestructive = true,
+            }).ConfigureAwait(true);
+
+            if (!confirmed) return;
+
+            if (!_environment.DeleteProfile.Invoke(row.Id)) return;
+
+            // The surface keeps the decisions that were on it — deleting the saved copy is not a reason to throw
+            // away the work in front of the user.
+            ReloadProfiles(null);
+            SetStatus(
+                string.Format(CultureInfo.CurrentCulture, UiStrings.ImportProfileDeletedFormat, row.Name),
+                MessageSeverity.Success);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            ReportUnexpected(ex);
+        }
+    }
+
+    private bool HasSelectedProfile => SelectedProfile is not null;
+
+    /// <summary>Re-reads the list and restores a selection by id — identity is the id, so a rename never loses
+    /// the user's place.</summary>
+    private void ReloadProfiles(string? selectId)
+    {
+        _suspendProfileSelection = true;
+        try
+        {
+            Profiles.Clear();
+
+            foreach (var profile in _environment.ListProfiles?.Invoke() ?? Array.Empty<ImportProfile>())
+            {
+                Profiles.Add(new ImportProfileRowViewModel(profile));
+            }
+
+            SelectedProfile = selectId is null
+                ? null
+                : Profiles.FirstOrDefault(p => string.Equals(p.Id, selectId, StringComparison.Ordinal));
+        }
+        finally
+        {
+            _suspendProfileSelection = false;
+        }
+
+        OnPropertyChanged(nameof(HasProfiles));
+    }
+
+    private ImportProfileRowViewModel? FindProfileByName(string name)
+    {
+        foreach (var row in Profiles)
+        {
+            if (string.Equals(row.Name, name.Trim(), StringComparison.CurrentCultureIgnoreCase)) return row;
+        }
+        return null;
+    }
+
+    /// <summary>What the name box opens with: the profile in hand, else the table the import is aimed at — the
+    /// word the user would have typed anyway.</summary>
+    private string SuggestedProfileName()
+    {
+        if (SelectedProfile is { } row) return row.Name;
+
+        var table = _configuration.Target.TableName;
+        return string.IsNullOrWhiteSpace(table) ? string.Empty : table;
+    }
 
     /// <summary>
     /// What happens to the user's working transaction (§4.5). <c>Manual</c> is the default and always will be:
@@ -652,7 +976,15 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         var question = string.Format(
             CultureInfo.CurrentCulture, UiStrings.ImportConfirmDropTableFormat, createdTable);
 
-        if (!await ConfirmRequested.Invoke(question).ConfigureAwait(true)) return;
+        var confirmed = await ConfirmRequested.Invoke(new ConfirmRequest
+        {
+            Title = UiStrings.ImportConfirmDropTableTitle,
+            Message = question,
+            ConfirmLabel = UiStrings.ImportConfirmDropTableConfirm,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
+
+        if (!confirmed) return;
 
         try
         {
@@ -711,7 +1043,13 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             ? string.Format(CultureInfo.CurrentCulture, UiStrings.ImportConfirmEmptyCountFormat, count, tableName)
             : string.Format(CultureInfo.CurrentCulture, UiStrings.ImportConfirmEmptyFormat, tableName);
 
-        return await ConfirmRequested.Invoke(question).ConfigureAwait(true);
+        return await ConfirmRequested.Invoke(new ConfirmRequest
+        {
+            Title = UiStrings.ImportTargetEmptyFirst,
+            Message = question,
+            ConfirmLabel = UiStrings.ImportRun,
+            IsDestructive = true,
+        }).ConfigureAwait(true);
     }
 
     /// <summary>

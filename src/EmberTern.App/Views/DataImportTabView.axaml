@@ -68,6 +68,49 @@
 
         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
 
+          <!-- ══ Named profiles (etap I11) ══════════════════════════════════════════════════════════
+               ⭐ This is the slot §4.8.4 reserved back in the MVP — the leftmost position of band B, before
+               Importuj — precisely so that adding the selector would not rearrange the toolbar. It did not:
+               everything to the right of this block is untouched.
+
+               The selector carries its own scope sentence as a tooltip, because the list deliberately does NOT
+               show profiles saved on other connections and a restriction the user cannot see is
+               indistinguishable from a profile that has gone missing. -->
+          <TextBlock Text="{x:Static app:UiStrings.ImportProfileLabel}" Classes="field-label"
+                     VerticalAlignment="Center" Margin="0" />
+          <ComboBox x:Name="ProfilePicker" MinWidth="170" VerticalAlignment="Center" FontSize="12"
+                    ItemsSource="{Binding Profiles}"
+                    SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
+                    PlaceholderText="{x:Static app:UiStrings.ImportProfilePlaceholder}"
+                    IsEnabled="{Binding IsConfigurationEnabled}"
+                    ToolTip.Tip="{Binding ProfileScopeNote}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ImportProfileRowViewModel">
+                <TextBlock Text="{Binding Display}" FontSize="12" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+
+          <Button Classes="flat" Command="{Binding SaveProfileAsCommand}"
+                  IsEnabled="{Binding IsConfigurationEnabled}"
+                  Content="{x:Static app:UiStrings.ImportProfileSaveAs}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportProfileSaveAsTooltip}" />
+
+          <!-- Rename and delete act on the SELECTED profile, so they are icon-only secondary actions and
+               disable themselves when there is nothing selected — their CanExecute says so, not a binding here. -->
+          <Button Classes="icon" Command="{Binding RenameProfileCommand}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportProfileRenameTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.Pencil}"
+                              Foreground="{DynamicResource AccentIconBrush}" />
+          </Button>
+          <Button Classes="icon" Command="{Binding DeleteProfileCommand}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportProfileDeleteTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.Trash}"
+                              Foreground="{DynamicResource DangerIconBrush}" />
+          </Button>
+
+          <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+
           <Button Classes="primary" Command="{Binding ImportCommand}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportRunTooltip}">
             <StackPanel Orientation="Horizontal" Spacing="6">

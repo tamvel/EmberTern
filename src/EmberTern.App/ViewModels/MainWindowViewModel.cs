@@ -4156,10 +4156,17 @@ public partial class MainWindowViewModel : ViewModelBase
             CommitAsync = () => importSession.CommitAsync(),
             RollbackAsync = () => importSession.RollbackAsync(),
 
-            // "Last used" is the implicit profile (§4.8.4) — the same store named profiles will use in I11,
-            // which is the whole point: nothing new gets built for them.
+            // "Last used" is the implicit profile (§4.8.4) — the same store the named ones use, which is the
+            // whole point: I11 built nothing new for them, it only gave the store's list a name column and a UI.
             LoadLastUsed = () => _importProfiles.GetLastUsed(connectionId),
             SaveLastUsed = configuration => _importProfiles.SaveLastUsed(connectionId, configuration),
+
+            // Named profiles (etap I11). The connection id is resolved HERE and never reaches the surface:
+            // which database this is, is not a decision about how to read a file (§4.8.2).
+            ListProfiles = () => _importProfiles.ListNamed(connectionId),
+            SaveProfile = (name, configuration) => _importProfiles.SaveNamed(connectionId, name, configuration),
+            RenameProfile = (id, name) => _importProfiles.Rename(id, name),
+            DeleteProfile = id => _importProfiles.Delete(id),
         };
 
         var import = new DataImportTabViewModel(environment);

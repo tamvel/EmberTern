@@ -65,12 +65,81 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | **✅ I9 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-27)** | XLSX: `EmberTern.Export.Office` → **`EmberTern.Office`** (D1), `XlsxImportProvider` (7 wytycznych REK-6), rozgałęzienie sekcji Format po **`Capabilities`**, `SourceErrorValue` domykający R20. ⭐ **Filar „jeden pipeline dla każdego źródła" utrzymał się: pipeline, konwerter, walidator, mapowanie i writer NIE zostały zmienione.** Potwierdzone wzrokowo przez użytkownika w obu paletach — sprawdzone osobno: wybór arkusza, ukrywanie ustawień właściwych dla CSV/TXT, opcja „traktuj komórki dat jako daty" i pełny przebieg importu XLSX; bez uwag wizualnych i funkcjonalnych |
 | **✅ I10 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | Schowek + `.xls` (BIFF8). ⭐ **Filar utrzymał się po raz drugi, tym razem pod większym obciążeniem — bo doszła NOWA ZALEŻNOŚĆ NuGet, a mimo to pipeline, konwerter, walidator, mapowanie i writer znów nie zostały tknięte.** Schowek okazał się już zbudowany (I5 dał przełącznik i pole, `MainWindow` czytanie ze schowka) — etap dołożył mu wyłącznie dowody. Szczegóły w bloku „⭐ I10 as-built" |
 | **🏁 SZEW ERGONOMICZNY PO I10 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-27)** | Trzy uwagi użytkownika z przeglądu I10, potraktowane jako domknięcie I10, **nie** jako nowy etap: schowek jako **źródło żywe**, przycisk **Odśwież**, i wymóg, żeby ponowny odczyt przechodził **tym samym łańcuchem** co pierwszy. **Potwierdzone przez użytkownika: bez uwag.** Wprost zaakceptowany kierunek architektoniczny — *„najważniejsze, że nie powstała druga ścieżka odświeżania, tylko wszystko przechodzi przez jeden łańcuch z różnymi powodami uruchomienia (Decision / Refresh)"*. `Ctrl+R` zostaje, **`F5` świadomie NIE dodane** (decyzja użytkownika — `F5` to Import). Szczegóły w bloku „⭐ Szew ergonomiczny po I10" |
-| **Następny etap** | **I11** — nazwane profile (UI nad istniejącym magazynem; zero zmian w modelach i w pipeline) |
-| **Testy** | **5801 zielonych**, 0 niepowodzeń (szew po I10 dodał **+16**; I10 dodał +22). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
+| **✅ I11 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | Nazwane profile. ⭐⭐ **Rachunek §4.8 się zgodził: ANI JEDEN model nie został zmieniony i pipeline nie został tknięty.** `ImportConfiguration`, `ImportProfile`, `ImportPipeline`, konwerter, walidator, planer mapowania i writer — bez jednej linii różnicy. Wczytanie profilu to `ApplyConfiguration` i **nic więcej**, więc profil niezgodny ze światem melduje się w pasku gotowości (IMP0011 / IMP0016), a nie wyjątkiem. Selektor wszedł w **zarezerwowane** miejsce paska B — układ toolbara nie został przebudowany. Szczegóły w bloku „⭐ I11 as-built" |
+| **Następny etap** | **I12** — domknięcie modułu (dokumentacja, audyt UI w obu paletach, pomiar na 1 M wierszy) |
+| **Testy** | **5835 zielonych**, 0 niepowodzeń (I11 dodał **+34**: 16 do magazynu, 18 w nowym `DataImportProfileTests`; szew po I10 dodał +16; I10 +22). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
 | **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **G z I8** + **H z I9** + **I z I10**) przeciwko FB5 `WI-V5.0.3.1683` — **33/33 ALL PASS**; sekcja I dokłada: detektor proponuje TAB dla wklejenia z Excela (3/3 rekordy zgodne co do 5 pól), wklejenie importuje się **bez pliku na dysku**, `.xls` → tabela istniejąca i → tabela nowa, `#N/A` z BIFF odrzucone przez kolumnę VARCHAR, data z `.xls` wraca z bazy tym samym dniem (2026-05-14), oraz **prawdziwy skoroszyt napisany przez Excela** (`Nadgodziny2.xls`: 3 arkusze, 20 pól, 1073 wiersze, ostatni numer 1074). Wcześniejsze: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, Rollback cofa wiersze i NIE cofa tabeli — **oraz (I9): arkusz → tabela istniejąca, arkusz → tabela nowa, prawdziwa komórka daty typuje się na `DATE` i wraca z bazy tym samym dniem (2026-04-03), a `#N/A` zostaje odrzucone przez kolumnę VARCHAR** |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
 | **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **pięć VM-ów i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
 | **⭐ Kamień milowy** | **MVP (I0–I7) DOSTARCZONE: CSV/TXT → istniejąca tabela działa end-to-end**, z walidacją, raportem, decyzją transakcyjną i pamięcią ostatniej konfiguracji. **I8 dokłada drugi wariant celu — tabelę, której jeszcze nie ma.** Wszystko dalej (I9–I12) jest przyrostowe. |
+
+### ⭐ I11 as-built — etap, który niczego nie dokładał, tylko sprawdzał rachunek (2026-07-27)
+
+**Werdykt: §4.8 nie zostało po drodze naruszone.** §6 nazwało dowód wprost — *„jeżeli nazwane profile wymagają
+zmiany choćby jednego modelu albo przebudowy sekcji UI, znaczy że §4.8 zostało naruszone"*. Nie wymagały.
+
+**Czego NIE trzeba było ruszyć — i to jest właściwy wynik etapu:**
+
+| | |
+|---|---|
+| `ImportConfiguration` | bez zmian |
+| `ImportProfile` | bez zmian — nazwany profil to wiersz tej samej listy, który **ma** `Name`; `IsImplicit` znaczy dokładnie to, co znaczyło od I1 |
+| `ImportPipeline`, `ImportValueConverter`, `ImportRowValidator`, `ImportMappingPlanner`, `FirebirdImportWriter` | bez zmian |
+| `UserSettings.ImportProfiles`, wersja kontenera `settings.dat` | bez zmian (wersja **nie** podbita — nauka z C3) |
+| Układ paska poleceń | bez przebudowy — selektor wszedł w miejsce, które §4.8.4 zarezerwowało w MVP |
+
+**Co trzeba było dopisać — jedno miejsce, zaplanowane w I1.** `ImportProfileStore` dostał operacje na nazwanych
+wpisach (`ListNamed` / `GetById` / `SaveNamed` / `NameExists` / `Rename` / `Delete` / `IsReadable`). To **nie jest**
+odstępstwo: własny komentarz tej klasy od I1 mówił, że API jest celowo ograniczone do wpisu niejawnego, bo
+*„named-profile operations arrive with their UI in etap I11 — adding them now would leave methods nothing calls"*
+(gotcha #233). Fasada urosła o czytanie i pisanie wierszy listy, która już istniała; **kształt danych się nie
+zmienił**.
+
+⚠ **Rozbieżność do odnotowania:** prompt otwierający sesję wymieniał `ImportProfileStore` wśród rzeczy, których
+dotknięcie ma oznaczać „ZATRZYMAJ I ZGŁOŚ". §4.8.4 mówi jednak o UI nazwanych profili jako o *„wyłącznie widoku
+nad istniejącym magazynem"*, a sam magazyn zapowiadał te metody na I11. Rozstrzygnięte na korzyść dokumentu
+projektowego: **modelem** jest `ImportConfiguration` i `ImportProfile`, a te są nietknięte. Zgłoszone jawnie,
+zgodnie z obowiązkiem etapu.
+
+**⭐⭐ Dlaczego niezgodność ze światem nie wymagała ani jednej linii kodu.** Wczytanie profilu to
+`ApplyConfiguration(profile.Configuration)` i **nic więcej** — czyli ta sama droga, którą od I7 wraca „ostatnio
+użyta" konfiguracja: `Recalculate` → źródło czytane na nowo → cel czytany na nowo z katalogu →
+`ImportMappingPlanner` przelicza pod regułą zachowania dowodliwego → pasek gotowości. Skutek: profil wskazujący
+usunięty plik daje **IMP0011**, profil wskazujący nieistniejącą tabelę daje **IMP0016**, a mapowanie na
+zmienionym źródle jest **przeplanowane po nazwach**, nie odtworzone po pozycjach. W kodzie profili nie ma na to
+żadnego warunku — to wypada z tego, że nie ma drugiej ścieżki wczytania. Zapinowane trzema testami.
+
+**⭐ Profil „z przyszłości" jest POKAZANY, a nie ukryty.** §4.8.3 wymaga oznaczenia go jako nieczytelnego z
+komunikatem; ukrycie wyglądałoby dla użytkownika dokładnie jak skasowanie zapisanego profilu. Predykat
+`ImportProfileStore.IsReadable` jest **jeden** i obsługuje zarówno listę nazwanych, jak i przywracanie wpisu
+niejawnego — dwie kopie reguły „za nowy" prędzej czy później zaczęłyby się różnić, a różnica objawiłaby się jako
+profil, który lista uznaje za zdatny, a ładowanie odrzuca.
+
+**⭐ Zakres selektora jest POWIEDZIANY NA EKRANIE.** Lista pokazuje profile tego połączenia plus te, które nie są
+z żadnym związane; profil zapisany na innym połączeniu **nie jest** oferowany, bo nazywa tabelę, której ta baza
+może nie mieć. Ograniczenie, którego użytkownik nie widzi, jest nieodróżnialne od profilu, który zniknął — stąd
+zdanie w podpowiedzi selektora.
+
+⚠ **Świadomie NIE zbudowane: eksport/import `.json`.** §6 wymienia go jako **opcjonalny** i nie ma go w DoD.
+Wymagałby nowego serializatora w Core i dwóch nowych szwów w widoku, czyli **powiększyłby powierzchnię, o której
+ten etap ma orzec, że jej nie ruszył** — a to jest jedyny produkt I11. Konsekwencja obsłużona: podpowiedź
+selektora nie obiecuje wymiany plikami. Gałąź `ConnectionId == null` w `ListNamed` **zostaje**, bo to nullowalne
+pole zapisanego rekordu — profil, którego żadne zapytanie nie zwraca, jest danymi nieosiągalnymi, nie brakującą
+funkcją.
+
+⚠ **Poprawka przy okazji, w granicach modułu:** wspólne potwierdzenie destrukcyjne (`ConfirmRequested`) niosło
+tylko treść, a widok dokładał **stały** nagłówek „Opróżnij tabelę przed importem" i **stały** przycisk
+„Importuj" — więc pytanie „usunąć utworzoną tabelę?" już wcześniej pojawiało się pod nazwą innej akcji. Zdarzenie
+niesie teraz cały `ConfirmRequest`; profile dołożyłyby trzecie i czwarte takie pytanie.
+
+⚠ **Świadomie NIE dodane: znacznik „zmodyfikowany" przy wybranym profilu.** Wymagałby kanonicznego porównania
+dwóch `ImportConfiguration`, a rekord porównuje listy (mapowanie, tokeny logiczne) po referencji — po każdym
+przeliczeniu mapowanie jest nową instancją, więc znacznik zapalałby się natychmiast po wczytaniu. Zbudowanie
+takiego porównania to zmiana modelu, czyli dokładnie to, czego ten etap dowodzi, że nie było potrzebne. Selektor
+mówi więc „ten profil wczytano", a nie „powierzchnia równa się temu profilowi"; `Zapisz jako…` podpowiada nazwę
+wybranego profilu, więc nadpisanie go jest jednym gestem.
+
+---
 
 ### ⭐ Szew ergonomiczny po I10 — schowek jako źródło żywe, „Odśwież", jeden łańcuch (2026-07-27)
 
@@ -1650,7 +1719,7 @@ zielonymi testami, czystym smoke testem i commitem.
 | **I8** ✅ **DOSTARCZONY** | Nowa tabela | `ColumnTypeInferencer` — **(I0/REK-7) domyślnie skanuje CAŁE źródło**, nie próbkę (limit bezpieczeństwa 1 M wierszy), bo w realnym pliku 2 z 5 kolumn były typowo mieszane (R19); siatka typów w sekcji Cel z **zawsze widoczną liczbą przeanalizowanych wierszy** w kolumnie „Podstawa"; podgląd DDL; wykonanie na linii Ddl; ostrzeżenie o nieodwracalności; opcja `DROP` przy niepowodzeniu. | Import do nieistniejącej tabeli działa; typy zachowawcze i edytowalne; DDL z tego samego generatora; **kolumna mieszana ląduje jako `VARCHAR`, nie jako `INTEGER` z bombą zegarową**. **Spełnione** — +86 testów (5693 zielone) oraz sekcja **G** w `DataImportRunProbe`: **20/20 ALL PASS** na żywym FB5, w tym dowód, że katalog oddaje dokładnie te typy, o które poprosiliśmy, i że Rollback cofa wiersze, a nie tabelę. |
 | **I9** | XLSX + zmiana nazwy projektu (D1) | `EmberTern.Export.Office` → **`EmberTern.Office`**; `XlsxImportProvider`; rozgałęzienie sekcji Format po `Capabilities`. **(I0/REK-6) Siedem wiążących wytycznych providera:** (1) **wyłącznie `OpenXmlReader` (SAX)** — DOM bierze 77× więcej pamięci (R8); (2) wartości umieszczane **po `CellReference`** — brakująca komórka środkowa jest NIEOBECNA, nie pusta, więc czytnik pozycyjny przesunąłby resztę wiersza o kolumnę (§0.1); (3) numer wiersza źródłowego **z `Row.RowIndex`** — puste wiersze są nieobecne, własny licznik skłamałby w raporcie (§0.6); (4) data = liczba + `numFmtId` daty (R3); (5) `SharedStringTable` czytana raz — Excel zapisuje teksty jako shared strings (rozmiar ∝ liczbie RÓŻNYCH tekstów); (6) `SheetDimension` **tylko jako wskazówka** postępu (bywa nieobecny); (7) formuła → wartość zbuforowana, a **komórka błędu → błąd wiersza** (+ opcja `ExcelErrorCellsAsNull`, R20). | Import plików z załączonych zrzutów daje identyczne dane. Eksport XLSX bez regresji. Pierwszy realny plik **z datami** obejrzany (luka pomiarowa R3). Po zamknięciu I9 `tools/probes/DataImportXlsxProbe` idzie do usunięcia. |
 | **I10** ✅ **DOSTARCZONY** | Schowek + XLS | Schowek (App czyta, Core parsuje — zero nowego parsera; **okazał się już zbudowany w I5**, etap dołożył dowody). `XlsImportProvider` (BIFF8) + zależność **`ExcelDataReader` 3.7.0, MIT** w `EmberTern.Office` (D2/R5) + `XlsCellReader` + wspólny `ExcelSerialDate`. Usunięta odmowa dla `.xls` i martwy już `ImportFormatNotYetSupportedFormat`. | Wklejenie z Excela importuje się bez zapisywania pliku. **Spełnione** — +22 testy (5785 zielonych) oraz sekcja **I** w `DataImportRunProbe`: **33/33 ALL PASS** na żywym FB5, w tym prawdziwy skoroszyt napisany przez Excela. R8 zmierzone przed implementacją: sterta **płaska 26,7 MB** przez 60 000 wierszy BIFF8. |
-| **I11** | Nazwane profile (UI) | Selektor profili w zarezerwowanym miejscu paska poleceń, `Zapisz jako…`, zmiana nazwy, usuwanie, opcjonalny eksport `.json`. **Zero zmian w modelach i w pipeline.** | Nazwany profil odtwarza cały import; niezgodności raportowane przez pasek gotowości (§4.8.5). |
+| **I11** ✅ **DOSTARCZONY** | Nazwane profile (UI) | Selektor profili w zarezerwowanym miejscu paska poleceń, `Zapisz jako…`, zmiana nazwy, usuwanie, opcjonalny eksport `.json`. **Zero zmian w modelach i w pipeline.** | Nazwany profil odtwarza cały import; niezgodności raportowane przez pasek gotowości (§4.8.5). **Spełnione — i to jest wynik etapu: rachunek §4.8 się zgodził.** Ani `ImportConfiguration`, ani `ImportProfile`, ani pipeline, konwerter, walidator, planer mapowania i writer nie zostały zmienione; `ImportProfileStore` urósł o operacje na nazwanych wpisach, które jego własny komentarz z I1 zapowiadał na ten etap. +34 testy (5835 zielonych), w tym trzy dowody §4.8.5: usunięty plik → IMP0011, brak tabeli → IMP0016, zmienione pola źródła → mapowanie **przeplanowane po nazwach**, nie odtworzone po pozycjach. **Eksport `.json` świadomie pominięty** (opcjonalny, poza DoD — powiększyłby powierzchnię, o której etap ma orzec, że jej nie ruszył). |
 | **I12** | Domknięcie | Dokumentacja (`docs/history/`, `docs/gotchas.md`, CLAUDE.md w miejscu), audyt UI (obie palety, checklista), pomiar wydajności na 1 M wierszy. | Moduł zamknięty. |
 
 **MVP = I0…I7** (CSV/TXT → istniejąca tabela, z walidacją, raportem i pamięcią ostatniej konfiguracji).

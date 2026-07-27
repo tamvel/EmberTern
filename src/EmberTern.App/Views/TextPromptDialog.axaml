@@ -1,0 +1,45 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.TextPromptDialog"
+        x:DataType="vm:TextPromptDialogViewModel"
+        Title="{Binding Title}"
+        Width="420"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <Grid RowDefinitions="Auto,Auto,Auto">
+
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="20,16">
+      <TextBlock Text="{Binding Title}" Classes="h1" />
+    </Border>
+
+    <StackPanel Grid.Row="1" Margin="20,18" Spacing="6">
+      <TextBlock Text="{Binding Label}" Classes="field-label" Margin="0" />
+      <TextBox x:Name="TextBox" Text="{Binding Text, Mode=TwoWay}" KeyDown="OnTextBoxKeyDown" />
+    </StackPanel>
+
+    <Border Grid.Row="2"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="20,12">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Classes="flat" Content="{Binding CancelLabel}" Command="{Binding CancelCommand}" />
+        <Button Classes="primary" Content="{Binding ConfirmLabel}" Command="{Binding ConfirmCommand}"
+                IsDefault="True" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>

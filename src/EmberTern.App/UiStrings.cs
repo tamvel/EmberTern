@@ -346,6 +346,10 @@ internal static class UiStrings
     public const string ImportCreatingTableFormat = "Creating table {0}…";
     public const string ImportCreatedTableFormat = "Table {0} created and committed.";
     public const string ImportCreateTableFailedFormat = "Table {0} could not be created: {1}";
+    /// <summary>⚠ Its own heading. The shared confirmation used to be titled "Empty the table before importing"
+    /// for every question the module asked, so this one appeared under the name of a different action.</summary>
+    public const string ImportConfirmDropTableTitle = "Drop the created table";
+    public const string ImportConfirmDropTableConfirm = "Drop table";
     public const string ImportConfirmDropTableFormat =
         "The import into {0} did not succeed.\n\nRoll back the imported rows and DROP the table?\n\n" +
         "The table was committed when it was created, so this is the only way to remove it.";
@@ -489,6 +493,51 @@ internal static class UiStrings
     public const string ImportRolledBack = "Rolled back.";
     public const string ImportRestoredLastConfiguration = "restored the last configuration";
     public const string ImportForgetLastConfiguration = "Clear";
+
+    // ---- Data Import: named profiles (etap I11) ----
+
+    public const string ImportProfileLabel = "Profile";
+    public const string ImportProfilePlaceholder = "(none)";
+    /// <summary>Says which profiles the selector holds. A restriction the user cannot see is indistinguishable
+    /// from a profile that has gone missing (§4.8.3).</summary>
+    public const string ImportProfileScopeFormat =
+        "Profiles saved on {0}, plus any that are not tied to a connection. A profile saved on another " +
+        "connection is not offered — it names a table this database may not have.";
+    /// <summary>Appended in the list to a profile that is not tied to a connection and is therefore offered
+    /// everywhere.</summary>
+    public const string ImportProfilePortableSuffix = "  · any connection";
+    /// <summary>Appended to a profile written by a newer build. It stays in the list on purpose — hiding it
+    /// would look exactly like a deletion.</summary>
+    public const string ImportProfileUnreadableSuffix = "  · newer version";
+    public const string ImportProfileUnreadableFormat =
+        "Profile {0} was saved by a newer version of EmberTern and was not loaded. Applying only the parts " +
+        "this build understands would silently change decisions you did not take.";
+    public const string ImportProfileLoadedFormat = "Loaded profile {0}.";
+
+    public const string ImportProfileSaveAs = "Save as…";
+    public const string ImportProfileSaveAsTooltip = "Save the current decisions as a named profile";
+    public const string ImportProfileSaveAsTitle = "Save the import profile";
+    public const string ImportProfileNameLabel = "Profile name";
+    public const string ImportProfileSaveConfirm = "Save";
+    public const string ImportProfileSavedFormat = "Saved profile {0}.";
+    public const string ImportProfileOverwriteTitle = "Overwrite the profile";
+    public const string ImportProfileOverwriteFormat =
+        "A profile named {0} already exists. Overwrite it with the decisions currently on the surface?";
+    public const string ImportProfileOverwriteConfirm = "Overwrite";
+
+    public const string ImportProfileRenameTooltip = "Rename the selected profile";
+    public const string ImportProfileRenameTitle = "Rename the profile";
+    public const string ImportProfileRenameConfirm = "Rename";
+    public const string ImportProfileRenamedFormat = "Renamed to {0}.";
+    public const string ImportProfileNameTakenFormat = "A profile named {0} already exists.";
+
+    public const string ImportProfileDeleteTooltip = "Delete the selected profile";
+    public const string ImportProfileDeleteTitle = "Delete the profile";
+    public const string ImportProfileDeleteFormat =
+        "Delete profile {0}? Only the saved decisions are removed — nothing on the surface changes and no " +
+        "data is touched.";
+    public const string ImportProfileDeleteConfirm = "Delete";
+    public const string ImportProfileDeletedFormat = "Deleted profile {0}.";
 
     // ---- Data Import: ImportErrorKind → one sentence. The ONE table (rule #6). ----
 

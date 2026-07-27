@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -135,7 +135,7 @@ public class DataImportNewTableTests : IDisposable
         string name = "IMP_NEW",
         int failAt = -1,
         bool ddlFails = false,
-        Func<string, Task<bool>>? confirm = null,
+        Func<ConfirmRequest, Task<bool>>? confirm = null,
         List<string>? transactionActions = null,
         ImportTarget? existing = null,
         List<string>? counted = null,
@@ -464,7 +464,7 @@ public class DataImportNewTableTests : IDisposable
 
         var (vm, _, ledger) = await NewTableVmAsync(
             failAt: 0,
-            confirm: q => { asked.Add(q); return Task.FromResult(true); },
+            confirm: r => { asked.Add(r.Message); return Task.FromResult(true); },
             transactionActions: actions);
 
         vm.Target.DropTableOnFailure = true;

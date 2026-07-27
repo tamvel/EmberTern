@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -118,7 +118,7 @@ public class DataImportRunTests : IDisposable
     private async Task<(DataImportTabViewModel Vm, FakeWriter Writer)> RunnableVmAsync(
         string csv = "KOD;NAZWA\nA1;Widget\nA2;Gadget\n",
         FakeWriter? writer = null,
-        Func<string, Task<bool>>? confirm = null,
+        Func<ConfirmRequest, Task<bool>>? confirm = null,
         List<string>? emptied = null,
         List<string>? transactionActions = null,
         long targetRowCount = 7,
@@ -405,7 +405,7 @@ public class DataImportRunTests : IDisposable
         var asked = new List<string>();
         var emptied = new List<string>();
         var (vm, writer) = await RunnableVmAsync(
-            confirm: q => { asked.Add(q); return Task.FromResult(false); },
+            confirm: r => { asked.Add(r.Message); return Task.FromResult(false); },
             emptied: emptied,
             targetRowCount: 7);
 
