@@ -4116,6 +4116,15 @@ public partial class MainWindowViewModel : ViewModelBase
             },
             ReadTargetAsync = (table, ct) => targetReader.ReadTargetAsync(table, ct),
 
+            // ⭐ I8 — the new table's CREATE (and its DROP on failure) go to the **Ddl** lane: autonomous,
+            // auto-committed, WAIT-bounded. Not a preference — gotcha #213: a Firebird transaction cannot use
+            // an object whose DDL it has not committed, so creating the table inside the import's own
+            // transaction would make every INSERT fail with "table unknown". The price, that a Rollback cannot
+            // remove the table, is stated in the Target section, in the readiness strip and in the report
+            // (§0.5). It is the SAME executor the object editors compile through — nothing new (§4.6).
+            CreateTableAsync = (sql, ct) => _ddlExecutor.ExecuteAsync(sql, ct),
+            DropTableAsync = (sql, ct) => _ddlExecutor.ExecuteAsync(sql, ct),
+
             // Batched is the only mode that finishes a transaction on its own, so it is the only one that gets
             // the decorator — Manual and AutoCommitOnSuccess run through byte-identical code (§4.5).
             CreateWriter = configuration =>

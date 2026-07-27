@@ -431,20 +431,25 @@
     </Border>
 
     <!-- ══ Band E2 — TARGET tile (§3.4) ═════════════════════════════════════════════════════════
-         Same shape as the source tile: the picker is always live, the facts sit under it on one thin
-         line. "New table" is etap I8 and is deliberately NOT shown as a disabled radio — an option
-         that looks like a choice and leads nowhere is the lie the readiness strip could not correct. -->
+         Two variants, one tile, read top-down: an EXISTING table has a shape to obey, a NEW one has a
+         shape to choose. Only the chosen variant's detail occupies space, so the tile stays one thin
+         line until there is something to say — the star row still belongs to the WORK (§3.1), which is
+         why the type grid is height-capped and scrolls rather than growing without limit. -->
     <Border Grid.Row="4" Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
       <StackPanel Spacing="5" DataContext="{Binding Target}" x:DataType="vm:ImportTargetSectionViewModel">
 
+        <!-- ── Existing table ─────────────────────────────────────────────────────────────────── -->
         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-          <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportTargetExistingTable}"
-                     Classes="field-label" VerticalAlignment="Center" Margin="0" />
+          <RadioButton Grid.Column="0" GroupName="ImportTargetKind"
+                       Content="{x:Static app:UiStrings.ImportTargetExistingTable}"
+                       IsChecked="{Binding IsExistingTable, Mode=TwoWay}"
+                       VerticalAlignment="Center" FontSize="12" />
 
           <controls:SearchableComboBox Grid.Column="1" x:Name="TargetPicker"
                                        ItemsSource="{Binding Tables}"
                                        SelectedItem="{Binding SelectedTable, Mode=TwoWay}"
+                                       IsEnabled="{Binding IsExistingTable}"
                                        Watermark="{x:Static app:UiStrings.ImportTargetTableWatermark}"
                                        FilterWatermark="{x:Static app:UiStrings.ImportTargetFilterWatermark}"
                                        HorizontalAlignment="Left" MinWidth="360" />
@@ -452,12 +457,130 @@
           <CheckBox Grid.Column="2" VerticalAlignment="Center"
                     Content="{x:Static app:UiStrings.ImportTargetEmptyFirst}"
                     ToolTip.Tip="{x:Static app:UiStrings.ImportTargetEmptyFirstTooltip}"
+                    IsVisible="{Binding IsExistingTable}"
                     IsChecked="{Binding EmptyBeforeImport, Mode=TwoWay}" FontSize="12" />
         </Grid>
 
         <TextBlock Text="{Binding FactsText}" Classes="subtle" FontSize="11"
                    TextTrimming="CharacterEllipsis"
                    IsVisible="{Binding FactsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <!-- ── New table (etap I8) ────────────────────────────────────────────────────────────── -->
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+          <RadioButton Grid.Column="0" GroupName="ImportTargetKind"
+                       Content="{x:Static app:UiStrings.ImportTargetNewTable}"
+                       IsChecked="{Binding IsNewTable, Mode=TwoWay}"
+                       VerticalAlignment="Center" FontSize="12" />
+
+          <TextBox Grid.Column="1" Text="{Binding NewTableName, Mode=TwoWay}"
+                   IsEnabled="{Binding IsNewTable}"
+                   Watermark="{x:Static app:UiStrings.ImportTargetNewTableWatermark}"
+                   HorizontalAlignment="Left" MinWidth="360" FontSize="12" />
+
+          <!-- ⚠ §0.5: the CREATE is committed before the first row (gotcha #213), so this is the only
+               way to undo it — and it is off by default, like every option that destroys something. -->
+          <CheckBox Grid.Column="2" VerticalAlignment="Center"
+                    Content="{x:Static app:UiStrings.ImportNewTableDropOnFailure}"
+                    ToolTip.Tip="{x:Static app:UiStrings.ImportNewTableDropOnFailureTooltip}"
+                    IsVisible="{Binding IsNewTable}"
+                    IsChecked="{Binding DropTableOnFailure, Mode=TwoWay}" FontSize="12" />
+
+          <Button Grid.Column="3" Classes="flat" FontSize="12"
+                  IsVisible="{Binding IsNewTable}"
+                  Command="{Binding ToggleDdlCommand}"
+                  Content="{Binding DdlToggleText}" />
+        </Grid>
+
+        <StackPanel Spacing="4" IsVisible="{Binding IsNewTable}">
+
+          <!-- ⭐ Always visible (§3.4): the number of rows the types rest on. REK-7 makes that the WHOLE
+               source, and a type is worth exactly as much as the evidence behind it. -->
+          <TextBlock Text="{Binding InferenceBasisText}" Classes="subtle" FontSize="11"
+                     IsVisible="{Binding InferenceBasisText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+          <TextBlock Text="{x:Static app:UiStrings.ImportNewTableEmpty}"
+                     Classes="subtle" FontSize="12" TextWrapping="Wrap" MaxWidth="640"
+                     HorizontalAlignment="Left"
+                     IsVisible="{Binding !HasNewColumns}" />
+
+          <!-- ⭐ The grid is EDITABLE, not merely shown (§0.3). Once the CREATE has run the table is
+               committed and beyond a Rollback, so this is the last moment a wrong type costs nothing. -->
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                  IsVisible="{Binding HasNewColumns}">
+            <Grid RowDefinitions="Auto,*">
+
+              <Grid Grid.Row="0" ColumnDefinitions="3*,2*,60,60,50,4*" ColumnSpacing="8" Margin="8,5"
+                    Background="{DynamicResource ElevatedPanelBrush}">
+                <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportNewTableColumnName}"
+                           Classes="field-label" Margin="0" />
+                <TextBlock Grid.Column="1" Text="{x:Static app:UiStrings.ImportNewTableColumnType}"
+                           Classes="field-label" Margin="0" />
+                <TextBlock Grid.Column="2" Text="{x:Static app:UiStrings.ImportNewTableColumnSize}"
+                           Classes="field-label" Margin="0" />
+                <TextBlock Grid.Column="3" Text="{x:Static app:UiStrings.ImportNewTableColumnScale}"
+                           Classes="field-label" Margin="0" />
+                <TextBlock Grid.Column="4" Text="{x:Static app:UiStrings.ImportNewTableColumnNullable}"
+                           Classes="field-label" Margin="0" />
+                <TextBlock Grid.Column="5" Text="{x:Static app:UiStrings.ImportNewTableColumnBasis}"
+                           Classes="field-label" Margin="0" />
+              </Grid>
+
+              <ScrollViewer Grid.Row="1" MaxHeight="170">
+                <ItemsControl ItemsSource="{Binding NewColumns}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ImportNewTableColumnRowViewModel">
+                      <Grid ColumnDefinitions="3*,2*,60,60,50,4*" ColumnSpacing="8" Margin="8,3">
+
+                        <TextBox Grid.Column="0" Text="{Binding Name, Mode=TwoWay}" FontSize="12" />
+
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding TypeOptions}"
+                                  SelectedItem="{Binding Type, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch" FontSize="12" />
+
+                        <!-- Size and Scale are enabled by the SHARED FieldTypeRules, so "does VARCHAR
+                             take a length" has one answer app-wide (§4.6). -->
+                        <NumericUpDown Grid.Column="2" Value="{Binding Size, Mode=TwoWay}"
+                                       IsEnabled="{Binding IsSizeEnabled}" ShowButtonSpinner="False"
+                                       Minimum="1" FormatString="0" FontSize="12" />
+                        <NumericUpDown Grid.Column="3" Value="{Binding Scale, Mode=TwoWay}"
+                                       IsEnabled="{Binding IsScaleEnabled}" ShowButtonSpinner="False"
+                                       Minimum="0" FormatString="0" FontSize="12" />
+
+                        <CheckBox Grid.Column="4" IsChecked="{Binding IsNullable, Mode=TwoWay}"
+                                  VerticalAlignment="Center" />
+
+                        <!-- ⭐ "Basis" answers "where did that type come from" — and for a mixed column
+                             (R19, the measured norm) it names the value and the row that decided it, so
+                             the user can check their own file rather than take our word (§0.6). -->
+                        <TextBlock Grid.Column="5" Text="{Binding Basis}" FontSize="11"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource SubtleForegroundBrush}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Grid>
+          </Border>
+
+          <!-- ⚠ THE sentence of this etap. It stands beside the decision that causes it, not in the
+               report afterwards — the same honesty the Script Executor's Sequenced mode applies to its
+               own non-atomicity (§0.5). -->
+          <controls:MessageBanner Classes="docked"
+                                  Severity="Warning"
+                                  Message="{x:Static app:UiStrings.ImportNewTableCommittedWarning}"
+                                  IsVisible="{Binding HasNewColumns}" />
+
+          <!-- The exact statement that will run — from the same call the run itself makes, so this is a
+               preview of the real thing rather than an illustration of it. -->
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                  Padding="8,6" IsVisible="{Binding IsDdlVisible}">
+            <ScrollViewer MaxHeight="140" HorizontalScrollBarVisibility="Auto">
+              <SelectableTextBlock Text="{Binding CreateTableSql}" FontFamily="Consolas,monospace"
+                                   FontSize="12" />
+            </ScrollViewer>
+          </Border>
+        </StackPanel>
       </StackPanel>
     </Border>
 

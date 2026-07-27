@@ -319,6 +319,180 @@ await ResetAsync();
         Fail("F2 import Commit settled ONLY the import", $"{after} rows, expected 20");
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════
+Section("G — etap I8: a table that does not exist yet");
+
+// The Ddl lane: autonomous, auto-committed, WAIT-bounded — the SAME executor the object editors compile
+// through (§4.6). Everything this section proves rests on the CREATE being committed before the first row,
+// which is gotcha #213 and not a preference.
+var ddlExecutor = new FirebirdDdlExecutor(connectionService, transactionService);
+
+const string newTable = "IMP_NEW_PROBE";
+
+async Task<long> CountInAsync(string table)
+{
+    if (transactionService.IsActive) throw new InvalidOperationException("Count with no transaction open.");
+
+    await transactionService.BeginTransactionAsync();
+    var connection = connectionService.RequireOpenConnection();
+    await using var cmd = connection.CreateCommand();
+    cmd.CommandText = $"SELECT COUNT(*) FROM {table}";
+    cmd.Transaction = transactionService.ActiveTransaction;
+    var scalar = await cmd.ExecuteScalarAsync();
+    await transactionService.CommitAsync();
+    return Convert.ToInt64(scalar, CultureInfo.InvariantCulture);
+}
+
+async Task<bool> TableExistsAsync(string table)
+{
+    if (transactionService.IsActive) await transactionService.CommitAsync();
+    await transactionService.BeginTransactionAsync();
+    var connection = connectionService.RequireOpenConnection();
+    await using var cmd = connection.CreateCommand();
+    cmd.CommandText =
+        "SELECT COUNT(*) FROM RDB$RELATIONS WHERE TRIM(RDB$RELATION_NAME) = @n AND RDB$VIEW_BLR IS NULL";
+    cmd.Transaction = transactionService.ActiveTransaction;
+    var parameter = cmd.CreateParameter();
+    parameter.ParameterName = "@n";
+    parameter.Value = table;
+    cmd.Parameters.Add(parameter);
+    var scalar = await cmd.ExecuteScalarAsync();
+    await transactionService.CommitAsync();
+    return Convert.ToInt64(scalar, CultureInfo.InvariantCulture) > 0;
+}
+
+async Task DropIfExistsAsync(string table)
+{
+    if (await TableExistsAsync(table))
+    {
+        await ddlExecutor.ExecuteAsync(ImportNewTable.BuildDropSql(table), CancellationToken.None);
+    }
+}
+
+// ⭐ R19 in a real file: a column of whole numbers with ONE piece of text in it. A sample would type QTY as
+// INTEGER and the import would then fail on that row — AFTER the table had been created and committed, i.e.
+// at the worst possible moment. The whole-source scan is what prevents it.
+const string newTableCsv =
+    "KOD;ILOSC;CENA;DATA\n" +
+    "A1;5;1.50;03.04.2026\n" +
+    "A2;12;22.75;04.04.2026\n" +
+    "A3;7;3.05;05.04.2026\n" +
+    "A4;nie wiem;9.99;06.04.2026\n";
+
+var newTableCulture = new ImportCultureOptions { DecimalSeparator = '.', DateOrder = DateFieldOrder.Dmy };
+
+await DropIfExistsAsync(newTable);
+{
+    var inferConfiguration = ImportConfiguration.Empty with
+    {
+        Delimited = new DelimitedOptions { Delimiter = ';', AutoDetectDelimiter = false, HasHeader = true },
+        Culture = newTableCulture,
+    };
+
+    var schema = await provider.ReadSchemaAsync(
+        new TextImportSource(newTableCsv), inferConfiguration, CancellationToken.None);
+
+    var inference = await ColumnTypeInferencer.InferAsync(
+        schema, provider, new TextImportSource(newTableCsv), inferConfiguration,
+        ColumnTypeInferencer.DefaultScanLimit, CancellationToken.None);
+
+    var inferred = inference.Columns.Select(c => c.Definition).ToList();
+    var types = inferred.Select(ImportNewTable.TypeText).ToArray();
+
+    // §0.3: the mixed column falls to VARCHAR, and the evidence names the value that decided it.
+    var qty = inference.Columns[1];
+    if (types[1].StartsWith("VARCHAR", StringComparison.Ordinal) && qty.Evidence.RejectedByValue == "nie wiem")
+        Pass("G1 mixed column falls to VARCHAR", $"ILOSC -> {types[1]}, decided by row {qty.Evidence.RejectedAtRow}");
+    else
+        Fail("G1 mixed column falls to VARCHAR", $"ILOSC -> {types[1]}, rejected by {qty.Evidence.RejectedByValue}");
+
+    if (types[2] == "NUMERIC(4,2)" && types[3] == "DATE" && inference.RowsAnalysed == 4)
+        Pass("G2 the other columns type from the whole file", $"CENA {types[2]}, DATA {types[3]}, {inference.RowsAnalysed} rows");
+    else
+        Fail("G2 the other columns type from the whole file", $"CENA {types[2]}, DATA {types[3]}, {inference.RowsAnalysed} rows");
+
+    // ── The CREATE, on the Ddl lane, committed before any row (#213) ─────────────────────────────────────
+    var createSql = ImportNewTable.BuildCreateSql(newTable, inferred);
+    await ddlExecutor.ExecuteAsync(createSql, CancellationToken.None);
+
+    if (await TableExistsAsync(newTable))
+        Pass("G3 CREATE committed on the Ddl lane", "visible from another attachment straight away (#213)");
+    else
+        Fail("G3 CREATE committed on the Ddl lane", "the table is not visible to the console attachment");
+
+    // ⭐⭐ The invariant the unit tests can only assert against our own parser: does FIREBIRD report back the
+    // type we asked for? If it does not, the preview validated rows against a column that does not exist as
+    // described — which is exactly the drift ImportNewTable exists to make impossible.
+    var created = await targetReader.ReadTargetAsync(newTable, CancellationToken.None);
+    if (created is not null)
+    {
+        var catalogTypes = created.Columns.Select(c => c.Type).ToArray();
+        if (catalogTypes.SequenceEqual(types))
+            Pass("G4 catalog reports the types we asked for", string.Join(", ", catalogTypes));
+        else
+            Fail("G4 catalog reports the types we asked for", $"asked {string.Join(", ", types)}, got {string.Join(", ", catalogTypes)}");
+    }
+    else
+    {
+        Fail("G4 catalog reports the types we asked for", "the created table could not be read back");
+    }
+
+    // ── The rows ────────────────────────────────────────────────────────────────────────────────────────
+    var runConfiguration = ImportConfiguration.Empty with
+    {
+        Delimited = new DelimitedOptions { Delimiter = ';', AutoDetectDelimiter = false, HasHeader = true },
+        Culture = newTableCulture,
+        Target = TargetDescriptor.New(newTable, inferred),
+        Mapping = inferred.Select((c, i) => new ColumnMapping
+        {
+            TargetColumnName = c.Name,
+            SourceFieldName = schema.Fields[i].Name,
+            SourceFieldIndex = i,
+        }).ToArray(),
+        ErrorPolicy = ImportErrorPolicy.SkipInvalidRows,
+    };
+
+    var writer = new FirebirdImportWriter(importSession, runConfiguration.ErrorPolicy);
+    var outcome = await ImportPipeline.RunAsync(
+        runConfiguration, created!, provider, new TextImportSource(newTableCsv), writer, charset);
+
+    await importSession.CommitAsync();
+
+    var actual = await CountInAsync(newTable);
+    if (outcome.RowsWritten == 4 && actual == 4 && outcome.RowsFailed == 0)
+        Pass("G5 report == SELECT COUNT(*)", $"{outcome.RowsWritten} written, {actual} in the new table");
+    else
+        Fail("G5 report == SELECT COUNT(*)", $"report {outcome.RowsWritten}/{outcome.RowsFailed} failed, table {actual}");
+
+    // ⭐⭐ THE sentence the surface shows the user, verified against the engine: a Rollback takes the ROWS
+    // back and leaves the TABLE. If this ever failed, the warning in the Target section would be a lie —
+    // in one direction or the other.
+    var second = new FirebirdImportWriter(importSession, runConfiguration.ErrorPolicy);
+    await ImportPipeline.RunAsync(
+        runConfiguration, created!, provider, new TextImportSource(newTableCsv), second, charset);
+
+    await importSession.RollbackAsync();
+
+    var afterRollback = await CountInAsync(newTable);
+    var survived = await TableExistsAsync(newTable);
+
+    if (survived && afterRollback == 4)
+        Pass("G6 Rollback undoes the rows, NOT the table", $"table still there, {afterRollback} rows (§0.5)");
+    else
+        Fail("G6 Rollback undoes the rows, NOT the table", $"exists={survived}, rows={afterRollback}, expected true/4");
+}
+
+// ── The offered clean-up: roll back, THEN drop (§0.5) ────────────────────────────────────────────────────
+{
+    await ddlExecutor.ExecuteAsync(ImportNewTable.BuildDropSql(newTable), CancellationToken.None);
+
+    if (!await TableExistsAsync(newTable))
+        Pass("G7 the clean-up really removes the table", "DROP on the Ddl lane, after the rows are gone");
+    else
+        Fail("G7 the clean-up really removes the table", "the table is still there");
+}
+
+await DropIfExistsAsync(newTable);
 await ResetAsync();
 await importSession.DisposeAsync();
 await connectionService.DisconnectAsync();

@@ -75,6 +75,7 @@ public sealed class ImportReadinessItemViewModel
             ImportDiagnosticCode.TargetNotFound => Format(UiStrings.ImportReadyTargetNotFoundFormat, subject),
             ImportDiagnosticCode.NewTableHasNoColumns => UiStrings.ImportReadyNewTableHasNoColumns,
             ImportDiagnosticCode.NewTableWillBeCommitted => Format(UiStrings.ImportReadyNewTableWillBeCommittedFormat, subject),
+            ImportDiagnosticCode.NewTableAlreadyExists => Format(UiStrings.ImportReadyNewTableAlreadyExistsFormat, subject),
             ImportDiagnosticCode.TargetHasBeforeInsertTriggers => Count(UiStrings.ImportReadyBeforeInsertTriggersFormat, count),
             ImportDiagnosticCode.TargetWillBeEmptied => Format(UiStrings.ImportReadyTargetWillBeEmptiedFormat, subject),
 

@@ -205,6 +205,10 @@ internal static class UiStrings
     public const string ImportReadyNewTableHasNoColumns = "The new table has no columns defined.";
     public const string ImportReadyNewTableWillBeCommittedFormat =
         "Table {0} will be created and COMMITTED before any row is written — a rollback will not remove it.";
+    // Refused here rather than by the engine: the CREATE is the first thing the run does, so without this the
+    // user would meet a raw server error immediately after being told everything was ready (§0).
+    public const string ImportReadyNewTableAlreadyExistsFormat =
+        "A table named {0} already exists — choose another name, or import into the existing table.";
     public const string ImportReadyBeforeInsertTriggersFormat =
         "{0} BEFORE INSERT trigger(s) on the target can overwrite imported values.";
     public const string ImportReadyTargetWillBeEmptiedFormat = "{0} will be emptied before the import.";
@@ -272,6 +276,69 @@ internal static class UiStrings
     public const string ImportTargetEmptyFirst = "Empty the table before importing";
     public const string ImportTargetEmptyFirstTooltip =
         "DELETE FROM in the SAME transaction as the rows — a rollback takes the deletion with it.";
+
+    // ---- Data Import, etap I8: a table that does not exist yet (§3.4) ----
+
+    public const string ImportTargetNewTable = "New table";
+    public const string ImportTargetNewTableWatermark = "Name for the new table…";
+
+    // ⚠ §0.5 / gotcha #213 — the module's most important honest sentence. A Firebird transaction cannot use an
+    // object whose DDL it has not committed, so the CREATE is committed on the Ddl lane BEFORE the first row,
+    // and a rollback of the import cannot take the table with it. Said where the decision is made, exactly as
+    // the Script Executor's Sequenced mode discloses its own non-atomicity.
+    public const string ImportNewTableCommittedWarning =
+        "The table is created and COMMITTED before the import starts — rolling the import back will not remove it.";
+    public const string ImportNewTableDropOnFailure = "Drop the table if the import fails";
+    public const string ImportNewTableDropOnFailureTooltip =
+        "On failure: roll back the imported rows, then DROP the table on the DDL connection. You are asked first.";
+    public const string ImportNewTableShowDdl = "Show DDL";
+    public const string ImportNewTableHideDdl = "Hide DDL";
+
+    // The type grid.
+    public const string ImportNewTableColumnName = "Column";
+    public const string ImportNewTableColumnType = "Type";
+    public const string ImportNewTableColumnSize = "Size";
+    public const string ImportNewTableColumnScale = "Scale";
+    public const string ImportNewTableColumnNullable = "NULL";
+    public const string ImportNewTableColumnBasis = "Basis";
+    public const string ImportNewTableEmpty =
+        "Name the new table and choose a source — its columns are proposed from the file, and you can correct every type before anything is created.";
+
+    // ⭐ Always visible (§3.4): the types are worth exactly as much as the evidence behind them, and REK-7 makes
+    // that evidence the WHOLE source rather than a sample.
+    public const string ImportNewTableInferenceFormat = "Types inferred from {0:N0} rows analysed — editable:";
+    public const string ImportNewTableInferenceTruncatedFormat =
+        "Types inferred from the first {0:N0} rows (safety limit reached) — editable:";
+
+    // The "Basis" cell — why this column has this type.
+    public const string ImportNewTableBasisNoValues = "no values — text";
+    public const string ImportNewTableBasisTextFormat = "text, {0:N0} values, longest {1}";
+    public const string ImportNewTableBasisMatchedFormat = "{0:N0} values, all {1}";
+    // R19: a mixed column is the norm, not the exception — so it names the value that decided it and the row
+    // the user can open their file at (§0.6).
+    public const string ImportNewTableBasisMixedFormat =
+        "mixed — {0} until row {1} “{2}”; text, longest {3}";
+    public const string ImportNewTableBasisRestored = "from the restored configuration";
+
+    public const string ImportNewTableKindInteger = "whole numbers";
+    public const string ImportNewTableKindDecimal = "decimals";
+    public const string ImportNewTableKindDate = "dates";
+    public const string ImportNewTableKindTimestamp = "dates with time";
+    public const string ImportNewTableKindTime = "times";
+    public const string ImportNewTableKindBoolean = "true/false";
+    public const string ImportNewTableKindText = "text";
+
+    // Creating and dropping.
+    public const string ImportCreatingTableFormat = "Creating table {0}…";
+    public const string ImportCreatedTableFormat = "Table {0} created and committed.";
+    public const string ImportCreateTableFailedFormat = "Table {0} could not be created: {1}";
+    public const string ImportConfirmDropTableFormat =
+        "The import into {0} did not succeed.\n\nRoll back the imported rows and DROP the table?\n\n" +
+        "The table was committed when it was created, so this is the only way to remove it.";
+    public const string ImportDroppedTableFormat = "Table {0} dropped.";
+    public const string ImportDropTableFailedFormat = "Table {0} could not be dropped: {1}";
+    // §0.5 / §0.6 — the report never leaves the created table unsaid, whether or not it was dropped.
+    public const string ImportReportCreatedTableFormat = "created table {0} (a rollback does not remove it)";
 
     // Mapping panel.
     public const string ImportMappingHeadlineFormat = "Mapped {0} of {1} columns.";

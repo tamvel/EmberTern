@@ -53,18 +53,60 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | | |
 |---|---|
 | **Gałąź** | `feat/data-import` (odbita od `master` @ `d474b42`); **wypchnięta na `origin`**, `private` do dosłania przy najbliższym zamknięciu etapu. Żywe gałęzie repozytorium: `master` + `feat/data-import` |
-| **Ostatni commit** | etap **I7** (poprzedni: `d530fb5` — domknięcie I6) |
+| **Ostatni commit** | etap **I8** (poprzedni: `dc653b1` — domknięcie MVP I0–I7.5) |
 | **Etapy zamknięte** | **I0** (sondy, `5e90435`) · **I1** (modele, konfiguracja, magazyn, czytnik, `77eb997`) · **I2** (konwersja, mapowanie, walidacja, gotowość, `392850f`) · **I3** (pipeline + dry-run + provider, `434daeb`) · **I4** (Firebird + weryfikacja na żywym FB5, `3b31a4d`) · **I5** (`0c5667e` + szew `95ae39e`) · **I6** (`4f2de74`) |
 | **✅ I5 — ZAMKNIĘTY (2026-07-26)** | Przegląd wzrokowy dał 5 uwag (U1–U5) + 5 propozycji z autoprzeglądu (U6–U10) + U11 + U12 z drugiego oglądu. **Wszystkie rozstrzygnięte; 10 dostarczonych w szwie domykającym** (§3.8). Układ **zrewidowany i wniesiony w miejsce do §3.1** — gwiazdka na powierzchni roboczej, pas A usunięty, kafelki pionowe z zawsze żywym pickerem, grupy ustawień jako karty. **Układ zaakceptowany przez użytkownika.** Otwarte świadomie: **U4** (gęstość globalna → sprint UX po module) i **U5** (weryfikacja przy I6) |
 | **✅ I6 — ZAMKNIĘTY (2026-07-26)** | Sekcja **Cel** (istniejąca tabela) + panel **Mapowanie** + łańcuch przeliczeń rozszerzony o cel i mapowanie. Potwierdzony wzrokowo przez użytkownika; odstępstwo o `COUNT(*)`, nazwy triggerów, orientacja „cel → źródło" i reguły identity — **zaakceptowane bez zmian** |
 | **✅ I7 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-26)** | Podgląd po konwersji + pasek poleceń (`Importuj`/F5, `Waliduj`/Ctrl+F5, `Anuluj`/Esc, tryb transakcji, polityka błędów, `ExecutionTimer`) + uruchomienie z postępem i anulowaniem + zakładki **Błędy** i **Raport** + Commit/Rollback w raporcie + eksport raportu przez istniejący framework + „ostatnio użyta" konfiguracja + domknięta zaległość I6 (liczba rekordów przy „opróżnij tabelę"). **KONIEC MVP** |
 | **✅ I7.5 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-26)** | Data Import ma **własną transakcję na własnym przyłączeniu** (amendment §4.5): wspólny `FirebirdSessionConnection` wydzielony z Debuggera przez kompozycję, `ImportSessionConnection`, `PendingWorkRegistry` jako **jedyny właściciel** pytania o niezatwierdzoną pracę. Sonda **13/13 ALL PASS** |
-| **Następny etap** | **I8** — nowa tabela (`ColumnTypeInferencer`, siatka typów, podgląd DDL, wykonanie na linii Ddl) |
-| **Testy** | **5607 zielonych**, 0 niepowodzeń (I7 dodał +24; wszystkich testów importu jest teraz **343**) |
-| **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7) przeciwko FB5 `WI-V5.0.3.1683` — **11/11 ALL PASS**: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, licznik czytany w transakcji użytkownika, `Batched` faktycznie zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego |
+| **✅ I8 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | Nowa tabela: `ColumnTypeInferencer` (skan CAŁEGO źródła), `ImportNewTable` (jedyny właściciel „definicja → SQL"), edytowalna siatka typów z kolumną „Podstawa", podgląd DDL, `CREATE` na linii **Ddl** przed pierwszym wierszem, `DROP` przy niepowodzeniu, `IMP0028` |
+| **Następny etap** | **I9** — XLSX (`EmberTern.Export.Office` → `EmberTern.Office`, `XlsxImportProvider`, 7 wytycznych z REK-6) |
+| **Testy** | **5693 zielone**, 0 niepowodzeń (I8 dodał **+86**; wszystkich testów importu jest teraz **429**) |
+| **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **sekcja G z I8**) przeciwko FB5 `WI-V5.0.3.1683` — **20/20 ALL PASS**: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, **kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, a Rollback cofa wiersze i NIE cofa tabeli** |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
-| **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **cztery VM-y i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
-| **⭐ Kamień milowy** | **MVP (I0–I7) DOSTARCZONE: CSV/TXT → istniejąca tabela działa end-to-end**, z walidacją, raportem, decyzją transakcyjną i pamięcią ostatniej konfiguracji. Wszystko dalej (I8–I12) jest przyrostowe. |
+| **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **pięć VM-ów i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
+| **⭐ Kamień milowy** | **MVP (I0–I7) DOSTARCZONE: CSV/TXT → istniejąca tabela działa end-to-end**, z walidacją, raportem, decyzją transakcyjną i pamięcią ostatniej konfiguracji. **I8 dokłada drugi wariant celu — tabelę, której jeszcze nie ma.** Wszystko dalej (I9–I12) jest przyrostowe. |
+
+### ⭐ I8 as-built — cztery rzeczy warte zapamiętania
+
+1. **⭐⭐ `ColumnTypeInferencer` NIE MA WŁASNEGO PARSERA.** Każde pytanie „czy ta wartość mogłaby być
+   liczbą / datą / logiczną" zadaje **`ImportValueConverter`** — tej samej klasie, która będzie tę wartość
+   konwertowała podczas prawdziwego przebiegu, pod tą samą kulturą. To nie jest schludność, tylko jedyny
+   sposób, żeby wnioskowanie i konwersja **nie mogły się rozjechać**: wnioskownik z własnym wyobrażeniem o
+   tym, jak wygląda liczba, zaproponowałby typ, którego konwerter potem odmawia — czyli dokładnie bombę
+   zegarową z R19. Pinuje to test `EveryValueSeen_ConvertsIntoTheTypeThatWasProposedForIt`.
+2. **⭐ `ImportNewTable` jest JEDYNYM właścicielem pytania „czym staje się ta definicja kolumny".** Tekst
+   typu, który waliduje podgląd, tekst typu w `CREATE TABLE` i tekst typu, który katalog odda po utworzeniu,
+   to **ten sam napis** — z jednego wywołania `DdlGenerator.FormatTypeOrDomain` (§4.6: żadnego drugiego
+   generatora, żadnego drugiego modelu kolumny). Gdyby powstawały w dwóch miejscach, rozjazd ujawniłby się
+   jako **wiersze odrzucane przez tabelę, którą sam moduł zaprojektował**. Sonda **G4** sprawdza to na żywym
+   silniku: katalog oddał `VARCHAR(2), VARCHAR(8), NUMERIC(4,2), DATE` — dokładnie to, o co poprosiliśmy.
+3. **⭐⭐ Rzutowanie nowej tabeli na `ImportTarget` (`ImportNewTable.Project`) daje „Waliduj" na tabeli,
+   której NIE MA — i to jest jego cała wartość.** Dry-run odpowiada na pytanie „czy te wywnioskowane typy
+   naprawdę pomieszczą mój plik" **w jedynym momencie, w którym odpowiedź jest jeszcze darmowa**: po `CREATE`
+   tabela jest zatwierdzona i poza zasięgiem Rollbacku (§0.5 / #213). Dzięki temu mapowanie, pasek gotowości
+   i podgląd po konwersji działają dla nowej tabeli **bez ani jednej gałęzi specjalnej** — z ich punktu
+   widzenia tabela, która będzie, i tabela, która jest, to to samo pytanie. Po prawdziwym `CREATE`
+   koordynator **odczytuje cel z KATALOGU**, bo rzutowanie jest przewidywaniem, a katalog faktem.
+4. **⭐ Wartość z wiodącym zerem NIE jest liczbą — i to jest reguła §0.1, nie reguła parsowania.** `007`
+   parsuje się do 7 bez najmniejszego protestu, ale siódemka i ten tekst to **różne dane**: kod pocztowy,
+   indeks, numer konta wracają z bazy inne, niż do niej weszły. To wprost reguła #11 („nigdy nie zmieniaj
+   tego, czego nie umiesz odtworzyć identycznie"), więc taka kolumna ląduje jako `VARCHAR`. Pojedyncze zero
+   (`0`, `0,5`) zostaje liczbą.
+
+⚠ **Trzy granice przyjęte świadomie.** (a) **Nic nie jest wnioskowane jako `NOT NULL`** — brak dziur w pliku,
+który mamy, nie mówi nic o następnym, a ograniczenie przeżywa import; zostaje decyzją użytkownika w siatce.
+(b) **`SMALLINT` nie jest nigdy proponowany** — jest trafny dla pliku w ręku i niedobry dla następnego, a
+różnica względem `INTEGER` nie jest warta odrzuconego wiersza. (c) **`DOUBLE PRECISION` nie jest kandydatem**
+— jedyny tekst, który przyjąłby, a `NUMERIC` nie, to notacja wykładnicza, której konwerter i tak nie
+przyjmuje; wybór typu przybliżonego dla wartości wyglądających na dokładne gubiłby cyfry po cichu (§0.1).
+
+**Ponowne wnioskowanie** biegnie według reguły zachowania dowodliwego (§4.7): siatka jest przeliczana, gdy
+zmienią się **pola źródła** albo **kultura** (jedno i drugie realnie zmienia, jakie typy są poprawne), a poza
+tym zostaje nietknięta. Kolumny z **przywróconej konfiguracji są adoptowane takie, jakie są** — nadpisanie ich
+propozycją w chwili otwarcia zakładki byłoby defektem „starszy build po cichu okradł profil" w nowym
+przebraniu (§4.8.6). Skan jest najdroższym ogniwem łańcucha i jedzie na tym samym anulowalnym tokenie, co
+reszta: nowsza edycja porzuca trwający skan, zamiast się z nim ścigać.
 
 ### ⭐ I7 as-built — trzy rzeczy warte zapamiętania
 
@@ -105,7 +147,7 @@ opróżnienie tabeli to dane, nie schemat) i wspomniany `BatchedCommitImportWrit
 |---|---|---|
 | ~~**I6**~~ ✅ | sekcja **Cel** (istniejąca tabela) + panel **Mapowanie** + przeliczanie łańcuchowe z anulowaniem | dostarczone; układ rozstrzygnięty przed implementacją, więc I6 wstawił się w gotową ramę |
 | ~~**I7**~~ ✅ | Dostarczone — patrz „I7 as-built" wyżej | pas **B** powstał tutaj, razem z zakładkami Błędy/Raport; **KONIEC MVP** |
-| **I8** | nowa tabela: `ColumnTypeInferencer` (skan całego źródła, R19), edytowalna siatka typów, podgląd DDL, wykonanie na linii Ddl, `DROP` przy niepowodzeniu | rozbudowuje sekcję Cel z I6 |
+| ~~**I8**~~ ✅ | Dostarczone — patrz „I8 as-built" wyżej. Ponadto: **`IMP0028 NewTableAlreadyExists`** (zajęta nazwa blokuje **przed** przebiegiem, bo `CREATE` jest pierwszą rzeczą, którą import robi — inaczej zielony pasek i natychmiast surowy błąd serwera) | wstawiło się w kafelek Cel z I6 bez przebudowy |
 | **I9** | XLSX + `EmberTern.Export.Office` → `EmberTern.Office`; `XlsxImportProvider` (7 wytycznych); rozgałęzienie sekcji Format po `Capabilities` | zamyka `DataImportXlsxProbe` |
 | **I10** | schowek (App czyta, Core parsuje) + `XlsImportProvider` (BIFF8, nowa zależność) | — |
 | **I11** | **nazwane profile (UI)** — selektor, „Zapisz jako…", zmiana nazwy, usuwanie | ⭐ **dowód projektu**: jeżeli wymaga zmiany choćby jednego modelu, §4.8 zostało po drodze naruszone |
@@ -159,6 +201,21 @@ src/EmberTern.Firebird/          ⭐ I4 — pierwszy kod modułu dotykający baz
                              (zmierzone: nasz labowy ma typ **17**)
 
 src/EmberTern.Core/Import/
+    ── I8 ──────────────────────────────────────────────────────────────────────────────────────
+    ColumnTypeInferencer.cs  ⭐ propozycja typów ze SKANU CAŁEGO ŹRÓDŁA (REK-7 / R19; limit 1 M).
+                             ⭐⭐ NIE MA własnego parsera — każde „czy to mogłaby być liczba"
+                             zadaje `ImportValueConverter`, tej samej klasie, która będzie tę
+                             wartość konwertowała. Wnioskowanie i konwersja nie mogą się rozjechać,
+                             bo jest tylko jedno. §0.3: kandydat musi pasować do KAŻDEJ wartości;
+                             pierwsza, do której nie pasuje, go zabija — a dowód (wartość + numer
+                             wiersza) zostaje w `ColumnInferenceEvidence`. Wiodące zero to NIE
+                             liczba (reguła #11: `007` ≠ 7). Nic nie jest wnioskowane `NOT NULL`
+    ImportNewTable.cs        ⭐ JEDYNY właściciel „czym staje się ta definicja kolumny": tekst typu
+                             dla podglądu, `CREATE`/`DROP` przez współdzielony `DdlGenerator`
+                             (§4.6 — zero drugiego generatora) i `Project()` → `ImportTarget`,
+                             dzięki któremu „Waliduj", mapowanie i podgląd działają na tabeli,
+                             KTÓREJ JESZCZE NIE MA — w jedynym momencie, w którym odpowiedź jest
+                             jeszcze darmowa (§0.5)
     ── I3 ──────────────────────────────────────────────────────────────────────────────────────
     ImportPipeline.cs        ⭐ JEDEN import: kroki 1–7 z §4.4. Nie wie, CO czyta (provider) ani
                              CZY pisze (writer) — „Waliduj" to inny argument, nie inny tryb, więc
@@ -224,6 +281,14 @@ Zmiany w plikach współdzielonych — **obie addytywne, obie zaakceptowane**:
 - `Core/Settings/UserSettings` → `List<Import.ImportProfile> ImportProfiles`. **Wersja schematu
   settings.dat celowo NIE podbita** (podbicie uruchamia ochronę przed downgrade'em i starszy build
   odmówiłby odczytu całego pliku).
+
+### Testy I8 (nie upraszczać ich w kolejnych etapach — decyzja użytkownika)
+
+| Plik | Co pinuje |
+|---|---|
+| `ColumnTypeInferencerTests` (36) | ⭐⭐ **`EveryValueSeen_ConvertsIntoTheTypeThatWasProposedForIt`** — każda wartość, którą wnioskownik zobaczył, musi przejść przez konwerter na typie, który dla niej zaproponował; gdyby to kiedyś padło, moduł zaprojektowałby tabelę, której własny import nie umie wypełnić (R19 odtworzone) · ⭐ **kolumna mieszana → `VARCHAR` z nazwaniem wartości i WIERSZA, który przesądził** · ⭐ **wiodące zero to nie liczba**, ale pojedyncze zero i `0,5` już tak · skan obejmuje CAŁE źródło (dyskwalifikująca wartość leży za 3. wierszem — próbka by ją przegapiła) · limit bezpieczeństwa mówi, że zadziałał · anulowalność · `INTEGER`→`BIGINT` tylko gdy trzeba, nigdy `SMALLINT` · precyzja i skala z tego, co widziano · liczba szersza niż 18 cyfr → tekst · `0`/`1` czytane jako `INTEGER`, nie jako `BOOLEAN` · długość `VARCHAR` = najdłuższa napotkana wartość · bardzo długi tekst → `BLOB SUB_TYPE 1` · **nic nie jest `NOT NULL`** · nazwy kolumn przez `ImportMappingPlanner.NormalizeName` (więc planer paruje je z powrotem bez gałęzi specjalnej) + rozstrzyganie duplikatów |
+| `ImportNewTableTests` (13) | ⭐⭐ **każdy typ, który ten moduł emituje, `ImportTargetType` czyta z powrotem** jako typ, który import umie zapisać — rzutowanie i katalog opisują tę samą kolumnę · ⚠ jedno `Size` z `ImportColumnDefinition` trafia do WŁAŚCIWEJ szuflady `FieldDefinition` (`Size` dla tekstu, `Precision` dla `NUMERIC`) · rozmiar na typie, który go nie bierze, nie wycieka do DDL · `CREATE` z współdzielonego generatora, z cytowaniem nazw · **żadnych wymyślonych ograniczeń** (PK / identity / DEFAULT) · wiersz bez nazwy to nie kolumna · rzutowanie: każda kolumna zapisywalna, zero triggerów |
+| `DataImportNewTableTests` (17) | ⭐⭐ **`TheTableIsCreatedBeforeTheFirstRow`** — gotcha #213 jako asercja KOLEJNOŚCI (`create` przed `begin`), bo każde zdanie powierzchni o Rollbacku wynika właśnie z niej · ⭐⭐ **`Validate_AnswersTheQuestion_WithoutCreatingAnything`** — dry-run na rzutowaniu, więc pytanie „czy te typy pomieszczą mój plik" ma odpowiedź, zanim cokolwiek powstanie · ⭐ **writer dostaje cel z KATALOGU, nie rzutowanie** (fikcyjny katalog celowo oddaje `VARCHAR(999)` tam, gdzie rzutowanie mówi `VARCHAR(2)`, więc test nie może przejść przypadkiem) · zajęta nazwa blokuje PRZED przebiegiem i żaden DDL nie leci · nieudany `CREATE` zatrzymuje przebieg, zanim poleci pierwszy wiersz · ⚠ **sprzątanie to dwa skutki i jedno pytanie**: najpierw Rollback, potem `DROP`, a pytanie mówi o obu · odmowa zostawia tabelę · udany import nigdy nie sprząta · domyślnie wyłączone · edycja typu dociera do rekordu i do DDL · **kolumny z przywróconego profilu nie są nadpisywane świeżą propozycją** |
 
 ### Testy I6 (nie upraszczać ich w kolejnych etapach — decyzja użytkownika)
 
@@ -672,6 +737,11 @@ bez dotykania XAML-a.
 - Typ w siatce nowej tabeli jest **edytowalny** (semantyka siatki pól z `NewTableTabView`; reguły
   rozmiar/skala/subtyp z `FieldTypeRules`). Kolumna **„Podstawa"** tłumaczy, *dlaczego* taki typ — to
   odpowiedź na „skąd on to wziął".
+- **As-built I8:** dla kolumny mieszanej „Podstawa" nazywa **wartość i numer wiersza**, który przesądził
+  o zejściu do `VARCHAR` (np. *„mieszane — liczby całkowite do wiersza 8724 „11 88x"; tekst, najdłuższa 18"*)
+  — bo R19 zmierzył, że mieszane kolumny są normą, a odesłanie użytkownika do konkretnej linii jego pliku
+  jest jedyną formą, w której to wyjaśnienie da się sprawdzić (§0.6). Wiersz przywrócony z profilu **nie
+  pożycza cudzej podstawy** i mówi wprost, że pochodzi z konfiguracji.
 - „Pokaż DDL" renderuje wynik `DdlGenerator.BuildCreateTable(name, spec)` — **ten sam generator**,
   którego używa kreator nowej tabeli. Zero drugiej ścieżki.
 - Opróżnianie tabeli pokazuje aktualną liczbę rekordów i wymaga potwierdzenia przy starcie.
@@ -1363,7 +1433,7 @@ zielonymi testami, czystym smoke testem i commitem.
 | **I5** ✅ **ZAMKNIĘTY** (etap + szew domykający, §3.8) | App: zakładka + rama powierzchni + sekcja Źródło i format | `WorkspaceTabKind.DataImport`, `Icon.Import`, przycisk toolbara (D6), near-singleton, dopisanie do listy pomijanej w `SnapshotCurrentTabs`, rama (pasy A–H), zwijalne sekcje, **pasek gotowości**, sekcja Źródło i format z dolną zakładką „Podgląd źródła". | Powierzchnia otwiera plik, pokazuje surowe rekordy i gotowość. Obie palety motywu. |
 | **I6** ✅ **ZAMKNIĘTY** | App: sekcja Cel (istniejąca tabela) + panel Mapowanie | Wybór tabeli (`SearchableComboBox`, lista z linii **Metadata**), linia faktów (kolumny · klucz główny · **nazwane** triggery BEFORE INSERT), „opróżnij tabelę przed importem"; siatka mapowania **cel → źródło** z auto-dopasowaniem z `ImportMappingPlanner`, diagnostyką per kolumna, blokadami kolumn systemowych **z powodem**, pochodzeniem w słowniku `ValueOrigin`, listą pól nieużywanych, „Dopasuj po pozycji" / „Wyczyść" / „Tylko niezmapowane"; łańcuch §4.7 rozszerzony: **źródło → cel → mapowanie → gotowość**, anulowalny. | Mapowanie ręczne i automatyczne działa; niezgodności widoczne przed importem. |
 | **I7** ✅ **DOSTARCZONY** | App: Podgląd + uruchomienie + raport — **pierwszy pełny przebieg** | Podgląd po konwersji (ciągły), `Waliduj`, tryby transakcji, `Importuj`/`F5`, postęp, anulowanie, raport, Commit/Rollback, eksport raportu, **zapis i przywracanie „ostatnio użytej" konfiguracji**. | **Import CSV → istniejąca tabela działa end-to-end na żywej bazie; druga sesja startuje z przywróconą konfiguracją.** Pierwszy etap z realną wartością dla użytkownika. **Spełnione** — +24 testy (5607 zielonych) oraz `tools/probes/DataImportRunProbe` **11/11 ALL PASS** na żywym FB5 (raport == `SELECT COUNT(*)`). |
-| **I8** | Nowa tabela | `ColumnTypeInferencer` — **(I0/REK-7) domyślnie skanuje CAŁE źródło**, nie próbkę (limit bezpieczeństwa 1 M wierszy), bo w realnym pliku 2 z 5 kolumn były typowo mieszane (R19); siatka typów w sekcji Cel z **zawsze widoczną liczbą przeanalizowanych wierszy** w kolumnie „Podstawa"; podgląd DDL; wykonanie na linii Ddl; ostrzeżenie o nieodwracalności; opcja `DROP` przy niepowodzeniu. | Import do nieistniejącej tabeli działa; typy zachowawcze i edytowalne; DDL z tego samego generatora; **kolumna mieszana ląduje jako `VARCHAR`, nie jako `INTEGER` z bombą zegarową**. |
+| **I8** ✅ **DOSTARCZONY** | Nowa tabela | `ColumnTypeInferencer` — **(I0/REK-7) domyślnie skanuje CAŁE źródło**, nie próbkę (limit bezpieczeństwa 1 M wierszy), bo w realnym pliku 2 z 5 kolumn były typowo mieszane (R19); siatka typów w sekcji Cel z **zawsze widoczną liczbą przeanalizowanych wierszy** w kolumnie „Podstawa"; podgląd DDL; wykonanie na linii Ddl; ostrzeżenie o nieodwracalności; opcja `DROP` przy niepowodzeniu. | Import do nieistniejącej tabeli działa; typy zachowawcze i edytowalne; DDL z tego samego generatora; **kolumna mieszana ląduje jako `VARCHAR`, nie jako `INTEGER` z bombą zegarową**. **Spełnione** — +86 testów (5693 zielone) oraz sekcja **G** w `DataImportRunProbe`: **20/20 ALL PASS** na żywym FB5, w tym dowód, że katalog oddaje dokładnie te typy, o które poprosiliśmy, i że Rollback cofa wiersze, a nie tabelę. |
 | **I9** | XLSX + zmiana nazwy projektu (D1) | `EmberTern.Export.Office` → **`EmberTern.Office`**; `XlsxImportProvider`; rozgałęzienie sekcji Format po `Capabilities`. **(I0/REK-6) Siedem wiążących wytycznych providera:** (1) **wyłącznie `OpenXmlReader` (SAX)** — DOM bierze 77× więcej pamięci (R8); (2) wartości umieszczane **po `CellReference`** — brakująca komórka środkowa jest NIEOBECNA, nie pusta, więc czytnik pozycyjny przesunąłby resztę wiersza o kolumnę (§0.1); (3) numer wiersza źródłowego **z `Row.RowIndex`** — puste wiersze są nieobecne, własny licznik skłamałby w raporcie (§0.6); (4) data = liczba + `numFmtId` daty (R3); (5) `SharedStringTable` czytana raz — Excel zapisuje teksty jako shared strings (rozmiar ∝ liczbie RÓŻNYCH tekstów); (6) `SheetDimension` **tylko jako wskazówka** postępu (bywa nieobecny); (7) formuła → wartość zbuforowana, a **komórka błędu → błąd wiersza** (+ opcja `ExcelErrorCellsAsNull`, R20). | Import plików z załączonych zrzutów daje identyczne dane. Eksport XLSX bez regresji. Pierwszy realny plik **z datami** obejrzany (luka pomiarowa R3). Po zamknięciu I9 `tools/probes/DataImportXlsxProbe` idzie do usunięcia. |
 | **I10** | Schowek + XLS | Schowek (App czyta, Core parsuje — zero nowego parsera). `XlsImportProvider` + zależność NuGet (D2). | Wklejenie z Excela importuje się bez zapisywania pliku. |
 | **I11** | Nazwane profile (UI) | Selektor profili w zarezerwowanym miejscu paska poleceń, `Zapisz jako…`, zmiana nazwy, usuwanie, opcjonalny eksport `.json`. **Zero zmian w modelach i w pipeline.** | Nazwany profil odtwarza cały import; niezgodności raportowane przez pasek gotowości (§4.8.5). |

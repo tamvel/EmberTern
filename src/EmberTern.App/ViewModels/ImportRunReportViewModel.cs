@@ -223,7 +223,17 @@ public sealed partial class ImportRunReportViewModel : ViewModelBase
 
     internal static string BuildNote(ImportOutcome outcome, long rowsCommitted)
     {
-        var parts = new List<string>(3);
+        var parts = new List<string>(4);
+
+        if (!string.IsNullOrEmpty(outcome.CreatedTable))
+        {
+            // ⭐ §0.5 / gotcha #213. The table was committed on the Ddl lane before the first row, so it
+            // outlives a Rollback — and the report is the last place that fact can still be said. It is stated
+            // whether the run succeeded or not: a table left behind by a failed import is exactly the thing
+            // the user needs told.
+            parts.Add(string.Format(
+                CultureInfo.CurrentCulture, UiStrings.ImportReportCreatedTableFormat, outcome.CreatedTable));
+        }
 
         if (rowsCommitted > 0)
         {

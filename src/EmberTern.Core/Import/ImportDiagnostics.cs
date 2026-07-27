@@ -164,6 +164,13 @@ public enum ImportDiagnosticCode
     /// in I0: those characters would be written as <c>?</c> with no error at all, even into a UTF8 column
     /// (design R1). The remedy is to connect in UTF8, and the strip says so.</summary>
     NotRepresentableInConnectionCharset = 27,
+
+    /// <summary>IMP0028 — the name chosen for a NEW table already belongs to a table in this database.
+    /// Blocking, and blocking <em>early</em> is the point: the <c>CREATE</c> runs on the Ddl lane before the
+    /// first row, so without this the user would meet a raw Firebird error at the moment the import starts,
+    /// having already been told everything was ready. §0 gives two options where the module would otherwise
+    /// stumble — ask, or refuse with a reason — and this is the refusal.</summary>
+    NewTableAlreadyExists = 28,
 }
 
 /// <summary>Renders an <see cref="ImportDiagnosticCode"/> as its published <c>IMP####</c> form.</summary>

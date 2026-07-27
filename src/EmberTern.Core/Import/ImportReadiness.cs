@@ -50,8 +50,21 @@ public sealed record ImportReadinessInput
     /// <summary>False when the source exists but the provider could not read a schema from it.</summary>
     public bool SourceReadable { get; init; } = true;
 
-    /// <summary>The resolved target; <c>null</c> when the configured table is not in the catalog.</summary>
+    /// <summary>
+    /// The resolved target; <c>null</c> when the configured table is not in the catalog.
+    /// <para>
+    /// For a NEW table this is the <see cref="ImportNewTable.Project">projection</see> of the columns the user
+    /// is about to create — which is what lets the mapping, the preview and "Validate" all work before any DDL
+    /// has run (etap I8). Everything below reads it the same way either way, because from here a table that
+    /// will exist and a table that does are the same question.
+    /// </para>
+    /// </summary>
     public ImportTarget? Target { get; init; }
+
+    /// <summary>True when the name chosen for a NEW table is already taken in this database. A fact read from
+    /// the catalog, so — like the schema and the target — it is an input here rather than part of the stored
+    /// configuration (§4.8.2), and it is re-read on every load.</summary>
+    public bool NewTableNameTaken { get; init; }
 
     public bool IsConnected { get; init; } = true;
 
@@ -304,6 +317,17 @@ public static class ImportReadiness
             {
                 items.Add(new ReadinessItem(
                     ImportDiagnosticCode.NewTableHasNoColumns, ImportSeverity.Error, true, ImportSection.Target));
+                return;
+            }
+
+            if (input.NewTableNameTaken)
+            {
+                // Refused here rather than by the engine at run time: the CREATE is the very first thing an
+                // import does, so letting this through would mean a green strip followed immediately by a raw
+                // server error (§0).
+                items.Add(new ReadinessItem(
+                    ImportDiagnosticCode.NewTableAlreadyExists, ImportSeverity.Error, true,
+                    ImportSection.Target, target.TableName));
                 return;
             }
 

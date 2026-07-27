@@ -55,6 +55,25 @@ public sealed class DataImportEnvironment
 
     public Func<string, CancellationToken, Task<ImportTarget?>>? ReadTargetAsync { get; init; }
 
+    // ── Ddl lane (autonomous, auto-committed, WAIT / Developer Mode) ─────────────────────────────────────
+
+    /// <summary>
+    /// ⭐ Runs the <c>CREATE TABLE</c> for a new target — on the <b>Ddl</b> lane, autonomously, and committed
+    /// before the first row.
+    /// <para>
+    /// That is not a preference, it is gotcha #213: a Firebird transaction cannot use an object whose DDL it
+    /// has not committed, so creating the table inside the import's own transaction would make every
+    /// <c>INSERT</c> fail with "table unknown". The consequence — <b>a rollback of the import cannot remove
+    /// the table</b> — is stated in the Target section, in the readiness strip and in the report (§0.5).
+    /// </para>
+    /// </summary>
+    public Func<string, CancellationToken, Task>? CreateTableAsync { get; init; }
+
+    /// <summary>Drops a table this run created, offered when the import then failed. Also on the Ddl lane, and
+    /// only ever after the import's own transaction has been rolled back — the rows have to be gone before the
+    /// table can be.</summary>
+    public Func<string, CancellationToken, Task>? DropTableAsync { get; init; }
+
     // ── Data lane (THE user's working transaction) ──────────────────────────────────────────────────────
 
     /// <summary>Builds the writer for one run. The configuration decides which one — the real writer, wrapped in

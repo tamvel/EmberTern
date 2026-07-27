@@ -18,9 +18,12 @@ namespace EmberTern.App.ViewModels;
 /// follows, and the reason named profiles can arrive in I11 as pure UI.
 /// </para>
 /// <para>
-/// <b>Etap I6 covers the EXISTING-table variant only.</b> "New table" is I8, and it is deliberately not shown
-/// as a disabled radio: an option that looks like a choice but leads nowhere is the lie the readiness strip
-/// could not correct, which is the same reason I5 shipped no command bar.
+/// ⭐ <b>Etap I8 added the second variant: a table that does not exist yet.</b> Until it worked, it was
+/// deliberately not shown even as a disabled radio — an option that looks like a choice but leads nowhere is
+/// the lie the readiness strip could not correct. It is a real choice now, and it carries the module's most
+/// important honest warning: the <c>CREATE</c> runs on the Ddl lane and is COMMITTED before the first row
+/// (gotcha #213), so <b>Rollback will not remove that table</b> (§0.5). That sentence lives beside the
+/// checkbox that causes it, not in the report afterwards.
 /// </para>
 /// <para>
 /// The facts line answers the questions that decide whether an import will work at all — how many columns,
@@ -38,6 +41,7 @@ public sealed partial class ImportTargetSectionViewModel : ViewModelBase
     public ImportTargetSectionViewModel()
     {
         Tables = new ObservableCollection<string>();
+        NewColumns = new ObservableCollection<ImportNewTableColumnRowViewModel>();
     }
 
     /// <summary>Raised whenever a user decision here changes, so the coordinator re-runs the chain (§4.7).</summary>
@@ -52,7 +56,172 @@ public sealed partial class ImportTargetSectionViewModel : ViewModelBase
 
     partial void OnSelectedTableChanged(string? value) => RaiseChanged();
 
-    public bool HasTarget => !string.IsNullOrWhiteSpace(SelectedTable);
+    /// <summary>True when a target has been chosen — a picked table, or a named new one.</summary>
+    public bool HasTarget => IsNewTable
+        ? !string.IsNullOrWhiteSpace(NewTableName)
+        : !string.IsNullOrWhiteSpace(SelectedTable);
+
+    // ── The two variants (§3.4) ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Which variant the user is on. A radio pair, not a mode: the two carry genuinely different decisions —
+    /// an existing table has a shape to obey, a new one has a shape to choose.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTarget))]
+    [NotifyPropertyChangedFor(nameof(IsExistingTable))]
+    private bool _isNewTable;
+
+    partial void OnIsNewTableChanged(bool value) => RaiseChanged();
+
+    /// <summary>The inverse, for the radio the view binds and for everything gated on the existing-table
+    /// variant. One owner, so the two can never both be true.</summary>
+    public bool IsExistingTable
+    {
+        get => !IsNewTable;
+        set => IsNewTable = !value;
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTarget))]
+    private string _newTableName = string.Empty;
+
+    private bool _settingNameUpper;
+
+    partial void OnNewTableNameChanged(string value)
+    {
+        // Catalog UPPERCASE, like every other name-entry field in the application (gotcha #141): the DDL quotes
+        // the identifier, so a lower-case name here would create a table the metadata tree then shows under a
+        // name the user did not type.
+        if (_settingNameUpper) return;
+
+        var upper = value?.ToUpperInvariant() ?? string.Empty;
+        if (!string.Equals(value, upper, StringComparison.Ordinal))
+        {
+            _settingNameUpper = true;
+            try { NewTableName = upper; } finally { _settingNameUpper = false; }
+            return;
+        }
+
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// The columns about to be created — inferred, then <b>editable</b> (§0.3). The grid is the last moment a
+    /// wrong type costs nothing: after the <c>CREATE</c> it is committed and beyond a Rollback's reach.
+    /// </summary>
+    public ObservableCollection<ImportNewTableColumnRowViewModel> NewColumns { get; }
+
+    /// <summary>How many rows the inference was based on, plus whether the safety limit stopped it — ⭐ always
+    /// visible (§3.4), because a type is worth exactly as much as the evidence behind it.</summary>
+    [ObservableProperty] private string _inferenceBasisText = string.Empty;
+
+    /// <summary>True while the source is being scanned for types. The scan reads the WHOLE source (R19), so it
+    /// is the one part of this section the user can be left waiting on.</summary>
+    [ObservableProperty] private bool _isInferring;
+
+    /// <summary>
+    /// ⚠ §0.5 — <c>DROP TABLE</c> on the Ddl lane if the import then fails, because Rollback cannot remove a
+    /// table whose <c>CREATE</c> had to be committed first (gotcha #213). Off by default: it destroys an
+    /// object, and every option that destroys something defaults to the conservative answer.
+    /// </summary>
+    [ObservableProperty] private bool _dropTableOnFailure;
+
+    partial void OnDropTableOnFailureChanged(bool value) => RaiseChanged();
+
+    /// <summary>True once the grid has something in it — the gate between the "name it and choose a source"
+    /// empty state and the type grid itself.</summary>
+    public bool HasNewColumns => NewColumns.Count > 0;
+
+    /// <summary>Whether the generated DDL is on screen. View state, so it deliberately does NOT enter
+    /// <see cref="ImportConfiguration"/> — a disclosure is not a decision about an import (§4.8.2), and the
+    /// reflection round-trip guard would otherwise ship it inside a saved profile.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CreateTableSql))]
+    [NotifyPropertyChangedFor(nameof(DdlToggleText))]
+    private bool _isDdlVisible;
+
+    /// <summary>The disclosure's own label — it says what the click will DO, which is the only reading that
+    /// stays true in both states.</summary>
+    public string DdlToggleText => IsDdlVisible ? UiStrings.ImportNewTableHideDdl : UiStrings.ImportNewTableShowDdl;
+
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void ToggleDdl() => IsDdlVisible = !IsDdlVisible;
+
+    /// <summary>
+    /// The exact statement that will run. ⭐ From <see cref="ImportNewTable.BuildCreateSql"/>, which is the same
+    /// call the run itself makes — so "Show DDL" is a preview of the real thing rather than an illustration of
+    /// it (§3.4).
+    /// </summary>
+    public string CreateTableSql
+    {
+        get
+        {
+            var columns = BuildNewColumns();
+            if (columns.Count == 0 || string.IsNullOrWhiteSpace(NewTableName)) return string.Empty;
+
+            try
+            {
+                return ImportNewTable.BuildCreateSql(NewTableName, columns);
+            }
+            catch (ArgumentException)
+            {
+                // A half-typed name is a state, not a fault. The readiness strip is what says the target is
+                // not usable yet; the preview just has nothing to show.
+                return string.Empty;
+            }
+        }
+    }
+
+    /// <summary>Replaces the grid with a fresh inference. Called by the coordinator, which owns when the source
+    /// has changed enough for the old types to be describing a different file.</summary>
+    public void ShowInferredColumns(ColumnTypeInference inference)
+    {
+        if (inference is null) throw new ArgumentNullException(nameof(inference));
+
+        using (SuspendChangeNotifications())
+        {
+            NewColumns.Clear();
+            foreach (var column in inference.Columns)
+            {
+                NewColumns.Add(new ImportNewTableColumnRowViewModel(column, OnColumnEdited));
+            }
+        }
+
+        OnPropertyChanged(nameof(HasNewColumns));
+
+        InferenceBasisText = inference.Columns.Count == 0
+            ? string.Empty
+            : string.Format(
+                CultureInfo.CurrentCulture,
+                inference.ScanTruncated
+                    ? UiStrings.ImportNewTableInferenceTruncatedFormat
+                    : UiStrings.ImportNewTableInferenceFormat,
+                inference.RowsAnalysed);
+
+        OnPropertyChanged(nameof(CreateTableSql));
+        RaiseChanged();
+    }
+
+    /// <summary>An edit to any cell is a decision: it reaches the record and re-runs the chain, exactly like
+    /// choosing a different table would.</summary>
+    private void OnColumnEdited()
+    {
+        OnPropertyChanged(nameof(CreateTableSql));
+        RaiseChanged();
+    }
+
+    private IReadOnlyList<ImportColumnDefinition> BuildNewColumns()
+    {
+        var columns = new List<ImportColumnDefinition>(NewColumns.Count);
+        foreach (var row in NewColumns)
+        {
+            var definition = row.Build();
+            if (definition.Name.Length == 0) continue;
+            columns.Add(definition);
+        }
+        return columns;
+    }
 
     /// <summary>Columns · primary key · BEFORE INSERT triggers — read from the target, never guessed.</summary>
     [ObservableProperty] private string _factsText = string.Empty;
@@ -72,32 +241,67 @@ public sealed partial class ImportTargetSectionViewModel : ViewModelBase
     // ── The section's slice of the ONE record (§4.8.6) ──────────────────────────────────────────────────
 
     /// <summary>
-    /// Produces the target slice. A configuration whose target is a NEW table is passed through untouched —
-    /// this build cannot edit that decision (I8), and silently degrading it to an existing-table target would
-    /// be exactly the "an older build quietly robbed the profile" defect §4.8.6 exists to prevent.
+    /// Produces the target slice — for whichever variant the user is on. The grid's rows become
+    /// <see cref="ImportColumnDefinition"/>s here and nowhere else, which is what keeps a new table's design
+    /// inside the ONE record and therefore inside a saved profile (§4.8.6).
     /// </summary>
+    /// <remarks>
+    /// The <paramref name="current"/> descriptor is no longer passed through: since I8 this section can edit
+    /// both variants, so there is nothing left it would be preserving. (It was passed through in I6 precisely
+    /// because it could not — an older build must never quietly degrade a decision a newer one made.)
+    /// </remarks>
     public TargetDescriptor BuildTarget(TargetDescriptor current)
     {
-        if (current is { Kind: ImportTargetKind.NewTable }) return current;
+        if (!IsNewTable) return TargetDescriptor.Existing(SelectedTable ?? string.Empty);
 
-        return TargetDescriptor.Existing(SelectedTable ?? string.Empty);
+        return TargetDescriptor.New(NewTableName.Trim(), BuildNewColumns());
     }
 
     public ImportBehaviorOptions BuildBehavior(ImportBehaviorOptions current)
-        => current with { EmptyTargetBeforeImport = EmptyBeforeImport };
+        => current with
+        {
+            EmptyTargetBeforeImport = EmptyBeforeImport,
+            DropTableOnFailure = DropTableOnFailure,
+        };
 
     public void Apply(ImportConfiguration configuration)
     {
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
 
+        var target = configuration.Target;
+
         using (SuspendChangeNotifications())
         {
-            SelectedTable = configuration.Target.Kind == ImportTargetKind.ExistingTable
-                                && configuration.Target.TableName.Length > 0
-                ? configuration.Target.TableName
+            IsNewTable = target.Kind == ImportTargetKind.NewTable;
+
+            SelectedTable = target.Kind == ImportTargetKind.ExistingTable && target.TableName.Length > 0
+                ? target.TableName
                 : null;
+
+            NewTableName = target.Kind == ImportTargetKind.NewTable ? target.TableName : string.Empty;
+
+            NewColumns.Clear();
+            if (target.Kind == ImportTargetKind.NewTable)
+            {
+                // ⭐ A restored column carries no basis, and it must not borrow one: the evidence behind a type
+                // is a fact about a file that was read at some other time, and reprinting it here would claim
+                // the current source said something it may never have said (§4.8.2 keeps evidence out of the
+                // profile for exactly this reason). The coordinator re-infers when the source stops matching.
+                foreach (var column in target.NewTableColumns)
+                {
+                    NewColumns.Add(new ImportNewTableColumnRowViewModel(
+                        column, UiStrings.ImportNewTableBasisRestored, OnColumnEdited));
+                }
+                InferenceBasisText = string.Empty;
+            }
+
+            OnPropertyChanged(nameof(HasNewColumns));
+
             EmptyBeforeImport = configuration.Behavior.EmptyTargetBeforeImport;
+            DropTableOnFailure = configuration.Behavior.DropTableOnFailure;
         }
+
+        OnPropertyChanged(nameof(CreateTableSql));
     }
 
     // ── Facts ──────────────────────────────────────────────────────────────────────────────────────────

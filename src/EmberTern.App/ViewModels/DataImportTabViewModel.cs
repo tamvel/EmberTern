@@ -376,6 +376,22 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             : _environment.CreateWriter?.Invoke(configuration);
         if (writer is null) return;
 
+        // ⭐ The new table is created HERE — before the writer touches anything, on the Ddl lane, committed.
+        // A validation deliberately creates nothing: a dry run against the PROJECTION is the whole reason the
+        // projection exists, and it is the one answer that is still free (§0.5 / gotcha #213).
+        string? createdTable = null;
+        if (!validation && configuration.Target.Kind == ImportTargetKind.NewTable)
+        {
+            createdTable = await CreateTargetTableAsync(configuration).ConfigureAwait(true);
+            if (createdTable is null) return;
+
+            // The writer must work against what Firebird actually BUILT, not against what we asked for. The
+            // projection is a prediction; the catalog is the fact, and a domain, a charset or a rounded
+            // precision could make them differ.
+            target = await ReadCreatedTargetAsync(createdTable).ConfigureAwait(true) ?? target;
+            _target = target;
+        }
+
         // Recorded at START, not at the end: a run the user cancels or that fails still says what they asked
         // for, and that is the configuration worth coming back to. One owner of persistence (§4.8.6).
         if (!validation) _environment.SaveLastUsed?.Invoke(configuration);
@@ -407,8 +423,14 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
                 token).ConfigureAwait(true);
 
             clock.Stop();
+
+            // The pipeline does not create tables, so it cannot know one was created (§4.5) — the coordinator
+            // that did it fills the fact in, and the report then states the one effect a Rollback cannot undo.
+            outcome = outcome with { CreatedTable = createdTable };
+
             Report.Publish(outcome, validation, clock.Elapsed, RowsCommittedBy(writer));
             await FinishTransactionIfRequestedAsync(configuration, outcome, validation).ConfigureAwait(true);
+            await DropCreatedTableIfFailedAsync(configuration, createdTable, outcome).ConfigureAwait(true);
             ReportReady?.Invoke(this, EventArgs.Empty);
         }
         catch (OperationCanceledException)
@@ -418,12 +440,14 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             // own outcome would have said so; here the run did not get that far.
             clock.Stop();
             SetStatus(UiStrings.ImportRunCancelled, MessageSeverity.Warning);
+            await DropCreatedTableIfFailedAsync(configuration, createdTable, failed: true).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException
                                       or UnauthorizedAccessException or NotSupportedException)
         {
             clock.Stop();
             SetStatus(ex.Message, MessageSeverity.Error);
+            await DropCreatedTableIfFailedAsync(configuration, createdTable, failed: true).ConfigureAwait(true);
         }
         finally
         {
@@ -439,6 +463,123 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// <summary>Raised when a run finished and the report has something to show, so the view can bring the
     /// Report tab forward (§3.7).</summary>
     public event EventHandler? ReportReady;
+
+    // ── Creating and dropping the new table (etap I8) ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Runs the <c>CREATE TABLE</c> on the Ddl lane. Returns the table's name on success, <c>null</c> when the
+    /// run must not continue.
+    /// <para>
+    /// ⚠ <b>The one ordering rule of this etap:</b> it happens BEFORE the first row and is COMMITTED, because
+    /// a Firebird transaction cannot use an object whose DDL it has not committed (gotcha #213). Everything the
+    /// surface says about Rollback not removing the table follows from this line.
+    /// </para>
+    /// </summary>
+    private async Task<string?> CreateTargetTableAsync(ImportConfiguration configuration)
+    {
+        var tableName = configuration.Target.TableName.Trim();
+
+        if (_environment.CreateTableAsync is null || tableName.Length == 0) return null;
+
+        SetStatus(
+            string.Format(CultureInfo.CurrentCulture, UiStrings.ImportCreatingTableFormat, tableName),
+            MessageSeverity.Info);
+
+        try
+        {
+            var sql = ImportNewTable.BuildCreateSql(tableName, configuration.Target.NewTableColumns);
+            await _environment.CreateTableAsync(sql, CancellationToken.None).ConfigureAwait(true);
+
+            SetStatus(
+                string.Format(CultureInfo.CurrentCulture, UiStrings.ImportCreatedTableFormat, tableName),
+                MessageSeverity.Success);
+
+            return tableName;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or ArgumentException)
+        {
+            // Nothing has been written yet, so refusing here costs the user nothing — which is exactly why the
+            // CREATE goes first rather than somewhere in the middle.
+            SetStatus(
+                string.Format(CultureInfo.CurrentCulture, UiStrings.ImportCreateTableFailedFormat, tableName, ex.Message),
+                MessageSeverity.Error);
+            return null;
+        }
+    }
+
+    /// <summary>Re-reads a freshly created table from the catalog. A failure here is not fatal — the projection
+    /// still describes it — so it degrades to null and the caller keeps what it had.</summary>
+    private async Task<ImportTarget?> ReadCreatedTargetAsync(string tableName)
+    {
+        if (_environment.ReadTargetAsync is null) return null;
+
+        try
+        {
+            return await _environment.ReadTargetAsync(tableName, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        {
+            SetStatus(ex.Message, MessageSeverity.Warning);
+            return null;
+        }
+    }
+
+    private Task DropCreatedTableIfFailedAsync(
+        ImportConfiguration configuration, string? createdTable, ImportOutcome outcome)
+        => DropCreatedTableIfFailedAsync(
+            configuration, createdTable, outcome.Cancelled || outcome.RowsFailed > 0);
+
+    /// <summary>
+    /// Offers to undo a table this run created, when the import into it did not succeed (§0.5).
+    /// <para>
+    /// ⚠ <b>Two effects, one question.</b> The rows have to be gone before the table can be, so this rolls the
+    /// import's own transaction back and only then drops. The confirmation says both out loud rather than
+    /// mentioning the drop and performing the rollback quietly — a dialog that under-describes what it is about
+    /// to do is how uncommitted work disappears.
+    /// </para>
+    /// <para>
+    /// The checkbox arms it; the confirmation is still asked, because the box may have been ticked long before
+    /// and dropping an object is not something to do from memory.
+    /// </para>
+    /// </summary>
+    private async Task DropCreatedTableIfFailedAsync(
+        ImportConfiguration configuration, string? createdTable, bool failed)
+    {
+        if (createdTable is null || !failed) return;
+        if (!configuration.Behavior.DropTableOnFailure) return;
+        if (_environment.DropTableAsync is null || ConfirmRequested is null) return;
+
+        var question = string.Format(
+            CultureInfo.CurrentCulture, UiStrings.ImportConfirmDropTableFormat, createdTable);
+
+        if (!await ConfirmRequested.Invoke(question).ConfigureAwait(true)) return;
+
+        try
+        {
+            if (_environment.RollbackAsync is not null)
+            {
+                await _environment.RollbackAsync().ConfigureAwait(true);
+                Report.TransactionLeftOpen = false;
+            }
+
+            await _environment.DropTableAsync(
+                ImportNewTable.BuildDropSql(createdTable), CancellationToken.None).ConfigureAwait(true);
+
+            SetStatus(
+                string.Format(CultureInfo.CurrentCulture, UiStrings.ImportDroppedTableFormat, createdTable),
+                MessageSeverity.Success);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        {
+            SetStatus(
+                string.Format(CultureInfo.CurrentCulture, UiStrings.ImportDropTableFailedFormat, createdTable, ex.Message),
+                MessageSeverity.Error);
+        }
+        finally
+        {
+            PublishReadiness();
+        }
+    }
 
     private async Task<bool> ConfirmEmptyAsync(string tableName)
     {
@@ -682,6 +823,12 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         Source.Apply(_configuration);
         Target.Apply(_configuration);
 
+        // The applied configuration may carry a new table the user designed earlier. Those columns are their
+        // decision, so the first inference pass adopts them instead of proposing over the top of them.
+        _inferredFor = null;
+        _adoptRestoredColumns = _configuration.Target.Kind == ImportTargetKind.NewTable
+            && _configuration.Target.NewTableColumns.Count > 0;
+
         // Suspended while this VM writes to itself — without it, applying a configuration would restart the very
         // chain that is about to run. The same guard the section VMs use, for the same reason.
         _suspendCommandBarNotification = true;
@@ -735,6 +882,9 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         if (cancellationToken.IsCancellationRequested) return;
 
         await ReadSourceAsync(cancellationToken).ConfigureAwait(true);
+        if (cancellationToken.IsCancellationRequested) return;
+
+        await InferNewTableColumnsAsync(cancellationToken).ConfigureAwait(true);
         if (cancellationToken.IsCancellationRequested) return;
 
         await ReadTargetAsync(cancellationToken).ConfigureAwait(true);
@@ -842,6 +992,120 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         return null;
     }
 
+    // ── New-table type inference (etap I8) ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The signature the current type grid was inferred from: the source's field names plus the culture the
+    /// values were read under. Both genuinely change what the right types are — different fields describe a
+    /// different file, and a different decimal separator changes what counts as a number.
+    /// </summary>
+    private string? _inferredFor;
+
+    /// <summary>
+    /// ⭐ Proposes the new table's columns from the source — <b>scanning the whole thing</b> (REK-7 / R19).
+    /// <para>
+    /// <b>When it runs</b> follows the module's own rule of provable preservation (§4.7): the grid is re-inferred
+    /// when the source's FIELDS or the CULTURE change, and left alone otherwise. So a restored profile's types
+    /// survive a source whose fields still match them — the same "the name is the proof" test the mapping
+    /// planner uses — while a genuinely different file gets types that describe it. A user's edit likewise
+    /// stands until the ground under it moves.
+    /// </para>
+    /// <para>
+    /// It is the most expensive link in the chain and rides the same cancellable token as the rest: a newer
+    /// edit abandons an in-flight scan rather than racing it. That is what makes a full-source scan affordable
+    /// on a surface the user is still typing into.
+    /// </para>
+    /// </summary>
+    private async Task InferNewTableColumnsAsync(CancellationToken cancellationToken)
+    {
+        if (_configuration.Target.Kind != ImportTargetKind.NewTable) return;
+
+        if (_schema is null || _schema.Fields.Count == 0)
+        {
+            _inferredFor = null;
+            return;
+        }
+
+        var signature = BuildInferenceSignature(_schema, _configuration);
+        if (string.Equals(_inferredFor, signature, StringComparison.Ordinal)) return;
+
+        // ⚠ A restored configuration's columns are the user's own decisions, and they are adopted for the
+        // source as it first reads rather than immediately overwritten by a proposal — that would be the
+        // "an older build quietly robbed the profile" defect §4.8.6 exists to prevent, in a new disguise.
+        // From here on the ordinary rule applies: change the fields or the culture and the types are proposed
+        // afresh, because the ground they stood on has moved.
+        if (_adoptRestoredColumns && _configuration.Target.NewTableColumns.Count > 0)
+        {
+            _adoptRestoredColumns = false;
+            _inferredFor = signature;
+            return;
+        }
+
+        _adoptRestoredColumns = false;
+
+        var source = TryCreateSource(_configuration);
+        if (source is null) return;
+
+        Target.IsInferring = true;
+        try
+        {
+            var configuration = _configuration;
+            var inference = await Task.Run(
+                    () => ColumnTypeInferencer.InferAsync(
+                        _schema, _delimitedProvider, source, configuration,
+                        ColumnTypeInferencer.DefaultScanLimit, cancellationToken),
+                    cancellationToken)
+                .ConfigureAwait(true);
+
+            if (cancellationToken.IsCancellationRequested) return;
+
+            Target.ShowInferredColumns(inference);
+            _inferredFor = signature;
+            _configuration = BuildConfiguration();
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer edit — not a failure, and nothing to report (gotcha #253).
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            SetStatus(ex.Message, MessageSeverity.Error);
+        }
+        finally
+        {
+            if (!cancellationToken.IsCancellationRequested) Target.IsInferring = false;
+        }
+    }
+
+    /// <summary>What the current types were inferred from. Nothing else belongs in it: the file's SIZE or its
+    /// timestamp would re-infer on every save of an unchanged shape, and the target's name has no bearing on
+    /// what type a column should be.</summary>
+    private static string BuildInferenceSignature(SourceSchema schema, ImportConfiguration configuration)
+    {
+        var builder = new System.Text.StringBuilder();
+        foreach (var field in schema.Fields) builder.Append(field.Name).Append('');
+
+        var culture = configuration.Culture;
+        builder.Append('|')
+            .Append(culture.DecimalSeparator)
+            .Append(culture.ThousandsSeparator)
+            .Append(culture.DateOrder)
+            .Append(culture.DateSeparator)
+            .Append(culture.TimeSeparator);
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// True until a restored configuration's own new-table columns have been adopted for the source it names.
+    /// <para>
+    /// It exists because "the types have not been inferred for this source yet" and "the user already told us
+    /// what these columns are" look identical from inside the chain, and treating the second as the first
+    /// would overwrite a saved decision with a proposal the moment the tab opened.
+    /// </para>
+    /// </summary>
+    private bool _adoptRestoredColumns;
+
     /// <summary>Loads the table list once per tab. The list is a fact about the database, not a user decision,
     /// so re-reading it on every keystroke would be work nobody asked for.</summary>
     private async Task EnsureTablesLoadedAsync(CancellationToken cancellationToken)
@@ -870,10 +1134,28 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// Reads the chosen table's columns and BEFORE INSERT triggers. Refusing with a reason is §0-compliant;
     /// pretending a table exists is not, so a target that cannot be read becomes a null target and readiness
     /// says so.
+    /// <para>
+    /// ⭐ For a table that does not exist yet there is nothing to read, so the target is
+    /// <see cref="ImportNewTable.Project">projected</see> from the columns the user is about to create. That is
+    /// what makes mapping, the converted preview and — most valuably — <b>"Validate"</b> work on a new table:
+    /// the dry run answers "will these inferred types actually hold my file?" at the one moment the answer is
+    /// still free, because after the <c>CREATE</c> the table is committed and beyond a Rollback (§0.5).
+    /// </para>
     /// </summary>
     private async Task ReadTargetAsync(CancellationToken cancellationToken)
     {
         var tableName = _configuration.Target.TableName;
+
+        if (_configuration.Target.Kind == ImportTargetKind.NewTable)
+        {
+            _target = string.IsNullOrWhiteSpace(tableName) || _configuration.Target.NewTableColumns.Count == 0
+                ? null
+                : ImportNewTable.Project(tableName, _configuration.Target.NewTableColumns);
+
+            // The facts line describes a table that HAS a shape; a new one shows its inference basis instead.
+            Target.ShowFacts(null);
+            return;
+        }
 
         if (_environment.ReadTargetAsync is null || string.IsNullOrWhiteSpace(tableName))
         {
@@ -1166,6 +1448,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             SourceReadable = _sourceReadable,
             Target = _target,
             IsConnected = _environment.IsConnected(),
+            NewTableNameTaken = IsNewTableNameTaken(),
         };
 
         Readiness.Update(ImportReadiness.Evaluate(input), PreviewRows.Count);
@@ -1179,6 +1462,25 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanFinishTransaction));
         ImportCommand.NotifyCanExecuteChanged();
         ValidateCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Whether the name chosen for a new table already belongs to one. Answered from the table list this tab
+    /// already loaded — a fact about the world, so readiness takes it as an input rather than looking it up
+    /// (§4.8.2), and it is what turns a raw server error at run time into a blocking item beforehand.
+    /// </summary>
+    private bool IsNewTableNameTaken()
+    {
+        if (_configuration.Target.Kind != ImportTargetKind.NewTable) return false;
+
+        var name = _configuration.Target.TableName.Trim();
+        if (name.Length == 0 || !_tablesLoaded) return false;
+
+        foreach (var table in Target.Tables)
+        {
+            if (string.Equals(table, name, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
     }
 
     private void UpdateSurfaceStatus()

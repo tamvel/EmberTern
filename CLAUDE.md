@@ -28,9 +28,9 @@ verbatim, in the archive below.
 | **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. **D14 = ANALYZED + DEFERRED** (its STATUS block records the ratified snapshot+savepoint+undo-only architecture if ever revisited). | **Every debugger implementation session — read this + your milestone's brief first.** |
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
 | **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next, and the remaining-scope table for I6–I12. **§3.8 holds the OPEN UX findings from the I5 review (U1–U10) — read it before touching the surface's layout.** | **Every Data Import session — read the status block + §3.8 + your etap's row in §6 first.** |
-| **`docs/design/data-import-i8-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I8** implementation session — the first etap after the MVP (a table that does not exist yet). Carries the input state, what the engine already provides (so I8 *uses* it rather than rewriting it), the scope, the binding decisions (gotcha #213 and the §0.5 consequence that Rollback will not remove the created table, the lane split, conservative type inference), the standing "no global UI work" rule, and the DoD incl. the live end-to-end run. Replace it with the I9 equivalent once I8 closes. | When starting etap I8. |
+| **`docs/design/data-import-i9-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I9** implementation session — the first etap that adds a new SOURCE (`.xlsx`), and therefore **the first real test of the "one pipeline for every source" pillar**: if adding a provider requires touching anything below `IImportProvider`, that is a stop-and-report. Carries the input state, the reuse inventory, REK-6's seven binding provider guidelines (all measured, incl. SAX-not-DOM at 77× memory and "place values by `CellReference`, never positionally"), the standing "no global UI work" rule, and the DoD incl. the live run and the owed **first real file with dates** (an explicit I0 measurement gap). Replace it with the I10 equivalent once I9 closes. | When starting etap I9. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (248 entries, #1–#261), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (250 entries, #1–#263), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -276,10 +276,42 @@ noted.
 
 ## Current state
 
-- **🏁 DATA IMPORT MVP IS COMPLETE — I0–I7.5 CLOSED AND USER-ACCEPTED (2026-07-26). Next: I8 (new table),
-  then I9 XLSX · I10 XLS · I11 named profiles · I12 close-out. Start I8 from
-  [data-import-i8-session-prompt.md](docs/design/data-import-i8-session-prompt.md) in a FRESH session (one
-  etap = one session).**
+- **✅ I8 — NEW TABLE: DELIVERED 2026-07-27, awaits the user's visual confirmation in both palettes.
+  Next: I9 XLSX · I10 XLS · I11 named profiles · I12 close-out.** Branch `feat/data-import`, suite **5693
+  green** (+86), build 0/0, app launches clean. **Live-verified:** `tools/probes/DataImportRunProbe` gained
+  section **G** and runs **20/20 ALL PASS** against FB5 `WI-V5.0.3.1683`.
+  **⭐ Four things worth carrying forward.**
+  (1) ⭐⭐ **`ColumnTypeInferencer` owns no parser.** Every "could this value be a number / a date / a
+  boolean?" is asked of **`ImportValueConverter`** — the same class that will convert the value during the
+  real run, under the same culture. Not tidiness: an inferencer with its own idea of what an integer looks
+  like would propose a type the converter then refuses, which is exactly R19's timebomb. Pinned by
+  `EveryValueSeen_ConvertsIntoTheTypeThatWasProposedForIt`.
+  (2) ⭐ **`ImportNewTable` is the ONE owner of "what does this column definition become".** The type text the
+  preview validates against, the type text in the `CREATE TABLE`, and the type text the catalog reports
+  afterwards are **the same string**, from one `DdlGenerator.FormatTypeOrDomain` call (§4.6 — no second
+  generator, no second column model). Two producers would eventually disagree, and the disagreement would
+  arrive as **rows rejected by a table the module itself designed**. Probe case **G4** checks it on the live
+  engine: the catalog returned `VARCHAR(2), VARCHAR(8), NUMERIC(4,2), DATE` — exactly what was asked for.
+  (3) ⭐⭐ **Projecting the new table as an `ImportTarget` (`ImportNewTable.Project`) is what gives "Validate"
+  a table that does not exist — and that is its whole value.** The dry run answers "will these inferred types
+  actually hold my file?" **at the one moment the answer is still free**: after the `CREATE` the table is
+  committed and beyond a Rollback (§0.5 / gotcha #213). Mapping, readiness and the converted preview then
+  work on a new table with **no special case at all** — from their side, a table that will exist and one that
+  does are the same question. After a real `CREATE` the coordinator **re-reads the target from the CATALOG**:
+  the projection is a prediction, the catalog is the fact.
+  (4) ⭐ **A value with a leading zero is NOT a number — a §0.1 rule, not a parsing one.** `007` parses as 7
+  without complaint, but the seven and the text are **different data**: a postal code, an index, an account
+  number comes back different from what went in. That is rule #11 directly, so such a column becomes
+  `VARCHAR`. A single leading zero (`0`, `0,5`) stays a number.
+  ⚠ **Three deliberate boundaries:** nothing is ever inferred `NOT NULL` (the file in hand having no gaps
+  says nothing about the next one, and the constraint outlives the import); **`SMALLINT` is never proposed**
+  (right for this file, wrong for the next, and the difference from `INTEGER` is not worth a rejected row);
+  and **`DOUBLE PRECISION` is not a candidate** (the only text it would accept and `NUMERIC` would not is
+  scientific notation, which the converter refuses anyway — and choosing an approximate type for
+  exact-looking values loses digits silently). Also new: **`IMP0028 NewTableAlreadyExists`** blocks a taken
+  name *before* the run, because the `CREATE` is the first thing an import does and letting it through would
+  mean a green strip followed instantly by a raw server error.
+- **🏁 DATA IMPORT MVP IS COMPLETE — I0–I7.5 CLOSED AND USER-ACCEPTED (2026-07-26).**
 - **⭐ I7.5 — DATA IMPORT HAS ITS OWN WORKING TRANSACTION (accepted). Ratified amendment to
   design §4.5, the module's "most important decision".** The deciding argument was not UX: while the import
   wrote into THE one user working transaction, its **Commit also persisted whatever the SQL Editor had left
@@ -2121,8 +2153,8 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5583 as of 2026-07-26
-  (`feat/data-import`, etap I6)** — all green in ONE `dotnet test` run (~10s).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5693 as of 2026-07-27
+  (`feat/data-import`, etap I8)** — all green in ONE `dotnet test` run (~8s).
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
   a `TextEditor` throw cross-thread from every session after the first (#226).
@@ -2925,7 +2957,7 @@ Before considering any UI task done, verify:
 
 ## Live gotchas — load-bearing subset
 
-The **complete** catalog (245 entries, organized thematically) lives in
+The **complete** catalog (250 entries, organized thematically) lives in
 **[`docs/gotchas.md`](docs/gotchas.md)**. Below are the ~20 that are load-bearing across almost
 *any* future session — the rest are searchable there by keyword the moment a bug "feels
 familiar". Each line is a one-sentence summary; follow the `#N` reference into `docs/gotchas.md`
@@ -3124,7 +3156,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (248 entries, #1–#261), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (250 entries, #1–#263), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a

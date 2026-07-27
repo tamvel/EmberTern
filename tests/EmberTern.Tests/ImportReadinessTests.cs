@@ -223,6 +223,74 @@ public class ImportReadinessTests
         Assert.True(report.CanRun);
     }
 
+    /// <summary>
+    /// ⭐ Etap I8. The <c>CREATE</c> is the very first thing an import does, on the Ddl lane, before any row —
+    /// so a name that is already taken has to be refused HERE. Letting it through would mean a green strip
+    /// followed immediately by a raw server error, which is exactly the "refuse with a reason" §0 asks for.
+    /// </summary>
+    [Fact]
+    public void ANewTableWhoseNameIsTaken_Blocks()
+    {
+        var configuration = Ready() with
+        {
+            Target = TargetDescriptor.New("T", new[] { new ImportColumnDefinition { Name = "A" } }),
+        };
+
+        var report = ImportReadiness.Evaluate(new ImportReadinessInput
+        {
+            Configuration = configuration,
+            Schema = Schema(),
+            Target = Target(),
+            NewTableNameTaken = true,
+        });
+
+        var item = Item(report, ImportDiagnosticCode.NewTableAlreadyExists);
+        Assert.True(item.IsBlocking);
+        Assert.Equal(ImportSection.Target, item.Section);
+        Assert.Equal("T", item.Subject);
+        Assert.False(report.CanRun);
+
+        // ⚠ And it blocks the DRY RUN too, which is the one place a target problem legitimately does: a
+        // validation against a projection of a table that cannot be created describes nothing real.
+        Assert.False(report.CanValidate);
+    }
+
+    /// <summary>
+    /// ⭐ Etap I8 — with the new table PROJECTED as a target, the mapping is evaluated for it exactly as for an
+    /// existing one. That is what lets "Validate" answer the question that matters while the decision is still
+    /// reversible: will the inferred types actually hold this file?
+    /// </summary>
+    [Fact]
+    public void ANewTablesMappingIsEvaluatedLikeAnyOther()
+    {
+        var columns = new[]
+        {
+            new ImportColumnDefinition { Name = "A", BasicType = "VARCHAR", Size = 50 },
+            new ImportColumnDefinition { Name = "B", BasicType = "VARCHAR", Size = 50 },
+        };
+
+        var configuration = Ready() with { Target = TargetDescriptor.New("NEW_T", columns) };
+
+        var report = ImportReadiness.Evaluate(new ImportReadinessInput
+        {
+            Configuration = configuration,
+            Schema = Schema(),
+            Target = ImportNewTable.Project("NEW_T", columns),
+        });
+
+        Assert.True(report.CanRun);
+        Assert.True(Has(report, ImportDiagnosticCode.NewTableWillBeCommitted));
+
+        // Nothing mapped is still a block, projection or not.
+        var unmapped = ImportReadiness.Evaluate(new ImportReadinessInput
+        {
+            Configuration = configuration with { Mapping = Array.Empty<ColumnMapping>() },
+            Schema = Schema(),
+            Target = ImportNewTable.Project("NEW_T", columns),
+        });
+        Assert.True(Has(unmapped, ImportDiagnosticCode.NothingMapped));
+    }
+
     /// <summary>A BEFORE INSERT trigger can overwrite an imported value; a user who does not know that cannot
     /// understand the result (design R6). It never changes what the import does.</summary>
     [Fact]
